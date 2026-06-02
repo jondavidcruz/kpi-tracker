@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
+/* ── Freedom Offers brand palette ─────────────────────────────
+   Veteran-owned · navy/charcoal base · gold accent · clean & pro.
+   Tweak these to re-tune the whole app. */
+@theme {
+  --color-brand-navy: #0b1f3a;       /* deep navy — headers, TV background */
+  --color-brand-navy-2: #13294b;     /* lighter navy — panels on dark */
+  --color-brand-gold: #c8a24b;       /* gold accent — highlights, CTAs */
+  --color-brand-gold-soft: #e6c878;  /* lighter gold — large numbers on navy */
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f7fa;
+  --foreground: #0b1f3a; /* navy text */
 }
 
 @theme inline {
@@ -12,15 +22,15 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background:
+    radial-gradient(1200px 600px at 100% -10%, rgba(200, 162, 75, 0.07), transparent 60%),
+    radial-gradient(1000px 500px at -10% 0%, rgba(11, 31, 58, 0.06), transparent 55%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* numbers line up nicely in tables */
+.tabular-nums { font-variant-numeric: tabular-nums; }

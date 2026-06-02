@@ -1,0 +1,113 @@
+// Data access for the dashboard and entry screens.
+import { db } from "./db";
+import { monthBounds, monthOf } from "./date";
+import type { Kpi, Target, User } from "@prisma/client";
+
+export async function getSettings() {
+  return (
+    (await db.settings.findUnique({ where: { id: 1 } })) ?? {
+      id: 1,
+      googleChatWebhook: "",
+      alertEmailRecipients: "",
+      emailFromAddress: "",
+      workdayCutoff: "18:00",
+      weekStart: "monday",
+      orgTimezone: "America/New_York",
+    }
+  );
+}
+
+export async function getActiveReps(): Promise<User[]> {
+  return db.user.findMany({
+    where: { active: true, role: "rep" },
+    orderBy: { name: "asc" },
+  });
+}
+
+export async function getAllUsers(): Promise<User[]> {
+  return db.user.findMany({ orderBy: [{ role: "asc" }, { name: "asc" }] });
+}
+
+export async function getKpis(filter?: {
+  scope?: string;
+  cadence?: string;
+  computed?: boolean;
+  roleKey?: string;
+}): Promise<Kpi[]> {
+  return db.kpi.findMany({
+    where: {
+      active: true,
+      ...(filter?.scope ? { scope: filter.scope } : {}),
+      ...(filter?.cadence ? { cadence: filter.cadence } : {}),
+      ...(filter?.computed !== undefined ? { computed: filter.computed } : {}),
+      ...(filter?.roleKey !== undefined ? { roleKey: filter.roleKey } : {}),
+    },
+    orderBy: { sortOrder: "asc" },
+  });
+}
+
+/** Resolve the goal for a KPI, honoring per-user / per-period Target overrides. */
+export async function resolveGoal(
+  kpi: Kpi,
+  userId: string | null,
+  period: string | null,
+): Promise<number | null> {
+  const overrides = await db.target.findMany({ where: { kpiId: kpi.id } });
+  return resolveGoalWith(overrides, kpi, userId, period);
+}
+
+/** All target overrides (prefetch once, then resolve in-memory per cell). */
+export async function getAllTargets(): Promise<Target[]> {
+  return db.target.findMany();
+}
+
+/**
+ * Pure goal resolver. Most specific wins:
+ * user+period > user(standing) > team+period > team(standing) > KPI default.
+ */
+export function resolveGoalWith(
+  targets: Target[],
+  kpi: Pick<Kpi, "id" | "goalValue">,
+  userId: string | null,
+  period: string | null,
+): number | null {
+  const c = targets.filter((t) => t.kpiId === kpi.id);
+  const pick =
+    c.find((t) => t.userId === userId && t.period === period) ??
+    c.find((t) => t.userId === userId && t.period === null) ??
+    c.find((t) => t.userId === null && t.period === period) ??
+    c.find((t) => t.userId === null && t.period === null);
+  return pick ? pick.goalValue : kpi.goalValue;
+}
+
+/** Map of "kpiId|userId" -> value for a given date (daily entries). */
+export async function getDailyValues(date: string): Promise<Map<string, number>> {
+  const entries = await db.entry.findMany({ where: { date } });
+  const map = new Map<string, number>();
+  for (const e of entries) map.set(`${e.kpiId}|${e.userId ?? ""}`, e.value);
+  return map;
+}
+
+/** Month-to-date sum per KPI up to and including `date`. */
+export async function getMonthToDateSums(date: string): Promise<Map<string, number>> {
+  const { start } = monthBounds(date);
+  const entries = await db.entry.findMany({
+    where: { date: { gte: start, lte: date } },
+  });
+  const sums = new Map<string, number>();
+  for (const e of entries) sums.set(e.kpiId, (sums.get(e.kpiId) ?? 0) + e.value);
+  return sums;
+}
+
+/** Monthly KPIs are stored as a single entry per month, dated to month start. */
+export async function getMonthlyValues(date: string): Promise<Map<string, number>> {
+  const { start } = monthBounds(date);
+  const entries = await db.entry.findMany({ where: { date: start, userId: null } });
+  const map = new Map<string, number>();
+  for (const e of entries) map.set(e.kpiId, e.value);
+  return map;
+}
+
+export function monthKey(date: string): string {
+  return monthOf(date);
+}

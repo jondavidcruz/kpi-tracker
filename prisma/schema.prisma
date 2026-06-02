@@ -1,0 +1,118 @@
+// KPI Tracker schema.
+// Local dev uses SQLite (zero setup). For production on Supabase, change
+// provider to "postgresql" and point DATABASE_URL at Supabase — the models
+// below are written to be portable (no SQLite-only features; enums are stored
+// as validated strings so the schema moves cleanly to Postgres).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A person who enters KPIs (rep) or receives alerts (manager/admin).
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      String   @default("rep") // rep | manager | admin  (permission level)
+  position  String   @default("") // acquisitions | cc_lm | dispositions  (which scorecard)
+  note      String   @default("") // free-text context, e.g. "part-time, CA listings"
+  irregularSchedule Boolean @default(false) // exempt from missing-entry alerts (no set schedule)
+  active    Boolean  @default(true)
+  timezone  String   @default("America/New_York")
+  createdAt DateTime @default(now())
+
+  entries Entry[]
+  targets Target[]
+  alerts  Alert[]
+}
+
+// The catalog of measurables (the spreadsheet's "Measurable" rows).
+model Kpi {
+  id         String  @id @default(cuid())
+  key        String  @unique // stable slug, e.g. "outbound_calls"
+  name       String
+  emoji      String  @default("")
+  category   String // green | blue | yellow | red  (drives alert severity)
+  unit       String // count | duration | percent | currency | ratio
+  scope      String // per_rep | team
+  roleKey    String  @default("") // acquisitions | cc_lm | dispositions ("" = any/team)
+  cadence    String // daily | monthly
+  goalValue  Float? // null when goalKind = tracked/computed
+  goalKind   String  @default("at_least") // at_least | at_most | exact | tracked
+  computed   Boolean @default(false) // true = derived (not entered by hand)
+  formula    String? // identifier resolved in code for computed metrics
+  definition String  @default("")
+  sortOrder  Int     @default(0)
+  active     Boolean @default(true)
+
+  entries Entry[]
+  targets Target[]
+  alerts  Alert[]
+}
+
+// Optional per-rep or per-period goal override. No row = use Kpi.goalValue.
+model Target {
+  id        String  @id @default(cuid())
+  kpi       Kpi     @relation(fields: [kpiId], references: [id])
+  kpiId     String
+  user      User?   @relation(fields: [userId], references: [id])
+  userId    String? // null = team-wide override
+  period    String? // "YYYY-MM" or null = standing override
+  goalValue Float
+
+  @@unique([kpiId, userId, period])
+}
+
+// The actual numbers entered. Duration values are stored in SECONDS;
+// percent as the number (100 = 100%); currency as a plain number.
+model Entry {
+  id        String   @id @default(cuid())
+  kpi       Kpi      @relation(fields: [kpiId], references: [id])
+  kpiId     String
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String? // null for team-scope KPIs
+  date      String // "YYYY-MM-DD" in org timezone
+  value     Float
+  note      String   @default("")
+  enteredBy String   @default("")
+  enteredAt DateTime @default(now())
+
+  @@unique([kpiId, userId, date])
+  @@index([date])
+}
+
+// Every flag the alert engine raises.
+model Alert {
+  id           String   @id @default(cuid())
+  kpi          Kpi      @relation(fields: [kpiId], references: [id])
+  kpiId        String
+  user         User?    @relation(fields: [userId], references: [id])
+  userId       String?
+  date         String // "YYYY-MM-DD"
+  severity     String // hard | soft
+  expected     Float
+  actual       Float
+  message      String
+  status       String   @default("open") // open | ack | resolved
+  channelsSent String   @default("[]") // JSON array of channels delivered
+  createdAt    DateTime @default(now())
+
+  @@unique([kpiId, userId, date, severity]) // dedup: one per kpi/user/day/severity
+  @@index([status])
+}
+
+// Single-row app configuration.
+model Settings {
+  id                  Int     @id @default(1)
+  googleChatWebhook   String  @default("")
+  alertEmailRecipients String @default("") // comma-separated
+  emailFromAddress    String  @default("")
+  workdayCutoff       String  @default("18:00") // HH:mm local
+  weekStart           String  @default("monday")
+  orgTimezone         String  @default("America/New_York")
+}
