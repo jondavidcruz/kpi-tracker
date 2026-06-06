@@ -5,6 +5,14 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
 import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
+import { createClient } from "@/lib/supabase/server";
+
+/** Sign the current user out and return to the login screen. */
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}
 
 /**
  * Save a day's entries. Form fields are named `v|<kpiId>|<userId>` where an

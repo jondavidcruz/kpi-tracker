@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { createKpi, saveKpi, saveSettings, saveUser } from "@/app/actions";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
 import { toInputNumber, type Unit } from "@/lib/format";
 import { categoryMeta } from "@/lib/kpi";
 import { POSITIONS } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
+import { getCurrentUser, isManager } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,28 @@ export default async function AdminPage({
   searchParams: Promise<{ saved?: string }>;
 }) {
   const sp = await searchParams;
+
+  // Admin is restricted to managers/admins.
+  const me = await getCurrentUser();
+  if (!isManager(me)) {
+    return (
+      <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <div className="mb-2 text-3xl">🔒</div>
+        <h1 className="text-xl font-bold">Managers only</h1>
+        <p className="mt-2 text-sm text-slate-500">
+          The Admin area is limited to managers. If you need access, ask an admin to set your
+          role to “manager.”
+        </p>
+        <Link
+          href="/dashboard"
+          className="mt-5 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+        >
+          Back to dashboard
+        </Link>
+      </div>
+    );
+  }
+
   const [settings, users, kpis] = await Promise.all([getSettings(), getAllUsers(), getKpis()]);
 
   return (
