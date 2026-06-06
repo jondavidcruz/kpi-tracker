@@ -2,8 +2,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Routes reachable WITHOUT a session.
-const PUBLIC_PATHS = ["/login", "/auth", "/tv"];
+// Routes reachable WITHOUT a session (login flow, wall display, machine webhooks).
+const PUBLIC_PATHS = ["/login", "/auth", "/tv", "/api/ingest", "/api/cron"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
