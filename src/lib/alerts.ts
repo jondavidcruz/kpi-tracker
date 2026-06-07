@@ -184,6 +184,10 @@ export async function dispatchHardAlerts(created: NewAlert[]): Promise<void> {
   const hard = created.filter((a) => a.severity === "hard");
   if (hard.length === 0) return;
 
+  // Team works Mon–Fri only — never push external alerts on the weekend.
+  const settings = await getSettings();
+  if (isWeekend(settings.orgTimezone)) return;
+
   const cfg = await getChannelConfig();
 
   // Build a coaching block (gap + why + training plan) for each hard miss.
@@ -361,6 +365,12 @@ export async function sendDailyDigest(date: string): Promise<boolean> {
 
 // --- Orchestrator (called by the cron route) ---------------------------------
 
+/** True on Saturday/Sunday in the org timezone (team works Mon–Fri only). */
+function isWeekend(tz: string): boolean {
+  const day = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(new Date());
+  return day === "Sat" || day === "Sun";
+}
+
 function pastCutoff(cutoff: string, tz: string): boolean {
   const now = new Intl.DateTimeFormat("en-GB", {
     timeZone: tz,
@@ -404,6 +414,8 @@ export async function runScheduledChecks(opts?: {
   // The twice-daily digest is the scheduled snapshot of everything still open
   // (hard + soft + missing), each with its gap + training plan. Instant hard
   // alerts already fired on save; the digest is the pre-/post-shift summary.
-  const digestSent = await sendDailyDigest(date);
+  // Skip on weekends (team works Mon–Fri) unless a manual force run is requested.
+  const digestSent =
+    opts?.force || !isWeekend(tz) ? await sendDailyDigest(date) : false;
   return { date, newAlerts: created.length, missing: missing.length, digestSent };
 }
