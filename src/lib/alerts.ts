@@ -278,9 +278,13 @@ export async function runScheduledChecks(opts?: {
   const tz = settings.orgTimezone;
   const date = opts?.date ?? todayStr(tz);
 
+  // Re-evaluate today's entries and record alerts in-app. External delivery
+  // happens ONLY through the digest below, so Chat/email post exactly twice a
+  // day (the two cron runs), never instantly on entry.
   const created = await evaluateAndRecordAlerts(date);
-  await dispatchHardAlerts(created);
 
+  // Missing-entry flags only after the workday cutoff — so the morning (8:30am)
+  // digest doesn't nag about a day that just started, but the evening one does.
   let missing: NewAlert[] = [];
   if (opts?.force || pastCutoff(settings.workdayCutoff, tz)) {
     missing = await generateMissingEntryAlerts(date);
