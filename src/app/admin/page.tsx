@@ -88,6 +88,10 @@ export default async function AdminPage({
                 {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
               </select>
             </label>
+            <label>
+              <span className={labelCls}>Annual revenue goal ($) — for the weekly report</span>
+              <input name="annualRevenueGoal" defaultValue={settings.annualRevenueGoal || ""} placeholder="e.g. 1000000" className={inputCls} />
+            </label>
             <div className="sm:col-span-2">
               <SaveBtn>Save settings</SaveBtn>
             </div>

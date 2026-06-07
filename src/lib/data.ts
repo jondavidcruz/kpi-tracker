@@ -13,6 +13,7 @@ export async function getSettings() {
       workdayCutoff: "18:00",
       weekStart: "monday",
       orgTimezone: "America/New_York",
+      annualRevenueGoal: 0,
     }
   );
 }
@@ -122,12 +123,28 @@ export async function getActiveDeals() {
   });
 }
 
-/** Deals still being pushed to sell (everything except sold/dead) — for report pg 6. */
+/** Deals still being pushed to sell (everything except closed/dead) — for report pg 6. */
 export async function getOpenDeals() {
   return db.deal.findMany({
-    where: { active: true, status: { notIn: ["sold", "dead"] } },
+    where: { active: true, status: { notIn: ["closed", "dead"] } },
     orderBy: { updatedAt: "desc" },
   });
+}
+
+/** Revenue/escrow rollups for the report's page-4 money metrics. */
+export async function getDealMetrics(yearPrefix: string) {
+  const deals = await db.deal.findMany({ where: { active: true } });
+  const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+  const closed = deals.filter((d) => d.status === "closed");
+  const inEscrow = deals.filter((d) => d.status === "in_escrow");
+  const closedThisYear = closed.filter((d) => d.soldDate.startsWith(yearPrefix));
+  return {
+    closedCount: closedThisYear.length,
+    inEscrowCount: inEscrow.length,
+    revenueClosed: sum(closedThisYear.map((d) => d.assignmentFee ?? 0)),
+    revenuePendingEscrow: sum(inEscrow.map((d) => d.assignmentFee ?? 0)),
+    activeCount: deals.filter((d) => !["closed", "dead"].includes(d.status)).length,
+  };
 }
 
 /** Sum of entries per "kpiId|userId" across an inclusive date range (for weekly report). */

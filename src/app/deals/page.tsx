@@ -9,7 +9,8 @@ const STATUSES = [
   { key: "under_contract", label: "Under Contract", cls: "bg-sky-100 text-sky-800" },
   { key: "marketing", label: "Marketing", cls: "bg-amber-100 text-amber-800" },
   { key: "buyer_found", label: "Buyer Found", cls: "bg-violet-100 text-violet-800" },
-  { key: "sold", label: "Sold", cls: "bg-emerald-100 text-emerald-800" },
+  { key: "in_escrow", label: "In Escrow", cls: "bg-indigo-100 text-indigo-800" },
+  { key: "closed", label: "Closed", cls: "bg-emerald-100 text-emerald-800" },
   { key: "dead", label: "Dead", cls: "bg-slate-200 text-slate-600" },
 ];
 
@@ -77,6 +78,7 @@ export default async function DealsPage({
           </select>
           <input name="contractPrice" placeholder="Contract $" className={inputCls} />
           <input name="askingPrice" placeholder="Asking $" className={inputCls} />
+          <input name="assignmentFee" placeholder="Our fee $" className={inputCls} />
           <input name="buyerName" placeholder="Buyer (if found)" className={inputCls} />
           <input type="date" name="contractDate" className={inputCls} title="Contract date" />
           <input name="notes" placeholder="Notes" className={`${inputCls} sm:col-span-3`} />
@@ -120,6 +122,7 @@ function DealRow({ deal }: { deal: Deal }) {
         <input name="contractPrice" defaultValue={deal.contractPrice ?? ""} placeholder="Contract $" className={inputCls} />
         <input name="askingPrice" defaultValue={deal.askingPrice ?? ""} placeholder="Asking $" className={inputCls} />
         <input name="soldPrice" defaultValue={deal.soldPrice ?? ""} placeholder="Sold $" className={inputCls} />
+        <input name="assignmentFee" defaultValue={deal.assignmentFee ?? ""} placeholder="Our fee $" className={inputCls} />
         <input name="buyerName" defaultValue={deal.buyerName} placeholder="Buyer" className={inputCls} />
         <input name="notes" defaultValue={deal.notes} placeholder="Notes" className={`${inputCls} sm:col-span-2`} />
         <input type="date" name="contractDate" defaultValue={deal.contractDate} className={inputCls} title="Contract date" />

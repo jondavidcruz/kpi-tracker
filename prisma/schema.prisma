@@ -112,12 +112,14 @@ model Alert {
 model Deal {
   id            String   @id @default(cuid())
   address       String // property address / nickname
-  status        String   @default("under_contract") // under_contract | marketing | buyer_found | sold | dead
+  // pipeline: under_contract -> marketing -> buyer_found -> in_escrow -> closed (or dead)
+  status        String   @default("under_contract")
   assignedTo    String   @default("") // dispo rep name (Sharyn / Marie)
   buyerName     String   @default("") // set once a buyer is found
   contractPrice Float? // what we have it under contract for
   askingPrice   Float? // what we're marketing it at
-  soldPrice     Float? // final assignment / sale price
+  soldPrice     Float? // final assignment / sale price to the buyer
+  assignmentFee Float? // OUR revenue on this deal (the fee/spread we book)
   contractDate  String   @default("") // "YYYY-MM-DD" we went under contract
   soldDate      String   @default("") // "YYYY-MM-DD" closed/assigned
   notes         String   @default("")
@@ -137,4 +139,5 @@ model Settings {
   workdayCutoff       String  @default("18:00") // HH:mm local
   weekStart           String  @default("monday")
   orgTimezone         String  @default("America/New_York")
+  annualRevenueGoal   Float   @default(0) // for "Goal Remaining by Dec 31" on the report
 }

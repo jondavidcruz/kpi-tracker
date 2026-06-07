@@ -86,6 +86,7 @@ export async function saveSettings(formData: FormData) {
     emailFromAddress: String(formData.get("emailFromAddress") ?? "").trim(),
     workdayCutoff: String(formData.get("workdayCutoff") ?? "18:00").trim(),
     orgTimezone: String(formData.get("orgTimezone") ?? "America/New_York").trim(),
+    annualRevenueGoal: numOrNull(formData.get("annualRevenueGoal")) ?? 0,
   };
   await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
   revalidatePath("/admin");
@@ -201,6 +202,7 @@ export async function saveDeal(formData: FormData) {
     contractPrice: numOrNull(formData.get("contractPrice")),
     askingPrice: numOrNull(formData.get("askingPrice")),
     soldPrice: numOrNull(formData.get("soldPrice")),
+    assignmentFee: numOrNull(formData.get("assignmentFee")),
     contractDate: String(formData.get("contractDate") ?? "").trim(),
     soldDate: String(formData.get("soldDate") ?? "").trim(),
     notes: String(formData.get("notes") ?? "").trim(),

@@ -3,6 +3,7 @@ import {
   getKpis,
   getRangeSums,
   getOpenDeals,
+  getDealMetrics,
   getSettings,
 } from "@/lib/data";
 import { todayStr, lastWeekRange } from "@/lib/date";
@@ -33,13 +34,16 @@ export default async function ReportPage({
   const today = sp.date ?? todayStr(settings.orgTimezone);
   const wk = lastWeekRange(today);
 
-  const [reps, perRepKpis, teamKpis, sums, deals] = await Promise.all([
+  const year = today.slice(0, 4);
+  const [reps, perRepKpis, teamKpis, sums, deals, dealMetrics] = await Promise.all([
     getActiveReps(),
     getKpis({ scope: "per_rep", computed: false }),
     getKpis({ scope: "team", computed: false, cadence: "daily" }),
     getRangeSums(wk.start, wk.end),
     getOpenDeals(),
+    getDealMetrics(year),
   ]);
+  const goalRemaining = Math.max(0, (settings.annualRevenueGoal ?? 0) - dealMetrics.revenueClosed);
 
   // ---- Page 4 data: KPIs at a glance (team totals for the week) ----
   // Sum each team daily KPI + roll up the key per-rep money KPIs across all reps.
@@ -70,6 +74,18 @@ export default async function ReportPage({
           Freedom Offers
         </span>
       </div>
+
+      {/* ===== Revenue / escrow band (page 4 money metrics) ===== */}
+      <section>
+        <SectionTitle title="Revenue Pipeline" subtitle={`${year} year-to-date · from the Deals board`} accent="bg-emerald-400" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <RevCard label="Revenue Closed" value={money(dealMetrics.revenueClosed)} tone="emerald" />
+          <RevCard label="Pending in Escrow" value={money(dealMetrics.revenuePendingEscrow)} />
+          <RevCard label="In Escrow" value={String(dealMetrics.inEscrowCount)} />
+          <RevCard label="Closed Deals" value={String(dealMetrics.closedCount)} />
+          <RevCard label="Goal Remaining" value={settings.annualRevenueGoal ? money(goalRemaining) : "—"} />
+        </div>
+      </section>
 
       {/* ===== PAGE 4: KPIs at a glance ===== */}
       <section>
@@ -153,6 +169,17 @@ export default async function ReportPage({
         Live report · always current · pull into the Canva deck for the Monday 1:30 PT meeting.
       </p>
     </div>
+  );
+}
+
+function RevCard({ label, value, tone }: { label: string; value: string; tone?: "emerald" }) {
+  return (
+    <Card className="p-4">
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className={`mt-1 text-2xl font-extrabold tabular-nums ${tone === "emerald" ? "text-emerald-600" : "text-slate-800"}`}>
+        {value}
+      </div>
+    </Card>
   );
 }
 
