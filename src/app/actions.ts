@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
-import { evaluateAndRecordAlerts } from "@/lib/alerts";
+import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { createClient } from "@/lib/supabase/server";
 
 /** Sign the current user out and return to the login screen. */
@@ -57,11 +57,15 @@ export async function saveDay(formData: FormData) {
     touchedKpiIds.add(kpiId);
   }
 
-  // Record alerts in-app instantly (dashboard/alerts inbox update right away).
-  // External Chat + email delivery is intentionally NOT done here — per team
-  // preference, those only go out in the twice-daily digest (8:30am & 6:30pm PT
-  // via /api/cron). This keeps Chat/email to exactly two posts per day.
-  await evaluateAndRecordAlerts(date, [...touchedKpiIds]);
+  // Instant alerting on save:
+  //  • In-app flags update immediately (dashboard + alerts inbox).
+  //  • HARD (green money) misses fire to Google Chat + email RIGHT AWAY, each
+  //    with a gap assessment + training plan, so a manager is notified the
+  //    moment someone is off a money KPI.
+  //  • SOFT (activity) misses are batched into the twice-daily digest
+  //    (8:30am pre-shift + 6:30pm post-shift via /api/cron).
+  const created = await evaluateAndRecordAlerts(date, [...touchedKpiIds]);
+  await dispatchHardAlerts(created);
 
   revalidatePath("/dashboard");
   revalidatePath("/entry");

@@ -11,7 +11,7 @@ import {
 import { todayStr, friendlyDate, paceFraction, monthOf } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { statusClasses, statusVsGoal, statusVsPace, alertSeverity, type Status } from "@/lib/kpi";
-import { dailyGap, monthlyGap, dailyCatchup, monthlyCatchup } from "@/lib/gap";
+import { dailyGap, monthlyGap, monthlyCatchup, buildCoaching } from "@/lib/gap";
 import { POSITIONS } from "@/lib/roles";
 import { db } from "@/lib/db";
 import { Card, SectionTitle, Legend, ProgressBar } from "@/components/ui";
@@ -30,6 +30,8 @@ interface GapItem {
   goal: number;
   pct: number;
   catchup: string;
+  diagnose: string;
+  plan: string[];
   weight: number; // sort key: higher = more urgent
 }
 
@@ -72,6 +74,7 @@ export default async function DashboardPage({
         if (status === "hit") onGoal += 1;
         const g = dailyGap(k.goalKind, value, goal);
         if (g) {
+          const coach = buildCoaching({ kpiKey: k.key, kpiName: k.name, unit: k.unit as Unit, gap: g, who: rep.name });
           gaps.push({
             who: rep.name,
             roleEmoji: pos.emoji,
@@ -82,7 +85,9 @@ export default async function DashboardPage({
             value,
             goal,
             pct: goal ? (value / goal) * 100 : 0,
-            catchup: dailyCatchup(k.unit as Unit, g),
+            catchup: coach.headline,
+            diagnose: coach.diagnose,
+            plan: coach.plan,
             weight: (k.category === "green" ? 1000 : 100) + (g.short / Math.max(1, goal)) * 100,
           });
         }
@@ -96,6 +101,7 @@ export default async function DashboardPage({
     const g = monthlyGap(date, k.goalKind, mtd, goal);
     if (statusVsPace(k.goalKind, mtd, goal, fraction) === "hit") onGoal += 1;
     if (g) {
+      const coach = buildCoaching({ kpiKey: k.key, kpiName: k.name, unit: k.unit as Unit, gap: g, who: null });
       gaps.push({
         who: "Team",
         roleEmoji: "🏢",
@@ -106,7 +112,9 @@ export default async function DashboardPage({
         value: mtd,
         goal,
         pct: goal ? (mtd / goal) * 100 : 0,
-        catchup: monthlyCatchup(k.unit as Unit, g),
+        catchup: coach.headline,
+        diagnose: coach.diagnose,
+        plan: coach.plan,
         weight: (k.category === "green" ? 1000 : 100) + (g.behindPace / Math.max(1, goal)) * 100,
       });
     }
@@ -167,27 +175,42 @@ export default async function DashboardPage({
               {gaps.slice(0, 8).map((g, i) => {
                 const isMoney = g.category === "green";
                 return (
-                  <li key={i} className="flex flex-wrap items-center gap-4 px-3 py-3">
-                    <span
-                      className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-bold ${
-                        isMoney ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {isMoney ? "MONEY" : "ACTIVITY"}
-                    </span>
-                    <div className="min-w-[150px] flex-1">
-                      <div className="font-semibold text-slate-800">
-                        {g.roleEmoji} {g.who} · {g.emoji} {g.kpiName}
+                  <li key={i} className="px-3 py-3">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <span
+                        className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-bold ${
+                          isMoney ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {isMoney ? "MONEY" : "ACTIVITY"}
+                      </span>
+                      <div className="min-w-[150px] flex-1">
+                        <div className="font-semibold text-slate-800">
+                          {g.roleEmoji} {g.who} · {g.emoji} {g.kpiName}
+                        </div>
+                        <div className="text-sm text-slate-500">{g.catchup}</div>
                       </div>
-                      <div className="text-sm text-slate-500">{g.catchup}</div>
-                    </div>
-                    <div className="w-40">
-                      <div className="mb-1 flex justify-between text-xs font-medium">
-                        <span className="text-slate-700 tabular-nums">{formatValue(g.unit, g.value)}</span>
-                        <span className="text-slate-400 tabular-nums">/ {formatValue(g.unit, g.goal)}</span>
+                      <div className="w-40">
+                        <div className="mb-1 flex justify-between text-xs font-medium">
+                          <span className="text-slate-700 tabular-nums">{formatValue(g.unit, g.value)}</span>
+                          <span className="text-slate-400 tabular-nums">/ {formatValue(g.unit, g.goal)}</span>
+                        </div>
+                        <ProgressBar pct={g.pct} status={isMoney ? "miss" : "close"} />
                       </div>
-                      <ProgressBar pct={g.pct} status={isMoney ? "miss" : "close"} />
                     </div>
+                    {/* Gap assessment + training plan */}
+                    <details className="mt-2 ml-1 group">
+                      <summary className="cursor-pointer text-xs font-semibold text-slate-500 hover:text-slate-700">
+                        🔍 Gap assessment & training plan
+                      </summary>
+                      <div className="mt-2 rounded-lg bg-slate-50 p-3 text-sm ring-1 ring-slate-200">
+                        <p className="text-slate-600"><span className="font-semibold">Why:</span> {g.diagnose}</p>
+                        <p className="mt-1.5 font-semibold text-slate-700">How to fix it:</p>
+                        <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-600">
+                          {g.plan.map((p, j) => <li key={j}>{p}</li>)}
+                        </ul>
+                      </div>
+                    </details>
                   </li>
                 );
               })}

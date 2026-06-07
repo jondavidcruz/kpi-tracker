@@ -6,6 +6,7 @@ import { getActiveReps, getSettings, resolveGoal } from "./data";
 import { monthOf, paceFraction, todayStr } from "./date";
 import { formatValue, type Unit } from "./format";
 import { alertSeverity, statusVsGoal, statusVsPace } from "./kpi";
+import { dailyGap, buildCoaching } from "./gap";
 import {
   alertEmailHtml,
   getChannelConfig,
@@ -22,6 +23,14 @@ export interface NewAlert {
   expected: number;
   actual: number;
   message: string;
+  // coaching context (so dispatch can build a gap assessment + training plan)
+  kpiKey: string;
+  kpiName: string;
+  unit: string;
+  cadence: string;
+  goalKind: string;
+  goal: number; // resolved goal value
+  userName: string | null;
 }
 
 /**
@@ -67,6 +76,19 @@ export async function evaluateAndRecordAlerts(
 
       if (result.status === "miss") {
         const message = buildMessage(kpi, subj.userName, result);
+        const enriched: NewAlert = {
+          ...key,
+          expected: result.expected,
+          actual: result.actual,
+          message,
+          kpiKey: kpi.key,
+          kpiName: kpi.name,
+          unit: kpi.unit,
+          cadence: kpi.cadence,
+          goalKind: kpi.goalKind,
+          goal: result.goal,
+          userName: subj.userName,
+        };
         if (!existing) {
           await db.alert.create({
             data: {
@@ -77,14 +99,14 @@ export async function evaluateAndRecordAlerts(
               status: "open",
             },
           });
-          created.push({ ...key, expected: result.expected, actual: result.actual, message });
+          created.push(enriched);
         } else if (existing.status === "resolved") {
           // It had recovered and slipped again — reopen with fresh numbers.
           await db.alert.update({
             where: { id: existing.id },
             data: { status: "open", expected: result.expected, actual: result.actual, message },
           });
-          created.push({ ...key, expected: result.expected, actual: result.actual, message });
+          created.push(enriched);
         } else {
           // Still open/ack — keep the numbers and message current.
           await db.alert.update({
@@ -108,14 +130,14 @@ async function evaluateOne(
   date: string,
   month: string,
   fraction: number,
-): Promise<{ status: ReturnType<typeof statusVsGoal>; expected: number; actual: number } | null> {
+): Promise<{ status: ReturnType<typeof statusVsGoal>; expected: number; actual: number; goal: number } | null> {
   const goal = await resolveGoal(kpi, kpi.scope === "per_rep" ? userId : null, month);
   if (goal === null) return null;
 
   if (kpi.cadence === "daily") {
     const entry = await db.entry.findFirst({ where: { kpiId: kpi.id, userId, date } });
     if (!entry) return null; // missing-entry handled by scheduled check (Phase 3)
-    return { status: statusVsGoal(kpi.goalKind, entry.value, goal), expected: goal, actual: entry.value };
+    return { status: statusVsGoal(kpi.goalKind, entry.value, goal), expected: goal, actual: entry.value, goal };
   }
 
   // monthly: month-to-date sum vs expected pace
@@ -123,7 +145,7 @@ async function evaluateOne(
   const entries = await db.entry.findMany({ where: { kpiId: kpi.id, date: { gte: start, lte: date } } });
   if (entries.length === 0) return null;
   const mtd = entries.reduce((s, e) => s + e.value, 0);
-  return { status: statusVsPace(kpi.goalKind, mtd, goal, fraction), expected: goal * fraction, actual: mtd };
+  return { status: statusVsPace(kpi.goalKind, mtd, goal, fraction), expected: goal * fraction, actual: mtd, goal };
 }
 
 function monthBoundsLite(date: string) {
@@ -163,16 +185,40 @@ export async function dispatchHardAlerts(created: NewAlert[]): Promise<void> {
   if (hard.length === 0) return;
 
   const cfg = await getChannelConfig();
-  const lines = hard.map((a) => a.message);
+
+  // Build a coaching block (gap + why + training plan) for each hard miss.
+  const blocks = hard.map((a) => {
+    const g = dailyGap(a.goalKind, a.actual, a.goal); // hard alerts are daily money KPIs
+    const gap = g ?? { short: Math.max(0, a.goal - a.actual), goal: a.goal, value: a.actual };
+    return {
+      alert: a,
+      coaching: buildCoaching({
+        kpiKey: a.kpiKey, kpiName: a.kpiName, unit: a.unit as Unit, gap, who: a.userName,
+      }),
+    };
+  });
+
+  // Google Chat: title + per-KPI gap assessment + training plan.
   const noun = hard.length === 1 ? "money KPI is" : "money KPIs are";
   const chatText =
-    `🔴 *KPI alert* — ${hard.length} ${noun} behind target:\n` +
-    lines.map((l) => `• ${l}`).join("\n");
+    `🔴 *KPI ALERT* — ${hard.length} ${noun} behind target right now:\n\n` +
+    blocks
+      .map((b) => {
+        const who = b.alert.userName ? `*${b.alert.userName}* · ` : "";
+        return (
+          `${who}${b.alert.kpiName}\n` +
+          `⚠️ ${b.coaching.headline}\n` +
+          `🔍 Why: ${b.coaching.diagnose}\n` +
+          `✅ Training plan:\n` +
+          b.coaching.plan.map((p) => `   • ${p}`).join("\n")
+        );
+      })
+      .join("\n\n");
 
   const chatOk = await sendGoogleChat(chatText, cfg);
   const emailOk = await sendEmail(
-    `🔴 ${hard.length} money KPI alert${hard.length === 1 ? "" : "s"}`,
-    alertEmailHtml("Money KPIs behind target", lines),
+    `🔴 ${hard.length} money KPI alert${hard.length === 1 ? "" : "s"} — gap + training plan`,
+    coachingEmailHtml(blocks),
     cfg,
   );
 
@@ -180,6 +226,35 @@ export async function dispatchHardAlerts(created: NewAlert[]): Promise<void> {
   if (chatOk) channels.push("google_chat");
   if (emailOk) channels.push("email");
   for (const a of hard) await recordChannels(a, channels);
+}
+
+/** Rich HTML email with a gap assessment + training plan per KPI. */
+function coachingEmailHtml(
+  blocks: { alert: NewAlert; coaching: { headline: string; diagnose: string; plan: string[] } }[],
+): string {
+  const cards = blocks
+    .map((b) => {
+      const who = b.alert.userName ? `${b.alert.userName} · ` : "";
+      const steps = b.coaching.plan.map((p) => `<li style="margin:3px 0;">${escapeHtmlLocal(p)}</li>`).join("");
+      return `<div style="margin:0 0 14px;padding:14px 16px;background:#fff7f7;border:1px solid #fecaca;border-radius:10px;">
+        <div style="font-weight:700;color:#0b1f3a;font-size:15px;">${escapeHtmlLocal(who + b.alert.kpiName)}</div>
+        <div style="color:#b91c1c;font-weight:600;margin:4px 0;">⚠️ ${escapeHtmlLocal(b.coaching.headline)}</div>
+        <div style="color:#475569;margin:4px 0;"><strong>Why:</strong> ${escapeHtmlLocal(b.coaching.diagnose)}</div>
+        <div style="color:#0b1f3a;margin-top:6px;"><strong>Training plan:</strong></div>
+        <ul style="margin:4px 0 0;padding-left:20px;color:#334155;">${steps}</ul>
+      </div>`;
+    })
+    .join("");
+  return `<div style="font-family:system-ui,Arial,sans-serif;max-width:600px;margin:0 auto;">
+    <h2 style="color:#0b1f3a;">🔴 KPI alert — action needed</h2>
+    <p style="color:#64748b;">A money KPI is behind target. Here's the gap and how to close it:</p>
+    ${cards}
+    <p style="color:#94a3b8;font-size:13px;">Freedom Offers KPI Tracker · open the dashboard to acknowledge.</p>
+  </div>`;
+}
+
+function escapeHtmlLocal(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // --- Missing-entry detection (scheduled) -------------------------------------
@@ -213,7 +288,11 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
       await db.alert.create({
         data: { kpiId: kpi.id, userId: rep.id, date, severity, expected: kpi.goalValue ?? 0, actual: 0, message, status: "open" },
       });
-      created.push({ kpiId: kpi.id, userId: rep.id, date, severity, expected: kpi.goalValue ?? 0, actual: 0, message });
+      created.push({
+        kpiId: kpi.id, userId: rep.id, date, severity, expected: kpi.goalValue ?? 0, actual: 0, message,
+        kpiKey: kpi.key, kpiName: kpi.name, unit: kpi.unit, cadence: kpi.cadence,
+        goalKind: kpi.goalKind, goal: kpi.goalValue ?? 0, userName: rep.name,
+      });
     }
   }
   return created;
@@ -221,27 +300,60 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
 
 // --- Daily digest ------------------------------------------------------------
 
-/** Send a single Chat + email digest of all open alerts for the date. */
+/** Send a single Chat + email digest of all open alerts for the date.
+ *  Money (hard) flags include a gap + training plan; activity/missing are listed. */
 export async function sendDailyDigest(date: string): Promise<boolean> {
   const open = await db.alert.findMany({
     where: { status: "open", date },
     orderBy: [{ severity: "asc" }],
+    include: { kpi: true, user: true },
   });
   if (open.length === 0) return false;
 
   const cfg = await getChannelConfig();
   const hard = open.filter((a) => a.severity === "hard");
   const soft = open.filter((a) => a.severity === "soft");
-  const lines = open.map((a) => `${a.severity === "hard" ? "🔴" : "🔵"} ${a.message}`);
 
+  // Coaching blocks for the money misses (skip missing-entry rows: actual 0 & no real gap value yet).
+  const hardBlocks = hard.map((a) => {
+    const g = dailyGap(a.kpi.goalKind, a.actual, a.expected);
+    const gap = g ?? { short: Math.max(0, a.expected - a.actual), goal: a.expected, value: a.actual };
+    return {
+      who: a.user?.name ?? null,
+      name: a.kpi.name,
+      coaching: buildCoaching({ kpiKey: a.kpi.key, kpiName: a.kpi.name, unit: a.kpi.unit as Unit, gap, who: a.user?.name ?? null }),
+    };
+  });
+
+  // ---- Google Chat ----
+  const moneySection = hardBlocks
+    .map((b) => {
+      const who = b.who ? `*${b.who}* · ` : "";
+      return `🔴 ${who}${b.name}\n   ⚠️ ${b.coaching.headline}\n   🔍 ${b.coaching.diagnose}\n   ✅ ${b.coaching.plan.map((p) => p).join("  •  ")}`;
+    })
+    .join("\n\n");
+  const softSection = soft.map((a) => `🔵 ${a.message}`).join("\n");
   const chatText =
-    `📊 *Daily KPI digest* (${date}) — ${hard.length} money + ${soft.length} activity flags:\n` +
-    lines.map((l) => `• ${l}`).join("\n");
+    `📊 *KPI Digest* (${date}) — ${hard.length} money + ${soft.length} activity\n\n` +
+    (moneySection ? moneySection + "\n\n" : "") +
+    (softSection ? `*Activity / missing:*\n${softSection}` : "");
 
   const chatOk = await sendGoogleChat(chatText, cfg);
+
+  // ---- Email (rich coaching cards for money, plain list for the rest) ----
+  const emailHtml =
+    coachingEmailHtml(
+      hardBlocks.map((b) => ({
+        alert: { userName: b.who, kpiName: b.name } as NewAlert,
+        coaching: b.coaching,
+      })),
+    ) +
+    (soft.length
+      ? alertEmailHtml(`Activity / missing — ${date}`, soft.map((a) => a.message))
+      : "");
   const emailOk = await sendEmail(
-    `📊 Daily KPI digest — ${open.length} open flag${open.length === 1 ? "" : "s"}`,
-    alertEmailHtml(`KPI digest — ${date}`, lines),
+    `📊 KPI Digest (${date}) — ${open.length} open flag${open.length === 1 ? "" : "s"}`,
+    emailHtml,
     cfg,
   );
   return chatOk || emailOk;
@@ -278,18 +390,20 @@ export async function runScheduledChecks(opts?: {
   const tz = settings.orgTimezone;
   const date = opts?.date ?? todayStr(tz);
 
-  // Re-evaluate today's entries and record alerts in-app. External delivery
-  // happens ONLY through the digest below, so Chat/email post exactly twice a
-  // day (the two cron runs), never instantly on entry.
+  // Re-evaluate today's entries and record alerts in-app.
   const created = await evaluateAndRecordAlerts(date);
 
-  // Missing-entry flags only after the workday cutoff — so the morning (8:30am)
-  // digest doesn't nag about a day that just started, but the evening one does.
+  // Missing-entry flags only after the workday cutoff — so the morning (8:30am
+  // pre-shift) digest doesn't nag about a day that just started, but the
+  // evening (6:30pm post-shift) one catches anyone who didn't log by 6pm.
   let missing: NewAlert[] = [];
   if (opts?.force || pastCutoff(settings.workdayCutoff, tz)) {
     missing = await generateMissingEntryAlerts(date);
   }
 
+  // The twice-daily digest is the scheduled snapshot of everything still open
+  // (hard + soft + missing), each with its gap + training plan. Instant hard
+  // alerts already fired on save; the digest is the pre-/post-shift summary.
   const digestSent = await sendDailyDigest(date);
   return { date, newAlerts: created.length, missing: missing.length, digestSent };
 }
