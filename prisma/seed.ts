@@ -21,12 +21,18 @@ const KPIS = [
   { key: "leads_cc", name: "Leads (Cold Call)", emoji: "🧊", category: "yellow", unit: "count", scope: "per_rep", roleKey: "cc_lm", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Leads from cold calling (dormant)." },
   { key: "cc_talk_time", name: "Talk Time", emoji: "🎙️", category: "blue", unit: "duration", scope: "per_rep", roleKey: "cc_lm", cadence: "daily", goalValue: 1 * H, goalKind: "at_least", definition: "Time on the phone." },
 
-  // ===== Acquisitions (Michelle = closer; Ethan = appts/listings) =====
-  { key: "leads_worked", name: "Leads Worked", emoji: "📲", category: "blue", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Inbound leads (PPL/SMS/mail) followed up with." },
-  { key: "appts_taken", name: "Appointments Taken", emoji: "🤝", category: "green", unit: "percent", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 100, goalKind: "at_least", definition: "% of set appointments actually taken." },
-  { key: "offers_made", name: "Offers Made", emoji: "💵", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 2, goalKind: "at_least", definition: "Offers made to sellers. Just above ~1.9 proven." },
-  { key: "listing_appointments", name: "Listing Appointments", emoji: "🏠", category: "yellow", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Listing appts for out-of-buy-box deals (wholesale / list-with-agent)." },
-  { key: "acq_talk_time", name: "Talk Time", emoji: "🎧", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 90 * 60, goalKind: "at_least", definition: "Time on the phone with sellers (1:30)." },
+  // ===== Acquisitions (Michelle, Ethan, Jon) =====
+  { key: "leads_worked", name: "Follow Ups", emoji: "📲", category: "blue", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Lead follow-ups completed." },
+  { key: "appts_taken", name: "Appointments Attended", emoji: "🤝", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Seller appointments actually attended (count)." },
+  { key: "completed_process_calls", name: "Completed Process Calls", emoji: "🗂️", category: "blue", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Process calls completed with sellers." },
+  { key: "offers_made", name: "Verbal Offers Made", emoji: "💬", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 2, goalKind: "at_least", definition: "Verbal offers made to sellers." },
+  { key: "offers_rejected", name: "Offers Rejected", emoji: "❌", category: "yellow", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Offers the seller rejected (visibility — diagnose pricing/approach)." },
+  { key: "acq_contracts_sent", name: "Contracts Sent", emoji: "📤", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts this rep sent today." },
+  { key: "acq_signed_assignment", name: "Signed — Assignment", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as an Assignment." },
+  { key: "acq_signed_novation", name: "Signed — Novation", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Novation." },
+  { key: "acq_signed_listing", name: "Signed — Listing", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Listing." },
+  { key: "acq_signed_creative", name: "Signed — Creative", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Creative deal." },
+  { key: "acq_talk_time", name: "Total Talk Time", emoji: "🎧", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 90 * 60, goalKind: "at_least", definition: "Total time on the phone with sellers." },
 
   // ===== Dispositions (Sharyn, Marie) =====
   { key: "buyers_contacted", name: "Buyers Contacted", emoji: "📇", category: "blue", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: 80, goalKind: "at_least", definition: "Buyers reached out to. Base = Marie (25h); Sharyn target 140." },
@@ -64,8 +70,8 @@ const USERS = [
   { name: "Ethan", email: "ethan@example.com", role: "rep", position: "acquisitions", irregularSchedule: true, note: "Part-time CA, no set schedule (exempt from missing-entry alerts). Listing appts for out-of-buy-box deals. Limited lead access." },
   { name: "Irish", email: "irish@example.com", role: "rep", position: "cc_lm", note: "Hybrid cold caller + lead manager (25h/wk). Stretch goal: 3 appts/day." },
   { name: "Sharyn", email: "sharyn@example.com", role: "rep", position: "dispositions", note: "" },
-  { name: "Marie", email: "marie@example.com", role: "rep", position: "dispositions", note: "" },
-  { name: "Manager", email: "manager@example.com", role: "manager", position: "", note: "" },
+  { name: "Marie", email: "marie@example.com", role: "manager", position: "dispositions", note: "Manager access + own Dispositions scorecard." },
+  { name: "Jon", email: "jon@example.com", role: "admin", position: "acquisitions", note: "Owner/admin + own Acquisitions scorecard." },
 ];
 
 // Per-rep goal overrides (Target). period null = standing.

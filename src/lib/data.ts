@@ -18,9 +18,12 @@ export async function getSettings() {
   );
 }
 
+/** Everyone who appears on a scorecard = active + has a position assigned.
+ *  Role (permission: rep/manager/admin) is independent of position (which
+ *  scorecard), so a manager/admin like Marie or Jon can still log their own KPIs. */
 export async function getActiveReps(): Promise<User[]> {
   return db.user.findMany({
-    where: { active: true, role: "rep" },
+    where: { active: true, position: { not: "" } },
     orderBy: { name: "asc" },
   });
 }
