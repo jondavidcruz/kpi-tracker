@@ -111,3 +111,32 @@ export async function getMonthlyValues(date: string): Promise<Map<string, number
 export function monthKey(date: string): string {
   return monthOf(date);
 }
+
+// --- Deals (Dispositions board) ---------------------------------------------
+
+/** Active deals for the board / report, newest activity first. */
+export async function getActiveDeals() {
+  return db.deal.findMany({
+    where: { active: true },
+    orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+  });
+}
+
+/** Deals still being pushed to sell (everything except sold/dead) — for report pg 6. */
+export async function getOpenDeals() {
+  return db.deal.findMany({
+    where: { active: true, status: { notIn: ["sold", "dead"] } },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+/** Sum of entries per "kpiId|userId" across an inclusive date range (for weekly report). */
+export async function getRangeSums(start: string, end: string): Promise<Map<string, number>> {
+  const entries = await db.entry.findMany({ where: { date: { gte: start, lte: end } } });
+  const sums = new Map<string, number>();
+  for (const e of entries) {
+    const key = `${e.kpiId}|${e.userId ?? ""}`;
+    sums.set(key, (sums.get(key) ?? 0) + e.value);
+  }
+  return sums;
+}

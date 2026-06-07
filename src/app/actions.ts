@@ -178,3 +178,48 @@ export async function createKpi(formData: FormData) {
   revalidatePath("/entry");
   redirect(`/admin?saved=${encodeURIComponent(name)}`);
 }
+
+// --- Deals (Dispositions board) ---------------------------------------------
+
+function numOrNull(v: FormDataEntryValue | null): number | null {
+  const s = String(v ?? "").replace(/[$,\s]/g, "").trim();
+  if (s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Create or update a deal. */
+export async function saveDeal(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const address = String(formData.get("address") ?? "").trim();
+  if (!address) return;
+  const data = {
+    address,
+    status: String(formData.get("status") ?? "under_contract"),
+    assignedTo: String(formData.get("assignedTo") ?? "").trim(),
+    buyerName: String(formData.get("buyerName") ?? "").trim(),
+    contractPrice: numOrNull(formData.get("contractPrice")),
+    askingPrice: numOrNull(formData.get("askingPrice")),
+    soldPrice: numOrNull(formData.get("soldPrice")),
+    contractDate: String(formData.get("contractDate") ?? "").trim(),
+    soldDate: String(formData.get("soldDate") ?? "").trim(),
+    notes: String(formData.get("notes") ?? "").trim(),
+  };
+  if (id) {
+    await db.deal.update({ where: { id }, data });
+  } else {
+    await db.deal.create({ data });
+  }
+  revalidatePath("/deals");
+  revalidatePath("/report");
+  redirect("/deals?saved=1");
+}
+
+/** Archive a deal (soft-delete: hides from board, keeps history). */
+export async function archiveDeal(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.deal.update({ where: { id }, data: { active: false } });
+  revalidatePath("/deals");
+  revalidatePath("/report");
+  redirect("/deals?saved=1");
+}

@@ -59,3 +59,37 @@ export function friendlyDate(dateStr: string): string {
 export function paceFraction(dateStr: string): number {
   return dayOfMonth(dateStr) / daysInMonth(dateStr);
 }
+
+/** Last week's Mon–Sun range (the completed week before the one containing `dateStr`). */
+export function lastWeekRange(dateStr: string): { start: string; end: string; label: string } {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0=Sun..6=Sat
+  // Days back to this week's Monday:
+  const toMonday = dow === 0 ? 6 : dow - 1;
+  const thisMon = new Date(dt);
+  thisMon.setUTCDate(dt.getUTCDate() - toMonday);
+  const lastMon = new Date(thisMon);
+  lastMon.setUTCDate(thisMon.getUTCDate() - 7);
+  const lastSun = new Date(lastMon);
+  lastSun.setUTCDate(lastMon.getUTCDate() + 6);
+  const fmt = (x: Date) => x.toISOString().slice(0, 10);
+  const start = fmt(lastMon);
+  const end = fmt(lastSun);
+  const labelFmt = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
+  return { start, end, label: `${labelFmt.format(lastMon)} – ${labelFmt.format(lastSun)}` };
+}
+
+/** All date strings in an inclusive range. */
+export function datesInRange(start: string, end: string): string[] {
+  const out: string[] = [];
+  const [ys, ms, ds] = start.split("-").map(Number);
+  const [ye, me, de] = end.split("-").map(Number);
+  const cur = new Date(Date.UTC(ys, ms - 1, ds));
+  const last = new Date(Date.UTC(ye, me - 1, de));
+  while (cur <= last) {
+    out.push(cur.toISOString().slice(0, 10));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return out;
+}

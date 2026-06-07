@@ -6,7 +6,9 @@ import { signOut } from "@/app/actions";
 const BASE_NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/entry", label: "Enter KPIs" },
+  { href: "/deals", label: "Deals" },
   { href: "/monthly", label: "Monthly" },
+  { href: "/report", label: "Weekly Report" },
   { href: "/alerts", label: "Alerts" },
 ];
 
