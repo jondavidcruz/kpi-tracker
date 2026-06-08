@@ -74,6 +74,10 @@ export default async function AdminPage({
               <span className={labelCls}>Alert email recipients (comma-separated)</span>
               <input name="alertEmailRecipients" defaultValue={settings.alertEmailRecipients} placeholder="manager@co.com, owner@co.com" className={inputCls} />
             </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Weekly report email recipients (Monday AM team KPIs)</span>
+              <input name="weeklyEmailRecipients" defaultValue={settings.weeklyEmailRecipients} placeholder="you@gmail.com, marie@gmail.com" className={inputCls} />
+            </label>
             <label>
               <span className={labelCls}>Email from address</span>
               <input name="emailFromAddress" defaultValue={settings.emailFromAddress} placeholder="kpi-alerts@co.com" className={inputCls} />

@@ -14,6 +14,7 @@ export async function getSettings() {
       weekStart: "monday",
       orgTimezone: "America/New_York",
       annualRevenueGoal: 0,
+      weeklyEmailRecipients: "",
     }
   );
 }

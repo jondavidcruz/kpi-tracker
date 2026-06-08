@@ -8,6 +8,7 @@ import { formatValue, type Unit } from "./format";
 import { alertSeverity, statusVsGoal, statusVsPace } from "./kpi";
 import { dailyGap, buildCoaching } from "./gap";
 import { dealsNeedingAttention } from "./deals";
+import { sendWeeklyTeamEmail } from "./weekly";
 import {
   alertEmailHtml,
   getChannelConfig,
@@ -403,10 +404,20 @@ export async function sendDealAgingAlerts(today: string): Promise<boolean> {
 
 // --- Orchestrator (called by the cron route) ---------------------------------
 
+/** Current weekday short-name in the org timezone, e.g. "Mon". */
+function weekdayName(tz: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(new Date());
+}
+
 /** True on Saturday/Sunday in the org timezone (team works Mon–Fri only). */
 function isWeekend(tz: string): boolean {
-  const day = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(new Date());
+  const day = weekdayName(tz);
   return day === "Sat" || day === "Sun";
+}
+
+/** True if today (org tz) is the given weekday short-name. */
+function isWeekday(tz: string, name: string): boolean {
+  return weekdayName(tz) === name;
 }
 
 function pastCutoff(cutoff: string, tz: string): boolean {
@@ -425,6 +436,7 @@ export interface ScheduledResult {
   missing: number;
   digestSent: boolean;
   dealAlertsSent: boolean;
+  weeklySent: boolean;
 }
 
 /**
@@ -434,6 +446,7 @@ export interface ScheduledResult {
 export async function runScheduledChecks(opts?: {
   date?: string;
   force?: boolean;
+  weekly?: boolean; // force-send the weekly team email regardless of weekday
 }): Promise<ScheduledResult> {
   const settings = await getSettings();
   const tz = settings.orgTimezone;
@@ -458,5 +471,11 @@ export async function runScheduledChecks(opts?: {
   const digestSent = weekdayOrForce ? await sendDailyDigest(date) : false;
   // Dispo deal-aging watch rides along with the same twice-daily, weekday schedule.
   const dealAlertsSent = weekdayOrForce ? await sendDealAgingAlerts(date) : false;
-  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent };
+
+  // Weekly team KPI email — Monday morning only (or any forced run with ?weekly=1).
+  const isMondayMorning = isWeekday(tz, "Mon") && !pastCutoff("12:00", tz);
+  const weeklySent =
+    opts?.weekly || isMondayMorning ? await sendWeeklyTeamEmail(date) : false;
+
+  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent };
 }

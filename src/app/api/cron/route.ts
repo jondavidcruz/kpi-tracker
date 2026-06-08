@@ -23,7 +23,8 @@ export async function GET(request: Request) {
 
   const date = url.searchParams.get("date") ?? undefined;
   const force = url.searchParams.get("force") === "1";
+  const weekly = url.searchParams.get("weekly") === "1";
 
-  const result = await runScheduledChecks({ date, force });
+  const result = await runScheduledChecks({ date, force, weekly });
   return NextResponse.json({ ok: true, ...result });
 }

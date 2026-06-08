@@ -92,6 +92,7 @@ export async function saveSettings(formData: FormData) {
     workdayCutoff: String(formData.get("workdayCutoff") ?? "18:00").trim(),
     orgTimezone: String(formData.get("orgTimezone") ?? "America/New_York").trim(),
     annualRevenueGoal: numOrNull(formData.get("annualRevenueGoal")) ?? 0,
+    weeklyEmailRecipients: String(formData.get("weeklyEmailRecipients") ?? "").trim(),
   };
   await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
   revalidatePath("/admin");

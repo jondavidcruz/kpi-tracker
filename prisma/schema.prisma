@@ -154,4 +154,5 @@ model Settings {
   weekStart           String  @default("monday")
   orgTimezone         String  @default("America/New_York")
   annualRevenueGoal   Float   @default(0) // for "Goal Remaining by Dec 31" on the report
+  weeklyEmailRecipients String @default("") // comma-separated; Monday team-KPI email
 }
