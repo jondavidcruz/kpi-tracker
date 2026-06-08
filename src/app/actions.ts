@@ -199,18 +199,27 @@ export async function saveDeal(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const address = String(formData.get("address") ?? "").trim();
   if (!address) return;
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
   const data = {
     address,
-    status: String(formData.get("status") ?? "under_contract"),
-    assignedTo: String(formData.get("assignedTo") ?? "").trim(),
-    buyerName: String(formData.get("buyerName") ?? "").trim(),
+    status: str("status") || "under_contract",
+    assignedTo: str("assignedTo"),
+    buyerName: str("buyerName"),
     contractPrice: numOrNull(formData.get("contractPrice")),
     askingPrice: numOrNull(formData.get("askingPrice")),
     soldPrice: numOrNull(formData.get("soldPrice")),
     assignmentFee: numOrNull(formData.get("assignmentFee")),
-    contractDate: String(formData.get("contractDate") ?? "").trim(),
-    soldDate: String(formData.get("soldDate") ?? "").trim(),
-    notes: String(formData.get("notes") ?? "").trim(),
+    dealType: str("dealType"),
+    source: str("source"),
+    lmAq: str("lmAq"),
+    contractDate: str("contractDate"),
+    contractExpiration: str("contractExpiration"),
+    onMarketSince: str("onMarketSince"),
+    listingSignedDate: str("listingSignedDate"),
+    listingExpiration: str("listingExpiration"),
+    soldDate: str("soldDate"),
+    nextSteps: str("nextSteps"),
+    notes: str("notes"),
   };
   if (id) {
     await db.deal.update({ where: { id }, data });

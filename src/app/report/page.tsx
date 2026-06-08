@@ -9,6 +9,7 @@ import {
 import { todayStr, lastWeekRange } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
+import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { Card, SectionTitle } from "@/components/ui";
 import type { Kpi, User } from "@prisma/client";
 
@@ -136,29 +137,39 @@ export default async function ReportPage({
                 <th className="px-4 py-3 font-semibold">Property</th>
                 <th className="px-3 py-3 font-semibold">Status</th>
                 <th className="px-3 py-3 font-semibold">Rep</th>
-                <th className="px-3 py-3 font-semibold">Buyer</th>
+                <th className="px-3 py-3 font-semibold">Rep</th>
+                <th className="px-3 py-3 text-center font-semibold">Days</th>
                 <th className="px-3 py-3 text-right font-semibold">Contract</th>
-                <th className="px-3 py-3 text-right font-semibold">Asking</th>
+                <th className="px-3 py-3 text-right font-semibold">Est. profit</th>
+                <th className="px-3 py-3 font-semibold">Next steps / action</th>
               </tr>
             </thead>
             <tbody>
               {deals.map((d) => {
                 const st = DEAL_STATUS[d.status] ?? { label: d.status, cls: "bg-slate-100 text-slate-700" };
+                const aging = analyzeDeal(d, today);
                 return (
-                  <tr key={d.id} className="border-b border-slate-100 last:border-0">
+                  <tr key={d.id} className="border-b border-slate-100 last:border-0 align-top">
                     <td className="px-4 py-3 font-semibold text-slate-800">{d.address}</td>
                     <td className="px-3 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${st.cls}`}>{st.label}</span>
                     </td>
                     <td className="px-3 py-3 text-slate-600">{d.assignedTo || "—"}</td>
-                    <td className="px-3 py-3 text-slate-600">{d.buyerName || "—"}</td>
+                    <td className="px-3 py-3 text-center">
+                      {aging.days === null ? <span className="text-slate-400">—</span> : (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${agingClasses(aging.level)}`}>{aging.days}d</span>
+                      )}
+                    </td>
                     <td className="px-3 py-3 text-right tabular-nums">{money(d.contractPrice)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{money(d.askingPrice)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{money(d.assignmentFee)}</td>
+                    <td className="px-3 py-3 text-sm text-slate-600 max-w-xs">
+                      {d.nextSteps || (aging.level !== "fresh" ? <span className="text-amber-700">{aging.recommendation}</span> : "—")}
+                    </td>
                   </tr>
                 );
               })}
               {deals.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No active deals right now.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No active deals right now.</td></tr>
               )}
             </tbody>
           </table>

@@ -116,16 +116,29 @@ model Deal {
   status        String   @default("under_contract")
   assignedTo    String   @default("") // dispo rep name (Sharyn / Marie)
   buyerName     String   @default("") // set once a buyer is found
-  contractPrice Float? // what we have it under contract for
+  contractPrice Float? // under-contract amount (what we have it locked at)
   askingPrice   Float? // what we're marketing it at
   soldPrice     Float? // final assignment / sale price to the buyer
-  assignmentFee Float? // OUR revenue on this deal (the fee/spread we book)
-  contractDate  String   @default("") // "YYYY-MM-DD" we went under contract
-  soldDate      String   @default("") // "YYYY-MM-DD" closed/assigned
-  notes         String   @default("")
-  active        Boolean  @default(true) // false = archived/dead, hidden from board
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  assignmentFee Float? // OUR revenue on this deal (profit estimate / fee)
+
+  // ---- pipeline detail mirrored from the Excel deal sheet ----
+  dealType      String   @default("") // Novation | Wholesale | JV | Wholesale/Novation ...
+  source        String   @default("") // PPL | Irish | Jon ...
+  lmAq          String   @default("") // LM/AQ credit, e.g. "Mitch/Jon"
+
+  // ---- key dates (all "YYYY-MM-DD"; blank = unknown) ----
+  contractDate       String @default("") // contract signed (us & seller)
+  contractExpiration String @default("") // contract expiration (us & seller)
+  onMarketSince      String @default("") // first listed on market
+  listingSignedDate  String @default("") // listing contract signed
+  listingExpiration  String @default("") // listing contract expiration
+  soldDate           String @default("") // closed / assigned
+
+  nextSteps String   @default("") // current plan / where the deal stands
+  notes     String   @default("")
+  active    Boolean  @default(true) // false = archived, hidden from board
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
 }

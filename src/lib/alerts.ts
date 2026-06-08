@@ -7,6 +7,7 @@ import { monthOf, paceFraction, todayStr } from "./date";
 import { formatValue, type Unit } from "./format";
 import { alertSeverity, statusVsGoal, statusVsPace } from "./kpi";
 import { dailyGap, buildCoaching } from "./gap";
+import { dealsNeedingAttention } from "./deals";
 import {
   alertEmailHtml,
   getChannelConfig,
@@ -363,6 +364,43 @@ export async function sendDailyDigest(date: string): Promise<boolean> {
   return chatOk || emailOk;
 }
 
+// --- Deal aging alerts -------------------------------------------------------
+
+/** Post a digest of dispo deals sitting too long / nearing expiration. */
+export async function sendDealAgingAlerts(today: string): Promise<boolean> {
+  const deals = await db.deal.findMany({ where: { active: true } });
+  const flagged = dealsNeedingAttention(deals, today);
+  if (flagged.length === 0) return false;
+
+  const cfg = await getChannelConfig();
+
+  const chatLines = flagged.map((x) => {
+    const icon = x.aging.level === "stale" ? "🔴" : x.aging.level === "reduce" ? "🟠" : "🟡";
+    const who = x.deal.assignedTo ? ` (${x.deal.assignedTo})` : "";
+    return `${icon} *${x.deal.address}*${who}\n   ${x.aging.recommendation}${x.deal.nextSteps ? `\n   _Next:_ ${x.deal.nextSteps}` : ""}`;
+  });
+  const chatText = `🏠 *Dispo Deal Watch* — ${flagged.length} deal${flagged.length === 1 ? "" : "s"} need attention:\n\n` + chatLines.join("\n\n");
+  const chatOk = await sendGoogleChat(chatText, cfg);
+
+  const cards = flagged
+    .map((x) => {
+      const tone = x.aging.level === "stale" ? "#b91c1c" : x.aging.level === "reduce" ? "#b45309" : "#0369a1";
+      return `<div style="margin:0 0 12px;padding:12px 14px;background:#fafafa;border-left:4px solid ${tone};border-radius:8px;">
+        <div style="font-weight:700;color:#0b1f3a;">${escapeHtmlLocal(x.deal.address)}${x.deal.assignedTo ? ` · ${escapeHtmlLocal(x.deal.assignedTo)}` : ""}</div>
+        <div style="color:${tone};font-weight:600;margin:4px 0;">${escapeHtmlLocal(x.aging.recommendation)}</div>
+        ${x.deal.nextSteps ? `<div style="color:#475569;"><strong>Next steps:</strong> ${escapeHtmlLocal(x.deal.nextSteps)}</div>` : ""}
+      </div>`;
+    })
+    .join("");
+  const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:600px;margin:0 auto;">
+    <h2 style="color:#0b1f3a;">🏠 Dispo Deal Watch</h2>
+    <p style="color:#64748b;">Deals on market too long or nearing expiration — act to keep them moving.</p>
+    ${cards}
+  </div>`;
+  const emailOk = await sendEmail(`🏠 Dispo Deal Watch — ${flagged.length} need attention`, html, cfg);
+  return chatOk || emailOk;
+}
+
 // --- Orchestrator (called by the cron route) ---------------------------------
 
 /** True on Saturday/Sunday in the org timezone (team works Mon–Fri only). */
@@ -386,6 +424,7 @@ export interface ScheduledResult {
   newAlerts: number;
   missing: number;
   digestSent: boolean;
+  dealAlertsSent: boolean;
 }
 
 /**
@@ -415,7 +454,9 @@ export async function runScheduledChecks(opts?: {
   // (hard + soft + missing), each with its gap + training plan. Instant hard
   // alerts already fired on save; the digest is the pre-/post-shift summary.
   // Skip on weekends (team works Mon–Fri) unless a manual force run is requested.
-  const digestSent =
-    opts?.force || !isWeekend(tz) ? await sendDailyDigest(date) : false;
-  return { date, newAlerts: created.length, missing: missing.length, digestSent };
+  const weekdayOrForce = opts?.force || !isWeekend(tz);
+  const digestSent = weekdayOrForce ? await sendDailyDigest(date) : false;
+  // Dispo deal-aging watch rides along with the same twice-daily, weekday schedule.
+  const dealAlertsSent = weekdayOrForce ? await sendDealAgingAlerts(date) : false;
+  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent };
 }
