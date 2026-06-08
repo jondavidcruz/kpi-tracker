@@ -199,6 +199,14 @@ const COACHING: Record<string, Coaching> = {
       "Follow up within hours, not days, on unsigned contracts.",
     ],
   },
+  internet_speed: {
+    diagnose: "Internet is below the minimum to work reliably — calls drop, dialer lags, CRM stalls.",
+    fix: [
+      "Restart the router/modem, then run a fresh speed test.",
+      "Move closer to the router or switch to a wired/ethernet connection.",
+      "If it stays low, switch to a mobile hotspot and flag a manager — log any outage.",
+    ],
+  },
 };
 
 const GENERIC: Coaching = {

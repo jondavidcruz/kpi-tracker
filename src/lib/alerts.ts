@@ -64,7 +64,7 @@ export async function evaluateAndRecordAlerts(
     const subjects: { userId: string | null; userName: string | null }[] =
       kpi.scope === "per_rep"
         ? reps
-            .filter((r) => r.position === kpi.roleKey)
+            .filter((r) => (kpi.roleKey === "internet" ? r.tracksInternet : r.position === kpi.roleKey))
             .map((r) => ({ userId: r.id, userName: r.name }))
         : [{ userId: null, userName: null }];
 
@@ -281,7 +281,7 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
   for (const kpi of kpis) {
     const severity = alertSeverity(kpi);
     if (!severity) continue;
-    for (const rep of reps.filter((r) => r.position === kpi.roleKey)) {
+    for (const rep of reps.filter((r) => (kpi.roleKey === "internet" ? r.tracksInternet : r.position === kpi.roleKey))) {
       if (rep.irregularSchedule) continue; // no set schedule — don't nag on off days
       const entry = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: rep.id, date } });
       if (entry) continue; // they logged something — nothing missing

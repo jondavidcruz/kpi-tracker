@@ -29,9 +29,13 @@ export default async function EntryPage({
   const selectedId = sp.user ?? reps[0]?.id;
   const rep = reps.find((r) => r.id === selectedId);
 
-  const [roleKpis, teamDaily, values, targets] = await Promise.all([
+  const [roleKpis, internetKpis, teamDaily, values, targets] = await Promise.all([
     rep
       ? getKpis({ scope: "per_rep", cadence: "daily", computed: false, roleKey: rep.position })
+      : Promise.resolve([]),
+    // Internet-speed KPI shows for anyone flagged tracksInternet, across roles.
+    rep?.tracksInternet
+      ? getKpis({ scope: "per_rep", cadence: "daily", computed: false, roleKey: "internet" })
       : Promise.resolve([]),
     getKpis({ scope: "team", cadence: "daily", computed: false }),
     getDailyValues(date),
@@ -40,19 +44,20 @@ export default async function EntryPage({
 
   const groups: EntryGroup[] = [];
   if (rep) {
+    const items = [...roleKpis, ...internetKpis].map((k) => ({
+      kpiId: k.id,
+      name: k.name,
+      emoji: k.emoji,
+      unit: k.unit as Unit,
+      goalValue: resolveGoalWith(targets, k, rep.id, month),
+      goalKind: k.goalKind,
+      userId: rep.id,
+      initial: toInputNumber(k.unit as Unit, values.get(`${k.id}|${rep.id}`)),
+    }));
     groups.push({
       title: `${rep.name} · ${positionLabel(rep.position)}`,
       hint: "Your activity for the day.",
-      items: roleKpis.map((k) => ({
-        kpiId: k.id,
-        name: k.name,
-        emoji: k.emoji,
-        unit: k.unit as Unit,
-        goalValue: resolveGoalWith(targets, k, rep.id, month),
-        goalKind: k.goalKind,
-        userId: rep.id,
-        initial: toInputNumber(k.unit as Unit, values.get(`${k.id}|${rep.id}`)),
-      })),
+      items,
     });
   }
   if (teamDaily.length > 0) {

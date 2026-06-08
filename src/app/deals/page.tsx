@@ -1,5 +1,5 @@
 import { archiveDeal, saveDeal } from "@/app/actions";
-import { getActiveDeals, getSettings } from "@/lib/data";
+import { getActiveDeals, getActiveReps, getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { Card, SectionTitle } from "@/components/ui";
@@ -29,6 +29,10 @@ export default async function DealsPage({
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
   const deals = await getActiveDeals();
+  const reps = await getActiveReps();
+  const dispoReps = reps.filter((r) => r.position === "dispositions").map((r) => r.name);
+  // include any names already on deals (e.g. legacy "Sharyn") so they still show.
+  const repNames = Array.from(new Set([...dispoReps, ...deals.map((d) => d.assignedTo).filter(Boolean)]));
 
   const byStatus = STATUSES.map((s) => ({ ...s, count: deals.filter((d) => d.status === s.key).length }));
   const openCount = deals.filter((d) => !["dead", "closed"].includes(d.status)).length;
@@ -67,8 +71,7 @@ export default async function DealsPage({
           </select>
           <select name="assignedTo" defaultValue="" className={inputCls}>
             <option value="">— assign to —</option>
-            <option value="Sharyn">Sharyn</option>
-            <option value="Marie">Marie</option>
+            {repNames.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
           <input name="dealType" placeholder="Type (Novation…)" className={inputCls} />
           <input name="contractPrice" placeholder="Contract $" className={inputCls} />
@@ -86,14 +89,14 @@ export default async function DealsPage({
           <Card className="p-10 text-center text-slate-400">No deals yet. Add your first one above.</Card>
         )}
         {deals.map((d) => (
-          <DealCard key={d.id} deal={d} today={today} />
+          <DealCard key={d.id} deal={d} today={today} repNames={repNames} />
         ))}
       </div>
     </div>
   );
 }
 
-function DealCard({ deal, today }: { deal: Deal; today: string }) {
+function DealCard({ deal, today, repNames }: { deal: Deal; today: string; repNames: string[] }) {
   const st = STATUSES.find((s) => s.key === deal.status) ?? STATUSES[0];
   const isLive = !["dead", "closed"].includes(deal.status);
   const aging = analyzeDeal(deal, today);
@@ -129,7 +132,8 @@ function DealCard({ deal, today }: { deal: Deal; today: string }) {
         </Field>
         <Field label="Dispo rep">
           <select name="assignedTo" defaultValue={deal.assignedTo} className={inputCls}>
-            <option value="">—</option><option value="Sharyn">Sharyn</option><option value="Marie">Marie</option>
+            <option value="">—</option>
+            {repNames.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </Field>
 

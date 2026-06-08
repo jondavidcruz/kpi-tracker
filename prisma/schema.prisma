@@ -23,6 +23,7 @@ model User {
   position  String   @default("") // acquisitions | cc_lm | dispositions  (which scorecard)
   note      String   @default("") // free-text context, e.g. "part-time, CA listings"
   irregularSchedule Boolean @default(false) // exempt from missing-entry alerts (no set schedule)
+  tracksInternet    Boolean @default(false) // logs daily internet speed (remote/unreliable connection)
   active    Boolean  @default(true)
   timezone  String   @default("America/New_York")
   createdAt DateTime @default(now())

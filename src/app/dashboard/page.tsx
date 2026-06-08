@@ -61,11 +61,14 @@ export default async function DashboardPage({
   // --- Build the gap list (who's behind + how to close it) ---
   const gaps: GapItem[] = [];
   let onGoal = 0;
+  const internetKpis = perRepKpis.filter((k) => k.roleKey === "internet");
   for (const pos of POSITIONS) {
     const roleReps = reps.filter((r) => r.position === pos.key);
     const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
     for (const rep of roleReps) {
-      for (const k of roleKpis) {
+      // each rep sees their role KPIs + internet KPI if they track it
+      const repKpis = rep.tracksInternet ? [...roleKpis, ...internetKpis] : roleKpis;
+      for (const k of repKpis) {
         const value = dailyValues.get(`${k.id}|${rep.id}`);
         if (value === undefined) continue;
         const goal = resolveGoalWith(targets, k, rep.id, month);
