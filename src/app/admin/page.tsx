@@ -150,6 +150,24 @@ export default async function AdminPage({
         </Card>
       </section>
 
+      {/* Weekly reviews */}
+      <section>
+        <SectionTitle title="Weekly performance reviews" subtitle="High-level per-rep review for keep / coach / reassign decisions" accent="bg-violet-400" />
+        <Card className="p-6">
+          <div className="flex flex-wrap gap-2">
+            {users.filter((u) => u.position).map((u) => (
+              <Link
+                key={u.id}
+                href={`/review/${u.id}`}
+                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
+              >
+                📋 {u.name}
+              </Link>
+            ))}
+          </div>
+        </Card>
+      </section>
+
       {/* KPIs */}
       <section>
         <SectionTitle title="KPIs & goals" subtitle="Category drives alert urgency · duration goals are in minutes" accent="bg-emerald-400" />
