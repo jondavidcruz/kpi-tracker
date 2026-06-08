@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getSettings, resolveGoalWith, getAllTargets } from "@/lib/data";
 import { todayStr, lastWeekRange, datesInRange } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
 
@@ -19,12 +19,12 @@ export default async function ReviewPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const me = await getCurrentUser();
-  if (!isManager(me)) {
+  if (!isAdmin(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
-        <h1 className="text-xl font-bold">Managers only</h1>
-        <p className="mt-2 text-sm text-slate-500">Performance reviews are limited to managers.</p>
+        <h1 className="text-xl font-bold">Private</h1>
+        <p className="mt-2 text-sm text-slate-500">Performance reviews are owner-only.</p>
         <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
       </Card>
     );

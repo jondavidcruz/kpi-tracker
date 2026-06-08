@@ -22,3 +22,8 @@ export async function getCurrentUser(): Promise<User | null> {
 export function isManager(user: User | null): boolean {
   return !!user && (user.role === "manager" || user.role === "admin");
 }
+
+/** Admin only (currently just Jon) — for owner-private views like rep reviews. */
+export function isAdmin(user: User | null): boolean {
+  return !!user && user.role === "admin";
+}

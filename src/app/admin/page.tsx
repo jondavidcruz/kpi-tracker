@@ -5,7 +5,7 @@ import { toInputNumber, type Unit } from "@/lib/format";
 import { categoryMeta } from "@/lib/kpi";
 import { POSITIONS } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -150,23 +150,26 @@ export default async function AdminPage({
         </Card>
       </section>
 
-      {/* Weekly reviews */}
-      <section>
-        <SectionTitle title="Weekly performance reviews" subtitle="High-level per-rep review for keep / coach / reassign decisions" accent="bg-violet-400" />
-        <Card className="p-6">
-          <div className="flex flex-wrap gap-2">
-            {users.filter((u) => u.position).map((u) => (
-              <Link
-                key={u.id}
-                href={`/review/${u.id}`}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
-              >
-                📋 {u.name}
-              </Link>
-            ))}
-          </div>
-        </Card>
-      </section>
+      {/* Weekly reviews — owner-private (admin only) */}
+      {isAdmin(me) && (
+        <section>
+          <SectionTitle title="Weekly performance reviews 🔒" subtitle="Owner-only · keep / coach / reassign decisions" accent="bg-violet-400" />
+          <Card className="p-6">
+            <div className="flex flex-wrap gap-2">
+              {users.filter((u) => u.position).map((u) => (
+                <Link
+                  key={u.id}
+                  href={`/review/${u.id}`}
+                  className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
+                >
+                  📋 {u.name}
+                </Link>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-400">Only you (admin) can see this section and open reviews.</p>
+          </Card>
+        </section>
+      )}
 
       {/* KPIs */}
       <section>
