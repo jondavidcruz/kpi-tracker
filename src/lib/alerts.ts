@@ -8,7 +8,7 @@ import { formatValue, type Unit } from "./format";
 import { alertSeverity, statusVsGoal, statusVsPace } from "./kpi";
 import { dailyGap, buildCoaching } from "./gap";
 import { dealsNeedingAttention } from "./deals";
-import { sendWeeklyTeamEmail } from "./weekly";
+import { sendWeeklyTeamEmail, sendDailyTeamReview } from "./weekly";
 import {
   alertEmailHtml,
   getChannelConfig,
@@ -437,6 +437,7 @@ export interface ScheduledResult {
   digestSent: boolean;
   dealAlertsSent: boolean;
   weeklySent: boolean;
+  dailyReviewSent: boolean;
 }
 
 /**
@@ -447,6 +448,7 @@ export async function runScheduledChecks(opts?: {
   date?: string;
   force?: boolean;
   weekly?: boolean; // force-send the weekly team email regardless of weekday
+  review?: boolean; // force-send the daily end-of-day team review
 }): Promise<ScheduledResult> {
   const settings = await getSettings();
   const tz = settings.orgTimezone;
@@ -477,5 +479,13 @@ export async function runScheduledChecks(opts?: {
   const weeklySent =
     opts?.weekly || isMondayMorning ? await sendWeeklyTeamEmail(date) : false;
 
-  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent };
+  // End-of-day team review — on the post-cutoff (6:30pm) weekday run, after KPIs
+  // are entered. Force with ?review=1.
+  const postCutoff = pastCutoff(settings.workdayCutoff, tz);
+  const dailyReviewSent =
+    opts?.review || (weekdayOrForce && postCutoff)
+      ? await sendDailyTeamReview(date)
+      : false;
+
+  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent, dailyReviewSent };
 }

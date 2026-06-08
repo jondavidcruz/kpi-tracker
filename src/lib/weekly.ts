@@ -9,9 +9,10 @@ import {
   resolveGoalWith,
   getSettings,
 } from "./data";
-import { lastWeekRange, datesInRange } from "./date";
+import { lastWeekRange, datesInRange, friendlyDate } from "./date";
 import { formatValue, type Unit } from "./format";
-import { POSITIONS } from "./roles";
+import { statusVsGoal } from "./kpi";
+import { POSITIONS, positionLabel } from "./roles";
 import { sendEmail, getChannelConfig } from "./notify";
 
 function esc(s: string): string {
@@ -116,4 +117,75 @@ export async function sendWeeklyTeamEmail(today: string): Promise<boolean> {
   const weeklyCfg = weeklyList.length ? { ...cfg, emailRecipients: weeklyList } : cfg;
 
   return sendEmail(`📊 Weekly Team KPIs — week of ${wk.label}`, html, weeklyCfg);
+}
+
+/** Resolve the recipient config for admin reports (weekly + daily review). */
+async function reportCfg() {
+  const settings = await getSettings();
+  const cfg = await getChannelConfig();
+  const list = (settings.weeklyEmailRecipients || "")
+    .split(/[,;\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return list.length ? { ...cfg, emailRecipients: list } : cfg;
+}
+
+/** End-of-day team performance review — full per-rep block for TODAY.
+ *  Sent on the post-cutoff (6:30pm) weekday cron to the admin recipients. */
+export async function sendDailyTeamReview(date: string): Promise<boolean> {
+  const [reps, perRep, targets] = await Promise.all([
+    getActiveReps(),
+    getKpis({ scope: "per_rep", computed: false }),
+    getAllTargets(),
+  ]);
+  const month = date.slice(0, 7);
+
+  // Today's entries per rep.
+  const entries = await db.entry.findMany({ where: { date } });
+  const valByUserKpi = new Map<string, number>();
+  for (const e of entries) if (e.userId) valByUserKpi.set(`${e.userId}|${e.kpiId}`, e.value);
+
+  const repBlocks = reps
+    .map((rep) => {
+      const repKpis = [
+        ...perRep.filter((k) => k.roleKey === rep.position),
+        ...(rep.tracksInternet ? perRep.filter((k) => k.roleKey === "internet") : []),
+      ];
+      const logged = repKpis.some((k) => valByUserKpi.has(`${rep.id}|${k.id}`));
+
+      const rows = repKpis
+        .map((k) => {
+          const has = valByUserKpi.has(`${rep.id}|${k.id}`);
+          const val = valByUserKpi.get(`${rep.id}|${k.id}`) ?? 0;
+          const goal = resolveGoalWith(targets, k, rep.id, month);
+          const status = has ? statusVsGoal(k.goalKind, val, goal) : "none";
+          const color = status === "hit" ? "#047857" : status === "close" ? "#b45309" : status === "miss" ? "#b91c1c" : "#94a3b8";
+          const goalStr = goal === null || k.goalKind === "tracked" ? "" : ` <span style="color:#94a3b8;">/ ${formatValue(k.unit as Unit, goal)}</span>`;
+          return `<tr><td style="padding:3px 8px;color:#334155;">${esc(k.emoji)} ${esc(k.name)}</td>
+            <td style="padding:3px 8px;text-align:right;font-weight:600;color:${color};font-variant-numeric:tabular-nums;">${has ? formatValue(k.unit as Unit, val) : "—"}${goalStr}</td></tr>`;
+        })
+        .join("");
+
+      const header = logged
+        ? `<span style="color:#047857;">✓ logged</span>`
+        : `<span style="color:#b91c1c;">⚠️ no entry today</span>`;
+
+      return `<div style="margin:0 0 14px;padding:12px 14px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <strong style="color:#0b1f3a;">${esc(rep.name)}</strong>
+          <span style="font-size:12px;">${esc(positionLabel(rep.position))} · ${header}</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;">${rows}</table>
+      </div>`;
+    })
+    .join("");
+
+  const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:640px;margin:0 auto;color:#0f172a;">
+    <h1 style="color:#0b1f3a;">📋 End-of-Day Team Review</h1>
+    <p style="color:#64748b;">${esc(friendlyDate(date))} · each member's KPIs for today vs goal.</p>
+    ${repBlocks}
+    <p style="margin-top:16px;font-size:12px;color:#94a3b8;">🟢 on goal · 🟠 close · 🔴 behind · — not entered. Live: https://kpi-tracker-lovat.vercel.app/dashboard</p>
+  </div>`;
+
+  return sendEmail(`📋 End-of-Day Team Review — ${friendlyDate(date)}`, html, await reportCfg());
 }
