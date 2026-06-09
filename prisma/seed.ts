@@ -35,6 +35,7 @@ const KPIS = [
   { key: "acq_talk_time", name: "Total Talk Time", emoji: "🎧", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 90 * 60, goalKind: "at_least", definition: "Total time on the phone with sellers." },
 
   // ===== Dispositions (Sharyn, Marie) =====
+  { key: "deals_comped", name: "Deals Comped", emoji: "💰", category: "blue", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Deals we ran comps on." },
   { key: "buyers_contacted", name: "Buyers Contacted", emoji: "📇", category: "blue", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: 80, goalKind: "at_least", definition: "Buyers reached out to. Base = Marie (25h); Sharyn target 140." },
   { key: "new_buyers", name: "New Buyers Added", emoji: "➕", category: "green", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: 2, goalKind: "at_least", definition: "New qualified cash buyers added. ~ proven buyers-qualified." },
   { key: "deals_under_contract", name: "Deals Under Contract", emoji: "📑", category: "yellow", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Active deals currently being marketed." },
