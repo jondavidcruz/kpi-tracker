@@ -7,6 +7,7 @@ import { statusClasses, statusVsGoal, type Status } from "@/lib/kpi";
 
 export interface EntryItem {
   kpiId: string;
+  kpiKey: string; // stable slug, used to enable special inputs (e.g. speed test)
   name: string;
   emoji: string;
   unit: Unit;
@@ -57,6 +58,8 @@ export default function EntryForm({
 
 function Field({ item }: { item: EntryItem }) {
   const [raw, setRaw] = useState(item.initial);
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState("");
   // Parse exactly the way the server does (handles duration H:MM, decimal hours,
   // bare minutes) so the live status dot matches what actually gets saved.
   const stored = fromInput(item.unit, raw);
@@ -64,9 +67,30 @@ function Field({ item }: { item: EntryItem }) {
     stored === null ? "none" : statusVsGoal(item.goalKind, stored, item.goalValue);
   const cls = statusClasses(status);
   const suffix = inputSuffix(item.unit);
+  const isSpeed = item.kpiKey === "internet_speed";
+
+  async function runSpeedTest() {
+    setTesting(true);
+    setTestMsg("Testing…");
+    try {
+      const bytes = 3 * 1024 * 1024; // matches /api/speedtest payload
+      const start = performance.now();
+      const res = await fetch(`/api/speedtest?t=${Date.now()}`, { cache: "no-store" });
+      await res.arrayBuffer();
+      const secs = (performance.now() - start) / 1000;
+      const mbps = (bytes * 8) / secs / 1_000_000; // megabits per second
+      const rounded = Math.max(1, Math.round(mbps));
+      setRaw(String(rounded));
+      setTestMsg(`Measured ${rounded} Mbps — remember to Save.`);
+    } catch {
+      setTestMsg("Test failed — check your connection and try again.");
+    } finally {
+      setTesting(false);
+    }
+  }
 
   return (
-    <label className="block">
+    <div className="block">
       <div className="flex items-center justify-between mb-1">
         <span className="text-sm font-medium text-slate-700">
           {item.emoji} {item.name}
@@ -95,7 +119,20 @@ function Field({ item }: { item: EntryItem }) {
         )}
         <span className={`ml-2 h-2.5 w-2.5 rounded-full ${cls.dot}`} />
       </div>
-    </label>
+      {isSpeed && (
+        <div className="mt-1.5 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={runSpeedTest}
+            disabled={testing}
+            className="rounded-md bg-brand-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-navy-2 disabled:opacity-60"
+          >
+            {testing ? "Testing…" : "⚡️ Run speed test"}
+          </button>
+          {testMsg && <span className="text-xs text-slate-500">{testMsg}</span>}
+        </div>
+      )}
+    </div>
   );
 }
 

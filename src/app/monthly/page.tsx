@@ -65,6 +65,7 @@ export default async function MonthlyPage({
     hint: "Entered once per month for the whole team.",
     items: enteredKpis.map((k) => ({
       kpiId: k.id,
+      kpiKey: k.key,
       name: k.name,
       emoji: k.emoji,
       unit: k.unit as Unit,

@@ -46,6 +46,7 @@ export default async function EntryPage({
   if (rep) {
     const items = [...roleKpis, ...internetKpis].map((k) => ({
       kpiId: k.id,
+        kpiKey: k.key,
       name: k.name,
       emoji: k.emoji,
       unit: k.unit as Unit,
@@ -66,6 +67,7 @@ export default async function EntryPage({
       hint: "PPL / text / direct-mail leads — entered once for the whole team.",
       items: teamDaily.map((k) => ({
         kpiId: k.id,
+        kpiKey: k.key,
         name: k.name,
         emoji: k.emoji,
         unit: k.unit as Unit,
