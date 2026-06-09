@@ -177,12 +177,27 @@ const COACHING: Record<string, Coaching> = {
       "Ask every active buyer for a referral.",
     ],
   },
-  deals_sold: {
-    diagnose: "Deals aren't getting assigned/sold — usually buyer-match or pricing/marketing speed.",
+  buyer_offers_received: {
+    diagnose: "Few offers coming back — buyers aren't biting, usually price or property fit.",
     fix: [
-      "Blast new contracts to the matched buyer list within 24h.",
+      "Re-check the asking price against recent comps.",
+      "Follow up with buyers who opened but didn't offer.",
+    ],
+  },
+  // key is still "deals_sold" but now means "Deals Sent to Buyers".
+  deals_sold: {
+    diagnose: "Deals aren't being sent to enough buyers — narrow distribution slows offers.",
+    fix: [
+      "Blast every new contract to the full matched buyer list within 24h.",
+      "Widen the buyer match (adjacent buy-boxes) when interest is thin.",
+      "Send to a backup buyer pool too, not just the obvious matches.",
+    ],
+  },
+  contracts_assigned: {
+    diagnose: "Deals aren't getting assigned/closed — buyer-match or pricing/marketing speed.",
+    fix: [
+      "Lock a backup buyer on every deal so a fallout doesn't kill it.",
       "Re-price or re-market anything sitting >7 days.",
-      "Line up a backup buyer on every deal under contract.",
     ],
   },
   contracts_sent: {
