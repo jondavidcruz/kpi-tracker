@@ -240,3 +240,24 @@ export async function archiveDeal(formData: FormData) {
   revalidatePath("/report");
   redirect("/deals?saved=1");
 }
+
+/** Save a one-off internet speed-test result as today's internet_speed KPI. */
+export async function saveSpeedTest(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  const mbps = Number(formData.get("mbps"));
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(mbps)) return;
+  const kpi = await db.kpi.findUnique({ where: { key: "internet_speed" } });
+  if (!kpi) return;
+  const existing = await db.entry.findFirst({ where: { kpiId: kpi.id, userId, date } });
+  if (existing) {
+    await db.entry.update({ where: { id: existing.id }, data: { value: mbps, enteredBy: "speedtest" } });
+  } else {
+    await db.entry.create({ data: { kpiId: kpi.id, userId, date, value: mbps, enteredBy: "speedtest" } });
+  }
+  // Instant alert if below goal (it's a soft/blue KPI but still flags).
+  const created = await evaluateAndRecordAlerts(date, [kpi.id]);
+  await dispatchHardAlerts(created);
+  revalidatePath("/entry");
+  revalidatePath("/dashboard");
+}

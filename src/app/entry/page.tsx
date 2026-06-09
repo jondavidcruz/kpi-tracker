@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { saveDay } from "@/app/actions";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
+import SpeedTestCard from "@/components/SpeedTestCard";
 import {
   getActiveReps,
   getAllTargets,
@@ -42,11 +43,17 @@ export default async function EntryPage({
     getAllTargets(),
   ]);
 
+  // Internet speed gets its own prominent test card (below), not a plain field.
+  const internetKpi = internetKpis[0] ?? null;
+  const internetGoal = internetKpi && rep ? resolveGoalWith(targets, internetKpi, rep.id, month) : null;
+  const internetInitial =
+    internetKpi && rep ? values.get(`${internetKpi.id}|${rep.id}`) ?? null : null;
+
   const groups: EntryGroup[] = [];
   if (rep) {
-    const items = [...roleKpis, ...internetKpis].map((k) => ({
+    const items = roleKpis.map((k) => ({
       kpiId: k.id,
-        kpiKey: k.key,
+      kpiKey: k.key,
       name: k.name,
       emoji: k.emoji,
       unit: k.unit as Unit,
@@ -119,6 +126,15 @@ export default async function EntryPage({
         />
         <button className="rounded-md bg-slate-200 px-3 py-1.5 font-medium hover:bg-slate-300">Go</button>
       </form>
+
+      {rep && internetKpi && (
+        <SpeedTestCard
+          userId={rep.id}
+          date={date}
+          goal={internetGoal ?? 50}
+          initial={internetInitial}
+        />
+      )}
 
       {groups.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">
