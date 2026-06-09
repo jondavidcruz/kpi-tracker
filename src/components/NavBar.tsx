@@ -43,12 +43,20 @@ export default async function NavBar() {
                 </Link>
               ))}
               {isManager(me) && (
-                <Link
-                  href="/admin"
-                  className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
-                >
-                  Admin
-                </Link>
+                <>
+                  <Link
+                    href="/analytics"
+                    className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+                  >
+                    Analytics
+                  </Link>
+                  <Link
+                    href="/admin"
+                    className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+                  >
+                    Admin
+                  </Link>
+                </>
               )}
               <Link
                 href="/tv"
