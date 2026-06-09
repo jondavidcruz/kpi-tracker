@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
 import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
+import { buildPipDraft } from "@/lib/pip";
+import { getChannelConfig, sendEmail } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 
 /** Sign the current user out and return to the login screen. */
@@ -282,6 +284,31 @@ export async function openPip(formData: FormData) {
   await db.pip.create({
     data: { userId, kpiKey, kpiName, reason, goalNote, plan, support, startDate, reviewDate, stage: "coaching", status: "open" },
   });
+
+  // Generate a SUPPORTIVE draft email addressed to the rep, and send it to the
+  // admin recipients (you) to review/edit/send — NOT auto-sent to the rep.
+  const rep = await db.user.findUnique({ where: { id: userId } });
+  if (rep && String(formData.get("emailDraft")) === "on") {
+    const draft = buildPipDraft({
+      repName: rep.name,
+      repEmail: rep.email,
+      kpiName,
+      goalNote,
+      plan,
+      support,
+      reviewDate,
+    });
+    const cfg = await getChannelConfig();
+    const settings = await db.settings.findUnique({ where: { id: 1 } });
+    const list = (settings?.weeklyEmailRecipients || cfg.emailRecipients.join(","))
+      .split(/[,;\s]+/).map((x: string) => x.trim()).filter(Boolean);
+    await sendEmail(
+      `📝 DRAFT for ${rep.name}: ${draft.subject}`,
+      draft.html,
+      list.length ? { ...cfg, emailRecipients: list } : cfg,
+    );
+  }
+
   revalidatePath("/pip");
   redirect("/pip?saved=1");
 }

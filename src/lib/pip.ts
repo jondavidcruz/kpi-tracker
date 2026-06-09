@@ -8,32 +8,33 @@ import { statusVsGoal } from "./kpi";
 import { buildCoaching, dailyGap } from "./gap";
 import { type Unit } from "./format";
 
-export const PIP_CONSECUTIVE_MISSES = 3; // working days in a row below goal -> flag
+export const PIP_CONSECUTIVE_MISSES = 4; // working days in a row below goal -> flag
 
-// The progressive ladder. Each stage names the support + the consequence if unmet.
+// The progressive ladder — supportive, growth-framed language. Each stage names
+// the support offered + the next step if targets aren't met.
 export const PIP_STAGES = [
   {
     key: "coaching",
-    label: "Stage 1 — Coaching",
-    blurb: "Documented conversation + clear 5-day targets. Support offered first.",
-    consequence: "None yet — support + a clear target. Miss the target → formal PIP.",
+    label: "Stage 1 — Check-in & Support",
+    blurb: "A supportive conversation to understand what's getting in the way, plus a clear target and the help to hit it.",
+    consequence: "Focus is on support — we'll set a target together and revisit in a few days.",
   },
   {
     key: "pip",
-    label: "Stage 2 — Formal PIP",
-    blurb: "Written plan, daily targets, scheduled check-ins, signed acknowledgment.",
-    consequence: "Saturday catch-up hours to make up missed output.",
+    label: "Stage 2 — Improvement Plan",
+    blurb: "A written plan with daily targets and regular check-ins so progress is clear and momentum builds.",
+    consequence: "We'll add a short catch-up session (e.g. Saturday hours) to rebuild momentum on missed days.",
   },
   {
     key: "final",
-    label: "Stage 3 — Final Warning",
-    blurb: "Last review window. Hit targets to exit, or proceed to release.",
-    consequence: "Commission/bonus hold + final written warning. Next miss → release.",
+    label: "Stage 3 — Final Review",
+    blurb: "A defined review window to get back on track, with extra support available.",
+    consequence: "Commission/bonus pauses until targets are met; if results don't improve, we'll discuss next steps for the role.",
   },
   {
     key: "closed",
     label: "Closed",
-    blurb: "Resolved (back on target) or separation completed.",
+    blurb: "Back on track, or a role change/separation was decided.",
     consequence: "—",
   },
 ];
@@ -132,4 +133,57 @@ function shiftDays(date: string, delta: number): string {
   const d = new Date(date + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + delta);
   return d.toISOString().slice(0, 10);
+}
+
+/** Build a supportive draft email a manager can review, edit, and send to the rep.
+ *  Returns subject + html. NOT auto-sent to the rep — drafted for the manager. */
+export function buildPipDraft(opts: {
+  repName: string;
+  repEmail: string;
+  kpiName: string;
+  goalNote: string;
+  plan: string;
+  support: string;
+  reviewDate: string;
+}): { subject: string; html: string; text: string } {
+  const first = opts.repName.split(" ")[0];
+  const planLines = opts.plan
+    .split("\n")
+    .map((l) => l.replace(/^[-•]\s*/, "").trim())
+    .filter(Boolean);
+
+  const subject = `Quick check-in & a plan to support you — ${opts.kpiName}`;
+  const text =
+`Hi ${first},
+
+I wanted to check in. I've noticed ${opts.kpiName} has been below target for a few days, and I want to make sure you have what you need to turn it around — this is about supporting you, not piling on.
+
+Here's a simple plan to get back on track:
+• Target: ${opts.goalNote || `consistently hit goal on ${opts.kpiName}`}
+${planLines.map((l) => `• ${l}`).join("\n")}
+
+${opts.support ? `Support from us: ${opts.support}\n` : ""}Let's touch base${opts.reviewDate ? ` on ${opts.reviewDate}` : " soon"} to see how it's going. If something's getting in the way (leads, internet, training — anything), tell me and we'll sort it together.
+
+You've got this.
+
+— Jon`;
+
+  const html =
+`<div style="font-family:system-ui,Arial,sans-serif;max-width:560px;color:#0f172a;line-height:1.5;">
+  <p>Hi ${first},</p>
+  <p>I wanted to check in. I've noticed <strong>${opts.kpiName}</strong> has been below target for a few days, and I want to make sure you have what you need to turn it around — this is about supporting you, not piling on.</p>
+  <p><strong>Here's a simple plan to get back on track:</strong></p>
+  <ul style="padding-left:20px;">
+    <li><strong>Target:</strong> ${opts.goalNote || `consistently hit goal on ${opts.kpiName}`}</li>
+    ${planLines.map((l) => `<li>${l}</li>`).join("")}
+  </ul>
+  ${opts.support ? `<p><strong>Support from us:</strong> ${opts.support}</p>` : ""}
+  <p>Let's touch base${opts.reviewDate ? ` on <strong>${opts.reviewDate}</strong>` : " soon"} to see how it's going. If something's getting in the way (leads, internet, training — anything), tell me and we'll sort it together.</p>
+  <p>You've got this.</p>
+  <p>— Jon</p>
+  <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">
+  <p style="font-size:12px;color:#94a3b8;">DRAFT for ${opts.repName} (${opts.repEmail}). Review and edit before sending — this was not sent to them.</p>
+</div>`;
+
+  return { subject, html, text };
 }

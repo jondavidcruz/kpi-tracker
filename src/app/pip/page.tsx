@@ -91,7 +91,10 @@ export default async function PipPage({ searchParams }: { searchParams: Promise<
                       <input name="support" placeholder="better leads / internet fix / training" className={inputCls} /></label>
                     <label><span className={lbl}>Review date</span><input type="date" name="reviewDate" className={inputCls} /></label>
                     <input type="hidden" name="startDate" value={today} />
-                    <div className="sm:col-span-2"><button className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Open PIP (Stage 1 — Coaching)</button></div>
+                    <label className="flex items-center gap-2 text-sm text-slate-600 sm:col-span-2">
+                      <input type="checkbox" name="emailDraft" defaultChecked /> Email me a supportive draft to review &amp; send to {c.userName.split(" ")[0]}
+                    </label>
+                    <div className="sm:col-span-2"><button className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Open plan (Stage 1 — Check-in &amp; Support)</button></div>
                   </form>
                 </details>
               </Card>
