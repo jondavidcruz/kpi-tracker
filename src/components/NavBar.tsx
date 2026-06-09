@@ -51,6 +51,12 @@ export default async function NavBar() {
                     Analytics
                   </Link>
                   <Link
+                    href="/pip"
+                    className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+                  >
+                    PIPs
+                  </Link>
+                  <Link
                     href="/admin"
                     className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
                   >

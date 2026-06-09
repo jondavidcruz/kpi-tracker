@@ -13,6 +13,7 @@ import { lastWeekRange, datesInRange, friendlyDate } from "./date";
 import { formatValue, type Unit } from "./format";
 import { statusVsGoal } from "./kpi";
 import { POSITIONS, positionLabel } from "./roles";
+import { findPipCandidates, PIP_CONSECUTIVE_MISSES } from "./pip";
 import { sendEmail, getChannelConfig } from "./notify";
 
 function esc(s: string): string {
@@ -180,10 +181,23 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
     })
     .join("");
 
+  // PIP flags: anyone who just hit the consecutive-miss threshold.
+  const candidates = await findPipCandidates(date);
+  const pipBlock = candidates.length
+    ? `<div style="margin-top:18px;padding:14px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;">
+        <h2 style="margin:0 0 6px;color:#b91c1c;">🎯 Flagged for a Performance Plan (${candidates.length})</h2>
+        <ul style="margin:0;padding-left:20px;color:#334155;font-size:13px;">
+          ${candidates.map((c) => `<li><strong>${esc(c.userName)}</strong> — ${esc(c.kpiName)} below goal ${PIP_CONSECUTIVE_MISSES} days straight.</li>`).join("")}
+        </ul>
+        <p style="margin:8px 0 0;font-size:12px;color:#94a3b8;">Open a documented plan → https://kpi-tracker-lovat.vercel.app/pip</p>
+      </div>`
+    : "";
+
   const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:640px;margin:0 auto;color:#0f172a;">
     <h1 style="color:#0b1f3a;">📋 End-of-Day Team Review</h1>
     <p style="color:#64748b;">${esc(friendlyDate(date))} · each member's KPIs for today vs goal.</p>
     ${repBlocks}
+    ${pipBlock}
     <p style="margin-top:16px;font-size:12px;color:#94a3b8;">🟢 on goal · 🟠 close · 🔴 behind · — not entered. Live: https://kpi-tracker-lovat.vercel.app/dashboard</p>
   </div>`;
 

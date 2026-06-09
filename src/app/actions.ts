@@ -261,3 +261,82 @@ export async function saveSpeedTest(formData: FormData) {
   revalidatePath("/entry");
   revalidatePath("/dashboard");
 }
+
+// --- PIP (Performance Improvement Plan) -------------------------------------
+
+/** Open a new PIP for a rep+KPI (typically from a flagged candidate). */
+export async function openPip(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  const kpiKey = String(formData.get("kpiKey") ?? "");
+  const kpiName = String(formData.get("kpiName") ?? "").trim();
+  if (!userId || !kpiKey) return;
+  const reason = String(formData.get("reason") ?? "").trim();
+  const goalNote = String(formData.get("goalNote") ?? "").trim();
+  const plan = String(formData.get("plan") ?? "").trim();
+  const support = String(formData.get("support") ?? "").trim();
+  const startDate = String(formData.get("startDate") ?? "").trim();
+  const reviewDate = String(formData.get("reviewDate") ?? "").trim();
+  // Don't duplicate an open PIP for the same rep+KPI.
+  const existing = await db.pip.findFirst({ where: { userId, kpiKey, status: "open" } });
+  if (existing) { revalidatePath("/pip"); redirect("/pip?saved=1"); }
+  await db.pip.create({
+    data: { userId, kpiKey, kpiName, reason, goalNote, plan, support, startDate, reviewDate, stage: "coaching", status: "open" },
+  });
+  revalidatePath("/pip");
+  redirect("/pip?saved=1");
+}
+
+/** Update an existing PIP (plan text, consequence, dates). */
+export async function updatePip(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.pip.update({
+    where: { id },
+    data: {
+      goalNote: String(formData.get("goalNote") ?? "").trim(),
+      plan: String(formData.get("plan") ?? "").trim(),
+      support: String(formData.get("support") ?? "").trim(),
+      consequence: String(formData.get("consequence") ?? "").trim(),
+      reviewDate: String(formData.get("reviewDate") ?? "").trim(),
+    },
+  });
+  revalidatePath("/pip");
+  redirect("/pip?saved=1");
+}
+
+/** Add a dated check-in note to a PIP. */
+export async function addPipCheckin(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const note = String(formData.get("note") ?? "").trim();
+  const date = String(formData.get("date") ?? "").trim();
+  if (!id || !note) return;
+  const pip = await db.pip.findUnique({ where: { id } });
+  if (!pip) return;
+  const checkins = JSON.parse(pip.checkins || "[]");
+  checkins.push({ date, note });
+  await db.pip.update({ where: { id }, data: { checkins: JSON.stringify(checkins) } });
+  revalidatePath("/pip");
+  redirect("/pip?saved=1");
+}
+
+/** Advance a PIP to the next stage, or resolve/close it. */
+export async function advancePip(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const action = String(formData.get("action") ?? ""); // advance | resolve | close
+  if (!id) return;
+  const pip = await db.pip.findUnique({ where: { id } });
+  if (!pip) return;
+  if (action === "resolve") {
+    await db.pip.update({ where: { id }, data: { status: "resolved", stage: "closed" } });
+  } else if (action === "close") {
+    await db.pip.update({ where: { id }, data: { status: "escalated", stage: "closed" } });
+  } else {
+    // advance to next stage
+    const order = ["coaching", "pip", "final", "closed"];
+    const i = order.indexOf(pip.stage);
+    const next = i >= 0 && i < order.length - 1 ? order[i + 1] : "closed";
+    await db.pip.update({ where: { id }, data: { stage: next } });
+  }
+  revalidatePath("/pip");
+  redirect("/pip?saved=1");
+}
