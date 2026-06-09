@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
-import { formatValue, inputSuffix, type Unit } from "@/lib/format";
+import { formatValue, fromInput, inputSuffix, type Unit } from "@/lib/format";
 import { statusClasses, statusVsGoal, type Status } from "@/lib/kpi";
 
 export interface EntryItem {
@@ -57,11 +57,9 @@ export default function EntryForm({
 
 function Field({ item }: { item: EntryItem }) {
   const [raw, setRaw] = useState(item.initial);
-  const numeric =
-    raw.trim() === "" ? null : Number(raw.replace(/[$,%\s]/g, ""));
-  // For duration the input is minutes; convert to seconds to compare with goal.
-  const stored =
-    numeric === null ? null : item.unit === "duration" ? numeric * 60 : numeric;
+  // Parse exactly the way the server does (handles duration H:MM, decimal hours,
+  // bare minutes) so the live status dot matches what actually gets saved.
+  const stored = fromInput(item.unit, raw);
   const status: Status =
     stored === null ? "none" : statusVsGoal(item.goalKind, stored, item.goalValue);
   const cls = statusClasses(status);
@@ -85,10 +83,10 @@ function Field({ item }: { item: EntryItem }) {
         {item.unit === "currency" && <span className="text-slate-400 mr-1">$</span>}
         <input
           name={`v|${item.kpiId}|${item.userId}`}
-          inputMode="decimal"
+          inputMode={item.unit === "duration" ? "text" : "decimal"}
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
-          placeholder="—"
+          placeholder={item.unit === "duration" ? "1:30" : "—"}
           className={`w-full bg-transparent py-2.5 text-xl font-semibold outline-none ${cls.text}`}
           autoComplete="off"
         />
