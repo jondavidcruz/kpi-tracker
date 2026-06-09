@@ -57,7 +57,7 @@ export function dailyCatchup(unit: Unit, g: DailyGap): string {
 
 /** Human "how to close it" line for a monthly gap. */
 export function monthlyCatchup(unit: Unit, g: MonthlyGap): string {
-  return `Behind pace by ${formatValue(unit, g.behindPace)} — need ${formatValue(
+  return `Behind pace by ${formatValue(unit, g.behindPace)}; need ${formatValue(
     unit,
     g.remaining,
   )} more in ${g.daysLeft} day${g.daysLeft === 1 ? "" : "s"} (~${formatValue(
@@ -78,15 +78,15 @@ interface Coaching {
 
 const COACHING: Record<string, Coaching> = {
   outbound_calls: {
-    diagnose: "Dial volume is the top of the funnel — low dials means everything downstream dries up.",
+    diagnose: "Dial volume is the top of the funnel; low dials means everything downstream dries up.",
     fix: [
       "Power-dial in 50-min blocks, no manual dialing between calls.",
       "Pre-load the next call list the night before so there's no morning ramp-up.",
-      "Check the dialer/connection isn't dropping — log any downtime.",
+      "Check the dialer/connection isn't dropping; log any downtime.",
     ],
   },
   connected_calls: {
-    diagnose: "Dials are happening but few are reaching a live person — likely list quality or call timing.",
+    diagnose: "Dials are happening but few are reaching a live person; likely list quality or call timing.",
     fix: [
       "Shift dialing to peak pickup windows (late morning, early evening local to the lead).",
       "Scrub dead/wrong numbers out of the list daily.",
@@ -94,7 +94,7 @@ const COACHING: Record<string, Coaching> = {
     ],
   },
   quality_convos: {
-    diagnose: "Reaching people but not getting real selling conversations — usually an opener/rapport gap.",
+    diagnose: "Reaching people but not getting real selling conversations; usually an opener/rapport gap.",
     fix: [
       "Lead with a pattern-interrupt opener, not a pitch.",
       "Ask 2 discovery questions before mentioning an offer.",
@@ -102,22 +102,22 @@ const COACHING: Record<string, Coaching> = {
     ],
   },
   leads_generated: {
-    diagnose: "Conversations aren't converting into qualified leads — likely weak qualifying or follow-up.",
+    diagnose: "Conversations aren't converting into qualified leads; likely weak qualifying or follow-up.",
     fix: [
       "Use the full qualifying script (motivation, timeline, price, condition).",
-      "Book the next step on the call — don't leave it open.",
+      "Book the next step on the call; don't leave it open.",
       "Tag warm-but-not-ready leads for a same-week callback.",
     ],
   },
   leads_cc: {
-    diagnose: "Cold-call lead output is low — tied to dials × connection × qualifying.",
+    diagnose: "Cold-call lead output is low; tied to dials × connection × qualifying.",
     fix: [
       "Hit the dial goal first; leads follow volume.",
       "Tighten the qualifying questions so good leads aren't slipping past.",
     ],
   },
   appts_set: {
-    diagnose: "Not enough appointments booked from the leads worked — usually a closing-for-the-appointment gap.",
+    diagnose: "Not enough appointments booked from the leads worked; usually a closing-for-the-appointment gap.",
     fix: [
       "Always ask for the appointment with a specific day/time (assumptive close).",
       "Handle the 'just send info' brush-off with a reason to meet instead.",
@@ -125,14 +125,14 @@ const COACHING: Record<string, Coaching> = {
     ],
   },
   passoffs: {
-    diagnose: "Few live transfers/handoffs to Acquisitions — qualified leads aren't being moved over fast enough.",
+    diagnose: "Few live transfers/handoffs to Acquisitions; qualified leads aren't being moved over fast enough.",
     fix: [
       "Warm-transfer on the call while interest is hot, don't queue it.",
       "If acquisitions is busy, book the appointment then and there.",
     ],
   },
   appts_taken: {
-    diagnose: "Set appointments aren't being taken/showing — a confirmation and pre-frame problem.",
+    diagnose: "Set appointments aren't being taken/showing; a confirmation and pre-frame problem.",
     fix: [
       "Confirm every appt the morning of with a value reminder.",
       "Pre-frame what the seller should expect so they keep it.",
@@ -140,7 +140,7 @@ const COACHING: Record<string, Coaching> = {
     ],
   },
   offers_made: {
-    diagnose: "Appointments aren't turning into offers — likely incomplete deal analysis or hesitation to present.",
+    diagnose: "Appointments aren't turning into offers; likely incomplete deal analysis or hesitation to present.",
     fix: [
       "Come to every appt with comps + a number ready to present.",
       "Present an offer on the first appt whenever the data allows.",
@@ -148,21 +148,21 @@ const COACHING: Record<string, Coaching> = {
     ],
   },
   acq_talk_time: {
-    diagnose: "Low talk time with sellers — not enough live seller conversations or calls too short.",
+    diagnose: "Low talk time with sellers; not enough live seller conversations or calls too short.",
     fix: [
       "Block dedicated seller-callback time daily.",
-      "Slow down on calls — discovery, not transactions.",
+      "Slow down on calls; discovery, not transactions.",
     ],
   },
   cc_talk_time: {
-    diagnose: "Low phone time — usually gaps between calls or short conversations.",
+    diagnose: "Low phone time; usually gaps between calls or short conversations.",
     fix: [
       "Tighten between-call downtime; keep the dialer moving.",
       "Extend good conversations with more discovery questions.",
     ],
   },
   buyers_contacted: {
-    diagnose: "Buyer outreach volume is low — the buyer list isn't being worked hard enough.",
+    diagnose: "Buyer outreach volume is low; the buyer list isn't being worked hard enough.",
     fix: [
       "Set a daily buyer-touch block and protect it.",
       "Work the list by buy-box match so outreach is relevant.",
@@ -170,7 +170,7 @@ const COACHING: Record<string, Coaching> = {
     ],
   },
   new_buyers: {
-    diagnose: "Few new qualified buyers added — pipeline of cash buyers is stagnating.",
+    diagnose: "Few new qualified buyers added; pipeline of cash buyers is stagnating.",
     fix: [
       "Pull new buyers from recent cash sales / public records weekly.",
       "Qualify buy-box + proof of funds before adding.",
@@ -178,7 +178,7 @@ const COACHING: Record<string, Coaching> = {
     ],
   },
   buyer_offers_received: {
-    diagnose: "Few offers coming back — buyers aren't biting, usually price or property fit.",
+    diagnose: "Few offers coming back; buyers aren't biting, usually price or property fit.",
     fix: [
       "Re-check the asking price against recent comps.",
       "Follow up with buyers who opened but didn't offer.",
@@ -186,7 +186,7 @@ const COACHING: Record<string, Coaching> = {
   },
   // key is still "deals_sold" but now means "Deals Sent to Buyers".
   deals_sold: {
-    diagnose: "Deals aren't being sent to enough buyers — narrow distribution slows offers.",
+    diagnose: "Deals aren't being sent to enough buyers; narrow distribution slows offers.",
     fix: [
       "Blast every new contract to the full matched buyer list within 24h.",
       "Widen the buyer match (adjacent buy-boxes) when interest is thin.",
@@ -194,32 +194,32 @@ const COACHING: Record<string, Coaching> = {
     ],
   },
   contracts_assigned: {
-    diagnose: "Deals aren't getting assigned/closed — buyer-match or pricing/marketing speed.",
+    diagnose: "Deals aren't getting assigned/closed; buyer-match or pricing/marketing speed.",
     fix: [
       "Lock a backup buyer on every deal so a fallout doesn't kill it.",
       "Re-price or re-market anything sitting >7 days.",
     ],
   },
   contracts_sent: {
-    diagnose: "Contract volume is behind pace — upstream offers or follow-up are lagging.",
+    diagnose: "Contract volume is behind pace; upstream offers or follow-up are lagging.",
     fix: [
       "Send the contract same-day when a seller verbally agrees.",
       "Follow up on outstanding offers daily until yes/no.",
     ],
   },
   contracts_signed: {
-    diagnose: "Sent contracts aren't getting signed — a follow-through and objection-handling gap.",
+    diagnose: "Sent contracts aren't getting signed; a follow-through and objection-handling gap.",
     fix: [
       "Walk the seller through signing live (screen-share / e-sign on the call).",
       "Follow up within hours, not days, on unsigned contracts.",
     ],
   },
   internet_speed: {
-    diagnose: "Internet is below the minimum to work reliably — calls drop, dialer lags, CRM stalls.",
+    diagnose: "Internet is below the minimum to work reliably; calls drop, dialer lags, CRM stalls.",
     fix: [
       "Restart the router/modem, then run a fresh speed test.",
       "Move closer to the router or switch to a wired/ethernet connection.",
-      "If it stays low, switch to a mobile hotspot and flag a manager — log any outage.",
+      "If it stays low, switch to a mobile hotspot and flag a manager; log any outage.",
     ],
   },
 };

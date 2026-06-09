@@ -9,7 +9,7 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Freedom Offers — KPI Tracker",
+  title: "Freedom Offers KPI Tracker",
   description: "Daily scorecard with automatic off-target alerts",
 };
 

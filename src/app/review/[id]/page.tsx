@@ -77,7 +77,7 @@ export default async function ReviewPage({
   const signals: { label: string; tone: "good" | "warn" | "bad" }[] = [];
   if (reliability < 60) signals.push({ label: `Logged only ${daysActive}/${workdays.length} workdays (${reliability}%)`, tone: "bad" });
   else if (reliability < 85) signals.push({ label: `Logged ${daysActive}/${workdays.length} workdays (${reliability}%)`, tone: "warn" });
-  else signals.push({ label: `Consistent — ${daysActive}/${workdays.length} workdays`, tone: "good" });
+  else signals.push({ label: `Consistent: ${daysActive}/${workdays.length} workdays`, tone: "good" });
 
   if (appts) {
     const hit = appts.goal ? appts.avg >= appts.goal : null;
@@ -90,7 +90,7 @@ export default async function ReviewPage({
   return (
     <div className="space-y-6">
       <SectionTitle
-        title={`📋 Weekly Review — ${rep.name}`}
+        title={`📋 Weekly Review: ${rep.name}`}
         subtitle={`${positionLabel(rep.position)} · ${wk.label}`}
         accent="bg-brand-gold"
       />
@@ -153,7 +153,7 @@ export default async function ReviewPage({
         <h3 className="mb-2 text-sm font-bold text-slate-700">Decision context</h3>
         <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
           <li><strong>Role:</strong> {positionLabel(rep.position)}. {rep.note || "—"}</li>
-          <li><strong>Output that pays:</strong> appointments set — this is the deliverable for a lead manager.</li>
+          <li><strong>Output that pays:</strong> appointments set, this is the deliverable for a lead manager.</li>
           <li><strong>Training:</strong> process calls (in progress). Weigh whether a 2nd lead manager is justified by current lead volume.</li>
           <li><strong>Reliability</strong> reflects days logged vs Mon–Fri; low % often signals the known power/internet issues.</li>
         </ul>

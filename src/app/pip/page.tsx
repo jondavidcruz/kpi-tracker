@@ -39,7 +39,7 @@ export default async function PipPage({ searchParams }: { searchParams: Promise<
     <div className="space-y-7">
       <SectionTitle
         title="🎯 Performance Improvement Plans"
-        subtitle="Documented, progressive accountability — driven by the gap data."
+        subtitle="Documented, progressive accountability driven by the gap data."
         accent="bg-red-400"
       />
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
@@ -94,7 +94,7 @@ export default async function PipPage({ searchParams }: { searchParams: Promise<
                     <label className="flex items-center gap-2 text-sm text-slate-600 sm:col-span-2">
                       <input type="checkbox" name="emailDraft" defaultChecked /> Email me a supportive draft to review &amp; send to {c.userName.split(" ")[0]}
                     </label>
-                    <div className="sm:col-span-2"><button className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Open plan (Stage 1 — Check-in &amp; Support)</button></div>
+                    <div className="sm:col-span-2"><button className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Open plan (Stage 1: Check-in and Support)</button></div>
                   </form>
                 </details>
               </Card>
@@ -145,7 +145,7 @@ export default async function PipPage({ searchParams }: { searchParams: Promise<
                   <div className="mt-3">
                     <div className="text-xs font-bold text-slate-600">Check-ins</div>
                     <ul className="mt-1 space-y-1 text-sm text-slate-600">
-                      {checkins.map((c, i) => <li key={i}>• <span className="text-slate-400">{c.date}</span> — {c.note}</li>)}
+                      {checkins.map((c, i) => <li key={i}>• <span className="text-slate-400">{c.date}</span>: {c.note}</li>)}
                       {checkins.length === 0 && <li className="text-slate-400">No check-ins yet.</li>}
                     </ul>
                     <form action={addPipCheckin} className="mt-2 flex flex-wrap items-end gap-2">
@@ -182,7 +182,7 @@ export default async function PipPage({ searchParams }: { searchParams: Promise<
       )}
 
       <p className="text-center text-xs text-slate-400">
-        Consequences shown are defaults you can override per plan. Pay/commission and separation decisions are management's — this tool documents the process. Confirm with HR/counsel before any pay or separation action.
+        Consequences shown are defaults you can override per plan. Pay, commission, and separation decisions are management's; this tool documents the process. Confirm with HR or counsel before any pay or separation action.
       </p>
     </div>
   );

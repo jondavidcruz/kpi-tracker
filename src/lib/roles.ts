@@ -27,7 +27,7 @@ export const POSITIONS: Position[] = [
     label: "Dispositions",
     short: "DS",
     emoji: "🤝",
-    blurb: "Finds buyers and moves deals under contract — sold as fast as possible.",
+    blurb: "Finds buyers and moves deals under contract, sold as fast as possible.",
   },
 ];
 

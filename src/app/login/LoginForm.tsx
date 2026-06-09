@@ -43,7 +43,7 @@ export default function LoginForm() {
 
         {status === "sent" ? (
           <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200">
-            ✅ Check your email — we sent a sign-in link to <strong>{email}</strong>. Open it on
+            ✅ Check your email. We sent a sign-in link to <strong>{email}</strong>. Open it on
             this device to log in.
           </div>
         ) : (
@@ -69,7 +69,7 @@ export default function LoginForm() {
             </button>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <p className="text-center text-xs text-slate-400">
-              No password needed — we email you a one-tap link.
+              No password needed. We email you a one-tap link.
             </p>
           </form>
         )}

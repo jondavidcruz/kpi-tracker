@@ -39,7 +39,7 @@ export default function SpeedTestCard({
       }
       setMbps(Math.max(1, Math.round(best)));
     } catch {
-      setErr("Test failed — check your connection and try again.");
+      setErr("Test failed. Check your connection and try again.");
     } finally {
       setTesting(false);
     }

@@ -70,7 +70,7 @@ export default async function DealsPage({
             {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
           <select name="assignedTo" defaultValue="" className={inputCls}>
-            <option value="">— assign to —</option>
+            <option value="">assign to…</option>
             {repNames.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
           <input name="dealType" placeholder="Type (Novation…)" className={inputCls} />

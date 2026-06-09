@@ -165,7 +165,7 @@ export default async function DashboardPage({
       <section>
         <SectionTitle
           title="Performance Gaps"
-          subtitle="Who's behind today — and what it takes to close the gap"
+          subtitle="Who's behind today, and what it takes to close the gap"
           accent="bg-red-400"
         />
         <Card className="p-2">
@@ -225,7 +225,7 @@ export default async function DashboardPage({
       {/* Lead sources */}
       {teamDaily.length > 0 && (
         <section>
-          <SectionTitle title="Lead Sources — Today" accent="bg-sky-400" />
+          <SectionTitle title="Lead Sources: Today" accent="bg-sky-400" />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {teamDaily.map((k) => {
               const value = dailyValues.get(`${k.id}|`) ?? null;
@@ -263,7 +263,7 @@ export default async function DashboardPage({
 
       {/* Monthly pace */}
       <section>
-        <SectionTitle title={`This Month — Pace (${month})`} accent="bg-emerald-400" />
+        <SectionTitle title={`This Month: Pace (${month})`} accent="bg-emerald-400" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {teamMonthly.map((k) => {
             const mtd = mtdSums.get(k.id) ?? 0;

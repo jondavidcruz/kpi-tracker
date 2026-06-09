@@ -207,7 +207,7 @@ export async function dispatchHardAlerts(created: NewAlert[]): Promise<void> {
   // Google Chat: title + per-KPI gap assessment + training plan.
   const noun = hard.length === 1 ? "money KPI is" : "money KPIs are";
   const chatText =
-    `🔴 *KPI ALERT* — ${hard.length} ${noun} behind target right now:\n\n` +
+    `🔴 *KPI ALERT*: ${hard.length} ${noun} behind target right now:\n\n` +
     blocks
       .map((b) => {
         const who = b.alert.userName ? `*${b.alert.userName}* · ` : "";
@@ -223,7 +223,7 @@ export async function dispatchHardAlerts(created: NewAlert[]): Promise<void> {
 
   const chatOk = await sendGoogleChat(chatText, cfg);
   const emailOk = await sendEmail(
-    `🔴 ${hard.length} money KPI alert${hard.length === 1 ? "" : "s"} — gap + training plan`,
+    `🔴 ${hard.length} money KPI alert${hard.length === 1 ? "" : "s"}: gap + training plan`,
     coachingEmailHtml(blocks),
     cfg,
   );
@@ -252,7 +252,7 @@ function coachingEmailHtml(
     })
     .join("");
   return `<div style="font-family:system-ui,Arial,sans-serif;max-width:600px;margin:0 auto;">
-    <h2 style="color:#0b1f3a;">🔴 KPI alert — action needed</h2>
+    <h2 style="color:#0b1f3a;">🔴 KPI alert: action needed</h2>
     <p style="color:#64748b;">A money KPI is behind target. Here's the gap and how to close it:</p>
     ${cards}
     <p style="color:#94a3b8;font-size:13px;">Freedom Offers KPI Tracker · open the dashboard to acknowledge.</p>
@@ -283,9 +283,9 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
     const severity = alertSeverity(kpi);
     if (!severity) continue;
     for (const rep of reps.filter((r) => (kpi.roleKey === "internet" ? r.tracksInternet : r.position === kpi.roleKey))) {
-      if (rep.irregularSchedule) continue; // no set schedule — don't nag on off days
+      if (rep.irregularSchedule) continue; // no set schedule, don't nag on off days
       const entry = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: rep.id, date } });
-      if (entry) continue; // they logged something — nothing missing
+      if (entry) continue; // they logged something, nothing missing
       const existing = await db.alert.findFirst({
         where: { kpiId: kpi.id, userId: rep.id, date, severity },
       });
@@ -340,7 +340,7 @@ export async function sendDailyDigest(date: string): Promise<boolean> {
     .join("\n\n");
   const softSection = soft.map((a) => `🔵 ${a.message}`).join("\n");
   const chatText =
-    `📊 *KPI Digest* (${date}) — ${hard.length} money + ${soft.length} activity\n\n` +
+    `📊 *KPI Digest* (${date}): ${hard.length} money + ${soft.length} activity\n\n` +
     (moneySection ? moneySection + "\n\n" : "") +
     (softSection ? `*Activity / missing:*\n${softSection}` : "");
 
@@ -355,10 +355,10 @@ export async function sendDailyDigest(date: string): Promise<boolean> {
       })),
     ) +
     (soft.length
-      ? alertEmailHtml(`Activity / missing — ${date}`, soft.map((a) => a.message))
+      ? alertEmailHtml(`Activity / missing: ${date}`, soft.map((a) => a.message))
       : "");
   const emailOk = await sendEmail(
-    `📊 KPI Digest (${date}) — ${open.length} open flag${open.length === 1 ? "" : "s"}`,
+    `📊 KPI Digest (${date}): ${open.length} open flag${open.length === 1 ? "" : "s"}`,
     emailHtml,
     cfg,
   );
@@ -380,7 +380,7 @@ export async function sendDealAgingAlerts(today: string): Promise<boolean> {
     const who = x.deal.assignedTo ? ` (${x.deal.assignedTo})` : "";
     return `${icon} *${x.deal.address}*${who}\n   ${x.aging.recommendation}${x.deal.nextSteps ? `\n   _Next:_ ${x.deal.nextSteps}` : ""}`;
   });
-  const chatText = `🏠 *Dispo Deal Watch* — ${flagged.length} deal${flagged.length === 1 ? "" : "s"} need attention:\n\n` + chatLines.join("\n\n");
+  const chatText = `🏠 *Dispo Deal Watch*: ${flagged.length} deal${flagged.length === 1 ? "" : "s"} need attention:\n\n` + chatLines.join("\n\n");
   const chatOk = await sendGoogleChat(chatText, cfg);
 
   const cards = flagged
@@ -395,10 +395,10 @@ export async function sendDealAgingAlerts(today: string): Promise<boolean> {
     .join("");
   const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:600px;margin:0 auto;">
     <h2 style="color:#0b1f3a;">🏠 Dispo Deal Watch</h2>
-    <p style="color:#64748b;">Deals on market too long or nearing expiration — act to keep them moving.</p>
+    <p style="color:#64748b;">Deals on market too long or nearing expiration. Act to keep them moving.</p>
     ${cards}
   </div>`;
-  const emailOk = await sendEmail(`🏠 Dispo Deal Watch — ${flagged.length} need attention`, html, cfg);
+  const emailOk = await sendEmail(`🏠 Dispo Deal Watch: ${flagged.length} need attention`, html, cfg);
   return chatOk || emailOk;
 }
 

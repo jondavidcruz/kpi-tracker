@@ -81,9 +81,9 @@ function Field({ item }: { item: EntryItem }) {
       const mbps = (bytes * 8) / secs / 1_000_000; // megabits per second
       const rounded = Math.max(1, Math.round(mbps));
       setRaw(String(rounded));
-      setTestMsg(`Measured ${rounded} Mbps — remember to Save.`);
+      setTestMsg(`Measured ${rounded} Mbps. Remember to Save.`);
     } catch {
-      setTestMsg("Test failed — check your connection and try again.");
+      setTestMsg("Test failed. Check your connection and try again.");
     } finally {
       setTesting(false);
     }

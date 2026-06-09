@@ -92,15 +92,15 @@ export async function sendWeeklyTeamEmail(today: string): Promise<boolean> {
       .join("");
     const relColor = reliability < 60 ? "#b91c1c" : reliability < 85 ? "#b45309" : "#047857";
     irishBlock = `<div style="margin-top:22px;padding:14px 16px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;">
-      <h2 style="margin:0 0 6px;color:#6b21a8;">📋 Irish — Performance Focus</h2>
-      <p style="margin:0 0 8px;color:#475569;">Reliability: <strong style="color:${relColor};">${reliability}%</strong> (${active}/${workdays} workdays). Role: lead manager — appointments set is the deliverable; process calls = training.</p>
+      <h2 style="margin:0 0 6px;color:#6b21a8;">📋 Irish: Performance Focus</h2>
+      <p style="margin:0 0 8px;color:#475569;">Reliability: <strong style="color:${relColor};">${reliability}%</strong> (${active}/${workdays} workdays). Role: lead manager. Appointments set is the deliverable; process calls = training.</p>
       <ul style="margin:0;padding-left:20px;color:#334155;font-size:13px;">${lines}</ul>
       <p style="margin:8px 0 0;font-size:12px;color:#94a3b8;">Decision lens: is a 2nd lead manager justified by current lead volume? See the full review in the app → Admin → Weekly performance reviews.</p>
     </div>`;
   }
 
   const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:680px;margin:0 auto;color:#0f172a;">
-    <h1 style="color:#0b1f3a;">📊 Freedom Offers — Weekly Team KPIs</h1>
+    <h1 style="color:#0b1f3a;">📊 Freedom Offers Weekly Team KPIs</h1>
     <p style="color:#64748b;">Week of ${esc(wk.label)} · totals per rep (and days worked Mon–Fri).</p>
     ${roleSections}
     ${irishBlock}
@@ -117,7 +117,7 @@ export async function sendWeeklyTeamEmail(today: string): Promise<boolean> {
     .filter(Boolean);
   const weeklyCfg = weeklyList.length ? { ...cfg, emailRecipients: weeklyList } : cfg;
 
-  return sendEmail(`📊 Weekly Team KPIs — week of ${wk.label}`, html, weeklyCfg);
+  return sendEmail(`📊 Weekly Team KPIs, week of ${wk.label}`, html, weeklyCfg);
 }
 
 /** Resolve the recipient config for admin reports (weekly + daily review). */
@@ -187,7 +187,7 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
     ? `<div style="margin-top:18px;padding:14px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;">
         <h2 style="margin:0 0 6px;color:#b91c1c;">🎯 Flagged for a Performance Plan (${candidates.length})</h2>
         <ul style="margin:0;padding-left:20px;color:#334155;font-size:13px;">
-          ${candidates.map((c) => `<li><strong>${esc(c.userName)}</strong> — ${esc(c.kpiName)} below goal ${PIP_CONSECUTIVE_MISSES} days straight.</li>`).join("")}
+          ${candidates.map((c) => `<li><strong>${esc(c.userName)}</strong>: ${esc(c.kpiName)} below goal ${PIP_CONSECUTIVE_MISSES} days straight.</li>`).join("")}
         </ul>
         <p style="margin:8px 0 0;font-size:12px;color:#94a3b8;">Open a documented plan → https://kpi-tracker-lovat.vercel.app/pip</p>
       </div>`
@@ -201,5 +201,5 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
     <p style="margin-top:16px;font-size:12px;color:#94a3b8;">🟢 on goal · 🟠 close · 🔴 behind · — not entered. Live: https://kpi-tracker-lovat.vercel.app/dashboard</p>
   </div>`;
 
-  return sendEmail(`📋 End-of-Day Team Review — ${friendlyDate(date)}`, html, await reportCfg());
+  return sendEmail(`📋 End-of-Day Team Review, ${friendlyDate(date)}`, html, await reportCfg());
 }

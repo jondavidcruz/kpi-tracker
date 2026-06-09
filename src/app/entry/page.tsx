@@ -71,7 +71,7 @@ export default async function EntryPage({
   if (teamDaily.length > 0) {
     groups.push({
       title: "Lead sources (shared)",
-      hint: "PPL / text / direct-mail leads — entered once for the whole team.",
+      hint: "PPL / text / direct-mail leads, entered once for the whole team.",
       items: teamDaily.map((k) => ({
         kpiId: k.id,
         kpiKey: k.key,

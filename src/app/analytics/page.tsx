@@ -60,7 +60,7 @@ export default async function AnalyticsPage({
   return (
     <div className="space-y-7">
       <SectionTitle
-        title={`📈 Year Analytics — ${year}`}
+        title={`📈 Year Analytics: ${year}`}
         subtitle="Year-to-date totals and monthly trend per rep · includes imported history"
         accent="bg-brand-gold"
       />

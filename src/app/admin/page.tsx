@@ -93,7 +93,7 @@ export default async function AdminPage({
               </select>
             </label>
             <label>
-              <span className={labelCls}>Annual revenue goal ($) — for the weekly report</span>
+              <span className={labelCls}>Annual revenue goal ($) for the weekly report</span>
               <input name="annualRevenueGoal" defaultValue={settings.annualRevenueGoal || ""} placeholder="e.g. 1000000" className={inputCls} />
             </label>
             <div className="sm:col-span-2">
@@ -125,7 +125,7 @@ export default async function AdminPage({
                   <option value="rep">rep</option><option value="manager">manager</option><option value="admin">admin</option>
                 </select>
                 <select name="position" defaultValue={u.position} className={`${inputCls} w-44`}>
-                  <option value="">— none —</option>
+                  <option value="">none</option>
                   {POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </select>
                 <input name="note" defaultValue={u.note} placeholder="note" className={`${inputCls} min-w-40 flex-1`} />
@@ -144,7 +144,7 @@ export default async function AdminPage({
                 <option value="rep">rep</option><option value="manager">manager</option><option value="admin">admin</option>
               </select>
               <select name="position" defaultValue="" className={`${inputCls} w-44`}>
-                <option value="">— none —</option>
+                <option value="">none</option>
                 {POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
               </select>
               <label className="flex items-center gap-1 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked /> active</label>

@@ -15,27 +15,27 @@ export const PIP_CONSECUTIVE_MISSES = 4; // working days in a row below goal -> 
 export const PIP_STAGES = [
   {
     key: "coaching",
-    label: "Stage 1 — Check-in & Support",
+    label: "Stage 1: Check-in and Support",
     blurb: "A supportive conversation to understand what's getting in the way, plus a clear target and the help to hit it.",
-    consequence: "Focus is on support — we'll set a target together and revisit in a few days.",
+    consequence: "Focus is on support. We'll set a target together and revisit in a few days.",
   },
   {
     key: "pip",
-    label: "Stage 2 — Improvement Plan",
+    label: "Stage 2: Improvement Plan",
     blurb: "A written plan with daily targets and regular check-ins so progress is clear and momentum builds.",
-    consequence: "We'll add a short catch-up session (e.g. Saturday hours) to rebuild momentum on missed days.",
+    consequence: "We'll add a short catch-up session (such as Saturday hours) to rebuild momentum on missed days.",
   },
   {
     key: "final",
-    label: "Stage 3 — Final Review",
+    label: "Stage 3: Final Review",
     blurb: "A defined review window to get back on track, with extra support available.",
-    consequence: "Commission/bonus pauses until targets are met; if results don't improve, we'll discuss next steps for the role.",
+    consequence: "Commission and bonus pause until targets are met. If results don't improve, we'll discuss next steps for the role.",
   },
   {
     key: "closed",
     label: "Closed",
-    blurb: "Back on track, or a role change/separation was decided.",
-    consequence: "—",
+    blurb: "Back on track, or a role change or separation was decided.",
+    consequence: "None",
   },
 ];
 
@@ -152,37 +152,37 @@ export function buildPipDraft(opts: {
     .map((l) => l.replace(/^[-•]\s*/, "").trim())
     .filter(Boolean);
 
-  const subject = `Quick check-in & a plan to support you — ${opts.kpiName}`;
+  const subject = `Quick check-in and a plan to support you on ${opts.kpiName}`;
   const text =
 `Hi ${first},
 
-I wanted to check in. I've noticed ${opts.kpiName} has been below target for a few days, and I want to make sure you have what you need to turn it around — this is about supporting you, not piling on.
+I wanted to check in. I've noticed your ${opts.kpiName} has been below target for a few days, and I want to make sure you have everything you need to turn it around. This is about supporting you, not piling on.
 
 Here's a simple plan to get back on track:
-• Target: ${opts.goalNote || `consistently hit goal on ${opts.kpiName}`}
-${planLines.map((l) => `• ${l}`).join("\n")}
+Target: ${opts.goalNote || `consistently hit goal on ${opts.kpiName}`}
+${planLines.map((l) => `${l}`).join("\n")}
 
-${opts.support ? `Support from us: ${opts.support}\n` : ""}Let's touch base${opts.reviewDate ? ` on ${opts.reviewDate}` : " soon"} to see how it's going. If something's getting in the way (leads, internet, training — anything), tell me and we'll sort it together.
+${opts.support ? `Here's how we'll support you: ${opts.support}\n` : ""}Let's touch base${opts.reviewDate ? ` on ${opts.reviewDate}` : " soon"} to see how it's going. If anything is getting in the way (leads, internet, training, whatever it is), just tell me and we'll sort it out together.
 
 You've got this.
 
-— Jon`;
+Jon`;
 
   const html =
 `<div style="font-family:system-ui,Arial,sans-serif;max-width:560px;color:#0f172a;line-height:1.5;">
   <p>Hi ${first},</p>
-  <p>I wanted to check in. I've noticed <strong>${opts.kpiName}</strong> has been below target for a few days, and I want to make sure you have what you need to turn it around — this is about supporting you, not piling on.</p>
+  <p>I wanted to check in. I've noticed your <strong>${opts.kpiName}</strong> has been below target for a few days, and I want to make sure you have everything you need to turn it around. This is about supporting you, not piling on.</p>
   <p><strong>Here's a simple plan to get back on track:</strong></p>
   <ul style="padding-left:20px;">
     <li><strong>Target:</strong> ${opts.goalNote || `consistently hit goal on ${opts.kpiName}`}</li>
     ${planLines.map((l) => `<li>${l}</li>`).join("")}
   </ul>
-  ${opts.support ? `<p><strong>Support from us:</strong> ${opts.support}</p>` : ""}
-  <p>Let's touch base${opts.reviewDate ? ` on <strong>${opts.reviewDate}</strong>` : " soon"} to see how it's going. If something's getting in the way (leads, internet, training — anything), tell me and we'll sort it together.</p>
+  ${opts.support ? `<p><strong>Here's how we'll support you:</strong> ${opts.support}</p>` : ""}
+  <p>Let's touch base${opts.reviewDate ? ` on <strong>${opts.reviewDate}</strong>` : " soon"} to see how it's going. If anything is getting in the way (leads, internet, training, whatever it is), just tell me and we'll sort it out together.</p>
   <p>You've got this.</p>
-  <p>— Jon</p>
+  <p>Jon</p>
   <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">
-  <p style="font-size:12px;color:#94a3b8;">DRAFT for ${opts.repName} (${opts.repEmail}). Review and edit before sending — this was not sent to them.</p>
+  <p style="font-size:12px;color:#94a3b8;">Draft for ${opts.repName} (${opts.repEmail}). Review and edit before sending. This was not sent to them.</p>
 </div>`;
 
   return { subject, html, text };

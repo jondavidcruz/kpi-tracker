@@ -40,18 +40,18 @@ export function analyzeDeal(deal: Deal, today: string): DealAging {
   const listingDaysLeft = negDays(deal.listingExpiration, today);
 
   let level: AgingLevel = "fresh";
-  let recommendation = "On track — keep marketing.";
+  let recommendation = "On track. Keep marketing.";
 
   if (days !== null) {
     if (days >= AGING.stale) {
       level = "stale";
-      recommendation = `On market ${days} days — STALE. Escalate: consider a meaningful price reduction, switch buyers list, or re-trade the seller.`;
+      recommendation = `On market ${days} days, STALE. Escalate: consider a meaningful price reduction, switch buyers list, or re-trade the seller.`;
     } else if (days >= AGING.reduction) {
       level = "reduce";
-      recommendation = `On market ${days} days — recommend a price reduction to drive activity.`;
+      recommendation = `On market ${days} days. Recommend a price reduction to drive activity.`;
     } else if (days >= AGING.priceCheck) {
       level = "watch";
-      recommendation = `On market ${days} days — sanity-check pricing & marketing; push the buyers list.`;
+      recommendation = `On market ${days} days. Sanity-check pricing & marketing; push the buyers list.`;
     }
   }
 
@@ -59,8 +59,8 @@ export function analyzeDeal(deal: Deal, today: string): DealAging {
   if (contractDaysLeft !== null && contractDaysLeft <= 7) {
     recommendation =
       contractDaysLeft < 0
-        ? `⚠️ Seller contract EXPIRED ${Math.abs(contractDaysLeft)}d ago — extend or release now.`
-        : `⚠️ Seller contract expires in ${contractDaysLeft}d — get an extension or close fast. ` + recommendation;
+        ? `⚠️ Seller contract EXPIRED ${Math.abs(contractDaysLeft)}d ago. Extend or release now.`
+        : `⚠️ Seller contract expires in ${contractDaysLeft}d. Get an extension or close fast. ` + recommendation;
   }
 
   return { days, level, recommendation, contractDaysLeft, listingDaysLeft };
