@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { saveSpeedTest } from "@/app/actions";
+import { measureDownloadMbps } from "@/lib/speedtest-client";
 
 // Prominent internet speed-test card for the Enter KPIs screen. Measures the
 // connection in-browser, shows the result big, and saves it as today's KPI.
@@ -20,24 +21,19 @@ export default function SpeedTestCard({
   const [testing, setTesting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState("");
+  const [rough, setRough] = useState(false);
 
   async function runTest() {
     setTesting(true);
     setErr("");
     setSaved(false);
+    setRough(false);
     try {
-      // Two passes; keep the faster (warms up the connection).
-      const sizes = [3 * 1024 * 1024, 3 * 1024 * 1024];
-      let best = 0;
-      for (const bytes of sizes) {
-        const start = performance.now();
-        const res = await fetch(`/api/speedtest?t=${Date.now()}-${Math.round(start)}`, { cache: "no-store" });
-        await res.arrayBuffer();
-        const secs = (performance.now() - start) / 1000;
-        const v = (bytes * 8) / secs / 1_000_000;
-        if (v > best) best = v;
-      }
-      setMbps(Math.max(1, Math.round(best)));
+      // Parallel-stream test against Cloudflare's nearest server (~8s),
+      // ticking the display live as it measures.
+      const result = await measureDownloadMbps((live) => setMbps(Math.round(live)));
+      setMbps(Math.max(1, Math.round(result.mbps)));
+      setRough(!result.accurate);
     } catch {
       setErr("Test failed. Check your connection and try again.");
     } finally {
@@ -104,6 +100,7 @@ export default function SpeedTestCard({
           </button>
         )}
         {err && <span className="text-sm text-red-600">{err}</span>}
+        {rough && <span className="text-sm text-amber-600">Rough estimate (test server unreachable, used backup method).</span>}
         {saved && <span className="text-sm text-emerald-700">Logged for today.</span>}
       </div>
     </div>

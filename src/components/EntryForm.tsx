@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { formatValue, fromInput, inputSuffix, type Unit } from "@/lib/format";
 import { statusClasses, statusVsGoal, type Status } from "@/lib/kpi";
+import { measureDownloadMbps } from "@/lib/speedtest-client";
 
 export interface EntryItem {
   kpiId: string;
@@ -71,17 +72,18 @@ function Field({ item }: { item: EntryItem }) {
 
   async function runSpeedTest() {
     setTesting(true);
-    setTestMsg("Testing…");
+    setTestMsg("Testing… (about 8 seconds)");
     try {
-      const bytes = 3 * 1024 * 1024; // matches /api/speedtest payload
-      const start = performance.now();
-      const res = await fetch(`/api/speedtest?t=${Date.now()}`, { cache: "no-store" });
-      await res.arrayBuffer();
-      const secs = (performance.now() - start) / 1000;
-      const mbps = (bytes * 8) / secs / 1_000_000; // megabits per second
-      const rounded = Math.max(1, Math.round(mbps));
+      const result = await measureDownloadMbps((live) =>
+        setTestMsg(`Testing… ${Math.round(live)} Mbps`),
+      );
+      const rounded = Math.max(1, Math.round(result.mbps));
       setRaw(String(rounded));
-      setTestMsg(`Measured ${rounded} Mbps. Remember to Save.`);
+      setTestMsg(
+        result.accurate
+          ? `Measured ${rounded} Mbps. Remember to Save.`
+          : `Rough estimate: ${rounded} Mbps (backup method). Remember to Save.`,
+      );
     } catch {
       setTestMsg("Test failed. Check your connection and try again.");
     } finally {
