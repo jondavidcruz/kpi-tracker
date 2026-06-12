@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { saveDay } from "@/app/actions";
+import { saveDay, addRepReason } from "@/app/actions";
+import { db } from "@/lib/db";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
 import SpeedTestCard from "@/components/SpeedTestCard";
 import {
@@ -42,6 +43,16 @@ export default async function EntryPage({
     getDailyValues(date),
     getAllTargets(),
   ]);
+
+  // The rep's own open flags, so they can add context before a manager reviews.
+  const myAlerts = rep
+    ? await db.alert.findMany({
+        where: { userId: rep.id, status: { in: ["open", "ack"] } },
+        include: { kpi: true },
+        orderBy: { date: "desc" },
+        take: 10,
+      })
+    : [];
 
   // Internet speed gets its own prominent test card (below), not a plain field.
   const internetKpi = internetKpis[0] ?? null;
@@ -126,6 +137,30 @@ export default async function EntryPage({
         />
         <button className="rounded-md bg-slate-200 px-3 py-1.5 font-medium hover:bg-slate-300">Go</button>
       </form>
+
+      {rep && myAlerts.length > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
+          <h2 className="text-base font-bold text-slate-800">⚠️ Your flagged KPIs</h2>
+          <p className="mb-3 text-sm text-slate-500">Add a quick reason so your manager has the context. This doesn&apos;t clear the flag — it just explains it.</p>
+          <div className="space-y-2">
+            {myAlerts.map((a) => (
+              <div key={a.id} className="rounded-lg bg-white p-3 ring-1 ring-amber-100">
+                <div className="text-sm font-semibold text-slate-700">{a.kpi.emoji} {a.message}</div>
+                <div className="text-xs text-slate-400">{friendlyDate(a.date)}</div>
+                {a.repReason ? (
+                  <p className="mt-1.5 rounded-md bg-sky-50 px-2.5 py-1.5 text-xs text-sky-800">You said: {a.repReason}</p>
+                ) : (
+                  <form action={addRepReason} className="mt-2 flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="id" value={a.id} />
+                    <input name="repReason" placeholder="e.g. internet down 2 hrs / had 2 closings" className="min-w-56 flex-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
+                    <button className="rounded-md bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-700">Add reason</button>
+                  </form>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {rep && internetKpi && (
         <SpeedTestCard

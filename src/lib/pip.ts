@@ -86,6 +86,15 @@ export async function findPipCandidates(endDate: string): Promise<PipCandidate[]
   const val = new Map<string, number>(); // `${userId}|${kpiId}|${date}` -> value
   for (const e of entries) if (e.userId) val.set(`${e.userId}|${e.kpiId}|${e.date}`, e.value);
 
+  // Days a manager marked "excused" (PTO, outage, holiday) don't count as misses,
+  // so a legitimate absence never drives someone toward a PIP.
+  const excusedAlerts = await db.alert.findMany({
+    where: { excused: true, date: { gte: start, lte: endDate } },
+    select: { userId: true, kpiId: true, date: true },
+  });
+  const excused = new Set<string>();
+  for (const e of excusedAlerts) if (e.userId) excused.add(`${e.userId}|${e.kpiId}|${e.date}`);
+
   const out: PipCandidate[] = [];
   for (const rep of reps) {
     if (rep.role === "admin") continue; // the owner manages the team; never auto-flag them
@@ -101,6 +110,7 @@ export async function findPipCandidates(endDate: string): Promise<PipCandidate[]
       let allMiss = true;
       const missed: string[] = [];
       for (const d of recent) {
+        if (excused.has(`${rep.id}|${k.id}|${d}`)) { allMiss = false; break; } // excused day breaks the streak
         const v = val.get(`${rep.id}|${k.id}|${d}`);
         if (v === undefined) { allMiss = false; break; } // not logged → don't PIP on it
         if (statusVsGoal(k.goalKind, v, goal) === "miss") missed.push(d);

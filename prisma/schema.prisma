@@ -105,6 +105,18 @@ model Alert {
   channelsSent String   @default("[]") // JSON array of channels delivered
   createdAt    DateTime @default(now())
 
+  // Rep's own context, added from their entry screen before a manager reviews.
+  repReason String?
+
+  // Manager's resolution: why it was missed + what we'll do about it. Captured
+  // when the alert is resolved so every closed alert is a documented decision.
+  resolutionCategory String? // tech | leads | training | effort | excused | process | recovered
+  resolutionNote     String? // what actually happened
+  correctiveAction   String? // the fix (pre-filled from gap coaching, editable)
+  resolvedBy         String? // name of the manager/rep who resolved it
+  resolvedAt         DateTime?
+  excused            Boolean   @default(false) // a legitimate non-miss (PTO, outage); excluded from PIP streaks + trends
+
   @@unique([kpiId, userId, date, severity]) // dedup: one per kpi/user/day/severity
   @@index([status])
 }

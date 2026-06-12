@@ -8,6 +8,8 @@ import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { isExcusedReason } from "@/lib/alert-resolution";
 
 /** Sign the current user out and return to the login screen. */
 export async function signOut() {
@@ -75,13 +77,87 @@ export async function saveDay(formData: FormData) {
   revalidatePath("/monthly");
 }
 
+function revalidateAlerts() {
+  revalidatePath("/alerts");
+  revalidatePath("/dashboard");
+  revalidatePath("/entry");
+}
+
+/** Lightweight status flips: acknowledge, reopen. (Resolve has its own action.) */
 export async function setAlertStatus(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!id || !["open", "ack", "resolved"].includes(status)) return;
-  await db.alert.update({ where: { id }, data: { status } });
-  revalidatePath("/alerts");
-  revalidatePath("/dashboard");
+  // Reopening clears any prior resolution so it's a clean slate again.
+  const data =
+    status === "open"
+      ? { status, resolvedBy: null, resolvedAt: null, resolutionCategory: null, excused: false }
+      : { status };
+  await db.alert.update({ where: { id }, data });
+  revalidateAlerts();
+}
+
+/**
+ * Resolve an alert WITH accountability: a reason category, what happened, and a
+ * corrective action (pre-filled from the gap coaching). Records who/when. An
+ * "excused" reason marks it as a legitimate non-miss (kept out of PIP + trends).
+ */
+export async function resolveAlert(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const resolutionCategory = String(formData.get("resolutionCategory") ?? "").trim() || null;
+  const resolutionNote = String(formData.get("resolutionNote") ?? "").trim() || null;
+  const correctiveAction = String(formData.get("correctiveAction") ?? "").trim() || null;
+  const excused = isExcusedReason(resolutionCategory);
+  const me = await getCurrentUser();
+  await db.alert.update({
+    where: { id },
+    data: {
+      status: "resolved",
+      resolutionCategory,
+      resolutionNote,
+      correctiveAction,
+      excused,
+      resolvedBy: me?.name ?? "manager",
+      resolvedAt: new Date(),
+    },
+  });
+  revalidateAlerts();
+}
+
+/**
+ * Bulk-resolve open/ack alerts: either a list of ids, every alert on a given
+ * date, or everything older than today. A quick way to keep the inbox useful.
+ */
+export async function bulkResolveAlerts(formData: FormData) {
+  const mode = String(formData.get("mode") ?? "ids");
+  const me = await getCurrentUser();
+  const base = { status: "resolved" as const, resolvedBy: me?.name ?? "manager", resolvedAt: new Date(), resolutionCategory: "process" };
+
+  if (mode === "ids") {
+    const ids = String(formData.get("ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (ids.length) await db.alert.updateMany({ where: { id: { in: ids } }, data: base });
+  } else if (mode === "date") {
+    const date = String(formData.get("date") ?? "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      await db.alert.updateMany({ where: { date, status: { in: ["open", "ack"] } }, data: base });
+    }
+  } else if (mode === "older") {
+    const before = String(formData.get("before") ?? "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(before)) {
+      await db.alert.updateMany({ where: { date: { lt: before }, status: { in: ["open", "ack"] } }, data: base });
+    }
+  }
+  revalidateAlerts();
+}
+
+/** A rep adds their own context to one of their open alerts (doesn't resolve it). */
+export async function addRepReason(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const repReason = String(formData.get("repReason") ?? "").trim();
+  if (!id || !repReason) return;
+  await db.alert.update({ where: { id }, data: { repReason } });
+  revalidateAlerts();
 }
 
 // --- Admin actions -----------------------------------------------------------
