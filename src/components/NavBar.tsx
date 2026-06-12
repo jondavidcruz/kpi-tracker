@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { signOut } from "@/app/actions";
+import { db } from "@/lib/db";
 
 const BASE_NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -14,6 +15,8 @@ const BASE_NAV = [
 
 export default async function NavBar() {
   const me = await getCurrentUser();
+  // Badge of tickets awaiting the admin's approval.
+  const newTickets = isManager(me) ? await db.ticket.count({ where: { status: "new" } }) : 0;
 
   return (
     <header className="sticky top-0 z-10 border-b border-brand-navy/15 bg-brand-navy text-white shadow-sm">
@@ -42,6 +45,15 @@ export default async function NavBar() {
                   {n.label}
                 </Link>
               ))}
+              <Link
+                href="/tickets"
+                className="relative whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+              >
+                Tickets
+                {newTickets > 0 && (
+                  <span className="ml-1.5 rounded-full bg-brand-gold px-1.5 py-0.5 text-[10px] font-bold text-brand-navy">{newTickets}</span>
+                )}
+              </Link>
               {isManager(me) && (
                 <>
                   <Link

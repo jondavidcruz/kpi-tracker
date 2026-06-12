@@ -32,6 +32,7 @@ model User {
   targets Target[]
   alerts  Alert[]
   pips    Pip[]
+  tickets Ticket[]
 }
 
 // The catalog of measurables (the spreadsheet's "Measurable" rows).
@@ -141,6 +142,28 @@ model Pip {
   reviewDate String @default("") // when the plan is evaluated
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// A support ticket: the team reports something broken/confusing in the tracker.
+// A ticket is a REPORT, not a command — submitting one only stores text. Nothing
+// changes until an admin approves it, which is the gate that keeps the team from
+// being able to alter the system just by filing tickets.
+model Ticket {
+  id          String   @id @default(cuid())
+  submittedBy String // display name of whoever filed it
+  user        User?    @relation(fields: [userId], references: [id])
+  userId      String?
+  title       String
+  body        String   @default("")
+  area        String   @default("") // which screen: Entry, Dashboard, Alerts, Speed test, Login, Other
+  severity    String   @default("normal") // blocking | normal | minor
+  // new -> approved -> in_progress -> resolved  (or new -> declined)
+  status      String   @default("new")
+  adminNote   String   @default("") // triage note: why declined, or how it was resolved
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([status])
 }

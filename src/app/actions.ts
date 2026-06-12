@@ -8,7 +8,7 @@ import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 
 /** Sign the current user out and return to the login screen. */
@@ -158,6 +158,76 @@ export async function addRepReason(formData: FormData) {
   if (!id || !repReason) return;
   await db.alert.update({ where: { id }, data: { repReason } });
   revalidateAlerts();
+}
+
+// --- Support tickets ---------------------------------------------------------
+// A ticket is inert data: filing one stores text and notifies admins. It NEVER
+// triggers a system change. Only an admin moving it past "new" (setTicketStatus,
+// which is role-gated below) puts it into the work queue. The team cannot alter
+// the app by filing tickets.
+
+/** Anyone signed in can file a ticket about something broken in the tracker. */
+export async function submitTicket(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return; // must be signed in
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const area = String(formData.get("area") ?? "").trim();
+  const severity = String(formData.get("severity") ?? "normal").trim();
+  if (!title) return;
+
+  await db.ticket.create({
+    data: { submittedBy: me.name, userId: me.id, title, body, area, severity, status: "new" },
+  });
+
+  // Ping the admins so the queue gets watched. Best-effort; never blocks the save.
+  try {
+    const cfg = await getChannelConfig();
+    const settings = await db.settings.findUnique({ where: { id: 1 } });
+    const list = (settings?.weeklyEmailRecipients || cfg.emailRecipients.join(","))
+      .split(/[,;\s]+/).map((x: string) => x.trim()).filter(Boolean);
+    const sevTag = severity === "blocking" ? "🔴 BLOCKING " : "";
+    await sendEmail(
+      `🎫 ${sevTag}New tracker ticket from ${me.name}: ${title}`,
+      `<div style="font-family:system-ui,Arial,sans-serif;max-width:560px;color:#0f172a;">
+        <p><strong>${escapeForEmail(me.name)}</strong> reported an issue with the KPI tracker.</p>
+        <p><strong>Area:</strong> ${escapeForEmail(area || "—")} &nbsp;·&nbsp; <strong>Severity:</strong> ${escapeForEmail(severity)}</p>
+        <p><strong>${escapeForEmail(title)}</strong></p>
+        <p style="white-space:pre-line;">${escapeForEmail(body)}</p>
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:14px 0;">
+        <p style="font-size:12px;color:#94a3b8;">This is a report only. Nothing changes until you approve it in the Tickets queue.</p>
+      </div>`,
+      list.length ? { ...cfg, emailRecipients: list } : cfg,
+    );
+  } catch {
+    // notification failure shouldn't lose the ticket
+  }
+
+  revalidatePath("/tickets");
+  redirect("/tickets?sent=1");
+}
+
+/**
+ * Triage a ticket: approve, decline, start, or resolve, with an optional note.
+ * MANAGER/ADMIN ONLY — this is the approval gate. A rep filing a ticket can never
+ * reach this; only an approver moves a ticket out of "new".
+ */
+export async function setTicketStatus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return; // hard gate: reps cannot triage
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "");
+  const adminNote = String(formData.get("adminNote") ?? "").trim();
+  if (!id || !["new", "approved", "in_progress", "resolved", "declined"].includes(status)) return;
+  await db.ticket.update({
+    where: { id },
+    data: { status, ...(adminNote ? { adminNote } : {}) },
+  });
+  revalidatePath("/tickets");
+}
+
+function escapeForEmail(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // --- Admin actions -----------------------------------------------------------
