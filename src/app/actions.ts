@@ -109,8 +109,9 @@ export async function saveUser(formData: FormData) {
   const position = String(formData.get("position") ?? "");
   const note = String(formData.get("note") ?? "").trim();
   const active = formData.get("active") === "on";
+  const tracksInternet = formData.get("tracksInternet") === "on";
   if (!name || !email) return;
-  const data = { name, email, role, position, note, active };
+  const data = { name, email, role, position, note, active, tracksInternet };
   if (id) {
     await db.user.update({ where: { id }, data });
   } else {

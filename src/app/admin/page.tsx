@@ -130,6 +130,7 @@ export default async function AdminPage({
                 </select>
                 <input name="note" defaultValue={u.note} placeholder="note" className={`${inputCls} min-w-40 flex-1`} />
                 <label className="flex items-center gap-1 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked={u.active} /> active</label>
+                <label className="flex items-center gap-1 text-sm text-slate-600" title="Show the internet speed test + KPI on this person's entry screen"><input type="checkbox" name="tracksInternet" defaultChecked={u.tracksInternet} /> ⚡️ speed test</label>
                 <SaveBtn small>Save</SaveBtn>
               </form>
             ))}
@@ -148,6 +149,7 @@ export default async function AdminPage({
                 {POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
               </select>
               <label className="flex items-center gap-1 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked /> active</label>
+              <label className="flex items-center gap-1 text-sm text-slate-600" title="Show the internet speed test + KPI on this person's entry screen"><input type="checkbox" name="tracksInternet" /> ⚡️ speed test</label>
               <SaveBtn small>+ Add person</SaveBtn>
             </form>
           </div>
