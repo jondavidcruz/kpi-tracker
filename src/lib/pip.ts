@@ -88,6 +88,7 @@ export async function findPipCandidates(endDate: string): Promise<PipCandidate[]
 
   const out: PipCandidate[] = [];
   for (const rep of reps) {
+    if (rep.role === "admin") continue; // the owner manages the team; never auto-flag them
     const repKpis = [
       ...perRep.filter((k) => k.roleKey === rep.position),
       ...(rep.tracksInternet ? perRep.filter((k) => k.roleKey === "internet") : []),
