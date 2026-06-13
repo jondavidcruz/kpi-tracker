@@ -16,13 +16,6 @@ export const POSITIONS: Position[] = [
     blurb: "Takes appointments → makes offers → gets contracts signed.",
   },
   {
-    key: "cc_lm",
-    label: "Cold Call / Lead Mgr",
-    short: "CC/LM",
-    emoji: "📞",
-    blurb: "Cold calls and sets appointments, then hands off to Acquisitions.",
-  },
-  {
     key: "dispositions",
     label: "Dispositions",
     short: "DS",
@@ -33,8 +26,15 @@ export const POSITIONS: Position[] = [
 
 export const POSITION_KEYS = POSITIONS.map((p) => p.key);
 
+// Retired roles — removed from the live UI (no tabs, no dropdown options, no
+// scorecard) but kept here so historical data and exported reports still label
+// correctly. Cold Call / Lead Mgr was retired 2026-06-12.
+const ARCHIVED_POSITIONS: Record<string, string> = {
+  cc_lm: "Cold Call / Lead Mgr",
+};
+
 export function positionLabel(key: string): string {
-  return POSITIONS.find((p) => p.key === key)?.label ?? "Unassigned";
+  return POSITIONS.find((p) => p.key === key)?.label ?? ARCHIVED_POSITIONS[key] ?? "Unassigned";
 }
 
 export function positionMeta(key: string): Position | undefined {

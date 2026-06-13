@@ -73,37 +73,10 @@ export async function sendWeeklyTeamEmail(today: string): Promise<boolean> {
       </table>`;
   }).join("");
 
-  // ---- Irish focus block ----
-  const irish = reps.find((r) => r.name.toLowerCase().startsWith("irish"));
-  let irishBlock = "";
-  if (irish) {
-    const irishKpis = perRep.filter((k) => k.roleKey === irish.position);
-    const active = daysActiveByUser.get(irish.id)?.size ?? 0;
-    const reliability = workdays ? Math.round((active / workdays) * 100) : 0;
-    const lines = irishKpis
-      .map((k) => {
-        const total = sums.get(`${k.id}|${irish.id}`) ?? 0;
-        const days = [...(daysActiveByUser.get(irish.id) ?? [])].length;
-        const goal = resolveGoalWith(targets, k, irish.id, month);
-        const avg = days ? total / days : 0;
-        const goalStr = goal === null ? "" : ` · goal ${formatValue(k.unit as Unit, goal)}`;
-        return `<li style="margin:3px 0;">${esc(k.emoji)} <strong>${esc(k.name)}:</strong> ${formatValue(k.unit as Unit, total)} total · ${formatValue(k.unit as Unit, avg)}/logged-day${goalStr}</li>`;
-      })
-      .join("");
-    const relColor = reliability < 60 ? "#b91c1c" : reliability < 85 ? "#b45309" : "#047857";
-    irishBlock = `<div style="margin-top:22px;padding:14px 16px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;">
-      <h2 style="margin:0 0 6px;color:#6b21a8;">📋 Irish: Performance Focus</h2>
-      <p style="margin:0 0 8px;color:#475569;">Reliability: <strong style="color:${relColor};">${reliability}%</strong> (${active}/${workdays} workdays). Role: lead manager. Appointments set is the deliverable; process calls = training.</p>
-      <ul style="margin:0;padding-left:20px;color:#334155;font-size:13px;">${lines}</ul>
-      <p style="margin:8px 0 0;font-size:12px;color:#94a3b8;">Decision lens: is a 2nd lead manager justified by current lead volume? See the full review in the app → Admin → Weekly performance reviews.</p>
-    </div>`;
-  }
-
   const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:680px;margin:0 auto;color:#0f172a;">
     <h1 style="color:#0b1f3a;">📊 Freedom Offers Weekly Team KPIs</h1>
     <p style="color:#64748b;">Week of ${esc(wk.label)} · totals per rep (and days worked Mon–Fri).</p>
     ${roleSections}
-    ${irishBlock}
     <p style="margin-top:20px;font-size:12px;color:#94a3b8;">Live dashboard: https://kpi-tracker-lovat.vercel.app/report</p>
   </div>`;
 

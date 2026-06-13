@@ -163,16 +163,17 @@ export default async function AdminPage({
           <Card className="p-6">
             <div className="flex flex-wrap gap-2">
               {users.filter((u) => u.position).map((u) => (
-                <Link
-                  key={u.id}
-                  href={`/review/${u.id}`}
-                  className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
-                >
-                  📋 {u.name}
-                </Link>
+                <span key={u.id} className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
+                  <Link href={`/review/${u.id}`} className="bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">
+                    📋 {u.name}
+                  </Link>
+                  <Link href={`/review/${u.id}/export`} className="border-l border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100" title={`Printable all-time KPI record for ${u.name} (Save as PDF)`}>
+                    📄 PDF
+                  </Link>
+                </span>
               ))}
             </div>
-            <p className="mt-2 text-xs text-slate-400">Only you (admin) can see this section and open reviews.</p>
+            <p className="mt-2 text-xs text-slate-400">Only you (admin) can see this section. &quot;📄 PDF&quot; opens a printable all-time KPI record — use it to archive someone&apos;s history before removing them.</p>
           </Card>
         </section>
       )}
@@ -223,7 +224,7 @@ export default async function AdminPage({
             <form action={createKpi} className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
               <label className="col-span-2"><span className={labelCls}>Name</span><div className="flex gap-1"><input name="emoji" placeholder="🆕" className={`${inputCls} w-12`} /><input name="name" placeholder="KPI name" className={inputCls} /></div></label>
               <label><span className={labelCls}>Scope</span><select name="scope" defaultValue="per_rep" className={inputCls}><option value="per_rep">per rep</option><option value="team">team</option></select></label>
-              <label><span className={labelCls}>Role</span><select name="roleKey" defaultValue="cc_lm" className={inputCls}>{POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.short}</option>)}</select></label>
+              <label><span className={labelCls}>Role</span><select name="roleKey" defaultValue="acquisitions" className={inputCls}>{POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.short}</option>)}</select></label>
               <label><span className={labelCls}>Cadence</span><select name="cadence" defaultValue="daily" className={inputCls}><option value="daily">daily</option><option value="monthly">monthly</option></select></label>
               <label><span className={labelCls}>Unit</span><select name="unit" defaultValue="count" className={inputCls}><option value="count">count</option><option value="duration">duration</option><option value="percent">percent</option><option value="currency">currency</option><option value="ratio">ratio</option></select></label>
               <label><span className={labelCls}>Category</span><select name="category" defaultValue="blue" className={inputCls}><option value="green">🟢 money</option><option value="blue">🔵 activity</option><option value="yellow">🟡 visibility</option><option value="red">🔴 none</option></select></label>
