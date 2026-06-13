@@ -168,6 +168,25 @@ model Ticket {
   @@index([status])
 }
 
+// An AI-generated improvement recommendation for the tracker itself. Populated
+// by the assistant (now) and a weekly analysis agent (later) via a secured API.
+// Jon/Marie review on the "AI Updates" tab and accept or decline each — nothing
+// is ever auto-applied.
+model Suggestion {
+  id        String   @id @default(cuid())
+  title     String
+  rationale String   @default("") // why it helps
+  category  String   @default("") // Feature | Efficiency | Data | UX | Cleanup
+  impact    String   @default("med") // high | med | low
+  effort    String   @default("M") // S | M | L
+  status    String   @default("proposed") // proposed | accepted | declined | done
+  note      String   @default("") // Jon's note on the decision
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
 // An active wholesale deal the Dispositions team is pushing to sell.
 // Feeds the weekly report's "active deals" page.
 model Deal {

@@ -18,6 +18,7 @@ const NAV = [
   { href: "/alerts", label: "Alerts", tone: "text-red-400 hover:text-red-300" },
   { href: "/pip", label: "PIPs", managerOnly: true, tone: "text-red-400 hover:text-red-300" },
   { href: "/tickets", label: "Tickets" },
+  { href: "/ai-updates", label: "AI Updates", managerOnly: true, tone: "text-violet-300 hover:text-violet-200" },
   { href: "/admin", label: "Admin", managerOnly: true },
 ];
 
@@ -33,7 +34,12 @@ export default async function NavBar() {
   }
 
   const manager = isManager(me);
-  const newTickets = manager ? await db.ticket.count({ where: { status: "new" } }) : 0;
+  const [newTickets, newSuggestions] = manager
+    ? await Promise.all([
+        db.ticket.count({ where: { status: "new" } }),
+        db.suggestion.count({ where: { status: "proposed" } }),
+      ])
+    : [0, 0];
   const items = NAV.filter((n) => !n.managerOnly || manager);
 
   return (
@@ -59,6 +65,9 @@ export default async function NavBar() {
                   {n.label}
                   {n.href === "/tickets" && newTickets > 0 && (
                     <span className="ml-1.5 rounded-full bg-brand-gold px-1.5 py-0.5 text-[10px] font-bold text-brand-navy">{newTickets}</span>
+                  )}
+                  {n.href === "/ai-updates" && newSuggestions > 0 && (
+                    <span className="ml-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[10px] font-bold text-white">{newSuggestions}</span>
                   )}
                 </Link>
               ))}

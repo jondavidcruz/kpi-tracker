@@ -241,6 +241,18 @@ export async function deleteTicket(formData: FormData) {
   revalidatePath("/tickets");
 }
 
+/** Accept / decline / mark-done an AI suggestion. MANAGER/ADMIN ONLY. */
+export async function setSuggestionStatus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return; // only Jon/Marie decide
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "");
+  const note = String(formData.get("note") ?? "").trim();
+  if (!id || !["proposed", "accepted", "declined", "done"].includes(status)) return;
+  await db.suggestion.update({ where: { id }, data: { status, ...(note ? { note } : {}) } });
+  revalidatePath("/ai-updates");
+}
+
 function escapeForEmail(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
