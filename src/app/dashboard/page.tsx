@@ -15,6 +15,7 @@ import { statusClasses, statusVsGoal, statusVsPace, alertSeverity, type Status }
 import { dailyGap, monthlyGap, monthlyCatchup, buildCoaching } from "@/lib/gap";
 import { dealsNeedingAttention } from "@/lib/deals";
 import { findPipCandidates } from "@/lib/pip";
+import { getDailyTrends } from "@/lib/trends";
 import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import { db } from "@/lib/db";
@@ -66,6 +67,12 @@ export default async function DashboardPage({
       findPipCandidates(date),
     ]);
   const agingDeals = dealsNeedingAttention(openDeals, date);
+  const trends = await getDailyTrends(date, 14);
+  const onGoalSeries = trends.map((t) => t.onGoal);
+  const behindSeries = trends.map((t) => t.behind);
+  const loggedSeries = trends.map((t) => t.logged);
+  const alertSeries = trends.map((t) => t.alertsRaised);
+  const wkDelta = (s: number[]) => (s.length >= 6 ? s[s.length - 1] - s[s.length - 6] : 0);
 
   // --- Build the gap list (who's behind + how to close it) ---
   const gaps: GapItem[] = [];
@@ -137,7 +144,6 @@ export default async function DashboardPage({
 
   // Today's priorities: the few things actually worth acting on right now.
   const moneyGaps = gaps.filter((g) => g.category === "green").length;
-  const tracked = onGoal + gaps.length;
   const repsLoggedToday = new Set([...dailyValues.keys()].map((k) => k.split("|")[1]).filter(Boolean)).size;
   const priorities: { Icon: LucideIcon; text: string; href: string; tone: string }[] = [];
   if (moneyGaps > 0) priorities.push({ Icon: Banknote, text: `${moneyGaps} money KPI${moneyGaps === 1 ? "" : "s"} behind today`, href: "/alerts", tone: "text-red-700 bg-red-50 ring-red-200" });
@@ -162,10 +168,10 @@ export default async function DashboardPage({
 
       {/* Headline metrics */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="On goal today" value={onGoal} hint={`of ${tracked} tracked`} hintTone="good" icon={<CircleCheck size={18} />} />
-        <MetricCard label="Behind" value={gaps.length} hint={moneyGaps > 0 ? `${moneyGaps} money KPI${moneyGaps === 1 ? "" : "s"}` : "none on money"} hintTone={gaps.length ? "bad" : "neutral"} icon={<TrendingDown size={18} />} />
-        <MetricCard label="Open alerts" value={openAlerts} hint={openAlerts ? "needs review" : "all clear"} hintTone={openAlerts ? "bad" : "good"} icon={<Bell size={18} />} />
-        <MetricCard label="Logged today" value={repsLoggedToday} hint={`of ${reps.length} reps`} icon={<Users size={18} />} />
+        <MetricCard label="On goal today" value={onGoal} icon={<CircleCheck size={18} />} spark={onGoalSeries} delta={wkDelta(onGoalSeries)} deltaTone={wkDelta(onGoalSeries) >= 0 ? "good" : "bad"} />
+        <MetricCard label="Behind" value={gaps.length} icon={<TrendingDown size={18} />} spark={behindSeries} delta={wkDelta(behindSeries)} deltaTone={wkDelta(behindSeries) <= 0 ? "good" : "bad"} />
+        <MetricCard label="Open alerts" value={openAlerts} icon={<Bell size={18} />} spark={alertSeries} hint={openAlerts ? "needs review" : "all clear"} hintTone={openAlerts ? "bad" : "good"} />
+        <MetricCard label="Logged today" value={repsLoggedToday} icon={<Users size={18} />} spark={loggedSeries} delta={wkDelta(loggedSeries)} deltaTone={wkDelta(loggedSeries) >= 0 ? "good" : "neutral"} />
       </div>
 
       {/* Today's priorities — the short list worth acting on now */}

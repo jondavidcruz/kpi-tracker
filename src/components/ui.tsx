@@ -30,21 +30,45 @@ export function Pill({
   );
 }
 
-/** A refined metric card: label, big tabular value, optional hint + icon. */
+/** A tiny inline trend line. Inherits stroke from text color (currentColor). */
+export function Sparkline({ data, className = "" }: { data: number[]; className?: string }) {
+  if (!data || data.length < 2) return null;
+  const w = 64, h = 20;
+  const max = Math.max(...data), min = Math.min(...data);
+  const range = max - min || 1;
+  const pts = data
+    .map((v, i) => `${((i / (data.length - 1)) * w).toFixed(1)},${(h - ((v - min) / range) * h).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className={className} preserveAspectRatio="none" aria-hidden>
+      <polyline points={pts} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** A refined metric card: label, big tabular value, optional delta + sparkline. */
 export function MetricCard({
   label,
   value,
   hint,
   hintTone = "neutral",
   icon,
+  spark,
+  delta,
+  deltaTone = "neutral",
 }: {
   label: string;
   value: string | number;
   hint?: string;
   hintTone?: "good" | "bad" | "neutral";
   icon?: React.ReactNode;
+  spark?: number[];
+  delta?: number; // signed change vs ~last week
+  deltaTone?: "good" | "bad" | "neutral";
 }) {
   const hc = hintTone === "good" ? "text-emerald-600" : hintTone === "bad" ? "text-red-600" : "text-slate-400";
+  const dc = deltaTone === "good" ? "text-emerald-600" : deltaTone === "bad" ? "text-red-600" : "text-slate-400";
+  const showDelta = typeof delta === "number";
   return (
     <div className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="flex items-center justify-between">
@@ -52,7 +76,17 @@ export function MetricCard({
         {icon && <span className="text-slate-300">{icon}</span>}
       </div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{value}</div>
-      {hint && <div className={`mt-0.5 text-xs ${hc}`}>{hint}</div>}
+      <div className="mt-1 flex items-end justify-between gap-2">
+        {showDelta ? (
+          <span className={`text-xs font-medium ${dc}`}>
+            {delta === 0 ? "—" : `${delta > 0 ? "▲" : "▼"} ${Math.abs(delta)}`}
+            <span className="ml-1 font-normal text-slate-400">vs last wk</span>
+          </span>
+        ) : hint ? (
+          <span className={`text-xs ${hc}`}>{hint}</span>
+        ) : <span />}
+        {spark && spark.length > 1 && <Sparkline data={spark} className="text-slate-300" />}
+      </div>
     </div>
   );
 }
