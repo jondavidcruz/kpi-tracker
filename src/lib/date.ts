@@ -60,6 +60,22 @@ export function paceFraction(dateStr: string): number {
   return dayOfMonth(dateStr) / daysInMonth(dateStr);
 }
 
+// The Mon–Sun week CONTAINING dateStr (the current week). Sums only include days
+// that actually have entries, so this shows the week's progress so far.
+export function currentWeekRange(dateStr: string): { start: string; end: string; label: string } {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay();
+  const toMonday = dow === 0 ? 6 : dow - 1;
+  const mon = new Date(dt);
+  mon.setUTCDate(dt.getUTCDate() - toMonday);
+  const sun = new Date(mon);
+  sun.setUTCDate(mon.getUTCDate() + 6);
+  const fmt = (x: Date) => x.toISOString().slice(0, 10);
+  const labelFmt = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
+  return { start: fmt(mon), end: fmt(sun), label: `${labelFmt.format(mon)} – ${labelFmt.format(sun)}` };
+}
+
 /** Last week's Mon–Sun range (the completed week before the one containing `dateStr`). */
 export function lastWeekRange(dateStr: string): { start: string; end: string; label: string } {
   const [y, m, d] = dateStr.split("-").map(Number);

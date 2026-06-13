@@ -6,7 +6,7 @@ import {
   getDealMetrics,
   getSettings,
 } from "@/lib/data";
-import { todayStr, lastWeekRange } from "@/lib/date";
+import { todayStr, lastWeekRange, currentWeekRange } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
@@ -28,12 +28,14 @@ function money(n: number | null): string {
 export default async function ReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; week?: string }>;
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
   const today = sp.date ?? todayStr(settings.orgTimezone);
-  const wk = lastWeekRange(today);
+  // Default to THIS week so today's entered KPIs show; ?week=last for review.
+  const showLast = sp.week === "last";
+  const wk = showLast ? lastWeekRange(today) : currentWeekRange(today);
 
   const year = today.slice(0, 4);
   const [reps, perRepKpis, teamKpis, sums, deals, dealMetrics] = await Promise.all([
@@ -69,11 +71,15 @@ export default async function ReportPage({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Weekly Report</h1>
-          <p className="text-slate-500">Last week · {wk.label}</p>
+          <p className="text-slate-500">{showLast ? "Last week" : "This week"} · {wk.label}</p>
         </div>
-        <span className="rounded-full bg-brand-navy px-3 py-1 text-xs font-semibold text-white">
-          Freedom Offers
-        </span>
+        <div className="flex items-center gap-2">
+          <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-200">
+            <a href="/report" className={`px-3 py-1.5 text-xs font-semibold ${!showLast ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>This week</a>
+            <a href="/report?week=last" className={`px-3 py-1.5 text-xs font-semibold ${showLast ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>Last week</a>
+          </div>
+          <span className="rounded-full bg-brand-navy px-3 py-1 text-xs font-semibold text-white">Freedom Offers</span>
+        </div>
       </div>
 
       {/* ===== Revenue / escrow band (page 4 money metrics) ===== */}
