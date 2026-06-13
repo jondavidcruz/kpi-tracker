@@ -6,15 +6,17 @@ import { signOut } from "@/app/actions";
 import { db } from "@/lib/db";
 
 // Ordered once; managerOnly items are hidden from reps but keep their place.
+// `tone` color-codes a few links; default is muted white.
+const DEFAULT_TONE = "text-white/70 hover:text-white";
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/deals", label: "Deals" },
-  { href: "/entry", label: "Enter KPIs" },
+  { href: "/entry", label: "Enter KPIs", tone: "text-emerald-300 hover:text-emerald-200" },
   { href: "/report", label: "Weekly Report" },
   { href: "/monthly", label: "Monthly Report" },
-  { href: "/analytics", label: "Analytics", managerOnly: true },
-  { href: "/alerts", label: "Alerts" },
-  { href: "/pip", label: "PIPs", managerOnly: true },
+  { href: "/analytics", label: "Analytics", managerOnly: true, tone: "text-amber-300 hover:text-amber-200" },
+  { href: "/alerts", label: "Alerts", tone: "text-red-400 hover:text-red-300" },
+  { href: "/pip", label: "PIPs", managerOnly: true, tone: "text-red-400 hover:text-red-300" },
   { href: "/tickets", label: "Tickets" },
   { href: "/admin", label: "Admin", managerOnly: true },
 ];
@@ -52,7 +54,7 @@ export default async function NavBar() {
                 <Link
                   key={n.href}
                   href={n.href}
-                  className="relative whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+                  className={`relative whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition hover:bg-white/10 ${n.tone ?? DEFAULT_TONE}`}
                 >
                   {n.label}
                   {n.href === "/tickets" && newTickets > 0 && (
