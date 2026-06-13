@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { createKpi, saveKpi, saveSettings, saveUser } from "@/app/actions";
+import { createKpi, saveKpi, saveSettings, saveUser, deleteUser } from "@/app/actions";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
 import { toInputNumber, type Unit } from "@/lib/format";
 import { categoryMeta } from "@/lib/kpi";
-import { POSITIONS } from "@/lib/roles";
+import { POSITIONS, positionLabel } from "@/lib/roles";
+import type { User } from "@prisma/client";
 import { Card, SectionTitle } from "@/components/ui";
 import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 
@@ -47,6 +48,9 @@ export default async function AdminPage({
   }
 
   const [settings, users, kpis] = await Promise.all([getSettings(), getAllUsers(), getKpis()]);
+  const activeUsers = users.filter((u) => u.active);
+  const removedUsers = users.filter((u) => !u.active);
+  const canDelete = isAdmin(me);
 
   return (
     <div className="space-y-8">
@@ -105,55 +109,44 @@ export default async function AdminPage({
 
       {/* People */}
       <section>
-        <SectionTitle title="People" subtitle="Position decides which scorecard a rep sees and is alerted on" accent="bg-sky-400" />
-        <Card className="p-6">
-          {/* column headers */}
-          <div className="mb-2 hidden gap-2 px-1 text-xs font-semibold text-slate-400 md:flex">
-            <span className="w-32">Name</span>
-            <span className="w-56">Email</span>
-            <span className="w-28">Access</span>
-            <span className="w-44">Scorecard</span>
-            <span className="flex-1">Note</span>
-          </div>
-          <div className="space-y-2">
-            {users.map((u) => (
-              <form key={u.id} action={saveUser} className="flex flex-wrap items-center gap-2 rounded-lg p-1 hover:bg-slate-50">
-                <input type="hidden" name="id" value={u.id} />
-                <input name="name" defaultValue={u.name} className={`${inputCls} w-32`} />
-                <input name="email" defaultValue={u.email} className={`${inputCls} w-56`} />
-                <select name="role" defaultValue={u.role} className={`${inputCls} w-28`}>
-                  <option value="rep">rep</option><option value="manager">manager</option><option value="admin">admin</option>
-                </select>
-                <select name="position" defaultValue={u.position} className={`${inputCls} w-44`}>
-                  <option value="">none</option>
-                  {POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-                </select>
-                <input name="note" defaultValue={u.note} placeholder="note" className={`${inputCls} min-w-40 flex-1`} />
-                <label className="flex items-center gap-1 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked={u.active} /> active</label>
-                <label className="flex items-center gap-1 text-sm text-slate-600" title="Show the internet speed test + KPI on this person's entry screen"><input type="checkbox" name="tracksInternet" defaultChecked={u.tracksInternet} /> ⚡️ speed test</label>
-                <SaveBtn small>Save</SaveBtn>
-              </form>
-            ))}
-          </div>
+        <SectionTitle title="People" subtitle={`${activeUsers.length} active · position decides which scorecard a rep sees`} accent="bg-sky-400" />
 
-          <div className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a person</p>
-            <form action={saveUser} className="flex flex-wrap items-center gap-2">
-              <input name="name" placeholder="Name" className={`${inputCls} w-32`} />
-              <input name="email" placeholder="email@co.com" className={`${inputCls} w-56`} />
-              <select name="role" defaultValue="rep" className={`${inputCls} w-28`}>
-                <option value="rep">rep</option><option value="manager">manager</option><option value="admin">admin</option>
-              </select>
-              <select name="position" defaultValue="" className={`${inputCls} w-44`}>
-                <option value="">none</option>
-                {POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-              </select>
-              <label className="flex items-center gap-1 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked /> active</label>
-              <label className="flex items-center gap-1 text-sm text-slate-600" title="Show the internet speed test + KPI on this person's entry screen"><input type="checkbox" name="tracksInternet" /> ⚡️ speed test</label>
-              <SaveBtn small>+ Add person</SaveBtn>
-            </form>
-          </div>
+        <div className="space-y-3">
+          {activeUsers.map((u) => <PersonCard key={u.id} u={u} />)}
+        </div>
+
+        {/* Add a person */}
+        <Card className="mt-4 p-5">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Add a person</p>
+          <form action={saveUser} className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label><span className={labelCls}>Name</span><input name="name" placeholder="Full name" className={inputCls} /></label>
+              <label><span className={labelCls}>Email (personal Gmail for login)</span><input name="email" placeholder="name@gmail.com" className={inputCls} /></label>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label><span className={labelCls}>Access</span><select name="role" defaultValue="rep" className={inputCls}><option value="rep">rep</option><option value="manager">manager</option><option value="admin">admin</option></select></label>
+              <label><span className={labelCls}>Scorecard</span><select name="position" defaultValue="" className={inputCls}><option value="">none</option>{POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
+              <label className="flex items-end gap-4 pb-1">
+                <span className="flex items-center gap-1.5 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked /> active</span>
+                <span className="flex items-center gap-1.5 text-sm text-slate-600" title="Show the internet speed test on this person's entry screen"><input type="checkbox" name="tracksInternet" /> ⚡️ speed test</span>
+              </label>
+            </div>
+            <div><SaveBtn small>+ Add person</SaveBtn></div>
+          </form>
         </Card>
+
+        {/* Removed / inactive — tucked away so the main list stays clean */}
+        {removedUsers.length > 0 && (
+          <details className="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-600">
+              🗄 Removed / inactive ({removedUsers.length}) — hidden from the team
+            </summary>
+            <p className="mt-2 text-xs text-slate-400">These people are locked out and don&apos;t appear on any scorecard. Re-check &quot;active&quot; + Save to bring someone back, or delete permanently to purge their name and history.</p>
+            <div className="mt-3 space-y-3">
+              {removedUsers.map((u) => <PersonCard key={u.id} u={u} removed canDelete={canDelete} />)}
+            </div>
+          </details>
+        )}
       </section>
 
       {/* Weekly reviews — owner-private (admin only) */}
@@ -243,5 +236,51 @@ function SaveBtn({ children, small }: { children: React.ReactNode; small?: boole
     <button className={`rounded-lg bg-slate-900 font-semibold text-white shadow-sm transition hover:bg-slate-700 ${small ? "px-3 py-1.5 text-sm" : "px-5 py-2.5 text-sm"}`}>
       {children}
     </button>
+  );
+}
+
+// One person, laid out clearly (name/email on top, role/scorecard/note below).
+function PersonCard({ u, removed, canDelete }: { u: User; removed?: boolean; canDelete?: boolean }) {
+  // Show an archived role (e.g. retired Cold Call/Lead Mgr) as a labelled option
+  // so it doesn't silently fall back to "none".
+  const knownPosition = POSITIONS.some((p) => p.key === u.position);
+  return (
+    <div className={`rounded-xl p-4 ring-1 ${removed ? "bg-white ring-slate-200" : "bg-white ring-slate-200"}`}>
+      <form action={saveUser} className="space-y-3">
+        <input type="hidden" name="id" value={u.id} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label><span className={labelCls}>Name</span><input name="name" defaultValue={u.name} className={inputCls} /></label>
+          <label><span className={labelCls}>Email</span><input name="email" defaultValue={u.email} className={inputCls} /></label>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <label><span className={labelCls}>Access</span>
+            <select name="role" defaultValue={u.role} className={inputCls}>
+              <option value="rep">rep</option><option value="manager">manager</option><option value="admin">admin</option>
+            </select>
+          </label>
+          <label><span className={labelCls}>Scorecard</span>
+            <select name="position" defaultValue={u.position} className={inputCls}>
+              <option value="">none</option>
+              {!knownPosition && u.position && <option value={u.position}>{positionLabel(u.position)} (archived)</option>}
+              {POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
+          </label>
+          <label><span className={labelCls}>Note</span><input name="note" defaultValue={u.note} placeholder="optional" className={inputCls} /></label>
+        </div>
+        <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-3">
+          <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked={u.active} /> active</label>
+          <label className="flex items-center gap-1.5 text-sm text-slate-600" title="Show the internet speed test on this person's entry screen"><input type="checkbox" name="tracksInternet" defaultChecked={u.tracksInternet} /> ⚡️ speed test</label>
+          <div className="ml-auto"><SaveBtn small>Save</SaveBtn></div>
+        </div>
+      </form>
+
+      {removed && canDelete && (
+        <form action={deleteUser} className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2">
+          <input type="hidden" name="id" value={u.id} />
+          <span className="mr-auto text-xs text-slate-400">Permanently remove {u.name.split(" ")[0]} and all their history</span>
+          <button className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-50">🗑 Delete permanently</button>
+        </form>
+      )}
+    </div>
   );
 }

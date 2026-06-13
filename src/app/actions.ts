@@ -8,7 +8,7 @@ import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 
 /** Sign the current user out and return to the login screen. */
@@ -282,6 +282,33 @@ export async function saveUser(formData: FormData) {
   revalidatePath("/entry");
   revalidatePath("/dashboard");
   redirect(`/admin?saved=${encodeURIComponent(name)}`);
+}
+
+/**
+ * Permanently delete a person AND all their data (entries, targets, alerts,
+ * PIPs, tickets). ADMIN-ONLY and destructive — guarded so it only works on an
+ * already-deactivated account, never on yourself. Use to fully purge a name
+ * after they've left; export their KPI report first if you want the record.
+ */
+export async function deleteUser(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return; // destructive → admin only
+  const id = String(formData.get("id") ?? "");
+  if (!id || id === me?.id) return; // never delete yourself
+  const u = await db.user.findUnique({ where: { id } });
+  if (!u || u.active) return; // must be deactivated first (safety)
+
+  // Remove dependent rows before the user (FK), scoped to this one person.
+  await db.entry.deleteMany({ where: { userId: id } });
+  await db.target.deleteMany({ where: { userId: id } });
+  await db.alert.deleteMany({ where: { userId: id } });
+  await db.pip.deleteMany({ where: { userId: id } });
+  await db.ticket.deleteMany({ where: { userId: id } });
+  await db.user.delete({ where: { id } });
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  redirect(`/admin?saved=${encodeURIComponent(u.name + " removed")}`);
 }
 
 export async function saveKpi(formData: FormData) {
