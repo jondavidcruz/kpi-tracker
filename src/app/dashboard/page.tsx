@@ -5,6 +5,7 @@ import {
   getDailyValues,
   getKpis,
   getMonthToDateSums,
+  getOpenDeals,
   getSettings,
   resolveGoalWith,
 } from "@/lib/data";
@@ -12,6 +13,8 @@ import { todayStr, friendlyDate, paceFraction, monthOf } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { statusClasses, statusVsGoal, statusVsPace, alertSeverity, type Status } from "@/lib/kpi";
 import { dailyGap, monthlyGap, monthlyCatchup, buildCoaching } from "@/lib/gap";
+import { dealsNeedingAttention } from "@/lib/deals";
+import { findPipCandidates } from "@/lib/pip";
 import { POSITIONS } from "@/lib/roles";
 import { db } from "@/lib/db";
 import { Card, SectionTitle, Legend, ProgressBar } from "@/components/ui";
@@ -46,7 +49,7 @@ export default async function DashboardPage({
   const month = monthOf(date);
   const fraction = paceFraction(date);
 
-  const [reps, perRepKpis, teamDaily, teamMonthly, dailyValues, mtdSums, targets, openAlerts] =
+  const [reps, perRepKpis, teamDaily, teamMonthly, dailyValues, mtdSums, targets, openAlerts, openDeals, pipCandidates] =
     await Promise.all([
       getActiveReps(),
       getKpis({ scope: "per_rep", computed: false }),
@@ -56,7 +59,10 @@ export default async function DashboardPage({
       getMonthToDateSums(date),
       getAllTargets(),
       db.alert.count({ where: { status: "open" } }),
+      getOpenDeals(),
+      findPipCandidates(date),
     ]);
+  const agingDeals = dealsNeedingAttention(openDeals, date);
 
   // --- Build the gap list (who's behind + how to close it) ---
   const gaps: GapItem[] = [];
@@ -124,6 +130,13 @@ export default async function DashboardPage({
   }
   gaps.sort((a, b) => b.weight - a.weight);
 
+  // Today's priorities: the few things actually worth acting on right now.
+  const moneyGaps = gaps.filter((g) => g.category === "green").length;
+  const priorities: { icon: string; text: string; href: string; tone: string }[] = [];
+  if (moneyGaps > 0) priorities.push({ icon: "💸", text: `${moneyGaps} money KPI${moneyGaps === 1 ? "" : "s"} behind today`, href: "/alerts", tone: "text-red-700 bg-red-50 ring-red-200" });
+  if (pipCandidates.length > 0) priorities.push({ icon: "⚠️", text: `${pipCandidates.length} rep-KPI${pipCandidates.length === 1 ? "" : "s"} PIP-eligible`, href: "/pip", tone: "text-orange-700 bg-orange-50 ring-orange-200" });
+  if (agingDeals.length > 0) priorities.push({ icon: "🏠", text: `${agingDeals.length} deal${agingDeals.length === 1 ? "" : "s"} need attention`, href: "/report", tone: "text-violet-700 bg-violet-50 ring-violet-200" });
+
   return (
     <div className="space-y-7">
       {/* Hero */}
@@ -160,6 +173,20 @@ export default async function DashboardPage({
           </div>
         </div>
       </Card>
+
+      {/* Today's priorities — the short list worth acting on now */}
+      {priorities.length > 0 && (
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-bold text-slate-700">🎯 Today&apos;s priorities</div>
+          <div className="flex flex-wrap gap-2">
+            {priorities.map((p, i) => (
+              <Link key={i} href={p.href} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ring-1 ${p.tone}`}>
+                <span>{p.icon}</span>{p.text} <span aria-hidden>→</span>
+              </Link>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Performance gaps */}
       <section>

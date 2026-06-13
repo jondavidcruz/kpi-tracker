@@ -32,6 +32,14 @@ export async function POST(request: Request) {
   let body: Record<string, unknown> = {};
   try { body = await request.json(); } catch { /* allow query fallback */ }
 
+  // Status update by id (e.g. mark a built item done) when id+status provided.
+  const id = String(body.id ?? "").trim();
+  const status = String(body.status ?? "").trim();
+  if (id && ["proposed", "accepted", "declined", "done"].includes(status)) {
+    const updated = await db.suggestion.update({ where: { id }, data: { status } });
+    return NextResponse.json({ ok: true, id: updated.id, status: updated.status });
+  }
+
   const title = String(body.title ?? url.searchParams.get("title") ?? "").trim();
   if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
 

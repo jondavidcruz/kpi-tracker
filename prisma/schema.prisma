@@ -168,6 +168,22 @@ model Ticket {
   @@index([status])
 }
 
+// An AI-scored acquisitions call. The transcript is graded against a coaching
+// rubric (Anthropic API). repName/scoredBy are plain strings (no FK) to keep it
+// simple. Created via the Call Scoring page.
+model CallScore {
+  id         String   @id @default(cuid())
+  repName    String   @default("")
+  scoredBy   String   @default("")
+  overall    Int      @default(0) // 0-100
+  breakdown  String   @default("[]") // JSON [{area, score, note}]
+  summary    String   @default("")
+  transcript String   @default("")
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // An AI-generated improvement recommendation for the tracker itself. Populated
 // by the assistant (now) and a weekly analysis agent (later) via a secured API.
 // Jon/Marie review on the "AI Updates" tab and accept or decline each — nothing

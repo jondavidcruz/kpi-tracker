@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { setSuggestionStatus } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import type { Suggestion } from "@prisma/client";
@@ -16,11 +16,11 @@ const catCls = "bg-sky-100 text-sky-700";
 
 export default async function AiUpdatesPage() {
   const me = await getCurrentUser();
-  if (!isManager(me)) {
+  if (!isAdmin(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
-        <h1 className="text-xl font-bold">Managers only</h1>
+        <h1 className="text-xl font-bold">Owner only</h1>
         <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
       </Card>
     );

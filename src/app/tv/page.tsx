@@ -11,6 +11,7 @@ import { todayStr, friendlyDate, paceFraction, monthOf } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { statusVsGoal, statusVsPace, type Status } from "@/lib/kpi";
 import { POSITIONS } from "@/lib/roles";
+import { computeStreaks } from "@/lib/streaks";
 import { db } from "@/lib/db";
 import type { Kpi, Target, User } from "@prisma/client";
 
@@ -42,7 +43,7 @@ export default async function TvPage() {
   const month = monthOf(date);
   const fraction = paceFraction(date);
 
-  const [reps, perRep, teamMonthly, dailyValues, mtdSums, targets, openAlerts] =
+  const [reps, perRep, teamMonthly, dailyValues, mtdSums, targets, openAlerts, streaks] =
     await Promise.all([
       getActiveReps(),
       getKpis({ scope: "per_rep", computed: false }),
@@ -51,6 +52,7 @@ export default async function TvPage() {
       getMonthToDateSums(date),
       getAllTargets(),
       db.alert.count({ where: { status: "open" } }),
+      computeStreaks(date),
     ]);
 
   // Team pulse: count goal-bearing per-rep entries on/behind goal today.
@@ -124,6 +126,20 @@ export default async function TvPage() {
           );
         })}
       </div>
+
+      {/* Goal streaks */}
+      {streaks.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 px-8 pb-2">
+          <span className="text-base font-bold uppercase tracking-widest text-brand-gold-soft">🔥 On a roll</span>
+          {streaks.slice(0, 6).map((s) => (
+            <span key={s.userId} className="inline-flex items-center gap-2 rounded-full bg-orange-500/15 px-4 py-1.5 ring-1 ring-orange-400/30">
+              <span className="text-xl font-black text-orange-300">{s.name}</span>
+              <span className="text-xl font-black tabular-nums text-orange-200">🔥 {s.days}-day</span>
+              <span className="text-sm text-white/40">{s.kpiEmoji} {s.kpiName}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Role tables */}
       <div className="flex-1 space-y-6 px-8 pb-8">

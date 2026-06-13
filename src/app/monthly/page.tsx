@@ -1,9 +1,10 @@
 import { saveDay } from "@/app/actions";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
 import { db } from "@/lib/db";
-import { getKpis, getMonthlyValues, getSettings } from "@/lib/data";
+import { getKpis, getMonthlyValues, getSettings, getActiveReps, getRangeSums, getAllTargets, resolveGoalWith } from "@/lib/data";
 import { todayStr, monthBounds, monthOf, daysInMonth, dayOfMonth } from "@/lib/date";
 import { formatValue, toInputNumber, type Unit } from "@/lib/format";
+import { POSITIONS } from "@/lib/roles";
 import {
   computeDerived,
   statusClasses,
@@ -27,10 +28,14 @@ export default async function MonthlyPage({
   const isCurrentMonth = month === monthOf(today);
   const fraction = isCurrentMonth ? dayOfMonth(today) / daysInMonth(today) : 1;
 
-  const [enteredKpis, computedKpis, monthlyValues] = await Promise.all([
+  const [enteredKpis, computedKpis, monthlyValues, reps, perRepKpis, monthSums, targets] = await Promise.all([
     getKpis({ scope: "team", cadence: "monthly", computed: false }),
     getKpis({ scope: "team", cadence: "monthly", computed: true }),
     getMonthlyValues(monthStart),
+    getActiveReps(),
+    getKpis({ scope: "per_rep", cadence: "daily", computed: false }),
+    getRangeSums(monthStart, monthEnd),
+    getAllTargets(),
   ]);
 
   // Total leads for the month = daily "Leads Generated" + "PPL Leads" entries.
@@ -162,6 +167,55 @@ export default async function MonthlyPage({
         <p className="mt-2 text-xs text-slate-400">
           Total Leads this month: {totalLeads.toLocaleString()} · derived live from entered numbers.
         </p>
+      </section>
+
+      {/* Per-rep monthly totals — daily KPIs rolled up for the whole month */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Per-rep totals this month
+        </h2>
+        <div className="space-y-5">
+          {POSITIONS.map((pos) => {
+            const roleReps = reps.filter((r) => r.position === pos.key);
+            const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
+            if (roleReps.length === 0 || roleKpis.length === 0) return null;
+            return (
+              <div key={pos.key}>
+                <h3 className="mb-2 text-sm font-bold text-slate-600">{pos.emoji} {pos.label}</h3>
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/70">
+                        <th className="sticky left-0 bg-slate-50/70 px-4 py-2.5 text-left font-semibold">Rep</th>
+                        {roleKpis.map((k) => (
+                          <th key={k.id} className="whitespace-nowrap px-3 py-2.5 text-center font-semibold">{k.emoji} {k.name}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {roleReps.map((rep) => (
+                        <tr key={rep.id} className="border-b border-slate-100 last:border-0">
+                          <td className="sticky left-0 bg-white px-4 py-2.5 font-semibold text-slate-800">{rep.name}</td>
+                          {roleKpis.map((k) => {
+                            const total = monthSums.get(`${k.id}|${rep.id}`) ?? 0;
+                            const goal = resolveGoalWith(targets, k, rep.id, month);
+                            return (
+                              <td key={k.id} className="px-3 py-2.5 text-center tabular-nums text-slate-700">
+                                {formatValue(k.unit as Unit, total)}
+                                {goal !== null && <span className="ml-1 text-[10px] text-slate-400">({formatValue(k.unit as Unit, goal)}/day)</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-xs text-slate-400">Sum of each rep&apos;s daily entries for {month}. Goals shown are the daily target for reference.</p>
       </section>
 
       {/* Editable monthly inputs */}

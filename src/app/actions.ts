@@ -10,6 +10,7 @@ import { getChannelConfig, sendEmail } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
+import { scoreTranscript } from "@/lib/score";
 
 /** Sign the current user out and return to the login screen. */
 export async function signOut() {
@@ -241,10 +242,36 @@ export async function deleteTicket(formData: FormData) {
   revalidatePath("/tickets");
 }
 
-/** Accept / decline / mark-done an AI suggestion. MANAGER/ADMIN ONLY. */
+/** Score a pasted call transcript and save the result. Any signed-in user. */
+export async function scoreCall(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const transcript = String(formData.get("transcript") ?? "").trim();
+  const repName = String(formData.get("repName") ?? "").trim();
+  if (transcript.length < 40) redirect("/call-scoring?err=short");
+
+  const result = await scoreTranscript(transcript);
+  if (!result.configured) redirect("/call-scoring?setup=1");
+  if (result.error) redirect(`/call-scoring?err=${encodeURIComponent(result.error)}`);
+
+  await db.callScore.create({
+    data: {
+      repName: repName || "(unspecified)",
+      scoredBy: me.name,
+      overall: result.overall,
+      breakdown: JSON.stringify(result.breakdown),
+      summary: result.summary,
+      transcript: transcript.slice(0, 20000),
+    },
+  });
+  revalidatePath("/call-scoring");
+  redirect("/call-scoring?scored=1");
+}
+
+/** Accept / decline / mark-done an AI suggestion. OWNER (admin/Jon) ONLY. */
 export async function setSuggestionStatus(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return; // only Jon/Marie decide
+  if (!isAdmin(me)) return; // AI Updates is Jon-only
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   const note = String(formData.get("note") ?? "").trim();

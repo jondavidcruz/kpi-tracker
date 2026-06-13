@@ -117,9 +117,13 @@ export async function evaluateAndRecordAlerts(
             data: { expected: result.expected, actual: result.actual, message },
           });
         }
-      } else if (existing && existing.status !== "resolved") {
-        // Recovered to goal/pace — auto-resolve.
-        await db.alert.update({ where: { id: existing.id }, data: { status: "resolved" } });
+      } else {
+        // Recovered to goal/pace — auto-resolve this rep's open alerts for this
+        // KPI: today's AND any still-open from earlier days, tagged "recovered".
+        await db.alert.updateMany({
+          where: { kpiId: kpi.id, userId: subj.userId, date: { lte: date }, status: { in: ["open", "ack"] } },
+          data: { status: "resolved", resolutionCategory: "recovered", resolvedBy: "auto", resolvedAt: new Date() },
+        });
       }
     }
   }

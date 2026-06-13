@@ -1,7 +1,7 @@
 // Top navigation. Server component — knows who's signed in and their role.
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionEmail, getCurrentUser, isManager } from "@/lib/auth";
+import { getSessionEmail, getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 import { signOut } from "@/app/actions";
 import { db } from "@/lib/db";
 
@@ -17,8 +17,9 @@ const NAV = [
   { href: "/analytics", label: "Analytics", managerOnly: true, tone: "text-amber-300 hover:text-amber-200" },
   { href: "/alerts", label: "Alerts", tone: "text-red-400 hover:text-red-300" },
   { href: "/pip", label: "PIPs", managerOnly: true, tone: "text-red-400 hover:text-red-300" },
+  { href: "/call-scoring", label: "Call Scoring", tone: "text-teal-300 hover:text-teal-200" },
   { href: "/tickets", label: "Tickets" },
-  { href: "/ai-updates", label: "AI Updates", managerOnly: true, tone: "text-violet-300 hover:text-violet-200" },
+  { href: "/ai-updates", label: "AI Updates", adminOnly: true, tone: "text-violet-300 hover:text-violet-200" },
   { href: "/admin", label: "Admin", managerOnly: true },
 ];
 
@@ -34,13 +35,14 @@ export default async function NavBar() {
   }
 
   const manager = isManager(me);
+  const admin = isAdmin(me);
   const [newTickets, newSuggestions] = manager
     ? await Promise.all([
         db.ticket.count({ where: { status: "new" } }),
-        db.suggestion.count({ where: { status: "proposed" } }),
+        admin ? db.suggestion.count({ where: { status: "proposed" } }) : Promise.resolve(0),
       ])
     : [0, 0];
-  const items = NAV.filter((n) => !n.managerOnly || manager);
+  const items = NAV.filter((n) => (!n.managerOnly || manager) && (!n.adminOnly || admin));
 
   return (
     <header className="sticky top-0 z-10 border-b border-brand-navy/15 bg-brand-navy text-white shadow-sm">

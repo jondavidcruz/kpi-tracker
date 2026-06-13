@@ -15,6 +15,7 @@ import { statusVsGoal } from "./kpi";
 import { POSITIONS, positionLabel } from "./roles";
 import { findPipCandidates, PIP_CONSECUTIVE_MISSES } from "./pip";
 import { sendEmail, getChannelConfig } from "./notify";
+import { reasonLabel } from "./alert-resolution";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -73,9 +74,30 @@ export async function sendWeeklyTeamEmail(today: string): Promise<boolean> {
       </table>`;
   }).join("");
 
+  // Top reason KPIs were missed last week (from resolved-alert reason tags),
+  // excluding auto-recovered. Tells you if misses are a leads/tech/effort thing.
+  const reasonRows = await db.alert.groupBy({
+    by: ["resolutionCategory"],
+    where: {
+      status: "resolved",
+      resolutionCategory: { notIn: ["recovered", ""] },
+      date: { gte: wk.start, lte: wk.end },
+    },
+    _count: { _all: true },
+  });
+  const topReason = reasonRows
+    .filter((r) => r.resolutionCategory)
+    .sort((a, b) => b._count._all - a._count._all)[0];
+  const reasonBlock = topReason
+    ? `<p style="margin:14px 0 0;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;color:#92400e;font-size:13px;">
+        <strong>Top reason for missed KPIs last week:</strong> ${esc(reasonLabel(topReason.resolutionCategory))} (${topReason._count._all}). ${topReason.resolutionCategory === "leads" ? "Supply problem — consider more lead spend, not just coaching." : topReason.resolutionCategory === "tech" ? "Mostly tech/internet — worth fixing at the source." : "Coachable — focus 1:1 time here."}
+      </p>`
+    : "";
+
   const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:680px;margin:0 auto;color:#0f172a;">
     <h1 style="color:#0b1f3a;">📊 Freedom Offers Weekly Team KPIs</h1>
     <p style="color:#64748b;">Week of ${esc(wk.label)} · totals per rep (and days worked Mon–Fri).</p>
+    ${reasonBlock}
     ${roleSections}
     <p style="margin-top:20px;font-size:12px;color:#94a3b8;">Live dashboard: https://kpi-tracker-lovat.vercel.app/report</p>
   </div>`;
