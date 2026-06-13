@@ -22,11 +22,18 @@ export async function getSettings() {
 /** Everyone who appears on a scorecard = active + has a position assigned.
  *  Role (permission: rep/manager/admin) is independent of position (which
  *  scorecard), so a manager/admin like Marie or Jon can still log their own KPIs. */
+// Display order for reps across all KPI views (by first name). Anyone not listed
+// falls to the end, alphabetically. Edit this list to reorder the team.
+const REP_ORDER = ["Michelle", "Jon", "Ethan", "Sharyn", "Marie"];
+function repRank(name: string): number {
+  const first = name.split(" ")[0].toLowerCase();
+  const i = REP_ORDER.findIndex((n) => n.toLowerCase() === first);
+  return i === -1 ? 999 : i;
+}
+
 export async function getActiveReps(): Promise<User[]> {
-  return db.user.findMany({
-    where: { active: true, position: { not: "" } },
-    orderBy: { name: "asc" },
-  });
+  const reps = await db.user.findMany({ where: { active: true, position: { not: "" } } });
+  return reps.sort((a, b) => repRank(a.name) - repRank(b.name) || a.name.localeCompare(b.name));
 }
 
 export async function getAllUsers(): Promise<User[]> {
