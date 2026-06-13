@@ -170,11 +170,16 @@ export async function addRepReason(formData: FormData) {
 export async function submitTicket(formData: FormData) {
   const me = await getCurrentUser();
   if (!me) return; // must be signed in
-  const title = String(formData.get("title") ?? "").trim();
+  const rawTitle = String(formData.get("title") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   const area = String(formData.get("area") ?? "").trim();
   const severity = String(formData.get("severity") ?? "normal").trim();
-  if (!title) return;
+  // Forgiving: if they typed everything into Details and left the summary blank,
+  // use the first line of the details as the title. Only bail if BOTH are empty.
+  const title = rawTitle || body.split("\n")[0].slice(0, 80);
+  if (!title) {
+    redirect("/tickets?empty=1");
+  }
 
   await db.ticket.create({
     data: { submittedBy: me.name, userId: me.id, title, body, area, severity, status: "new" },

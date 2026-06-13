@@ -17,7 +17,7 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   declined: { label: "Declined", cls: "bg-slate-200 text-slate-600" },
 };
 
-export default async function TicketsPage({ searchParams }: { searchParams: Promise<{ sent?: string }> }) {
+export default async function TicketsPage({ searchParams }: { searchParams: Promise<{ sent?: string; empty?: string }> }) {
   const me = await getCurrentUser();
   const sp = await searchParams;
   if (!me) return <Card className="mx-auto max-w-md p-8 text-center">Please sign in.</Card>;
@@ -48,14 +48,15 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
         accent="bg-sky-400"
       />
       {sp.sent && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Ticket submitted. Jon will review it before anything is changed.</div>}
+      {sp.empty && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Please type a summary or some details before submitting.</div>}
 
       {/* Submit form — open to everyone signed in */}
       <Card className="p-5">
         <h3 className="mb-3 text-sm font-bold text-slate-700">Report an issue</h3>
         <form action={submitTicket} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="sm:col-span-2">
-            <span className={lbl}>What&apos;s the problem?</span>
-            <input name="title" required placeholder="e.g. Speed test button spins forever" className={inputCls} />
+            <span className={lbl}>What&apos;s the problem? <span className="font-normal text-slate-400">(a short summary)</span></span>
+            <input name="title" placeholder="e.g. Speed test button spins forever" className={inputCls} />
           </label>
           <label>
             <span className={lbl}>Where in the app?</span>
