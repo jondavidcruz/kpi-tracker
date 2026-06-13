@@ -18,6 +18,7 @@
   --color-brand-gold: #c8a24b;       /* accent — CTAs, active marks */
   --color-brand-gold-soft: #e6c878;  /* large numbers on navy */
   --color-brand-gold-100: #f3e6c4;   /* faint gold fills */
+  --color-brand-cream: #e9e4d7;      /* logo wordmark on navy */
 
   /* Neutral surfaces + lines */
   --color-surface: #ffffff;     /* cards */

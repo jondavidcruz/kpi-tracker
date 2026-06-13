@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { formatValue, fromInput, inputSuffix, type Unit } from "@/lib/format";
 import { statusClasses, statusVsGoal, type Status } from "@/lib/kpi";
 import { measureDownloadMbps } from "@/lib/speedtest-client";
+import { KpiLabel } from "@/lib/kpiIcons";
 
 export interface EntryItem {
   kpiId: string;
@@ -95,7 +96,7 @@ function Field({ item }: { item: EntryItem }) {
     <div className="block">
       <div className="flex items-center justify-between mb-1">
         <span className="text-sm font-medium text-slate-700">
-          {item.emoji} {item.name}
+          <KpiLabel kpiKey={item.kpiKey} name={item.name} />
         </span>
         {item.goalValue !== null && (
           <span className="text-xs text-slate-400">

@@ -16,6 +16,7 @@ import { dailyGap, monthlyGap, monthlyCatchup, buildCoaching } from "@/lib/gap";
 import { dealsNeedingAttention } from "@/lib/deals";
 import { findPipCandidates } from "@/lib/pip";
 import { POSITIONS } from "@/lib/roles";
+import { KpiLabel } from "@/lib/kpiIcons";
 import { db } from "@/lib/db";
 import { Card, SectionTitle, Legend, ProgressBar } from "@/components/ui";
 import type { Kpi, Target, User } from "@prisma/client";
@@ -26,6 +27,7 @@ interface GapItem {
   who: string;
   roleEmoji: string;
   kpiName: string;
+  kpiKey: string;
   emoji: string;
   category: string;
   unit: Unit;
@@ -88,6 +90,7 @@ export default async function DashboardPage({
             who: rep.name,
             roleEmoji: pos.emoji,
             kpiName: k.name,
+          kpiKey: k.key,
             emoji: k.emoji,
             category: k.category,
             unit: k.unit as Unit,
@@ -115,6 +118,7 @@ export default async function DashboardPage({
         who: "Team",
         roleEmoji: "🏢",
         kpiName: k.name,
+        kpiKey: k.key,
         emoji: k.emoji,
         category: k.category,
         unit: k.unit as Unit,
@@ -216,7 +220,7 @@ export default async function DashboardPage({
                       </span>
                       <div className="min-w-[150px] flex-1">
                         <div className="font-semibold text-slate-800">
-                          {g.roleEmoji} {g.who} · {g.emoji} {g.kpiName}
+                          {g.who} · <KpiLabel kpiKey={g.kpiKey} name={g.kpiName} />
                         </div>
                         <div className="text-sm text-slate-500">{g.catchup}</div>
                       </div>
@@ -258,7 +262,7 @@ export default async function DashboardPage({
               const value = dailyValues.get(`${k.id}|`) ?? null;
               return (
                 <Card key={k.id} className="p-4">
-                  <div className="text-xs font-medium text-slate-500">{k.emoji} {k.name}</div>
+                  <div className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={k.key} name={k.name} /></div>
                   <div className="mt-1 text-3xl font-extrabold tabular-nums text-slate-800">
                     {value === null ? "—" : formatValue(k.unit as Unit, value)}
                   </div>
@@ -302,7 +306,7 @@ export default async function DashboardPage({
             return (
               <Card key={k.id} className="p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-500">{k.emoji} {k.name}</span>
+                  <span className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={k.key} name={k.name} /></span>
                   <span className={`text-xs font-semibold ${cls.text}`}>{cls.label}</span>
                 </div>
                 <div className={`mt-1 text-3xl font-extrabold tabular-nums ${cls.text}`}>
@@ -364,7 +368,7 @@ function RoleScorecard({
               <th className="sticky left-0 bg-slate-50/70 px-4 py-3 text-left font-semibold">Rep</th>
               {kpis.map((k) => (
                 <th key={k.id} className="whitespace-nowrap px-3 py-3 text-center font-semibold">
-                  {k.emoji} {k.name}
+                  <KpiLabel kpiKey={k.key} name={k.name} />
                 </th>
               ))}
             </tr>

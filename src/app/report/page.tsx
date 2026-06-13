@@ -10,6 +10,7 @@ import { todayStr, lastWeekRange, currentWeekRange } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
+import { KpiLabel } from "@/lib/kpiIcons";
 import { Card, SectionTitle } from "@/components/ui";
 import type { Kpi, User } from "@prisma/client";
 
@@ -50,9 +51,10 @@ export default async function ReportPage({
 
   // ---- Page 4 data: KPIs at a glance (team totals for the week) ----
   // Sum each team daily KPI + roll up the key per-rep money KPIs across all reps.
-  const glance: { emoji: string; name: string; value: string }[] = [];
+  const glance: { key: string; emoji: string; name: string; value: string }[] = [];
   for (const k of teamKpis) {
     glance.push({
+      key: k.key,
       emoji: k.emoji,
       name: k.name,
       value: formatValue(k.unit as Unit, sums.get(`${k.id}|`) ?? 0),
@@ -63,7 +65,7 @@ export default async function ReportPage({
   for (const k of perRepKpis.filter((x) => rollupKeys.includes(x.key) && x.category === "green")) {
     let total = 0;
     for (const r of reps) total += sums.get(`${k.id}|${r.id}`) ?? 0;
-    glance.push({ emoji: k.emoji, name: k.name, value: formatValue(k.unit as Unit, total) });
+    glance.push({ key: k.key, emoji: k.emoji, name: k.name, value: formatValue(k.unit as Unit, total) });
   }
 
   return (
@@ -100,7 +102,7 @@ export default async function ReportPage({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {glance.map((g, i) => (
             <Card key={i} className="p-4">
-              <div className="text-xs font-medium text-slate-500">{g.emoji} {g.name}</div>
+              <div className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={g.key} name={g.name} /></div>
               <div className="mt-1 text-3xl font-extrabold tabular-nums text-slate-800">{g.value}</div>
             </Card>
           ))}
@@ -221,7 +223,7 @@ function RoleWeekTable({
               <th className="sticky left-0 bg-slate-50/70 px-4 py-2.5 text-left font-semibold">Rep</th>
               {kpis.map((k) => (
                 <th key={k.id} className="whitespace-nowrap px-3 py-2.5 text-center font-semibold">
-                  {k.emoji} {k.name}
+                  <KpiLabel kpiKey={k.key} name={k.name} />
                 </th>
               ))}
             </tr>

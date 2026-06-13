@@ -12,6 +12,7 @@ import { formatValue, type Unit } from "@/lib/format";
 import { statusVsGoal, statusVsPace, type Status } from "@/lib/kpi";
 import { POSITIONS } from "@/lib/roles";
 import { computeStreaks } from "@/lib/streaks";
+import { KpiIcon } from "@/lib/kpiIcons";
 import { db } from "@/lib/db";
 import type { Kpi, Target, User } from "@prisma/client";
 
@@ -108,7 +109,7 @@ export default async function TvPage() {
           const pct = goal ? Math.min(100, (mtd / goal) * 100) : 0;
           return (
             <div key={k.id} className="rounded-2xl bg-brand-navy-2 p-5 ring-1 ring-white/10">
-              <div className="text-base text-white/55">{k.emoji} {k.name} <span className="text-white/30">/mo</span></div>
+              <div className="text-base text-white/55"><KpiIcon kpiKey={k.key} className="mr-1.5 inline align-[-3px] opacity-70" /> {k.name} <span className="text-white/30">/mo</span></div>
               <div className="mt-1 flex items-baseline gap-2">
                 <span className={`text-5xl font-black tabular-nums ${tone(s)}`}>{formatValue(k.unit as Unit, mtd)}</span>
                 <span className="text-lg text-white/35">/ {formatValue(k.unit as Unit, goal)}</span>
@@ -204,7 +205,7 @@ function RoleTable({
               <th className="px-6 py-3 font-semibold">Rep</th>
               {kpis.map((k) => (
                 <th key={k.id} className="px-3 py-3 text-center font-semibold">
-                  {k.emoji} {k.name}
+                  <KpiIcon kpiKey={k.key} className="mr-1.5 inline align-[-3px] opacity-70" /> {k.name}
                 </th>
               ))}
             </tr>

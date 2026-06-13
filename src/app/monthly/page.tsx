@@ -5,6 +5,7 @@ import { getKpis, getMonthlyValues, getSettings, getActiveReps, getRangeSums, ge
 import { todayStr, monthBounds, monthOf, daysInMonth, dayOfMonth } from "@/lib/date";
 import { formatValue, toInputNumber, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
+import { KpiLabel } from "@/lib/kpiIcons";
 import {
   computeDerived,
   statusClasses,
@@ -119,7 +120,7 @@ export default async function MonthlyPage({
               return (
                 <div key={k.id} className={`rounded-xl border p-4 ${cls.bg} ${cls.border}`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-600">{k.emoji} {k.name}</span>
+                    <span className="text-sm font-medium text-slate-600"><KpiLabel kpiKey={k.key} name={k.name} /></span>
                     <span className={`text-sm font-semibold ${cls.text}`}>{cls.label}</span>
                   </div>
                   <div className="mt-2 flex items-baseline gap-2">
@@ -153,7 +154,7 @@ export default async function MonthlyPage({
                 const v = k.formula ? computeDerived(k.formula, inputs) : null;
                 return (
                   <tr key={k.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3 font-medium">{k.emoji} {k.name}</td>
+                    <td className="px-4 py-3 font-medium"><KpiLabel kpiKey={k.key} name={k.name} /></td>
                     <td className="px-4 py-3 text-slate-400 hidden sm:table-cell">{k.definition}</td>
                     <td className="px-4 py-3 text-right font-bold text-lg">
                       {v === null ? "—" : formatValue(k.unit as Unit, v)}
@@ -188,7 +189,7 @@ export default async function MonthlyPage({
                       <tr className="border-b border-slate-200 bg-slate-50/70">
                         <th className="sticky left-0 bg-slate-50/70 px-4 py-2.5 text-left font-semibold">Rep</th>
                         {roleKpis.map((k) => (
-                          <th key={k.id} className="whitespace-nowrap px-3 py-2.5 text-center font-semibold">{k.emoji} {k.name}</th>
+                          <th key={k.id} className="whitespace-nowrap px-3 py-2.5 text-center font-semibold"><KpiLabel kpiKey={k.key} name={k.name} /></th>
                         ))}
                       </tr>
                     </thead>

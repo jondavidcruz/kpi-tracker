@@ -8,6 +8,7 @@ import {
   Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
+import Logo from "./Logo";
 
 type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; badge?: number };
 
@@ -51,9 +52,8 @@ export default function Sidebar({
 
   const Nav = (
     <div className="flex h-full flex-col">
-      <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-4 py-4">
-        <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-gold text-base font-bold text-brand-navy">FO</span>
-        <span className="text-[15px] font-semibold text-white">Freedom Offers</span>
+      <Link href="/dashboard" onClick={() => setOpen(false)} className="block px-4 py-5">
+        <Logo size="sm" />
       </Link>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
@@ -117,10 +117,7 @@ export default function Sidebar({
     <>
       {/* Mobile top bar */}
       <div className="flex items-center justify-between bg-brand-navy px-4 py-3 md:hidden">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-gold text-sm font-bold text-brand-navy">FO</span>
-          <span className="text-sm font-semibold text-white">Freedom Offers</span>
-        </Link>
+        <Link href="/dashboard"><Logo size="sm" /></Link>
         <button aria-label="Open menu" onClick={() => setOpen(true)} className="grid h-9 w-9 place-items-center rounded-lg text-white hover:bg-white/10">
           <Menu size={22} />
         </button>

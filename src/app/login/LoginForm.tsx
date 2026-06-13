@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { MailCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import Logo from "@/components/Logo";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -32,19 +34,19 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-[70vh] items-center justify-center">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-md bg-brand-gold text-sm font-black text-brand-navy">
-            FO
-          </span>
-          <div className="font-extrabold tracking-tight">Freedom Offers · KPIs</div>
+    <div className="flex min-h-[88vh] flex-col items-center justify-center gap-6 px-4">
+      <div className="flex flex-col items-center gap-3">
+        <div className="rounded-2xl bg-brand-navy px-10 py-7">
+          <Logo size="lg" />
         </div>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">KPI Performance Portal</p>
+      </div>
 
+      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         {status === "sent" ? (
-          <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200">
-            ✅ Check your email. We sent a sign-in link to <strong>{email}</strong>. Open it on
-            this device to log in.
+          <div className="flex items-start gap-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200">
+            <MailCheck size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+            <span>Check your email. We sent a sign-in link to <strong>{email}</strong>. Open it on this device to log in.</span>
           </div>
         ) : (
           <form onSubmit={sendLink} className="space-y-4">
