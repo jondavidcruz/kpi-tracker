@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { submitTicket, setTicketStatus } from "@/app/actions";
+import { submitTicket, setTicketStatus, deleteTicket } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
+import TicketSubmitButton from "@/components/TicketSubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
             <textarea name="body" rows={4} placeholder="Steps to reproduce help a lot…" className={inputCls} />
           </label>
           <div className="sm:col-span-2">
-            <button className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">Submit ticket</button>
+            <TicketSubmitButton />
             <span className="ml-3 text-xs text-slate-400">This files a report only — it can&apos;t change the system.</span>
           </div>
         </form>
@@ -158,6 +159,10 @@ function AdminTicket({ t, stage }: { t: { id: string; title: string; body: strin
           {t.body && <p className="mt-0.5 whitespace-pre-line text-sm text-slate-500">{t.body}</p>}
           {t.adminNote && <p className="mt-2 rounded-md bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 ring-1 ring-slate-100"><strong>Note:</strong> {t.adminNote}</p>}
         </div>
+        <form action={deleteTicket} className="shrink-0">
+          <input type="hidden" name="id" value={t.id} />
+          <button className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 ring-1 ring-slate-200 hover:bg-red-50 hover:text-red-600 hover:ring-red-200" title="Permanently delete this ticket">🗑 Delete</button>
+        </form>
       </div>
 
       <form action={setTicketStatus} className="mt-3 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">

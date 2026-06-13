@@ -231,6 +231,16 @@ export async function setTicketStatus(formData: FormData) {
   revalidatePath("/tickets");
 }
 
+/** Permanently delete a ticket. MANAGER/ADMIN ONLY — for clearing duplicates/spam. */
+export async function deleteTicket(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return; // hard gate
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.ticket.delete({ where: { id } });
+  revalidatePath("/tickets");
+}
+
 function escapeForEmail(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
