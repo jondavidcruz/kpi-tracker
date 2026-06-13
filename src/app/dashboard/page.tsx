@@ -18,7 +18,8 @@ import { findPipCandidates } from "@/lib/pip";
 import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import { db } from "@/lib/db";
-import { Card, SectionTitle, Legend, ProgressBar } from "@/components/ui";
+import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
+import { CircleCheck, TrendingDown, Bell, Users, Banknote, ShieldAlert, Building2, type LucideIcon } from "lucide-react";
 import type { Kpi, Target, User } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -136,58 +137,50 @@ export default async function DashboardPage({
 
   // Today's priorities: the few things actually worth acting on right now.
   const moneyGaps = gaps.filter((g) => g.category === "green").length;
-  const priorities: { icon: string; text: string; href: string; tone: string }[] = [];
-  if (moneyGaps > 0) priorities.push({ icon: "💸", text: `${moneyGaps} money KPI${moneyGaps === 1 ? "" : "s"} behind today`, href: "/alerts", tone: "text-red-700 bg-red-50 ring-red-200" });
-  if (pipCandidates.length > 0) priorities.push({ icon: "⚠️", text: `${pipCandidates.length} rep-KPI${pipCandidates.length === 1 ? "" : "s"} PIP-eligible`, href: "/pip", tone: "text-orange-700 bg-orange-50 ring-orange-200" });
-  if (agingDeals.length > 0) priorities.push({ icon: "🏠", text: `${agingDeals.length} deal${agingDeals.length === 1 ? "" : "s"} need attention`, href: "/report", tone: "text-violet-700 bg-violet-50 ring-violet-200" });
+  const tracked = onGoal + gaps.length;
+  const repsLoggedToday = new Set([...dailyValues.keys()].map((k) => k.split("|")[1]).filter(Boolean)).size;
+  const priorities: { Icon: LucideIcon; text: string; href: string; tone: string }[] = [];
+  if (moneyGaps > 0) priorities.push({ Icon: Banknote, text: `${moneyGaps} money KPI${moneyGaps === 1 ? "" : "s"} behind today`, href: "/alerts", tone: "text-red-700 bg-red-50 ring-red-200" });
+  if (pipCandidates.length > 0) priorities.push({ Icon: ShieldAlert, text: `${pipCandidates.length} rep-KPI${pipCandidates.length === 1 ? "" : "s"} PIP-eligible`, href: "/pip", tone: "text-orange-700 bg-orange-50 ring-orange-200" });
+  if (agingDeals.length > 0) priorities.push({ Icon: Building2, text: `${agingDeals.length} deal${agingDeals.length === 1 ? "" : "s"} need attention`, href: "/report", tone: "text-violet-700 bg-violet-50 ring-violet-200" });
 
   return (
     <div className="space-y-7">
-      {/* Hero */}
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4 p-5">
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Team Dashboard</h1>
-            <p className="text-slate-500">{friendlyDate(date)}</p>
-          </div>
-          <div className="flex items-center gap-5">
-            <div className="flex items-center gap-5 border-r border-slate-200 pr-5">
-              <Stat n={onGoal} label="on goal" tone="emerald" />
-              <Stat n={gaps.length} label="behind" tone={gaps.length ? "red" : "slate"} />
-            </div>
-            {openAlerts > 0 ? (
-              <Link
-                href="/alerts"
-                className="inline-flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-200 hover:bg-red-100"
-              >
-                <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                {openAlerts} alert{openAlerts === 1 ? "" : "s"}
-              </Link>
-            ) : (
-              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" /> All clear
-              </span>
-            )}
-            <Link
-              href="/entry"
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-700"
-            >
-              + Enter KPIs
-            </Link>
-          </div>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Team dashboard</h1>
+          <p className="text-sm text-slate-500">{friendlyDate(date)}</p>
         </div>
-      </Card>
+        <Link
+          href="/entry"
+          className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-navy-700"
+        >
+          + Enter KPIs
+        </Link>
+      </div>
+
+      {/* Headline metrics */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard label="On goal today" value={onGoal} hint={`of ${tracked} tracked`} hintTone="good" icon={<CircleCheck size={18} />} />
+        <MetricCard label="Behind" value={gaps.length} hint={moneyGaps > 0 ? `${moneyGaps} money KPI${moneyGaps === 1 ? "" : "s"}` : "none on money"} hintTone={gaps.length ? "bad" : "neutral"} icon={<TrendingDown size={18} />} />
+        <MetricCard label="Open alerts" value={openAlerts} hint={openAlerts ? "needs review" : "all clear"} hintTone={openAlerts ? "bad" : "good"} icon={<Bell size={18} />} />
+        <MetricCard label="Logged today" value={repsLoggedToday} hint={`of ${reps.length} reps`} icon={<Users size={18} />} />
+      </div>
 
       {/* Today's priorities — the short list worth acting on now */}
       {priorities.length > 0 && (
         <Card className="p-4">
-          <div className="mb-2 text-sm font-bold text-slate-700">🎯 Today&apos;s priorities</div>
+          <div className="mb-2 text-sm font-semibold text-slate-700">Today&apos;s priorities</div>
           <div className="flex flex-wrap gap-2">
-            {priorities.map((p, i) => (
-              <Link key={i} href={p.href} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ring-1 ${p.tone}`}>
-                <span>{p.icon}</span>{p.text} <span aria-hidden>→</span>
-              </Link>
-            ))}
+            {priorities.map((p, i) => {
+              const Icon = p.Icon;
+              return (
+                <Link key={i} href={p.href} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ring-1 ${p.tone}`}>
+                  <Icon size={16} /> {p.text} <span aria-hidden>→</span>
+                </Link>
+              );
+            })}
           </div>
         </Card>
       )}
@@ -307,7 +300,7 @@ export default async function DashboardPage({
               <Card key={k.id} className="p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={k.key} name={k.name} /></span>
-                  <span className={`text-xs font-semibold ${cls.text}`}>{cls.label}</span>
+                  <Pill tone={status === "hit" ? "good" : status === "close" ? "watch" : status === "miss" ? "bad" : "neutral"}>{cls.label}</Pill>
                 </div>
                 <div className={`mt-1 text-3xl font-extrabold tabular-nums ${cls.text}`}>
                   {formatValue(k.unit as Unit, mtd)}
@@ -327,16 +320,6 @@ export default async function DashboardPage({
           })}
         </div>
       </section>
-    </div>
-  );
-}
-
-function Stat({ n, label, tone }: { n: number; label: string; tone: "emerald" | "red" | "slate" }) {
-  const c = tone === "emerald" ? "text-emerald-600" : tone === "red" ? "text-red-600" : "text-slate-400";
-  return (
-    <div className="text-center">
-      <div className={`text-2xl font-extrabold tabular-nums ${c}`}>{n}</div>
-      <div className="text-xs font-medium text-slate-500">{label}</div>
     </div>
   );
 }

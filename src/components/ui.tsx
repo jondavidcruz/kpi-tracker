@@ -1,6 +1,62 @@
 // Shared presentational building blocks for a cohesive, polished look.
 import type { Status } from "@/lib/kpi";
 
+// Strip a leading emoji from a heading so titles read clean (the colored accent
+// bar carries the visual marker now).
+function stripEmoji(s: string): string {
+  return s.replace(/^(?:\p{Extended_Pictographic}|️|‍)+\s*/u, "");
+}
+
+const PILL_TONES = {
+  good: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  watch: "bg-amber-50 text-amber-700 ring-amber-200",
+  bad: "bg-red-50 text-red-700 ring-red-200",
+  info: "bg-sky-50 text-sky-700 ring-sky-200",
+  neutral: "bg-slate-100 text-slate-600 ring-slate-200",
+} as const;
+
+/** A small status pill — replaces colored dots / emoji status markers. */
+export function Pill({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: keyof typeof PILL_TONES;
+}) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${PILL_TONES[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+/** A refined metric card: label, big tabular value, optional hint + icon. */
+export function MetricCard({
+  label,
+  value,
+  hint,
+  hintTone = "neutral",
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  hintTone?: "good" | "bad" | "neutral";
+  icon?: React.ReactNode;
+}) {
+  const hc = hintTone === "good" ? "text-emerald-600" : hintTone === "bad" ? "text-red-600" : "text-slate-400";
+  return (
+    <div className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-slate-500">{label}</span>
+        {icon && <span className="text-slate-300">{icon}</span>}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{value}</div>
+      {hint && <div className={`mt-0.5 text-xs ${hc}`}>{hint}</div>}
+    </div>
+  );
+}
+
 export function Card({
   children,
   className = "",
@@ -33,7 +89,7 @@ export function SectionTitle({
       <div className="flex items-center gap-2.5">
         <span className={`h-5 w-1 rounded-full ${accent}`} />
         <div>
-          <h2 className="text-base font-semibold leading-tight tracking-tight text-slate-900">{title}</h2>
+          <h2 className="text-base font-semibold leading-tight tracking-tight text-slate-900">{stripEmoji(title)}</h2>
           {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
         </div>
       </div>

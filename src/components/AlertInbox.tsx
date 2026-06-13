@@ -4,9 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { resolveAlert, setAlertStatus, bulkResolveAlerts } from "@/app/actions";
 import { REASON_OPTIONS, reasonLabel } from "@/lib/alert-resolution";
+import { KpiIcon } from "@/lib/kpiIcons";
 
 export interface AlertView {
   id: string;
+  kpiKey: string;
   emoji: string;
   message: string;
   friendlyDate: string;
@@ -92,7 +94,7 @@ export default function AlertInbox({ alerts, tab }: { alerts: AlertView[]; tab: 
                       </Link>
                     )}
                   </div>
-                  <p className="mt-1 font-semibold text-slate-800">{a.emoji} {a.message}</p>
+                  <p className="mt-1 flex items-center gap-1.5 font-semibold text-slate-800"><KpiIcon kpiKey={a.kpiKey} className="shrink-0 text-slate-400" /> {a.message}</p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                     <span>{a.friendlyDate}</span><span>·</span><span>{a.who}</span>
                     {a.behind && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold tabular-nums text-slate-600">gap {a.behind}</span>}

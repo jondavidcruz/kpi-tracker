@@ -110,6 +110,7 @@ async function InboxForStatus({ status, today }: { status: string; today: string
     });
     return {
       id: a.id,
+      kpiKey: a.kpi.key,
       emoji: a.kpi.emoji,
       message: a.message,
       friendlyDate: friendlyDate(a.date),

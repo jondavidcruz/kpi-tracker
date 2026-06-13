@@ -13,6 +13,7 @@ import { statusVsGoal, statusVsPace, type Status } from "@/lib/kpi";
 import { POSITIONS } from "@/lib/roles";
 import { computeStreaks } from "@/lib/streaks";
 import { KpiIcon } from "@/lib/kpiIcons";
+import { Flame } from "lucide-react";
 import { db } from "@/lib/db";
 import type { Kpi, Target, User } from "@prisma/client";
 
@@ -131,12 +132,12 @@ export default async function TvPage() {
       {/* Goal streaks */}
       {streaks.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 px-8 pb-2">
-          <span className="text-base font-bold uppercase tracking-widest text-brand-gold-soft">🔥 On a roll</span>
+          <span className="inline-flex items-center gap-2 text-base font-bold uppercase tracking-widest text-brand-gold-soft"><Flame size={20} className="text-orange-300" /> On a roll</span>
           {streaks.slice(0, 6).map((s) => (
             <span key={s.userId} className="inline-flex items-center gap-2 rounded-full bg-orange-500/15 px-4 py-1.5 ring-1 ring-orange-400/30">
               <span className="text-xl font-black text-orange-300">{s.name}</span>
-              <span className="text-xl font-black tabular-nums text-orange-200">🔥 {s.days}-day</span>
-              <span className="text-sm text-white/40">{s.kpiEmoji} {s.kpiName}</span>
+              <span className="inline-flex items-center gap-1 text-xl font-black tabular-nums text-orange-200"><Flame size={18} /> {s.days}-day</span>
+              <span className="text-sm text-white/40">{s.kpiName}</span>
             </span>
           ))}
         </div>
