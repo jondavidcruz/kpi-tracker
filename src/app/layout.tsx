@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
-import NavBar from "@/components/NavBar";
+import AppShell from "@/components/AppShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,9 +26,8 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col text-slate-900">
-        <NavBar />
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-7">{children}</main>
+      <body className="min-h-full text-slate-900">
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

@@ -10,7 +10,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-slate-200/80 bg-white shadow-sm ${className}`}
+      className={`rounded-xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${className}`}
     >
       {children}
     </div>
@@ -31,9 +31,9 @@ export function SectionTitle({
   return (
     <div className="mb-3 flex items-end justify-between gap-3">
       <div className="flex items-center gap-2.5">
-        <span className={`h-5 w-1.5 rounded-full ${accent}`} />
+        <span className={`h-5 w-1 rounded-full ${accent}`} />
         <div>
-          <h2 className="text-base font-bold leading-tight text-slate-800">{title}</h2>
+          <h2 className="text-base font-semibold leading-tight tracking-tight text-slate-900">{title}</h2>
           {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
         </div>
       </div>
