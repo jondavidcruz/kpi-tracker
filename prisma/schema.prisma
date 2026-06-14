@@ -168,6 +168,21 @@ model Ticket {
   @@index([status])
 }
 
+// Long-horizon monthly history for year-over-year trends. Imported from the old
+// Excel scorecards (2024–2025) and extended over time. Raw inputs only; ratios
+// (net, cost/lead, conversion) are computed on read so they can't drift.
+model MonthlyMetric {
+  id     String @id @default(cuid())
+  year   Int
+  month  Int // 1-12
+  metric String // dials | connects | leads | offers | contracts | sold_deals | expenses | revenue
+  value  Float
+  source String @default("import")
+
+  @@unique([year, month, metric])
+  @@index([year])
+}
+
 // An AI-scored acquisitions call. The transcript is graded against a coaching
 // rubric (Anthropic API). repName/scoredBy are plain strings (no FK) to keep it
 // simple. Created via the Call Scoring page.
