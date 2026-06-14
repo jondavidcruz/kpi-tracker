@@ -268,6 +268,34 @@ export async function scoreCall(formData: FormData) {
   redirect("/call-scoring?scored=1");
 }
 
+/** Add/edit an Operations-hub link. OWNER (admin) ONLY. */
+export async function saveResource(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  let url = String(formData.get("url") ?? "").trim();
+  const category = String(formData.get("category") ?? "General").trim() || "General";
+  const description = String(formData.get("description") ?? "").trim();
+  if (!title || !url) return;
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url; // tolerate pasted bare domains
+  const data = { title, url, category, description };
+  if (id) await db.resource.update({ where: { id }, data });
+  else await db.resource.create({ data });
+  revalidatePath("/operations");
+  redirect("/operations?saved=1");
+}
+
+/** Delete an Operations-hub link. OWNER (admin) ONLY. */
+export async function deleteResource(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.resource.delete({ where: { id } });
+  revalidatePath("/operations");
+}
+
 /** Accept / decline / mark-done an AI suggestion. OWNER (admin/Jon) ONLY. */
 export async function setSuggestionStatus(formData: FormData) {
   const me = await getCurrentUser();
