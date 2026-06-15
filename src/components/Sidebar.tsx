@@ -43,7 +43,7 @@ export default function Sidebar({
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
     ] },
     { label: "Workspace", items: [
-      { href: "/meeting/edit", label: "Meeting content", Icon: Megaphone, managerOnly: true },
+      { href: "/meeting/edit", label: "Monday meeting content", Icon: Megaphone, managerOnly: true },
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
       { href: "/closed-deals", label: "Closed deals", Icon: DollarSign, adminOnly: true },
