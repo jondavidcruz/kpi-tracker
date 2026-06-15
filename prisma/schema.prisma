@@ -310,4 +310,25 @@ model Settings {
   orgTimezone         String  @default("America/New_York")
   annualRevenueGoal   Float   @default(0) // for "Goal Remaining by Dec 31" on the report
   weeklyEmailRecipients String @default("") // comma-separated; Monday team-KPI email
+
+  // ---- Monday Meeting deck ----
+  homeownersGoal     Int    @default(24) // "Help N homeowners in need" annual mission
+  revenueStretchGoal Float  @default(0) // stretch revenue target
+  goalReward         String @default("") // incentive copy for hitting the goal
+  stretchReward      String @default("") // incentive copy for the stretch goal
+  mtgAnnouncements   String @default("") // editorial slide: Team Announcements (newline list)
+  mtgComingSoon      String @default("") // editorial slide: Change / Coming Soon
+  mtgTalkingPoints   String @default("") // editorial slide: Leadership Talking Points
+}
+
+// Coaching tips for the Monday Meeting. The deck auto-picks the one matching the
+// team's weakest KPI that week; otherwise rotates the general (untagged) ones.
+model TrainingTip {
+  id        String   @id @default(cuid())
+  text      String
+  kpiKey    String   @default("") // target KPI key ('' = general)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([kpiKey])
 }

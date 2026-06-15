@@ -329,6 +329,49 @@ export async function saveSettings(formData: FormData) {
   redirect("/admin?saved=Settings");
 }
 
+/** Save the Monday-Meeting deck content (annual goal + editorial slides). Managers only. */
+export async function saveMeetingSettings(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const data = {
+    annualRevenueGoal: numOrNull(formData.get("annualRevenueGoal")) ?? 0,
+    homeownersGoal: Math.round(numOrNull(formData.get("homeownersGoal")) ?? 24),
+    revenueStretchGoal: numOrNull(formData.get("revenueStretchGoal")) ?? 0,
+    goalReward: String(formData.get("goalReward") ?? "").trim(),
+    stretchReward: String(formData.get("stretchReward") ?? "").trim(),
+    mtgAnnouncements: String(formData.get("mtgAnnouncements") ?? "").trim(),
+    mtgComingSoon: String(formData.get("mtgComingSoon") ?? "").trim(),
+    mtgTalkingPoints: String(formData.get("mtgTalkingPoints") ?? "").trim(),
+  };
+  await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
+  revalidatePath("/admin");
+  revalidatePath("/meeting");
+  redirect("/admin?saved=Meeting#meeting");
+}
+
+/** Add a Monday-Meeting training tip to the backlog. Managers only. */
+export async function saveTrainingTip(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const text = String(formData.get("text") ?? "").trim();
+  if (!text) return;
+  const kpiKey = String(formData.get("kpiKey") ?? "").trim();
+  await db.trainingTip.create({ data: { text, kpiKey } });
+  revalidatePath("/admin");
+  revalidatePath("/meeting");
+  redirect("/admin?saved=Tip#meeting");
+}
+
+/** Delete a training tip. Managers only. */
+export async function deleteTrainingTip(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.trainingTip.delete({ where: { id } });
+  revalidatePath("/admin");
+  redirect("/admin?saved=Tip#meeting");
+}
+
 export async function saveUser(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();

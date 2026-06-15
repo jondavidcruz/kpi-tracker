@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -35,6 +35,7 @@ export default function Sidebar({
       { href: "/monthly", label: "Monthly report", Icon: CalendarDays },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/trends", label: "Trends", Icon: TrendingUp, managerOnly: true },
+      { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
     ] },
     { label: "Coaching", items: [
       { href: "/alerts", label: "Alerts", Icon: Bell },

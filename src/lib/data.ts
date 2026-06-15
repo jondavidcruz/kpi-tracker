@@ -15,6 +15,13 @@ export async function getSettings() {
       orgTimezone: "America/New_York",
       annualRevenueGoal: 0,
       weeklyEmailRecipients: "",
+      homeownersGoal: 24,
+      revenueStretchGoal: 0,
+      goalReward: "",
+      stretchReward: "",
+      mtgAnnouncements: "",
+      mtgComingSoon: "",
+      mtgTalkingPoints: "",
     }
   );
 }
