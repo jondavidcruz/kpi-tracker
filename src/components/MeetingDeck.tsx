@@ -16,6 +16,9 @@ export default function MeetingDeckView({ deck }: { deck: MeetingDeck }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Don't hijack typing in the edit form below the deck.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
       if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); go(1); }
       else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
     };
@@ -263,7 +266,23 @@ function buildSlides(d: MeetingDeck): { name: string; node: React.ReactNode }[] 
     </div>
   )});
 
-  // 11. Leadership talking points
+  // 11. Blank divider — the all-call ends here; what follows is leadership-only.
+  s.push({ name: "— Break —", node: (
+    <div className="flex h-full w-full items-center justify-center bg-brand-navy-950 text-center">
+      <div className="text-white/25" style={{ fontSize: "clamp(14px,2cqw,28px)", letterSpacing: "0.5em" }}>• • •</div>
+    </div>
+  )});
+
+  // 12. Leadership Meeting title (separate meeting)
+  s.push({ name: "Leadership Meeting", node: (
+    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-brand-navy-950 via-brand-navy to-brand-navy-700 text-center text-white">
+      <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.4cqw,16px)", letterSpacing: "0.4em" }}>FREEDOM OFFERS</div>
+      <div className="mt-2 font-extrabold tracking-tight" style={{ fontSize: "clamp(26px,5.4cqw,76px)" }}>Leadership Meeting</div>
+      <div className="mt-3 rounded-full bg-white/10 px-5 py-1.5 text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>Leadership only</div>
+    </div>
+  )});
+
+  // 13. Leadership talking points
   s.push({ name: "Talking Points", node: (
     <Light title="Leadership Talking Points">
       {d.talkingPoints.length ? (
