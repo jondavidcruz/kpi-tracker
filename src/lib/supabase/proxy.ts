@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Routes reachable WITHOUT a session (login flow, wall display, machine webhooks).
-const PUBLIC_PATHS = ["/login", "/auth", "/tv", "/api/ingest", "/api/cron", "/api/speedtest", "/api/tickets", "/api/suggestions", "/manifest.webmanifest", "/icon", "/apple-icon"];
+const PUBLIC_PATHS = ["/login", "/auth", "/tv", "/api/ingest", "/api/cron", "/api/speedtest", "/api/tickets", "/api/suggestions", "/api/recording", "/manifest.webmanifest", "/icon", "/apple-icon"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
