@@ -99,29 +99,22 @@ function Bullets({ items, empty }: { items: string[]; empty: string }) {
 function buildSlides(d: MeetingDeck): { name: string; node: React.ReactNode }[] {
   const s: { name: string; node: React.ReactNode }[] = [];
 
-  // 1. Title
+  // 1. Title — the real Canva hero (team photo), with the live week overlaid
   s.push({ name: "Title", node: (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-brand-navy-950 via-brand-navy to-brand-navy-700 text-center text-white">
-      <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.4cqw,16px)", letterSpacing: "0.4em" }}>FREEDOM OFFERS</div>
-      <div className="mt-2 font-extrabold tracking-tight" style={{ fontSize: "clamp(28px,6cqw,84px)" }}>Monday All-Call</div>
-      <div className="mt-3 rounded-full bg-white/10 px-5 py-1.5 text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.8cqw,22px)" }}>{d.weekLabel}</div>
-      <div className="mt-6 text-white/50" style={{ fontSize: "clamp(10px,1.2cqw,15px)" }}>{d.generatedOn} · live from the KPI tracker</div>
+    <div className="relative h-full w-full bg-brand-navy bg-cover bg-center" style={{ backgroundImage: "url(/meeting/title.png)" }}>
+      <div className="absolute inset-x-0 bottom-0 flex justify-center pb-[4%]">
+        <div className="rounded-full bg-brand-navy/85 px-6 py-2 text-center text-white shadow-lg backdrop-blur-sm">
+          <span className="font-bold" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>Monday All-Call</span>
+          <span className="mx-2 text-brand-gold">·</span>
+          <span className="text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>{d.weekLabel}</span>
+        </div>
+      </div>
     </div>
   )});
 
-  // 2. Meet the team
+  // 2. Meet the team — the exact Canva slide
   s.push({ name: "Team", node: (
-    <Light title="Meet the Team">
-      <div className="grid h-full grid-cols-4 content-center gap-[3%]">
-        {d.team.map((m) => (
-          <div key={m.name} className="rounded-xl bg-slate-50 p-[6%] text-center ring-1 ring-slate-200">
-            <div className="mx-auto grid place-items-center rounded-full bg-brand-navy font-bold text-brand-gold-soft" style={{ width: "3cqw", height: "3cqw", minWidth: 34, minHeight: 34, fontSize: "clamp(11px,1.4cqw,18px)" }}>{m.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}</div>
-            <div className="mt-2 font-bold text-slate-800" style={{ fontSize: "clamp(11px,1.5cqw,20px)" }}>{m.name}</div>
-            <div className="text-slate-500" style={{ fontSize: "clamp(9px,1.1cqw,14px)" }}>{m.role}</div>
-          </div>
-        ))}
-      </div>
-    </Light>
+    <div className="h-full w-full bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: "url(/meeting/team.png)" }} />
   )});
 
   // 3. Announcements
@@ -172,13 +165,14 @@ function buildSlides(d: MeetingDeck): { name: string; node: React.ReactNode }[] 
   // 6. Monthly dashboard
   s.push({ name: "Monthly Dashboard", node: (
     <Navy title="Month-to-Date Dashboard">
-      <div className="grid grid-cols-4 gap-[1.6%]">
-        {d.monthly.glance.slice(0, 8).map((g) => (
+      <div className="grid grid-cols-3 gap-[1.6%]">
+        {d.monthly.financials.map((g) => (
           <div key={g.key} className="rounded-lg bg-white/5 p-[3%] ring-1 ring-white/10">
             <div className="text-white/60" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{g.name}</div>
             <div className="font-extrabold tabular-nums text-white" style={{ fontSize: "clamp(15px,2.6cqw,34px)" }}>{g.value}</div>
           </div>
         ))}
+        {!d.monthly.financials.length && <div className="col-span-3 text-center text-white/50" style={{ fontSize: "clamp(11px,1.6cqw,20px)" }}>No monthly KPIs entered yet this month.</div>}
       </div>
       <div className="mt-[3%] grid grid-cols-5 gap-[1.6%]">
         {[

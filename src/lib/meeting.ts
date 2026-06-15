@@ -3,7 +3,7 @@
 // recognition, and a weakest-KPI training tip. Reuses the report/deal helpers.
 import { db } from "./db";
 import {
-  getSettings, getActiveReps, getKpis, getRangeSums, getOpenDeals, getDealMetrics,
+  getSettings, getActiveReps, getKpis, getRangeSums, getMonthlyValues, getOpenDeals, getDealMetrics,
 } from "./data";
 import { lastWeekRange, monthBounds, friendlyDate } from "./date";
 import { formatValue, type Unit } from "./format";
@@ -28,7 +28,7 @@ export interface MeetingDeck {
   talkingPoints: string[];
   lastWeek: { glance: Glance[]; roleTables: RoleTable[] };
   monthly: {
-    label: string; glance: Glance[];
+    label: string; financials: Glance[];
     revenueClosed: number; revenuePending: number; inEscrow: number; closedCount: number; goalRemaining: number;
   };
   pipeline: PipelineRow[];
@@ -72,16 +72,23 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const mb = monthBounds(today);
   const year = today.slice(0, 4);
 
-  const [settings, reps, perRepKpis, teamKpis, wkSums, mtdSums, deals, dealMetrics] = await Promise.all([
+  const [settings, reps, perRepKpis, teamKpis, teamMonthlyKpis, wkSums, monthlyVals, deals, dealMetrics] = await Promise.all([
     getSettings(),
     getActiveReps(),
     getKpis({ scope: "per_rep", computed: false }),
     getKpis({ scope: "team", computed: false, cadence: "daily" }),
+    getKpis({ scope: "team", computed: false, cadence: "monthly" }),
     getRangeSums(wk.start, wk.end),
-    getRangeSums(mb.start, today),
+    getMonthlyValues(today),
     getOpenDeals(),
     getDealMetrics(year),
   ]);
+
+  // Month-to-date financial dashboard from the team's MONTHLY KPIs (contracts
+  // sent/signed, deals closed, gross revenue, marketing spend, op-ex).
+  const financials: Glance[] = teamMonthlyKpis.map((k) => ({
+    key: k.key, name: k.name, value: formatValue(k.unit as Unit, monthlyVals.get(k.id) ?? 0),
+  }));
 
   // ---- Last week: at-a-glance + per-role tables ----
   const lastGlance = glanceFrom(teamKpis, perRepKpis, reps, wkSums);
@@ -154,7 +161,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     lastWeek: { glance: lastGlance, roleTables },
     monthly: {
       label: friendlyDate(mb.start).replace(/,.*/, "") + " – today",
-      glance: glanceFrom(teamKpis, perRepKpis, reps, mtdSums),
+      financials,
       revenueClosed: dealMetrics.revenueClosed,
       revenuePending: dealMetrics.revenuePendingEscrow,
       inEscrow: dealMetrics.inEscrowCount,

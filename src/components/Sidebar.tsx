@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Megaphone,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -43,6 +43,7 @@ export default function Sidebar({
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
     ] },
     { label: "Workspace", items: [
+      { href: "/meeting/edit", label: "Meeting content", Icon: Megaphone, managerOnly: true },
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
       { href: "/closed-deals", label: "Closed deals", Icon: DollarSign, adminOnly: true },

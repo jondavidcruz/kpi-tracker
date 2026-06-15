@@ -28,7 +28,7 @@ export default async function MeetingPage() {
         title="🗓 Monday Meeting"
         subtitle="One-click all-call deck — live from your KPIs. Hit Present for full screen."
         accent="bg-brand-gold"
-        right={<Link href="/admin#meeting" className="text-sm font-semibold text-brand-navy hover:underline">Edit deck content →</Link>}
+        right={<Link href="/meeting/edit" className="text-sm font-semibold text-brand-navy hover:underline">Edit deck content →</Link>}
       />
       <MeetingDeckView deck={deck} />
     </div>

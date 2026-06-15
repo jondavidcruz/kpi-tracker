@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, saveMeetingSettings, saveTrainingTip, deleteTrainingTip } from "@/app/actions";
+import { createKpi, saveKpi, saveSettings, saveUser, deleteUser } from "@/app/actions";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
-import { db } from "@/lib/db";
 import { toInputNumber, type Unit } from "@/lib/format";
 import { categoryMeta } from "@/lib/kpi";
 import { POSITIONS, positionLabel } from "@/lib/roles";
@@ -48,8 +47,7 @@ export default async function AdminPage({
     );
   }
 
-  const [settings, users, kpis, tips] = await Promise.all([getSettings(), getAllUsers(), getKpis(), db.trainingTip.findMany({ orderBy: { createdAt: "desc" } })]);
-  const greenKpis = kpis.filter((k) => k.scope === "per_rep" && k.category === "green");
+  const [settings, users, kpis] = await Promise.all([getSettings(), getAllUsers(), getKpis()]);
   const activeUsers = users.filter((u) => u.active);
   const removedUsers = users.filter((u) => !u.active);
   const canDelete = isAdmin(me);
@@ -105,74 +103,6 @@ export default async function AdminPage({
             <div className="sm:col-span-2">
               <SaveBtn>Save settings</SaveBtn>
             </div>
-          </form>
-        </Card>
-      </section>
-
-      {/* Monday Meeting deck */}
-      <section id="meeting" className="scroll-mt-4">
-        <SectionTitle title="🗓 Monday Meeting deck" subtitle="Annual goal, editorial slides, and the training-tip backlog for the one-click all-call deck" accent="bg-brand-gold" />
-        <Card className="p-6">
-          <form action={saveMeetingSettings} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <label>
-              <span className={labelCls}>Annual revenue goal ($)</span>
-              <input name="annualRevenueGoal" defaultValue={settings.annualRevenueGoal || ""} placeholder="500000" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Homeowners to help (mission)</span>
-              <input name="homeownersGoal" defaultValue={settings.homeownersGoal || ""} placeholder="24" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Goal reward / incentive</span>
-              <input name="goalReward" defaultValue={settings.goalReward} placeholder="Boracay / Cebu trip + $250 VA bonus" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Stretch revenue goal ($)</span>
-              <input name="revenueStretchGoal" defaultValue={settings.revenueStretchGoal || ""} placeholder="600000" className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Stretch reward / incentive</span>
-              <input name="stretchReward" defaultValue={settings.stretchReward} placeholder="+$250 additional VA bonus" className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Team Announcements (one per line)</span>
-              <textarea name="mtgAnnouncements" defaultValue={settings.mtgAnnouncements} rows={4} placeholder={"New script live\nUpdated underwriting process\n…"} className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Change / Coming Soon (one per line)</span>
-              <textarea name="mtgComingSoon" defaultValue={settings.mtgComingSoon} rows={4} className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Leadership Talking Points (one per line)</span>
-              <textarea name="mtgTalkingPoints" defaultValue={settings.mtgTalkingPoints} rows={3} className={inputCls} />
-            </label>
-            <div className="sm:col-span-2"><SaveBtn>Save deck content</SaveBtn></div>
-          </form>
-        </Card>
-
-        <Card className="mt-4 p-6">
-          <h3 className="mb-1 text-sm font-bold text-slate-700">Training-tip backlog</h3>
-          <p className="mb-3 text-xs text-slate-500">Each Monday the deck shows the tip matching the team&apos;s weakest KPI; untagged tips rotate as the general fallback.</p>
-          <div className="mb-4 space-y-2">
-            {tips.length === 0 && <p className="text-sm text-slate-400">No tips yet — add your first below.</p>}
-            {tips.map((t) => (
-              <div key={t.id} className="flex items-start gap-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-200">
-                <span className="mt-0.5 shrink-0 rounded-md bg-brand-navy px-1.5 py-0.5 text-[10px] font-semibold text-white">{t.kpiKey || "general"}</span>
-                <span className="flex-1 text-sm text-slate-700">{t.text}</span>
-                <form action={deleteTrainingTip}>
-                  <input type="hidden" name="id" value={t.id} />
-                  <button className="text-xs font-medium text-slate-400 hover:text-red-600">Delete</button>
-                </form>
-              </div>
-            ))}
-          </div>
-          <form action={saveTrainingTip} className="grid grid-cols-1 gap-2 sm:grid-cols-6">
-            <input name="text" placeholder="New training tip…" className={`${inputCls} sm:col-span-4`} required />
-            <select name="kpiKey" defaultValue="" className={`${inputCls} sm:col-span-1`}>
-              <option value="">general</option>
-              {greenKpis.map((k) => <option key={k.key} value={k.key}>{k.name}</option>)}
-            </select>
-            <button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:col-span-1">+ Add tip</button>
           </form>
         </Card>
       </section>
