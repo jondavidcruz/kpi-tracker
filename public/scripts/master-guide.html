@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freedom Offers Master Script Guide</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+
+        /* HEADER */
+        .header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+            padding: 24px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 5px solid #3b82f6;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-logo {
+            width: 64px;
+            height: 64px;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            flex-shrink: 0;
+        }
+        .header-text h1 { font-size: 26px; margin-bottom: 4px; }
+        .header-text p { font-size: 13px; opacity: 0.85; margin-bottom: 6px; }
+        .header-website a {
+            color: #60a5fa;
+            font-weight: 700;
+            font-size: 14px;
+            text-decoration: none;
+            background: rgba(96, 165, 250, 0.15);
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid #3b82f6;
+        }
+        .header-website a:hover { background: rgba(96,165,250,0.25); }
+
+        /* CONTACT BANNER */
+        .contact-section {
+            background: linear-gradient(135deg, #1e3a2a 0%, #0f3a1f 100%);
+            border: 3px solid #10b981;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .contact-header {
+            font-size: 18px;
+            font-weight: 700;
+            color: #34d399;
+            flex: 1;
+            min-width: 250px;
+        }
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(16,185,129,0.15);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(16,185,129,0.3);
+        }
+        .contact-item .icon { font-size: 24px; }
+        .contact-item .text { display: flex; flex-direction: column; }
+        .contact-item .label { font-size: 10px; color: #6ee7b7; text-transform: uppercase; letter-spacing: 0.5px; }
+        .contact-item .value { font-size: 15px; font-weight: 700; color: #34d399; }
+        .contact-item a {
+            color: #34d399;
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .contact-item a:hover { text-decoration: underline; }
+
+        /* MAIN SECTION TABS */
+        .main-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #334155;
+            flex-wrap: wrap;
+        }
+        .main-tab-button {
+            padding: 12px 18px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+        .main-tab-button.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+        .main-tab-button:hover { color: #60a5fa; }
+        .main-content { display: none; }
+        .main-content.active { display: block; }
+
+        /* SUB TABS */
+        .sub-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #334155;
+            flex-wrap: wrap;
+        }
+        .sub-tab-button {
+            padding: 10px 16px;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #cbd5e1;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: -1px;
+            transition: all 0.2s;
+        }
+        .sub-tab-button.active { color: #10b981; border-bottom-color: #10b981; }
+        .sub-tab-button:hover { color: #34d399; }
+        .sub-content { display: none; }
+        .sub-content.active { display: block; }
+
+        /* STRATEGY TABS */
+        .strategy-tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .strategy-tab-button {
+            flex: 1;
+            min-width: 150px;
+            padding: 10px;
+            background: #1e293b;
+            border: 2px solid #334155;
+            color: #cbd5e1;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .strategy-tab-button.active { background: #10b981; border-color: #10b981; color: white; }
+        .strategy-content { display: none; }
+        .strategy-content.active { display: block; }
+
+        /* SECTIONS */
+        .section {
+            background: #1e293b;
+            padding: 16px;
+            margin-bottom: 14px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+        .section h3 { margin: 0 0 12px 0; font-size: 16px; }
+        .section h4 { margin: 12px 0 8px 0; font-size: 14px; color: #cbd5e1; }
+
+        /* DIALOGUE BOXES */
+        .you {
+            background: linear-gradient(135deg, #1a3a00 0%, #2d5a00 100%);
+            color: #32ff00;
+            padding: 13px 13px 13px 42px;
+            margin: 10px 0;
+            border-left: 5px solid #32ff00;
+            border-radius: 6px;
+            font-size: 15px;
+            line-height: 1.75;
+            position: relative;
+        }
+        .you::before { content: '🎤'; position: absolute; left: 10px; top: 12px; font-size: 18px; }
+
+        .question {
+            background: #003a66;
+            color: #00d4ff;
+            padding: 10px 12px;
+            margin: 10px 0;
+            border-left: 4px solid #00d4ff;
+            border-radius: 5px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .response {
+            background: linear-gradient(135deg, #001a0f 0%, #003a1f 100%);
+            color: #10b981;
+            padding: 11px 11px 11px 40px;
+            margin: 8px 0;
+            border-left: 4px solid #10b981;
+            border-radius: 5px;
+            font-size: 14px;
+            line-height: 1.6;
+            position: relative;
+        }
+        .response::before { content: '✅'; position: absolute; left: 10px; top: 10px; font-size: 16px; }
+
+        .note { color: #94a3b8; font-size: 12px; margin: 3px 0 8px 10px; font-style: italic; }
+
+        /* KEYWORD TOOLTIPS */
+        .keyword {
+            background: #4a3600;
+            color: #ffd700;
+            padding: 2px 7px;
+            border-radius: 4px;
+            border-bottom: 2px dotted #ffd700;
+            cursor: help;
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+        }
+        .keyword:hover::after {
+            content: attr(data-tip);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #ffd700;
+            border: 2px solid #ffd700;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: normal;
+            white-space: normal;
+            width: 260px;
+            z-index: 999;
+            line-height: 1.5;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        .tip { background: #1e3a2a; padding: 10px 14px; margin: 10px 0; border-left: 3px solid #10b981; border-radius: 4px; color: #cbd5e1; font-size: 13px; }
+        .callout { background: #1e293b; padding: 10px 14px; margin: 10px 0; border-left: 3px solid #60a5fa; border-radius: 4px; color: #cbd5e1; font-size: 13px; }
+        .warning { background: #3a2a1e; padding: 10px 14px; margin: 10px 0; border-left: 3px solid #f59e0b; border-radius: 4px; color: #fbbf24; font-size: 13px; }
+
+        /* BENEFITS BOX */
+        .benefits-box {
+            background: linear-gradient(135deg, #1e3a2a 0%, #0f3a1f 100%);
+            border: 2px solid #10b981;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 14px 0;
+        }
+        .benefits-box h4 { color: #34d399; margin-bottom: 12px; font-size: 14px; }
+        .benefit-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: rgba(16,185,129,0.08);
+            border-radius: 6px;
+            border-left: 3px solid #10b981;
+        }
+        .benefit-icon { font-size: 18px; flex-shrink: 0; }
+        .benefit-text { font-size: 13px; }
+        .benefit-text strong { color: #34d399; display: block; }
+
+        /* OBJECTIONS */
+        .objection-item {
+            background: #1e293b;
+            border-radius: 8px;
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+        .objection-header {
+            background: linear-gradient(135deg, #3a1e1e 0%, #4a2a00 100%);
+            padding: 12px 14px;
+            color: #fca5a5;
+            font-weight: 700;
+            font-size: 14px;
+            border-left: 4px solid #ef4444;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .objection-response {
+            padding: 14px;
+            color: #32ff00;
+            font-size: 14px;
+            line-height: 1.75;
+            background: linear-gradient(135deg, #1a3a00 0%, #2d5a00 100%);
+            border-left: 4px solid #32ff00;
+        }
+        .objection-tip {
+            padding: 10px 14px;
+            font-size: 12px;
+            color: #94a3b8;
+            font-style: italic;
+            background: #0f172a;
+        }
+
+        .footer { text-align: center; margin-top: 40px; padding: 20px; border-top: 1px solid #334155; color: #64748b; font-size: 12px; }
+
+        @media (max-width: 768px) {
+            .strategy-tabs { flex-direction: column; }
+            .header { flex-direction: column; text-align: center; }
+            .contact-section { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="header-logo">📞</div>
+        <div class="header-text">
+            <h1>Master Script Guide</h1>
+            <p>Freedom Offers LLC — Veteran-Owned | San Diego, CA | Complete Cold Call Playbook</p>
+            <div class="header-website">
+                <a href="https://freedom-offers.com" target="_blank">🌐 freedom-offers.com</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTACT SECTION -->
+    <div class="contact-section">
+        <div class="contact-header">📞 Contact Freedom Offers</div>
+        <div class="contact-item">
+            <div class="icon">📱</div>
+            <div class="text">
+                <div class="label">Phone</div>
+                <div class="value"><a href="tel:+18776528991">+1 (877) 652-8991</a></div>
+            </div>
+        </div>
+        <div class="contact-item">
+            <div class="icon">✉️</div>
+            <div class="text">
+                <div class="label">Email</div>
+                <div class="value"><a href="mailto:info@freedom-offers.com">info@freedom-offers.com</a></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN SECTION TABS -->
+    <div class="main-tabs">
+        <button class="main-tab-button active" onclick="switchMainTab(event,'sellers-tab')">🏡 SELLERS</button>
+        <button class="main-tab-button" onclick="switchMainTab(event,'buyers-tab')">💼 BUYERS</button>
+        <button class="main-tab-button" onclick="switchMainTab(event,'agents-tab')">🤝 AGENTS</button>
+    </div>
+
+    <!-- ==================== SELLERS TAB ==================== -->
+    <div id="sellers-tab" class="main-content active">
+
+        <div class="section" style="background:linear-gradient(135deg,#1e3a2a,#0f3a1f); border-left-color:#10b981;">
+            <h3>🏡 Seller Scripts Overview</h3>
+            <p><strong>Two Approaches:</strong> Traditional/Fix & Flip sellers (lower price point, distressed) vs Luxury sellers (higher value, development potential). Both cold and warm openers included.</p>
+        </div>
+
+        <!-- SUB TABS FOR SELLERS -->
+        <div class="sub-tabs">
+            <button class="sub-tab-button active" onclick="switchSellerTab(event,'traditional-sellers')">Traditional / Fix & Flip</button>
+            <button class="sub-tab-button" onclick="switchSellerTab(event,'luxury-sellers')">Luxury Market</button>
+        </div>
+
+        <!-- TRADITIONAL/FIX & FLIP SELLERS -->
+        <div id="traditional-sellers" class="sub-content active">
+
+            <div class="section" style="background:linear-gradient(135deg,#0f3a2a,#1e4a3a); border-left-color:#10b981;">
+                <h3>🔨 Traditional / Fix & Flip Sellers</h3>
+                <p><strong>Profile:</strong> Distressed homeowners, estates, investors wanting out, properties needing work. Lower price points, shorter timelines, motivated sellers.</p>
+            </div>
+
+            <!-- COLD OPENER -->
+            <div class="section">
+                <h3>1️⃣ Cold Opener — Build Credibility</h3>
+                <div class="you">Hey, [Name]? This is [Your Name] calling from Freedom Offers. We're a veteran-owned acquisition company based out of San Diego — we work directly with developers and buyers looking for off-market properties in your area. So here's the deal — we specialize in higher-end homes, completely private, no public listings, no open houses. And I'm not gonna waste your time with lowball offers, I promise. You got a quick minute?</div>
+                <div class="tip">💡 If they ask "what company?" → Say: <em>"Freedom Offers — you can check us out at freedom-offers.com. We work with developers to find off-market properties before they ever hit the market. You can also call us at (877) 652-8991 if you want to verify."</em></div>
+            </div>
+
+            <!-- WARM OPENER -->
+            <div class="section" style="background: linear-gradient(135deg, #0f3a2a,#1e4a3a); border-left-color:#10b981;">
+                <h3>1️⃣ Warm Opener — Follow-Up from Previous Contact</h3>
+                <div class="you">Hey, [Name]? This is [Your Name] with Freedom Offers. So my team talked to you previously about [address] and mentioned you might possibly be looking to sell. Do you have about 5 mins?</div>
+                <div class="tip">💡 Use this when your team has already made contact or they've engaged with you before. Skips the credibility setup — they know who you are. Go straight to property.</div>
+            </div>
+
+            <!-- WHY CALLING -->
+            <div class="section">
+                <h3>2️⃣ Why You're Calling</h3>
+                <div class="you">So the reason I'm reaching out — we've got a group of developers and buyers right now actively looking for properties in your area. Yours came up as a potential fit. I'm not here to pressure you into anything — I just wanted to see if a private, <span class="keyword" data-tip="A sale handled privately without being listed on public databases. No agents, no open houses.">off-market</span> option is something you'd ever consider.</div>
+            </div>
+
+            <!-- QUICK INTEREST CHECK -->
+            <div class="section">
+                <h3>3️⃣ Quick Interest Check</h3>
+                <div class="question">❓ How long have you owned the place?</div>
+                <p class="note">→ Tenure tells you how attached they are and potential equity</p>
+                <div class="question">❓ Do you have a plan for where you'd go next?</div>
+                <p class="note">→ Uncovers timeline and flexibility</p>
+                <div class="you">The reason I ask — we're super flexible on timing. We can even let sellers stay after closing if that takes the stress off the move.</div>
+            </div>
+
+            <!-- PROPERTY QUESTIONS -->
+            <div class="section">
+                <h3>4️⃣ Property Condition & Details</h3>
+                <div class="you">Can you walk me through the condition? HVAC, roof, water heater, foundation, electrical, sewage — what's the situation?</div>
+                <p class="note">→ Listen for major systems. Ask directly about the "Major Six Elements" if they don't mention them.</p>
+                <div class="question">❓ Any other major issues I should know about?</div>
+            </div>
+
+            <!-- MOTIVATION -->
+            <div class="section">
+                <h3>5️⃣ Motivation & Timeline</h3>
+                <div class="question">❓ If you did sell, what would that next chapter look like for you?</div>
+                <div class="question">❓ Is there a timeframe that matters — soon, or more like someday?</div>
+                <div class="question">❓ What would need to happen for this to feel like the right move?</div>
+            </div>
+
+            <!-- SOFT CLOSE -->
+            <div class="section">
+                <h3>6️⃣ Soft Close</h3>
+                <div class="you">Would it make sense for me to take a deeper look at your property and come back with a couple of options? Just information — nothing pushy.</div>
+                <p style="text-align:center;color:#64748b;margin:10px 0;">— OR —</p>
+                <div class="you">Would you rather I reach back out if things change down the road? Keep our number handy — (877) 652-8991 — so you can reach us if something comes up.</div>
+            </div>
+
+            <!-- OBJECTIONS -->
+            <div class="section" style="background:linear-gradient(135deg,#1e3a2a,#0f3a1f); border-left-color:#10b981;">
+                <h3>🛡️ Common Objections (Traditional Sellers)</h3>
+            </div>
+
+            <div class="objection-item">
+                <div class="objection-header">❌ "I'm not interested in selling."</div>
+                <div class="objection-response">🎤 Totally get that — I'm not trying to talk you into anything. I just wanted to reach out because your property came up and it seemed like it might be a fit for one of our buyers. If it ever makes sense down the road, we'd love to be the first call you make. Mind if I check back in a few months? You can also reach us anytime at (877) 652-8991.</div>
+                <div class="objection-tip">💡 Goal: Keep the door open. Get permission to follow up. Don't push.</div>
+            </div>
+
+            <div class="objection-item">
+                <div class="objection-header">❌ "I already have a real estate agent."</div>
+                <div class="objection-response">🎤 No problem at all — I actually work alongside agents sometimes. The difference with us is we're buying directly, off-market. No listing period, no showings, no open houses. If you ever want to explore a private option alongside what your agent is doing, we can do that without conflicting. Just something to keep in your back pocket. Here's our number if you want to check us out — (877) 652-8991.</div>
+                <div class="objection-tip">💡 Don't trash their agent. Position as an alternative, not a replacement.</div>
+            </div>
+
+            <div class="objection-item">
+                <div class="objection-header">❌ "How do I know you're legit?"</div>
+                <div class="objection-response">🎤 That's a totally fair question. We're Freedom Offers — a veteran-owned acquisitions company out of San Diego. You can look us up right now at freedom-offers.com or call us at (877) 652-8991. We work directly with developers and buyers — this isn't our first deal. We take our reputation seriously, especially coming from a military background. Everything's in writing, everything goes through title.</div>
+                <div class="objection-tip">💡 Always direct them to freedom-offers.com and give the phone number. Veteran background = trust builder.</div>
+            </div>
+
+        </div>
+
+        <!-- LUXURY SELLERS -->
+        <div id="luxury-sellers" class="sub-content">
+
+            <div class="section" style="background:linear-gradient(135deg,#0f3a2a,#1e4a3a); border-left-color:#10b981;">
+                <h3>👑 Luxury Market Sellers</h3>
+                <p><strong>Profile:</strong> High-value properties with development potential. Sellers typically have more equity, longer timelines, development intentions. Developers pay at or above retail value.</p>
+            </div>
+
+            <!-- COLD OPENER LUXURY -->
+            <div class="section">
+                <h3>1️⃣ Cold Opener — Build Credibility</h3>
+                <div class="you">Hey, [Name]? This is [Your Name] calling from Freedom Offers. We're a veteran-owned acquisition company based out of San Diego — we work directly with developers and buyers looking for off-market properties in your area. So here's the deal — we specialize in higher-end homes, completely private, no public listings, no open houses. And I'm not gonna waste your time with lowball offers, I promise. You got a quick minute?</div>
+                <div class="tip">💡 If they ask "what company?" → Say: <em>"Freedom Offers — you can check us out at freedom-offers.com. We work with developers to find off-market properties before they ever hit the market. You can also call us at (877) 652-8991 if you want to verify."</em></div>
+            </div>
+
+            <!-- WARM OPENER LUXURY -->
+            <div class="section" style="background: linear-gradient(135deg, #0f3a2a,#1e4a3a); border-left-color:#10b981;">
+                <h3>1️⃣ Warm Opener — Follow-Up from Previous Contact</h3>
+                <div class="you">Hey, [Name]? This is [Your Name] with Freedom Offers. So my team talked to you previously about [address] and mentioned you might possibly be looking to sell. Do you have about 5 mins?</div>
+                <div class="tip">💡 Use this when your team has already made contact. Transitions straight to property specifics.</div>
+            </div>
+
+            <!-- WHY CALLING LUXURY -->
+            <div class="section">
+                <h3>2️⃣ Why You're Calling</h3>
+                <div class="you">So the reason I'm reaching out — we've got a group of developers and buyers right now actively looking for properties in your area. Yours came up as a potential fit. I'm not here to pressure you into anything — I just wanted to see if a private, <span class="keyword" data-tip="A sale handled privately without being listed on public databases. No agents, no open houses.">off-market</span> option is something you'd ever consider.</div>
+            </div>
+
+            <!-- PROPERTY ASSESSMENT LUXURY -->
+            <div class="section">
+                <h3>3️⃣ Lot & Development Questions</h3>
+                <div class="question">❓ Do you know the lot size roughly?</div>
+                <div class="question">❓ Is it pretty rectangular or does it have some weird angles?</div>
+                <div class="question">❓ Any <span class="keyword" data-tip="Legal right for someone else to use part of your property (utility lines, drainage). Limits what you can build on that area.">easements</span> on it? Like utilities or drainage?</div>
+                <div class="question">❓ Any <span class="keyword" data-tip="Legal minimum distance between property line and where you can build. Affects how much of the lot is actually usable.">setback</span> issues when you tried to do improvements?</div>
+                <div class="question">❓ How is it <span class="keyword" data-tip="Government classification: R1=single family, R2=multi-family/duplex, C=commercial, M=mixed-use. Determines what can legally be built.">zoned</span>?</div>
+                <div class="question">❓ You on <span class="keyword" data-tip="Sewer = city wastewater system (good for building). Septic = private tank (limits density, requires maintenance).">sewer or septic</span>?</div>
+            </div>
+
+            <!-- MOTIVATION LUXURY -->
+            <div class="section">
+                <h3>4️⃣ Motivation & Timeline</h3>
+                <div class="question">❓ If you did sell, what would that next chapter look like for you?</div>
+                <div class="question">❓ Is there a timeframe that matters — soon, or more like someday?</div>
+                <div class="question">❓ What would need to happen for this to feel like the right move?</div>
+            </div>
+
+            <!-- WHAT MAKES YOU DIFFERENT LUXURY -->
+            <div class="section" style="background:linear-gradient(135deg,#1e3a2a,#0f3a1f); border-left-color:#10b981;">
+                <h3>5️⃣ What Makes Freedom Offers Different</h3>
+                <div class="you">Here's what's different about us — we typically pay at <span class="keyword" data-tip="What the property would sell for on the open market. Same price as a traditional sale, but without the agent costs.">retail value</span>. So you get what you'd get on the open market, but without dealing with agents, inspections, appraisals, or any of that. And we cover all the <span class="keyword" data-tip="Fees paid at closing (title, escrow, recording, appraisals). Usually 2-4% of sale price — we pay these, not you.">closing costs</span>. You actually come out ahead because you're saving 6% in commissions alone.</div>
+                <div class="you">Everything stays private — no public listings, no neighbors knowing your business, no open houses. You stay in control the whole time. And if you need time after closing, we can work with that too.</div>
+                <div class="you">You can also check us out at freedom-offers.com — see the kind of work we do and the developers we partner with. We're not a fly-by-night operation. We're a veteran-owned company and we take that seriously. If you have any questions, you can also reach us at (877) 652-8991 or email info@freedom-offers.com.</div>
+            </div>
+
+            <!-- SOFT CLOSE LUXURY -->
+            <div class="section">
+                <h3>6️⃣ Soft Close</h3>
+                <div class="you">Would it make sense for me to take a deeper look at your property and come back with a couple of options? Just information — nothing pushy.</div>
+                <p style="text-align:center;color:#64748b;margin:10px 0;">— OR —</p>
+                <div class="you">Would you rather I reach back out if things change down the road? Keep our number handy — (877) 652-8991 — so you can reach us if something comes up.</div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ==================== BUYERS TAB ==================== -->
+    <div id="buyers-tab" class="main-content">
+
+        <div class="section" style="background:linear-gradient(135deg,#1e3a2a,#0f3a1f); border-left-color:#10b981;">
+            <h3>💼 Buyer Scripts Overview</h3>
+            <p><strong>Two Buyer Types:</strong> Fix & Flip Investors (looking for 70% ARV deals, full rehab) vs Developers (paying retail for land value, tear-down opportunities). Different conversations, different incentives.</p>
+        </div>
+
+        <!-- SUB TABS FOR BUYERS -->
+        <div class="sub-tabs">
+            <button class="sub-tab-button active" onclick="switchBuyerTab(event,'flipper-buyers')">Fix & Flip Investors</button>
+            <button class="sub-tab-button" onclick="switchBuyerTab(event,'developer-buyers')">Developers</button>
+        </div>
+
+        <!-- FIX & FLIP INVESTORS -->
+        <div id="flipper-buyers" class="sub-content active">
+
+            <div class="section" style="background:linear-gradient(135deg,#0f3a2a,#1e4a3a); border-left-color:#10b981;">
+                <h3>🔨 Fix & Flip Investors</h3>
+                <p><strong>Profile:</strong> Looking to buy at 70% of ARV. Account for renovation + profit margin. Want properties needing work in any market, any price point.</p>
+            </div>
+
+            <div class="section">
+                <h3>1️⃣ Opening</h3>
+                <div class="you">Hey [Investor Name], this is [Your Name] with Freedom Offers. We source off-market flip deals and I've got a property that might fit your criteria. You actively looking for deals right now?</div>
+                <div class="tip">💡 Direct and fast. Flippers are busy — respect their time.</div>
+            </div>
+
+            <div class="section">
+                <h3>2️⃣ Qualify Their Buy Box</h3>
+                <div class="question">❓ What's your target purchase price range?</div>
+                <div class="question">❓ What neighborhoods or markets are you focused on?</div>
+                <div class="question">❓ Are you looking for cosmetic flips or full rehabs?</div>
+                <div class="question">❓ How fast can you close on the right deal?</div>
+                <p class="note">→ Make sure they fit BEFORE you send details. Don't waste time on bad matches.</p>
+            </div>
+
+            <div class="section">
+                <h3>3️⃣ Present the Deal</h3>
+                <div class="you">Okay, so here's what we have — [ADDRESS]. [YEAR BUILT], [SQUARE FOOTAGE]. The condition is [GENERAL: needs full rehab, cosmetic updates, etc.]. Based on the <span class="keyword" data-tip="Projected market value of the property after all improvements and development are complete.">ARV</span> in that area, this should work at the right price point.</div>
+                <p class="note">→ Don't give your purchase price. Let them analyze and make an offer.</p>
+            </div>
+
+            <div class="section">
+                <h3>4️⃣ Close</h3>
+                <div class="you">Want me to send you the full details? Or do you want to jump on a call and walk through it?</div>
+            </div>
+
+        </div>
+
+        <!-- DEVELOPERS -->
+        <div id="developer-buyers" class="sub-content">
+
+            <div class="section" style="background:linear-gradient(135deg,#0f3a2a,#1e4a3a); border-left-color:#10b981;">
+                <h3>👑 Developers</h3>
+                <p><strong>Profile:</strong> Buying at retail or above for land value + redevelopment. Tear down old, build new. Focus on luxury neighborhoods, strong comps, <span class="keyword" data-tip="Legal permissions required to build: zoning variances, permits, design reviews.">entitlements</span>.</p>
+            </div>
+
+            <div class="section">
+                <h3>1️⃣ Opening</h3>
+                <div class="you">Hey [Developer Name], this is [Your Name] with Freedom Offers. I source off-market development opportunities and I've got a land play in [NEIGHBORHOOD/AREA] that might match your buy box. You actively looking for projects?</div>
+                <div class="tip">💡 Be direct. Reference their work if you know it. Sound like a peer.</div>
+            </div>
+
+            <div class="section">
+                <h3>2️⃣ Understand Their Buy Box</h3>
+                <div class="you">Perfect. Before I bring you details, I want to make sure it's actually a fit. What are you typically looking for right now?</div>
+                <div class="question">❓ What areas or neighborhoods are you focused on?</div>
+                <div class="question">❓ Price range per deal?</div>
+                <div class="question">❓ You more interested in tear-downs or renovation opportunities?</div>
+                <div class="question">❓ What's your timeline to move on projects?</div>
+            </div>
+
+            <div class="section">
+                <h3>3️⃣ Present the Opportunity</h3>
+                <div class="you">Okay, so here's the opportunity — [ADDRESS]. It's a [YEAR BUILT], on roughly [LOT SIZE]. The neighborhood has recent sales at [PRICE RANGE], solid comps for redevelopment. It's a strong development play.</div>
+                <p class="note">→ Focus on lot value, neighborhood strength, and redevelopment upside — not cosmetics.</p>
+            </div>
+
+            <div class="section">
+                <h3>4️⃣ Close</h3>
+                <div class="you">Want me to send you the full details? Or I can set up a time for you to walk the property?</div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ==================== AGENTS TAB ==================== -->
+    <div id="agents-tab" class="main-content">
+
+        <div class="section" style="background:linear-gradient(135deg,#1e3a2a,#0f3a1f); border-left-color:#10b981;">
+            <h3>🤝 Agent Scripts Overview</h3>
+            <p><strong>Two Purposes:</strong> Deal Disposition (find buyers/developers for deals you control) and Pocket Listing Sourcing (find new off-market opportunities). Split by Luxury vs Fix & Flip. Always lead with commission incentive.</p>
+        </div>
+
+        <!-- SUB TABS FOR AGENTS -->
+        <div class="sub-tabs">
+            <button class="sub-tab-button active" onclick="switchAgentTab(event,'agent-disposition')">Deal Disposition</button>
+            <button class="sub-tab-button" onclick="switchAgentTab(event,'agent-sourcing')">Pocket Listing Sourcing</button>
+        </div>
+
+        <!-- AGENT DEAL DISPOSITION -->
+        <div id="agent-disposition" class="sub-content active">
+
+            <div class="section" style="background:linear-gradient(135deg,#1e3a2a,#0f3a1f); border-left-color:#10b981;">
+                <h3>💼 Deal Disposition (Finding Buyers)</h3>
+                <p><strong>Goal:</strong> You have a deal under contract. You need to find the buyer (developer or flipper). Agent's job is to connect you.</p>
+                <p style="margin-top:10px;"><strong>Info Protection:</strong> Share address + condition ONLY. Never share price, analysis, or ARV. This prevents agents from shopping to developers directly and cutting you out.</p>
+                <p style="margin-top:10px;"><strong>Commission:</strong> Agent gets paid when their connection closes with you.</p>
+            </div>
+
+            <!-- STRATEGY TABS FOR DISPOSITION -->
+            <div class="strategy-tabs">
+                <button class="strategy-tab-button active" onclick="switchAgentDispo(event,'dispo-luxury')">👑 LUXURY (Developers)</button>
+                <button class="strategy-tab-button" onclick="switchAgentDispo(event,'dispo-flipper')">🔨 FIX & FLIP (Investors)</button>
+            </div>
+
+            <!-- LUXURY DISPOSITION -->
+            <div id="dispo-luxury" class="strategy-content active">
+
+                <div class="section">
+                    <h3>1️⃣ Cold Opener</h3>
+                    <div class="you">Hey [Agent Name], this is [Your Name] with Freedom Offers. We're a development acquisition company based in San Diego — we partner with developers and builders on luxury off-market properties. The reason I'm calling is we just acquired a deal in [AREA/ZIP] and it's a solid development opportunity. Do you have a few developers or builders you actively work with who might be looking for a project like this?</div>
+                </div>
+
+                <div class="section">
+                    <h3>2️⃣ Get Their Developer List</h3>
+                    <div class="question">❓ Who are the main developers or builders you work with in [ZIP/AREA]?</div>
+                    <div class="question">❓ What kind of projects do they focus on? Price points? Lot size?</div>
+                </div>
+
+                <div class="section">
+                    <h3>3️⃣ Share the Opportunity (Address + Condition Only)</h3>
+                    <div class="you">Okay, so here's what we have — [ADDRESS]. It's a [YEAR BUILT] home, [SQUARE FOOTAGE], on roughly [LOT SIZE]. The condition is [GENERAL CONDITION: livable, needs renovation, tear-down opportunity]. It's a solid development play in that neighborhood.</div>
+                    <div class="warning">⚠️ DO NOT SHARE: Asking price, your analysis, ARV, your offer, or financing terms. If they ask price → Say: <em>"We're protecting the deal specifics for now, but if your developer is interested in the neighborhood and property type, I'm happy to explore it with them directly."</em></div>
+                </div>
+
+                <div class="section">
+                    <h3>4️⃣ Understand Their Developer's Buy Box</h3>
+                    <div class="you">Before I bring you more details, what are your developers typically looking for in [AREA]? Price range? Lot size? Any specific preferences?</div>
+                    <div class="question">❓ Are they more interested in tear-downs or renovation opportunities?</div>
+                    <div class="question">❓ What's their typical acquisition price per square foot?</div>
+                </div>
+
+                <div class="section">
+                    <h3>5️⃣ Commission Incentive</h3>
+                    <div class="you">Here's the cool part — if one of your developers is interested and we work together on this, I'm paying commission. You'd earn your commission when we close with their buyer. So you're incentivized to connect us with someone who can actually move on it.</div>
+                </div>
+
+                <div class="section">
+                    <h3>6️⃣ Soft Close</h3>
+                    <div class="you">So if you have a developer who's actively looking for deals in [AREA] and fits that profile, can you send me their contact info? Or I can reach out to them directly if you give me the intro. Either way works. And if this ends up being a fit, we'll make sure you're taken care of on commission. Sound good?</div>
+                </div>
+
+            </div>
+
+            <!-- FIX & FLIP DISPOSITION -->
+            <div id="dispo-flipper" class="strategy-content">
+
+                <div class="section">
+                    <h3>1️⃣ Cold Opener</h3>
+                    <div class="you">Hey [Agent Name], this is [Your Name] with Freedom Offers. We're an acquisitions company focused on off-market deals and flips. I'm calling because we just secured a property in [AREA] that looks like a solid flip opportunity. Do you have buyers or investors you actively work with who flip properties in that market?</div>
+                </div>
+
+                <div class="section">
+                    <h3>2️⃣ Get Their Flip Buyer Profile</h3>
+                    <div class="question">❓ Do you work with fix & flip investors? How active are they right now?</div>
+                    <div class="question">❓ What kind of properties are they looking for — price range, condition, neighborhoods?</div>
+                    <div class="question">❓ Are they cash buyers or using financing?</div>
+                </div>
+
+                <div class="section">
+                    <h3>3️⃣ Share the Property (Address + Condition Only)</h3>
+                    <div class="you">Okay, so here's the deal — [ADDRESS]. It's a [YEAR BUILT] home, [SQUARE FOOTAGE], on [LOT SIZE]. The condition is [GENERAL CONDITION: needs full rehab, cosmetic updates needed, good bones]. It's a solid flip candidate in that neighborhood.</div>
+                    <div class="warning">⚠️ DO NOT SHARE: Purchase price, ARV, your analysis. If they ask price → Say: <em>"We're protecting the numbers for now, but if your buyers are interested in this neighborhood and property type, I can get you more details."</em></div>
+                </div>
+
+                <div class="section">
+                    <h3>4️⃣ Understand the Flip Buyer's Buy Box</h3>
+                    <div class="you">Before I send you full details, what are your buyers typically looking to spend? And what kind of condition are they comfortable with?</div>
+                    <div class="question">❓ Are they looking for cosmetic flips or full rehabs?</div>
+                    <div class="question">❓ What neighborhoods are hot for them right now?</div>
+                </div>
+
+                <div class="section">
+                    <h3>5️⃣ Commission Incentive</h3>
+                    <div class="you">Here's the deal — if one of your flip investors is interested and we connect, you'll earn commission when we close. So there's real money in introducing me to the right buyer.</div>
+                </div>
+
+                <div class="section">
+                    <h3>6️⃣ Soft Close</h3>
+                    <div class="you">So if you have investors looking for deals in [AREA], can you send me their info or make an intro? And if it closes, commission is yours.</div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- AGENT POCKET LISTING SOURCING -->
+        <div id="agent-sourcing" class="sub-content">
+
+            <div class="section" style="background:linear-gradient(135deg,#1e3a2a,#0f3a1f); border-left-color:#10b981;">
+                <h3>🔍 Pocket Listing Sourcing (Finding Deals)</h3>
+                <p><strong>Goal:</strong> After sending an agent a deal, ask them to source similar pocket listings for you. Different criteria for Luxury vs Fix & Flip.</p>
+                <p style="margin-top:10px;"><strong>Position:</strong> "Signature development partner" with cash buyers ready. No listings. Commission paid on close.</p>
+            </div>
+
+            <!-- STRATEGY TABS FOR SOURCING -->
+            <div class="strategy-tabs">
+                <button class="strategy-tab-button active" onclick="switchAgentSource(event,'source-luxury')">👑 LUXURY TEAR-DOWN</button>
+                <button class="strategy-tab-button" onclick="switchAgentSource(event,'source-flipper')">🔨 FIX & FLIP</button>
+            </div>
+
+            <!-- LUXURY TEAR-DOWN SOURCING -->
+            <div id="source-luxury" class="strategy-content active">
+
+                <div class="section">
+                    <h3>Criteria</h3>
+                    <p><strong>Old properties</strong> (pre-1980s) in luxury neighborhoods where recent comps sold $2M+ within last 5 years. Same neighborhood as the deal you just sent.</p>
+                </div>
+
+                <div class="section">
+                    <h3>1️⃣ Opening After Sending Deal</h3>
+                    <div class="you">Hey [Agent Name], so I sent you that deal at [ADDRESS] earlier. That neighborhood is exactly what we're focused on right now. Do you have any other pocket listings in that same neighborhood? Old homes, pre-1980s especially, where the seller might be thinking about selling but hasn't listed yet?</div>
+                </div>
+
+                <div class="section">
+                    <h3>2️⃣ Clarify the Opportunity</h3>
+                    <div class="you">Here's what we're looking for — older properties in that neighborhood. The sellers might not be ready to list, but they're thinking about it. Could be an estate, empty nesters wanting out, anything like that. The land value is what matters — we're looking at these as redevelopment opportunities.</div>
+                    <div class="question">❓ Do you know of any sellers in that neighborhood who fit that profile? Properties that are older but on valuable lots?</div>
+                    <div class="question">❓ Any homes that have been sitting, or owners who've mentioned wanting to sell but haven't listed?</div>
+                </div>
+
+                <div class="section">
+                    <h3>3️⃣ Why You're Interested</h3>
+                    <div class="you">The reason we're hunting in this neighborhood is we have developers looking for exactly this — old homes on great lots where they can build something new. The neighborhood's appreciating, we're seeing recent sales at $2M+, and developers see the land value. So if you know of any owners who might consider selling, we can move really fast on it.</div>
+                </div>
+
+                <div class="section">
+                    <h3>4️⃣ Commission & Incentive</h3>
+                    <div class="you">And here's the good part — if you know of a property and can connect us with the seller, we'll pay your full commission when we close. We cover all closing costs too. So there's real money in this if you can point us toward the right sellers.</div>
+                </div>
+
+                <div class="section">
+                    <h3>5️⃣ Soft Close</h3>
+                    <div class="you">So can you think of anyone in that neighborhood who might fit? Even if you're not sure if they want to sell, if you know someone with an older home on a valuable lot, send me their name and I'll explore it. If it works out, you get the commission. Sound good?</div>
+                    <div class="you">You can reach me at (877) 652-8991 or info@freedom-offers.com. I'll check in in a couple weeks too.</div>
+                </div>
+
+            </div>
+
+            <!-- FIX & FLIP SOURCING -->
+            <div id="source-flipper" class="strategy-content">
+
+                <div class="section">
+                    <h3>Criteria</h3>
+                    <p><strong>Any price point, any neighborhood.</strong> Distressed properties, motivated sellers, estates, properties needing renovation. Not location-specific like luxury — condition and motivation matter.</p>
+                </div>
+
+                <div class="section">
+                    <h3>1️⃣ Opening After Sending Deal</h3>
+                    <div class="you">Hey [Agent Name], so I sent you that flip opportunity at [ADDRESS]. We're constantly looking for more distressed properties just like that. Do you know of any other off-market deals in your area? Homes that need work, sellers in a pinch, anything like that?</div>
+                </div>
+
+                <div class="section">
+                    <h3>2️⃣ Clarify What You Buy</h3>
+                    <div class="you">Here's what we're looking for — properties where sellers are motivated to move. Could be an estate, inherited property, landlords who are done, foreclosure, anything where they need to sell fast. The property can need work — that's perfect. We buy as-is, all cash, and we close quick.</div>
+                    <div class="question">❓ Do you know of any properties like that? Estate sales, distressed sellers, anything where they might not want to list publicly?</div>
+                    <div class="question">❓ Any properties that have been on the market and didn't sell, or homes where the owners have mentioned they want out?</div>
+                </div>
+
+                <div class="section">
+                    <h3>3️⃣ Your Buyer Profile</h3>
+                    <div class="you">The reason this matters — we have flip investors looking for exactly this. They want renovation projects, they need deals at wholesale prices, and they want to close fast. So if you know of distressed properties or motivated sellers, we can connect them immediately.</div>
+                </div>
+
+                <div class="section">
+                    <h3>4️⃣ Your Terms</h3>
+                    <div class="you">Here's what we offer — we cover all closing costs. The seller keeps more cash. And we still pay your full commission when it closes. So there's no downside for the agent, and the seller gets a fast, clean exit.</div>
+                </div>
+
+                <div class="section">
+                    <h3>5️⃣ Soft Close</h3>
+                    <div class="you">So if you know of any distressed properties or motivated sellers in your area, send them my way. I'll handle all the outreach and if we buy it, you get commission. No pressure — just keep us in mind. You can reach me at (877) 652-8991 or info@freedom-offers.com. I'll follow up in a couple weeks too.</div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- KEY PRINCIPLES FOOTER -->
+    <div class="section" style="background:linear-gradient(135deg,#1e3a2a,#0f3a1f); border-left-color:#10b981; margin-top:30px;">
+        <h3>🎯 Key Principles Across All Scripts</h3>
+        <div class="benefit-item" style="margin-bottom:12px;">
+            <div class="benefit-icon">🔐</div>
+            <div class="benefit-text">
+                <strong>Information Protection:</strong> Sellers: only share address + condition, not price or analysis. Agents: same rule — protects deals from being shopped directly.
+            </div>
+        </div>
+        <div class="benefit-item" style="margin-bottom:12px;">
+            <div class="benefit-icon">💵</div>
+            <div class="benefit-text">
+                <strong>Always Lead with Incentives:</strong> Agents with commission. Sellers with speed + closing cost savings. Buyers with below-market deals.
+            </div>
+        </div>
+        <div class="benefit-item" style="margin-bottom:12px;">
+            <div class="benefit-icon">🤝</div>
+            <div class="benefit-text">
+                <strong>Positioning:</strong> You're a "signature development partner" with a Rolodex of buyers/developers. Sometimes you're the buyer, but you don't volunteer that unless asked.
+            </div>
+        </div>
+        <div class="benefit-item" style="margin-bottom:12px;">
+            <div class="benefit-icon">📞</div>
+            <div class="benefit-text">
+                <strong>Follow Up:</strong> Always leave contact info. Say you'll call back in 2 weeks. Build relationships over time, not just one call.
+            </div>
+        </div>
+        <div class="benefit-item">
+            <div class="benefit-icon">✅</div>
+            <div class="benefit-text">
+                <strong>Deliver on Promises:</strong> Pay agents on time. Close deals. Your reputation is everything. Transparency builds trust.
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Freedom Offers LLC · Veteran-Owned · San Diego, CA · <a href="https://freedom-offers.com" target="_blank" style="color:#3b82f6;">freedom-offers.com</a> · <a href="tel:+18776528991" style="color:#3b82f6;">(877) 652-8991</a> · <a href="mailto:info@freedom-offers.com" style="color:#3b82f6;">info@freedom-offers.com</a></p>
+    </div>
+
+</div>
+
+<script>
+    function switchMainTab(e, tabName) {
+        var tabs = document.getElementsByClassName('main-content');
+        for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
+        var buttons = document.querySelectorAll('.main-tab-button');
+        for (var i = 0; i < buttons.length; i++) { buttons[i].classList.remove('active'); }
+        document.getElementById(tabName).classList.add('active');
+        e.target.classList.add('active');
+    }
+
+    function switchSellerTab(e, tabName) {
+        var tabs = document.querySelectorAll('#sellers-tab .sub-content');
+        for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
+        var buttons = document.querySelectorAll('#sellers-tab .sub-tab-button');
+        for (var i = 0; i < buttons.length; i++) { buttons[i].classList.remove('active'); }
+        document.getElementById(tabName).classList.add('active');
+        e.target.classList.add('active');
+    }
+
+    function switchBuyerTab(e, tabName) {
+        var tabs = document.querySelectorAll('#buyers-tab .sub-content');
+        for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
+        var buttons = document.querySelectorAll('#buyers-tab .sub-tab-button');
+        for (var i = 0; i < buttons.length; i++) { buttons[i].classList.remove('active'); }
+        document.getElementById(tabName).classList.add('active');
+        e.target.classList.add('active');
+    }
+
+    function switchAgentTab(e, tabName) {
+        var tabs = document.querySelectorAll('#agents-tab .sub-content');
+        for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
+        var buttons = document.querySelectorAll('#agents-tab .sub-tab-button');
+        for (var i = 0; i < buttons.length; i++) { buttons[i].classList.remove('active'); }
+        document.getElementById(tabName).classList.add('active');
+        e.target.classList.add('active');
+    }
+
+    function switchAgentDispo(e, strategyName) {
+        var contents = document.querySelectorAll('#agent-disposition .strategy-content');
+        for (var i = 0; i < contents.length; i++) { contents[i].classList.remove('active'); }
+        var buttons = document.querySelectorAll('#agent-disposition .strategy-tab-button');
+        for (var i = 0; i < buttons.length; i++) { buttons[i].classList.remove('active'); }
+        document.getElementById(strategyName).classList.add('active');
+        e.target.classList.add('active');
+    }
+
+    function switchAgentSource(e, strategyName) {
+        var contents = document.querySelectorAll('#agent-sourcing .strategy-content');
+        for (var i = 0; i < contents.length; i++) { contents[i].classList.remove('active'); }
+        var buttons = document.querySelectorAll('#agent-sourcing .strategy-tab-button');
+        for (var i = 0; i < buttons.length; i++) { buttons[i].classList.remove('active'); }
+        document.getElementById(strategyName).classList.add('active');
+        e.target.classList.add('active');
+    }
+</script>
+</body>
+</html>

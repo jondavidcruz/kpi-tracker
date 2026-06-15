@@ -443,6 +443,10 @@ export async function addChangeComment(formData: FormData) {
   if (leader && req!.submitterEmail) {
     await sendEmailTo([req!.submitterEmail], `Re: ${req!.title}`,
       alertEmailHtml(`Update on your request: ${req!.title}`, [`${me.name}: ${body}`, "Open the Change Portal to reply."]));
+  } else if (!leader) {
+    // rep replied — loop in leadership
+    await sendEmail(`💬 Reply on “${req!.title}” from ${me.name}`,
+      alertEmailHtml(`Reply: ${req!.title}`, [`${me.name}: ${body}`, "Open the Change Portal to respond."]));
   }
   revalidatePath("/change-portal");
   redirect(`/change-portal#req-${requestId}`);

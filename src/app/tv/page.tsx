@@ -12,7 +12,9 @@ import { formatValue, type Unit } from "@/lib/format";
 import { statusVsGoal, statusVsPace, type Status } from "@/lib/kpi";
 import { POSITIONS } from "@/lib/roles";
 import { computeStreaks } from "@/lib/streaks";
+import { getAwardBoard, getAiChampions } from "@/lib/awards";
 import { KpiIcon } from "@/lib/kpiIcons";
+import RecognitionBoards from "@/components/RecognitionBoards";
 import { Flame } from "lucide-react";
 import { db } from "@/lib/db";
 import type { Kpi, Target, User } from "@prisma/client";
@@ -45,7 +47,7 @@ export default async function TvPage() {
   const month = monthOf(date);
   const fraction = paceFraction(date);
 
-  const [reps, perRep, teamMonthly, dailyValues, mtdSums, targets, openAlerts, streaks] =
+  const [reps, perRep, teamMonthly, dailyValues, mtdSums, targets, openAlerts, streaks, awardBoard, aiChampions] =
     await Promise.all([
       getActiveReps(),
       getKpis({ scope: "per_rep", computed: false }),
@@ -55,6 +57,8 @@ export default async function TvPage() {
       getAllTargets(),
       db.alert.count({ where: { status: "open" } }),
       computeStreaks(date),
+      getAwardBoard(),
+      getAiChampions(),
     ]);
 
   // Team pulse: count goal-bearing per-rep entries on/behind goal today.
@@ -162,6 +166,11 @@ export default async function TvPage() {
             />
           );
         })}
+      </div>
+
+      {/* Recognition — Hall of Fame + AI Champions */}
+      <div className="px-8 pb-8">
+        <RecognitionBoards champions={awardBoard.champions} aiChampions={aiChampions} variant="dark" />
       </div>
     </div>
   );

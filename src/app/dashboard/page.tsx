@@ -16,8 +16,10 @@ import { dailyGap, monthlyGap, monthlyCatchup, buildCoaching } from "@/lib/gap";
 import { dealsNeedingAttention } from "@/lib/deals";
 import { findPipCandidates } from "@/lib/pip";
 import { getDailyTrends } from "@/lib/trends";
+import { getAwardBoard, getAiChampions } from "@/lib/awards";
 import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
+import RecognitionBoards from "@/components/RecognitionBoards";
 import { db } from "@/lib/db";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
 import { CircleCheck, TrendingDown, Bell, Users, Banknote, ShieldAlert, Building2, type LucideIcon } from "lucide-react";
@@ -68,6 +70,7 @@ export default async function DashboardPage({
     ]);
   const agingDeals = dealsNeedingAttention(openDeals, date);
   const trends = await getDailyTrends(date, 14);
+  const [awardBoard, aiChampions] = await Promise.all([getAwardBoard(), getAiChampions()]);
   const onGoalSeries = trends.map((t) => t.onGoal);
   const behindSeries = trends.map((t) => t.behind);
   const loggedSeries = trends.map((t) => t.logged);
@@ -173,6 +176,9 @@ export default async function DashboardPage({
         <MetricCard label="Open alerts" value={openAlerts} icon={<Bell size={18} />} spark={alertSeries} hint={openAlerts ? "needs review" : "all clear"} hintTone={openAlerts ? "bad" : "good"} />
         <MetricCard label="Logged today" value={repsLoggedToday} icon={<Users size={18} />} spark={loggedSeries} delta={wkDelta(loggedSeries)} deltaTone={wkDelta(loggedSeries) >= 0 ? "good" : "neutral"} />
       </div>
+
+      {/* Gamified recognition */}
+      <RecognitionBoards champions={awardBoard.champions} aiChampions={aiChampions} variant="light" />
 
       {/* Today's priorities — the short list worth acting on now */}
       {priorities.length > 0 && (

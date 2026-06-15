@@ -245,6 +245,19 @@ model CallScore {
   @@index([createdAt])
 }
 
+// Weekly top-performer wins — one per role per week, for the gamified leaderboard.
+model WeeklyAward {
+  id        String   @id @default(cuid())
+  weekStart String // YYYY-MM-DD (Monday of the won week)
+  role      String // Acquisitions | Dispositions
+  repName   String
+  kpiName   String   @default("")
+  value     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([weekStart, role])
+}
+
 // The approved script/process per call type — the AI scores adherence to it.
 model CallScript {
   id        String   @id @default(cuid())
