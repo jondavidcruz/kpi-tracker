@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -31,6 +31,7 @@ export default function Sidebar({
     ] },
     { label: "Performance", items: [
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
+      { href: "/rocks", label: "Rocks", Icon: Mountain },
       { href: "/report", label: "Weekly report", Icon: FileText },
       { href: "/monthly", label: "Monthly report", Icon: CalendarDays },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },

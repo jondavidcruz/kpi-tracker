@@ -12,6 +12,9 @@ import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
+import { getSettings } from "@/lib/data";
+import { todayStr } from "@/lib/date";
+import { quarterOf, quarterEnd } from "@/lib/eos";
 
 /** Sign the current user out and return to the login screen. */
 export async function signOut() {
@@ -585,6 +588,72 @@ export async function saveTeamProfile(formData: FormData) {
   else await db.teamProfile.create({ data });
   revalidatePath("/team-roster");
   redirect("/team-roster?saved=1");
+}
+
+// --- EOS Rocks (quarterly priorities) ---------------------------------------
+
+/** Add a Rock. Anyone signed in can add one they own; managers can add company
+ *  rocks or assign to anyone. Quarter/due default to the current quarter. */
+export async function addRock(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) redirect("/rocks?empty=1");
+  const leader = isManager(me);
+  const settings = await getSettings();
+  const today = todayStr(settings.orgTimezone);
+  const isCompany = leader && String(formData.get("isCompany") ?? "") === "on";
+  const owner = isCompany ? "" : (leader ? String(formData.get("owner") ?? "").trim() || me.name : me.name);
+  const quarter = String(formData.get("quarter") ?? "").trim() || quarterOf(today);
+  const dueDate = String(formData.get("dueDate") ?? "").trim() || quarterEnd(today);
+  const milestones = String(formData.get("milestones") ?? "").trim();
+  await db.rock.create({ data: { title, owner, isCompany, quarter, dueDate, milestones } });
+  revalidatePath("/rocks");
+  redirect("/rocks?saved=1");
+}
+
+/** Update a Rock's status + progress. The owner or any manager can do this. */
+export async function updateRockStatus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const rock = await db.rock.findUnique({ where: { id } });
+  if (!rock) return;
+  if (!isManager(me) && rock.owner !== me.name) return; // only your rock (or leadership)
+  const status = String(formData.get("status") ?? rock.status).trim();
+  const progressRaw = formData.get("progress");
+  const progress = progressRaw != null ? Math.max(0, Math.min(100, Number(progressRaw) || 0)) : rock.progress;
+  await db.rock.update({ where: { id }, data: { status, progress: status === "done" ? 100 : progress } });
+  revalidatePath("/rocks");
+  redirect("/rocks");
+}
+
+/** Edit a Rock's core fields — managers only. */
+export async function editRock(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const isCompany = str("isCompany") === "on";
+  await db.rock.update({ where: { id }, data: {
+    title: str("title"), owner: isCompany ? "" : str("owner"), isCompany,
+    quarter: str("quarter"), dueDate: str("dueDate"),
+    milestones: str("milestones"), notes: str("notes"),
+  } });
+  revalidatePath("/rocks");
+  redirect("/rocks");
+}
+
+/** Delete a Rock — managers only. */
+export async function deleteRock(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.rock.delete({ where: { id } });
+  revalidatePath("/rocks");
+  redirect("/rocks");
 }
 
 /** Add a Monday-Meeting training tip to the backlog. Managers only. */

@@ -447,6 +447,27 @@ model AiSubmission {
   @@index([status])
 }
 
+// EOS Rock — a quarterly priority (the "big rocks"). Company-wide or owned by
+// one person. 3–7 per quarter is the EOS discipline. Status is binary in EOS
+// (on-track / off-track) until done; progress % is a soft aid.
+model Rock {
+  id         String   @id @default(cuid())
+  title      String
+  owner      String   @default("") // accountable person's display name ("" = company rock)
+  isCompany  Boolean  @default(false) // company-level rock vs individual
+  quarter    String   @default("") // "2026-Q2"
+  dueDate    String   @default("") // YYYY-MM-DD (usually end of quarter)
+  status     String   @default("on_track") // on_track | off_track | done
+  progress   Int      @default(0) // 0-100 (soft aid; EOS status is the real signal)
+  milestones String   @default("") // newline list of sub-steps / milestones
+  notes      String   @default("")
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([quarter])
+}
+
 // Coaching tips for the Monday Meeting. The deck auto-picks the one matching the
 // team's weakest KPI that week; otherwise rotates the general (untagged) ones.
 model TrainingTip {
