@@ -8,6 +8,7 @@ import { todayStr } from "@/lib/date";
 import { getSettings } from "@/lib/data";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
+import AccountabilityChart from "@/components/AccountabilityChart";
 
 export const dynamic = "force-dynamic";
 
@@ -45,11 +46,12 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
-  const [users, profiles, board, ai] = await Promise.all([
+  const [users, profiles, board, ai, seats] = await Promise.all([
     getAllUsers(),
     db.teamProfile.findMany(),
     getAwardBoard(),
     getAiChampions(),
+    db.seat.findMany({ orderBy: { sortOrder: "asc" } }),
   ]);
   const active = users.filter((u) => u.active);
   const byUser = new Map(profiles.map((p) => [p.userId ?? "", p]));
@@ -66,6 +68,17 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
       </div>
 
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
+
+      {/* EOS Accountability Chart + GWC */}
+      <details open={seats.length > 0} className="rounded-xl ring-1 ring-violet-200">
+        <summary className="cursor-pointer rounded-xl bg-violet-50 px-4 py-3">
+          <span className="text-sm font-bold text-violet-800">🗂 Accountability Chart + GWC</span>
+          <span className="ml-2 text-xs text-violet-600">Right person, right seat — the org structure, key roles, and Gets-it / Wants-it / Capacity read per seat.</span>
+        </summary>
+        <div className="p-4">
+          <AccountabilityChart seats={seats} />
+        </div>
+      </details>
 
       <div className="space-y-4">
         {active.map((u) => {

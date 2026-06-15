@@ -468,6 +468,26 @@ model Rock {
   @@index([quarter])
 }
 
+// EOS Accountability Chart seat — one box in the org structure. "Right person,
+// right seat." Each seat lists its 5 key roles and who sits in it, plus the
+// People-Analyzer GWC read (Gets it / Wants it / Capacity). OWNER-ONLY (private).
+model Seat {
+  id          String   @id @default(cuid())
+  title       String // the seat / function, e.g. "Acquisitions", "Integrator"
+  holder      String   @default("") // person in the seat
+  roles       String   @default("") // the ~5 key roles (newline list)
+  parentId    String? // reports-to seat (self-relation = the chart hierarchy)
+  sortOrder   Int      @default(0)
+  gwcGet      String   @default("") // "" | yes | no
+  gwcWant     String   @default("")
+  gwcCapacity String   @default("")
+  gwcNote     String   @default("") // values fit / notes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([parentId])
+}
+
 // EOS Vision/Traction Organizer (V/TO) — the single-page company vision. One
 // row (id=1). Owner-editable (Jon); the whole team reads it. Quarterly Rocks and
 // the Issues List (the "Traction" half) live in their own modules.

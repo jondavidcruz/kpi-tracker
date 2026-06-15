@@ -656,6 +656,39 @@ export async function deleteRock(formData: FormData) {
   redirect("/rocks");
 }
 
+// --- EOS Accountability Chart (Seats + GWC) — OWNER ONLY --------------------
+
+export async function saveSeat(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const title = str("title");
+  if (!title) return;
+  const parentId = str("parentId") || null;
+  const sortOrder = Number(formData.get("sortOrder")) || 0;
+  const data = {
+    title, holder: str("holder"), roles: str("roles"), parentId, sortOrder,
+    gwcGet: str("gwcGet"), gwcWant: str("gwcWant"), gwcCapacity: str("gwcCapacity"), gwcNote: str("gwcNote"),
+  };
+  if (id) await db.seat.update({ where: { id }, data });
+  else await db.seat.create({ data });
+  revalidatePath("/team-roster");
+  redirect("/team-roster?saved=1#chart");
+}
+
+export async function deleteSeat(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) {
+    await db.seat.updateMany({ where: { parentId: id }, data: { parentId: null } });
+    await db.seat.delete({ where: { id } });
+  }
+  revalidatePath("/team-roster");
+  redirect("/team-roster#chart");
+}
+
 // --- EOS V/TO (Vision/Traction Organizer) — OWNER edits, team reads ---------
 
 export async function saveVto(formData: FormData) {
