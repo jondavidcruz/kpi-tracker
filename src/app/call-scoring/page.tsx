@@ -1,10 +1,13 @@
 import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getActiveReps } from "@/lib/data";
-import { scoreCall } from "@/app/actions";
+import { scoreCall, saveCallScript } from "@/app/actions";
 import { friendlyDate } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import type { ScoreArea } from "@/lib/score";
+import { CALL_TYPES, callTypeLabel } from "@/lib/call-types";
+
+const GROUPS = ["Acquisitions", "Dispositions"] as const;
 
 export const dynamic = "force-dynamic";
 
@@ -14,15 +17,18 @@ function scoreColor(n: number): string {
   return n >= 80 ? "text-emerald-600" : n >= 60 ? "text-amber-600" : "text-red-600";
 }
 
-export default async function CallScoringPage({ searchParams }: { searchParams: Promise<{ scored?: string; setup?: string; err?: string }> }) {
+export default async function CallScoringPage({ searchParams }: { searchParams: Promise<{ scored?: string; setup?: string; err?: string; saved?: string }> }) {
   const me = await getCurrentUser();
   if (!me) return <Card className="mx-auto max-w-md p-8 text-center">Please sign in.</Card>;
   const sp = await searchParams;
+  const leader = isManager(me);
 
-  const [reps, scores] = await Promise.all([
+  const [reps, scores, scriptRows] = await Promise.all([
     getActiveReps(),
     db.callScore.findMany({ orderBy: { createdAt: "desc" }, take: 25 }),
+    db.callScript.findMany(),
   ]);
+  const scripts = new Map(scriptRows.map((r) => [r.callType, r.script]));
   const configured = !!process.env.ANTHROPIC_API_KEY;
 
   return (
@@ -39,6 +45,7 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
         </div>
       )}
       {sp.scored && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Scored and saved below.</div>}
+      {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved “{sp.saved}”.</div>}
       {sp.setup && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Scoring isn&apos;t configured yet — add the ANTHROPIC_API_KEY (see above).</div>}
       {sp.err === "short" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Please paste a longer transcript.</div>}
       {sp.err && sp.err !== "short" && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">{sp.err}</div>}
@@ -51,6 +58,19 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
               <select name="repName" className={inputCls} defaultValue="">
                 <option value="">Pick a rep…</option>
                 {reps.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
+              </select>
+            </label>
+            <label className="sm:col-span-2">
+              <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Call type</span>
+              <select name="callType" required className={inputCls} defaultValue="">
+                <option value="" disabled>Pick a call type…</option>
+                {GROUPS.map((g) => (
+                  <optgroup key={g} label={g}>
+                    {CALL_TYPES.filter((c) => c.group === g).map((c) => (
+                      <option key={c.key} value={c.key}>{scripts.get(c.key) ? "✓ " : ""}{c.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </label>
           </div>
@@ -78,7 +98,11 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
               return (
                 <Card key={s.id} className="p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-bold text-slate-800">{s.repName} <span className="font-normal text-slate-400">· scored by {s.scoredBy} · {friendlyDate(s.createdAt.toISOString().slice(0, 10))}</span></div>
+                    <div>
+                      {s.callType && <span className="mr-2 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-800">{callTypeLabel(s.callType)}</span>}
+                      <span className="font-bold text-slate-800">{s.repName}</span>
+                      <span className="font-normal text-slate-400"> · scored by {s.scoredBy} · {friendlyDate(s.createdAt.toISOString().slice(0, 10))}</span>
+                    </div>
                     <div className={`text-3xl font-extrabold tabular-nums ${scoreColor(s.overall)}`}>{s.overall}<span className="text-base text-slate-400">/100</span></div>
                   </div>
                   {s.summary && <p className="mt-1 text-sm text-slate-600">{s.summary}</p>}
@@ -101,6 +125,36 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
           </div>
         )}
       </section>
+
+      {/* Manage scripts — leadership pastes the approved script per call type;
+          the AI scores adherence against it. */}
+      {leader && (
+        <section id="scripts" className="scroll-mt-4">
+          <SectionTitle title="📋 Call scripts" subtitle="Paste the approved script for each call type. The score then measures how well the rep followed it." accent="bg-brand-navy" />
+          <div className="space-y-2">
+            {GROUPS.map((g) => (
+              <div key={g}>
+                <h3 className="mb-1 mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{g}</h3>
+                {CALL_TYPES.filter((c) => c.group === g).map((c) => {
+                  const has = !!scripts.get(c.key);
+                  return (
+                    <details key={c.key} className="mb-1.5 rounded-lg border border-slate-200 bg-white p-2">
+                      <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                        {has ? "✅" : "⬜️"} {c.label}
+                      </summary>
+                      <form action={saveCallScript} className="mt-2 space-y-2">
+                        <input type="hidden" name="callType" value={c.key} />
+                        <textarea name="script" defaultValue={scripts.get(c.key) ?? ""} rows={8} placeholder={`Paste the ${c.label} script / process here…`} className={inputCls} />
+                        <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save script</button>
+                      </form>
+                    </details>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

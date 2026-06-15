@@ -16,16 +16,25 @@ export interface ScoreResult {
   summary: string;
 }
 
-const RUBRIC = `You are an expert real-estate acquisitions sales coach scoring a cold/seller call transcript for a wholesaling team. Score these areas 0-100 and give one short, specific, actionable note each:
-- Opener & Rapport: did they earn the conversation and build trust early?
-- Discovery: did they uncover motivation, timeline, property condition, and price expectations?
-- Objection Handling: did they address concerns without getting defensive?
-- The Ask: did they move toward a concrete next step (appointment, offer, or follow-up)?
-Then give an overall 0-100 and a 2-3 sentence summary with the single highest-leverage thing to improve next time.
-Respond with ONLY valid JSON, no markdown, in this exact shape:
-{"overall": <int>, "breakdown": [{"area": "Opener & Rapport", "score": <int>, "note": "..."}, {"area":"Discovery","score":<int>,"note":"..."}, {"area":"Objection Handling","score":<int>,"note":"..."}, {"area":"The Ask","score":<int>,"note":"..."}], "summary": "..."}`;
+function buildRubric(label?: string, script?: string): string {
+  const intro = label
+    ? `You are an expert real-estate sales coach scoring a "${label}" for a wholesaling team. Each call type is different — score on the skills that matter MOST for this specific kind of call.`
+    : `You are an expert real-estate acquisitions sales coach scoring a seller/cold call for a wholesaling team.`;
+  const scriptBlock = script
+    ? `\n\nThe rep is expected to follow this approved script / process for this exact call type. Judge how closely they followed it and flag meaningful deviations:\n"""\n${script.slice(0, 9000)}\n"""`
+    : `\n\n(No script is on file for this call type yet — score on general best practices for this kind of call.)`;
+  return `${intro}${scriptBlock}
 
-export async function scoreTranscript(transcript: string): Promise<ScoreResult> {
+Score 0-100 on the 4-5 dimensions that matter most for THIS call type${script ? `, and ALWAYS include "Script Adherence" as one of them` : ""}. Pick dimension names appropriate to the call (e.g. rapport, motivation discovery, qualifying, anchoring/price framing, objection handling, setting the next step, closing). Give one short, specific, actionable note per dimension.
+Then give an overall 0-100 and a 2-3 sentence summary naming the single highest-leverage thing to improve next time.
+Respond with ONLY valid JSON, no markdown:
+{"overall": <int>, "breakdown": [{"area": "...", "score": <int>, "note": "..."}, ...], "summary": "..."}`;
+}
+
+export async function scoreTranscript(
+  transcript: string,
+  opts?: { label?: string; script?: string },
+): Promise<ScoreResult> {
   const key = process.env.ANTHROPIC_API_KEY;
   const empty: ScoreResult = { configured: false, overall: 0, breakdown: [], summary: "" };
   if (!key) return empty;
@@ -41,8 +50,8 @@ export async function scoreTranscript(transcript: string): Promise<ScoreResult> 
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
-        system: RUBRIC,
-        messages: [{ role: "user", content: `Score this call transcript:\n\n${transcript.slice(0, 24000)}` }],
+        system: buildRubric(opts?.label, opts?.script),
+        messages: [{ role: "user", content: `Score this ${opts?.label ?? "call"} transcript:\n\n${transcript.slice(0, 24000)}` }],
       }),
     });
     if (!res.ok) {

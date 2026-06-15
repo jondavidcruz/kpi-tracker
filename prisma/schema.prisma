@@ -234,6 +234,7 @@ model MonthlyMetric {
 model CallScore {
   id         String   @id @default(cuid())
   repName    String   @default("")
+  callType   String   @default("") // which call type was scored (see lib/call-types)
   scoredBy   String   @default("")
   overall    Int      @default(0) // 0-100
   breakdown  String   @default("[]") // JSON [{area, score, note}]
@@ -242,6 +243,14 @@ model CallScore {
   createdAt  DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// The approved script/process per call type — the AI scores adherence to it.
+model CallScript {
+  id        String   @id @default(cuid())
+  callType  String   @unique
+  script    String   @default("")
+  updatedAt DateTime @updatedAt
 }
 
 // An AI-generated improvement recommendation for the tracker itself. Populated

@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import { scoreTranscript } from "@/lib/score";
+import { callTypeLabel } from "@/lib/call-types";
 
 /** Sign the current user out and return to the login screen. */
 export async function signOut() {
@@ -248,15 +249,21 @@ export async function scoreCall(formData: FormData) {
   if (!me) return;
   const transcript = String(formData.get("transcript") ?? "").trim();
   const repName = String(formData.get("repName") ?? "").trim();
+  const callType = String(formData.get("callType") ?? "").trim();
   if (transcript.length < 40) redirect("/call-scoring?err=short");
 
-  const result = await scoreTranscript(transcript);
+  const script = callType ? await db.callScript.findUnique({ where: { callType } }) : null;
+  const result = await scoreTranscript(transcript, {
+    label: callType ? callTypeLabel(callType) : undefined,
+    script: script?.script || undefined,
+  });
   if (!result.configured) redirect("/call-scoring?setup=1");
   if (result.error) redirect(`/call-scoring?err=${encodeURIComponent(result.error)}`);
 
   await db.callScore.create({
     data: {
       repName: repName || "(unspecified)",
+      callType,
       scoredBy: me.name,
       overall: result.overall,
       breakdown: JSON.stringify(result.breakdown),
@@ -266,6 +273,22 @@ export async function scoreCall(formData: FormData) {
   });
   revalidatePath("/call-scoring");
   redirect("/call-scoring?scored=1");
+}
+
+/** Save/update the approved script for a call type. Managers only. */
+export async function saveCallScript(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const callType = String(formData.get("callType") ?? "").trim();
+  if (!callType) return;
+  const script = String(formData.get("script") ?? "").trim();
+  await db.callScript.upsert({
+    where: { callType },
+    update: { script },
+    create: { callType, script },
+  });
+  revalidatePath("/call-scoring");
+  redirect("/call-scoring?saved=Script#scripts");
 }
 
 /** Add/edit an Operations-hub link. OWNER (admin) ONLY. */
