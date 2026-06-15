@@ -65,7 +65,7 @@ export default function Sidebar({
   const Nav = (
     <div className="flex h-full flex-col">
       <Link href="/dashboard" onClick={() => setOpen(false)} className="block px-4 py-5">
-        <Logo size="sm" />
+        <Logo size="sm" tagline />
       </Link>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
