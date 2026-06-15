@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -46,6 +46,7 @@ export default function Sidebar({
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
     ] },
     { label: "Workspace", items: [
+      { href: "/issues", label: "Issues / IDS", Icon: Flag },
       { href: "/change-portal", label: "Change Portal", Icon: Lightbulb },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },

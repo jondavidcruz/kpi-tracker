@@ -468,6 +468,39 @@ model Rock {
   @@index([quarter])
 }
 
+// EOS Issue — anything getting in the way (obstacle, idea, concern). The team
+// raises issues; in the Level 10 meeting you prioritize the top 3 and run IDS
+// (Identify, Discuss, Solve). Solving one often spawns a To-Do.
+model Issue {
+  id        String   @id @default(cuid())
+  title     String
+  detail    String   @default("")
+  raisedBy  String   @default("")
+  owner     String   @default("") // who owns getting it solved
+  priority  Int      @default(0) // manual rank; higher = solve first (top 3)
+  scope     String   @default("leadership") // leadership | team — which IDS list
+  status    String   @default("open") // open | solved | dropped
+  solveNote String   @default("") // the decision when it was solved
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// EOS To-Do — a 7-day action item, often the output of solving an Issue. Binary
+// done/not-done; reviewed every Level 10 meeting (target 90% completion).
+model ToDo {
+  id        String   @id @default(cuid())
+  text      String
+  owner     String   @default("")
+  dueDate   String   @default("") // YYYY-MM-DD (EOS ~7 days out)
+  done      Boolean  @default(false)
+  fromIssue String? // Issue.id this came from (null = standalone)
+  createdAt DateTime @default(now())
+
+  @@index([done])
+}
+
 // Coaching tips for the Monday Meeting. The deck auto-picks the one matching the
 // team's weakest KPI that week; otherwise rotates the general (untagged) ones.
 model TrainingTip {

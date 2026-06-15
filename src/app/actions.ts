@@ -656,6 +656,133 @@ export async function deleteRock(formData: FormData) {
   redirect("/rocks");
 }
 
+// --- EOS Issues + To-Dos (IDS) ----------------------------------------------
+
+/** Raise an issue — anyone signed in. */
+export async function addIssue(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) redirect("/issues?empty=1");
+  const detail = String(formData.get("detail") ?? "").trim();
+  const scope = String(formData.get("scope") ?? "leadership").trim() || "leadership";
+  const owner = isManager(me) ? String(formData.get("owner") ?? "").trim() : "";
+  await db.issue.create({ data: { title, detail, scope, owner, raisedBy: me.name } });
+  revalidatePath("/issues");
+  redirect("/issues?raised=1");
+}
+
+/** Bump an issue to the top of the priority order (leadership). */
+export async function bumpIssue(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const top = await db.issue.findFirst({ where: { status: "open" }, orderBy: { priority: "desc" } });
+  await db.issue.update({ where: { id }, data: { priority: (top?.priority ?? 0) + 1 } });
+  revalidatePath("/issues");
+  redirect("/issues");
+}
+
+/** Solve an issue (IDS) — owner or leadership. Optionally spawns a To-Do. */
+export async function solveIssue(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const issue = await db.issue.findUnique({ where: { id } });
+  if (!issue) return;
+  if (!isManager(me) && issue.owner !== me.name && issue.raisedBy !== me.name) return;
+  const solveNote = String(formData.get("solveNote") ?? "").trim();
+  await db.issue.update({ where: { id }, data: { status: "solved", solveNote } });
+
+  // Solving often produces a 7-day action item.
+  const todoText = String(formData.get("todoText") ?? "").trim();
+  if (todoText) {
+    const settings = await getSettings();
+    const today = todayStr(settings.orgTimezone);
+    let due = String(formData.get("todoDue") ?? "").trim();
+    if (!due) {
+      const d = new Date(today + "T00:00:00");
+      d.setDate(d.getDate() + 7);
+      due = d.toISOString().slice(0, 10);
+    }
+    const todoOwner = String(formData.get("todoOwner") ?? "").trim() || issue.owner;
+    await db.toDo.create({ data: { text: todoText, owner: todoOwner, dueDate: due, fromIssue: id } });
+  }
+  revalidatePath("/issues");
+  redirect("/issues");
+}
+
+/** Drop an issue without solving (not worth it / out of scope). */
+export async function dropIssue(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const issue = await db.issue.findUnique({ where: { id } });
+  if (!issue) return;
+  if (!isManager(me) && issue.owner !== me.name && issue.raisedBy !== me.name) return;
+  await db.issue.update({ where: { id }, data: { status: "dropped" } });
+  revalidatePath("/issues");
+  redirect("/issues");
+}
+
+/** Reopen a solved/dropped issue — leadership. */
+export async function reopenIssue(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.issue.update({ where: { id }, data: { status: "open" } });
+  revalidatePath("/issues");
+  redirect("/issues");
+}
+
+/** Delete an issue — leadership. */
+export async function deleteIssue(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.issue.delete({ where: { id } });
+  revalidatePath("/issues");
+  redirect("/issues");
+}
+
+/** Add a standalone To-Do — anyone signed in. */
+export async function addToDo(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const text = String(formData.get("text") ?? "").trim();
+  if (!text) redirect("/issues");
+  const owner = String(formData.get("owner") ?? "").trim() || me.name;
+  const dueDate = String(formData.get("dueDate") ?? "").trim();
+  await db.toDo.create({ data: { text, owner, dueDate } });
+  revalidatePath("/issues");
+  redirect("/issues");
+}
+
+/** Toggle a To-Do done/not-done — anyone signed in. */
+export async function toggleToDo(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const todo = await db.toDo.findUnique({ where: { id } });
+  if (todo) await db.toDo.update({ where: { id }, data: { done: !todo.done } });
+  revalidatePath("/issues");
+  redirect("/issues");
+}
+
+/** Delete a To-Do — leadership. */
+export async function deleteToDo(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.toDo.delete({ where: { id } });
+  revalidatePath("/issues");
+  redirect("/issues");
+}
+
 /** Add a Monday-Meeting training tip to the backlog. Managers only. */
 export async function saveTrainingTip(formData: FormData) {
   const me = await getCurrentUser();
