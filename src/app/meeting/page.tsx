@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote } from "@/app/actions";
+import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording } from "@/app/actions";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings, getKpis } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -7,6 +7,7 @@ import { getMeetingDeck } from "@/lib/meeting";
 import { todayStr } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import MeetingDeckView from "@/components/MeetingDeck";
+import RecordingsCard from "@/components/RecordingsCard";
 
 export const dynamic = "force-dynamic";
 
@@ -26,11 +27,12 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
     );
   }
   const sp = await searchParams;
-  const [settings, kpis, tips, notes] = await Promise.all([
+  const [settings, kpis, tips, notes, recordings] = await Promise.all([
     getSettings(),
     getKpis(),
     db.trainingTip.findMany({ orderBy: { createdAt: "desc" } }),
     db.meetingNote.findMany({ where: { meeting: "monday" }, orderBy: { createdAt: "desc" }, take: 50 }),
+    db.meetingRecording.findMany({ where: { meeting: "monday" }, orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
   const greenKpis = kpis.filter((k) => k.scope === "per_rep" && k.category === "green");
   const deck = await getMeetingDeck(todayStr(settings.orgTimezone));
@@ -44,10 +46,19 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
         title="🗓 Monday Meeting"
         subtitle="One-click all-call deck — live from your KPIs. Hit Present for full screen; edit the content below."
         accent="bg-brand-gold"
-        right={<a href="#edit" className="text-sm font-semibold text-brand-navy hover:underline">Edit content ↓</a>}
+        right={
+          <div className="flex items-center gap-3">
+            {settings.teamMeetLink && <a href={settings.teamMeetLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">🎥 Join Meet</a>}
+            <a href="#edit" className="text-sm font-semibold text-brand-navy hover:underline">Edit content ↓</a>
+          </div>
+        }
       />
 
       <MeetingDeckView deck={deck} />
+
+      {/* Recordings archive (Fathom links) */}
+      <RecordingsCard meeting="monday" recordings={recordings} fmtWhen={fmtWhen} />
+
 
       {/* Meeting notes — capture feedback live during the meeting. */}
       <div id="notes" className="scroll-mt-4">
@@ -118,6 +129,10 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
             <label className="sm:col-span-2">
               <span className={labelCls}>Change / Coming Soon (one per line)</span>
               <textarea name="mtgComingSoon" defaultValue={settings.mtgComingSoon} rows={4} className={inputCls} />
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>🎥 Google Meet link (Join button)</span>
+              <input name="teamMeetLink" defaultValue={settings.teamMeetLink} placeholder="https://meet.google.com/…" className={inputCls} />
             </label>
             <div className="sm:col-span-2">
               <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save deck content</button>

@@ -363,11 +363,26 @@ model Settings {
   mtgTalkingPoints   String @default("") // leadership deck: Talking Points (newline list)
   leadAgenda         String @default("") // leadership deck: Agenda (newline list)
   leadActionItems    String @default("") // leadership deck: Decisions / action items
+  teamMeetLink       String @default("") // Google Meet link for the Monday all-call
+  leadershipMeetLink String @default("") // Google Meet link for the leadership meeting
 
   // ---- Ethan shift-aware KPI reminder ----
   ethanShiftIcsUrl   String @default("") // secret iCal URL of the AQ Shift calendar
   ethanReminderEmail String @default("") // where the EOD reminder goes
   ethanRemindedOn    String @default("") // "YYYY-MM-DD" we last reminded — dedupes same-day sends
+}
+
+// A Fathom recording link for a past meeting (we store the link, not the video).
+model MeetingRecording {
+  id           String   @id @default(cuid())
+  meeting      String   @default("monday") // monday | leadership
+  title        String
+  url          String
+  meetingDate  String   @default("") // YYYY-MM-DD
+  postedToChat Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([meeting, createdAt])
 }
 
 // Feedback / notes captured during a Monday Meeting.

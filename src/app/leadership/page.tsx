@@ -7,6 +7,7 @@ import { getLeadershipDeck } from "@/lib/meeting";
 import { todayStr } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import LeadershipDeckView from "@/components/LeadershipDeck";
+import RecordingsCard from "@/components/RecordingsCard";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +27,10 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
     );
   }
   const sp = await searchParams;
-  const [settings, notes] = await Promise.all([
+  const [settings, notes, recordings] = await Promise.all([
     getSettings(),
     db.meetingNote.findMany({ where: { meeting: "leadership" }, orderBy: { createdAt: "desc" }, take: 50 }),
+    db.meetingRecording.findMany({ where: { meeting: "leadership" }, orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
   const deck = await getLeadershipDeck(todayStr(settings.orgTimezone));
   const fmtWhen = (d: Date) => new Intl.DateTimeFormat("en-US", {
@@ -41,10 +43,19 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
         title="👔 Leadership Meeting"
         subtitle="Leadership-only deck — agenda, business snapshot, decisions. Hit Present for full screen."
         accent="bg-brand-navy"
-        right={<a href="#edit" className="text-sm font-semibold text-brand-navy hover:underline">Edit content ↓</a>}
+        right={
+          <div className="flex items-center gap-3">
+            {settings.leadershipMeetLink && <a href={settings.leadershipMeetLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">🎥 Join Meet</a>}
+            <a href="#edit" className="text-sm font-semibold text-brand-navy hover:underline">Edit content ↓</a>
+          </div>
+        }
       />
 
       <LeadershipDeckView deck={deck} />
+
+      {/* Recordings archive (Fathom links) */}
+      <RecordingsCard meeting="leadership" recordings={recordings} fmtWhen={fmtWhen} />
+
 
       {/* Meeting notes */}
       <div id="notes" className="scroll-mt-4">
@@ -97,6 +108,10 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
             <label>
               <span className={labelCls}>Decisions &amp; Action Items (one per line)</span>
               <textarea name="leadActionItems" defaultValue={settings.leadActionItems} rows={4} className={inputCls} />
+            </label>
+            <label>
+              <span className={labelCls}>🎥 Google Meet link (Join button)</span>
+              <input name="leadershipMeetLink" defaultValue={settings.leadershipMeetLink} placeholder="https://meet.google.com/…" className={inputCls} />
             </label>
             <div>
               <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save deck content</button>

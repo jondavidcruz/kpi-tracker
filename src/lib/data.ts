@@ -24,6 +24,8 @@ export async function getSettings() {
       mtgTalkingPoints: "",
       leadAgenda: "",
       leadActionItems: "",
+      teamMeetLink: "",
+      leadershipMeetLink: "",
       ethanShiftIcsUrl: "",
       ethanReminderEmail: "",
       ethanRemindedOn: "",

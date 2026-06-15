@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
 import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
-import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml } from "@/lib/notify";
+import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
@@ -366,6 +366,7 @@ export async function saveMeetingSettings(formData: FormData) {
     stretchReward: String(formData.get("stretchReward") ?? "").trim(),
     mtgAnnouncements: String(formData.get("mtgAnnouncements") ?? "").trim(),
     mtgComingSoon: String(formData.get("mtgComingSoon") ?? "").trim(),
+    teamMeetLink: String(formData.get("teamMeetLink") ?? "").trim(),
   };
   await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
   revalidatePath("/meeting");
@@ -380,6 +381,7 @@ export async function saveLeadershipSettings(formData: FormData) {
     leadAgenda: String(formData.get("leadAgenda") ?? "").trim(),
     mtgTalkingPoints: String(formData.get("mtgTalkingPoints") ?? "").trim(),
     leadActionItems: String(formData.get("leadActionItems") ?? "").trim(),
+    leadershipMeetLink: String(formData.get("leadershipMeetLink") ?? "").trim(),
   };
   await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
   revalidatePath("/leadership");
@@ -409,6 +411,39 @@ export async function deleteMeetingNote(formData: FormData) {
   const path = meeting === "leadership" ? "/leadership" : "/meeting";
   revalidatePath(path);
   redirect(`${path}?saved=Note#notes`);
+}
+
+// --- Meeting recordings (Fathom links) --------------------------------------
+
+/** File a Fathom recording link for a meeting; optionally post it to Google Chat. */
+export async function addRecording(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
+  const title = String(formData.get("title") ?? "").trim();
+  const url = String(formData.get("url") ?? "").trim();
+  if (!title || !url) redirect(`/${meeting === "leadership" ? "leadership" : "meeting"}?err=rec#recordings`);
+  const meetingDate = String(formData.get("meetingDate") ?? "").trim();
+  const post = formData.get("postToChat") === "on";
+  let posted = false;
+  if (post) {
+    posted = await sendGoogleChat(`🎥 *${meeting === "leadership" ? "Leadership" : "Team"} meeting recording* — ${title}\n${url}`);
+  }
+  await db.meetingRecording.create({ data: { meeting, title, url, meetingDate, postedToChat: posted } });
+  const path = meeting === "leadership" ? "/leadership" : "/meeting";
+  revalidatePath(path);
+  redirect(`${path}?saved=Recording#recordings`);
+}
+
+export async function deleteRecording(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
+  if (id) await db.meetingRecording.delete({ where: { id } });
+  const path = meeting === "leadership" ? "/leadership" : "/meeting";
+  revalidatePath(path);
+  redirect(`${path}#recordings`);
 }
 
 // --- Change / Improvement Portal --------------------------------------------
