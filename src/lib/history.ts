@@ -9,14 +9,33 @@ export interface YearData {
 }
 
 export async function getMonthlyHistory(): Promise<YearData[]> {
-  const rows = await db.monthlyMetric.findMany({ orderBy: [{ year: "asc" }, { month: "asc" }] });
+  const [rows, deals] = await Promise.all([
+    db.monthlyMetric.findMany({ orderBy: [{ year: "asc" }, { month: "asc" }] }),
+    db.closedDeal.findMany(),
+  ]);
   const byYear = new Map<number, YearData>();
+  const ensure = (y: number) => {
+    let yd = byYear.get(y);
+    if (!yd) { yd = { year: y, monthly: {}, total: {} }; byYear.set(y, yd); }
+    return yd;
+  };
+  // Activity + cost metrics from the imported monthly stats. revenue + sold_deals
+  // are intentionally skipped here — the ClosedDeal ledger is their source of truth.
   for (const r of rows) {
-    let yd = byYear.get(r.year);
-    if (!yd) { yd = { year: r.year, monthly: {}, total: {} }; byYear.set(r.year, yd); }
+    if (r.metric === "revenue" || r.metric === "sold_deals") continue;
+    const yd = ensure(r.year);
     if (!yd.monthly[r.metric]) yd.monthly[r.metric] = Array(12).fill(null);
     yd.monthly[r.metric][r.month - 1] = r.value;
     yd.total[r.metric] = (yd.total[r.metric] ?? 0) + r.value;
+  }
+  // Deal profit + count straight from the HUD-verified closed-deal ledger.
+  for (const d of deals) {
+    const yd = ensure(d.year);
+    for (const [metric, val] of [["revenue", d.profit], ["sold_deals", 1]] as const) {
+      if (!yd.monthly[metric]) yd.monthly[metric] = Array(12).fill(null);
+      yd.monthly[metric][d.month - 1] = (yd.monthly[metric][d.month - 1] ?? 0) + val;
+      yd.total[metric] = (yd.total[metric] ?? 0) + val;
+    }
   }
   return [...byYear.values()].sort((a, b) => a.year - b.year);
 }

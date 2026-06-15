@@ -168,6 +168,25 @@ model Ticket {
   @@index([status])
 }
 
+// A closed/paid wholesale deal — the permanent profit ledger (from HUDs).
+// Source of truth for deal profit + count in Trends. Owner-only data.
+model ClosedDeal {
+  id        String   @id @default(cuid())
+  address   String
+  city      String   @default("")
+  state     String   @default("")
+  closeDate String // YYYY-MM-DD
+  year      Int
+  month     Int
+  dealType  String   @default("assignment") // assignment | jv | wholetail | double_close | subject_to
+  profit    Float
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([address, closeDate])
+  @@index([year])
+}
+
 // A link in the private Operations hub (owner-only): SOPs, scripts, training,
 // onboarding/offboarding, tools. Curated launcher, not a doc store.
 model Resource {
