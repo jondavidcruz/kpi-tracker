@@ -350,6 +350,27 @@ export async function saveMeetingSettings(formData: FormData) {
   redirect("/meeting?saved=Deck+content#edit");
 }
 
+/** Capture a feedback note during a meeting. Managers only. */
+export async function addMeetingNote(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const text = String(formData.get("text") ?? "").trim();
+  if (!text) return;
+  await db.meetingNote.create({ data: { text, author: me!.name } });
+  revalidatePath("/meeting");
+  redirect("/meeting?saved=Note#notes");
+}
+
+/** Delete a meeting note. Managers only. */
+export async function deleteMeetingNote(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.meetingNote.delete({ where: { id } });
+  revalidatePath("/meeting");
+  redirect("/meeting?saved=Note#notes");
+}
+
 /** Add a Monday-Meeting training tip to the backlog. Managers only. */
 export async function saveTrainingTip(formData: FormData) {
   const me = await getCurrentUser();

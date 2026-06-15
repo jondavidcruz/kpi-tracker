@@ -326,6 +326,16 @@ model Settings {
   ethanRemindedOn    String @default("") // "YYYY-MM-DD" we last reminded — dedupes same-day sends
 }
 
+// Feedback / notes captured during a Monday Meeting.
+model MeetingNote {
+  id        String   @id @default(cuid())
+  text      String
+  author    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // Coaching tips for the Monday Meeting. The deck auto-picks the one matching the
 // team's weakest KPI that week; otherwise rotates the general (untagged) ones.
 model TrainingTip {

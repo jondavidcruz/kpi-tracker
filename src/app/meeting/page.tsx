@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip } from "@/app/actions";
+import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote } from "@/app/actions";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings, getKpis } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -26,13 +26,17 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
     );
   }
   const sp = await searchParams;
-  const [settings, kpis, tips] = await Promise.all([
+  const [settings, kpis, tips, notes] = await Promise.all([
     getSettings(),
     getKpis(),
     db.trainingTip.findMany({ orderBy: { createdAt: "desc" } }),
+    db.meetingNote.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
   ]);
   const greenKpis = kpis.filter((k) => k.scope === "per_rep" && k.category === "green");
   const deck = await getMeetingDeck(todayStr(settings.orgTimezone));
+  const fmtWhen = (d: Date) => new Intl.DateTimeFormat("en-US", {
+    timeZone: settings.orgTimezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  }).format(d);
 
   return (
     <div className="space-y-5">
@@ -44,6 +48,34 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
       />
 
       <MeetingDeckView deck={deck} />
+
+      {/* Meeting notes — capture feedback live during the meeting. */}
+      <div id="notes" className="scroll-mt-4">
+        <Card className="p-6">
+          <h3 className="mb-1 text-sm font-bold text-slate-700">📝 Meeting notes</h3>
+          <p className="mb-3 text-xs text-slate-500">Jot down feedback as it comes up. Saved to a running log below.</p>
+          <form action={addMeetingNote} className="flex flex-col gap-2 sm:flex-row">
+            <input name="text" placeholder="Add a note or piece of feedback…" className={`${inputCls} flex-1`} required />
+            <button className="rounded-lg bg-brand-navy px-5 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save note</button>
+          </form>
+          {notes.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {notes.map((n) => (
+                <li key={n.id} className="flex items-start gap-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-200">
+                  <div className="flex-1">
+                    <div className="text-sm text-slate-700">{n.text}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-400">{n.author || "—"} · {fmtWhen(n.createdAt)}</div>
+                  </div>
+                  <form action={deleteMeetingNote}>
+                    <input type="hidden" name="id" value={n.id} />
+                    <button className="text-xs font-medium text-slate-400 hover:text-red-600">Delete</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
 
       {/* Edit content — lives on the same page; the team only sees the fullscreen Present view. */}
       <div id="edit" className="scroll-mt-4 border-t border-slate-200 pt-6">
