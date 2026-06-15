@@ -272,6 +272,9 @@ function escapeHtmlLocal(s: string): string {
 
 /** Reps who haven't logged a goal-bearing per-rep daily KPI raise a soft flag. */
 export async function generateMissingEntryAlerts(date: string): Promise<NewAlert[]> {
+  // No one works weekends — never flag missing entries for a Sat/Sun date.
+  const dow = new Date(date + "T12:00:00Z").getUTCDay(); // 0=Sun..6=Sat
+  if (dow === 0 || dow === 6) return [];
   const reps = await getActiveReps();
   const kpis = await db.kpi.findMany({
     where: {
@@ -466,8 +469,10 @@ export async function runScheduledChecks(opts?: {
   // Missing-entry flags only after the workday cutoff — so the morning (8:30am
   // pre-shift) digest doesn't nag about a day that just started, but the
   // evening (6:30pm post-shift) one catches anyone who didn't log by 6pm.
+  // Weekends are off — skip missing-entry nags (and the digest below) unless forced.
+  const weekdayOrForce = opts?.force || !isWeekend(tz);
   let missing: NewAlert[] = [];
-  if (opts?.force || pastCutoff(settings.workdayCutoff, tz)) {
+  if (weekdayOrForce && (opts?.force || pastCutoff(settings.workdayCutoff, tz))) {
     missing = await generateMissingEntryAlerts(date);
   }
 
@@ -475,7 +480,6 @@ export async function runScheduledChecks(opts?: {
   // (hard + soft + missing), each with its gap + training plan. Instant hard
   // alerts already fired on save; the digest is the pre-/post-shift summary.
   // Skip on weekends (team works Mon–Fri) unless a manual force run is requested.
-  const weekdayOrForce = opts?.force || !isWeekend(tz);
   const digestSent = weekdayOrForce ? await sendDailyDigest(date) : false;
   // Dispo deal-aging watch rides along with the same twice-daily, weekday schedule.
   const dealAlertsSent = weekdayOrForce ? await sendDealAgingAlerts(date) : false;
