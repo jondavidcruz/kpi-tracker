@@ -3,10 +3,11 @@ import { saveLeadershipSettings, addMeetingNote, deleteMeetingNote } from "@/app
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
-import { getLeadershipDeck } from "@/lib/meeting";
+import { getLeadershipDeck, getL10 } from "@/lib/meeting";
 import { todayStr } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import LeadershipDeckView from "@/components/LeadershipDeck";
+import L10Agenda from "@/components/L10Agenda";
 import RecordingsCard from "@/components/RecordingsCard";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,8 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
     db.meetingNote.findMany({ where: { meeting: "leadership" }, orderBy: { createdAt: "desc" }, take: 50 }),
     db.meetingRecording.findMany({ where: { meeting: "leadership" }, orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
-  const deck = await getLeadershipDeck(todayStr(settings.orgTimezone));
+  const today = todayStr(settings.orgTimezone);
+  const [deck, l10] = await Promise.all([getLeadershipDeck(today), getL10(today)]);
   const fmtWhen = (d: Date) => new Intl.DateTimeFormat("en-US", {
     timeZone: settings.orgTimezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   }).format(d);
@@ -41,7 +43,7 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
     <div className="space-y-5">
       <SectionTitle
         title="👔 Leadership Meeting"
-        subtitle="Leadership-only deck — agenda, business snapshot, decisions. Hit Present for full screen."
+        subtitle="Run the EOS Level 10 agenda below — Scorecard, Rocks, To-Dos, and IDS, all live."
         accent="bg-brand-navy"
         right={
           <div className="flex items-center gap-3">
@@ -51,7 +53,14 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
         }
       />
 
-      <LeadershipDeckView deck={deck} />
+      {/* EOS Level 10 Meeting — the live 90-min agenda runner */}
+      <L10Agenda l10={l10} />
+
+      {/* Present-mode deck (screen-share slides) */}
+      <div className="border-t border-slate-200 pt-5">
+        <SectionTitle title="🖥 Present mode" subtitle="Full-screen slides for screen-sharing the snapshot" accent="bg-slate-300" />
+        <LeadershipDeckView deck={deck} />
+      </div>
 
       {/* Recordings archive (Fathom links) */}
       <RecordingsCard meeting="leadership" recordings={recordings} fmtWhen={fmtWhen} />

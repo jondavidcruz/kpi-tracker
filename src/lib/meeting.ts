@@ -9,6 +9,7 @@ import { lastWeekRange, monthBounds, friendlyDate } from "./date";
 import { formatValue, type Unit } from "./format";
 import { POSITIONS, positionLabel } from "./roles";
 import { analyzeDeal } from "./deals";
+import { quarterOf, quarterLabel } from "./eos";
 
 export interface Glance { key: string; name: string; value: string }
 export interface RoleTable {
@@ -89,6 +90,51 @@ export async function getLeadershipDeck(today: string): Promise<LeadershipDeck> 
     goal: deck.goal,
     monthly: deck.monthly,
     pipelineCount: deck.pipeline.length,
+  };
+}
+
+export interface L10 {
+  generatedOn: string;
+  quarterLabel: string;
+  scorecard: Glance[];
+  rocks: {
+    total: number; onTrack: number; offTrack: number; done: number;
+    list: { title: string; owner: string; status: string; progress: number; isCompany: boolean }[];
+  };
+  issues: { title: string; raisedBy: string; owner: string }[];
+  todos: { open: number; donePct: number; list: { text: string; owner: string; dueDate: string }[] };
+  goal: MeetingDeck["goal"];
+}
+
+/** Level 10 Meeting data — reuses the Monday deck's weekly scorecard + goal, and
+ *  pulls live Rocks, Issues, and To-Dos for the IDS engine. */
+export async function getL10(today: string): Promise<L10> {
+  const deck = await getMeetingDeck(today);
+  const quarter = quarterOf(today);
+  const [rocks, issues, todos] = await Promise.all([
+    db.rock.findMany({ where: { quarter }, orderBy: [{ isCompany: "desc" }, { createdAt: "asc" }] }),
+    db.issue.findMany({ where: { status: "open" }, orderBy: [{ priority: "desc" }, { createdAt: "asc" }], take: 8 }),
+    db.toDo.findMany({ orderBy: [{ done: "asc" }, { dueDate: "asc" }] }),
+  ]);
+  const doneTodos = todos.filter((t) => t.done).length;
+  return {
+    generatedOn: deck.generatedOn,
+    quarterLabel: quarterLabel(quarter),
+    scorecard: deck.lastWeek.glance,
+    rocks: {
+      total: rocks.length,
+      onTrack: rocks.filter((r) => r.status === "on_track").length,
+      offTrack: rocks.filter((r) => r.status === "off_track").length,
+      done: rocks.filter((r) => r.status === "done").length,
+      list: rocks.map((r) => ({ title: r.title, owner: r.isCompany ? "Company" : (r.owner || "—"), status: r.status, progress: r.progress, isCompany: r.isCompany })),
+    },
+    issues: issues.map((i) => ({ title: i.title, raisedBy: i.raisedBy, owner: i.owner })),
+    todos: {
+      open: todos.filter((t) => !t.done).length,
+      donePct: todos.length ? Math.round((doneTodos / todos.length) * 100) : 0,
+      list: todos.filter((t) => !t.done).slice(0, 10).map((t) => ({ text: t.text, owner: t.owner, dueDate: t.dueDate })),
+    },
+    goal: deck.goal,
   };
 }
 
