@@ -107,9 +107,13 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     });
   }
 
-  // ---- Annual goal ----
+  // ---- Annual goal — synced from the Closed Deals ledger (this year). Every
+  // closed deal = one homeowner helped; revenue = sum of verified profit. ----
+  const closedThisYear = await db.closedDeal.findMany({ where: { year: Number(year) } });
+  const homeownersDone = closedThisYear.length;
+  const closedRevenueYTD = closedThisYear.reduce((s, d) => s + d.profit, 0);
   const revenueGoal = settings.annualRevenueGoal ?? 0;
-  const goalRemaining = Math.max(0, revenueGoal - dealMetrics.revenueClosed);
+  const goalRemaining = Math.max(0, revenueGoal - closedRevenueYTD);
 
   // ---- Recognition: top performer per role on a signature KPI ----
   const byKey = new Map(perRepKpis.map((k) => [k.key, k]));
@@ -162,10 +166,10 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     monthly: {
       label: friendlyDate(mb.start).replace(/,.*/, "") + " – today",
       financials,
-      revenueClosed: dealMetrics.revenueClosed,
+      revenueClosed: closedRevenueYTD,
       revenuePending: dealMetrics.revenuePendingEscrow,
       inEscrow: dealMetrics.inEscrowCount,
-      closedCount: dealMetrics.closedCount,
+      closedCount: homeownersDone,
       goalRemaining,
     },
     pipeline: deals.slice(0, 12).map((d) => ({
@@ -176,14 +180,14 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
       profit: d.assignmentFee ?? null,
     })),
     goal: {
-      homeownersDone: dealMetrics.closedCount,
+      homeownersDone,
       homeownersGoal: settings.homeownersGoal ?? 24,
-      revenueClosed: dealMetrics.revenueClosed,
+      revenueClosed: closedRevenueYTD,
       revenueGoal,
       stretchGoal: settings.revenueStretchGoal ?? 0,
       reward: settings.goalReward ?? "",
       stretchReward: settings.stretchReward ?? "",
-      pct: revenueGoal > 0 ? Math.min(1, dealMetrics.revenueClosed / revenueGoal) : 0,
+      pct: revenueGoal > 0 ? Math.min(1, closedRevenueYTD / revenueGoal) : 0,
     },
     recognition,
     trainingTip,
