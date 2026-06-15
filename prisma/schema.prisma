@@ -245,6 +245,26 @@ model CallScore {
   @@index([createdAt])
 }
 
+// Private HR / payment record per team member. OWNER-ONLY (Jon). Holds PII +
+// payment destinations (Wise) + tenure/promotion/pay — never exposed to the team.
+model TeamProfile {
+  id            String   @id @default(cuid())
+  userId        String?  @unique // link to the app User
+  name          String
+  birthday      String   @default("") // YYYY-MM-DD
+  phone         String   @default("")
+  address       String   @default("")
+  startDate     String   @default("") // joined (YYYY-MM-DD)
+  lastPromotion String   @default("") // YYYY-MM-DD
+  payScale      String   @default("") // rate / amount
+  payPeriod     String   @default("") // monthly | biweekly | hourly | per-deal
+  payMethod     String   @default("Wise") // Wise / TransferWise / …
+  payDetails    String   @default("") // bank / Wise details (sensitive)
+  about         String   @default("") // details about them
+  performance   String   @default("") // promotion-readiness notes
+  updatedAt     DateTime @updatedAt
+}
+
 // Weekly top-performer wins — one per role per week, for the gamified leaderboard.
 model WeeklyAward {
   id        String   @id @default(cuid())

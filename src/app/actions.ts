@@ -529,6 +529,29 @@ export async function deleteAiSubmission(formData: FormData) {
   redirect("/ai-champion");
 }
 
+// --- Team Roster (private HR) — OWNER ONLY ----------------------------------
+
+export async function saveTeamProfile(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return; // Jon only
+  const userId = String(formData.get("userId") ?? "") || null;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const data = {
+    name,
+    birthday: str("birthday"), phone: str("phone"), address: str("address"),
+    startDate: str("startDate"), lastPromotion: str("lastPromotion"),
+    payScale: str("payScale"), payPeriod: str("payPeriod"),
+    payMethod: str("payMethod") || "Wise", payDetails: str("payDetails"),
+    about: str("about"), performance: str("performance"),
+  };
+  if (userId) await db.teamProfile.upsert({ where: { userId }, update: data, create: { userId, ...data } });
+  else await db.teamProfile.create({ data });
+  revalidatePath("/team-roster");
+  redirect("/team-roster?saved=1");
+}
+
 /** Add a Monday-Meeting training tip to the backlog. Managers only. */
 export async function saveTrainingTip(formData: FormData) {
   const me = await getCurrentUser();

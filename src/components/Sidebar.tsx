@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -50,6 +50,7 @@ export default function Sidebar({
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
       { href: "/closed-deals", label: "Closed deals", Icon: DollarSign, adminOnly: true },
+      { href: "/team-roster", label: "Team Roster", Icon: Users, adminOnly: true },
       { href: "/operations", label: "Operations", Icon: Briefcase, adminOnly: true },
       { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
     ] },
@@ -87,6 +88,7 @@ export default function Sidebar({
                     >
                       <it.Icon size={18} strokeWidth={1.75} className={active ? "text-brand-gold" : "text-brand-navy-300 group-hover:text-white"} />
                       <span className="flex-1">{it.label}</span>
+                      {it.adminOnly && <Lock size={11} className="shrink-0 text-brand-gold-soft/80" aria-label="Owner only" />}
                       {it.badge ? (
                         <span className="rounded-full bg-brand-gold px-1.5 py-0.5 text-[10px] font-bold text-brand-navy">{it.badge}</span>
                       ) : null}

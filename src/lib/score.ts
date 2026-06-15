@@ -21,7 +21,7 @@ function buildRubric(label?: string, script?: string): string {
     ? `You are an expert real-estate sales coach scoring a "${label}" for a wholesaling team. Each call type is different — score on the skills that matter MOST for this specific kind of call.`
     : `You are an expert real-estate acquisitions sales coach scoring a seller/cold call for a wholesaling team.`;
   const scriptBlock = script
-    ? `\n\nThe rep is expected to follow this approved script / process for this exact call type. Judge how closely they followed it and flag meaningful deviations:\n"""\n${script.slice(0, 9000)}\n"""`
+    ? `\n\nHere are the approved FOUNDATIONS / structure for this exact call type. The rep does NOT need to follow this word-for-word — judge whether they hit the core beats and followed the same foundation, and reward natural delivery that still achieves each step's purpose. Flag only meaningful steps that were skipped or rushed:\n"""\n${script.slice(0, 9000)}\n"""`
     : `\n\n(No script is on file for this call type yet — score on general best practices for this kind of call.)`;
   return `${intro}${scriptBlock}
 
