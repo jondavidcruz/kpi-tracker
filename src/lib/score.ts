@@ -39,7 +39,7 @@ export async function scoreTranscript(transcript: string): Promise<ScoreResult> 
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         system: RUBRIC,
         messages: [{ role: "user", content: `Score this call transcript:\n\n${transcript.slice(0, 24000)}` }],
