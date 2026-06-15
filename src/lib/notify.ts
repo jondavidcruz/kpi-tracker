@@ -90,6 +90,29 @@ export async function sendEmail(
   }
 }
 
+/** Send to explicit recipients (e.g. a single rep), not the configured alert list. */
+export async function sendEmailTo(
+  to: string[],
+  subject: string,
+  html: string,
+  cfg?: ChannelConfig,
+): Promise<boolean> {
+  const c = cfg ?? (await getChannelConfig());
+  if (!c.resendKey || to.length === 0 || !c.emailFrom) {
+    console.log(`[notify] Email-to not configured — would send "${subject}" to ${to.join(", ")}`);
+    return false;
+  }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.resendKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: c.emailFrom, to, subject, html }),
+    });
+    if (!res.ok) { console.error("[notify] Email-to failed:", res.status, await res.text()); return false; }
+    return true;
+  } catch (err) { console.error("[notify] Email-to error:", err); return false; }
+}
+
 /** Wrap alert lines in a minimal, readable HTML email. */
 export function alertEmailHtml(title: string, lines: string[]): string {
   const items = lines

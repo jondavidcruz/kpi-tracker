@@ -100,6 +100,15 @@ export default async function AdminPage({
               <span className={labelCls}>Annual revenue goal ($) for the weekly report</span>
               <input name="annualRevenueGoal" defaultValue={settings.annualRevenueGoal || ""} placeholder="e.g. 1000000" className={inputCls} />
             </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Ethan shift-reminder email</span>
+              <input name="ethanReminderEmail" defaultValue={settings.ethanReminderEmail} placeholder="ethan@gmail.com" className={inputCls} />
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Ethan shift calendar — secret iCal URL (Google Calendar → AQ Shift → Settings → “Secret address in iCal format”)</span>
+              <input name="ethanShiftIcsUrl" defaultValue={settings.ethanShiftIcsUrl} placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" className={inputCls} />
+              <span className="mt-1 block text-[11px] text-slate-400">On days the calendar shows “Ethan - AQ Shift”, he gets an end-of-day email if he hasn’t logged his KPIs.</span>
+            </label>
             <div className="sm:col-span-2">
               <SaveBtn>Save settings</SaveBtn>
             </div>

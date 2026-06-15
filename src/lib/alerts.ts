@@ -9,6 +9,7 @@ import { alertSeverity, statusVsGoal, statusVsPace } from "./kpi";
 import { dailyGap, buildCoaching } from "./gap";
 import { dealsNeedingAttention } from "./deals";
 import { sendWeeklyTeamEmail, sendDailyTeamReview } from "./weekly";
+import { sendEthanReminder } from "./ethan-reminder";
 import {
   alertEmailHtml,
   getChannelConfig,
@@ -447,6 +448,7 @@ export interface ScheduledResult {
   dealAlertsSent: boolean;
   weeklySent: boolean;
   dailyReviewSent: boolean;
+  ethanReminded: boolean;
 }
 
 /**
@@ -497,5 +499,13 @@ export async function runScheduledChecks(opts?: {
       ? await sendDailyTeamReview(date)
       : false;
 
-  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent, dailyReviewSent };
+  // Ethan's shift-aware EOD reminder — only on days the AQ Shift calendar says
+  // he worked, after his shift would have ended (post-cutoff), and not on a
+  // forced run with no real time context unless explicitly forced.
+  const ethanReminded =
+    opts?.force || (weekdayOrForce && postCutoff)
+      ? await sendEthanReminder(date)
+      : false;
+
+  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent, dailyReviewSent, ethanReminded };
 }
