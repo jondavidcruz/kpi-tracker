@@ -346,9 +346,8 @@ export async function saveMeetingSettings(formData: FormData) {
     mtgTalkingPoints: String(formData.get("mtgTalkingPoints") ?? "").trim(),
   };
   await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
-  revalidatePath("/admin");
   revalidatePath("/meeting");
-  redirect("/admin?saved=Meeting#meeting");
+  redirect("/meeting?saved=Deck+content#edit");
 }
 
 /** Add a Monday-Meeting training tip to the backlog. Managers only. */
@@ -359,9 +358,8 @@ export async function saveTrainingTip(formData: FormData) {
   if (!text) return;
   const kpiKey = String(formData.get("kpiKey") ?? "").trim();
   await db.trainingTip.create({ data: { text, kpiKey } });
-  revalidatePath("/admin");
   revalidatePath("/meeting");
-  redirect("/admin?saved=Tip#meeting");
+  redirect("/meeting?saved=Tip#edit");
 }
 
 /** Delete a training tip. Managers only. */
@@ -370,8 +368,8 @@ export async function deleteTrainingTip(formData: FormData) {
   if (!isManager(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.trainingTip.delete({ where: { id } });
-  revalidatePath("/admin");
-  redirect("/admin?saved=Tip#meeting");
+  revalidatePath("/meeting");
+  redirect("/meeting?saved=Tip#edit");
 }
 
 export async function saveUser(formData: FormData) {
