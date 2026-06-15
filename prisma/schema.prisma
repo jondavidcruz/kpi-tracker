@@ -318,7 +318,9 @@ model Settings {
   stretchReward      String @default("") // incentive copy for the stretch goal
   mtgAnnouncements   String @default("") // editorial slide: Team Announcements (newline list)
   mtgComingSoon      String @default("") // editorial slide: Change / Coming Soon
-  mtgTalkingPoints   String @default("") // editorial slide: Leadership Talking Points
+  mtgTalkingPoints   String @default("") // leadership deck: Talking Points (newline list)
+  leadAgenda         String @default("") // leadership deck: Agenda (newline list)
+  leadActionItems    String @default("") // leadership deck: Decisions / action items
 
   // ---- Ethan shift-aware KPI reminder ----
   ethanShiftIcsUrl   String @default("") // secret iCal URL of the AQ Shift calendar
@@ -331,9 +333,10 @@ model MeetingNote {
   id        String   @id @default(cuid())
   text      String
   author    String   @default("")
+  meeting   String   @default("monday") // monday | leadership — which deck's log
   createdAt DateTime @default(now())
 
-  @@index([createdAt])
+  @@index([meeting, createdAt])
 }
 
 // Coaching tips for the Monday Meeting. The deck auto-picks the one matching the

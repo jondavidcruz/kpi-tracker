@@ -343,11 +343,24 @@ export async function saveMeetingSettings(formData: FormData) {
     stretchReward: String(formData.get("stretchReward") ?? "").trim(),
     mtgAnnouncements: String(formData.get("mtgAnnouncements") ?? "").trim(),
     mtgComingSoon: String(formData.get("mtgComingSoon") ?? "").trim(),
-    mtgTalkingPoints: String(formData.get("mtgTalkingPoints") ?? "").trim(),
   };
   await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
   revalidatePath("/meeting");
   redirect("/meeting?saved=Deck+content#edit");
+}
+
+/** Save the Leadership-meeting deck content (agenda, talking points, action items). Managers only. */
+export async function saveLeadershipSettings(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const data = {
+    leadAgenda: String(formData.get("leadAgenda") ?? "").trim(),
+    mtgTalkingPoints: String(formData.get("mtgTalkingPoints") ?? "").trim(),
+    leadActionItems: String(formData.get("leadActionItems") ?? "").trim(),
+  };
+  await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
+  revalidatePath("/leadership");
+  redirect("/leadership?saved=Deck+content#edit");
 }
 
 /** Capture a feedback note during a meeting. Managers only. */
@@ -355,10 +368,12 @@ export async function addMeetingNote(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
   const text = String(formData.get("text") ?? "").trim();
+  const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   if (!text) return;
-  await db.meetingNote.create({ data: { text, author: me!.name } });
-  revalidatePath("/meeting");
-  redirect("/meeting?saved=Note#notes");
+  await db.meetingNote.create({ data: { text, author: me!.name, meeting } });
+  const path = meeting === "leadership" ? "/leadership" : "/meeting";
+  revalidatePath(path);
+  redirect(`${path}?saved=Note#notes`);
 }
 
 /** Delete a meeting note. Managers only. */
@@ -366,9 +381,11 @@ export async function deleteMeetingNote(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
   const id = String(formData.get("id") ?? "");
+  const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   if (id) await db.meetingNote.delete({ where: { id } });
-  revalidatePath("/meeting");
-  redirect("/meeting?saved=Note#notes");
+  const path = meeting === "leadership" ? "/leadership" : "/meeting";
+  revalidatePath(path);
+  redirect(`${path}?saved=Note#notes`);
 }
 
 /** Add a Monday-Meeting training tip to the backlog. Managers only. */

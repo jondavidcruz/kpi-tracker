@@ -22,6 +22,8 @@ export async function getSettings() {
       mtgAnnouncements: "",
       mtgComingSoon: "",
       mtgTalkingPoints: "",
+      leadAgenda: "",
+      leadActionItems: "",
       ethanShiftIcsUrl: "",
       ethanReminderEmail: "",
       ethanRemindedOn: "",

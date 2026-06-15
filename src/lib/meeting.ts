@@ -67,6 +67,31 @@ function glanceFrom(
   return out;
 }
 
+export interface LeadershipDeck {
+  generatedOn: string;
+  agenda: string[];
+  talkingPoints: string[];
+  actionItems: string[];
+  goal: MeetingDeck["goal"];
+  monthly: MeetingDeck["monthly"];
+  pipelineCount: number;
+}
+
+/** Leadership-meeting deck — its own agenda/talking-points/action-items plus a
+ *  high-level business snapshot (reuses the Monday deck's computed numbers). */
+export async function getLeadershipDeck(today: string): Promise<LeadershipDeck> {
+  const [deck, settings] = await Promise.all([getMeetingDeck(today), getSettings()]);
+  return {
+    generatedOn: deck.generatedOn,
+    agenda: bullets(settings.leadAgenda ?? ""),
+    talkingPoints: deck.talkingPoints,
+    actionItems: bullets(settings.leadActionItems ?? ""),
+    goal: deck.goal,
+    monthly: deck.monthly,
+    pipelineCount: deck.pipeline.length,
+  };
+}
+
 export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const wk = lastWeekRange(today);
   const mb = monthBounds(today);

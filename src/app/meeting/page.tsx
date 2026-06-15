@@ -30,7 +30,7 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
     getSettings(),
     getKpis(),
     db.trainingTip.findMany({ orderBy: { createdAt: "desc" } }),
-    db.meetingNote.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
+    db.meetingNote.findMany({ where: { meeting: "monday" }, orderBy: { createdAt: "desc" }, take: 50 }),
   ]);
   const greenKpis = kpis.filter((k) => k.scope === "per_rep" && k.category === "green");
   const deck = await getMeetingDeck(todayStr(settings.orgTimezone));
@@ -55,6 +55,7 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
           <h3 className="mb-1 text-sm font-bold text-slate-700">📝 Meeting notes</h3>
           <p className="mb-3 text-xs text-slate-500">Jot down feedback as it comes up. Saved to a running log below.</p>
           <form action={addMeetingNote} className="flex flex-col gap-2 sm:flex-row">
+            <input type="hidden" name="meeting" value="monday" />
             <input name="text" placeholder="Add a note or piece of feedback…" className={`${inputCls} flex-1`} required />
             <button className="rounded-lg bg-brand-navy px-5 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save note</button>
           </form>
@@ -68,6 +69,7 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
                   </div>
                   <form action={deleteMeetingNote}>
                     <input type="hidden" name="id" value={n.id} />
+                    <input type="hidden" name="meeting" value="monday" />
                     <button className="text-xs font-medium text-slate-400 hover:text-red-600">Delete</button>
                   </form>
                 </li>
@@ -116,10 +118,6 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
             <label className="sm:col-span-2">
               <span className={labelCls}>Change / Coming Soon (one per line)</span>
               <textarea name="mtgComingSoon" defaultValue={settings.mtgComingSoon} rows={4} className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Leadership Talking Points (one per line)</span>
-              <textarea name="mtgTalkingPoints" defaultValue={settings.mtgTalkingPoints} rows={3} className={inputCls} />
             </label>
             <div className="sm:col-span-2">
               <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save deck content</button>
