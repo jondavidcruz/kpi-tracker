@@ -339,6 +339,57 @@ model MeetingNote {
   @@index([meeting, createdAt])
 }
 
+// Change / Improvement Portal — anyone requests a business change; leadership
+// reviews with a two-way comment thread. (Distinct from Ticket, which is for
+// bugs in the tracker itself.)
+model ChangeRequest {
+  id             String          @id @default(cuid())
+  submittedBy    String
+  submitterEmail String          @default("")
+  title          String
+  body           String          @default("")
+  category       String          @default("other") // script | schedule | process | tool | marketing | other
+  status         String          @default("open") // open | reviewing | approved | implemented | declined
+  reviewNote     String          @default("")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  comments       ChangeComment[]
+
+  @@index([status])
+}
+
+model ChangeComment {
+  id           String        @id @default(cuid())
+  request      ChangeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId    String
+  author       String
+  body         String
+  byLeadership Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+
+  @@index([requestId])
+}
+
+// AI Champion — team submits AI/automation processes they built; leadership
+// reviews and rewards the proven ones with a bonus.
+model AiSubmission {
+  id             String   @id @default(cuid())
+  submittedBy    String
+  submitterEmail String   @default("")
+  title          String
+  description    String   @default("")
+  tool           String   @default("") // Claude | GHL | Zapier | …
+  hoursSaved     Float? // est hours saved per week
+  proofUrl       String   @default("")
+  status         String   @default("submitted") // submitted | piloting | proven | declined
+  rewardAmount   Float? // bonus paid when proven
+  reviewNote     String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+}
+
 // Coaching tips for the Monday Meeting. The deck auto-picks the one matching the
 // team's weakest KPI that week; otherwise rotates the general (untagged) ones.
 model TrainingTip {

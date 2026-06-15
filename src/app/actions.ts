@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
 import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
-import { getChannelConfig, sendEmail } from "@/lib/notify";
+import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
@@ -386,6 +386,120 @@ export async function deleteMeetingNote(formData: FormData) {
   const path = meeting === "leadership" ? "/leadership" : "/meeting";
   revalidatePath(path);
   redirect(`${path}?saved=Note#notes`);
+}
+
+// --- Change / Improvement Portal --------------------------------------------
+
+/** Anyone signed in can request a business change (script, schedule, process…). */
+export async function submitChangeRequest(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) redirect("/change-portal?empty=1");
+  const category = String(formData.get("category") ?? "other").trim() || "other";
+  const body = String(formData.get("body") ?? "").trim();
+  await db.changeRequest.create({ data: { submittedBy: me.name, submitterEmail: me.email, title, body, category } });
+  await sendEmail(`💡 Change request from ${me.name}: ${title}`,
+    alertEmailHtml(`Change request: ${title}`, [`Category: ${category}`, body || "(no details)", "Review it in the Change Portal."]));
+  revalidatePath("/change-portal");
+  redirect("/change-portal?sent=1");
+}
+
+/** Two-way thread: submitter or leadership adds a comment to a request. */
+export async function addChangeComment(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const requestId = String(formData.get("requestId") ?? "");
+  const body = String(formData.get("body") ?? "").trim();
+  if (!requestId || !body) redirect("/change-portal");
+  const req = await db.changeRequest.findUnique({ where: { id: requestId } });
+  if (!req) redirect("/change-portal");
+  const leader = isManager(me);
+  if (!leader && req!.submittedBy !== me.name) return; // only your own thread
+  await db.changeComment.create({ data: { requestId, author: me.name, body, byLeadership: leader } });
+  if (leader && req!.submitterEmail) {
+    await sendEmailTo([req!.submitterEmail], `Re: ${req!.title}`,
+      alertEmailHtml(`Update on your request: ${req!.title}`, [`${me.name}: ${body}`, "Open the Change Portal to reply."]));
+  }
+  revalidatePath("/change-portal");
+  redirect(`/change-portal#req-${requestId}`);
+}
+
+/** Leadership sets a request's status + review note. */
+export async function setChangeStatus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "").trim();
+  if (!id || !status) redirect("/change-portal");
+  const note = String(formData.get("reviewNote") ?? "").trim();
+  const req = await db.changeRequest.update({ where: { id }, data: { status, ...(note ? { reviewNote: note } : {}) } });
+  if (req.submitterEmail) {
+    await sendEmailTo([req.submitterEmail], `Your request is now “${status}”: ${req.title}`,
+      alertEmailHtml(`${req.title} → ${status}`, [note || `Status updated to ${status}.`, "Open the Change Portal for details."]));
+  }
+  revalidatePath("/change-portal");
+  redirect(`/change-portal#req-${id}`);
+}
+
+export async function deleteChangeRequest(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.changeRequest.delete({ where: { id } });
+  revalidatePath("/change-portal");
+  redirect("/change-portal");
+}
+
+// --- AI Champion ------------------------------------------------------------
+
+/** Anyone signed in can submit an AI process they built. */
+export async function submitAiIdea(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) redirect("/ai-champion?empty=1");
+  const tool = String(formData.get("tool") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  await db.aiSubmission.create({ data: {
+    submittedBy: me.name, submitterEmail: me.email, title, description, tool,
+    hoursSaved: numOrNull(formData.get("hoursSaved")),
+    proofUrl: String(formData.get("proofUrl") ?? "").trim(),
+  } });
+  await sendEmail(`🤖 AI Champion submission from ${me.name}: ${title}`,
+    alertEmailHtml(`AI submission: ${title}`, [`Tool: ${tool || "—"}`, description || "(no description)", "Review it in AI Champion."]));
+  revalidatePath("/ai-champion");
+  redirect("/ai-champion?sent=1");
+}
+
+/** Leadership reviews a submission: status + reward + note. */
+export async function reviewAiSubmission(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "").trim();
+  if (!id || !status) redirect("/ai-champion");
+  const sub = await db.aiSubmission.update({ where: { id }, data: {
+    status,
+    rewardAmount: numOrNull(formData.get("rewardAmount")),
+    reviewNote: String(formData.get("reviewNote") ?? "").trim(),
+  } });
+  if (sub.submitterEmail) {
+    const reward = sub.rewardAmount ? ` Bonus: $${Math.round(sub.rewardAmount)}.` : "";
+    await sendEmailTo([sub.submitterEmail], `AI Champion: “${sub.title}” → ${status}`,
+      alertEmailHtml(`${sub.title} → ${status}`, [(sub.reviewNote || `Status: ${status}.`) + reward, "Open AI Champion for details."]));
+  }
+  revalidatePath("/ai-champion");
+  redirect(`/ai-champion#sub-${id}`);
+}
+
+export async function deleteAiSubmission(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.aiSubmission.delete({ where: { id } });
+  revalidatePath("/ai-champion");
+  redirect("/ai-champion");
 }
 
 /** Add a Monday-Meeting training tip to the backlog. Managers only. */
