@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // HUD statement uploads (PDF/image) on the deal-close flow.
+    serverActions: { bodySizeLimit: "4mb" },
+  },
 };
 
 export default nextConfig;

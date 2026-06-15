@@ -181,6 +181,18 @@ model ClosedDeal {
   dealType  String   @default("assignment") // assignment | jv | wholetail | double_close | subject_to
   profit    Float
   notes     String   @default("")
+
+  // how the lead was generated + what it cost us to acquire the deal
+  leadSource      String @default("") // ppl | cold_call | other
+  acquisitionCost Float? // cost to source the lead (null = not yet provided)
+
+  // verification + provenance
+  closedBy String  @default("") // dispo rep who marked it closed
+  dealId   String? // originating Deal.id (null for historical imports)
+  hudData  Bytes? // the uploaded HUD statement (proof) — owner-only
+  hudName  String  @default("")
+  hudType  String  @default("") // mime type
+
   createdAt DateTime @default(now())
 
   @@unique([address, closeDate])

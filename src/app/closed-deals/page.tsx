@@ -14,6 +14,11 @@ const TYPE_LABEL: Record<string, string> = {
   double_close: "Double close",
   subject_to: "Subject-to",
 };
+const LEAD_LABEL: Record<string, string> = {
+  ppl: "Pay-per-lead",
+  cold_call: "Cold call",
+  other: "Other",
+};
 
 export default async function ClosedDealsPage() {
   const me = await getCurrentUser();
@@ -27,7 +32,15 @@ export default async function ClosedDealsPage() {
     );
   }
 
-  const deals = await db.closedDeal.findMany({ orderBy: { closeDate: "desc" } });
+  const deals = await db.closedDeal.findMany({
+    orderBy: { closeDate: "desc" },
+    // exclude the HUD blob from the list query — it's streamed on demand
+    select: {
+      id: true, address: true, city: true, state: true, closeDate: true, year: true,
+      dealType: true, profit: true, notes: true, leadSource: true, acquisitionCost: true,
+      hudName: true, closedBy: true,
+    },
+  });
   const total = deals.reduce((s, d) => s + d.profit, 0);
   const avg = deals.length ? total / deals.length : 0;
   const best = deals.reduce((m, d) => (d.profit > m ? d.profit : m), 0);
@@ -82,6 +95,20 @@ export default async function ClosedDealsPage() {
                   <div className="font-semibold text-slate-800">{d.address}</div>
                   <div className="text-xs text-slate-400">{[d.city, d.state].filter(Boolean).join(", ")}</div>
                   {d.notes && <div className="mt-0.5 text-xs text-slate-500">{d.notes}</div>}
+                  {/* Lead generation + acquisition cost */}
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                    {d.leadSource && (
+                      <span className={`rounded-md px-1.5 py-0.5 font-semibold ${d.leadSource === "ppl" ? "bg-violet-100 text-violet-700" : d.leadSource === "cold_call" ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-600"}`}>
+                        {LEAD_LABEL[d.leadSource] ?? d.leadSource}
+                      </span>
+                    )}
+                    <span className="text-slate-500">
+                      Acquire cost: {d.acquisitionCost != null ? <strong className="text-slate-700">{money(d.acquisitionCost)}</strong> : <span className="text-slate-400">TBD</span>}
+                    </span>
+                    {d.hudName && (
+                      <a href={`/closed-deals/hud/${d.id}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-navy hover:underline">📄 View HUD</a>
+                    )}
+                  </div>
                 </td>
                 <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">{friendlyDate(d.closeDate)}</td>
                 <td className="px-3 py-2.5"><span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{TYPE_LABEL[d.dealType] ?? d.dealType}</span></td>

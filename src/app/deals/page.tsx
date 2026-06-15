@@ -1,4 +1,5 @@
-import { archiveDeal, saveDeal } from "@/app/actions";
+import { archiveDeal, saveDeal, closeDeal } from "@/app/actions";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getActiveDeals, getActiveReps, getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
@@ -23,13 +24,24 @@ const lblCls = "block text-[11px] font-semibold text-slate-500 mb-0.5";
 export default async function DealsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; closed?: string; err?: string }>;
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
   const deals = await getActiveDeals();
   const reps = await getActiveReps();
+  const me = await getCurrentUser();
+  const canClose = !!me && (isManager(me) || me.position === "dispositions");
+  const ERRORS = {
+    hud: "A HUD statement is required to close a deal.",
+    fields: "Add a valid close date and profit amount.",
+    size: "That HUD file is over 4MB — compress it or upload a single statement.",
+    type: "HUD must be a PDF or image file.",
+    dup: "A closed deal already exists for that property + date.",
+    missing: "Couldn't find that deal.",
+  } as const;
+  const errMsg = sp.err ? ERRORS[sp.err as keyof typeof ERRORS] : null;
   const dispoReps = reps.filter((r) => r.position === "dispositions").map((r) => r.name);
   // include any names already on deals (e.g. legacy "Sharyn") so they still show.
   const repNames = Array.from(new Set([...dispoReps, ...deals.map((d) => d.assignedTo).filter(Boolean)]));
@@ -49,6 +61,16 @@ export default async function DealsPage({
       {sp.saved && (
         <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
           ✓ Saved.
+        </div>
+      )}
+      {sp.closed && (
+        <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
+          🎉 Deal closed &amp; verified — it&apos;s now in Closed Deals.
+        </div>
+      )}
+      {errMsg && (
+        <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">
+          ⚠️ {errMsg}
         </div>
       )}
 
@@ -89,17 +111,18 @@ export default async function DealsPage({
           <Card className="p-10 text-center text-slate-400">No deals yet. Add your first one above.</Card>
         )}
         {deals.map((d) => (
-          <DealCard key={d.id} deal={d} today={today} repNames={repNames} />
+          <DealCard key={d.id} deal={d} today={today} repNames={repNames} canClose={canClose} />
         ))}
       </div>
     </div>
   );
 }
 
-function DealCard({ deal, today, repNames }: { deal: Deal; today: string; repNames: string[] }) {
+function DealCard({ deal, today, repNames, canClose }: { deal: Deal; today: string; repNames: string[]; canClose: boolean }) {
   const st = STATUSES.find((s) => s.key === deal.status) ?? STATUSES[0];
   const isLive = !["dead", "closed"].includes(deal.status);
   const aging = analyzeDeal(deal, today);
+  const defaultLead = /ppl/i.test(deal.source) ? "ppl" : "cold_call";
 
   return (
     <Card className="p-4">
@@ -172,6 +195,46 @@ function DealCard({ deal, today, repNames }: { deal: Deal; today: string; repNam
           <button className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-700">Save</button>
         </div>
       </form>
+
+      {/* Mark closed — HUD-verified. Dispo reps + managers only. */}
+      {canClose && deal.status !== "closed" && (
+        <details className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
+          <summary className="cursor-pointer text-sm font-bold text-emerald-800">✅ Mark as closed (verify with HUD)</summary>
+          <form action={closeDeal} className="mt-3 grid grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+            <input type="hidden" name="dealId" value={deal.id} />
+            <Field label="Close date *"><input type="date" name="closeDate" defaultValue={deal.soldDate || today} className={inputCls} required /></Field>
+            <Field label="Our profit $ *"><input name="profit" defaultValue={deal.assignmentFee ?? ""} placeholder="net from HUD" className={inputCls} required /></Field>
+            <Field label="Deal type">
+              <select name="dealType" defaultValue="assignment" className={inputCls}>
+                <option value="assignment">Assignment</option>
+                <option value="jv">JV</option>
+                <option value="wholetail">Wholetail</option>
+                <option value="double_close">Double close</option>
+                <option value="subject_to">Subject-to</option>
+              </select>
+            </Field>
+            <Field label="Lead source">
+              <select name="leadSource" defaultValue={defaultLead} className={inputCls}>
+                <option value="ppl">Pay-per-lead</option>
+                <option value="cold_call">Cold call</option>
+                <option value="other">Other</option>
+              </select>
+            </Field>
+            <Field label="Cost to acquire $"><input name="acquisitionCost" placeholder="optional" className={inputCls} /></Field>
+            <Field label="📄 HUD statement * (PDF/image, ≤4MB)" full>
+              <input type="file" name="hud" accept="application/pdf,image/*" required
+                className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:bg-emerald-700" />
+            </Field>
+            <Field label="Notes" full>
+              <textarea name="notes" rows={2} defaultValue={deal.notes} className={inputCls} placeholder="Anything noteworthy about the close" />
+            </Field>
+            <div className="sm:col-span-3 lg:col-span-4">
+              <button className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">Close deal &amp; file HUD</button>
+              <p className="mt-1 text-[11px] text-slate-500">Closing pulls the deal off this board and adds it to Closed Deals with the HUD attached as proof.</p>
+            </div>
+          </form>
+        </details>
+      )}
 
       <form action={archiveDeal} className="mt-2">
         <input type="hidden" name="id" value={deal.id} />

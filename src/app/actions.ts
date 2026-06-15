@@ -499,6 +499,76 @@ export async function archiveDeal(formData: FormData) {
   redirect("/deals?saved=1");
 }
 
+/**
+ * Mark a pipeline deal CLOSED — verified by a required HUD upload.
+ * Dispo reps + managers + owner can run it. Creates the ClosedDeal ledger entry
+ * (with the HUD stored as proof + lead source / acquisition cost), then pulls
+ * the deal off the active board.
+ */
+export async function closeDeal(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !(isManager(me) || me.position === "dispositions")) return;
+
+  const dealId = String(formData.get("dealId") ?? "");
+  const deal = dealId ? await db.deal.findUnique({ where: { id: dealId } }) : null;
+  if (!deal) redirect("/deals?err=missing");
+
+  const closeDate = String(formData.get("closeDate") ?? "").trim(); // YYYY-MM-DD
+  const profit = numOrNull(formData.get("profit"));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(closeDate) || profit === null) redirect("/deals?err=fields");
+
+  // HUD upload is the authentication gate — no proof, no close.
+  const hud = formData.get("hud");
+  if (!(hud instanceof File) || hud.size === 0) redirect("/deals?err=hud");
+  const file = hud as File;
+  if (file.size > 4 * 1024 * 1024) redirect("/deals?err=size");
+  const okType = /pdf|image\//.test(file.type);
+  if (!okType) redirect("/deals?err=type");
+  const hudData = Buffer.from(await file.arrayBuffer());
+
+  const dt = closeDate as string;
+  const year = Number(dt.slice(0, 4));
+  const month = Number(dt.slice(5, 7));
+  const dealType = String(formData.get("dealType") ?? "assignment").trim() || "assignment";
+  const leadSource = String(formData.get("leadSource") ?? "").trim();
+  const acquisitionCost = numOrNull(formData.get("acquisitionCost"));
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  let created = true;
+  try {
+    await db.closedDeal.create({
+      data: {
+        address: deal!.address,
+        closeDate: dt,
+        year,
+        month,
+        dealType,
+        profit: profit as number,
+        leadSource,
+        acquisitionCost,
+        notes,
+        closedBy: me.name,
+        dealId: deal!.id,
+        hudData,
+        hudName: file.name,
+        hudType: file.type,
+      },
+    });
+  } catch {
+    created = false; // most likely the (address, closeDate) unique guard
+  }
+  if (!created) redirect("/deals?err=dup");
+
+  await db.deal.update({
+    where: { id: deal!.id },
+    data: { status: "closed", soldDate: dt, assignmentFee: profit, active: false },
+  });
+  revalidatePath("/deals");
+  revalidatePath("/closed-deals");
+  revalidatePath("/trends");
+  redirect("/deals?closed=1");
+}
+
 /** Save a one-off internet speed-test result as today's internet_speed KPI. */
 export async function saveSpeedTest(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
