@@ -656,6 +656,26 @@ export async function deleteRock(formData: FormData) {
   redirect("/rocks");
 }
 
+// --- EOS V/TO (Vision/Traction Organizer) — OWNER edits, team reads ---------
+
+export async function saveVto(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return; // owner-only edit
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const data = {
+    coreValues: str("coreValues"), purpose: str("purpose"), niche: str("niche"),
+    tenYearTarget: str("tenYearTarget"), targetMarket: str("targetMarket"),
+    uniques: str("uniques"), provenProcess: str("provenProcess"), guarantee: str("guarantee"),
+    threeYrDate: str("threeYrDate"), threeYrRevenue: str("threeYrRevenue"), threeYrProfit: str("threeYrProfit"),
+    threeYrMeasurables: str("threeYrMeasurables"), threeYrPicture: str("threeYrPicture"),
+    oneYrDate: str("oneYrDate"), oneYrRevenue: str("oneYrRevenue"), oneYrProfit: str("oneYrProfit"),
+    oneYrMeasurables: str("oneYrMeasurables"), oneYrGoals: str("oneYrGoals"),
+  };
+  await db.vto.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
+  revalidatePath("/vto");
+  redirect("/vto?saved=1");
+}
+
 // --- EOS Issues + To-Dos (IDS) ----------------------------------------------
 
 /** Raise an issue — anyone signed in. */

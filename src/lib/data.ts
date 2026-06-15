@@ -33,6 +33,20 @@ export async function getSettings() {
   );
 }
 
+/** The single-row EOS Vision/Traction Organizer, with an all-blank fallback. */
+export async function getVto() {
+  return (
+    (await db.vto.findUnique({ where: { id: 1 } })) ?? {
+      id: 1,
+      coreValues: "", purpose: "", niche: "", tenYearTarget: "",
+      targetMarket: "", uniques: "", provenProcess: "", guarantee: "",
+      threeYrDate: "", threeYrRevenue: "", threeYrProfit: "", threeYrMeasurables: "", threeYrPicture: "",
+      oneYrDate: "", oneYrRevenue: "", oneYrProfit: "", oneYrMeasurables: "", oneYrGoals: "",
+      updatedAt: new Date(),
+    }
+  );
+}
+
 /** Everyone who appears on a scorecard = active + has a position assigned.
  *  Role (permission: rep/manager/admin) is independent of position (which
  *  scorecard), so a manager/admin like Marie or Jon can still log their own KPIs. */

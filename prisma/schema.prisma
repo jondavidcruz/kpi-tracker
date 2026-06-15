@@ -468,6 +468,32 @@ model Rock {
   @@index([quarter])
 }
 
+// EOS Vision/Traction Organizer (V/TO) — the single-page company vision. One
+// row (id=1). Owner-editable (Jon); the whole team reads it. Quarterly Rocks and
+// the Issues List (the "Traction" half) live in their own modules.
+model Vto {
+  id                 Int      @id @default(1)
+  coreValues         String   @default("") // newline list
+  purpose            String   @default("") // Core Focus — Purpose / Cause / Passion
+  niche              String   @default("") // Core Focus — Niche
+  tenYearTarget      String   @default("") // the 10-year BHAG
+  targetMarket       String   @default("") // marketing strategy — "The List" / ideal client
+  uniques            String   @default("") // the 3 Uniques (newline)
+  provenProcess      String   @default("") // our proven process name / steps
+  guarantee          String   @default("") // the guarantee
+  threeYrDate        String   @default("") // e.g. "Dec 31, 2029"
+  threeYrRevenue     String   @default("")
+  threeYrProfit      String   @default("")
+  threeYrMeasurables String   @default("") // newline
+  threeYrPicture     String   @default("") // newline bullets — what it looks like
+  oneYrDate          String   @default("")
+  oneYrRevenue       String   @default("")
+  oneYrProfit        String   @default("")
+  oneYrMeasurables   String   @default("") // newline
+  oneYrGoals         String   @default("") // newline — the 3-7 goals for the year
+  updatedAt          DateTime @updatedAt
+}
+
 // EOS Issue — anything getting in the way (obstacle, idea, concern). The team
 // raises issues; in the Level 10 meeting you prioritize the top 3 and run IDS
 // (Identify, Discuss, Solve). Solving one often spawns a To-Do.
