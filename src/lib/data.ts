@@ -24,6 +24,7 @@ export async function getSettings() {
       mtgTalkingPoints: "",
       ethanShiftIcsUrl: "",
       ethanReminderEmail: "",
+      ethanRemindedOn: "",
     }
   );
 }

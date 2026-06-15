@@ -323,6 +323,7 @@ model Settings {
   // ---- Ethan shift-aware KPI reminder ----
   ethanShiftIcsUrl   String @default("") // secret iCal URL of the AQ Shift calendar
   ethanReminderEmail String @default("") // where the EOD reminder goes
+  ethanRemindedOn    String @default("") // "YYYY-MM-DD" we last reminded — dedupes same-day sends
 }
 
 // Coaching tips for the Monday Meeting. The deck auto-picks the one matching the

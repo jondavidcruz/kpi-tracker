@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { runScheduledChecks } from "@/lib/alerts";
+import { sendEthanReminder } from "@/lib/ethan-reminder";
+import { getSettings } from "@/lib/data";
+import { todayStr } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +28,13 @@ export async function GET(request: Request) {
   const force = url.searchParams.get("force") === "1";
   const weekly = url.searchParams.get("weekly") === "1";
   const review = url.searchParams.get("review") === "1";
+
+  // Lightweight midday run: only Ethan's shift-end KPI reminder (no digest).
+  if (url.searchParams.get("ethan") === "1") {
+    const settings = await getSettings();
+    const ethanReminded = await sendEthanReminder(date ?? todayStr(settings.orgTimezone));
+    return NextResponse.json({ ok: true, ethanReminded });
+  }
 
   const result = await runScheduledChecks({ date, force, weekly, review });
   return NextResponse.json({ ok: true, ...result });
