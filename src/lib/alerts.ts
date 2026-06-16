@@ -15,6 +15,7 @@ import {
   alertEmailHtml,
   getChannelConfig,
   sendEmail,
+  sendEmailTo,
   sendGoogleChat,
 } from "./notify";
 import type { Kpi } from "@prisma/client";
@@ -315,6 +316,51 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
   return created;
 }
 
+// --- Missing-KPI email to the manager (Marie) --------------------------------
+
+/**
+ * EOD email to the managers (Marie + Jon): who hasn't logged their KPIs today,
+ * or whose data isn't recording. Lists each rep and the KPIs still blank so
+ * Marie can chase before end of day. Weekdays only.
+ */
+export async function sendMissingKpiEmail(date: string): Promise<boolean> {
+  const dow = new Date(date + "T12:00:00Z").getUTCDay();
+  if (dow === 0 || dow === 6) return false; // no weekends
+
+  const [reps, dailyKpis, entries] = await Promise.all([
+    getActiveReps(),
+    db.kpi.findMany({ where: { active: true, computed: false, scope: "per_rep", cadence: "daily", goalKind: { not: "tracked" } } }),
+    db.entry.findMany({ where: { date, userId: { not: null } }, select: { kpiId: true, userId: true } }),
+  ]);
+  const have = new Set(entries.map((e) => `${e.kpiId}|${e.userId}`));
+
+  const missingByRep: { name: string; detail: string }[] = [];
+  for (const rep of reps) {
+    if (rep.role === "admin") continue; // owner isn't nagged
+    if (rep.irregularSchedule) continue; // no set schedule (e.g. part-time) — don't nag
+    const roleKpis = dailyKpis.filter((k) => (k.roleKey === "internet" ? rep.tracksInternet : k.roleKey === rep.position));
+    if (roleKpis.length === 0) continue;
+    const missing = roleKpis.filter((k) => !have.has(`${k.id}|${rep.id}`));
+    if (missing.length === roleKpis.length) {
+      missingByRep.push({ name: rep.name, detail: "nothing recorded today" });
+    } else if (missing.length > 0) {
+      missingByRep.push({ name: rep.name, detail: `missing: ${missing.map((k) => k.name).join(", ")}` });
+    }
+  }
+  if (missingByRep.length === 0) return false;
+
+  const managers = await db.user.findMany({ where: { active: true, role: { in: ["manager", "admin"] } }, select: { email: true } });
+  const to = managers.map((m) => m.email).filter(Boolean);
+  if (to.length === 0) return false;
+
+  const html = alertEmailHtml(`KPIs not logged — ${date}`, [
+    `${missingByRep.length} ${missingByRep.length === 1 ? "person hasn't" : "people haven't"} fully logged their KPIs today:`,
+    ...missingByRep.map((r) => `• ${r.name} — ${r.detail}`),
+    "Follow up before end of day. If someone is sure they logged it, check the entry actually saved (it isn't recording).",
+  ]);
+  return sendEmailTo(to, `📋 EOD: ${missingByRep.length} not fully logged (${date})`, html);
+}
+
 // --- Daily digest ------------------------------------------------------------
 
 /** Send a single Chat + email digest of all open alerts for the date.
@@ -449,6 +495,7 @@ export interface ScheduledResult {
   dealAlertsSent: boolean;
   weeklySent: boolean;
   dailyReviewSent: boolean;
+  missingKpiEmailSent: boolean;
   ethanReminded: boolean;
 }
 
@@ -502,6 +549,12 @@ export async function runScheduledChecks(opts?: {
       ? await sendDailyTeamReview(date)
       : false;
 
+  // EOD missing-KPI email to managers (Marie + Jon) — who hasn't logged today.
+  const missingKpiEmailSent =
+    opts?.review || (weekdayOrForce && postCutoff)
+      ? await sendMissingKpiEmail(date)
+      : false;
+
   // Ethan's shift-aware EOD reminder — only on days the AQ Shift calendar says
   // he worked, after his shift would have ended (post-cutoff), and not on a
   // forced run with no real time context unless explicitly forced.
@@ -510,5 +563,5 @@ export async function runScheduledChecks(opts?: {
       ? await sendEthanReminder(date)
       : false;
 
-  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent, dailyReviewSent, ethanReminded };
+  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent, dailyReviewSent, missingKpiEmailSent, ethanReminded };
 }
