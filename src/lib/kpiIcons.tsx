@@ -25,6 +25,8 @@ const MAP: Record<string, LucideIcon> = {
   contracts_signed: FileSignature,
   acq_talk_time: Mic,
   cc_talk_time: Mic,
+  acq_dialer_talk_time: PhoneCall,
+  ds_dialer_talk_time: PhoneCall,
   buyers_contacted: Users,
   new_buyers: UserPlus,
   buyer_offers_received: Inbox,

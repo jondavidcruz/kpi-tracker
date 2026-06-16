@@ -33,6 +33,7 @@ const KPIS = [
   { key: "acq_signed_listing", name: "Signed — Listing", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Listing." },
   { key: "acq_signed_creative", name: "Signed — Creative", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Creative deal." },
   { key: "acq_talk_time", name: "Total Talk Time", emoji: "🎧", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 90 * 60, goalKind: "at_least", definition: "Total time on the phone with sellers." },
+  { key: "acq_dialer_talk_time", name: "Dialer Talk Time", emoji: "📟", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Talk time logged through the dialer when contacting sellers — adds to total outbound effort." },
 
   // ===== Dispositions (Sharyn, Marie) =====
   { key: "deals_comped", name: "Deals Comped", emoji: "💰", category: "blue", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Deals we ran comps on." },
@@ -44,6 +45,7 @@ const KPIS = [
   { key: "contracts_assigned", name: "Contracts Assigned", emoji: "🏁", category: "green", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Deals we got assigned/sold to a buyer (closed assignment)." },
   { key: "deals_comped", name: "Deals Comped", emoji: "💰", category: "blue", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Deals we ran comps on." },
   { key: "avg_days_to_sell", name: "Avg Days-to-Sell", emoji: "⏳", category: "yellow", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "at_most", definition: "Average days a deal sits before sold (lower is better)." },
+  { key: "ds_dialer_talk_time", name: "Dialer Talk Time", emoji: "📟", category: "blue", unit: "duration", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Talk time logged through the dialer when contacting buyers — adds to total outbound effort." },
 
   // ===== Lead sources — daily (PPL model, team-shared) =====
   { key: "ppl_leads", name: "PPL Leads (Purchased/Inbound)", emoji: "🎟️", category: "green", unit: "count", scope: "team", roleKey: "", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Paid-per-lead leads purchased + inbound leads received." },
