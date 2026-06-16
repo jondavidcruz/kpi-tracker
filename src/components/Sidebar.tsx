@@ -10,14 +10,15 @@ import {
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
 
-type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; badge?: number };
+type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; badge?: number };
 
 export default function Sidebar({
-  name, manager, admin, newTickets, newSuggestions,
+  name, manager, admin, marketing, newTickets, newSuggestions,
 }: {
   name: string;
   manager: boolean;
   admin: boolean;
+  marketing: boolean;
   newTickets: number;
   newSuggestions: number;
 }) {
@@ -57,10 +58,10 @@ export default function Sidebar({
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
     ] },
     { label: "Marketing", items: [
-      { href: "/marketing", label: "Marketing", Icon: Megaphone, managerOnly: true },
+      { href: "/marketing", label: "Marketing", Icon: Megaphone, marketingOnly: true },
     ] },
     { label: "Operations", items: [
-      { href: "/roadmap", label: "Roadmap", Icon: Map, managerOnly: true },
+      { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },
       { href: "/operations", label: "Resources & SOPs", Icon: Briefcase, adminOnly: true },
       { href: "/closed-deals", label: "Closed deals", Icon: DollarSign, adminOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, adminOnly: true },
@@ -68,7 +69,7 @@ export default function Sidebar({
     ] },
   ];
 
-  const visible = (it: Item) => (!it.managerOnly || manager) && (!it.adminOnly || admin);
+  const visible = (it: Item) => (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   const Nav = (

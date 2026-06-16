@@ -40,3 +40,14 @@ export function canCurateSoftware(user: User | null): boolean {
   const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   return SOFTWARE_CURATORS.includes(first);
 }
+
+// Reps (beyond managers/admin) allowed into the Marketing section.
+const MARKETING_ACCESS = ["viktoriia", "sharyn"];
+
+/** Can view + edit the Marketing section (managers + named reps). */
+export function canAccessMarketing(user: User | null): boolean {
+  if (!user) return false;
+  if (isManager(user)) return true; // Marie + Jon
+  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return MARKETING_ACCESS.includes(first);
+}

@@ -8,7 +8,7 @@ import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, isManager, isAdmin, canCurateSoftware } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, canCurateSoftware, canAccessMarketing } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
@@ -1316,7 +1316,7 @@ export async function advancePip(formData: FormData) {
 
 export async function saveMarketContact(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!canAccessMarketing(me)) return;
   const id = String(formData.get("id") ?? "");
   const str = (k: string) => String(formData.get(k) ?? "").trim();
   const name = str("name");
@@ -1334,7 +1334,7 @@ export async function saveMarketContact(formData: FormData) {
 
 export async function deleteMarketContact(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!canAccessMarketing(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.marketContact.delete({ where: { id } });
   revalidatePath("/marketing");
@@ -1343,7 +1343,7 @@ export async function deleteMarketContact(formData: FormData) {
 
 export async function saveMarketingNotes(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!canAccessMarketing(me)) return;
   const data = {
     marketingMarkets: String(formData.get("marketingMarkets") ?? "").trim(),
     marketingResearch: String(formData.get("marketingResearch") ?? "").trim(),
@@ -1357,7 +1357,7 @@ export async function saveMarketingNotes(formData: FormData) {
 
 export async function saveRoadmapItem(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   const str = (k: string) => String(formData.get(k) ?? "").trim();
   const title = str("title");
@@ -1372,7 +1372,7 @@ export async function saveRoadmapItem(formData: FormData) {
 /** Cycle a roadmap item's status: todo -> doing -> done -> todo. */
 export async function cycleRoadmapStatus(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const item = await db.roadmapItem.findUnique({ where: { id } });
@@ -1385,7 +1385,7 @@ export async function cycleRoadmapStatus(formData: FormData) {
 
 export async function deleteRoadmapItem(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.roadmapItem.delete({ where: { id } });
   revalidatePath("/roadmap");
