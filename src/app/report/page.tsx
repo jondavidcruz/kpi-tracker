@@ -11,6 +11,7 @@ import { formatValue, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { KpiLabel } from "@/lib/kpiIcons";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import type { Kpi, User } from "@prisma/client";
 
@@ -49,6 +50,11 @@ export default async function ReportPage({
   ]);
   const goalRemaining = Math.max(0, (settings.annualRevenueGoal ?? 0) - dealMetrics.revenueClosed);
 
+  // The activity scoreboard stays visible to everyone; the company-money
+  // sections below (revenue pipeline, active-deal profits) are managers-only.
+  const me = await getCurrentUser();
+  const manager = isManager(me);
+
   // ---- Page 4 data: KPIs at a glance (team totals for the week) ----
   // Sum each team daily KPI + roll up the key per-rep money KPIs across all reps.
   const glance: { key: string; emoji: string; name: string; value: string }[] = [];
@@ -84,7 +90,8 @@ export default async function ReportPage({
         </div>
       </div>
 
-      {/* ===== Revenue / escrow band (page 4 money metrics) ===== */}
+      {/* ===== Revenue / escrow band (managers only) ===== */}
+      {manager && (
       <section>
         <SectionTitle title="Revenue Pipeline" subtitle={`${year} year-to-date · from the Deals board`} accent="bg-emerald-400" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -95,8 +102,9 @@ export default async function ReportPage({
           <RevCard label="Goal Remaining" value={settings.annualRevenueGoal ? money(goalRemaining) : "—"} />
         </div>
       </section>
+      )}
 
-      {/* ===== PAGE 4: KPIs at a glance ===== */}
+      {/* ===== KPIs at a glance — team totals (everyone) ===== */}
       <section>
         <SectionTitle title="① KPIs at a Glance" subtitle={`Team totals for ${wk.label}`} accent="bg-brand-gold" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -109,7 +117,7 @@ export default async function ReportPage({
         </div>
       </section>
 
-      {/* ===== PAGE 5: Full team KPIs by role ===== */}
+      {/* ===== Full team KPIs by role (everyone — the scoreboard) ===== */}
       <section>
         <SectionTitle title="② Team KPIs" subtitle="Every rep's weekly totals by role" accent="bg-sky-400" />
         <div className="space-y-5">
@@ -130,7 +138,8 @@ export default async function ReportPage({
         </div>
       </section>
 
-      {/* ===== PAGE 6: Active deals being pushed ===== */}
+      {/* ===== Active deals being pushed (managers only) ===== */}
+      {manager && (
       <section>
         <SectionTitle
           title="③ Active Deals"
@@ -183,6 +192,7 @@ export default async function ReportPage({
           </table>
         </Card>
       </section>
+      )}
 
       <p className="text-center text-xs text-slate-400">
         Live report · always current · pull into the Canva deck for the Monday 1:30 PT meeting.

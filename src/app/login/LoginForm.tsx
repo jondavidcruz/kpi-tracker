@@ -53,10 +53,9 @@ export default function LoginForm() {
   return (
     <div className="flex min-h-[88vh] flex-col items-center justify-center gap-6 px-4">
       <div className="flex flex-col items-center gap-3">
-        <div className="rounded-2xl bg-brand-navy px-10 py-7">
-          <Logo size="lg" />
+        <div className="rounded-2xl bg-brand-navy px-10 py-7 text-center">
+          <Logo size="lg" tagline />
         </div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">KPI Performance Portal</p>
       </div>
 
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">

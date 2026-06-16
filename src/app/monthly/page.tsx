@@ -6,6 +6,7 @@ import { todayStr, monthBounds, monthOf, daysInMonth, dayOfMonth } from "@/lib/d
 import { formatValue, toInputNumber, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import {
   computeDerived,
   statusClasses,
@@ -52,6 +53,11 @@ export default async function MonthlyPage({
       })
     : [];
   const totalLeads = leadEntries.reduce((s, e) => s + e.value, 0);
+
+  // Company-money sections (goal pace, ratios, monthly inputs) are managers-only;
+  // the per-rep activity scoreboard stays visible to the whole team.
+  const me = await getCurrentUser();
+  const manager = isManager(me);
 
   const byKey = new Map(enteredKpis.map((k) => [k.key, k]));
   const valOf = (key: string) => {
@@ -103,7 +109,8 @@ export default async function MonthlyPage({
         </form>
       </div>
 
-      {/* Pace summary for goal-bearing monthly KPIs */}
+      {/* Pace summary for goal-bearing monthly KPIs (managers only) */}
+      {manager && (
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
           Goal pace
@@ -141,8 +148,10 @@ export default async function MonthlyPage({
             })}
         </div>
       </section>
+      )}
 
-      {/* Computed ratios — always correct, never #DIV/0! */}
+      {/* Computed ratios — company financials (managers only) */}
+      {manager && (
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
           Computed ratios
@@ -169,8 +178,9 @@ export default async function MonthlyPage({
           Total Leads this month: {totalLeads.toLocaleString()} · derived live from entered numbers.
         </p>
       </section>
+      )}
 
-      {/* Per-rep monthly totals — daily KPIs rolled up for the whole month */}
+      {/* Per-rep monthly totals — daily KPIs rolled up for the whole month (everyone) */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
           Per-rep totals this month
@@ -219,8 +229,10 @@ export default async function MonthlyPage({
         <p className="mt-2 text-xs text-slate-400">Sum of each rep&apos;s daily entries for {month}. Goals shown are the daily target for reference.</p>
       </section>
 
-      {/* Editable monthly inputs */}
-      <EntryForm groups={[entryGroup]} date={monthStart} enteredBy="team" action={saveDay} />
+      {/* Editable monthly inputs — company money, managers only */}
+      {manager && (
+        <EntryForm groups={[entryGroup]} date={monthStart} enteredBy="team" action={saveDay} />
+      )}
     </div>
   );
 }
