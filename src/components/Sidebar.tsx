@@ -41,7 +41,7 @@ export default function Sidebar({
       { href: "/leadership", label: "Leadership Meeting", Icon: Crown, adminOnly: true },
     ] },
     { label: "Coaching", items: [
-      { href: "/alerts", label: "Alerts", Icon: Bell },
+      { href: "/alerts", label: "Alerts", Icon: Bell, managerOnly: true },
       { href: "/pip", label: "PIPs", Icon: ShieldAlert, managerOnly: true },
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
       { href: "/scripts", label: "Scripts", Icon: ScrollText },

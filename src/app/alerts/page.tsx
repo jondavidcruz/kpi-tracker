@@ -1,10 +1,12 @@
+import Link from "next/link";
 import { bulkResolveAlerts } from "@/app/actions";
 import { db } from "@/lib/db";
 import { friendlyDate, todayStr, monthOf } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { buildCoaching } from "@/lib/gap";
 import { findPipCandidates } from "@/lib/pip";
-import { getSettings } from "@/lib/data";
+import { getSettings, getActiveReps } from "@/lib/data";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { reasonLabel } from "@/lib/alert-resolution";
 import { Card, SectionTitle } from "@/components/ui";
 import AlertInbox, { type AlertView } from "@/components/AlertInbox";
@@ -13,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 const TABS = [
   { key: "open", label: "Open" },
+  { key: "accountability", label: "⚖️ Accountability" },
   { key: "ack", label: "Acknowledged" },
   { key: "resolved", label: "Resolved" },
   { key: "trends", label: "📊 Trends" },
@@ -23,6 +26,17 @@ export default async function AlertsPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) {
+    return (
+      <Card className="mx-auto max-w-md p-8 text-center">
+        <div className="mb-2 text-3xl">🔒</div>
+        <h1 className="text-xl font-bold">Managers only</h1>
+        <p className="mt-2 text-sm text-slate-500">The alerts inbox is for managers. You can see your own flags on your Enter-KPIs screen and dashboard.</p>
+        <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
+      </Card>
+    );
+  }
   const sp = await searchParams;
   const status = sp.status ?? "open";
   const settings = await getSettings();
@@ -55,6 +69,8 @@ export default async function AlertsPage({
 
       {status === "trends" ? (
         <TrendsView today={today} />
+      ) : status === "accountability" ? (
+        <AccountabilityView today={today} />
       ) : (
         <>
           {(status === "open" || status === "ack") && (
@@ -130,6 +146,148 @@ async function InboxForStatus({ status, today }: { status: string; today: string
   });
 
   return <AlertInbox alerts={views} tab={status} />;
+}
+
+// --- Accountability: per-rep EOD view — pattern -> verdict -> action ----------
+// The point: a reason given 3+ times is a PATTERN, not a one-off. If it's
+// company-side (leads/tech/process) it's a real blocker to FIX; if it's effort
+// it's become an excuse and needs an accountability conversation / PIP.
+const COMPANY_SIDE = new Set(["leads", "tech", "process"]);
+const RECURRING_AT = 3; // same reason this many times in the window = a pattern
+
+async function AccountabilityView({ today }: { today: string }) {
+  const start = new Date(today + "T00:00:00Z");
+  start.setUTCDate(start.getUTCDate() - 13); // ~2 weeks
+  const windowStart = start.toISOString().slice(0, 10);
+
+  const [reps, alerts, pipCandidates] = await Promise.all([
+    getActiveReps(),
+    db.alert.findMany({
+      where: { date: { gte: windowStart }, userId: { not: null } },
+      include: { kpi: true, user: true },
+      orderBy: { date: "desc" },
+      take: 1000,
+    }),
+    findPipCandidates(today),
+  ]);
+  const pipByUser = new Map<string, { kpiName: string }[]>();
+  for (const c of pipCandidates) {
+    const arr = pipByUser.get(c.userId) ?? [];
+    arr.push({ kpiName: c.kpiName });
+    pipByUser.set(c.userId, arr);
+  }
+
+  type Tone = "red" | "amber" | "slate" | "emerald";
+  const rows = reps.map((r) => {
+    const mine = alerts.filter((a) => a.userId === r.id);
+    const nonExcused = mine.filter((a) => !a.excused);
+    const days = new Set(nonExcused.map((a) => a.date)).size;
+    const undocumented = nonExcused.filter((a) => a.status !== "resolved" && !a.repReason);
+    const excused = mine.length - nonExcused.length;
+
+    const reasonTally = new Map<string, number>();
+    for (const a of mine) {
+      if (a.excused) continue;
+      const c = a.resolutionCategory;
+      if (c && c !== "recovered") reasonTally.set(c, (reasonTally.get(c) ?? 0) + 1);
+    }
+    const sortedReasons = [...reasonTally.entries()].sort((a, b) => b[1] - a[1]);
+    const top = sortedReasons[0];
+    const pipEligible = pipByUser.has(r.id);
+
+    let tone: Tone = "emerald";
+    let head = "No pattern — one-offs";
+    let body = "Isolated or excused misses. No action needed.";
+    let cta: { href: string; label: string } | null = null;
+
+    if (pipEligible) {
+      tone = "red";
+      head = "PIP-eligible now";
+      body = `4+ consecutive misses on ${pipByUser.get(r.id)!.map((p) => p.kpiName).join(", ")}. The runway for justifications is over — open a plan.`;
+      cta = { href: "/pip", label: "Open a PIP →" };
+    } else if (top && top[1] >= RECURRING_AT && top[0] === "effort") {
+      tone = "red";
+      head = "Recurring effort gap → accountability";
+      body = `"Effort / focus" came up ${top[1]}× in 2 weeks. A reason this often is no longer a justification — it's an excuse. Have the accountability conversation today; open a PIP if it continues.`;
+      cta = { href: "/pip", label: "Review for PIP →" };
+    } else if (top && top[1] >= RECURRING_AT && COMPANY_SIDE.has(top[0])) {
+      tone = "amber";
+      head = "Recurring blocker → fix it (not coaching)";
+      body = `${reasonLabel(top[0])} came up ${top[1]}× in 2 weeks. This is a real justification — the fix is on us (e.g. more leads, fix the tech), not a coaching conversation. Raise it as an issue and solve the blocker.`;
+      cta = { href: "/issues", label: "Raise an issue →" };
+    } else if (top && top[1] >= RECURRING_AT && top[0] === "training") {
+      tone = "amber";
+      head = "Recurring skill gap → coach";
+      body = `Training came up ${top[1]}× in 2 weeks. Targeted coaching on this skill; escalate to a PIP if it persists.`;
+    } else if (undocumented.length >= RECURRING_AT) {
+      tone = "slate";
+      head = `${undocumented.length} misses with no reason`;
+      body = "Get the why at end of day and resolve each with a category — you can't tell a justification from an excuse until the pattern is documented.";
+      cta = { href: "/alerts?status=open", label: "Resolve open misses →" };
+    } else if (nonExcused.length === 0) {
+      head = "Clean — no misses";
+      body = excused > 0 ? `${excused} excused (PTO/outage) — fine.` : "No flagged misses in the last 2 weeks.";
+    }
+
+    return { rep: r.name, total: nonExcused.length, days, excused, reasons: sortedReasons, undocumented: undocumented.length, tone, head, body, cta };
+  });
+
+  const order: Record<Tone, number> = { red: 0, amber: 1, slate: 2, emerald: 3 };
+  const sorted = rows.sort((a, b) => order[a.tone] - order[b.tone] || b.total - a.total);
+
+  const toneCls: Record<Tone, string> = {
+    red: "border-red-300 bg-red-50",
+    amber: "border-amber-300 bg-amber-50",
+    slate: "border-slate-300 bg-slate-50",
+    emerald: "border-emerald-300 bg-emerald-50",
+  };
+  const headCls: Record<Tone, string> = {
+    red: "text-red-800", amber: "text-amber-800", slate: "text-slate-700", emerald: "text-emerald-800",
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <h3 className="mb-1 text-sm font-bold text-slate-700">⚖️ End-of-day accountability</h3>
+        <p className="text-xs text-slate-500">
+          How to read this: a reason given <strong>{RECURRING_AT}+ times in two weeks is a pattern</strong>, not a one-off.
+          Company-side reasons (low leads, tech) are real <strong>justifications</strong> — fix the blocker.
+          &ldquo;Effort/focus&rdquo; repeated is an <strong>excuse</strong> — hold the line with a conversation, then a PIP.
+          Document every miss with a reason so the pattern is visible.
+        </p>
+      </Card>
+
+      {sorted.every((r) => r.tone === "emerald") && (
+        <Card className="p-8 text-center text-sm text-slate-400">Everyone&apos;s clean over the last two weeks. 🎉</Card>
+      )}
+
+      {sorted.filter((r) => r.tone !== "emerald" || r.total > 0).map((r) => (
+        <Card key={r.rep} className={`border-l-4 p-4 ${toneCls[r.tone]}`}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-base font-bold text-slate-800">{r.rep}</span>
+            <span className="text-xs text-slate-500">{r.total} miss{r.total === 1 ? "" : "es"} · {r.days} day{r.days === 1 ? "" : "s"} flagged{r.excused ? ` · ${r.excused} excused` : ""}</span>
+            {r.undocumented > 0 && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{r.undocumented} undocumented</span>}
+          </div>
+
+          {r.reasons.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {r.reasons.map(([cat, n]) => (
+                <span key={cat} className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${n >= RECURRING_AT ? "bg-slate-800 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+                  {reasonLabel(cat)} ×{n}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-2">
+            <div className={`text-sm font-bold ${headCls[r.tone]}`}>{r.head}</div>
+            <p className="mt-0.5 text-sm text-slate-600">{r.body}</p>
+            {r.cta && <Link href={r.cta.href} className="mt-1.5 inline-block text-sm font-semibold text-brand-navy hover:underline">{r.cta.label}</Link>}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
 }
 
 // --- Trends: turn resolved-with-a-reason data into coaching insight ----------
