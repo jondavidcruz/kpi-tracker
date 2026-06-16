@@ -488,12 +488,26 @@ model Software {
   billingCycle String   @default("") // monthly | annual
   renewalDate  String   @default("") // YYYY-MM-DD (owner-only)
   notes        String   @default("")
+  // Encrypted password (AES-256-GCM, base64 iv+tag+ciphertext). Decryptable only
+  // server-side with VAULT_KEY (a Vercel secret, never in the DB). "" = none.
+  secret       String   @default("")
   sortOrder    Int      @default(0)
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([category])
+}
+
+// Audit trail: who revealed which software password, and when. Owner-visible.
+model SecretAccess {
+  id           String   @id @default(cuid())
+  softwareId   String
+  softwareName String   @default("")
+  viewedBy     String   @default("")
+  viewedAt     DateTime @default(now())
+
+  @@index([viewedAt])
 }
 
 // EOS Accountability Chart seat — one box in the org structure. "Right person,

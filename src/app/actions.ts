@@ -15,6 +15,7 @@ import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { quarterOf, quarterEnd } from "@/lib/eos";
+import { encryptSecret, vaultConfigured } from "@/lib/crypto";
 
 /** Sign the current user out and return to the login screen. */
 export async function signOut() {
@@ -667,17 +668,35 @@ export async function saveSoftware(formData: FormData) {
   const str = (k: string) => String(formData.get(k) ?? "").trim();
   const name = str("name");
   if (!name) return;
-  const data = {
+  const data: Record<string, unknown> = {
     name, category: str("category") || "Other", url: str("url"), loginEmail: str("loginEmail"),
     vaultRef: str("vaultRef"), vaultUrl: str("vaultUrl"), mfa: str("mfa"),
     owner: str("owner"), accessList: str("accessList"), plan: str("plan"),
     monthlyCost: str("monthlyCost"), billingCycle: str("billingCycle"), renewalDate: str("renewalDate"),
     notes: str("notes"), sortOrder: Number(formData.get("sortOrder")) || 0,
   };
+
+  // Encrypt the password only if a new one was typed; blank leaves it unchanged.
+  const secretPlain = String(formData.get("secret") ?? "");
+  if (secretPlain.trim()) {
+    if (!vaultConfigured()) redirect("/software?novault=1");
+    data.secret = encryptSecret(secretPlain.trim());
+  }
+
   if (id) await db.software.update({ where: { id }, data });
-  else await db.software.create({ data });
+  else await db.software.create({ data: data as Parameters<typeof db.software.create>[0]["data"] });
   revalidatePath("/software");
   redirect("/software?saved=1");
+}
+
+/** Remove the stored password for a tool (keep the rest of the entry). */
+export async function clearSecret(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.software.update({ where: { id }, data: { secret: "" } });
+  revalidatePath("/software");
+  redirect("/software");
 }
 
 export async function deleteSoftware(formData: FormData) {
