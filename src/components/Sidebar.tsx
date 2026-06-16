@@ -29,7 +29,7 @@ export default function Sidebar({
       { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
       { href: "/deals", label: "Deals", Icon: Building2 },
     ] },
-    { label: "EOS", items: [
+    { label: "Entrepreneurial Operating System", items: [
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
       { href: "/rocks", label: "Rocks", Icon: Mountain },
       { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },
@@ -49,7 +49,7 @@ export default function Sidebar({
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
     ] },
-    { label: "Workspace", items: [
+    { label: "Support", items: [
       { href: "/change-portal", label: "Change Portal", Icon: Lightbulb },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },
