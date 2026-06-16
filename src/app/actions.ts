@@ -670,6 +670,8 @@ export async function saveSeat(formData: FormData) {
   const data = {
     title, holder: str("holder"), roles: str("roles"), parentId, sortOrder,
     gwcGet: str("gwcGet"), gwcWant: str("gwcWant"), gwcCapacity: str("gwcCapacity"), gwcNote: str("gwcNote"),
+    piProfile: str("piProfile"), piTagline: str("piTagline"), piSummary: str("piSummary"),
+    iq: str("iq"), ei: str("ei"), assessedOn: str("assessedOn"), roleFit: str("roleFit"),
   };
   if (id) await db.seat.update({ where: { id }, data });
   else await db.seat.create({ data });

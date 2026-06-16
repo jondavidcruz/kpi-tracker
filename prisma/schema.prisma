@@ -482,6 +482,14 @@ model Seat {
   gwcWant     String   @default("")
   gwcCapacity String   @default("")
   gwcNote     String   @default("") // values fit / notes
+  // Assessment results (Predictive Index, IQ, EI) — owner-only reference for fit.
+  piProfile   String   @default("") // PI reference profile, e.g. "Strategist"
+  piTagline   String   @default("") // PI one-line descriptor
+  piSummary   String   @default("") // key behavioral traits (short)
+  iq          String   @default("") // IQ score
+  ei          String   @default("") // EI quadrant scores
+  assessedOn  String   @default("") // when the PI was taken
+  roleFit     String   @default("") // how well the role aligns with the results
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
