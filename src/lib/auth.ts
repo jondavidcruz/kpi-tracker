@@ -27,3 +27,16 @@ export function isManager(user: User | null): boolean {
 export function isAdmin(user: User | null): boolean {
   return !!user && user.role === "admin";
 }
+
+// Reps (beyond managers/admin) allowed to curate the Software & Logins directory.
+// Matched by first name, case-insensitive. Edit this list to change who can add/
+// edit software entries without changing their global role.
+const SOFTWARE_CURATORS = ["sharyn", "marie"];
+
+/** Can add/edit/delete entries in the Software & Logins directory. */
+export function canCurateSoftware(user: User | null): boolean {
+  if (!user) return false;
+  if (isManager(user)) return true; // managers + admin
+  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return SOFTWARE_CURATORS.includes(first);
+}

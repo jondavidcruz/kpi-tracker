@@ -1,5 +1,5 @@
 import { saveSoftware, deleteSoftware, clearSecret } from "@/app/actions";
-import { getCurrentUser, isAdmin, isManager } from "@/lib/auth";
+import { getCurrentUser, isAdmin, isManager, canCurateSoftware } from "@/lib/auth";
 import { vaultConfigured } from "@/lib/crypto";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
@@ -54,6 +54,7 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const owner = isAdmin(me);
   const manager = isManager(me);
+  const canEdit = canCurateSoftware(me); // owner + managers + named curators (Sharyn)
   const meName = me.name.toLowerCase();
   const configured = vaultConfigured();
 
@@ -96,7 +97,7 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
       {sp.novault && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">Set up the VAULT_KEY (above) before storing a password.</div>}
 
-      {list.length === 0 && !owner && <Card className="p-10 text-center text-slate-400">No software added yet.</Card>}
+      {list.length === 0 && !canEdit && <Card className="p-10 text-center text-slate-400">No software added yet.</Card>}
 
       {cats.map((cat) => (
         <div key={cat}>
@@ -140,7 +141,7 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
                     </div>
                   )}
 
-                  {owner && (
+                  {canEdit && (
                     <details className="mt-2">
                       <summary className="cursor-pointer text-[11px] font-medium text-slate-400 hover:text-brand-navy">Edit / delete</summary>
                       <div className="mt-2"><SoftwareForm sw={s} hasSecret={hasSecret} /></div>
@@ -157,7 +158,7 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
         </div>
       ))}
 
-      {owner && (
+      {canEdit && (
         <Card className="p-5">
           <h3 className="mb-3 text-sm font-bold text-slate-700">Add software</h3>
           <SoftwareForm />

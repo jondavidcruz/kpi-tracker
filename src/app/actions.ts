@@ -8,7 +8,7 @@ import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, canCurateSoftware } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
@@ -663,7 +663,7 @@ export async function deleteRock(formData: FormData) {
 
 export async function saveSoftware(formData: FormData) {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me)) return;
+  if (!canCurateSoftware(me)) return;
   const id = String(formData.get("id") ?? "");
   const str = (k: string) => String(formData.get(k) ?? "").trim();
   const name = str("name");
@@ -692,7 +692,7 @@ export async function saveSoftware(formData: FormData) {
 /** Remove the stored password for a tool (keep the rest of the entry). */
 export async function clearSecret(formData: FormData) {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me)) return;
+  if (!canCurateSoftware(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.software.update({ where: { id }, data: { secret: "" } });
   revalidatePath("/software");
@@ -701,7 +701,7 @@ export async function clearSecret(formData: FormData) {
 
 export async function deleteSoftware(formData: FormData) {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me)) return;
+  if (!canCurateSoftware(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.software.delete({ where: { id } });
   revalidatePath("/software");
