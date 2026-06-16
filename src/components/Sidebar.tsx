@@ -29,16 +29,19 @@ export default function Sidebar({
       { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
       { href: "/deals", label: "Deals", Icon: Building2 },
     ] },
-    { label: "Performance", items: [
+    { label: "EOS", items: [
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
-      { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/rocks", label: "Rocks", Icon: Mountain },
+      { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },
+      { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
+      { href: "/leadership", label: "Leadership Meeting", Icon: Crown, managerOnly: true },
+    ] },
+    { label: "Performance", items: [
+      { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/report", label: "Weekly report", Icon: FileText },
       { href: "/monthly", label: "Monthly report", Icon: CalendarDays },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/trends", label: "Trends", Icon: TrendingUp, managerOnly: true },
-      { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
-      { href: "/leadership", label: "Leadership Meeting", Icon: Crown, managerOnly: true },
     ] },
     { label: "Coaching", items: [
       { href: "/alerts", label: "Alerts", Icon: Bell, managerOnly: true },
@@ -47,7 +50,6 @@ export default function Sidebar({
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
     ] },
     { label: "Workspace", items: [
-      { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },
       { href: "/change-portal", label: "Change Portal", Icon: Lightbulb },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },
