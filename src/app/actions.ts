@@ -656,6 +656,39 @@ export async function deleteRock(formData: FormData) {
   redirect("/rocks");
 }
 
+// --- Software & logins directory — OWNER curates, team reads ----------------
+// NOTE: there is deliberately no password field. Secrets live in the team
+// password manager; this only stores where to find them.
+
+export async function saveSoftware(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const name = str("name");
+  if (!name) return;
+  const data = {
+    name, category: str("category") || "Other", url: str("url"), loginEmail: str("loginEmail"),
+    vaultRef: str("vaultRef"), vaultUrl: str("vaultUrl"), mfa: str("mfa"),
+    owner: str("owner"), accessList: str("accessList"), plan: str("plan"),
+    monthlyCost: str("monthlyCost"), billingCycle: str("billingCycle"), renewalDate: str("renewalDate"),
+    notes: str("notes"), sortOrder: Number(formData.get("sortOrder")) || 0,
+  };
+  if (id) await db.software.update({ where: { id }, data });
+  else await db.software.create({ data });
+  revalidatePath("/software");
+  redirect("/software?saved=1");
+}
+
+export async function deleteSoftware(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.software.delete({ where: { id } });
+  revalidatePath("/software");
+  redirect("/software");
+}
+
 // --- EOS Accountability Chart (Seats + GWC) — OWNER ONLY --------------------
 
 export async function saveSeat(formData: FormData) {

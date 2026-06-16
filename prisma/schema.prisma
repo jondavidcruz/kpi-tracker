@@ -468,6 +468,34 @@ model Rock {
   @@index([quarter])
 }
 
+// Software & logins directory (native). Lists every tool the team uses and
+// WHERE its password lives (in the team password manager) — NEVER the password
+// itself (there is deliberately no password field). The team reads it to find
+// logins; the owner curates it. Cost/renewal fields are owner-only in the UI.
+model Software {
+  id           String   @id @default(cuid())
+  name         String
+  category     String   @default("Other") // CRM | Dialer | Marketing | Data | Finance | Comms | Productivity | Other
+  url          String   @default("") // login URL
+  loginEmail   String   @default("") // username / email to log in (NOT the password)
+  vaultRef     String   @default("") // where the password lives, e.g. "Bitwarden › Acquisitions"
+  vaultUrl     String   @default("") // optional direct link to the vault item
+  mfa          String   @default("") // "" | on | off
+  owner        String   @default("") // who owns / admins the account
+  accessList   String   @default("") // who has access (newline / comma list)
+  plan         String   @default("") // plan tier
+  monthlyCost  String   @default("") // owner-only in the UI
+  billingCycle String   @default("") // monthly | annual
+  renewalDate  String   @default("") // YYYY-MM-DD (owner-only)
+  notes        String   @default("")
+  sortOrder    Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+}
+
 // EOS Accountability Chart seat — one box in the org structure. "Right person,
 // right seat." Each seat lists its 5 key roles and who sits in it, plus the
 // People-Analyzer GWC read (Gets it / Wants it / Capacity). OWNER-ONLY (private).
