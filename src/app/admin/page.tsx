@@ -172,6 +172,7 @@ export default async function AdminPage({
         <Card className="p-5">
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Change my password</p>
           <form action={setMyPassword} className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="to" value="/admin" />
             <label className="flex-1"><span className={labelCls}>New password (8+ characters)</span><input type="password" name="password" autoComplete="new-password" minLength={8} required className={inputCls} /></label>
             <SaveBtn small>Update my password</SaveBtn>
           </form>

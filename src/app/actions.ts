@@ -43,11 +43,13 @@ export async function setMyPassword(formData: FormData) {
   const me = await getCurrentUser();
   if (!me) return;
   const password = String(formData.get("password") ?? "");
-  if (password.length < 8) redirect("/admin?pwerr=short#access");
+  const to = String(formData.get("to") ?? "/account") === "/admin" ? "/admin" : "/account";
+  const anchor = to === "/admin" ? "#access" : "";
+  if (password.length < 8) redirect(`${to}?pwerr=short${anchor}`);
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password });
-  if (error) redirect("/admin?pwerr=1#access");
-  redirect("/admin?pwok=you#access");
+  if (error) redirect(`${to}?pwerr=1${anchor}`);
+  redirect(`${to}?pwok=you${anchor}`);
 }
 
 /** Sign the current user out and return to the login screen. */

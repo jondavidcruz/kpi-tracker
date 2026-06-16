@@ -119,8 +119,8 @@ export default function Sidebar({
 
       <div className="border-t border-white/10 px-3 py-3">
         <div className="flex items-center gap-2.5 px-2 py-1.5">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy-2 text-xs font-semibold text-brand-gold-soft">{initials(name)}</span>
-          <span className="flex-1 truncate text-sm text-brand-navy-100">{name}</span>
+          <Link href="/account" onClick={() => setOpen(false)} title="My account & password" className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy-2 text-xs font-semibold text-brand-gold-soft hover:ring-2 hover:ring-brand-gold/40">{initials(name)}</Link>
+          <Link href="/account" onClick={() => setOpen(false)} className="flex-1 truncate text-sm text-brand-navy-100 hover:text-white">{name}</Link>
           <form action={signOut}>
             <button aria-label="Sign out" className="grid h-8 w-8 place-items-center rounded-lg text-brand-navy-300 hover:bg-white/5 hover:text-white">
               <LogOut size={16} strokeWidth={1.75} />

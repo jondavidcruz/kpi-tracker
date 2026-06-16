@@ -97,6 +97,21 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
       {sp.novault && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">Set up the VAULT_KEY (above) before storing a password.</div>}
 
+      {/* Quick add — the simple path: just name + login + password */}
+      {canEdit && (
+        <Card className="border-l-4 border-brand-gold bg-white p-5">
+          <h3 className="mb-1 text-sm font-bold text-slate-700">⚡ Quick add a login</h3>
+          <p className="mb-3 text-xs text-slate-500">Just the basics — it&apos;s encrypted on save. Add the category, cost, and access list later by editing it.</p>
+          <form action={saveSoftware} className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+            <input name="name" placeholder="Software (e.g. GoHighLevel)" className={`${inputCls} sm:col-span-2`} required />
+            <input name="url" placeholder="Login URL (optional)" className={`${inputCls} sm:col-span-2`} />
+            <input name="loginEmail" placeholder="Username / email" className={`${inputCls} sm:col-span-2`} autoComplete="off" />
+            <input type="password" name="secret" placeholder="Password" autoComplete="new-password" className={`${inputCls} sm:col-span-2`} />
+            <div className="sm:col-span-4"><button className="rounded-lg bg-brand-navy px-5 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save login securely</button></div>
+          </form>
+        </Card>
+      )}
+
       {list.length === 0 && !canEdit && <Card className="p-10 text-center text-slate-400">No software added yet.</Card>}
 
       {cats.map((cat) => (
@@ -159,10 +174,10 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
       ))}
 
       {canEdit && (
-        <Card className="p-5">
-          <h3 className="mb-3 text-sm font-bold text-slate-700">Add software</h3>
-          <SoftwareForm />
-        </Card>
+        <details className="rounded-xl ring-1 ring-slate-200">
+          <summary className="cursor-pointer rounded-xl bg-slate-50 px-5 py-3 text-sm font-bold text-slate-700">➕ Add with all details (category, cost, access, MFA…)</summary>
+          <div className="p-5"><SoftwareForm /></div>
+        </details>
       )}
 
       {owner && recent.length > 0 && (
