@@ -297,7 +297,7 @@ export async function saveCallScript(formData: FormData) {
 /** Add/edit an Operations-hub link. OWNER (admin) ONLY. */
 export async function saveResource(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   let url = String(formData.get("url") ?? "").trim();
@@ -315,7 +315,7 @@ export async function saveResource(formData: FormData) {
 /** Delete an Operations-hub link. OWNER (admin) ONLY. */
 export async function deleteResource(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await db.resource.delete({ where: { id } });
@@ -325,7 +325,7 @@ export async function deleteResource(formData: FormData) {
 /** Accept / decline / mark-done an AI suggestion. OWNER (admin/Jon) ONLY. */
 export async function setSuggestionStatus(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return; // AI Updates is Jon-only
+  if (!me || !isAdmin(me)) return; // AI Updates is Jon-only
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   const note = String(formData.get("note") ?? "").trim();
@@ -360,7 +360,7 @@ export async function saveSettings(formData: FormData) {
 /** Save the Monday-Meeting deck content (annual goal + editorial slides). Managers only. */
 export async function saveMeetingSettings(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const data = {
     annualRevenueGoal: numOrNull(formData.get("annualRevenueGoal")) ?? 0,
     homeownersGoal: Math.round(numOrNull(formData.get("homeownersGoal")) ?? 24),
@@ -379,7 +379,7 @@ export async function saveMeetingSettings(formData: FormData) {
 /** Save the Leadership-meeting deck content (agenda, talking points, action items). Managers only. */
 export async function saveLeadershipSettings(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const data = {
     leadAgenda: String(formData.get("leadAgenda") ?? "").trim(),
     mtgTalkingPoints: String(formData.get("mtgTalkingPoints") ?? "").trim(),
@@ -394,7 +394,7 @@ export async function saveLeadershipSettings(formData: FormData) {
 /** Capture a feedback note during a meeting. Managers only. */
 export async function addMeetingNote(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const text = String(formData.get("text") ?? "").trim();
   const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   if (!text) return;
@@ -407,7 +407,7 @@ export async function addMeetingNote(formData: FormData) {
 /** Delete a meeting note. Managers only. */
 export async function deleteMeetingNote(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   if (id) await db.meetingNote.delete({ where: { id } });
@@ -421,7 +421,7 @@ export async function deleteMeetingNote(formData: FormData) {
 /** File a Fathom recording link for a meeting; optionally post it to Google Chat. */
 export async function addRecording(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   const title = String(formData.get("title") ?? "").trim();
   const url = String(formData.get("url") ?? "").trim();
@@ -440,7 +440,7 @@ export async function addRecording(formData: FormData) {
 
 export async function deleteRecording(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   if (id) await db.meetingRecording.delete({ where: { id } });
@@ -571,7 +571,7 @@ export async function deleteAiSubmission(formData: FormData) {
 
 export async function saveTeamProfile(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return; // Jon only
+  if (!me || !isAdmin(me)) return; // Jon only
   const userId = String(formData.get("userId") ?? "") || null;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
@@ -660,7 +660,7 @@ export async function deleteRock(formData: FormData) {
 
 export async function saveSeat(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   const str = (k: string) => String(formData.get(k) ?? "").trim();
   const title = str("title");
@@ -681,7 +681,7 @@ export async function saveSeat(formData: FormData) {
 
 export async function deleteSeat(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) {
     await db.seat.updateMany({ where: { parentId: id }, data: { parentId: null } });
@@ -695,7 +695,7 @@ export async function deleteSeat(formData: FormData) {
 
 export async function saveVto(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return; // owner-only edit
+  if (!me || !isAdmin(me)) return; // owner-only edit
   const str = (k: string) => String(formData.get(k) ?? "").trim();
   const data = {
     coreValues: str("coreValues"), purpose: str("purpose"), niche: str("niche"),
@@ -716,7 +716,7 @@ export async function saveVto(formData: FormData) {
 /** Raise an issue — anyone signed in. */
 export async function addIssue(formData: FormData) {
   const me = await getCurrentUser();
-  if (!me) return;
+  if (!me || !isAdmin(me)) return;
   const title = String(formData.get("title") ?? "").trim();
   if (!title) redirect("/issues?empty=1");
   const detail = String(formData.get("detail") ?? "").trim();
@@ -730,7 +730,7 @@ export async function addIssue(formData: FormData) {
 /** Bump an issue to the top of the priority order (leadership). */
 export async function bumpIssue(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const top = await db.issue.findFirst({ where: { status: "open" }, orderBy: { priority: "desc" } });
@@ -742,7 +742,7 @@ export async function bumpIssue(formData: FormData) {
 /** Solve an issue (IDS) — owner or leadership. Optionally spawns a To-Do. */
 export async function solveIssue(formData: FormData) {
   const me = await getCurrentUser();
-  if (!me) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const issue = await db.issue.findUnique({ where: { id } });
@@ -772,7 +772,7 @@ export async function solveIssue(formData: FormData) {
 /** Drop an issue without solving (not worth it / out of scope). */
 export async function dropIssue(formData: FormData) {
   const me = await getCurrentUser();
-  if (!me) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const issue = await db.issue.findUnique({ where: { id } });
@@ -786,7 +786,7 @@ export async function dropIssue(formData: FormData) {
 /** Reopen a solved/dropped issue — leadership. */
 export async function reopenIssue(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.issue.update({ where: { id }, data: { status: "open" } });
   revalidatePath("/issues");
@@ -796,7 +796,7 @@ export async function reopenIssue(formData: FormData) {
 /** Delete an issue — leadership. */
 export async function deleteIssue(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.issue.delete({ where: { id } });
   revalidatePath("/issues");
@@ -806,7 +806,7 @@ export async function deleteIssue(formData: FormData) {
 /** Add a standalone To-Do — anyone signed in. */
 export async function addToDo(formData: FormData) {
   const me = await getCurrentUser();
-  if (!me) return;
+  if (!me || !isAdmin(me)) return;
   const text = String(formData.get("text") ?? "").trim();
   if (!text) redirect("/issues");
   const owner = String(formData.get("owner") ?? "").trim() || me.name;
@@ -819,7 +819,7 @@ export async function addToDo(formData: FormData) {
 /** Toggle a To-Do done/not-done — anyone signed in. */
 export async function toggleToDo(formData: FormData) {
   const me = await getCurrentUser();
-  if (!me) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const todo = await db.toDo.findUnique({ where: { id } });
@@ -831,7 +831,7 @@ export async function toggleToDo(formData: FormData) {
 /** Delete a To-Do — leadership. */
 export async function deleteToDo(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.toDo.delete({ where: { id } });
   revalidatePath("/issues");
@@ -841,7 +841,7 @@ export async function deleteToDo(formData: FormData) {
 /** Add a Monday-Meeting training tip to the backlog. Managers only. */
 export async function saveTrainingTip(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const text = String(formData.get("text") ?? "").trim();
   if (!text) return;
   const kpiKey = String(formData.get("kpiKey") ?? "").trim();
@@ -853,7 +853,7 @@ export async function saveTrainingTip(formData: FormData) {
 /** Delete a training tip. Managers only. */
 export async function deleteTrainingTip(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return;
+  if (!me || !isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.trainingTip.delete({ where: { id } });
   revalidatePath("/meeting");
@@ -890,7 +890,7 @@ export async function saveUser(formData: FormData) {
  */
 export async function deleteUser(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) return; // destructive → admin only
+  if (!me || !isAdmin(me)) return; // destructive → admin only
   const id = String(formData.get("id") ?? "");
   if (!id || id === me?.id) return; // never delete yourself
   const u = await db.user.findUnique({ where: { id } });

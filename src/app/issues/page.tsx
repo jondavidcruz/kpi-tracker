@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { addIssue, bumpIssue, solveIssue, dropIssue, reopenIssue, deleteIssue, addToDo, toggleToDo, deleteToDo } from "@/app/actions";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { getSettings, getActiveReps } from "@/lib/data";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
@@ -11,9 +12,18 @@ const labelCls = "mb-1 block text-xs font-semibold text-slate-500";
 
 export default async function IssuesPage({ searchParams }: { searchParams: Promise<{ raised?: string; empty?: string }> }) {
   const me = await getCurrentUser();
-  if (!me) return null;
+  if (!isAdmin(me)) {
+    return (
+      <Card className="mx-auto max-w-md p-8 text-center">
+        <div className="mb-2 text-3xl">🔒</div>
+        <h1 className="text-xl font-bold">Owner only</h1>
+        <p className="mt-2 text-sm text-slate-500">The issues list is private to the owner. To raise something, use the Change Portal.</p>
+        <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
+      </Card>
+    );
+  }
   const sp = await searchParams;
-  const leader = isManager(me);
+  const leader = true;
   const [settings, reps, issues, todos] = await Promise.all([
     getSettings(),
     getActiveReps(),
@@ -32,7 +42,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const todayYmd = (() => {
     return new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
   })();
-  const canClose = (i: { owner: string; raisedBy: string }) => leader || i.owner === me.name || i.raisedBy === me.name;
+  const canClose = (_i: { owner: string; raisedBy: string }) => leader;
   const todoDonePct = todos.length ? Math.round((doneTodos.length / todos.length) * 100) : 0;
 
   return (
@@ -115,7 +125,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
         <Card className="p-5">
           <form action={addToDo} className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-6">
             <input name="text" placeholder="Add an action item…" className={`${inputCls} sm:col-span-3`} required />
-            <select name="owner" defaultValue={me.name} className={`${inputCls} sm:col-span-1`}>{reps.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}</select>
+            <select name="owner" defaultValue="" className={`${inputCls} sm:col-span-1`}><option value="">— owner</option>{reps.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}</select>
             <input name="dueDate" type="date" className={`${inputCls} sm:col-span-1`} />
             <button className="rounded-lg bg-brand-navy px-3 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700 sm:col-span-1">+ Add</button>
           </form>
