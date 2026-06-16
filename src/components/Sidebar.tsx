@@ -96,7 +96,11 @@ export default function Sidebar({
                     >
                       <it.Icon size={18} strokeWidth={1.75} className={active ? "text-brand-gold" : "text-brand-navy-300 group-hover:text-white"} />
                       <span className="flex-1">{it.label}</span>
-                      {it.adminOnly && <Lock size={11} className="shrink-0 text-brand-gold-soft/80" aria-label="Owner only" />}
+                      {it.adminOnly ? (
+                        <span title="Owner only — just you"><Lock size={11} className="shrink-0 text-brand-gold-soft/90" /></span>
+                      ) : it.managerOnly ? (
+                        <span title="You + Marie (managers)"><Lock size={11} className="shrink-0 text-sky-300/90" /></span>
+                      ) : null}
                       {it.badge ? (
                         <span className="rounded-full bg-brand-gold px-1.5 py-0.5 text-[10px] font-bold text-brand-navy">{it.badge}</span>
                       ) : null}
@@ -115,6 +119,14 @@ export default function Sidebar({
             Wall display
           </Link>
         </div>
+
+        {/* Lock-color key (visible only where locked items appear) */}
+        {(manager || admin) && (
+          <div className="mt-2 flex flex-col gap-1 px-3 pt-2 text-[10px] text-brand-navy-300">
+            {admin && <span className="flex items-center gap-1.5"><Lock size={10} className="text-brand-gold-soft/90" /> Owner only — just you</span>}
+            <span className="flex items-center gap-1.5"><Lock size={10} className="text-sky-300/90" /> You + Marie</span>
+          </div>
+        )}
       </nav>
 
       <div className="border-t border-white/10 px-3 py-3">
