@@ -38,7 +38,7 @@ function SeatForm({ seat, allSeats }: { seat?: SeatT; allSeats: SeatT[] }) {
       {tri("Gets it", seat?.gwcGet ?? "")}
       {tri("Wants it", seat?.gwcWant ?? "")}
       {tri("Capacity", seat?.gwcCapacity ?? "")}
-      <label className="sm:col-span-2"><span className={labelCls}>GWC / values-fit note</span><input name="gwcNote" defaultValue={seat?.gwcNote ?? ""} className={inputCls} /></label>
+      <label className="sm:col-span-2"><span className={labelCls}>Notes / values fit</span><input name="gwcNote" defaultValue={seat?.gwcNote ?? ""} className={inputCls} /></label>
       <label><span className={labelCls}>Sort order</span><input name="sortOrder" type="number" defaultValue={seat?.sortOrder ?? 0} className={inputCls} /></label>
       <div className="sm:col-span-3"><button className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">{seat ? "Save seat" : "Add seat"}</button></div>
     </form>
@@ -53,8 +53,8 @@ function SeatNode({ seat, children, allSeats, depth }: { seat: SeatT; children: 
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-bold text-slate-800">{seat.title}</span>
           {seat.holder && <span className="rounded-md bg-brand-navy px-1.5 py-0.5 text-[11px] font-semibold text-white">{seat.holder}</span>}
-          <span className="ml-auto flex gap-1">
-            <Gwc label="G" v={seat.gwcGet} /><Gwc label="W" v={seat.gwcWant} /><Gwc label="C" v={seat.gwcCapacity} />
+          <span className="ml-auto flex flex-wrap justify-end gap-1">
+            <Gwc label="Gets it" v={seat.gwcGet} /><Gwc label="Wants it" v={seat.gwcWant} /><Gwc label="Capacity" v={seat.gwcCapacity} />
           </span>
         </div>
         {roles.length > 0 && <ul className="mt-1.5 space-y-0.5">{roles.map((r, i) => <li key={i} className="text-xs text-slate-600">• {r}</li>)}</ul>}

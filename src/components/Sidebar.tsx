@@ -47,7 +47,7 @@ export default function Sidebar({
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
     ] },
     { label: "Workspace", items: [
-      { href: "/issues", label: "Issues / IDS", Icon: Flag },
+      { href: "/issues", label: "Issues", Icon: Flag },
       { href: "/change-portal", label: "Change Portal", Icon: Lightbulb },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },

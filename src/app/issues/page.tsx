@@ -38,7 +38,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   return (
     <div className="space-y-6">
       <SectionTitle
-        title="🚧 Issues List (IDS)"
+        title="🚧 Issues List"
         subtitle="Surface every obstacle, idea, or concern. In the meeting: prioritize the top 3, then Identify → Discuss → Solve."
         accent="bg-brand-gold"
         right={<div className="flex gap-2 text-xs">
@@ -83,7 +83,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
                 )}
                 {canClose(i) && (
                   <details className="inline-block">
-                    <summary className="cursor-pointer rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700">Solve (IDS)</summary>
+                    <summary className="cursor-pointer rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700">Solve</summary>
                     <form action={solveIssue} className="mt-2 grid grid-cols-1 gap-2 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200 sm:w-[28rem]">
                       <input type="hidden" name="id" value={i.id} />
                       <label><span className={labelCls}>The decision / how it was solved</span><input name="solveNote" placeholder="What did we decide?" className={inputCls} /></label>

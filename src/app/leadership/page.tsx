@@ -43,7 +43,7 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
     <div className="space-y-5">
       <SectionTitle
         title="👔 Leadership Meeting"
-        subtitle="Run the EOS Level 10 agenda below — Scorecard, Rocks, To-Dos, and IDS, all live."
+        subtitle="Run the EOS Level 10 agenda below — Scorecard, Rocks, To-Dos, and issues to solve, all live."
         accent="bg-brand-navy"
         right={
           <div className="flex items-center gap-3">

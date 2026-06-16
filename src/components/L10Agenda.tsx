@@ -48,7 +48,7 @@ export default function L10Agenda({ l10 }: { l10: L10 }) {
                 </div>
               ))}
             </div>}
-        <p className="mt-2 text-xs text-slate-500">Each owner: on-track or off-track? Off-track numbers become an issue — drop them down to IDS.</p>
+        <p className="mt-2 text-xs text-slate-500">Each owner: on-track or off-track? Off-track numbers become an issue — drop them down to the issues list to solve.</p>
       </Seg>
 
       <Seg n={3} title="Rock Review" mins={5} href="/rocks" hrefLabel="Rocks board">
@@ -68,7 +68,7 @@ export default function L10Agenda({ l10 }: { l10: L10 }) {
                 </li>
               ))}
             </ul>}
-        <p className="mt-2 text-xs text-slate-500">Off-track Rock? Don&apos;t solve it here — drop it to the Issues list for IDS.</p>
+        <p className="mt-2 text-xs text-slate-500">Off-track Rock? Don&apos;t solve it here — drop it to the Issues list to identify, discuss &amp; solve.</p>
       </Seg>
 
       <Seg n={4} title="Customer / Employee Headlines" mins={5}>
@@ -94,7 +94,7 @@ export default function L10Agenda({ l10 }: { l10: L10 }) {
             </ul>}
       </Seg>
 
-      <Seg n={6} title="IDS — Identify, Discuss, Solve" mins={60} href="/issues" hrefLabel="Issues list">
+      <Seg n={6} title="Identify, Discuss, Solve" mins={60} href="/issues" hrefLabel="Issues list">
         <p className="mb-2 text-sm text-slate-500">The heart of the meeting. Prioritize the top 3, then solve #1 all the way through before moving on.</p>
         {l10.issues.length === 0
           ? <p className="text-sm text-slate-400">No open issues. 🎉</p>
@@ -111,7 +111,7 @@ export default function L10Agenda({ l10 }: { l10: L10 }) {
 
       <Seg n={7} title="Conclude" mins={5} href="#notes" hrefLabel="Notes & rating">
         <ul className="space-y-1 text-sm text-slate-600">
-          <li>• Recap new <strong>to-dos</strong> created during IDS — each with an owner and a 7-day due date.</li>
+          <li>• Recap new <strong>to-dos</strong> created while solving issues — each with an owner and a 7-day due date.</li>
           <li>• Decide the <strong>cascading message</strong> — what to communicate to the rest of the team.</li>
           <li>• Everyone <strong>rates the meeting 1–10</strong> (target 8+). Log the rating in the notes below.</li>
         </ul>

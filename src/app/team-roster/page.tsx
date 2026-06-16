@@ -72,8 +72,8 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
       {/* EOS Accountability Chart + GWC */}
       <details open={seats.length > 0} className="rounded-xl ring-1 ring-violet-200">
         <summary className="cursor-pointer rounded-xl bg-violet-50 px-4 py-3">
-          <span className="text-sm font-bold text-violet-800">🗂 Accountability Chart + GWC</span>
-          <span className="ml-2 text-xs text-violet-600">Right person, right seat — the org structure, key roles, and Gets-it / Wants-it / Capacity read per seat.</span>
+          <span className="text-sm font-bold text-violet-800">🗂 Accountability Chart</span>
+          <span className="ml-2 text-xs text-violet-600">Right person, right seat — the org structure, key roles, and a Gets it / Wants it / Capacity read per seat.</span>
         </summary>
         <div className="p-4">
           <AccountabilityChart seats={seats} />
