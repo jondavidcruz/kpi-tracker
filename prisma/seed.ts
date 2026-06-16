@@ -32,8 +32,6 @@ const KPIS = [
   { key: "acq_signed_novation", name: "Signed — Novation", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Novation." },
   { key: "acq_signed_listing", name: "Signed — Listing", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Listing." },
   { key: "acq_signed_creative", name: "Signed — Creative", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Creative deal." },
-  { key: "acq_talk_time", name: "Total Talk Time", emoji: "🎧", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 90 * 60, goalKind: "at_least", definition: "Total time on the phone with sellers." },
-  { key: "acq_dialer_talk_time", name: "Dialer Talk Time", emoji: "📟", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Talk time logged through the dialer when contacting sellers — adds to total outbound effort." },
 
   // ===== Dispositions (Sharyn, Marie) =====
   { key: "deals_comped", name: "Deals Comped", emoji: "💰", category: "blue", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Deals we ran comps on." },
@@ -45,7 +43,6 @@ const KPIS = [
   { key: "contracts_assigned", name: "Contracts Assigned", emoji: "🏁", category: "green", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Deals we got assigned/sold to a buyer (closed assignment)." },
   { key: "deals_comped", name: "Deals Comped", emoji: "💰", category: "blue", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Deals we ran comps on." },
   { key: "avg_days_to_sell", name: "Avg Days-to-Sell", emoji: "⏳", category: "yellow", unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "at_most", definition: "Average days a deal sits before sold (lower is better)." },
-  { key: "ds_dialer_talk_time", name: "Dialer Talk Time", emoji: "📟", category: "blue", unit: "duration", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Talk time logged through the dialer when contacting buyers — adds to total outbound effort." },
 
   // ===== Lead sources — daily (PPL model, team-shared) =====
   { key: "ppl_leads", name: "PPL Leads (Purchased/Inbound)", emoji: "🎟️", category: "green", unit: "count", scope: "team", roleKey: "", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Paid-per-lead leads purchased + inbound leads received." },
@@ -68,6 +65,11 @@ const KPIS = [
   { key: "net_margin", name: "Net Margin", emoji: "％", category: "yellow", unit: "percent", scope: "team", roleKey: "", cadence: "monthly", goalValue: null, goalKind: "tracked", computed: true, formula: "net_margin", definition: "(Revenue − Mktg − OpEx) ÷ Revenue." },
   { key: "marketing_roi", name: "Marketing ROI", emoji: "🧮", category: "yellow", unit: "ratio", scope: "team", roleKey: "", cadence: "monthly", goalValue: null, goalKind: "tracked", computed: true, formula: "marketing_roi", definition: "(Revenue − Mktg) ÷ Mktg." },
   { key: "company_roi", name: "Company ROI", emoji: "🧮", category: "yellow", unit: "ratio", scope: "team", roleKey: "", cadence: "monthly", goalValue: null, goalKind: "tracked", computed: true, formula: "company_roi", definition: "(Revenue − Mktg − OpEx) ÷ (Mktg + OpEx)." },
+
+  // ===== Talk time — kept at the END of each scorecard, side by side =====
+  { key: "acq_talk_time", name: "CRM Talk Time", emoji: "🎧", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 90 * 60, goalKind: "at_least", definition: "Talk time logged in the CRM with sellers." },
+  { key: "acq_dialer_talk_time", name: "Dialer Talk Time", emoji: "📟", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Talk time logged through the dialer when contacting sellers — adds to total outbound effort." },
+  { key: "ds_dialer_talk_time", name: "Dialer Talk Time", emoji: "📟", category: "blue", unit: "duration", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Talk time logged through the dialer when contacting buyers — adds to total outbound effort." },
 ];
 
 // Reps with their positions. Emails are placeholders — edit in Admin.
