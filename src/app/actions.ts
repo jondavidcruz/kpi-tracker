@@ -1311,3 +1311,83 @@ export async function advancePip(formData: FormData) {
   revalidatePath("/pip");
   redirect("/pip?saved=1");
 }
+
+// --- Marketing directory + research (manager-curated) -----------------------
+
+export async function saveMarketContact(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const name = str("name");
+  if (!name) return;
+  const data = {
+    name, category: str("category") === "luxury" ? "luxury" : "distressed",
+    type: str("type"), market: str("market"), contact: str("contact"),
+    buyBox: str("buyBox"), notes: str("notes"), sortOrder: Number(formData.get("sortOrder")) || 0,
+  };
+  if (id) await db.marketContact.update({ where: { id }, data });
+  else await db.marketContact.create({ data });
+  revalidatePath("/marketing");
+  redirect("/marketing?saved=1");
+}
+
+export async function deleteMarketContact(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.marketContact.delete({ where: { id } });
+  revalidatePath("/marketing");
+  redirect("/marketing");
+}
+
+export async function saveMarketingNotes(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const data = {
+    marketingMarkets: String(formData.get("marketingMarkets") ?? "").trim(),
+    marketingResearch: String(formData.get("marketingResearch") ?? "").trim(),
+  };
+  await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
+  revalidatePath("/marketing");
+  redirect("/marketing?saved=1");
+}
+
+// --- Roadmap / backlog (manager-curated) ------------------------------------
+
+export async function saveRoadmapItem(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const title = str("title");
+  if (!title) return;
+  const data = { title, detail: str("detail"), category: str("category") || "Other", status: str("status") || "todo", sortOrder: Number(formData.get("sortOrder")) || 0 };
+  if (id) await db.roadmapItem.update({ where: { id }, data });
+  else await db.roadmapItem.create({ data });
+  revalidatePath("/roadmap");
+  redirect("/roadmap?saved=1");
+}
+
+/** Cycle a roadmap item's status: todo -> doing -> done -> todo. */
+export async function cycleRoadmapStatus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const item = await db.roadmapItem.findUnique({ where: { id } });
+  if (!item) return;
+  const next = item.status === "todo" ? "doing" : item.status === "doing" ? "done" : "todo";
+  await db.roadmapItem.update({ where: { id }, data: { status: next } });
+  revalidatePath("/roadmap");
+  redirect("/roadmap");
+}
+
+export async function deleteRoadmapItem(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.roadmapItem.delete({ where: { id } });
+  revalidatePath("/roadmap");
+  redirect("/roadmap");
+}

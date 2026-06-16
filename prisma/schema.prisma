@@ -366,6 +366,10 @@ model Settings {
   teamMeetLink       String @default("") // Google Meet link for the Monday all-call
   leadershipMeetLink String @default("") // Google Meet link for the leadership meeting
 
+  // ---- Marketing research ----
+  marketingMarkets  String @default("") // markets we're in (newline list)
+  marketingResearch String @default("") // freeform research notes
+
   // ---- Ethan shift-aware KPI reminder ----
   ethanShiftIcsUrl   String @default("") // secret iCal URL of the AQ Shift calendar
   ethanReminderEmail String @default("") // where the EOD reminder goes
@@ -466,6 +470,39 @@ model Rock {
   updatedAt  DateTime @updatedAt
 
   @@index([quarter])
+}
+
+// Marketing — buyers / developers / flippers directory + markets + research.
+// Distinguishes Luxury/Developers from Distressed/Flippers. Manager-curated.
+model MarketContact {
+  id        String   @id @default(cuid())
+  name      String
+  category  String   @default("distressed") // luxury | distressed
+  type      String   @default("") // developer | flipper | cash_buyer | investor | agent | other
+  market    String   @default("") // city / region they buy in
+  contact   String   @default("") // email / phone
+  buyBox    String   @default("") // price range / criteria / what they want
+  notes     String   @default("")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+// Roadmap / backlog — the running list of what's still to build or do. Owner-
+// curated; the team can see where the war room is headed.
+model RoadmapItem {
+  id        String   @id @default(cuid())
+  title     String
+  detail    String   @default("")
+  category  String   @default("Other") // Hub | Marketing | Process | Automation | Training | Analytics | Other
+  status    String   @default("todo") // todo | doing | done
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
 }
 
 // Software & logins directory (native). Lists every tool the team uses and

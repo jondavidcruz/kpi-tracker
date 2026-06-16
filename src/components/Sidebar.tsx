@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -56,7 +56,11 @@ export default function Sidebar({
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
     ] },
+    { label: "Marketing", items: [
+      { href: "/marketing", label: "Marketing", Icon: Megaphone, managerOnly: true },
+    ] },
     { label: "Operations", items: [
+      { href: "/roadmap", label: "Roadmap", Icon: Map, managerOnly: true },
       { href: "/operations", label: "Resources & SOPs", Icon: Briefcase, adminOnly: true },
       { href: "/closed-deals", label: "Closed deals", Icon: DollarSign, adminOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, adminOnly: true },
