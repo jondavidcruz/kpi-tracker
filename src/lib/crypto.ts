@@ -9,15 +9,29 @@
 import crypto from "crypto";
 
 function getKey(): Buffer | null {
+  // Preferred: an explicit 32-byte VAULT_KEY (hex or base64). Most durable.
   const k = process.env.VAULT_KEY;
-  if (!k) return null;
-  let buf: Buffer;
-  try {
-    buf = /^[0-9a-fA-F]{64}$/.test(k) ? Buffer.from(k, "hex") : Buffer.from(k, "base64");
-  } catch {
-    return null;
+  if (k) {
+    let buf: Buffer;
+    try {
+      buf = /^[0-9a-fA-F]{64}$/.test(k) ? Buffer.from(k, "hex") : Buffer.from(k, "base64");
+    } catch {
+      buf = Buffer.alloc(0);
+    }
+    if (buf.length === 32) return buf;
   }
-  return buf.length === 32 ? buf : null;
+
+  // Zero-setup fallback: derive a stable key from a secret the server already
+  // has (still an env var, never in the database — a DB leak alone can't decrypt).
+  // Trade-off: if that base secret is rotated, stored passwords must be re-entered;
+  // set a dedicated VAULT_KEY to avoid that.
+  const base =
+    process.env.INGEST_SECRET ||
+    process.env.CRON_SECRET ||
+    process.env.DIRECT_URL ||
+    process.env.DATABASE_URL;
+  if (!base) return null;
+  return crypto.scryptSync(base, "freedom-offers-vault-v1", 32);
 }
 
 /** True when a valid 32-byte VAULT_KEY is configured. */

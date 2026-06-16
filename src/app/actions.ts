@@ -16,6 +16,39 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { quarterOf, quarterEnd } from "@/lib/eos";
 import { encryptSecret, vaultConfigured } from "@/lib/crypto";
+import { adminConfigured, createAdminClient, findAuthUserByEmail } from "@/lib/supabase/admin";
+
+// --- Email + password auth management ---------------------------------------
+
+/** Owner sets/creates a team member's password (no email needed). Admin only. */
+export async function setTeamPassword(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  if (!adminConfigured()) redirect("/admin?pwerr=nokey#access");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  if (!email || password.length < 8) redirect("/admin?pwerr=short#access");
+  const admin = createAdminClient();
+  const authId = await findAuthUserByEmail(email);
+  const res = authId
+    ? await admin.auth.admin.updateUserById(authId, { password, email_confirm: true })
+    : await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  if (res.error) redirect("/admin?pwerr=1#access");
+  revalidatePath("/admin");
+  redirect(`/admin?pwok=${encodeURIComponent(email)}#access`);
+}
+
+/** Any signed-in user sets their own password (uses their session). */
+export async function setMyPassword(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const password = String(formData.get("password") ?? "");
+  if (password.length < 8) redirect("/admin?pwerr=short#access");
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) redirect("/admin?pwerr=1#access");
+  redirect("/admin?pwok=you#access");
+}
 
 /** Sign the current user out and return to the login screen. */
 export async function signOut() {
