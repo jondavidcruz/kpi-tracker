@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording } from "@/app/actions";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings, getKpis } from "@/lib/data";
 import { db } from "@/lib/db";
 import { getMeetingDeck } from "@/lib/meeting";
@@ -17,12 +17,11 @@ const labelCls = "mb-1 block text-xs font-semibold text-slate-500";
 
 export default async function MeetingPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) {
+  if (!isManager(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
-        <h1 className="text-xl font-bold">Owner only</h1>
-        <p className="mt-2 text-sm text-slate-500">This meeting page is private to the owner.</p>
+        <h1 className="text-xl font-bold">Managers only</h1>
         <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
       </Card>
     );

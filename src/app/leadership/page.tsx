@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { saveLeadershipSettings, addMeetingNote, deleteMeetingNote } from "@/app/actions";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { getLeadershipDeck, getL10 } from "@/lib/meeting";
@@ -18,16 +18,16 @@ const labelCls = "mb-1 block text-xs font-semibold text-slate-500";
 
 export default async function LeadershipPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) {
+  if (!isManager(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
-        <h1 className="text-xl font-bold">Owner only</h1>
-        <p className="mt-2 text-sm text-slate-500">This meeting page is private to the owner.</p>
+        <h1 className="text-xl font-bold">Managers only</h1>
         <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
       </Card>
     );
   }
+  const owner = isAdmin(me); // the Issues list is owner-only — hide its contents from managers
   const sp = await searchParams;
   const [settings, notes, recordings] = await Promise.all([
     getSettings(),
@@ -55,7 +55,7 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
       />
 
       {/* EOS Level 10 Meeting — the live 90-min agenda runner */}
-      <L10Agenda l10={l10} />
+      <L10Agenda l10={l10} showIssues={owner} />
 
       {/* Present-mode deck (screen-share slides) */}
       <div className="border-t border-slate-200 pt-5">

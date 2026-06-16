@@ -24,7 +24,7 @@ function Seg({ n, title, mins, children, href, hrefLabel }: {
   );
 }
 
-export default function L10Agenda({ l10 }: { l10: L10 }) {
+export default function L10Agenda({ l10, showIssues = true }: { l10: L10; showIssues?: boolean }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -75,7 +75,7 @@ export default function L10Agenda({ l10 }: { l10: L10 }) {
         <p className="text-sm text-slate-500">Quick bullet headlines — wins, concerns, anything the team should know. No discussion; anything that needs solving becomes an issue.</p>
       </Seg>
 
-      <Seg n={5} title="To-Do List" mins={5} href="/issues" hrefLabel="Open list">
+      <Seg n={5} title="To-Do List" mins={5} href={showIssues ? "/issues" : undefined} hrefLabel={showIssues ? "Open list" : undefined}>
         <div className="mb-2 flex items-center gap-2">
           <div className="relative h-2 w-40 overflow-hidden rounded-full bg-slate-200">
             <div className="absolute inset-y-0 left-0 rounded-full bg-emerald-500" style={{ width: `${l10.todos.donePct}%` }} />
@@ -94,9 +94,11 @@ export default function L10Agenda({ l10 }: { l10: L10 }) {
             </ul>}
       </Seg>
 
-      <Seg n={6} title="Identify, Discuss, Solve" mins={60} href="/issues" hrefLabel="Issues list">
+      <Seg n={6} title="Identify, Discuss, Solve" mins={60} href={showIssues ? "/issues" : undefined} hrefLabel={showIssues ? "Issues list" : undefined}>
         <p className="mb-2 text-sm text-slate-500">The heart of the meeting. Prioritize the top 3, then solve #1 all the way through before moving on.</p>
-        {l10.issues.length === 0
+        {!showIssues
+          ? <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500 ring-1 ring-slate-200">🔒 The issues list is owner-only — the owner walks the team through the top issues live.</p>
+          : l10.issues.length === 0
           ? <p className="text-sm text-slate-400">No open issues. 🎉</p>
           : <ol className="space-y-1">
               {l10.issues.map((iss, i) => (
