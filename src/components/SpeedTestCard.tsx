@@ -32,8 +32,11 @@ export default function SpeedTestCard({
       // Parallel-stream test against Cloudflare's nearest server (~8s),
       // ticking the display live as it measures.
       const result = await measureDownloadMbps((live) => setMbps(Math.round(live)));
-      setMbps(Math.max(1, Math.round(result.mbps)));
+      const final = Math.max(1, Math.round(result.mbps));
+      setMbps(final);
       setRough(!result.accurate);
+      // Auto-save today's result so it's always recorded (no extra click).
+      await saveResult(final);
     } catch {
       setErr("Test failed. Check your connection and try again.");
     } finally {
@@ -41,14 +44,17 @@ export default function SpeedTestCard({
     }
   }
 
-  async function save() {
-    if (mbps === null) return;
+  async function saveResult(value: number) {
     const fd = new FormData();
     fd.set("userId", userId);
     fd.set("date", date);
-    fd.set("mbps", String(mbps));
+    fd.set("mbps", String(value));
     await saveSpeedTest(fd);
     setSaved(true);
+  }
+
+  async function save() {
+    if (mbps !== null) await saveResult(mbps);
   }
 
   const status =
@@ -64,7 +70,7 @@ export default function SpeedTestCard({
         <div>
           <h3 className="text-base font-bold text-slate-800">⚡️ Internet Speed Test</h3>
           <p className="text-sm text-slate-500">
-            Run a quick test, then save it. Goal: <strong>{goal}+ Mbps</strong> for smooth dialer / calls / CRM.
+            Run a quick test — it saves to today&apos;s record automatically. Goal: <strong>{goal}+ Mbps</strong> for smooth dialer / calls / CRM.
           </p>
         </div>
         <div className="text-right">

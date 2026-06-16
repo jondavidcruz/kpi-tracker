@@ -35,8 +35,9 @@ export default async function EntryPage({
     rep
       ? getKpis({ scope: "per_rep", cadence: "daily", computed: false, roleKey: rep.position })
       : Promise.resolve([]),
-    // Internet-speed KPI shows for anyone flagged tracksInternet, across roles.
-    rep?.tracksInternet
+    // Internet-speed test shows for EVERY rep so each person's daily speed is
+    // recorded (alerts still only fire for tracksInternet reps — see alerts.ts).
+    rep
       ? getKpis({ scope: "per_rep", cadence: "daily", computed: false, roleKey: "internet" })
       : Promise.resolve([]),
     getKpis({ scope: "team", cadence: "daily", computed: false }),
