@@ -5,15 +5,17 @@ import {
   getOpenDeals,
   getDealMetrics,
   getSettings,
+  getAllTargets,
+  resolveGoalWith,
 } from "@/lib/data";
-import { todayStr, lastWeekRange, currentWeekRange } from "@/lib/date";
+import { todayStr, lastWeekRange, currentWeekRange, datesInRange } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { KpiLabel } from "@/lib/kpiIcons";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
-import type { Kpi, User } from "@prisma/client";
+import type { Kpi, User, Target } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -40,14 +42,22 @@ export default async function ReportPage({
   const wk = showLast ? lastWeekRange(today) : currentWeekRange(today);
 
   const year = today.slice(0, 4);
-  const [reps, perRepKpis, teamKpis, sums, deals, dealMetrics] = await Promise.all([
+  const [reps, perRepKpis, teamKpis, sums, deals, dealMetrics, targets] = await Promise.all([
     getActiveReps(),
     getKpis({ scope: "per_rep", computed: false }),
     getKpis({ scope: "team", computed: false, cadence: "daily" }),
     getRangeSums(wk.start, wk.end),
     getOpenDeals(),
     getDealMetrics(year),
+    getAllTargets(),
   ]);
+  // Working days in the week → turns each rep's per-day goal into a weekly target,
+  // so the scoreboard shows % against each person's OWN goal (fair across hours).
+  const month = today.slice(0, 7);
+  const workdays = Math.max(1, datesInRange(wk.start, wk.end).filter((d) => {
+    const dow = new Date(d + "T00:00:00Z").getUTCDay();
+    return dow >= 1 && dow <= 5;
+  }).length);
   const goalRemaining = Math.max(0, (settings.annualRevenueGoal ?? 0) - dealMetrics.revenueClosed);
 
   // The activity scoreboard stays visible to everyone; the company-money
@@ -132,6 +142,9 @@ export default async function ReportPage({
                 reps={roleReps}
                 kpis={roleKpis}
                 sums={sums}
+                targets={targets}
+                month={month}
+                workdays={workdays}
               />
             );
           })}
@@ -217,11 +230,17 @@ function RoleWeekTable({
   reps,
   kpis,
   sums,
+  targets,
+  month,
+  workdays,
 }: {
   title: string;
   reps: User[];
   kpis: Kpi[];
   sums: Map<string, number>;
+  targets: Target[];
+  month: string;
+  workdays: number;
 }) {
   return (
     <div>
@@ -242,11 +261,20 @@ function RoleWeekTable({
             {reps.map((rep) => (
               <tr key={rep.id} className="border-b border-slate-100 last:border-0">
                 <td className="sticky left-0 bg-white px-4 py-2.5 font-semibold text-slate-800">{rep.name}</td>
-                {kpis.map((k) => (
-                  <td key={k.id} className="px-3 py-2.5 text-center tabular-nums text-slate-700">
-                    {formatValue(k.unit as Unit, sums.get(`${k.id}|${rep.id}`) ?? 0)}
-                  </td>
-                ))}
+                {kpis.map((k) => {
+                  const val = sums.get(`${k.id}|${rep.id}`) ?? 0;
+                  // Per-rep weekly target = their per-day goal × working days this week.
+                  const dailyGoal = (k.goalKind === "at_least") ? resolveGoalWith(targets, k, rep.id, month) : null;
+                  const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdays : null;
+                  const pct = weeklyGoal ? Math.round((val / weeklyGoal) * 100) : null;
+                  const pctCls = pct == null ? "" : pct >= 100 ? "text-emerald-600" : pct >= 70 ? "text-amber-600" : "text-red-600";
+                  return (
+                    <td key={k.id} className="px-3 py-2.5 text-center tabular-nums text-slate-700">
+                      {formatValue(k.unit as Unit, val)}
+                      {pct != null && <span className={`ml-1 text-[10px] font-semibold ${pctCls}`}>{pct}%</span>}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

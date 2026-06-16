@@ -11,6 +11,7 @@ import { dealsNeedingAttention } from "./deals";
 import { sendWeeklyTeamEmail, sendDailyTeamReview } from "./weekly";
 import { sendEthanReminder } from "./ethan-reminder";
 import { recordWeeklyAwards } from "./awards";
+import { sendEosPulse } from "./eos-pulse";
 import {
   alertEmailHtml,
   getChannelConfig,
@@ -540,6 +541,8 @@ export async function runScheduledChecks(opts?: {
     opts?.weekly || isMondayMorning ? await sendWeeklyTeamEmail(date) : false;
   // Record last week's top-performer wins for the gamified leaderboard (Mondays).
   if (opts?.weekly || isMondayMorning) await recordWeeklyAwards(date).catch(() => {});
+  // Weekly EOS pulse to managers — off-track Rocks, To-Dos, open-issue counts.
+  if (opts?.weekly || isMondayMorning) await sendEosPulse(date).catch(() => {});
 
   // End-of-day team review — on the post-cutoff (6:30pm) weekday run, after KPIs
   // are entered. Force with ?review=1.
