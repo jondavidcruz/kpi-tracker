@@ -54,9 +54,11 @@ export default function Sidebar({
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
+    ] },
+    { label: "Operations", items: [
+      { href: "/operations", label: "Resources & SOPs", Icon: Briefcase, adminOnly: true },
       { href: "/closed-deals", label: "Closed deals", Icon: DollarSign, adminOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, adminOnly: true },
-      { href: "/operations", label: "Operations", Icon: Briefcase, adminOnly: true },
       { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
     ] },
   ];
