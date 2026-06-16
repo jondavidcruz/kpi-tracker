@@ -360,7 +360,7 @@ export async function saveSettings(formData: FormData) {
 /** Save the Monday-Meeting deck content (annual goal + editorial slides). Managers only. */
 export async function saveMeetingSettings(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const data = {
     annualRevenueGoal: numOrNull(formData.get("annualRevenueGoal")) ?? 0,
     homeownersGoal: Math.round(numOrNull(formData.get("homeownersGoal")) ?? 24),
@@ -379,7 +379,7 @@ export async function saveMeetingSettings(formData: FormData) {
 /** Save the Leadership-meeting deck content (agenda, talking points, action items). Managers only. */
 export async function saveLeadershipSettings(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const data = {
     leadAgenda: String(formData.get("leadAgenda") ?? "").trim(),
     mtgTalkingPoints: String(formData.get("mtgTalkingPoints") ?? "").trim(),
@@ -394,7 +394,7 @@ export async function saveLeadershipSettings(formData: FormData) {
 /** Capture a feedback note during a meeting. Managers only. */
 export async function addMeetingNote(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const text = String(formData.get("text") ?? "").trim();
   const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   if (!text) return;
@@ -407,7 +407,7 @@ export async function addMeetingNote(formData: FormData) {
 /** Delete a meeting note. Managers only. */
 export async function deleteMeetingNote(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   if (id) await db.meetingNote.delete({ where: { id } });
@@ -421,7 +421,7 @@ export async function deleteMeetingNote(formData: FormData) {
 /** File a Fathom recording link for a meeting; optionally post it to Google Chat. */
 export async function addRecording(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   const title = String(formData.get("title") ?? "").trim();
   const url = String(formData.get("url") ?? "").trim();
@@ -440,7 +440,7 @@ export async function addRecording(formData: FormData) {
 
 export async function deleteRecording(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   const meeting = String(formData.get("meeting") ?? "monday") === "leadership" ? "leadership" : "monday";
   if (id) await db.meetingRecording.delete({ where: { id } });
@@ -839,7 +839,7 @@ export async function deleteToDo(formData: FormData) {
 /** Add a Monday-Meeting training tip to the backlog. Managers only. */
 export async function saveTrainingTip(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const text = String(formData.get("text") ?? "").trim();
   if (!text) return;
   const kpiKey = String(formData.get("kpiKey") ?? "").trim();
@@ -851,7 +851,7 @@ export async function saveTrainingTip(formData: FormData) {
 /** Delete a training tip. Managers only. */
 export async function deleteTrainingTip(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!isAdmin(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.trainingTip.delete({ where: { id } });
   revalidatePath("/meeting");

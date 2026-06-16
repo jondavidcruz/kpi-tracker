@@ -37,8 +37,8 @@ export default function Sidebar({
       { href: "/monthly", label: "Monthly report", Icon: CalendarDays },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/trends", label: "Trends", Icon: TrendingUp, managerOnly: true },
-      { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
-      { href: "/leadership", label: "Leadership Meeting", Icon: Crown, managerOnly: true },
+      { href: "/meeting", label: "Monday Meeting", Icon: Presentation, adminOnly: true },
+      { href: "/leadership", label: "Leadership Meeting", Icon: Crown, adminOnly: true },
     ] },
     { label: "Coaching", items: [
       { href: "/alerts", label: "Alerts", Icon: Bell },
