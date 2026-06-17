@@ -116,7 +116,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             </label>
             <button className="w-full rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Submit request</button>
           </form>
-          <p className="mt-2 text-[11px] text-slate-400">Approved time off will also sync to your Google Calendar (coming soon).</p>
+          <p className="mt-2 text-[11px] text-slate-400">Approved time off syncs to the shared team Google Calendar (once connected).</p>
         </Card>
 
         {/* Calendar */}

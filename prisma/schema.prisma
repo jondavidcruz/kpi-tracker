@@ -691,6 +691,7 @@ model TimeOff {
   endDate   String // YYYY-MM-DD (inclusive)
   note      String   @default("")
   status    String   @default("requested") // requested | approved | denied
+  gcalEventId String @default("") // Google Calendar event id once synced (approval)
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 

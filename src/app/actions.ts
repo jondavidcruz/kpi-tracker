@@ -17,6 +17,7 @@ import { todayStr } from "@/lib/date";
 import { quarterOf, quarterEnd } from "@/lib/eos";
 import { encryptSecret, vaultConfigured } from "@/lib/crypto";
 import { adminConfigured, createAdminClient, findAuthUserByEmail } from "@/lib/supabase/admin";
+import { createTimeOffEvent, deleteTimeOffEvent } from "@/lib/gcal";
 
 // --- Email + password auth management ---------------------------------------
 
@@ -1500,7 +1501,11 @@ export async function requestTimeOff(formData: FormData) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < startDate) endDate = startDate;
   // Managers' own requests are auto-approved; everyone else starts as requested.
   const status = isManager(me) ? "approved" : "requested";
-  await db.timeOff.create({ data: { userId: me.id, type, startDate, endDate, note, status } });
+  const row = await db.timeOff.create({ data: { userId: me.id, type, startDate, endDate, note, status } });
+  if (status === "approved") {
+    const eventId = await createTimeOffEvent({ name: me.name, type, startDate, endDate, note }).catch(() => null);
+    if (eventId) await db.timeOff.update({ where: { id: row.id }, data: { gcalEventId: eventId } });
+  }
   revalidatePath("/schedule");
 }
 
@@ -1511,7 +1516,17 @@ export async function setTimeOffStatus(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!id || !["approved", "denied", "requested"].includes(status)) return;
+  const row = await db.timeOff.findUnique({ where: { id }, include: { user: { select: { name: true } } } });
+  if (!row) return;
   await db.timeOff.update({ where: { id }, data: { status } });
+  // Sync Google Calendar: create on approve, remove if un-approved.
+  if (status === "approved" && !row.gcalEventId) {
+    const eventId = await createTimeOffEvent({ name: row.user.name, type: row.type, startDate: row.startDate, endDate: row.endDate, note: row.note }).catch(() => null);
+    if (eventId) await db.timeOff.update({ where: { id }, data: { gcalEventId: eventId } });
+  } else if (status !== "approved" && row.gcalEventId) {
+    await deleteTimeOffEvent(row.gcalEventId).catch(() => {});
+    await db.timeOff.update({ where: { id }, data: { gcalEventId: "" } });
+  }
   revalidatePath("/schedule");
 }
 
@@ -1524,6 +1539,7 @@ export async function deleteTimeOff(formData: FormData) {
   const row = await db.timeOff.findUnique({ where: { id } });
   if (!row) return;
   if (row.userId !== me.id && !isManager(me)) return;
+  if (row.gcalEventId) await deleteTimeOffEvent(row.gcalEventId).catch(() => {});
   await db.timeOff.delete({ where: { id } });
   revalidatePath("/schedule");
 }
