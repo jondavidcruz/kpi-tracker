@@ -377,6 +377,9 @@ model Settings {
   ethanShiftIcsUrl   String @default("") // secret iCal URL of the AQ Shift calendar
   ethanReminderEmail String @default("") // where the EOD reminder goes
   ethanRemindedOn    String @default("") // "YYYY-MM-DD" we last reminded — dedupes same-day sends
+
+  // ---- Time-off Google Calendar (auto-provisioned, service-account owned) ----
+  timeoffCalendarId  String @default("") // id of the SA-owned "Time Off" calendar
 }
 
 // A Fathom recording link for a past meeting (we store the link, not the video).

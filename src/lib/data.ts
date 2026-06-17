@@ -32,6 +32,7 @@ export async function getSettings() {
       ethanShiftIcsUrl: "",
       ethanReminderEmail: "",
       ethanRemindedOn: "",
+      timeoffCalendarId: "",
     }
   );
 }
