@@ -16,6 +16,7 @@ const BUYING_FREQ = ["1+ / week", "1–3 / month", "A few / quarter", "Opportuni
 const PROPERTY_TYPE = ["SFR", "Condo / Townhome", "Small multi (2–4)", "Mobile / Manufactured", "Any"];
 const CONDITION = ["Any / teardown OK", "Heavy rehab", "Light–moderate", "Turnkey only"];
 const NEEDS_VIEW = ["No — offers sight-unseen", "Yes — needs walkthrough", "Sometimes"];
+const VET_STAGES: [string, string][] = [["to_vet", "To vet"], ["vetted", "Vetted"], ["active", "Active buyer"], ["hold", "On hold"], ["dead", "Dead"]];
 
 type CD = { id?: string } & Record<string, string | number | null | undefined>;
 
@@ -63,7 +64,12 @@ export default function MarketContactForm({ c, defaultCategory }: { c?: CD; defa
       <Inp name="title" label="Title / role" c={c} />
       <Inp name="company" label={isDev ? "Company / Dev firm" : "Company"} c={c} span={2} />
       <Sel name="preferredContact" label="Preferred contact method" c={c} options={PREFERRED_CONTACT} />
-      <Inp name="status" label="Status" c={c} />
+      <label><span className={labelCls}>Vetting stage</span>
+        <select name="vetStage" defaultValue={val(c, "vetStage") || "to_vet"} className={inputCls}>
+          {VET_STAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </label>
+      <Inp name="status" label="Status tag" c={c} />
       <Inp name="phone" label="Phone" c={c} />
       <Inp name="email" label="Email" c={c} />
       <Inp name="igHandle" label="Instagram" c={c} placeholder="@handle" />

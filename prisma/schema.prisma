@@ -487,7 +487,8 @@ model MarketContact {
   type        String   @default("") // developer | custom | remodeler | flipper | cash_buyer | investor | agent | other
   region      String   @default("") // SD | OC | LA | other
   market      String   @default("") // city / area they buy in
-  status      String   @default("") // freeform: Priority | To Vet | Contacted | Buy Box | Dead …
+  status      String   @default("") // freeform tag: Priority | B-rated | Buy Box …
+  vetStage    String   @default("to_vet") // vetting workflow: to_vet | vetted | active | hold | dead
   email       String   @default("")
   phone       String   @default("")
   website     String   @default("")

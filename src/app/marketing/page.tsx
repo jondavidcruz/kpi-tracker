@@ -7,6 +7,7 @@ import { Card, SectionTitle } from "@/components/ui";
 import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
 import CopyButton from "@/components/CopyButton";
 import MarketContactForm from "@/components/MarketContactForm";
+import MarketRolodexFilter from "@/components/MarketRolodexFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ const TYPES = ["developer", "custom", "remodeler", "flipper", "cash_buyer", "inv
 const REGIONS = [["SD", "San Diego Co."], ["OC", "Orange Co."], ["LA", "Los Angeles"], ["other", "Other / TBD"]];
 
 type MC = Buyer & {
-  sortOrder: number; igHandle: string; bestContact: string; lastContacted: string; nextFollowUp: string; outreachLog: string;
+  sortOrder: number; vetStage: string; igHandle: string; bestContact: string; lastContacted: string; nextFollowUp: string; outreachLog: string;
   company: string; title: string; preferredContact: string; decisionMaker: string; buyingFrequency: string; priceRange: string; closingSpeed: string;
   dealType: string; buildType: string; minLotSize: string;
   marketDetails: string; minBeds: string; maxBaths: string; propertyType: string; conditionTolerance: string; needsView: string;
@@ -27,11 +28,23 @@ function Rolodex({ items }: { items: MC[] }) {
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       {items.length === 0 && <Card className="p-6 text-center text-sm text-slate-400 lg:col-span-2">None yet.</Card>}
-      {items.map((c) => (
-        <Card key={c.id} className="p-3">
+      {items.map((c) => {
+        const stage = c.vetStage || "to_vet";
+        const stageMeta: Record<string, { label: string; cls: string }> = {
+          to_vet: { label: "To vet", cls: "bg-slate-200 text-slate-600" },
+          vetted: { label: "Vetted", cls: "bg-sky-100 text-sky-700" },
+          active: { label: "Active", cls: "bg-emerald-100 text-emerald-700" },
+          hold: { label: "On hold", cls: "bg-amber-100 text-amber-700" },
+          dead: { label: "Dead", cls: "bg-red-100 text-red-700" },
+        };
+        const sm = stageMeta[stage] ?? stageMeta.to_vet;
+        const hay = [c.name, c.company, c.market, c.buyBoxAreas, c.priceRange, c.dealType, c.buildType, c.propertyType, c.status, c.email, c.phone, c.igHandle].filter(Boolean).join(" ").toLowerCase();
+        return (
+        <div key={c.id} data-mc-card data-search={hay} data-stage={stage}>
+        <Card className="p-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-slate-800">{c.name}</span>
-            {c.type && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{c.type}</span>}
+            <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${sm.cls}`}>{sm.label}</span>
             {c.status && <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{c.status}</span>}
             {c.market && <span className="ml-auto text-xs text-slate-400">📍 {c.market}</span>}
           </div>
@@ -62,7 +75,9 @@ function Rolodex({ items }: { items: MC[] }) {
             <form action={deleteMarketContact} className="mt-1"><input type="hidden" name="id" value={c.id} /><button className="text-[11px] font-medium text-slate-300 hover:text-red-600">Delete</button></form>
           </details>
         </Card>
-      ))}
+        </div>
+        );
+      })}
     </div>
   );
 }
@@ -186,7 +201,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       {/* CSV bulk import — for the dispo team to add vetted developers/flippers fast */}
       <Card className="border-l-4 border-emerald-300 bg-emerald-50/40 p-5">
         <h3 className="mb-1 text-sm font-bold text-slate-700">⬆️ Bulk import (CSV)</h3>
-        <p className="mb-2 text-xs text-slate-500">Add many vetted developers / flippers at once. Header row columns: <span className="font-mono">name, category (luxury|distressed), type, region, market, status, email, phone, website, buyBox, buyBoxAreas, igHandle, bestContact, lat, lng, notes</span>. Only <strong>name</strong> is required.</p>
+        <p className="mb-2 text-xs text-slate-500">Add many vetted developers / flippers at once. Header row columns (any subset): <span className="font-mono">name, category (luxury|distressed), company, title, market, status, vetStage, email, phone, website, preferredContact, decisionMaker, buyingFrequency, priceRange, closingSpeed, dealType, buildType, minLotSize, propertyType, minBeds, maxBaths, conditionTolerance, needsView, buyBoxAreas (target geography / preferred markets), marketDetails, igHandle, bestContact, lat, lng, notes</span>. Only <strong>name</strong> is required.</p>
         <form action={importMarketContacts} className="grid grid-cols-1 gap-2">
           <input type="file" name="file" accept=".csv,text/csv" className="text-xs text-slate-600" />
           <textarea name="csv" rows={3} placeholder="…or paste CSV here (first row = headers)" className={inputCls} />
@@ -195,6 +210,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       </Card>
 
       {/* Rolodex by category */}
+      <MarketRolodexFilter />
       <div>
         <SectionTitle title="🏛 Luxury / Developers" subtitle={`${luxury.length} developers & luxury buyers`} accent="bg-brand-navy" />
         <Rolodex items={luxury} />

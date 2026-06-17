@@ -1336,6 +1336,7 @@ export async function saveMarketContact(formData: FormData) {
   const data = {
     name, category: str("category") === "luxury" ? "luxury" : "distressed",
     type: str("type"), region: str("region"), market: str("market"), status,
+    vetStage: str("vetStage") || "to_vet",
     email: str("email"), phone: str("phone"), website: str("website"),
     buyBox: str("buyBox"), buyBoxAreas: str("buyBoxAreas"),
     igHandle: str("igHandle"), bestContact: str("bestContact"),
@@ -1458,11 +1459,28 @@ export async function importMarketContacts(formData: FormData) {
     name: idx(["name", "company", "builder"]), category: idx(["category"]), type: idx(["type", "tier"]),
     region: idx(["region"]), market: idx(["market", "city", "primary city"]), status: idx(["status"]),
     email: idx(["email"]), phone: idx(["phone"]), website: idx(["website", "web"]),
-    buyBox: idx(["buybox", "buy box"]), areas: idx(["buyboxareas", "areas", "target areas", "neighborhoods"]),
+    buyBox: idx(["buybox", "buy box"]), areas: idx(["buyboxareas", "areas", "target areas", "target geography", "preferred markets", "neighborhoods"]),
     lat: idx(["lat"]), lng: idx(["lng", "lon"]), notes: idx(["notes"]),
     ig: idx(["ig", "instagram", "ighandle", "handle"]), best: idx(["bestcontact", "best contact", "best way"]),
+    company: idx(["company", "dev firm", "firm"]), title: idx(["title", "role"]),
+    preferredContact: idx(["preferredcontact", "preferred contact", "preferred contact method"]),
+    decisionMaker: idx(["decisionmaker", "decision maker"]), buyingFrequency: idx(["buyingfrequency", "buying frequency"]),
+    priceRange: idx(["pricerange", "price range", "price range per lot", "price range buy box"]), closingSpeed: idx(["closingspeed", "closing speed", "move speed"]),
+    dealType: idx(["dealtype", "deal type"]), buildType: idx(["buildtype", "build type"]), minLotSize: idx(["minlotsize", "minimum lot size", "min lot"]),
+    marketDetails: idx(["marketdetails", "market details"]), minBeds: idx(["minbeds", "minimum bedrooms", "min beds"]),
+    maxBaths: idx(["maxbaths", "maximum bathrooms", "max baths"]), propertyType: idx(["propertytype", "property type", "property buy box type"]),
+    conditionTolerance: idx(["conditiontolerance", "condition tolerance"]), needsView: idx(["needsview", "needs to view", "needs to view before offer"]),
+    vetStage: idx(["vetstage", "vet stage", "vetting stage", "stage"]),
   };
   if (col.name < 0) redirect("/marketing?imp=noname");
+  const stageKey = (s: string) => {
+    const t = s.trim().toLowerCase();
+    if (/vetted/.test(t)) return "vetted";
+    if (/active/.test(t)) return "active";
+    if (/hold/.test(t)) return "hold";
+    if (/dead/.test(t)) return "dead";
+    return "to_vet";
+  };
 
   let n = 0;
   for (let r = 1; r < rows.length; r++) {
@@ -1471,12 +1489,21 @@ export async function importMarketContacts(formData: FormData) {
     const name = g(col.name);
     if (!name) continue;
     const latV = parseFloat(g(col.lat)); const lngV = parseFloat(g(col.lng));
+    const dm = g(col.decisionMaker);
+    let status = g(col.status);
+    if (!status && /not direct/i.test(dm)) status = "B-rated";
     await db.marketContact.create({ data: {
       name, category: g(col.category).toLowerCase() === "luxury" ? "luxury" : "distressed",
-      type: g(col.type), region: g(col.region), market: g(col.market), status: g(col.status),
+      type: g(col.type), region: g(col.region), market: g(col.market), status,
+      vetStage: col.vetStage >= 0 ? stageKey(g(col.vetStage)) : "to_vet",
       email: g(col.email), phone: g(col.phone), website: g(col.website),
       buyBox: g(col.buyBox), buyBoxAreas: g(col.areas), notes: g(col.notes),
       igHandle: g(col.ig), bestContact: g(col.best),
+      company: g(col.company), title: g(col.title), preferredContact: g(col.preferredContact),
+      decisionMaker: dm, buyingFrequency: g(col.buyingFrequency), priceRange: g(col.priceRange), closingSpeed: g(col.closingSpeed),
+      dealType: g(col.dealType), buildType: g(col.buildType), minLotSize: g(col.minLotSize),
+      marketDetails: g(col.marketDetails), minBeds: g(col.minBeds), maxBaths: g(col.maxBaths),
+      propertyType: g(col.propertyType), conditionTolerance: g(col.conditionTolerance), needsView: g(col.needsView),
       lat: Number.isFinite(latV) ? latV : null, lng: Number.isFinite(lngV) ? lngV : null,
     } });
     n++;
