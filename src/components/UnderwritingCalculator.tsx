@@ -3,146 +3,207 @@
 import { useState } from "react";
 
 const TABS = [
-  { key: "assignment", label: "Assignment", emoji: "🤝", blurb: "Contract low, assign to a cash buyer for a fee." },
-  { key: "novation", label: "Novation", emoji: "📋", blurb: "Light fix, list retail, keep the spread above the seller's payout." },
-  { key: "creative", label: "Creative", emoji: "🔑", blurb: "Seller-finance / subject-to — cashflow or resale markup." },
+  { key: "assignment", label: "Assignment", emoji: "🤝", blurb: "Cash offer. Calculate the cash MAO from ARV − repairs − your assignment fee, plus an anchor to open negotiations." },
+  { key: "novation", label: "Novation", emoji: "📋", blurb: "List at current similar-condition value, cover the seller's closing, pay agent commission (no holding — retail buyer). Find the max seller payout." },
+  { key: "creative", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
+  { key: "listing", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
 ] as const;
 
 function num(v: string): number {
-  const n = Number(v.replace(/[^0-9.\-]/g, ""));
+  const n = Number((v || "").replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(n) ? n : 0;
 }
 const money = (n: number) => (Number.isFinite(n) ? `$${Math.round(n).toLocaleString()}` : "—");
-const pct = (n: number) => (Number.isFinite(n) ? `${Math.round(n)}%` : "—");
+const esc = (s: string) => (s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 
-const inputCls =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-slate-200";
-
-function Field({ label, value, onChange, prefix, suffix, placeholder }: {
-  label: string; value: string; onChange: (v: string) => void; prefix?: string; suffix?: string; placeholder?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">{label}</span>
-      <div className="relative">
-        {prefix && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{prefix}</span>}
-        <input
-          inputMode="decimal"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={`${inputCls} ${prefix ? "pl-6" : ""} ${suffix ? "pr-8" : ""}`}
-        />
-        {suffix && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{suffix}</span>}
-      </div>
-    </label>
-  );
-}
-
-function Result({ label, value, tone = "navy", big }: { label: string; value: string; tone?: "navy" | "good" | "bad" | "muted"; big?: boolean }) {
-  const cls = tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : tone === "muted" ? "text-slate-500" : "text-brand-navy";
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-1.5">
-      <span className="text-sm text-slate-600">{label}</span>
-      <span className={`font-extrabold tabular-nums ${big ? "text-2xl" : "text-base"} ${cls}`}>{value}</span>
-    </div>
-  );
-}
+const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-slate-200";
 
 export default function UnderwritingCalculator() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("assignment");
+  const [f, setF] = useState<Record<string, string>>({});
+  const v = (k: string) => f[k] ?? "";
+  const n = (k: string) => num(v(k));
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
 
-  // Shared
-  const [arv, setArv] = useState("");
-  const [repairs, setRepairs] = useState("");
-  // Assignment
-  const [buyerPct, setBuyerPct] = useState("70");
-  const [fee, setFee] = useState("10000");
-  // Novation
-  const [listPrice, setListPrice] = useState("");
-  const [commission, setCommission] = useState("6");
-  const [closingPct, setClosingPct] = useState("2");
-  const [holding, setHolding] = useState("3000");
-  const [sellerPayout, setSellerPayout] = useState("");
-  // Creative
-  const [purchase, setPurchase] = useState("");
-  const [down, setDown] = useState("");
-  const [payment, setPayment] = useState("");
-  const [rent, setRent] = useState("");
-  const [resale, setResale] = useState("");
+  function Field({ k, label, prefix, suffix, placeholder, span }: { k: string; label: string; prefix?: string; suffix?: string; placeholder?: string; span?: number }) {
+    return (
+      <label className={span === 2 ? "sm:col-span-2" : span === 3 ? "sm:col-span-3" : ""}>
+        <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">{label}</span>
+        <div className="relative">
+          {prefix && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{prefix}</span>}
+          <input inputMode={suffix || prefix ? "decimal" : "text"} value={v(k)} onChange={set(k)} placeholder={placeholder} className={`${inputCls} ${prefix ? "pl-6" : ""} ${suffix ? "pr-8" : ""}`} />
+          {suffix && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{suffix}</span>}
+        </div>
+      </label>
+    );
+  }
+  function Res({ label, value, tone = "navy", big }: { label: string; value: string; tone?: "navy" | "good" | "bad" | "muted"; big?: boolean }) {
+    const cls = tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : tone === "muted" ? "text-slate-500" : "text-brand-navy";
+    return (
+      <div className="flex items-baseline justify-between gap-3 py-1.5">
+        <span className="text-sm text-slate-600">{label}</span>
+        <span className={`font-extrabold tabular-nums ${big ? "text-2xl" : "text-base"} ${cls}`}>{value}</span>
+      </div>
+    );
+  }
 
-  const A = num(arv);
-  const R = num(repairs);
+  // ---- Assignment ----
+  const buyerPct = v("buyerPct") || "70";
+  const arv = n("arv"), repairs = n("repairs"), aFee = n("aFee");
+  const buyerMax = arv * (num(buyerPct) / 100) - repairs;
+  const cashMao = buyerMax - aFee;
+  const aAnchorPct = v("aAnchorPct") || "12";
+  const aAnchor = cashMao * (1 - num(aAnchorPct) / 100);
 
-  // Assignment
-  const buyerMax = A * (num(buyerPct) / 100) - R;
-  const mao = buyerMax - num(fee);
-  const maoPctArv = A ? (mao / A) * 100 : NaN;
+  // ---- Novation ----
+  const nList = n("nList"), nComm = num(v("nComm") || "5"), nSellerClose = n("nSellerClose"), nMinFee = n("nMinFee");
+  const nNet = nList - nList * (nComm / 100) - nSellerClose;
+  const novMao = nNet - nMinFee; // max payout we can give the seller
+  const nAnchorPct = v("nAnchorPct") || "10";
+  const novAnchor = novMao * (1 - num(nAnchorPct) / 100);
+  const feeAtAnchor = nNet - novAnchor;
 
-  // Novation
-  const LP = num(listPrice) || A;
-  const novCommission = LP * (num(commission) / 100);
-  const novClosing = LP * (num(closingPct) / 100);
-  const novProfit = LP - novCommission - novClosing - R - num(holding) - num(sellerPayout);
-  const novMargin = LP ? (novProfit / LP) * 100 : NaN;
+  // ---- Creative ----
+  const cFee = n("cFee");
 
-  // Creative
-  const cashflow = num(rent) - num(payment);
-  const cashToClose = num(down);
-  const resaleSpread = num(resale) ? num(resale) - num(purchase) : NaN;
+  // ---- Listing ----
+  const lList = n("lList"), lComm = num(v("lComm") || "2.5"), lRef = num(v("lRef") || "25"), lFlat = n("lFlat");
+  const mktFee = lFlat > 0 ? lFlat : lList * (lComm / 100) * (lRef / 100);
+
+  function buildReport(): { title: string; rows: [string, string][]; comps?: string; note?: string } {
+    const addr = v("subject") || "—";
+    if (tab === "assignment") {
+      const comps = ["comp1", "comp2", "comp3"].map((k) => v(k)).filter(Boolean).map(esc).join("<br>");
+      return {
+        title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps:</strong><br>${comps}` : ""}`,
+        rows: [["ARV", money(arv)], ["Repair estimate", money(repairs)], [`Cash buyer target (${buyerPct}% of ARV)`, money(buyerMax)], ["Assignment fee", money(aFee)], ["Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
+        note: "Open at the anchor, negotiate up to the cash MAO. If the seller won't meet MAO, pivot to Novation.",
+      };
+    }
+    if (tab === "novation") {
+      const comps = [1, 2, 3].map((i) => { const a = v(`nComp${i}`); const p = v(`nComp${i}p`); const d = v(`nComp${i}d`); return a ? `${esc(a)} — ${p ? "$" + esc(p) : "?"}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
+      return {
+        title: "Novation Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>As-is comps (price · days on market):</strong><br>${comps}` : ""}`,
+        rows: [["List price (current similar-condition)", money(nList)], [`Agent commission (${nComm}%)`, money(nList * (nComm / 100))], ["Seller closing costs (we cover)", money(nSellerClose)], ["Net after costs", money(nNet)], ["Our minimum fee", money(nMinFee)], ["Novation MAO (max seller payout)", money(novMao)], [`Anchor / opening payout (${nAnchorPct}% below MAO)`, money(novAnchor)], ["Negotiation range (seller payout)", `${money(novAnchor)} → ${money(novMao)}`], ["Our fee at anchor", money(feeAtAnchor)]],
+        note: "No holding costs (retail buyer). List conservatively to sell under 90 days. Disclose we market higher to make it work.",
+      };
+    }
+    if (tab === "creative") {
+      const type = v("cType") || "Seller finance";
+      const rows: [string, string][] = [["Structure", type]];
+      if (type === "Subject-to") { rows.push(["Loan balance assumed", money(n("cLoan"))], ["Monthly payment (PITI)", money(n("cPmt"))]); }
+      else { rows.push(["Agreed price", money(n("cPrice"))], ["Down to seller", money(n("cDown"))], ["Monthly to seller", money(n("cPmt"))], ["Term", v("cTerm") || "—"]); }
+      rows.push(["Our assignment fee (to end buyer)", money(cFee)]);
+      return { title: "Creative (Seller-finance / Subject-to) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`, rows, note: "We assign these terms to an end buyer who wants them and collect the assignment fee." };
+    }
+    return {
+      title: "Listing Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`,
+      rows: [["List price", money(lList)], [`Listing commission (${lComm}%)`, money(lList * (lComm / 100))], lFlat > 0 ? ["Flat marketing fee", money(lFlat)] : [`Referral / marketing fee (${lRef}% of commission)`, money(mktFee)], ["Our marketing fee", money(mktFee)]],
+      note: "Standard agent-to-agent referral is 25% of the listing-side commission. A flat $2,500–$5,000 is also common — set whichever you use.",
+    };
+  }
+
+  function exportPdf() {
+    const r = buildReport();
+    const w = window.open("", "_blank", "width=820,height=920");
+    if (!w) return;
+    const rows = r.rows.map(([l, val], i) => `<tr style="background:${i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:7px 12px;color:#475569">${esc(l)}</td><td style="padding:7px 12px;font-weight:700;text-align:right">${esc(val)}</td></tr>`).join("");
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(r.title)}</title></head>
+      <body style="font-family:system-ui,Arial,sans-serif;color:#0f172a;max-width:720px;margin:28px auto;padding:0 18px">
+        <div style="border-bottom:3px solid #0b1f3a;padding-bottom:8px;margin-bottom:14px">
+          <div style="font-weight:800;font-size:18px;color:#0b1f3a">Freedom Offers — War Room</div>
+          <div style="color:#64748b;font-size:13px">${esc(r.title)} · ${new Date().toLocaleDateString()}</div>
+        </div>
+        ${r.comps ? `<div style="margin-bottom:14px;color:#334155;line-height:1.5">${r.comps}</div>` : ""}
+        <table style="width:100%;border-collapse:collapse;font-size:14px">${rows}</table>
+        ${r.note ? `<p style="margin-top:16px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
+      </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 250);
+  }
 
   return (
     <div className="space-y-4">
-      {/* Shared property inputs */}
-      <div className="grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:grid-cols-2">
-        <Field label="After-Repair Value (ARV)" value={arv} onChange={setArv} prefix="$" placeholder="350,000" />
-        <Field label="Repair estimate" value={repairs} onChange={setRepairs} prefix="$" placeholder="40,000" />
+      {/* Subject address — shared */}
+      <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+        <label className="block">
+          <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">📍 Subject property address</span>
+          <input value={v("subject")} onChange={set("subject")} placeholder="123 Main St, San Diego, CA 92101" className={inputCls} />
+        </label>
       </div>
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${tab === t.key ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-          >
-            {t.emoji} {t.label}
-          </button>
+          <button key={t.key} type="button" onClick={() => setTab(t.key)} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${tab === t.key ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{t.emoji} {t.label}</button>
         ))}
       </div>
       <p className="text-xs text-slate-500">{TABS.find((t) => t.key === tab)!.blurb}</p>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Inputs */}
-        <div className="space-y-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+        <div className="grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:grid-cols-2">
           {tab === "assignment" && (
             <>
-              <Field label="Cash buyer's target (% of ARV)" value={buyerPct} onChange={setBuyerPct} suffix="%" />
-              <Field label="Your assignment fee" value={fee} onChange={setFee} prefix="$" />
+              <Field k="arv" label="ARV" prefix="$" placeholder="350,000" />
+              <Field k="repairs" label="Repair estimate" prefix="$" placeholder="40,000" />
+              <Field k="buyerPct" label="Cash buyer target (% of ARV)" suffix="%" placeholder="70" />
+              <Field k="aFee" label="Assignment fee (from underwriter)" prefix="$" placeholder="10,000" />
+              <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="12" />
+              <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">ARV comp addresses (from underwriter)</div>
+              <Field k="comp1" label="Comp 1" span={2} />
+              <Field k="comp2" label="Comp 2" span={2} />
+              <Field k="comp3" label="Comp 3" span={2} />
             </>
           )}
           {tab === "novation" && (
             <>
-              <Field label="List price (retail)" value={listPrice} onChange={setListPrice} prefix="$" placeholder={A ? String(A) : "ARV"} />
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Agent commission" value={commission} onChange={setCommission} suffix="%" />
-                <Field label="Closing costs" value={closingPct} onChange={setClosingPct} suffix="%" />
-              </div>
-              <Field label="Holding costs" value={holding} onChange={setHolding} prefix="$" />
-              <Field label="Seller payout (what they net)" value={sellerPayout} onChange={setSellerPayout} prefix="$" />
+              <Field k="nList" label="List price (current similar-condition value)" prefix="$" span={2} placeholder="420,000" />
+              <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" />
+              <Field k="nSellerClose" label="Seller closing costs (we cover)" prefix="$" placeholder="6,000" />
+              <Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder="15,000" />
+              <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" />
+              <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">As-is comparables — match the condition (addr · price · days on market)</div>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
+                  <Field k={`nComp${i}`} label={`Comp ${i} address`} span={2} />
+                  <Field k={`nComp${i}p`} label="Sold $" prefix="$" />
+                  <Field k={`nComp${i}d`} label="Days on mkt" />
+                </div>
+              ))}
             </>
           )}
           {tab === "creative" && (
             <>
-              <Field label="Agreed purchase price" value={purchase} onChange={setPurchase} prefix="$" />
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Down / entry to seller" value={down} onChange={setDown} prefix="$" />
-                <Field label="Monthly payment (PITI)" value={payment} onChange={setPayment} prefix="$" />
-              </div>
-              <Field label="Market rent (if holding)" value={rent} onChange={setRent} prefix="$" />
-              <Field label="Resale price (if reselling)" value={resale} onChange={setResale} prefix="$" />
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Structure</span>
+                <select value={v("cType") || "Seller finance"} onChange={set("cType")} className={inputCls}>
+                  <option>Seller finance</option>
+                  <option>Subject-to</option>
+                </select>
+              </label>
+              {(v("cType") || "Seller finance") === "Subject-to" ? (
+                <>
+                  <Field k="cLoan" label="Loan balance assumed" prefix="$" />
+                  <Field k="cPmt" label="Monthly payment (PITI)" prefix="$" />
+                </>
+              ) : (
+                <>
+                  <Field k="cPrice" label="Agreed price" prefix="$" />
+                  <Field k="cDown" label="Down to seller" prefix="$" />
+                  <Field k="cPmt" label="Monthly to seller" prefix="$" />
+                  <Field k="cTerm" label="Term (e.g. 60 mo / balloon 5yr)" />
+                </>
+              )}
+              <Field k="cFee" label="Our assignment fee (to end buyer)" prefix="$" span={2} placeholder="15,000" />
+            </>
+          )}
+          {tab === "listing" && (
+            <>
+              <Field k="lList" label="List price" prefix="$" span={2} />
+              <Field k="lComm" label="Listing-side commission" suffix="%" placeholder="2.5" />
+              <Field k="lRef" label="Referral fee (% of commission)" suffix="%" placeholder="25" />
+              <Field k="lFlat" label="…or flat marketing fee (overrides)" prefix="$" span={2} placeholder="2,500" />
             </>
           )}
         </div>
@@ -151,33 +212,43 @@ export default function UnderwritingCalculator() {
         <div className="rounded-2xl bg-gradient-to-b from-slate-50 to-white p-4 ring-1 ring-slate-200">
           {tab === "assignment" && (
             <>
-              <Result label="Cash buyer's max price" value={money(buyerMax)} tone="muted" />
-              <Result label="🎯 Your max offer to seller (MAO)" value={money(mao)} tone={mao > 0 ? "navy" : "bad"} big />
-              <Result label="Your spread (assignment fee)" value={money(num(fee))} tone="good" />
-              <Result label="Offer as % of ARV" value={pct(maoPctArv)} tone="muted" />
+              <Res label={`Cash buyer target (${buyerPct}% of ARV)`} value={money(buyerMax)} tone="muted" />
+              <Res label="🎯 Cash MAO (max offer to seller)" value={money(cashMao)} tone={cashMao > 0 ? "navy" : "bad"} big />
+              <Res label="⚓ Anchor (open here)" value={money(aAnchor)} tone="good" />
+              <Res label="Negotiate" value={`${money(aAnchor)} → ${money(cashMao)}`} tone="muted" />
             </>
           )}
           {tab === "novation" && (
             <>
-              <Result label="Commission" value={money(novCommission)} tone="muted" />
-              <Result label="Closing costs" value={money(novClosing)} tone="muted" />
-              <Result label="Seller nets" value={money(num(sellerPayout))} tone="muted" />
-              <Result label="🎯 Your projected profit" value={money(novProfit)} tone={novProfit > 0 ? "good" : "bad"} big />
-              <Result label="Margin (% of sale)" value={pct(novMargin)} tone="muted" />
+              <Res label="Net after commission + seller closing" value={money(nNet)} tone="muted" />
+              <Res label="🎯 Novation MAO (max seller payout)" value={money(novMao)} tone={novMao > 0 ? "navy" : "bad"} big />
+              <Res label="⚓ Anchor payout (open here)" value={money(novAnchor)} tone="good" />
+              <Res label="Our fee at anchor" value={money(feeAtAnchor)} tone="good" />
+              <Res label="Negotiate (seller payout)" value={`${money(novAnchor)} → ${money(novMao)}`} tone="muted" />
             </>
           )}
           {tab === "creative" && (
             <>
-              <Result label="Cash to close (entry)" value={money(cashToClose)} tone="muted" />
-              <Result label="🎯 Monthly cashflow (rent − payment)" value={money(cashflow)} tone={cashflow > 0 ? "good" : "bad"} big />
-              {num(resale) > 0 && <Result label="Resale spread (resale − purchase)" value={money(resaleSpread)} tone={resaleSpread > 0 ? "good" : "bad"} />}
-              <p className="mt-2 text-[11px] text-slate-400">Tip: positive cashflow for a hold; use resale spread for a wrap/flip exit.</p>
+              <Res label="Structure" value={v("cType") || "Seller finance"} tone="muted" />
+              <Res label="🎯 Our assignment fee" value={money(cFee)} tone={cFee > 0 ? "good" : "muted"} big />
+              <p className="mt-2 text-[11px] text-slate-400">We assign these terms to an end buyer who wants them — we collect the fee, the buyer takes over the terms.</p>
+            </>
+          )}
+          {tab === "listing" && (
+            <>
+              <Res label="Listing commission" value={money(lList * (lComm / 100))} tone="muted" />
+              <Res label="🎯 Our marketing / referral fee" value={money(mktFee)} tone={mktFee > 0 ? "good" : "muted"} big />
+              <p className="mt-2 text-[11px] text-slate-400">Typical: 25% of the listing-side commission (industry-standard referral), or a flat $2,500–$5,000.</p>
             </>
           )}
         </div>
       </div>
 
-      <p className="text-[11px] text-slate-400">Estimates only — confirm comps, repair scope, and title before making an offer. Defaults are editable.</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={exportPdf} className="rounded-lg bg-brand-gold px-5 py-2.5 text-sm font-bold text-brand-navy hover:opacity-90">📄 Export PDF (for the CRM)</button>
+        <span className="text-[11px] text-slate-400">Opens a clean report — choose “Save as PDF” in the print dialog, then upload to REI Reply.</span>
+      </div>
+      <p className="text-[11px] text-slate-400">Estimates only — confirm comps, repair scope, and title before making an offer. Next up: Wholetail, Flip, and Luxury assignment tabs.</p>
     </div>
   );
 }
