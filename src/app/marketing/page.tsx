@@ -4,7 +4,7 @@ import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
-import MarketsMap, { type Buyer } from "@/components/MarketsMap";
+import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
 
 export const dynamic = "force-dynamic";
 
@@ -80,10 +80,13 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   }
   void isManager;
   const sp = await searchParams;
-  const [settings, rows] = await Promise.all([
+  const [settings, rows, targets] = await Promise.all([
     getSettings(),
     db.marketContact.findMany({ orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
+    db.targetMarket.findMany({ orderBy: { sortOrder: "asc" } }),
   ]);
+  const marketsForMap: Market[] = targets.map((t) => ({ id: t.id, name: t.name, tier: t.tier, score: t.score, lat: t.lat, lng: t.lng }));
+  const TIER_PILL: Record<string, string> = { S: "bg-red-100 text-red-700", "1": "bg-orange-100 text-orange-700", "2": "bg-amber-100 text-amber-700", "3": "bg-sky-100 text-sky-700" };
   const buyers: Buyer[] = rows.map((r) => ({
     id: r.id, name: r.name, category: r.category, type: r.type, region: r.region, market: r.market,
     status: r.status, email: r.email, phone: r.phone, website: r.website, buyBox: r.buyBox,
@@ -100,8 +103,35 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
 
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">
-        <MarketsMap buyers={buyers} />
+        <MarketsMap buyers={buyers} markets={marketsForMap} />
       </Card>
+
+      {/* Target markets — detail by county + neighborhoods */}
+      {targets.length > 0 && (
+        <div>
+          <SectionTitle title="🎯 Target Markets" subtitle="Heat-tiered by sold $2M+ volume — top zips, neighborhoods, and the developers who buy there." accent="bg-red-400" />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {targets.map((t) => (
+              <Card key={t.id} className="p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-base font-bold text-slate-800">{t.name}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${TIER_PILL[t.tier] ?? "bg-slate-100 text-slate-600"}`}>Tier {t.tier}</span>
+                  <span className="ml-auto text-sm font-bold tabular-nums text-slate-700">{t.score.toLocaleString()} <span className="text-xs font-normal text-slate-400">sold</span></span>
+                </div>
+                {t.summary && <p className="mt-1 text-xs text-slate-500">{t.summary}</p>}
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[11px] font-semibold text-brand-navy">Top zips &amp; neighborhoods</summary>
+                  <ul className="mt-1 space-y-0.5">{t.neighborhoods.split("\n").filter(Boolean).map((n, i) => <li key={i} className="text-xs text-slate-600">📍 {n}</li>)}</ul>
+                </details>
+                <details className="mt-1.5">
+                  <summary className="cursor-pointer text-[11px] font-semibold text-brand-navy">Developers &amp; buy boxes</summary>
+                  <ul className="mt-1 space-y-0.5">{t.developers.split("\n").filter(Boolean).map((d, i) => <li key={i} className="text-xs text-slate-600">🏗 {d}</li>)}</ul>
+                </details>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Markets + research */}
       <Card className="p-5">

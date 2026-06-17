@@ -8,6 +8,11 @@ export type Buyer = {
   lat: number | null; lng: number | null; notes: string;
 };
 
+export type Market = { id: string; name: string; tier: string; score: number; lat: number | null; lng: number | null };
+
+const TIER_COLOR: Record<string, string> = { S: "#b91c1c", "1": "#ea580c", "2": "#ca8a04", "3": "#2563eb" };
+const TIER_RADIUS: Record<string, number> = { S: 34, "1": 28, "2": 22, "3": 16 };
+
 const REGION = {
   SD: { name: "San Diego Co.", color: "#2563eb" },
   OC: { name: "Orange Co.", color: "#ea580c" },
@@ -39,7 +44,7 @@ function loadLeaflet(): Promise<unknown> {
   return leafletPromise;
 }
 
-export default function MarketsMap({ buyers }: { buyers: Buyer[] }) {
+export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; markets?: Market[] }) {
   const [query, setQuery] = useState("");
   const [regions, setRegions] = useState<Set<string>>(new Set(["SD", "OC", "LA", "other"]));
   const [cats, setCats] = useState<Set<string>>(new Set(["luxury", "distressed"]));
@@ -90,6 +95,14 @@ export default function MarketsMap({ buyers }: { buyers: Buyer[] }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function renderPins(LL: any) {
     layerRef.current.clearLayers();
+    // Market heat zones (under the developer pins, always shown).
+    for (const mk of markets) {
+      if (mk.lat == null || mk.lng == null) continue;
+      const color = TIER_COLOR[mk.tier] ?? "#64748b";
+      LL.circleMarker([mk.lat, mk.lng], { radius: TIER_RADIUS[mk.tier] ?? 18, color, weight: 1, fillColor: color, fillOpacity: 0.18 })
+        .addTo(layerRef.current)
+        .bindTooltip(`${mk.name} · Tier ${mk.tier} · ${mk.score}`, { direction: "top", permanent: false });
+    }
     const groups: Record<string, { lat: number; lng: number; items: Buyer[] }> = {};
     for (const b of filtered) {
       if (b.lat == null || b.lng == null) continue;
@@ -145,6 +158,23 @@ export default function MarketsMap({ buyers }: { buyers: Buyer[] }) {
         <button onClick={() => toggle(cats, "luxury", setCats)} className={`rounded-full px-2.5 py-1 font-semibold ring-1 ${cats.has("luxury") ? "bg-brand-navy text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200"}`}>🏛 Luxury / Developers</button>
         <button onClick={() => toggle(cats, "distressed", setCats)} className={`rounded-full px-2.5 py-1 font-semibold ring-1 ${cats.has("distressed") ? "bg-amber-500 text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200"}`}>🔨 Distressed / Flippers</button>
       </div>
+
+      {/* Jump to a target market */}
+      {markets.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="font-semibold text-slate-400">Jump to:</span>
+          {markets.map((mk) => (
+            <button
+              key={mk.id}
+              onClick={() => { if (mk.lat != null && mk.lng != null && mapRef.current) mapRef.current.setView([mk.lat, mk.lng], mk.tier === "S" || mk.tier === "2" ? 10 : 8, { animate: true }); }}
+              className="rounded-full px-2.5 py-1 font-semibold text-white"
+              style={{ background: TIER_COLOR[mk.tier] ?? "#64748b" }}
+            >
+              {mk.name.split(",")[0]} · {mk.score}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.4fr_1fr]">
         {/* Map */}

@@ -498,6 +498,24 @@ model MarketContact {
   @@index([category])
 }
 
+// Target market (Markets & Buyers) — a county/metro we hunt in, with its heat
+// tier, top zips & neighborhoods, and the developers who buy there.
+model TargetMarket {
+  id            String   @id @default(cuid())
+  name          String
+  region        String   @default("") // OC | SD | LA | TN | HI | other
+  tier          String   @default("") // S | 1 | 2 | 3
+  score         Int      @default(0) // heat score (sold $2M+, built 2021+)
+  summary       String   @default("")
+  neighborhoods String   @default("") // zips + neighborhoods (newline list)
+  developers    String   @default("") // top builders + buy box (newline list)
+  lat           Float?
+  lng           Float?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 // Roadmap / backlog — the running list of what's still to build or do. Owner-
 // curated; the team can see where the war room is headed.
 model RoadmapItem {
