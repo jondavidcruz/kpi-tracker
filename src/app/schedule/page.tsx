@@ -186,6 +186,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                 <span className="font-semibold text-slate-800">{t.user.name}</span>
                 <span className="text-sm text-slate-500">{t.startDate}{t.endDate !== t.startDate ? ` → ${t.endDate}` : ""}{t.note ? ` · ${t.note}` : ""}</span>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${t.status === "approved" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{t.status === "approved" ? "approved" : "pending"}</span>
+                {t.gcalEventId && <span title="On the team Google Calendar" className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">✓ Google Calendar</span>}
                 {canDelete && (
                   <form action={deleteTimeOff} className="ml-auto"><input type="hidden" name="id" value={t.id} /><button className="text-[11px] font-medium text-slate-300 hover:text-red-600">Remove</button></form>
                 )}
