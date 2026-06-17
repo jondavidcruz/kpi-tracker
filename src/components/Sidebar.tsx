@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -29,6 +29,7 @@ export default function Sidebar({
     { label: "Overview", items: [
       { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
       { href: "/deals", label: "Deals", Icon: Building2 },
+      { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
     ] },
     { label: "Entrepreneurial Operating System", items: [
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },

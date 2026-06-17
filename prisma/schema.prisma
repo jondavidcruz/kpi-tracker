@@ -33,6 +33,8 @@ model User {
   alerts  Alert[]
   pips    Pip[]
   tickets Ticket[]
+  timeOff TimeOff[]
+  punches Punch[]
 }
 
 // The catalog of measurables (the spreadsheet's "Measurable" rows).
@@ -677,4 +679,33 @@ model TrainingTip {
   createdAt DateTime @default(now())
 
   @@index([kpiKey])
+}
+
+// Time off / day-off requests — the team inputs holidays & PTO on the shared
+// Schedule calendar. (Future: push approved ones to the user's Google Calendar.)
+model TimeOff {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   @default("pto") // pto | holiday | sick | unpaid
+  startDate String // YYYY-MM-DD
+  endDate   String // YYYY-MM-DD (inclusive)
+  note      String   @default("")
+  status    String   @default("requested") // requested | approved | denied
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([startDate])
+}
+
+// Time-card punches — clock in/out + break/lunch. Current presence and worked
+// time are derived from each user's punches for the day.
+model Punch {
+  id     String   @id @default(cuid())
+  userId String
+  date   String // YYYY-MM-DD (org tz) for grouping a shift
+  kind   String // in | out | break_start | break_end | lunch_start | lunch_end
+  at     DateTime @default(now())
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
 }

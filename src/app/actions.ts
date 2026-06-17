@@ -1471,3 +1471,59 @@ export async function importMarketContacts(formData: FormData) {
   revalidatePath("/marketing");
   redirect(`/marketing?imp=${n}`);
 }
+
+// --- Schedule + Time card ----------------------------------------------------
+
+const PUNCH_KINDS = ["in", "out", "break_start", "break_end", "lunch_start", "lunch_end"];
+
+/** Record a time-card punch (clock in/out, break/lunch) for the current user. */
+export async function punch(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const kind = String(formData.get("kind") ?? "");
+  if (!PUNCH_KINDS.includes(kind)) return;
+  const settings = await getSettings();
+  const date = todayStr(settings.orgTimezone);
+  await db.punch.create({ data: { userId: me.id, kind, date } });
+  revalidatePath("/schedule");
+}
+
+/** Submit a time-off / day-off request for the current user. */
+export async function requestTimeOff(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const type = String(formData.get("type") ?? "pto");
+  const startDate = String(formData.get("startDate") ?? "");
+  let endDate = String(formData.get("endDate") ?? "");
+  const note = String(formData.get("note") ?? "").trim().slice(0, 300);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < startDate) endDate = startDate;
+  // Managers' own requests are auto-approved; everyone else starts as requested.
+  const status = isManager(me) ? "approved" : "requested";
+  await db.timeOff.create({ data: { userId: me.id, type, startDate, endDate, note, status } });
+  revalidatePath("/schedule");
+}
+
+/** Approve or deny a time-off request (managers only). */
+export async function setTimeOffStatus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "");
+  if (!id || !["approved", "denied", "requested"].includes(status)) return;
+  await db.timeOff.update({ where: { id }, data: { status } });
+  revalidatePath("/schedule");
+}
+
+/** Delete a time-off entry (its owner, or any manager). */
+export async function deleteTimeOff(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const row = await db.timeOff.findUnique({ where: { id } });
+  if (!row) return;
+  if (row.userId !== me.id && !isManager(me)) return;
+  await db.timeOff.delete({ where: { id } });
+  revalidatePath("/schedule");
+}

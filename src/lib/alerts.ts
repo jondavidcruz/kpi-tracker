@@ -405,6 +405,28 @@ export async function sendShiftStartSpeedReminders(date: string, slot: "am" | "p
   return sent;
 }
 
+/** EOD check: any alerts still open (un-justified) today → remind Marie + Jon to
+ *  justify & resolve them before wrapping up. Marie should have these done by 7pm. */
+export async function sendAlertJustificationReminder(date: string): Promise<boolean> {
+  const open = await db.alert.findMany({
+    where: { status: "open", date },
+    include: { kpi: true, user: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (open.length === 0) return false;
+
+  const managers = await db.user.findMany({ where: { active: true, role: { in: ["manager", "admin"] } }, select: { email: true } });
+  const to = managers.map((m) => m.email).filter(Boolean);
+  if (to.length === 0) return false;
+
+  const html = alertEmailHtml(`Alerts still need justification — ${date}`, [
+    `${open.length} alert${open.length === 1 ? "" : "s"} still need a justification before end of day (target 7pm):`,
+    ...open.slice(0, 25).map((a) => `• ${a.user?.name ?? "Team"} — ${a.kpi.emoji} ${a.message}`),
+    "Open Alerts → Justify & Resolve each one so the day is fully closed out.",
+  ]);
+  return sendEmailTo(to, `📝 ${open.length} alert${open.length === 1 ? "" : "s"} to justify before 7pm (${date})`, html);
+}
+
 // --- Daily digest ------------------------------------------------------------
 
 /** Send a single Chat + email digest of all open alerts for the date.
@@ -540,6 +562,7 @@ export interface ScheduledResult {
   weeklySent: boolean;
   dailyReviewSent: boolean;
   missingKpiEmailSent: boolean;
+  justifyReminderSent: boolean;
   ethanReminded: boolean;
 }
 
@@ -606,6 +629,12 @@ export async function runScheduledChecks(opts?: {
       ? await sendMissingKpiEmail(date)
       : false;
 
+  // Remind Marie (+ Jon) to justify any still-open alerts before 7pm.
+  const justifyReminderSent =
+    opts?.review || (weekdayOrForce && postCutoff)
+      ? await sendAlertJustificationReminder(date)
+      : false;
+
   // Ethan's shift-aware EOD reminder — only on days the AQ Shift calendar says
   // he worked, after his shift would have ended (post-cutoff), and not on a
   // forced run with no real time context unless explicitly forced.
@@ -614,5 +643,5 @@ export async function runScheduledChecks(opts?: {
       ? await sendEthanReminder(date)
       : false;
 
-  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent, dailyReviewSent, missingKpiEmailSent, ethanReminded };
+  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent, dailyReviewSent, missingKpiEmailSent, justifyReminderSent, ethanReminded };
 }
