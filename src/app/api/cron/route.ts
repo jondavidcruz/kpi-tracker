@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runScheduledChecks } from "@/lib/alerts";
+import { runScheduledChecks, sendSpeedTestReminderEmail } from "@/lib/alerts";
 import { sendEthanReminder } from "@/lib/ethan-reminder";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
@@ -28,6 +28,13 @@ export async function GET(request: Request) {
   const force = url.searchParams.get("force") === "1";
   const weekly = url.searchParams.get("weekly") === "1";
   const review = url.searchParams.get("review") === "1";
+
+  // Start-of-shift run: email reps who haven't run today's internet speed test.
+  if (url.searchParams.get("speedtest") === "1") {
+    const settings = await getSettings();
+    const reminded = await sendSpeedTestReminderEmail(date ?? todayStr(settings.orgTimezone));
+    return NextResponse.json({ ok: true, speedTestReminded: reminded });
+  }
 
   // Lightweight midday run: only Ethan's shift-end KPI reminder (no digest).
   if (url.searchParams.get("ethan") === "1") {

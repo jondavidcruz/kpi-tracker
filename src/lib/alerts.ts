@@ -362,6 +362,36 @@ export async function sendMissingKpiEmail(date: string): Promise<boolean> {
   return sendEmailTo(to, `📋 EOD: ${missingByRep.length} not fully logged (${date})`, html);
 }
 
+/** Start-of-shift nudge: email each rep who tracks internet and hasn't run
+ *  today's speed test yet. (Calendar-synced per-shift timing is a later phase;
+ *  for now this is a single morning reminder + the in-app banner.) */
+export async function sendSpeedTestReminderEmail(date: string): Promise<number> {
+  const dow = new Date(date + "T12:00:00Z").getUTCDay();
+  if (dow === 0 || dow === 6) return 0; // no weekends
+
+  const kpi = await db.kpi.findFirst({ where: { roleKey: "internet" } });
+  if (!kpi) return 0;
+
+  const [reps, entries] = await Promise.all([
+    getActiveReps(),
+    db.entry.findMany({ where: { kpiId: kpi.id, date }, select: { userId: true } }),
+  ]);
+  const tested = new Set(entries.map((e) => e.userId));
+
+  let sent = 0;
+  for (const rep of reps) {
+    if (!rep.tracksInternet || rep.irregularSchedule) continue;
+    if (tested.has(rep.id) || !rep.email) continue;
+    const html = alertEmailHtml("📡 Run your internet speed test", [
+      `Hi ${rep.name.split(" ")[0]} — quick start-of-shift task.`,
+      "Open the War Room and run your internet speed test. It records to your KPIs automatically and takes about 10 seconds.",
+      "Goal: 50+ Mbps for a smooth dialer, calls, and CRM. If you're below, restart your router and re-test before you start dialing.",
+    ]);
+    if (await sendEmailTo([rep.email], "📡 Run your internet speed test", html)) sent++;
+  }
+  return sent;
+}
+
 // --- Daily digest ------------------------------------------------------------
 
 /** Send a single Chat + email digest of all open alerts for the date.
