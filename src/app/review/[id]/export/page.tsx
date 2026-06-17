@@ -180,7 +180,7 @@ export default async function RepExportPage({ params }: { params: Promise<{ id: 
       )}
 
       <p className="text-center text-xs text-slate-400">
-        Generated from the Freedom Offers KPI Tracker · {entries.length} total entries on record.
+        Generated from the Freedom Offers War Room · {entries.length} total entries on record.
       </p>
     </div>
   );

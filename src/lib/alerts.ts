@@ -264,7 +264,7 @@ function coachingEmailHtml(
     <h2 style="color:#0b1f3a;">🔴 KPI alert: action needed</h2>
     <p style="color:#64748b;">A money KPI is behind target. Here's the gap and how to close it:</p>
     ${cards}
-    <p style="color:#94a3b8;font-size:13px;">Freedom Offers KPI Tracker · open the dashboard to acknowledge.</p>
+    <p style="color:#94a3b8;font-size:13px;">Freedom Offers War Room · open the dashboard to acknowledge.</p>
   </div>`;
 }
 

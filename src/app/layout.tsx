@@ -16,10 +16,10 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Freedom Offers KPI Tracker",
-  description: "Daily scorecard with automatic off-target alerts",
+  title: "Freedom Offers War Room",
+  description: "Freedom Offers War Room — KPIs, deals, schedule, and the team's second brain",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "FO KPIs" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "War Room" },
 };
 
 export const viewport: Viewport = {

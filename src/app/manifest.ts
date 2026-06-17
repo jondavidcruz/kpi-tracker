@@ -4,9 +4,9 @@ import type { MetadataRoute } from "next";
 // the apple-icon + appleWebApp metadata in layout.tsx.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Freedom Offers KPI Tracker",
-    short_name: "FO KPIs",
-    description: "Daily scorecard with automatic off-target alerts",
+    name: "Freedom Offers War Room",
+    short_name: "War Room",
+    description: "Freedom Offers War Room — the team's second brain",
     start_url: "/dashboard",
     display: "standalone",
     background_color: "#0b1f3a",

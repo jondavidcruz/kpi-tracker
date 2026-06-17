@@ -237,7 +237,7 @@ export async function submitTicket(formData: FormData) {
     await sendEmail(
       `🎫 ${sevTag}New tracker ticket from ${me.name}: ${title}`,
       `<div style="font-family:system-ui,Arial,sans-serif;max-width:560px;color:#0f172a;">
-        <p><strong>${escapeForEmail(me.name)}</strong> reported an issue with the KPI tracker.</p>
+        <p><strong>${escapeForEmail(me.name)}</strong> reported an issue with the War Room.</p>
         <p><strong>Area:</strong> ${escapeForEmail(area || "—")} &nbsp;·&nbsp; <strong>Severity:</strong> ${escapeForEmail(severity)}</p>
         <p><strong>${escapeForEmail(title)}</strong></p>
         <p style="white-space:pre-line;">${escapeForEmail(body)}</p>
