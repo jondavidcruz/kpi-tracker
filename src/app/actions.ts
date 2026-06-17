@@ -1329,14 +1329,26 @@ export async function saveMarketContact(formData: FormData) {
   const name = str("name");
   if (!name) return;
   const num = (k: string) => { const v = parseFloat(String(formData.get(k) ?? "")); return Number.isFinite(v) ? v : null; };
+  const decisionMaker = str("decisionMaker");
+  // Their CRM rule: a buyer who isn't the direct decision maker is a B-rated buyer.
+  let status = str("status");
+  if (!status && /not direct/i.test(decisionMaker)) status = "B-rated";
   const data = {
     name, category: str("category") === "luxury" ? "luxury" : "distressed",
-    type: str("type"), region: str("region"), market: str("market"), status: str("status"),
+    type: str("type"), region: str("region"), market: str("market"), status,
     email: str("email"), phone: str("phone"), website: str("website"),
     buyBox: str("buyBox"), buyBoxAreas: str("buyBoxAreas"),
     igHandle: str("igHandle"), bestContact: str("bestContact"),
     lastContacted: str("lastContacted"), nextFollowUp: str("nextFollowUp"), outreachLog: str("outreachLog"),
     lat: num("lat"), lng: num("lng"), notes: str("notes"),
+    // structured buy-box (shared)
+    company: str("company"), title: str("title"), preferredContact: str("preferredContact"),
+    decisionMaker, buyingFrequency: str("buyingFrequency"), priceRange: str("priceRange"), closingSpeed: str("closingSpeed"),
+    // developer
+    dealType: str("dealType"), buildType: str("buildType"), minLotSize: str("minLotSize"),
+    // flipper
+    marketDetails: str("marketDetails"), minBeds: str("minBeds"), maxBaths: str("maxBaths"),
+    propertyType: str("propertyType"), conditionTolerance: str("conditionTolerance"), needsView: str("needsView"),
     sortOrder: Number(formData.get("sortOrder")) || 0,
   };
   if (id) await db.marketContact.update({ where: { id }, data });

@@ -496,6 +496,25 @@ model MarketContact {
   lat         Float? // map pin
   lng         Float?
   contact     String   @default("") // legacy combined contact
+  // ---- Structured buy-box (CRM-style), shared ----
+  company        String @default("") // Company / Dev Firm
+  title          String @default("") // contact's role / title
+  preferredContact String @default("") // Phone | Text | Email | IG DM | WhatsApp
+  decisionMaker  String @default("") // Direct/principal | Acq mgr | Agent | Not direct (B-rated)
+  buyingFrequency String @default("")
+  priceRange     String @default("") // price range per lot / buy box
+  closingSpeed   String @default("") // move speed / closing speed
+  // ---- Developer-specific ----
+  dealType    String   @default("")
+  buildType   String   @default("")
+  minLotSize  String   @default("")
+  // ---- Flipper-specific ----
+  marketDetails String @default("")
+  minBeds     String   @default("")
+  maxBaths    String   @default("")
+  propertyType String  @default("")
+  conditionTolerance String @default("")
+  needsView   String   @default("") // needs to view before offer?
   // Dispo outreach tracking (separate from the CRM):
   igHandle      String @default("") // Instagram handle
   bestContact   String @default("") // best way / sequence to reach them

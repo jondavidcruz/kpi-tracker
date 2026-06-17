@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
 import CopyButton from "@/components/CopyButton";
+import MarketContactForm from "@/components/MarketContactForm";
 
 export const dynamic = "force-dynamic";
 
@@ -15,35 +16,12 @@ const labelCls = "mb-0.5 block text-[11px] font-semibold text-slate-500";
 const TYPES = ["developer", "custom", "remodeler", "flipper", "cash_buyer", "investor", "agent", "other"];
 const REGIONS = [["SD", "San Diego Co."], ["OC", "Orange Co."], ["LA", "Los Angeles"], ["other", "Other / TBD"]];
 
-type MC = Buyer & { sortOrder: number; igHandle: string; bestContact: string; lastContacted: string; nextFollowUp: string; outreachLog: string };
-
-function ContactForm({ c, defaultCategory }: { c?: MC; defaultCategory?: string }) {
-  return (
-    <form action={saveMarketContact} className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-      {c && <input type="hidden" name="id" value={c.id} />}
-      <label className="sm:col-span-2"><span className={labelCls}>Name / company</span><input name="name" defaultValue={c?.name ?? ""} className={inputCls} required /></label>
-      <label><span className={labelCls}>Category</span><select name="category" defaultValue={c?.category ?? defaultCategory ?? "distressed"} className={inputCls}><option value="luxury">Luxury / Developer</option><option value="distressed">Distressed / Flipper</option></select></label>
-      <label><span className={labelCls}>Type</span><select name="type" defaultValue={c?.type ?? ""} className={inputCls}><option value="">—</option>{TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
-      <label><span className={labelCls}>Region</span><select name="region" defaultValue={c?.region ?? ""} className={inputCls}><option value="">—</option>{REGIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
-      <label><span className={labelCls}>Market / city</span><input name="market" defaultValue={c?.market ?? ""} className={inputCls} /></label>
-      <label><span className={labelCls}>Status</span><input name="status" defaultValue={c?.status ?? ""} placeholder="Priority / To Vet…" className={inputCls} /></label>
-      <label><span className={labelCls}>Phone</span><input name="phone" defaultValue={c?.phone ?? ""} className={inputCls} /></label>
-      <label className="sm:col-span-2"><span className={labelCls}>Email</span><input name="email" defaultValue={c?.email ?? ""} className={inputCls} /></label>
-      <label className="sm:col-span-2"><span className={labelCls}>Website</span><input name="website" defaultValue={c?.website ?? ""} className={inputCls} /></label>
-      <label className="sm:col-span-2"><span className={labelCls}>🎯 Target areas (neighborhoods — searched by the map)</span><input name="buyBoxAreas" defaultValue={c?.buyBoxAreas ?? ""} placeholder="Newport Heights, Eastbluff…" className={inputCls} /></label>
-      <label className="sm:col-span-2"><span className={labelCls}>Buy box / criteria</span><input name="buyBox" defaultValue={c?.buyBox ?? ""} placeholder="min lot, max land basis, R-1…" className={inputCls} /></label>
-      <label><span className={labelCls}>Instagram</span><input name="igHandle" defaultValue={c?.igHandle ?? ""} placeholder="@handle" className={inputCls} /></label>
-      <label><span className={labelCls}>Last contacted</span><input name="lastContacted" type="date" defaultValue={c?.lastContacted ?? ""} className={inputCls} /></label>
-      <label><span className={labelCls}>Next follow-up</span><input name="nextFollowUp" type="date" defaultValue={c?.nextFollowUp ?? ""} className={inputCls} /></label>
-      <label className="sm:col-span-2"><span className={labelCls}>Best way to reach (sequence)</span><input name="bestContact" defaultValue={c?.bestContact ?? ""} placeholder="IG DM → email → call; founder direct" className={inputCls} /></label>
-      <label className="sm:col-span-4"><span className={labelCls}>Outreach log (touches, replies, next step)</span><textarea name="outreachLog" defaultValue={c?.outreachLog ?? ""} rows={2} className={inputCls} /></label>
-      <label><span className={labelCls}>Lat</span><input name="lat" type="number" step="any" defaultValue={c?.lat ?? ""} className={inputCls} /></label>
-      <label><span className={labelCls}>Lng</span><input name="lng" type="number" step="any" defaultValue={c?.lng ?? ""} className={inputCls} /></label>
-      <label className="sm:col-span-2"><span className={labelCls}>Notes</span><input name="notes" defaultValue={c?.notes ?? ""} className={inputCls} /></label>
-      <div className="sm:col-span-4"><button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">{c ? "Save" : "Add"}</button></div>
-    </form>
-  );
-}
+type MC = Buyer & {
+  sortOrder: number; igHandle: string; bestContact: string; lastContacted: string; nextFollowUp: string; outreachLog: string;
+  company: string; title: string; preferredContact: string; decisionMaker: string; buyingFrequency: string; priceRange: string; closingSpeed: string;
+  dealType: string; buildType: string; minLotSize: string;
+  marketDetails: string; minBeds: string; maxBaths: string; propertyType: string; conditionTolerance: string; needsView: string;
+};
 
 function Rolodex({ items }: { items: MC[] }) {
   return (
@@ -59,7 +37,20 @@ function Rolodex({ items }: { items: MC[] }) {
           </div>
           {(c.phone || c.email || c.igHandle) && <p className="mt-1 text-xs text-brand-navy">{[c.phone, c.email, c.igHandle].filter(Boolean).join(" · ")}</p>}
           {c.website && <a href={`https://${c.website.replace(/^https?:\/\//, "")}`} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:underline">{c.website} ↗</a>}
+          {(c.company || c.title) && <p className="text-[11px] text-slate-500">{[c.company, c.title].filter(Boolean).join(" · ")}</p>}
           {c.buyBoxAreas && <p className="text-xs text-emerald-700">🎯 {c.buyBoxAreas}</p>}
+          {(() => {
+            const box = c.category === "luxury"
+              ? [c.dealType, c.buildType, c.minLotSize && `lot ${c.minLotSize}`, c.priceRange]
+              : [c.propertyType, c.minBeds && `${c.minBeds}+ bd`, c.maxBaths && `${c.maxBaths} ba`, c.conditionTolerance, c.priceRange];
+            const extra = [c.closingSpeed, c.buyingFrequency, c.needsView, c.decisionMaker, c.preferredContact && `via ${c.preferredContact}`];
+            const all = [...box, ...extra].filter(Boolean);
+            return all.length ? (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {all.map((x, i) => <span key={i} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{x}</span>)}
+              </div>
+            ) : null;
+          })()}
           {c.buyBox && <p className="text-xs text-slate-600">{c.buyBox}</p>}
           {c.bestContact && <p className="text-xs text-violet-700">📣 Reach: {c.bestContact}</p>}
           {c.lastContacted && <p className="text-[11px] text-slate-400">Last contacted {c.lastContacted}</p>}
@@ -67,7 +58,7 @@ function Rolodex({ items }: { items: MC[] }) {
           {c.notes && <p className="mt-0.5 text-xs italic text-slate-500">{c.notes}</p>}
           <details className="mt-1.5">
             <summary className="cursor-pointer text-[11px] font-medium text-slate-400 hover:text-brand-navy">Edit / delete</summary>
-            <div className="mt-2"><ContactForm c={c} /></div>
+            <div className="mt-2"><MarketContactForm c={c} /></div>
             <form action={deleteMarketContact} className="mt-1"><input type="hidden" name="id" value={c.id} /><button className="text-[11px] font-medium text-slate-300 hover:text-red-600">Delete</button></form>
           </details>
         </Card>
@@ -207,12 +198,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       <div>
         <SectionTitle title="🏛 Luxury / Developers" subtitle={`${luxury.length} developers & luxury buyers`} accent="bg-brand-navy" />
         <Rolodex items={luxury} />
-        <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a luxury buyer / developer</h4><ContactForm defaultCategory="luxury" /></Card>
+        <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a luxury buyer / developer</h4><MarketContactForm defaultCategory="luxury" /></Card>
       </div>
       <div>
         <SectionTitle title="🔨 Distressed / Flippers" subtitle={`${distressed.length} flippers & cash buyers`} accent="bg-amber-400" />
         <Rolodex items={distressed} />
-        <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a flipper / cash buyer</h4><ContactForm defaultCategory="distressed" /></Card>
+        <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a flipper / cash buyer</h4><MarketContactForm defaultCategory="distressed" /></Card>
       </div>
     </div>
   );
