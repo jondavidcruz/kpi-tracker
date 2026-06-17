@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveMarketContact, deleteMarketContact, saveMarketingNotes } from "@/app/actions";
+import { saveMarketContact, deleteMarketContact, saveMarketingNotes, importMarketContacts } from "@/app/actions";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -14,7 +14,7 @@ const labelCls = "mb-0.5 block text-[11px] font-semibold text-slate-500";
 const TYPES = ["developer", "custom", "remodeler", "flipper", "cash_buyer", "investor", "agent", "other"];
 const REGIONS = [["SD", "San Diego Co."], ["OC", "Orange Co."], ["LA", "Los Angeles"], ["other", "Other / TBD"]];
 
-type MC = Buyer & { sortOrder: number };
+type MC = Buyer & { sortOrder: number; igHandle: string; bestContact: string; lastContacted: string; outreachLog: string };
 
 function ContactForm({ c, defaultCategory }: { c?: MC; defaultCategory?: string }) {
   return (
@@ -31,6 +31,10 @@ function ContactForm({ c, defaultCategory }: { c?: MC; defaultCategory?: string 
       <label className="sm:col-span-2"><span className={labelCls}>Website</span><input name="website" defaultValue={c?.website ?? ""} className={inputCls} /></label>
       <label className="sm:col-span-2"><span className={labelCls}>🎯 Target areas (neighborhoods — searched by the map)</span><input name="buyBoxAreas" defaultValue={c?.buyBoxAreas ?? ""} placeholder="Newport Heights, Eastbluff…" className={inputCls} /></label>
       <label className="sm:col-span-2"><span className={labelCls}>Buy box / criteria</span><input name="buyBox" defaultValue={c?.buyBox ?? ""} placeholder="min lot, max land basis, R-1…" className={inputCls} /></label>
+      <label><span className={labelCls}>Instagram</span><input name="igHandle" defaultValue={c?.igHandle ?? ""} placeholder="@handle" className={inputCls} /></label>
+      <label><span className={labelCls}>Last contacted</span><input name="lastContacted" type="date" defaultValue={c?.lastContacted ?? ""} className={inputCls} /></label>
+      <label className="sm:col-span-2"><span className={labelCls}>Best way to reach (sequence)</span><input name="bestContact" defaultValue={c?.bestContact ?? ""} placeholder="IG DM → email → call; founder direct" className={inputCls} /></label>
+      <label className="sm:col-span-4"><span className={labelCls}>Outreach log (touches, replies, next step)</span><textarea name="outreachLog" defaultValue={c?.outreachLog ?? ""} rows={2} className={inputCls} /></label>
       <label><span className={labelCls}>Lat</span><input name="lat" type="number" step="any" defaultValue={c?.lat ?? ""} className={inputCls} /></label>
       <label><span className={labelCls}>Lng</span><input name="lng" type="number" step="any" defaultValue={c?.lng ?? ""} className={inputCls} /></label>
       <label className="sm:col-span-2"><span className={labelCls}>Notes</span><input name="notes" defaultValue={c?.notes ?? ""} className={inputCls} /></label>
@@ -51,10 +55,13 @@ function Rolodex({ items }: { items: MC[] }) {
             {c.status && <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{c.status}</span>}
             {c.market && <span className="ml-auto text-xs text-slate-400">📍 {c.market}</span>}
           </div>
-          {(c.phone || c.email) && <p className="mt-1 text-xs text-brand-navy">{[c.phone, c.email].filter(Boolean).join(" · ")}</p>}
+          {(c.phone || c.email || c.igHandle) && <p className="mt-1 text-xs text-brand-navy">{[c.phone, c.email, c.igHandle].filter(Boolean).join(" · ")}</p>}
           {c.website && <a href={`https://${c.website.replace(/^https?:\/\//, "")}`} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:underline">{c.website} ↗</a>}
           {c.buyBoxAreas && <p className="text-xs text-emerald-700">🎯 {c.buyBoxAreas}</p>}
           {c.buyBox && <p className="text-xs text-slate-600">{c.buyBox}</p>}
+          {c.bestContact && <p className="text-xs text-violet-700">📣 Reach: {c.bestContact}</p>}
+          {c.lastContacted && <p className="text-[11px] text-slate-400">Last contacted {c.lastContacted}</p>}
+          {c.outreachLog && <p className="mt-0.5 rounded bg-slate-50 px-2 py-1 text-[11px] text-slate-600">📋 {c.outreachLog}</p>}
           {c.notes && <p className="mt-0.5 text-xs italic text-slate-500">{c.notes}</p>}
           <details className="mt-1.5">
             <summary className="cursor-pointer text-[11px] font-medium text-slate-400 hover:text-brand-navy">Edit / delete</summary>
@@ -67,7 +74,7 @@ function Rolodex({ items }: { items: MC[] }) {
   );
 }
 
-export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ saved?: string; imp?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) {
     return (
@@ -100,6 +107,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     <div className="space-y-6">
       <SectionTitle title="🗺 Markets & Buyers" subtitle="Interactive map of our target markets and the developers + flippers who buy there. Search an area to see who matches." accent="bg-brand-gold" />
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
+      {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} contact{sp.imp === "1" ? "" : "s"}.</div>}
+      {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
+      {sp.imp === "noname" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Your CSV needs a header row with a &ldquo;name&rdquo; column.</div>}
 
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">
@@ -146,6 +156,17 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
             <div className="sm:col-span-2"><button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save</button></div>
           </form>
         </details>
+      </Card>
+
+      {/* CSV bulk import — for the dispo team to add vetted developers/flippers fast */}
+      <Card className="border-l-4 border-emerald-300 bg-emerald-50/40 p-5">
+        <h3 className="mb-1 text-sm font-bold text-slate-700">⬆️ Bulk import (CSV)</h3>
+        <p className="mb-2 text-xs text-slate-500">Add many vetted developers / flippers at once. Header row columns: <span className="font-mono">name, category (luxury|distressed), type, region, market, status, email, phone, website, buyBox, buyBoxAreas, igHandle, bestContact, lat, lng, notes</span>. Only <strong>name</strong> is required.</p>
+        <form action={importMarketContacts} className="grid grid-cols-1 gap-2">
+          <input type="file" name="file" accept=".csv,text/csv" className="text-xs text-slate-600" />
+          <textarea name="csv" rows={3} placeholder="…or paste CSV here (first row = headers)" className={inputCls} />
+          <div><button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Import rows</button></div>
+        </form>
       </Card>
 
       {/* Rolodex by category */}

@@ -1327,6 +1327,8 @@ export async function saveMarketContact(formData: FormData) {
     type: str("type"), region: str("region"), market: str("market"), status: str("status"),
     email: str("email"), phone: str("phone"), website: str("website"),
     buyBox: str("buyBox"), buyBoxAreas: str("buyBoxAreas"),
+    igHandle: str("igHandle"), bestContact: str("bestContact"),
+    lastContacted: str("lastContacted"), outreachLog: str("outreachLog"),
     lat: num("lat"), lng: num("lng"), notes: str("notes"),
     sortOrder: Number(formData.get("sortOrder")) || 0,
   };
@@ -1394,4 +1396,71 @@ export async function deleteRoadmapItem(formData: FormData) {
   if (id) await db.roadmapItem.delete({ where: { id } });
   revalidatePath("/roadmap");
   redirect("/roadmap");
+}
+
+// --- Markets & Buyers: CSV bulk import (dispo team) --------------------------
+
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], cell = "", inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cell += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ",") { row.push(cell); cell = ""; }
+      else if (c === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+      else if (c === "\r") { /* skip */ }
+      else cell += c;
+    }
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((x) => x.trim() !== ""));
+}
+
+/** Bulk-add vetted developers/flippers from a CSV (file upload or pasted text). */
+export async function importMarketContacts(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const file = formData.get("file") as File | null;
+  let text = String(formData.get("csv") ?? "");
+  if (file && typeof file.size === "number" && file.size > 0) text = await file.text();
+  if (!text.trim()) redirect("/marketing?imp=empty");
+
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) redirect("/marketing?imp=empty");
+  const header = rows[0].map((h) => h.trim().toLowerCase());
+  const idx = (names: string[]) => { for (const n of names) { const i = header.indexOf(n); if (i >= 0) return i; } return -1; };
+  const col = {
+    name: idx(["name", "company", "builder"]), category: idx(["category"]), type: idx(["type", "tier"]),
+    region: idx(["region"]), market: idx(["market", "city", "primary city"]), status: idx(["status"]),
+    email: idx(["email"]), phone: idx(["phone"]), website: idx(["website", "web"]),
+    buyBox: idx(["buybox", "buy box"]), areas: idx(["buyboxareas", "areas", "target areas", "neighborhoods"]),
+    lat: idx(["lat"]), lng: idx(["lng", "lon"]), notes: idx(["notes"]),
+    ig: idx(["ig", "instagram", "ighandle", "handle"]), best: idx(["bestcontact", "best contact", "best way"]),
+  };
+  if (col.name < 0) redirect("/marketing?imp=noname");
+
+  let n = 0;
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const g = (i: number) => (i >= 0 && i < row.length ? row[i].trim() : "");
+    const name = g(col.name);
+    if (!name) continue;
+    const latV = parseFloat(g(col.lat)); const lngV = parseFloat(g(col.lng));
+    await db.marketContact.create({ data: {
+      name, category: g(col.category).toLowerCase() === "luxury" ? "luxury" : "distressed",
+      type: g(col.type), region: g(col.region), market: g(col.market), status: g(col.status),
+      email: g(col.email), phone: g(col.phone), website: g(col.website),
+      buyBox: g(col.buyBox), buyBoxAreas: g(col.areas), notes: g(col.notes),
+      igHandle: g(col.ig), bestContact: g(col.best),
+      lat: Number.isFinite(latV) ? latV : null, lng: Number.isFinite(lngV) ? lngV : null,
+    } });
+    n++;
+  }
+  revalidatePath("/marketing");
+  redirect(`/marketing?imp=${n}`);
 }
