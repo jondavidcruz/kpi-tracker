@@ -475,17 +475,25 @@ model Rock {
 // Marketing — buyers / developers / flippers directory + markets + research.
 // Distinguishes Luxury/Developers from Distressed/Flippers. Manager-curated.
 model MarketContact {
-  id        String   @id @default(cuid())
-  name      String
-  category  String   @default("distressed") // luxury | distressed
-  type      String   @default("") // developer | flipper | cash_buyer | investor | agent | other
-  market    String   @default("") // city / region they buy in
-  contact   String   @default("") // email / phone
-  buyBox    String   @default("") // price range / criteria / what they want
-  notes     String   @default("")
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  category    String   @default("distressed") // luxury | distressed
+  type        String   @default("") // developer | custom | remodeler | flipper | cash_buyer | investor | agent | other
+  region      String   @default("") // SD | OC | LA | other
+  market      String   @default("") // city / area they buy in
+  status      String   @default("") // freeform: Priority | To Vet | Contacted | Buy Box | Dead …
+  email       String   @default("")
+  phone       String   @default("")
+  website     String   @default("")
+  buyBox      String   @default("") // price range / criteria / what they want
+  buyBoxAreas String   @default("") // target neighborhoods (matched by the area search)
+  lat         Float? // map pin
+  lng         Float?
+  contact     String   @default("") // legacy combined contact
+  notes       String   @default("")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([category])
 }

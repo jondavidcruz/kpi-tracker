@@ -58,7 +58,7 @@ export default function Sidebar({
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
     ] },
     { label: "Marketing", items: [
-      { href: "/marketing", label: "Marketing", Icon: Megaphone, marketingOnly: true },
+      { href: "/marketing", label: "Markets & Buyers", Icon: Megaphone, marketingOnly: true },
     ] },
     { label: "Operations", items: [
       { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },

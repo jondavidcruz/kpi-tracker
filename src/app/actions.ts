@@ -1321,10 +1321,14 @@ export async function saveMarketContact(formData: FormData) {
   const str = (k: string) => String(formData.get(k) ?? "").trim();
   const name = str("name");
   if (!name) return;
+  const num = (k: string) => { const v = parseFloat(String(formData.get(k) ?? "")); return Number.isFinite(v) ? v : null; };
   const data = {
     name, category: str("category") === "luxury" ? "luxury" : "distressed",
-    type: str("type"), market: str("market"), contact: str("contact"),
-    buyBox: str("buyBox"), notes: str("notes"), sortOrder: Number(formData.get("sortOrder")) || 0,
+    type: str("type"), region: str("region"), market: str("market"), status: str("status"),
+    email: str("email"), phone: str("phone"), website: str("website"),
+    buyBox: str("buyBox"), buyBoxAreas: str("buyBoxAreas"),
+    lat: num("lat"), lng: num("lng"), notes: str("notes"),
+    sortOrder: Number(formData.get("sortOrder")) || 0,
   };
   if (id) await db.marketContact.update({ where: { id }, data });
   else await db.marketContact.create({ data });
