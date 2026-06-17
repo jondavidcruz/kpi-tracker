@@ -4,6 +4,7 @@ import { vaultConfigured } from "@/lib/crypto";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import RevealSecret from "@/components/RevealSecret";
+import SoftwareControls from "@/components/SoftwareControls";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,7 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
   const configured = vaultConfigured();
 
   const [list, recent] = await Promise.all([
-    db.software.findMany({ where: { active: true }, orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
+    db.software.findMany({ where: { active: true }, orderBy: [{ name: "asc" }] }),
     owner ? db.secretAccess.findMany({ orderBy: { viewedAt: "desc" }, take: 10 }) : Promise.resolve([]),
   ]);
   const withSecret = new Set(list.filter((s) => s.secret).map((s) => s.id));
@@ -114,16 +115,27 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
 
       {list.length === 0 && !canEdit && <Card className="p-10 text-center text-slate-400">No software added yet.</Card>}
 
+      {list.length > 0 && <SoftwareControls categories={cats} />}
+      <div data-sw-empty style={{ display: "none" }}>
+        <Card className="p-8 text-center text-slate-400">No logins match your search.</Card>
+      </div>
+
       {cats.map((cat) => (
-        <div key={cat}>
-          <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"><span className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ${CAT_COLOR[cat]}`}>{cat}</span></h3>
+        <div key={cat} data-sw-group={cat}>
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700">
+            <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ${CAT_COLOR[cat]}`}>{cat}</span>
+            <span className="text-xs font-semibold text-slate-400"><span data-sw-count>{byCat.get(cat)!.length}</span></span>
+          </h3>
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {byCat.get(cat)!.map((s) => {
               const hasSecret = withSecret.has(s.id);
               const names = s.accessList.split(/[\n,]/).map((x) => x.trim().toLowerCase()).filter(Boolean);
               const canReveal = manager || names.includes(meName);
+              const hay = [s.name, s.loginEmail, s.owner, s.category, s.plan, s.notes, s.accessList, s.vaultRef]
+                .filter(Boolean).join(" ").toLowerCase();
               return (
-                <Card key={s.id} className="p-4">
+                <div key={s.id} data-sw-card data-search={hay}>
+                <Card className="p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-base font-bold text-slate-800">{s.name}</span>
                     {s.mfa === "on" && <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">MFA on</span>}
@@ -167,6 +179,7 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
                     </details>
                   )}
                 </Card>
+                </div>
               );
             })}
           </div>
