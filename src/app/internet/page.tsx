@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getActiveReps, getAllTargets, getSettings, resolveGoalWith } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, currentWeekRange, datesInRange } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
@@ -18,6 +19,17 @@ function cellBg(v: number | null, goal: number) {
 }
 
 export default async function InternetPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) {
+    return (
+      <Card className="mx-auto max-w-md p-8 text-center">
+        <div className="mb-2 text-3xl">🔒</div>
+        <h1 className="text-xl font-bold">Managers only</h1>
+        <p className="mt-1 text-sm text-slate-500">The team internet view is visible to Jon &amp; Marie.</p>
+        <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
+      </Card>
+    );
+  }
   const sp = await searchParams;
   const settings = await getSettings();
   const today = sp.date ?? todayStr(settings.orgTimezone);

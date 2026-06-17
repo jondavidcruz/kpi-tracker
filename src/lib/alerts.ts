@@ -557,6 +557,11 @@ export async function runScheduledChecks(opts?: {
   const tz = settings.orgTimezone;
   const date = opts?.date ?? todayStr(tz);
 
+  // Friday is a short day — the whole team releases at 2pm, so EOD (team review,
+  // missing-KPI email, missing-entry flags) runs after 14:00 on Fridays instead
+  // of the normal end-of-day cutoff. Mon–Thu use the standard cutoff.
+  const cutoff = isWeekday(tz, "Fri") ? "14:00" : settings.workdayCutoff;
+
   // Re-evaluate today's entries and record alerts in-app.
   const created = await evaluateAndRecordAlerts(date);
 
@@ -566,7 +571,7 @@ export async function runScheduledChecks(opts?: {
   // Weekends are off — skip missing-entry nags (and the digest below) unless forced.
   const weekdayOrForce = opts?.force || !isWeekend(tz);
   let missing: NewAlert[] = [];
-  if (weekdayOrForce && (opts?.force || pastCutoff(settings.workdayCutoff, tz))) {
+  if (weekdayOrForce && (opts?.force || pastCutoff(cutoff, tz))) {
     missing = await generateMissingEntryAlerts(date);
   }
 
@@ -589,7 +594,7 @@ export async function runScheduledChecks(opts?: {
 
   // End-of-day team review — on the post-cutoff (6:30pm) weekday run, after KPIs
   // are entered. Force with ?review=1.
-  const postCutoff = pastCutoff(settings.workdayCutoff, tz);
+  const postCutoff = pastCutoff(cutoff, tz);
   const dailyReviewSent =
     opts?.review || (weekdayOrForce && postCutoff)
       ? await sendDailyTeamReview(date)
