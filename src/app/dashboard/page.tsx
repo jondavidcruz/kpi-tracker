@@ -9,7 +9,7 @@ import {
   getSettings,
   resolveGoalWith,
 } from "@/lib/data";
-import { todayStr, friendlyDate, paceFraction, monthOf } from "@/lib/date";
+import { todayStr, friendlyDate, paceFraction, monthOf, datesInRange } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { statusClasses, statusVsGoal, statusVsPace, alertSeverity, type Status } from "@/lib/kpi";
 import { dailyGap, monthlyGap, monthlyCatchup, buildCoaching } from "@/lib/gap";
@@ -71,6 +71,22 @@ export default async function DashboardPage({
   const agingDeals = dealsNeedingAttention(openDeals, date);
   const trends = await getDailyTrends(date, 14);
   const [awardBoard, aiChampions] = await Promise.all([getAwardBoard(), getAiChampions()]);
+
+  // --- Internet speed: today's recorded reading per rep + a 14-day history/trend ---
+  const internetSpeedKpi = perRepKpis.find((k) => k.roleKey === "internet") ?? null;
+  const [sy, sm, sd] = date.split("-").map(Number);
+  const winStart = new Date(Date.UTC(sy, sm - 1, sd));
+  winStart.setUTCDate(winStart.getUTCDate() - 13);
+  const speedDays = datesInRange(winStart.toISOString().slice(0, 10), date); // 14 days incl. today
+  const speedEntries = internetSpeedKpi
+    ? await db.entry.findMany({
+        where: { kpiId: internetSpeedKpi.id, date: { gte: speedDays[0], lte: date } },
+        select: { userId: true, date: true, value: true },
+      })
+    : [];
+  const speedMap = new Map<string, number>();
+  for (const e of speedEntries) speedMap.set(`${e.userId}|${e.date}`, e.value);
+  const speedReps = reps.filter((r) => r.tracksInternet);
   const onGoalSeries = trends.map((t) => t.onGoal);
   const behindSeries = trends.map((t) => t.behind);
   const loggedSeries = trends.map((t) => t.logged);
@@ -278,6 +294,15 @@ export default async function DashboardPage({
         </section>
       )}
 
+      {/* Internet speed — today's reading + 2-week history & trend per rep */}
+      <InternetSpeedSection
+        kpi={internetSpeedKpi}
+        reps={speedReps}
+        days={speedDays}
+        valueAt={(uid, d) => speedMap.get(`${uid}|${d}`) ?? null}
+        goalFor={(uid) => (internetSpeedKpi ? resolveGoalWith(targets, internetSpeedKpi, uid, month) : null)}
+      />
+
       {/* Role scorecards */}
       {POSITIONS.map((pos) => {
         const roleReps = reps.filter((r) => r.position === pos.key);
@@ -333,6 +358,78 @@ export default async function DashboardPage({
         </div>
       </section>
     </div>
+  );
+}
+
+function InternetSpeedSection({
+  kpi,
+  reps,
+  days,
+  valueAt,
+  goalFor,
+}: {
+  kpi: Kpi | null;
+  reps: User[];
+  days: string[];
+  valueAt: (userId: string, date: string) => number | null;
+  goalFor: (userId: string) => number | null;
+}) {
+  if (!kpi || reps.length === 0) return null;
+  const tone = (v: number | null, goal: number) =>
+    v === null ? "text-slate-300" : v >= goal ? "text-emerald-600" : v >= 25 ? "text-amber-600" : "text-red-600";
+  return (
+    <section>
+      <SectionTitle
+        title="📡 Internet Speed — daily"
+        subtitle="Today's reading plus the last 2 weeks. Red bars = below goal — watch for reps with chronic slow days."
+        accent="bg-indigo-400"
+      />
+      <Card className="divide-y divide-slate-100">
+        {reps.map((rep) => {
+          const goal = goalFor(rep.id) ?? 50;
+          const series = days.map((d) => ({ date: d, v: valueAt(rep.id, d) }));
+          const recorded = series.filter((s): s is { date: string; v: number } => s.v !== null);
+          const today = series[series.length - 1].v;
+          const avg = recorded.length ? Math.round(recorded.reduce((a, b) => a + b.v, 0) / recorded.length) : null;
+          const min = recorded.length ? Math.min(...recorded.map((s) => s.v)) : null;
+          const lowDays = recorded.filter((s) => s.v < goal).length;
+          const scaleMax = Math.max(goal, ...recorded.map((s) => s.v), 1);
+          return (
+            <div key={rep.id} className="flex flex-wrap items-center gap-4 p-4">
+              <div className="w-32 shrink-0">
+                <div className="font-semibold text-slate-800">{rep.name}</div>
+                <div className={`text-2xl font-extrabold tabular-nums ${tone(today, goal)}`}>
+                  {today === null ? "—" : today}
+                  <span className="text-xs font-semibold text-slate-400"> Mbps</span>
+                </div>
+              </div>
+              <div className="flex flex-1 items-end gap-0.5" style={{ height: 48, minWidth: 160 }}>
+                {series.map((s) => {
+                  const h = s.v === null ? 3 : Math.max(3, Math.round((s.v / scaleMax) * 46));
+                  const c = s.v === null ? "bg-slate-200" : s.v >= goal ? "bg-emerald-400" : s.v >= 25 ? "bg-amber-400" : "bg-red-400";
+                  return (
+                    <div
+                      key={s.date}
+                      title={`${s.date}: ${s.v === null ? "no test" : `${s.v} Mbps`}`}
+                      className={`flex-1 rounded-sm ${c}`}
+                      style={{ height: h }}
+                    />
+                  );
+                })}
+              </div>
+              <div className="w-44 shrink-0 text-right text-xs text-slate-500">
+                <div>avg <span className="font-semibold tabular-nums text-slate-700">{avg ?? "—"}</span> · low <span className="font-semibold tabular-nums text-slate-700">{min ?? "—"}</span> Mbps</div>
+                <div>goal {goal}+ · <span className={lowDays >= 3 ? "font-semibold text-red-600" : "text-slate-400"}>{lowDays} day{lowDays === 1 ? "" : "s"} below</span></div>
+                {recorded.length === 0 && <div className="text-amber-600">no tests logged yet</div>}
+              </div>
+            </div>
+          );
+        })}
+      </Card>
+      <p className="mt-1 text-xs text-slate-400">
+        From the in-app speed test on <Link href="/entry" className="underline hover:text-slate-600">Enter KPIs</Link>. Bars are the last {days.length} days (oldest → today). Hover a bar for that day&apos;s reading.
+      </p>
+    </section>
   );
 }
 

@@ -1193,7 +1193,13 @@ export async function saveSpeedTest(formData: FormData) {
   const date = String(formData.get("date") ?? "");
   const mbps = Number(formData.get("mbps"));
   if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(mbps)) return;
-  const kpi = await db.kpi.findUnique({ where: { key: "internet_speed" } });
+  // Resolve the internet-speed KPI the same way the entry card binds to it — by
+  // roleKey "internet" — falling back to the legacy "internet_speed" slug. The
+  // card shows whenever a roleKey="internet" KPI exists, but the row's generated
+  // key can differ (e.g. admin-created), which previously made saves silently no-op.
+  const kpi =
+    (await db.kpi.findFirst({ where: { roleKey: "internet" }, orderBy: { sortOrder: "asc" } })) ??
+    (await db.kpi.findUnique({ where: { key: "internet_speed" } }));
   if (!kpi) return;
   const existing = await db.entry.findFirst({ where: { kpiId: kpi.id, userId, date } });
   if (existing) {
