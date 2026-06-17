@@ -29,7 +29,7 @@ export interface AlertView {
 }
 
 export default function AlertInbox({ alerts, tab }: { alerts: AlertView[]; tab: string }) {
-  const canResolve = tab === "open" || tab === "ack";
+  const canResolve = tab === "open";
   const [sel, setSel] = useState<Set<string>>(new Set());
 
   function toggle(id: string) {
@@ -108,7 +108,6 @@ export default function AlertInbox({ alerts, tab }: { alerts: AlertView[]; tab: 
               </div>
 
               <div className="flex shrink-0 gap-2">
-                {tab === "open" && <StatusBtn id={a.id} to="ack" label="Acknowledge" />}
                 {tab === "resolved" && <StatusBtn id={a.id} to="open" label="Reopen" />}
               </div>
             </div>
@@ -127,11 +126,11 @@ export default function AlertInbox({ alerts, tab }: { alerts: AlertView[]; tab: 
               </div>
             )}
 
-            {/* Justify & Resolve form */}
+            {/* Justify & Resolve form — open by default so EOD justification is one step */}
             {canResolve && (
-              <details className="border-t border-slate-100">
+              <details open className="border-t border-slate-100">
                 <summary className="cursor-pointer px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                  ✍️ Justify &amp; resolve
+                  ✍️ Justify &amp; resolve <span className="font-normal text-slate-400">— pick a reason to close it</span>
                 </summary>
                 <form action={resolveAlert} className="space-y-3 px-4 pb-4">
                   <input type="hidden" name="id" value={a.id} />

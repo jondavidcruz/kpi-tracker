@@ -16,7 +16,6 @@ export const dynamic = "force-dynamic";
 const TABS = [
   { key: "open", label: "Open" },
   { key: "accountability", label: "⚖️ Accountability" },
-  { key: "ack", label: "Acknowledged" },
   { key: "resolved", label: "Resolved" },
   { key: "trends", label: "📊 Trends" },
 ];
@@ -44,7 +43,7 @@ export default async function AlertsPage({
 
   const counts = Object.fromEntries(
     await Promise.all(
-      ["open", "ack", "resolved"].map(async (k) => [k, await db.alert.count({ where: { status: k } })] as const),
+      ["open", "resolved"].map(async (k) => [k, await db.alert.count({ where: { status: k } })] as const),
     ),
   ) as Record<string, number>;
 
@@ -62,7 +61,7 @@ export default async function AlertsPage({
             }`}
           >
             {t.label}
-            {t.key !== "trends" && <span className="tabular-nums"> ({counts[t.key] ?? 0})</span>}
+            {(t.key === "open" || t.key === "resolved") && <span className="tabular-nums"> ({counts[t.key] ?? 0})</span>}
           </a>
         ))}
       </div>

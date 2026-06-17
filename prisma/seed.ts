@@ -69,6 +69,7 @@ const KPIS = [
   // ===== Talk time — kept at the END of each scorecard, side by side =====
   { key: "acq_talk_time", name: "CRM Talk Time", emoji: "🎧", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: 90 * 60, goalKind: "at_least", definition: "Talk time logged in the CRM with sellers." },
   { key: "acq_dialer_talk_time", name: "Dialer Talk Time", emoji: "📟", category: "blue", unit: "duration", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Talk time logged through the dialer when contacting sellers — adds to total outbound effort." },
+  { key: "ds_talk_time", name: "CRM Talk Time", emoji: "🎧", category: "blue", unit: "duration", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Talk time logged in the CRM with buyers." },
   { key: "ds_dialer_talk_time", name: "Dialer Talk Time", emoji: "📟", category: "blue", unit: "duration", scope: "per_rep", roleKey: "dispositions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Talk time logged through the dialer when contacting buyers — adds to total outbound effort." },
 ];
 
