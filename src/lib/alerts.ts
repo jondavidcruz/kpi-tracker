@@ -431,13 +431,15 @@ export async function sendAlertJustificationReminder(date: string): Promise<bool
 
 /** Send a single Chat + email digest of all open alerts for the date.
  *  Money (hard) flags include a gap + training plan; activity/missing are listed. */
-export async function sendDailyDigest(date: string): Promise<boolean> {
-  const open = await db.alert.findMany({
-    where: { status: "open", date },
-    orderBy: [{ severity: "asc" }],
-    include: { kpi: true, user: true },
-  });
-  if (open.length === 0) return false;
+export async function sendDailyDigest(date: string, opts?: { chat?: boolean }): Promise<boolean> {
+  const sendChat = opts?.chat ?? true;
+  const [open, resolvedAll] = await Promise.all([
+    db.alert.findMany({ where: { status: "open", date }, orderBy: [{ severity: "asc" }], include: { kpi: true, user: true } }),
+    db.alert.findMany({ where: { status: "resolved", date }, include: { kpi: true, user: true } }),
+  ]);
+  // Resolved alerts with a written justification (what Marie entered at EOD).
+  const justified = resolvedAll.filter((a) => a.resolutionNote || a.correctiveAction);
+  if (open.length === 0 && justified.length === 0) return false;
 
   const cfg = await getChannelConfig();
   const hard = open.filter((a) => a.severity === "hard");
@@ -462,12 +464,20 @@ export async function sendDailyDigest(date: string): Promise<boolean> {
     })
     .join("\n\n");
   const softSection = soft.map((a) => `🔵 ${a.message}`).join("\n");
+  const justifiedChat = justified
+    .map((a) => {
+      const who = a.user?.name ? `*${a.user.name}* · ` : "";
+      const note = a.resolutionNote || a.correctiveAction || "";
+      return `✅ ${who}${a.kpi.emoji} ${a.kpi.name}\n   _${a.resolutionCategory ?? "resolved"}:_ ${note}${a.resolvedBy ? `  — ${a.resolvedBy}` : ""}`;
+    })
+    .join("\n\n");
   const chatText =
-    `📊 *KPI Digest* (${date}): ${hard.length} money + ${soft.length} activity\n\n` +
+    `📊 *KPI Digest* (${date}): ${hard.length} money + ${soft.length} activity${justified.length ? ` · ${justified.length} justified` : ""}\n\n` +
     (moneySection ? moneySection + "\n\n" : "") +
-    (softSection ? `*Activity / missing:*\n${softSection}` : "");
+    (softSection ? `*Activity / missing:*\n${softSection}\n\n` : "") +
+    (justifiedChat ? `*Justifications logged:*\n${justifiedChat}` : "");
 
-  const chatOk = await sendGoogleChat(chatText, cfg);
+  const chatOk = sendChat ? await sendGoogleChat(chatText, cfg) : false;
 
   // ---- Email (rich coaching cards for money, plain list for the rest) ----
   const emailHtml =
@@ -479,9 +489,15 @@ export async function sendDailyDigest(date: string): Promise<boolean> {
     ) +
     (soft.length
       ? alertEmailHtml(`Activity / missing: ${date}`, soft.map((a) => a.message))
+      : "") +
+    (justified.length
+      ? alertEmailHtml(
+          `✅ Justifications logged: ${date}`,
+          justified.map((a) => `${a.user?.name ?? "Team"} — ${a.kpi.name}: ${(a.resolutionNote || a.correctiveAction || "").trim()}${a.resolvedBy ? ` (— ${a.resolvedBy})` : ""}`),
+        )
       : "");
   const emailOk = await sendEmail(
-    `📊 KPI Digest (${date}): ${open.length} open flag${open.length === 1 ? "" : "s"}`,
+    `📊 KPI Digest (${date}): ${open.length} open · ${justified.length} justified`,
     emailHtml,
     cfg,
   );
@@ -491,7 +507,8 @@ export async function sendDailyDigest(date: string): Promise<boolean> {
 // --- Deal aging alerts -------------------------------------------------------
 
 /** Post a digest of dispo deals sitting too long / nearing expiration. */
-export async function sendDealAgingAlerts(today: string): Promise<boolean> {
+export async function sendDealAgingAlerts(today: string, opts?: { chat?: boolean }): Promise<boolean> {
+  const sendChat = opts?.chat ?? true;
   const deals = await db.deal.findMany({ where: { active: true } });
   const flagged = dealsNeedingAttention(deals, today);
   if (flagged.length === 0) return false;
@@ -504,7 +521,7 @@ export async function sendDealAgingAlerts(today: string): Promise<boolean> {
     return `${icon} *${x.deal.address}*${who}\n   ${x.aging.recommendation}${x.deal.nextSteps ? `\n   _Next:_ ${x.deal.nextSteps}` : ""}`;
   });
   const chatText = `🏠 *Dispo Deal Watch*: ${flagged.length} deal${flagged.length === 1 ? "" : "s"} need attention:\n\n` + chatLines.join("\n\n");
-  const chatOk = await sendGoogleChat(chatText, cfg);
+  const chatOk = sendChat ? await sendGoogleChat(chatText, cfg) : false;
 
   const cards = flagged
     .map((x) => {
@@ -584,6 +601,9 @@ export async function runScheduledChecks(opts?: {
   // missing-KPI email, missing-entry flags) runs after 14:00 on Fridays instead
   // of the normal end-of-day cutoff. Mon–Thu use the standard cutoff.
   const cutoff = isWeekday(tz, "Fri") ? "14:00" : settings.workdayCutoff;
+  // Past the end-of-day cutoff = the evening/EOD run. Google Chat gets the digest
+  // ONLY then (once a day, ~6:30pm); the morning run stays email-only.
+  const postCutoff = opts?.force || pastCutoff(cutoff, tz);
 
   // Re-evaluate today's entries and record alerts in-app.
   const created = await evaluateAndRecordAlerts(date);
@@ -602,9 +622,10 @@ export async function runScheduledChecks(opts?: {
   // (hard + soft + missing), each with its gap + training plan. Instant hard
   // alerts already fired on save; the digest is the pre-/post-shift summary.
   // Skip on weekends (team works Mon–Fri) unless a manual force run is requested.
-  const digestSent = weekdayOrForce ? await sendDailyDigest(date) : false;
-  // Dispo deal-aging watch rides along with the same twice-daily, weekday schedule.
-  const dealAlertsSent = weekdayOrForce ? await sendDealAgingAlerts(date) : false;
+  // Email goes on both runs; Google Chat only on the evening/EOD run (chat: postCutoff).
+  const digestSent = weekdayOrForce ? await sendDailyDigest(date, { chat: postCutoff }) : false;
+  // Dispo deal-aging watch rides along — same once-a-day Chat rule.
+  const dealAlertsSent = weekdayOrForce ? await sendDealAgingAlerts(date, { chat: postCutoff }) : false;
 
   // Weekly team KPI email — Monday morning only (or any forced run with ?weekly=1).
   const isMondayMorning = isWeekday(tz, "Mon") && !pastCutoff("12:00", tz);
@@ -617,7 +638,6 @@ export async function runScheduledChecks(opts?: {
 
   // End-of-day team review — on the post-cutoff (6:30pm) weekday run, after KPIs
   // are entered. Force with ?review=1.
-  const postCutoff = pastCutoff(cutoff, tz);
   const dailyReviewSent =
     opts?.review || (weekdayOrForce && postCutoff)
       ? await sendDailyTeamReview(date)
