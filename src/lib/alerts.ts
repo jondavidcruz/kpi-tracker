@@ -362,12 +362,21 @@ export async function sendMissingKpiEmail(date: string): Promise<boolean> {
   return sendEmailTo(to, `📋 EOD: ${missingByRep.length} not fully logged (${date})`, html);
 }
 
-/** Start-of-shift nudge: email each rep who tracks internet and hasn't run
- *  today's speed test yet. (Calendar-synced per-shift timing is a later phase;
- *  for now this is a single morning reminder + the in-app banner.) */
-export async function sendSpeedTestReminderEmail(date: string): Promise<number> {
-  const dow = new Date(date + "T12:00:00Z").getUTCDay();
-  if (dow === 0 || dow === 6) return 0; // no weekends
+// Fixed team shift-start hours (America/Los_Angeles local), matched by first
+// name. Each rep gets the speed-test email at the hour their shift begins.
+// Edit here if hours change. Ethan is intentionally absent (supervised in person).
+//   dow: 0=Sun … 6=Sat. Returns the local start hour for that weekday, or null (off).
+export const SHIFT_START_HOURS: { match: string; startHour: (dow: number) => number | null }[] = [
+  { match: "michelle", startHour: (d) => (d >= 1 && d <= 5 ? 9 : null) },  // Mon–Fri 9am
+  { match: "sharyn", startHour: (d) => (d >= 1 && d <= 5 ? 9 : null) },     // Mon–Fri 9am
+  { match: "marie", startHour: (d) => (d >= 1 && d <= 4 ? 13 : d === 5 ? 9 : null) }, // Mon–Thu 1pm, Fri 9am
+];
+
+/** Start-of-shift nudge: email scheduled reps whose shift begins at `laHour`
+ *  (America/Los_Angeles) today and who haven't run their speed test yet. Called
+ *  hourly-ish by cron; only the firing that matches a rep's start hour sends. */
+export async function sendShiftStartSpeedReminders(date: string, laHour: number, laDow: number): Promise<number> {
+  if (laDow === 0 || laDow === 6) return 0; // no weekends
 
   const kpi = await db.kpi.findFirst({ where: { roleKey: "internet" } });
   if (!kpi) return 0;
@@ -380,7 +389,9 @@ export async function sendSpeedTestReminderEmail(date: string): Promise<number> 
 
   let sent = 0;
   for (const rep of reps) {
-    if (!rep.tracksInternet || rep.irregularSchedule) continue;
+    if (!rep.tracksInternet) continue;
+    const cfg = SHIFT_START_HOURS.find((s) => rep.name.toLowerCase().includes(s.match));
+    if (!cfg || cfg.startHour(laDow) !== laHour) continue; // not their shift start this hour
     if (tested.has(rep.id) || !rep.email) continue;
     const html = alertEmailHtml("📡 Run your internet speed test", [
       `Hi ${rep.name.split(" ")[0]} — quick start-of-shift task.`,
