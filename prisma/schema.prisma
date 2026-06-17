@@ -369,6 +369,7 @@ model Settings {
   // ---- Marketing research ----
   marketingMarkets  String @default("") // markets we're in (newline list)
   marketingResearch String @default("") // freeform research notes
+  outreachTemplates String @default("") // copy-paste DM/email openers + leverage
 
   // ---- Ethan shift-aware KPI reminder ----
   ethanShiftIcsUrl   String @default("") // secret iCal URL of the AQ Shift calendar
@@ -494,6 +495,7 @@ model MarketContact {
   igHandle      String @default("") // Instagram handle
   bestContact   String @default("") // best way / sequence to reach them
   lastContacted String @default("") // YYYY-MM-DD of last touch
+  nextFollowUp  String @default("") // YYYY-MM-DD next touch due (drives the Due list)
   outreachLog   String @default("") // running notes / touch log
   notes       String   @default("")
   sortOrder   Int      @default(0)

@@ -48,6 +48,8 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
   const [query, setQuery] = useState("");
   const [regions, setRegions] = useState<Set<string>>(new Set(["SD", "OC", "LA", "other"]));
   const [cats, setCats] = useState<Set<string>>(new Set(["luxury", "distressed"]));
+  const [statuses, setStatuses] = useState<Set<string>>(new Set()); // empty = all
+  const allStatuses = useMemo(() => Array.from(new Set(buyers.map((b) => b.status).filter(Boolean))).sort(), [buyers]);
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -59,11 +61,12 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
     return buyers.filter((b) => {
       if (!regions.has(b.region || "other")) return false;
       if (!cats.has(b.category)) return false;
+      if (statuses.size && !statuses.has(b.status)) return false;
       if (!q) return true;
       const hay = `${b.name} ${b.market} ${b.buyBoxAreas} ${b.notes} ${REGION[b.region]?.name ?? ""} ${b.region}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [buyers, query, regions, cats]);
+  }, [buyers, query, regions, cats, statuses]);
 
   // Init map once.
   useEffect(() => {
@@ -158,6 +161,17 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
         <button onClick={() => toggle(cats, "luxury", setCats)} className={`rounded-full px-2.5 py-1 font-semibold ring-1 ${cats.has("luxury") ? "bg-brand-navy text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200"}`}>🏛 Luxury / Developers</button>
         <button onClick={() => toggle(cats, "distressed", setCats)} className={`rounded-full px-2.5 py-1 font-semibold ring-1 ${cats.has("distressed") ? "bg-amber-500 text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200"}`}>🔨 Distressed / Flippers</button>
       </div>
+
+      {/* Status pipeline filter */}
+      {allStatuses.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="font-semibold text-slate-400">Status:</span>
+          <button onClick={() => setStatuses(new Set())} className={`rounded-full px-2.5 py-1 font-semibold ring-1 ${statuses.size === 0 ? "bg-slate-800 text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200"}`}>All</button>
+          {allStatuses.map((s) => (
+            <button key={s} onClick={() => toggle(statuses, s, setStatuses)} className={`rounded-full px-2.5 py-1 font-semibold ring-1 ${statuses.has(s) ? "bg-slate-800 text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200"}`}>{s}</button>
+          ))}
+        </div>
+      )}
 
       {/* Jump to a target market */}
       {markets.length > 0 && (

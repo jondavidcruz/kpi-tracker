@@ -28,6 +28,7 @@ export async function getSettings() {
       leadershipMeetLink: "",
       marketingMarkets: "",
       marketingResearch: "",
+      outreachTemplates: "",
       ethanShiftIcsUrl: "",
       ethanReminderEmail: "",
       ethanRemindedOn: "",

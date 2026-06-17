@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
+import CopyButton from "@/components/CopyButton";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ const labelCls = "mb-0.5 block text-[11px] font-semibold text-slate-500";
 const TYPES = ["developer", "custom", "remodeler", "flipper", "cash_buyer", "investor", "agent", "other"];
 const REGIONS = [["SD", "San Diego Co."], ["OC", "Orange Co."], ["LA", "Los Angeles"], ["other", "Other / TBD"]];
 
-type MC = Buyer & { sortOrder: number; igHandle: string; bestContact: string; lastContacted: string; outreachLog: string };
+type MC = Buyer & { sortOrder: number; igHandle: string; bestContact: string; lastContacted: string; nextFollowUp: string; outreachLog: string };
 
 function ContactForm({ c, defaultCategory }: { c?: MC; defaultCategory?: string }) {
   return (
@@ -33,6 +34,7 @@ function ContactForm({ c, defaultCategory }: { c?: MC; defaultCategory?: string 
       <label className="sm:col-span-2"><span className={labelCls}>Buy box / criteria</span><input name="buyBox" defaultValue={c?.buyBox ?? ""} placeholder="min lot, max land basis, R-1…" className={inputCls} /></label>
       <label><span className={labelCls}>Instagram</span><input name="igHandle" defaultValue={c?.igHandle ?? ""} placeholder="@handle" className={inputCls} /></label>
       <label><span className={labelCls}>Last contacted</span><input name="lastContacted" type="date" defaultValue={c?.lastContacted ?? ""} className={inputCls} /></label>
+      <label><span className={labelCls}>Next follow-up</span><input name="nextFollowUp" type="date" defaultValue={c?.nextFollowUp ?? ""} className={inputCls} /></label>
       <label className="sm:col-span-2"><span className={labelCls}>Best way to reach (sequence)</span><input name="bestContact" defaultValue={c?.bestContact ?? ""} placeholder="IG DM → email → call; founder direct" className={inputCls} /></label>
       <label className="sm:col-span-4"><span className={labelCls}>Outreach log (touches, replies, next step)</span><textarea name="outreachLog" defaultValue={c?.outreachLog ?? ""} rows={2} className={inputCls} /></label>
       <label><span className={labelCls}>Lat</span><input name="lat" type="number" step="any" defaultValue={c?.lat ?? ""} className={inputCls} /></label>
@@ -102,6 +104,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const luxury = rows.filter((r) => r.category === "luxury") as MC[];
   const distressed = rows.filter((r) => r.category !== "luxury") as MC[];
   const markets = settings.marketingMarkets.split("\n").map((m) => m.trim()).filter(Boolean);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
+  const dueRows = (rows as MC[]).filter((r) => r.nextFollowUp && r.nextFollowUp <= today).sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp));
 
   return (
     <div className="space-y-6">
@@ -110,6 +114,24 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} contact{sp.imp === "1" ? "" : "s"}.</div>}
       {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
       {sp.imp === "noname" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Your CSV needs a header row with a &ldquo;name&rdquo; column.</div>}
+
+      {/* Follow-ups due — the daily driver */}
+      {dueRows.length > 0 && (
+        <Card className="border-l-4 border-red-400 bg-red-50/50 p-4">
+          <h3 className="mb-2 text-sm font-bold text-red-800">⏰ Follow-ups due ({dueRows.length}) — reach out today</h3>
+          <div className="space-y-1.5">
+            {dueRows.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-semibold text-slate-800">{r.name}</span>
+                {r.market && <span className="text-xs text-slate-400">📍 {r.market}</span>}
+                {r.bestContact && <span className="text-xs text-violet-700">📣 {r.bestContact}</span>}
+                {[r.phone, r.email, r.igHandle].filter(Boolean).length > 0 && <span className="text-xs text-brand-navy">{[r.phone, r.email, r.igHandle].filter(Boolean).join(" · ")}</span>}
+                <span className={`ml-auto text-[11px] font-semibold ${r.nextFollowUp < today ? "text-red-600" : "text-amber-600"}`}>{r.nextFollowUp < today ? "overdue" : "today"} · {r.nextFollowUp}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">
@@ -153,10 +175,22 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           <form action={saveMarketingNotes} className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label><span className={labelCls}>Markets we&apos;re in (one per line)</span><textarea name="marketingMarkets" defaultValue={settings.marketingMarkets} rows={4} className={inputCls} /></label>
             <label><span className={labelCls}>Research notes</span><textarea name="marketingResearch" defaultValue={settings.marketingResearch} rows={4} className={inputCls} /></label>
+            <label className="sm:col-span-2"><span className={labelCls}>Outreach templates (openers, leverage, sequence)</span><textarea name="outreachTemplates" defaultValue={settings.outreachTemplates} rows={8} className={inputCls} /></label>
             <div className="sm:col-span-2"><button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save</button></div>
           </form>
         </details>
       </Card>
+
+      {/* Outreach templates — copy-paste playbook */}
+      {settings.outreachTemplates && (
+        <Card className="p-5">
+          <div className="mb-2 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-700">📣 Outreach templates &amp; playbook</h3>
+            <span className="ml-auto"><CopyButton text={settings.outreachTemplates} label="Copy all" /></span>
+          </div>
+          <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs text-slate-700 ring-1 ring-slate-200">{settings.outreachTemplates}</pre>
+        </Card>
+      )}
 
       {/* CSV bulk import — for the dispo team to add vetted developers/flippers fast */}
       <Card className="border-l-4 border-emerald-300 bg-emerald-50/40 p-5">

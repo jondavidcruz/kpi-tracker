@@ -1328,7 +1328,7 @@ export async function saveMarketContact(formData: FormData) {
     email: str("email"), phone: str("phone"), website: str("website"),
     buyBox: str("buyBox"), buyBoxAreas: str("buyBoxAreas"),
     igHandle: str("igHandle"), bestContact: str("bestContact"),
-    lastContacted: str("lastContacted"), outreachLog: str("outreachLog"),
+    lastContacted: str("lastContacted"), nextFollowUp: str("nextFollowUp"), outreachLog: str("outreachLog"),
     lat: num("lat"), lng: num("lng"), notes: str("notes"),
     sortOrder: Number(formData.get("sortOrder")) || 0,
   };
@@ -1353,6 +1353,7 @@ export async function saveMarketingNotes(formData: FormData) {
   const data = {
     marketingMarkets: String(formData.get("marketingMarkets") ?? "").trim(),
     marketingResearch: String(formData.get("marketingResearch") ?? "").trim(),
+    outreachTemplates: String(formData.get("outreachTemplates") ?? "").trim(),
   };
   await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
   revalidatePath("/marketing");
