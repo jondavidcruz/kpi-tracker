@@ -54,6 +54,32 @@ export default function UnderwritingCalculator() {
   const setV = (k: string, val: string) => setF((p) => ({ ...p, [k]: val }));
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV(k, e.target.value);
 
+  const [comping, setComping] = useState(false);
+  const [compMsg, setCompMsg] = useState("");
+  async function pullComps() {
+    const addr = (f.subject ?? "").trim();
+    if (addr.length < 6) { setCompMsg("Enter the subject address first."); return; }
+    setComping(true); setCompMsg("");
+    try {
+      const r = await fetch(`/api/comps?address=${encodeURIComponent(addr)}`);
+      const d = await r.json();
+      if (d.configured === false) { setCompMsg("Comp pull isn't connected yet — add a RentCast API key in Vercel (see setup)."); return; }
+      if (d.error) { setCompMsg(d.error); return; }
+      setF((p) => {
+        const next = { ...p };
+        if (d.arv) next.arv = String(d.arv);
+        (d.comps || []).slice(0, 3).forEach((c: { address: string; price: number; dom: number | null }, i: number) => {
+          const j = i + 1;
+          next[`comp${j}`] = c.address; next[`comp${j}p`] = c.price ? String(c.price) : ""; next[`comp${j}d`] = c.dom != null ? String(c.dom) : "";
+          next[`nComp${j}`] = c.address; next[`nComp${j}p`] = c.price ? String(c.price) : ""; next[`nComp${j}d`] = c.dom != null ? String(c.dom) : "";
+        });
+        return next;
+      });
+      setCompMsg(`Pulled ARV ${d.arv ? "$" + Number(d.arv).toLocaleString() : "?"} + ${(d.comps || []).length} comps. Review & adjust before offering.`);
+    } catch { setCompMsg("Couldn't reach the comp service."); }
+    finally { setComping(false); }
+  }
+
   function Field({ k, label, prefix, suffix, placeholder, span }: { k: string; label: string; prefix?: string; suffix?: string; placeholder?: string; span?: number }) {
     return (
       <label className={span === 2 ? "sm:col-span-2" : span === 3 ? "sm:col-span-3" : ""}>
@@ -161,10 +187,12 @@ export default function UnderwritingCalculator() {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-        <label className="block">
-          <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">📍 Subject property address</span>
-          <input value={v("subject")} onChange={set("subject")} placeholder="123 Main St, San Diego, CA 92101" className={inputCls} />
-        </label>
+        <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">📍 Subject property address</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <input value={v("subject")} onChange={set("subject")} placeholder="123 Main St, San Diego, CA 92101" className={`${inputCls} flex-1`} style={{ minWidth: 220 }} />
+          <button type="button" onClick={pullComps} disabled={comping} className="shrink-0 rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700 disabled:opacity-50">{comping ? "Pulling…" : "🔎 Pull comps & ARV"}</button>
+        </div>
+        {compMsg && <p className="mt-1.5 text-[11px] text-slate-500">{compMsg}</p>}
       </div>
 
       <div className="flex flex-wrap gap-2">
