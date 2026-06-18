@@ -24,7 +24,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
         <h1 className="text-xl font-bold">Payroll — restricted</h1>
-        <p className="mt-1 text-sm text-slate-500">Visible to Jon, Viktoriia &amp; Enrico only.</p>
+        <p className="mt-1 text-sm text-slate-500">Visible to Jon &amp; Viktoriia only.</p>
         <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
       </Card>
     );

@@ -53,8 +53,8 @@ export function canAccessMarketing(user: User | null): boolean {
 }
 
 // Time card + payroll (pay rates, hours, pay) — owner + named payroll staff only.
-// NOTE: intentionally NOT all managers (excludes Marie). Just Jon, Viktoriia, Enrico.
-const PAYROLL_ACCESS = ["viktoriia", "enrico"];
+// NOTE: intentionally NOT all managers (excludes Marie). Just Jon + Viktoriia.
+const PAYROLL_ACCESS = ["viktoriia"];
 
 /** Can view the Time Card / payroll. */
 export function canAccessPayroll(user: User | null): boolean {
