@@ -69,6 +69,7 @@ export default function Sidebar({
     { label: "Operations", items: [
       { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },
       { href: "/operations", label: "Resources & SOPs", Icon: Briefcase, adminOnly: true },
+      { href: "/closing", label: "Escrow & Closing", Icon: DollarSign, managerOnly: true },
       { href: "/closed-deals", label: "Closed deals", Icon: DollarSign, adminOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, adminOnly: true },
       { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },

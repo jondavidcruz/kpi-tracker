@@ -1765,6 +1765,61 @@ export async function deleteOutage(formData: FormData) {
   revalidatePath("/timecard");
 }
 
+// --- Escrow & Closing tracker (managers) --------------------------------------
+
+const EXITS = ["assignment", "novation", "flip", "listing", "creative", "other"];
+const CLOSING_STATUSES = ["escrow", "closed", "fell_through"];
+
+export async function saveClosing(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "").trim();
+  const address = String(formData.get("address") ?? "").trim().slice(0, 200);
+  if (!address) return;
+  const data = {
+    address,
+    buyer: String(formData.get("buyer") ?? "").trim().slice(0, 160),
+    exit: EXITS.includes(String(formData.get("exit"))) ? String(formData.get("exit")) : "assignment",
+    status: CLOSING_STATUSES.includes(String(formData.get("status"))) ? String(formData.get("status")) : "escrow",
+    revenue: Math.max(0, parseFloat(String(formData.get("revenue") ?? "0")) || 0),
+    openedDate: String(formData.get("openedDate") ?? "").trim(),
+    closeDate: String(formData.get("closeDate") ?? "").trim(),
+    note: String(formData.get("note") ?? "").trim().slice(0, 500),
+  };
+  if (id) await db.closing.update({ where: { id }, data });
+  else await db.closing.create({ data });
+  revalidatePath("/closing");
+}
+
+export async function deleteClosing(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.closing.delete({ where: { id } });
+  revalidatePath("/closing");
+}
+
+export async function addClosingExpense(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const closingId = String(formData.get("closingId") ?? "");
+  const label = String(formData.get("label") ?? "").trim().slice(0, 120);
+  const amount = Math.max(0, parseFloat(String(formData.get("amount") ?? "0")) || 0);
+  if (!closingId || !label || amount === 0) return;
+  await db.closingExpense.create({ data: { closingId, label, amount } });
+  revalidatePath("/closing");
+}
+
+export async function deleteClosingExpense(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.closingExpense.delete({ where: { id } });
+  revalidatePath("/closing");
+}
+
 /** Save biweekly payroll settings (anchor payday + recipients). Owner only. */
 export async function savePayrollSettings(formData: FormData) {
   const me = await getCurrentUser();

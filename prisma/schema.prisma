@@ -825,3 +825,30 @@ model Outage {
 
   @@index([userId, date])
 }
+
+// A deal in escrow / closing — tracks gross revenue in, every expense line, and
+// the final net profit + margin once it closes.
+model Closing {
+  id         String           @id @default(cuid())
+  address    String
+  buyer      String           @default("")
+  exit       String           @default("assignment") // assignment | novation | flip | listing | creative | other
+  status     String           @default("escrow") // escrow | closed | fell_through
+  revenue    Float            @default(0) // gross in (assignment fee or sale price)
+  openedDate String           @default("") // escrow opened (YYYY-MM-DD)
+  closeDate  String           @default("") // expected/actual close (YYYY-MM-DD)
+  note       String           @default("")
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  expenses   ClosingExpense[]
+}
+
+model ClosingExpense {
+  id        String  @id @default(cuid())
+  closingId String
+  label     String
+  amount    Float   @default(0)
+  closing   Closing @relation(fields: [closingId], references: [id], onDelete: Cascade)
+
+  @@index([closingId])
+}
