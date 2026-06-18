@@ -1672,7 +1672,17 @@ export async function addAvailability(formData: FormData) {
   if (!me) return;
   const date = String(formData.get("date") ?? "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-  const hours = String(formData.get("hours") ?? "").trim().slice(0, 60);
+  const fmt = (t: string) => {
+    if (!/^\d{2}:\d{2}$/.test(t)) return "";
+    let [h, m] = t.split(":").map(Number);
+    const ap = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return `${h}:${String(m).padStart(2, "0")} ${ap}`;
+  };
+  const from = fmt(String(formData.get("from") ?? "").trim());
+  const to = fmt(String(formData.get("to") ?? "").trim());
+  const raw = String(formData.get("hours") ?? "").trim();
+  const hours = (from && to ? `${from} – ${to}` : from ? `from ${from}` : raw).slice(0, 60);
   const note = String(formData.get("note") ?? "").trim().slice(0, 200);
   await db.availability.create({ data: { userId: me.id, date, hours, note } });
   revalidatePath("/schedule");

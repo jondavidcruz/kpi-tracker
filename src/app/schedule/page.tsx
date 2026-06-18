@@ -25,7 +25,7 @@ const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ from?: string }> }) {
+export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ from?: string; avail?: string }> }) {
   const me = await getCurrentUser();
   if (!me) return null;
   const sp = await searchParams;
@@ -43,15 +43,54 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       db.availability.findMany({ where: { userId: me.id, date: { gte: today } }, orderBy: { date: "asc" } }),
     ]);
     const upcomingOff = myTimeOff.filter((t) => t.endDate >= today && t.status !== "denied");
+    // Month calendar for tap-to-pick availability.
+    const [ay, am] = month.split("-").map(Number);
+    const aFirstDow = new Date(Date.UTC(ay, am - 1, 1)).getUTCDay();
+    const aDays = new Date(Date.UTC(ay, am, 0)).getUTCDate();
+    const availDates = new Set(myAvail.map((a) => a.date));
+    const aCells: (string | null)[] = [...Array(aFirstDow).fill(null), ...Array.from({ length: aDays }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`)];
+    const monthLabel = new Date(Date.UTC(ay, am - 1, 1)).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+    const pickDate = sp.avail && /^\d{4}-\d{2}-\d{2}$/.test(sp.avail) ? sp.avail : today;
     return (
       <div className="space-y-6">
-        <SectionTitle title="🗓️ My Schedule" subtitle="Set the days you can work and request time off." accent="bg-indigo-400" right={<span className="text-sm font-semibold text-slate-500">{friendlyDate(today)}</span>} />
+        <SectionTitle title="🗓️ My Schedule" subtitle="Tap the days you can work and request time off." accent="bg-indigo-400" right={<span className="text-sm font-semibold text-slate-500">{friendlyDate(today)}</span>} />
 
-        <Card className="p-5">
+        <Card className="p-5" id="availform">
           <h3 className="mb-1 text-sm font-bold text-slate-700">📅 When can you work?</h3>
-          <p className="mb-3 text-xs text-slate-500">Add the days &amp; hours you&apos;re available — Jon and Marie schedule around this.</p>
-          {myAvail.length > 0 ? (
-            <ul className="mb-3 space-y-1">
+          <p className="mb-3 text-xs text-slate-500">Tap a day below, then pick your hours. Jon and Marie schedule around this.</p>
+
+          <div className="mb-3">
+            <div className="mb-1 text-xs font-bold text-slate-600">{monthLabel}</div>
+            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-slate-400">
+              {WEEKDAYS.map((w) => <div key={w} className="py-0.5">{w}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {aCells.map((c, i) => {
+                if (!c) return <div key={i} />;
+                const has = availDates.has(c);
+                const isToday = c === today;
+                const isPicked = c === pickDate;
+                return (
+                  <Link key={i} href={`/schedule?avail=${c}#availform`} className={`grid min-h-9 place-items-center rounded-lg border text-[11px] font-bold transition ${isPicked ? "border-brand-navy bg-brand-navy text-white" : has ? "border-emerald-300 bg-emerald-50 text-emerald-700" : isToday ? "border-brand-navy/40 bg-white text-brand-navy" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                    {Number(c.slice(8))}
+                  </Link>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[10px] text-slate-400">Green = you&apos;re available · Navy = selected.</p>
+          </div>
+
+          <form action={addAvailability} className="flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2.5">
+            <input type="hidden" name="date" value={pickDate} />
+            <span className="text-xs font-semibold text-slate-600">{friendlyDate(pickDate)}</span>
+            <label className="text-xs"><span className="mb-0.5 block text-slate-500">From</span><input type="time" name="from" className={`${inputCls} w-32`} /></label>
+            <label className="text-xs"><span className="mb-0.5 block text-slate-500">To</span><input type="time" name="to" className={`${inputCls} w-32`} /></label>
+            <input name="note" placeholder="note (optional)" className={`${inputCls} min-w-32 flex-1`} />
+            <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Add this day</button>
+          </form>
+
+          {myAvail.length > 0 && (
+            <ul className="mt-3 space-y-1">
               {myAvail.map((a) => (
                 <li key={a.id} className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-semibold text-slate-700">{friendlyDate(a.date)}</span>
@@ -61,13 +100,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                 </li>
               ))}
             </ul>
-          ) : <p className="mb-3 text-xs text-slate-400">No availability added yet.</p>}
-          <form action={addAvailability} className="flex flex-wrap items-end gap-2">
-            <label className="text-xs"><span className="mb-0.5 block text-slate-500">Date</span><input type="date" name="date" defaultValue={today} className={`${inputCls} w-44`} required /></label>
-            <label className="text-xs"><span className="mb-0.5 block text-slate-500">Hours</span><input name="hours" placeholder="2pm–5pm" className={`${inputCls} w-32`} /></label>
-            <input name="note" placeholder="note (optional)" className={`${inputCls} min-w-40 flex-1`} />
-            <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Add</button>
-          </form>
+          )}
         </Card>
 
         <Card className="p-5" id="request">

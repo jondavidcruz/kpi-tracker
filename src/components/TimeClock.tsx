@@ -9,7 +9,7 @@ const STATUS: Record<State, { label: string; cls: string }> = {
   online: { label: "🟢 Clocked in", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
   break: { label: "🟡 On break", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
   lunch: { label: "🟡 At lunch", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
-  offline: { label: "⚪️ Clocked out", cls: "bg-slate-100 text-slate-600 ring-slate-200" },
+  offline: { label: "⚪️ Day ended", cls: "bg-slate-100 text-slate-600 ring-slate-200" },
 };
 
 function hm(min: number) {
@@ -74,19 +74,19 @@ export default function TimeClock({
           <>
             <PunchButton kind="break_start" label="☕ Start break" cls="bg-amber-400 text-amber-950 hover:bg-amber-500" />
             <PunchButton kind="lunch_start" label="🍽️ Start lunch" cls="bg-amber-400 text-amber-950 hover:bg-amber-500" />
-            <PunchButton kind="out" label="■ Clock Out" cls="bg-slate-800 text-white hover:bg-slate-900" />
+            <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
           </>
         )}
         {state === "break" && (
           <>
             <PunchButton kind="break_end" label="↩︎ End break — back to work" cls="bg-emerald-600 text-white hover:bg-emerald-700" />
-            <PunchButton kind="out" label="■ Clock Out" cls="bg-slate-800 text-white hover:bg-slate-900" />
+            <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
           </>
         )}
         {state === "lunch" && (
           <>
             <PunchButton kind="lunch_end" label="↩︎ End lunch — back to work" cls="bg-emerald-600 text-white hover:bg-emerald-700" />
-            <PunchButton kind="out" label="■ Clock Out" cls="bg-slate-800 text-white hover:bg-slate-900" />
+            <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
           </>
         )}
       </div>
