@@ -5,8 +5,7 @@
 import { db } from "./db";
 import { getSettings } from "./data";
 import { sendEmailTo, alertEmailHtml, getChannelConfig } from "./notify";
-
-const APP_URL = "https://kpi-tracker-lovat.vercel.app";
+import { APP_URL } from "./site";
 
 /** Parse an iCal timestamp to an absolute Date. Handles UTC (…Z) and naive forms. */
 function parseIcsTs(raw: string | undefined): Date | null {

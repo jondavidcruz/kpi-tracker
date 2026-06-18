@@ -16,6 +16,7 @@ import { POSITIONS, positionLabel } from "./roles";
 import { findPipCandidates, PIP_CONSECUTIVE_MISSES } from "./pip";
 import { sendEmail, getChannelConfig } from "./notify";
 import { reasonLabel } from "./alert-resolution";
+import { APP_URL } from "./site";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -99,7 +100,7 @@ export async function sendWeeklyTeamEmail(today: string): Promise<boolean> {
     <p style="color:#64748b;">Week of ${esc(wk.label)} · totals per rep (and days worked Mon–Fri).</p>
     ${reasonBlock}
     ${roleSections}
-    <p style="margin-top:20px;font-size:12px;color:#94a3b8;">Live dashboard: https://kpi-tracker-lovat.vercel.app/report</p>
+    <p style="margin-top:20px;font-size:12px;color:#94a3b8;">Live dashboard: ${APP_URL}/report</p>
   </div>`;
 
   // Weekly email has its own recipient list (you + Marie), separate from the
@@ -184,7 +185,7 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
         <ul style="margin:0;padding-left:20px;color:#334155;font-size:13px;">
           ${candidates.map((c) => `<li><strong>${esc(c.userName)}</strong>: ${esc(c.kpiName)} below goal ${PIP_CONSECUTIVE_MISSES} days straight.</li>`).join("")}
         </ul>
-        <p style="margin:8px 0 0;font-size:12px;color:#94a3b8;">Open a documented plan → https://kpi-tracker-lovat.vercel.app/pip</p>
+        <p style="margin:8px 0 0;font-size:12px;color:#94a3b8;">Open a documented plan → ${APP_URL}/pip</p>
       </div>`
     : "";
 
@@ -193,7 +194,7 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
     <p style="color:#64748b;">${esc(friendlyDate(date))} · each member's KPIs for today vs goal.</p>
     ${repBlocks}
     ${pipBlock}
-    <p style="margin-top:16px;font-size:12px;color:#94a3b8;">🟢 on goal · 🟠 close · 🔴 behind · — not entered. Live: https://kpi-tracker-lovat.vercel.app/dashboard</p>
+    <p style="margin-top:16px;font-size:12px;color:#94a3b8;">🟢 on goal · 🟠 close · 🔴 behind · — not entered. Live: ${APP_URL}/dashboard</p>
   </div>`;
 
   return sendEmail(`📋 End-of-Day Team Review, ${friendlyDate(date)}`, html, await reportCfg());
