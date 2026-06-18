@@ -33,6 +33,8 @@ export async function getSettings() {
       ethanReminderEmail: "",
       ethanRemindedOn: "",
       timeoffCalendarId: "",
+      payCycleAnchor: "",
+      payrollEmails: "",
     }
   );
 }

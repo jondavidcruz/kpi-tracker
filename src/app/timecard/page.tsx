@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { getAllUsers, getSettings } from "@/lib/data";
-import { todayStr, payPeriod, datesInRange } from "@/lib/date";
+import { todayStr, payPeriod, biweeklyPeriod, datesInRange } from "@/lib/date";
 import { workedMinutes } from "@/lib/presence";
 import { parseHourly, fmtHours } from "@/lib/payroll";
 import { positionLabel } from "@/lib/roles";
@@ -34,7 +34,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
   const off = Number(sp.p ?? 0) || 0;
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
-  const period = payPeriod(today, off);
+  const period = settings.payCycleAnchor ? biweeklyPeriod(today, settings.payCycleAnchor, off) : payPeriod(today, off);
   const days = datesInRange(period.start, period.end);
   const now = new Date();
 
@@ -66,7 +66,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             <Link href={`/timecard?p=${off + 1}`} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-200">→</Link>
           </div>
         } />
-      {showPay && <p className="text-xs text-slate-400">Pays on the 1st &amp; 15th (each ~2 working weeks). Pay = paid hours × hourly rate + bonuses.</p>}
+      {showPay && <p className="text-xs text-slate-400">Paid at the end of every 2-week work cycle. Pay = paid hours × hourly rate + bonuses.{!settings.payCycleAnchor && " (Set the pay-cycle anchor date in Admin to switch from 1st/15th to true biweekly.)"}</p>}
 
       {active.map((u) => {
         const prof = profByUser.get(u.id);

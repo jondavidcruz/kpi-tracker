@@ -1650,3 +1650,17 @@ export async function deleteBonus(formData: FormData) {
   await db.bonus.delete({ where: { id } });
   revalidatePath("/timecard");
 }
+
+/** Save biweekly payroll settings (anchor payday + recipients). Owner only. */
+export async function savePayrollSettings(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  const data = {
+    payCycleAnchor: String(formData.get("payCycleAnchor") ?? "").trim(),
+    payrollEmails: String(formData.get("payrollEmails") ?? "").trim(),
+  };
+  await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
+  revalidatePath("/admin");
+  revalidatePath("/timecard");
+  redirect("/admin?saved=Payroll");
+}

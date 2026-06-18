@@ -132,3 +132,30 @@ export function payPeriod(dateStr: string, offset = 0): { key: string; label: st
   const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return { key: `${y}-${mp}-B`, label: `${mn} 16–${lastDay}, ${y}`, start: `${y}-${mp}-16`, end: `${y}-${mp}-${String(lastDay).padStart(2, "0")}` };
 }
+
+const DAY_MS = 86400000;
+function utcMs(d: string): number { const [y, m, dd] = d.split("-").map(Number); return Date.UTC(y, m - 1, dd); }
+function isoFromMs(ms: number): string { return new Date(ms).toISOString().slice(0, 10); }
+function shortDate(d: string): string { const [, m, dd] = d.split("-").map(Number); return `${MONTHS_SHORT[m - 1]} ${dd}`; }
+
+/** Whole-day difference today − anchor (both YYYY-MM-DD). */
+export function daysBetween(a: string, b: string): number {
+  return Math.round((utcMs(b) - utcMs(a)) / DAY_MS);
+}
+
+/** Biweekly pay cycle (14 days) ending on a payday, anchored to `anchor` (a real
+ *  payday). Cycle containing `today`, shifted by `offset` cycles. */
+export function biweeklyPeriod(today: string, anchor: string, offset = 0): { key: string; label: string; start: string; end: string } {
+  const diff = daysBetween(anchor, today);
+  const k = Math.ceil(diff / 14); // cycles from anchor to the payday on/after today
+  const endMs = utcMs(anchor) + (k + offset) * 14 * DAY_MS;
+  const startMs = endMs - 13 * DAY_MS;
+  const start = isoFromMs(startMs), end = isoFromMs(endMs);
+  return { key: end, label: `${shortDate(start)} – ${shortDate(end)}`, start, end };
+}
+
+/** True if `today` is a payday given the biweekly anchor (every 14 days). */
+export function isPayday(today: string, anchor: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(anchor)) return false;
+  return daysBetween(anchor, today) % 14 === 0;
+}

@@ -6,6 +6,8 @@ import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
 import { buildBackup } from "@/lib/backup";
 import { sendEmailWithAttachment } from "@/lib/notify";
+import { isPayday } from "@/lib/date";
+import { sendPayrollEmail } from "@/lib/payday";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
 function laNow(): { hour: number; dow: number } {
@@ -65,6 +67,18 @@ export async function GET(request: Request) {
         )
       : false;
     return NextResponse.json({ ok: true, backedUp: backup.totalRows, emailed });
+  }
+
+  // Payday — fires on Friday evenings; only sends on actual biweekly paydays
+  // (every 14 days from the anchor). `&force=1` sends regardless for a test.
+  if (url.searchParams.get("payroll") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    if (!force && !isPayday(today, settings.payCycleAnchor)) {
+      return NextResponse.json({ ok: true, payday: false });
+    }
+    const sent = await sendPayrollEmail(today);
+    return NextResponse.json({ ok: true, payday: true, sent });
   }
 
   // Manual speed-test reminder trigger (no dedicated cron — piggybacks on the

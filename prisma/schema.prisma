@@ -380,6 +380,10 @@ model Settings {
 
   // ---- Time-off Google Calendar (auto-provisioned, service-account owned) ----
   timeoffCalendarId  String @default("") // id of the SA-owned "Time Off" calendar
+
+  // ---- Payroll (biweekly) ----
+  payCycleAnchor String @default("") // a real payday date (YYYY-MM-DD, a Friday). Biweekly cycles end here + every 14 days.
+  payrollEmails  String @default("") // comma list — who gets the payday summary email
 }
 
 // A Fathom recording link for a past meeting (we store the link, not the video).
