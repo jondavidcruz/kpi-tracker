@@ -26,7 +26,7 @@ const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ from?: string; avail?: string }> }) {
+export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ from?: string; avail?: string; m?: string }> }) {
   const me = await getCurrentUser();
   if (!me) return null;
   const sp = await searchParams;
@@ -44,12 +44,27 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       db.availability.findMany({ where: { userId: me.id, date: { gte: today } }, orderBy: { date: "asc" } }),
     ]);
     const upcomingOff = myTimeOff.filter((t) => t.endDate >= today && t.status !== "denied");
-    // Month calendar for tap-to-pick availability.
-    const [ay, am] = month.split("-").map(Number);
+    // Month calendar for tap-to-pick availability — navigable from this month
+    // forward through December (never into a past month).
+    const curMonth = month;
+    const yearEnd = `${curMonth.slice(0, 4)}-12`;
+    let viewMonth = sp.m && /^\d{4}-\d{2}$/.test(sp.m) ? sp.m : curMonth;
+    if (viewMonth < curMonth) viewMonth = curMonth;
+    if (viewMonth > yearEnd) viewMonth = yearEnd;
+    const shiftMonth = (ym: string, delta: number) => {
+      let [yy, mm] = ym.split("-").map(Number);
+      mm += delta;
+      while (mm < 1) { mm += 12; yy--; }
+      while (mm > 12) { mm -= 12; yy++; }
+      return `${yy}-${String(mm).padStart(2, "0")}`;
+    };
+    const prevMonth = viewMonth > curMonth ? shiftMonth(viewMonth, -1) : null;
+    const nextMonth = viewMonth < yearEnd ? shiftMonth(viewMonth, 1) : null;
+    const [ay, am] = viewMonth.split("-").map(Number);
     const aFirstDow = new Date(Date.UTC(ay, am - 1, 1)).getUTCDay();
     const aDays = new Date(Date.UTC(ay, am, 0)).getUTCDate();
     const availDates = new Set(myAvail.map((a) => a.date));
-    const aCells: (string | null)[] = [...Array(aFirstDow).fill(null), ...Array.from({ length: aDays }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`)];
+    const aCells: (string | null)[] = [...Array(aFirstDow).fill(null), ...Array.from({ length: aDays }, (_, i) => `${viewMonth}-${String(i + 1).padStart(2, "0")}`)];
     const monthLabel = new Date(Date.UTC(ay, am - 1, 1)).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
     const pickDate = sp.avail && /^\d{4}-\d{2}-\d{2}$/.test(sp.avail) ? sp.avail : today;
     return (
@@ -61,7 +76,19 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <p className="mb-3 text-xs text-slate-500">Tap a day below, then pick your hours. Jon and Marie schedule around this.</p>
 
           <div className="mb-3">
-            <div className="mb-1 text-xs font-bold text-slate-600">{monthLabel}</div>
+            <div className="mb-1 flex items-center justify-between">
+              {prevMonth ? (
+                <Link href={`/schedule?m=${prevMonth}#availform`} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-brand-navy" aria-label="Previous month">‹</Link>
+              ) : (
+                <span className="grid h-7 w-7 place-items-center rounded-lg border border-slate-100 text-slate-200" aria-hidden>‹</span>
+              )}
+              <div className="text-xs font-bold text-slate-600">{monthLabel}</div>
+              {nextMonth ? (
+                <Link href={`/schedule?m=${nextMonth}#availform`} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-brand-navy" aria-label="Next month">›</Link>
+              ) : (
+                <span className="grid h-7 w-7 place-items-center rounded-lg border border-slate-100 text-slate-200" aria-hidden>›</span>
+              )}
+            </div>
             <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-slate-400">
               {WEEKDAYS.map((w) => <div key={w} className="py-0.5">{w}</div>)}
             </div>
@@ -70,9 +97,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                 if (!c) return <div key={i} />;
                 const has = availDates.has(c);
                 const isToday = c === today;
+                const isPast = c < today;
                 const isPicked = c === pickDate;
+                if (isPast) return <div key={i} className="grid min-h-9 place-items-center rounded-lg border border-slate-100 text-[11px] font-bold text-slate-200">{Number(c.slice(8))}</div>;
                 return (
-                  <Link key={i} href={`/schedule?avail=${c}#availform`} className={`grid min-h-9 place-items-center rounded-lg border text-[11px] font-bold transition ${isPicked ? "border-brand-navy bg-brand-navy text-white" : has ? "border-emerald-300 bg-emerald-50 text-emerald-700" : isToday ? "border-brand-navy/40 bg-white text-brand-navy" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                  <Link key={i} href={`/schedule?m=${viewMonth}&avail=${c}#availform`} className={`grid min-h-9 place-items-center rounded-lg border text-[11px] font-bold transition ${isPicked ? "border-brand-navy bg-brand-navy text-white" : has ? "border-emerald-300 bg-emerald-50 text-emerald-700" : isToday ? "border-brand-navy/40 bg-white text-brand-navy" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
                     {Number(c.slice(8))}
                   </Link>
                 );
