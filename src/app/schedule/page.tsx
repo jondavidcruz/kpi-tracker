@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
@@ -157,11 +157,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const now = new Date();
   const cap = workCapAt(today, settings.orgTimezone);
   const capMs = cap ? cap.getTime() : null;
-  const people = users.map((u) => {
-    const ps = byUser.get(u.id) ?? [];
-    const { state, since } = stateFromPunches(ps);
-    return { id: u.id, name: u.name, state, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
-  });
+  const people = users
+    .filter((u) => !isOwner(u)) // owner isn't a tracked employee
+    .map((u) => {
+      const ps = byUser.get(u.id) ?? [];
+      const { state, since } = stateFromPunches(ps);
+      return { id: u.id, name: u.name, state, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
+    });
 
   // My time card today.
   const myPs = byUser.get(me.id) ?? [];
@@ -217,10 +219,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         </section>
       )}
 
-      {/* MY TIME CARD */}
-      <section>
-        <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} />
-      </section>
+      {/* MY TIME CARD — not for the owner (Jon doesn't punch a clock) */}
+      {!isOwner(me) && (
+        <section>
+          <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} />
+        </section>
+      )}
 
       {/* TIME OFF */}
       <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">

@@ -69,3 +69,9 @@ export function canAccessPayroll(user: User | null): boolean {
 export function canTrackTime(user: User | null): boolean {
   return isManager(user) || canAccessPayroll(user);
 }
+
+/** The owner (Jon). Not a tracked employee — no personal time card / not on the board. */
+export function isOwner(user: { name: string } | null): boolean {
+  if (!user) return false;
+  return (user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "") === "jon";
+}

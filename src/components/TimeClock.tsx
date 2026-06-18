@@ -27,6 +27,20 @@ function PunchButton({ kind, label, cls }: { kind: string; label: string; cls: s
   );
 }
 
+// A greyed-out preview of an action that isn't available yet (e.g. Break before
+// you've clocked in) — so the team can see the full set of buttons up front.
+function GhostButton({ label, title }: { label: string; title: string }) {
+  return (
+    <button
+      disabled
+      title={title}
+      className="cursor-not-allowed rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-300"
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function TimeClock({
   state,
   sinceMs,
@@ -91,7 +105,12 @@ export default function TimeClock({
 
       <div className="mt-4 flex flex-wrap gap-2">
         {state === "offline" && (
-          <PunchButton kind="in" label="▶︎ Clock In" cls="bg-emerald-600 text-white hover:bg-emerald-700" />
+          <>
+            <PunchButton kind="in" label="▶︎ Clock In" cls="bg-emerald-600 text-white hover:bg-emerald-700" />
+            <GhostButton label="☕ Start break" title="Available once you clock in" />
+            <GhostButton label="🍽️ Start lunch" title="Available once you clock in" />
+            <GhostButton label="■ End of day" title="Available once you clock in" />
+          </>
         )}
         {state === "online" && (
           <>
@@ -115,8 +134,10 @@ export default function TimeClock({
       </div>
 
       <p className="mt-3 text-xs text-slate-400">
-        Your status is saved on the server — close the tab and come back anytime, your clock keeps running until you press
-        End of day.
+        {state === "offline"
+          ? "Clock In first — then the Break, Lunch, and End of day buttons turn on. When you come back from a break, tap “End break — back to work.”"
+          : "Tap Start break or Start lunch when you step away, then “back to work” when you return. Press End of day to finish."}
+        {" "}Your status is saved on the server, so you can close the tab and come back — the clock keeps running until you press End of day.
       </p>
     </div>
   );
