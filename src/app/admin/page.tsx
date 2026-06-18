@@ -80,6 +80,10 @@ export default async function AdminPage({
               <li>⏱️ <strong>Real-time backup (primary):</strong> turn on Supabase <strong>Point-in-Time Recovery</strong> for continuous, restore-to-any-second backups → Supabase dashboard → <em>Database → Backups → enable PITR</em>. (Daily automated backups are already on with the Pro plan.)</li>
               <li>🔒 <strong>Invite-only signups:</strong> the app already blocks anyone without an account you created — but to fully lock the door, disable public sign-ups in Supabase → <em>Authentication → Sign In / Providers → Email → turn OFF “Allow new users to sign up.”</em> After that, accounts exist <strong>only</strong> when you create them below.</li>
             </ul>
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <Link href="/admin/access-preview" className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">🕵️ Preview what each member sees</Link>
+              <span className="ml-2 text-xs text-slate-500">Confirm nobody can see sections they shouldn&apos;t.</span>
+            </div>
           </Card>
         </section>
       )}
@@ -87,17 +91,14 @@ export default async function AdminPage({
       {/* Payroll (biweekly) — owner only */}
       {isAdmin(me) && (
         <section>
-          <SectionTitle title="💵 Payroll (biweekly)" subtitle="Set one real payday so the system knows your 2-week cycles; payday summaries email after each cycle" accent="bg-emerald-500" />
+          <SectionTitle title="💵 Payroll (semi-monthly)" subtitle="Paid the 15th & last day of each month; the payday summary emails automatically on those days" accent="bg-emerald-500" />
           <Card className="p-5">
             <form action={savePayrollSettings} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Pay-cycle anchor (one real payday — a Friday)</span>
-                <input type="date" name="payCycleAnchor" defaultValue={settings.payCycleAnchor} className={inputCls} />
-                <span className="mt-0.5 block text-[10px] text-slate-400">Every 14 days from this date is a payday. Until set, the Time Card uses 1st/15th.</span>
-              </label>
-              <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Payday email recipients (comma-separated)</span>
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Payday email recipients (comma-separated)</span>
                 <input name="payrollEmails" defaultValue={settings.payrollEmails} placeholder="you@gmail.com, …" className={inputCls} />
-                <span className="mt-0.5 block text-[10px] text-slate-400">Leadership only — gets the pay summary each payday.</span>
+                <span className="mt-0.5 block text-[10px] text-slate-400">Leadership only — gets the pay summary on the 15th and last day of each month.</span>
               </label>
+              <input type="hidden" name="payCycleAnchor" value={settings.payCycleAnchor} />
               <div className="sm:col-span-2"><button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Save payroll settings</button></div>
             </form>
           </Card>

@@ -6,7 +6,7 @@ import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
 import { buildBackup } from "@/lib/backup";
 import { sendEmailWithAttachment } from "@/lib/notify";
-import { isPayday } from "@/lib/date";
+import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
 
@@ -70,12 +70,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, backedUp: backup.totalRows, emailed });
   }
 
-  // Payday — fires on Friday evenings; only sends on actual biweekly paydays
-  // (every 14 days from the anchor). `&force=1` sends regardless for a test.
+  // Payday — checked daily; only sends on actual semi-monthly paydays (the 15th
+  // and the last day of the month). `&force=1` sends regardless for a test.
   if (url.searchParams.get("payroll") === "1") {
     const settings = await getSettings();
     const today = date ?? todayStr(settings.orgTimezone);
-    if (!force && !isPayday(today, settings.payCycleAnchor)) {
+    if (!force && !isSemiMonthlyPayday(today)) {
       return NextResponse.json({ ok: true, payday: false });
     }
     const sent = await sendPayrollEmail(today);

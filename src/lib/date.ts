@@ -159,3 +159,11 @@ export function isPayday(today: string, anchor: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(anchor)) return false;
   return daysBetween(anchor, today) % 14 === 0;
 }
+
+/** True if `today` is a semi-monthly payday — the 15th or the last day of the month. */
+export function isSemiMonthlyPayday(today: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) return false;
+  const [y, m, d] = today.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return d === 15 || d === lastDay;
+}

@@ -3,26 +3,27 @@ import { getSettings } from "./data";
 import { sendEmailTo } from "./notify";
 import { workedMinutes } from "./presence";
 import { parseHourly, fmtHours } from "./payroll";
-import { datesInRange, biweeklyPeriod } from "./date";
+import { datesInRange, payPeriod } from "./date";
 import { workCapAt } from "./shift";
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** Email the pay summary for the cycle ending on `payday` to the payroll recipients. */
+/** Email the pay summary for the semi-monthly period containing `payday`. */
 export async function sendPayrollEmail(payday: string): Promise<boolean> {
   const settings = await getSettings();
-  if (!settings.payCycleAnchor) return false;
   const to = (settings.payrollEmails || "").split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
   if (to.length === 0) return false;
 
-  const period = biweeklyPeriod(payday, settings.payCycleAnchor, 0);
+  const period = payPeriod(payday, 0); // semi-monthly period containing the payday
   const days = datesInRange(period.start, period.end);
-  const [users, profiles, punches, adjustments, bonuses] = await Promise.all([
+  const [users, profiles, punches, adjustments, bonuses, payEntries, outages] = await Promise.all([
     db.user.findMany({ where: { active: true } }),
     db.teamProfile.findMany(),
     db.punch.findMany({ where: { date: { gte: period.start, lte: period.end } }, orderBy: { at: "asc" }, select: { userId: true, date: true, kind: true, at: true } }),
     db.timeAdjustment.findMany({ where: { date: { gte: period.start, lte: period.end } } }),
     db.bonus.findMany({ where: { periodKey: period.key } }),
+    db.payEntry.findMany({ where: { periodKey: period.key } }),
+    db.outage.findMany({ where: { date: { gte: period.start, lte: period.end } } }),
   ]);
   const active = users.filter((u) => u.active && !u.irregularSchedule && u.name.trim().split(/\s+/)[0]?.toLowerCase() !== "jon");
   const profByUser = new Map(profiles.map((p) => [p.userId ?? "", p]));
@@ -31,24 +32,30 @@ export async function sendPayrollEmail(payday: string): Promise<boolean> {
   const adjByDay = new Map(adjustments.map((a) => [`${a.userId}|${a.date}`, a]));
   const bonusByUser = new Map<string, number>();
   for (const b of bonuses) bonusByUser.set(b.userId, (bonusByUser.get(b.userId) ?? 0) + b.amount);
+  const payEntryByUser = new Map(payEntries.map((p) => [p.userId, p]));
+  const outageMinByDay = new Map<string, number>();
+  for (const o of outages) { const k = `${o.userId}|${o.date}`; outageMinByDay.set(k, (outageMinByDay.get(k) ?? 0) + Math.max(0, o.endMin - o.startMin)); }
   const now = new Date();
 
   let totalPay = 0;
   const rows = active.map((u) => {
     const rate = parseHourly(profByUser.get(u.id)?.payScale);
-    let workedH = 0, deductH = 0;
+    let autoH = 0;
     for (const d of days) {
       const ps = punchByDay.get(`${u.id}|${d}`) ?? [];
       // Cap each day at its scheduled shift end so a forgotten clock-out can't
       // inflate pay — never counts past the shift, even if never closed.
-      if (ps.length) workedH += workedMinutes(ps, now, workCapAt(d, settings.orgTimezone)) / 60;
-      const adj = adjByDay.get(`${u.id}|${d}`);
-      if (adj) deductH += adj.deductHours;
+      let dayH = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone)) / 60 : 0;
+      dayH -= (adjByDay.get(`${u.id}|${d}`)?.deductHours ?? 0);
+      dayH -= (outageMinByDay.get(`${u.id}|${d}`) ?? 0) / 60; // self-reported outages, unpaid
+      autoH += Math.max(0, dayH);
     }
-    const paidH = Math.max(0, workedH - deductH);
+    const pe = payEntryByUser.get(u.id);
+    const paidH = pe?.manualHours != null ? pe.manualHours : autoH; // Marie's entry wins
     const bonus = bonusByUser.get(u.id) ?? 0;
+    const adjustAmt = pe?.adjustAmount ?? 0;
     const gross = rate != null ? paidH * rate : null;
-    const total = (gross ?? 0) + bonus;
+    const total = (gross ?? 0) + bonus + adjustAmt;
     totalPay += total;
     return { name: u.name, paidH, rate, gross, bonus, total };
   });

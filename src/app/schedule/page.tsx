@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
 import { workCapAt, shiftEndLabel } from "@/lib/shift";
-import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability } from "@/app/actions";
+import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
@@ -180,6 +180,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const partAvail = manager ? await db.availability.findMany({ where: { date: { gte: today } }, orderBy: { date: "asc" } }) : [];
   const partNames = new Map(manager ? (await db.user.findMany({ where: { active: true }, select: { id: true, name: true } })).map((u) => [u.id, u.name]) : []);
 
+  // My self-reported outages (last 10 days) — for the report card below.
+  const tenDaysAgo = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
+  const myOutages = isOwner(me) ? [] : await db.outage.findMany({ where: { userId: me.id, date: { gte: tenDaysAgo } }, orderBy: [{ date: "desc" }, { startMin: "asc" }] });
+  const outHHMM = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+
   // Presence (initial render; PresenceBoard then polls live). Worked time is
   // capped at the scheduled shift end so a forgotten clock-out can't inflate it.
   const byUser = groupByUser(punchesToday);
@@ -253,6 +258,37 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         <section>
           <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} />
         </section>
+      )}
+
+      {/* REPORT A POWER / INTERNET OUTAGE — self-serve, unpaid time */}
+      {!isOwner(me) && (
+        <Card className="p-5">
+          <h3 className="mb-1 text-sm font-bold text-slate-700">⚡ Report a power or internet outage</h3>
+          <p className="mb-3 text-xs text-slate-500">If you couldn&apos;t work because of a power or internet outage, log when it started and ended. This time is unpaid and is taken off your hours automatically.</p>
+          <form action={reportOutage} className="flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2.5">
+            <label className="text-xs"><span className="mb-0.5 block text-slate-500">Day</span><input type="date" name="date" defaultValue={today} max={today} className={`${inputCls} w-40`} /></label>
+            <label className="text-xs"><span className="mb-0.5 block text-slate-500">Type</span>
+              <select name="kind" className={inputCls} defaultValue="internet"><option value="internet">Internet</option><option value="power">Power</option><option value="other">Other</option></select>
+            </label>
+            <label className="text-xs"><span className="mb-0.5 block text-slate-500">Started</span><input type="time" name="start" required className={`${inputCls} w-28`} /></label>
+            <label className="text-xs"><span className="mb-0.5 block text-slate-500">Back up</span><input type="time" name="end" required className={`${inputCls} w-28`} /></label>
+            <input name="note" placeholder="note (optional)" className={`${inputCls} min-w-32 flex-1`} />
+            <button className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600">Log outage</button>
+          </form>
+          {myOutages.length > 0 && (
+            <ul className="mt-3 space-y-1">
+              {myOutages.map((o) => (
+                <li key={o.id} className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">{o.kind}</span>
+                  <span className="font-semibold text-slate-700">{friendlyDate(o.date)}</span>
+                  <span className="text-slate-500">{outHHMM(o.startMin)}–{outHHMM(o.endMin)}</span>
+                  {o.note && <span className="text-xs text-slate-400">{o.note}</span>}
+                  <form action={deleteOutage} className="ml-auto"><input type="hidden" name="id" value={o.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">Remove</button></form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       )}
 
       {/* TIME OFF */}

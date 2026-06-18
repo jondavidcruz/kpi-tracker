@@ -8,7 +8,7 @@ import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, isManager, isAdmin, canCurateSoftware, canAccessMarketing, canAccessPayroll } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
@@ -1517,6 +1517,15 @@ export async function importMarketContacts(formData: FormData) {
 const PUNCH_KINDS = ["in", "out", "break_start", "break_end", "lunch_start", "lunch_end"];
 
 /** Record a time-card punch (clock in/out, break/lunch) for the current user. */
+const PUNCH_CHAT: Record<string, string> = {
+  in: "🟢 {name} clocked in",
+  out: "⚪️ {name} ended the day",
+  break_start: "🟡 {name} started a break",
+  break_end: "🟢 {name} is back from break",
+  lunch_start: "🍽️ {name} went to lunch",
+  lunch_end: "🟢 {name} is back from lunch",
+};
+
 export async function punch(formData: FormData) {
   const me = await getCurrentUser();
   if (!me) return;
@@ -1525,6 +1534,13 @@ export async function punch(formData: FormData) {
   const settings = await getSettings();
   const date = todayStr(settings.orgTimezone);
   await db.punch.create({ data: { userId: me.id, kind, date } });
+  // Mirror the status change to the team Google Chat room (replaces the manual
+  // "on break / back from lunch" typing the team used to do).
+  const tmpl = PUNCH_CHAT[kind];
+  if (tmpl) {
+    const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
+    sendGoogleChat(`${tmpl.replace("{name}", me.name)} · ${time}`).catch(() => {});
+  }
   revalidatePath("/schedule");
 }
 
@@ -1648,6 +1664,79 @@ export async function deleteBonus(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await db.bonus.delete({ where: { id } });
+  revalidatePath("/timecard");
+}
+
+/** Marie's authoritative paid hours for a person+period (source of truth for pay). */
+export async function savePayHours(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canTrackTime(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const periodKey = String(formData.get("periodKey") ?? "");
+  if (!userId || !periodKey) return;
+  const raw = String(formData.get("manualHours") ?? "").trim();
+  const manualHours = raw === "" ? null : Math.max(0, parseFloat(raw) || 0);
+  await db.payEntry.upsert({
+    where: { userId_periodKey: { userId, periodKey } },
+    update: { manualHours },
+    create: { userId, periodKey, manualHours },
+  });
+  revalidatePath("/timecard");
+}
+
+/** $ discrepancy / clawback for a person+period (the Excel "Discrepancies" column). Leadership only. */
+export async function savePayDiscrepancy(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessPayroll(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const periodKey = String(formData.get("periodKey") ?? "");
+  if (!userId || !periodKey) return;
+  const adjustAmount = parseFloat(String(formData.get("adjustAmount") ?? "0")) || 0;
+  const note = String(formData.get("note") ?? "").trim().slice(0, 300);
+  await db.payEntry.upsert({
+    where: { userId_periodKey: { userId, periodKey } },
+    update: { adjustAmount, note },
+    create: { userId, periodKey, adjustAmount, note },
+  });
+  revalidatePath("/timecard");
+}
+
+const HHMM = /^(\d{1,2}):(\d{2})$/;
+function toMinutes(s: string): number | null {
+  const m = HHMM.exec(s.trim());
+  if (!m) return null;
+  const h = Number(m[1]), mi = Number(m[2]);
+  if (h > 23 || mi > 59) return null;
+  return h * 60 + mi;
+}
+
+/** Self-report a power / internet outage during a shift (unpaid time). */
+export async function reportOutage(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const settings = await getSettings();
+  const date = String(formData.get("date") ?? "") || todayStr(settings.orgTimezone);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const kind = ["internet", "power", "other"].includes(String(formData.get("kind"))) ? String(formData.get("kind")) : "internet";
+  const startMin = toMinutes(String(formData.get("start") ?? ""));
+  const endMin = toMinutes(String(formData.get("end") ?? ""));
+  if (startMin === null || endMin === null || endMin <= startMin) return;
+  const note = String(formData.get("note") ?? "").trim().slice(0, 300);
+  await db.outage.create({ data: { userId: me.id, date, kind, startMin, endMin, note } });
+  revalidatePath("/schedule");
+  revalidatePath("/timecard");
+}
+
+export async function deleteOutage(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const row = await db.outage.findUnique({ where: { id } });
+  if (!row) return;
+  if (row.userId !== me.id && !canTrackTime(me)) return;
+  await db.outage.delete({ where: { id } });
+  revalidatePath("/schedule");
   revalidatePath("/timecard");
 }
 

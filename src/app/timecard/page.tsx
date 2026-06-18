@@ -2,11 +2,12 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { getAllUsers, getSettings } from "@/lib/data";
-import { todayStr, payPeriod, biweeklyPeriod, datesInRange } from "@/lib/date";
+import { todayStr, payPeriod, datesInRange } from "@/lib/date";
 import { workedMinutes } from "@/lib/presence";
+import { workCapAt } from "@/lib/shift";
 import { parseHourly, fmtHours } from "@/lib/payroll";
 import { positionLabel } from "@/lib/roles";
-import { saveTimeAdjustment, saveBonus, deleteBonus } from "@/app/actions";
+import { saveTimeAdjustment, saveBonus, deleteBonus, savePayHours, savePayDiscrepancy, deleteOutage } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -34,18 +35,24 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
   const off = Number(sp.p ?? 0) || 0;
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
-  const period = settings.payCycleAnchor ? biweeklyPeriod(today, settings.payCycleAnchor, off) : payPeriod(today, off);
+  const period = payPeriod(today, off); // semi-monthly: 1–15 & 16–end
   const days = datesInRange(period.start, period.end);
   const now = new Date();
 
-  const [users, profiles, punches, adjustments, timeOff, bonuses] = await Promise.all([
+  const [users, profiles, punches, adjustments, timeOff, bonuses, payEntries, outages] = await Promise.all([
     getAllUsers(),
     db.teamProfile.findMany(),
     db.punch.findMany({ where: { date: { gte: period.start, lte: period.end } }, orderBy: { at: "asc" }, select: { userId: true, date: true, kind: true, at: true } }),
     db.timeAdjustment.findMany({ where: { date: { gte: period.start, lte: period.end } } }),
     db.timeOff.findMany({ where: { status: "approved", startDate: { lte: period.end }, endDate: { gte: period.start } }, select: { userId: true, type: true, startDate: true, endDate: true } }),
     db.bonus.findMany({ where: { periodKey: period.key }, orderBy: { createdAt: "asc" } }),
+    db.payEntry.findMany({ where: { periodKey: period.key } }),
+    db.outage.findMany({ where: { date: { gte: period.start, lte: period.end } }, orderBy: { startMin: "asc" } }),
   ]);
+  const payEntryByUser = new Map(payEntries.map((p) => [p.userId, p]));
+  const outageByDay = new Map<string, typeof outages>();
+  for (const o of outages) { const k = `${o.userId}|${o.date}`; const a = outageByDay.get(k) ?? []; a.push(o); outageByDay.set(k, a); }
+  const outageMin = (uid: string, d: string) => (outageByDay.get(`${uid}|${d}`) ?? []).reduce((s, o) => s + Math.max(0, o.endMin - o.startMin), 0);
   // Track everyone the company pays (incl. Marie, who is also an admin) — skip
   // only the owner (Jon) and part-timers (Ethan, irregular schedule).
   const active = users.filter((u) => u.active && !u.irregularSchedule && u.name.trim().split(/\s+/)[0]?.toLowerCase() !== "jon");
@@ -68,21 +75,23 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             <Link href={`/timecard?p=${off + 1}`} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-200">→</Link>
           </div>
         } />
-      {showPay && <p className="text-xs text-slate-400">Paid at the end of every 2-week work cycle. Pay = paid hours × hourly rate + bonuses.{!settings.payCycleAnchor && " (Set the pay-cycle anchor date in Admin to switch from 1st/15th to true biweekly.)"}</p>}
+      {showPay && <p className="text-xs text-slate-400">Semi-monthly: paid on the <strong>15th</strong> and the <strong>last day</strong> of each month (periods 1–15 & 16–end). Pay = paid hours × hourly rate + bonuses − discrepancies. Marie&apos;s entered hours are what pay; the clock-tracked hours are shown beside them as a check.</p>}
 
       {active.map((u) => {
         const prof = profByUser.get(u.id);
         const rate = parseHourly(prof?.payScale);
         const bonusRows = bonusByUser.get(u.id) ?? [];
         const bonusSum = bonusRows.reduce((s, b) => s + b.amount, 0);
+        const pe = payEntryByUser.get(u.id);
 
         const rows = days.map((d) => {
           const ps = punchByDay.get(punchKey(u.id, d)) ?? [];
           const adj = adjByDay.get(punchKey(u.id, d));
           const leave = offCovers(u.id, d);
           const dow = new Date(d + "T12:00:00Z").getUTCDay();
-          const workedH = ps.length ? workedMinutes(ps, now) / 60 : 0;
-          const deduct = adj?.deductHours ?? 0;
+          const workedH = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone)) / 60 : 0;
+          const outH = outageMin(u.id, d) / 60;
+          const deduct = (adj?.deductHours ?? 0) + outH;
           const paidH = Math.max(0, workedH - deduct);
           const inAt = ps.find((p) => p.kind === "in")?.at ?? null;
           const outAt = [...ps].reverse().find((p) => p.kind === "out")?.at ?? null;
@@ -90,14 +99,17 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
           if (workedH > 0) status = "Working";
           else if (leave) status = LEAVE[leave.type] ?? "Time off";
           else if (adj?.status === "day_off") status = "Day off";
-          return { d, dow, workedH, deduct, paidH, inAt, outAt, status, note: adj?.note ?? "", hasData: ps.length > 0 || !!leave || !!adj };
+          return { d, dow, workedH, deduct, outH, paidH, inAt, outAt, status, note: adj?.note ?? "", hasData: ps.length > 0 || !!leave || !!adj || outH > 0 };
         }).filter((r) => r.hasData);
 
-        const workedH = rows.reduce((s, r) => s + r.workedH, 0);
+        const autoPaidH = rows.reduce((s, r) => s + r.paidH, 0);
         const deductH = rows.reduce((s, r) => s + r.deduct, 0);
-        const paidH = Math.max(0, workedH - deductH);
+        const manualH = pe?.manualHours ?? null;
+        const paidH = manualH != null ? manualH : autoPaidH; // Marie's entry is source of truth
+        const variance = manualH != null ? manualH - autoPaidH : 0;
+        const adjustAmt = pe?.adjustAmount ?? 0;
         const gross = rate != null ? paidH * rate : null;
-        const total = (gross ?? 0) + bonusSum;
+        const total = (gross ?? 0) + bonusSum + adjustAmt;
 
         return (
           <Card key={u.id} className="p-4">
@@ -135,18 +147,54 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
               </table>
             </div>
 
-            {/* Summary — hours always; $ only for leadership */}
+            {/* Summary — Auto (clock) vs Marie's entered hours, then $ for leadership */}
             <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-              <span>Paid hours <strong className="tabular-nums">{fmtHours(paidH)}</strong></span>
+              <span className="text-slate-500">Clock-tracked <strong className="tabular-nums text-slate-700">{fmtHours(autoPaidH)}</strong></span>
+              <span>Paid hours <strong className="tabular-nums">{fmtHours(paidH)}</strong>{manualH != null ? <span className="ml-1 text-[11px] text-slate-400">(entered)</span> : <span className="ml-1 text-[11px] text-slate-400">(auto)</span>}</span>
+              {manualH != null && Math.abs(variance) >= 0.25 && (
+                <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${variance > 0 ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>
+                  {variance > 0 ? "+" : "−"}{fmtHours(Math.abs(variance))} vs clock
+                </span>
+              )}
               {showPay && gross != null && <span>Gross <strong className="tabular-nums">{money(gross)}</strong></span>}
               {showPay && bonusSum > 0 && <span>Bonuses <strong className="tabular-nums text-emerald-700">{money(bonusSum)}</strong></span>}
-              {showPay && <span className="ml-auto text-base">Pay this period <strong className="tabular-nums text-brand-navy">{gross != null || bonusSum ? money(total) : "—"}</strong></span>}
+              {showPay && adjustAmt !== 0 && <span>Discrepancy <strong className={`tabular-nums ${adjustAmt < 0 ? "text-red-600" : "text-emerald-700"}`}>{money(adjustAmt)}</strong></span>}
+              {showPay && <span className="ml-auto text-base">Pay this period <strong className="tabular-nums text-brand-navy">{gross != null || bonusSum || adjustAmt ? money(total) : "—"}</strong></span>}
             </div>
 
-            {/* Manager tools: adjust a day + bonuses */}
+            {/* Outages reported this period */}
+            {(() => {
+              const us = outages.filter((o) => o.userId === u.id);
+              if (us.length === 0) return null;
+              const hhmm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+              return (
+                <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
+                  <span className="font-bold">⚡ Outages (unpaid): </span>
+                  {us.map((o) => (
+                    <span key={o.id} className="mr-2 inline-flex items-center gap-1">
+                      {o.date.slice(5)} {o.kind} {hhmm(o.startMin)}–{hhmm(o.endMin)}
+                      <form action={deleteOutage} className="inline"><input type="hidden" name="id" value={o.id} /><button className="text-amber-400 hover:text-red-600">×</button></form>
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Marie's entered hours (source of truth for pay) */}
             <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <form action={savePayHours} className="rounded-lg ring-1 ring-slate-200 p-2.5">
+                <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Paid hours for this period (Marie)</div>
+                <input type="hidden" name="userId" value={u.id} />
+                <input type="hidden" name="periodKey" value={period.key} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="text-xs"><span className="mb-0.5 block text-slate-500">Hours</span><input name="manualHours" type="number" step="0.01" defaultValue={manualH != null ? manualH : ""} placeholder={fmtHours(autoPaidH)} className={`${inputCls} w-24`} /></label>
+                  <button className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Save hours</button>
+                  <span className="text-[11px] text-slate-400">Leave blank to use clock-tracked ({fmtHours(autoPaidH)}).</span>
+                </div>
+              </form>
+
               <form action={saveTimeAdjustment} className="rounded-lg ring-1 ring-slate-200 p-2.5">
-                <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Adjust a day (outage / owed / note)</div>
+                <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Adjust a day (owed / note)</div>
                 <input type="hidden" name="userId" value={u.id} />
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="text-xs"><span className="mb-0.5 block text-slate-500">Date</span>
@@ -158,7 +206,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                   <label className="text-xs"><span className="mb-0.5 block text-slate-500">Status</span>
                     <select name="status" className={inputCls} defaultValue=""><option value="">auto</option><option value="day_off">Day off</option><option value="working">Working</option></select>
                   </label>
-                  <input name="note" placeholder="Power outage 1:27–2:56…" className={`${inputCls} min-w-40 flex-1`} />
+                  <input name="note" placeholder="note" className={`${inputCls} min-w-32 flex-1`} />
                   <button className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
                 </div>
               </form>
@@ -181,6 +229,20 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                   <button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Add</button>
                 </form>
               </div>
+              )}
+
+              {showPay && (
+              <form action={savePayDiscrepancy} className="rounded-lg ring-1 ring-slate-200 p-2.5">
+                <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Discrepancy / clawback ($)</div>
+                <input type="hidden" name="userId" value={u.id} />
+                <input type="hidden" name="periodKey" value={period.key} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="text-xs"><span className="mb-0.5 block text-slate-500">Amount</span><input name="adjustAmount" type="number" step="0.01" defaultValue={adjustAmt || ""} placeholder="-36.00" className={`${inputCls} w-24`} /></label>
+                  <input name="note" defaultValue={pe?.note ?? ""} placeholder="e.g. subtract 3h overpay" className={`${inputCls} min-w-32 flex-1`} />
+                  <button className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">Use a negative number to claw back an overpay; positive to add owed pay.</p>
+              </form>
               )}
             </div>
           </Card>

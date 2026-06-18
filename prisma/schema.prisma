@@ -793,3 +793,34 @@ model Availability {
 
   @@index([userId, date])
 }
+
+// Per-period payroll entry. manualHours is Marie's authoritative paid hours
+// (source of truth); when null, the auto-tracked clock hours are used. adjustAmount
+// is the Excel "Discrepancies" $ correction/clawback (may be negative).
+model PayEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  periodKey    String // "YYYY-MM-A" (1–15) | "YYYY-MM-B" (16–end)
+  manualHours  Float? // null = use auto-tracked hours
+  adjustAmount Float    @default(0) // $ discrepancy / clawback (can be negative)
+  note         String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, periodKey])
+}
+
+// Self-reported power / internet outage during a shift (unpaid). Start/end are
+// minutes from local midnight; the duration is deducted from worked time.
+model Outage {
+  id        String   @id @default(cuid())
+  userId    String
+  date      String // YYYY-MM-DD (org tz)
+  kind      String   @default("internet") // internet | power | other
+  startMin  Int // minutes from midnight, local
+  endMin    Int
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([userId, date])
+}
