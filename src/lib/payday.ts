@@ -23,7 +23,7 @@ export async function sendPayrollEmail(payday: string): Promise<boolean> {
     db.timeAdjustment.findMany({ where: { date: { gte: period.start, lte: period.end } } }),
     db.bonus.findMany({ where: { periodKey: period.key } }),
   ]);
-  const active = users.filter((u) => u.active && u.role !== "admin" && !u.irregularSchedule);
+  const active = users.filter((u) => u.active && !u.irregularSchedule && u.name.trim().split(/\s+/)[0]?.toLowerCase() !== "jon");
   const profByUser = new Map(profiles.map((p) => [p.userId ?? "", p]));
   const punchByDay = new Map<string, { kind: string; at: Date }[]>();
   for (const p of punches) { const k = `${p.userId}|${p.date}`; const a = punchByDay.get(k) ?? []; a.push({ kind: p.kind, at: p.at }); punchByDay.set(k, a); }

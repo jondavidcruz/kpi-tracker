@@ -23,7 +23,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
-        <h1 className="text-xl font-bold">Time Card — restricted</h1>
+        <h1 className="text-xl font-bold">Payroll — restricted</h1>
         <p className="mt-1 text-sm text-slate-500">Managers only.</p>
         <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
       </Card>
@@ -46,7 +46,9 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
     db.timeOff.findMany({ where: { status: "approved", startDate: { lte: period.end }, endDate: { gte: period.start } }, select: { userId: true, type: true, startDate: true, endDate: true } }),
     db.bonus.findMany({ where: { periodKey: period.key }, orderBy: { createdAt: "asc" } }),
   ]);
-  const active = users.filter((u) => u.active && u.role !== "admin" && !u.irregularSchedule); // skip owner + part-timers (Ethan)
+  // Track everyone the company pays (incl. Marie, who is also an admin) — skip
+  // only the owner (Jon) and part-timers (Ethan, irregular schedule).
+  const active = users.filter((u) => u.active && !u.irregularSchedule && u.name.trim().split(/\s+/)[0]?.toLowerCase() !== "jon");
   const profByUser = new Map(profiles.map((p) => [p.userId ?? "", p]));
   const punchKey = (uid: string, d: string) => `${uid}|${d}`;
   const punchByDay = new Map<string, { kind: string; at: Date }[]>();
@@ -58,7 +60,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="space-y-5">
-      <SectionTitle title={showPay ? "⏱️ Time Card & Pay" : "⏱️ Time Card"} subtitle="Hours from clock-in/out, minus breaks, lunch, outages & time off. Not counted: breaks, days off, sick, vacation, outages." accent="bg-emerald-500"
+      <SectionTitle title="💵 Payroll — Time Card" subtitle={`Team hours by 2-week cycle (clock-in minus breaks, lunch, outages & time off).${showPay ? "" : " Pay totals are visible to leadership only."}`} accent="bg-emerald-500"
         right={
           <div className="flex items-center gap-2 text-sm">
             <Link href={`/timecard?p=${off - 1}`} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-200">←</Link>

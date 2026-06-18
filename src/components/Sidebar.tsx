@@ -33,7 +33,7 @@ export default function Sidebar({
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
-      { href: "/timecard", label: "Time Card", Icon: Wallet, timecardOnly: true },
+      { href: "/timecard", label: "Payroll", Icon: Wallet, timecardOnly: true },
     ] },
     { label: "Entrepreneurial Operating System", items: [
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
