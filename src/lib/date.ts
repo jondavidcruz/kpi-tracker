@@ -109,3 +109,26 @@ export function datesInRange(start: string, end: string): string[] {
   }
   return out;
 }
+
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Semi-monthly pay period containing `dateStr`, shifted by `offset` half-months.
+ *  A = 1st–15th, B = 16th–end. Pays on the 15th and 1st. */
+export function payPeriod(dateStr: string, offset = 0): { key: string; label: string; start: string; end: string } {
+  const y0 = Number(dateStr.slice(0, 4));
+  const m0 = Number(dateStr.slice(5, 7));
+  const day = Number(dateStr.slice(8, 10));
+  const half0 = day <= 15 ? 0 : 1;
+  const idx = y0 * 24 + (m0 - 1) * 2 + half0 + offset;
+  const y = Math.floor(idx / 24);
+  const rem = ((idx % 24) + 24) % 24;
+  const m = Math.floor(rem / 2) + 1;
+  const half = rem % 2;
+  const mp = String(m).padStart(2, "0");
+  const mn = MONTHS_SHORT[m - 1];
+  if (half === 0) {
+    return { key: `${y}-${mp}-A`, label: `${mn} 1–15, ${y}`, start: `${y}-${mp}-01`, end: `${y}-${mp}-15` };
+  }
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { key: `${y}-${mp}-B`, label: `${mn} 16–${lastDay}, ${y}`, start: `${y}-${mp}-16`, end: `${y}-${mp}-${String(lastDay).padStart(2, "0")}` };
+}

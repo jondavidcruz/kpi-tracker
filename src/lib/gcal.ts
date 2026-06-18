@@ -106,7 +106,7 @@ function nextDay(d: string): string {
   return new Date(Date.UTC(y, m - 1, dd + 1)).toISOString().slice(0, 10);
 }
 
-const TYPE_LABEL: Record<string, string> = { pto: "PTO", holiday: "Holiday", sick: "Sick", unpaid: "Unpaid" };
+const TYPE_LABEL: Record<string, string> = { vacation: "Vacation", emergency: "Emergency leave", sick: "Sick", special: "Special event", pto: "Time off", holiday: "Holiday", unpaid: "Unpaid" };
 
 /** Create an all-day time-off event on the shared calendar. Returns the event id, or null. */
 export async function createTimeOffEvent(opts: {

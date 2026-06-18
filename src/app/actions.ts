@@ -8,7 +8,7 @@ import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, isManager, isAdmin, canCurateSoftware, canAccessMarketing } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, canCurateSoftware, canAccessMarketing, canAccessPayroll } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
@@ -1532,7 +1532,7 @@ export async function punch(formData: FormData) {
 export async function requestTimeOff(formData: FormData) {
   const me = await getCurrentUser();
   if (!me) return;
-  const type = String(formData.get("type") ?? "pto");
+  const type = String(formData.get("type") ?? "vacation");
   const startDate = String(formData.get("startDate") ?? "");
   let endDate = String(formData.get("endDate") ?? "");
   const note = String(formData.get("note") ?? "").trim().slice(0, 300);
@@ -1609,4 +1609,44 @@ export async function deleteTeamDoc(formData: FormData) {
   if (!id) return;
   await db.teamDoc.delete({ where: { id } });
   revalidatePath("/team-roster");
+}
+
+// --- Time card / payroll (Jon / Viktoriia / Enrico) --------------------------
+
+export async function saveTimeAdjustment(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessPayroll(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const deductHours = Math.max(0, parseFloat(String(formData.get("deductHours") ?? "0")) || 0);
+  const status = String(formData.get("status") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim().slice(0, 300);
+  await db.timeAdjustment.upsert({
+    where: { userId_date: { userId, date } },
+    update: { deductHours, status, note },
+    create: { userId, date, deductHours, status, note },
+  });
+  revalidatePath("/timecard");
+}
+
+export async function saveBonus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessPayroll(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const periodKey = String(formData.get("periodKey") ?? "");
+  const amount = parseFloat(String(formData.get("amount") ?? "0")) || 0;
+  const note = String(formData.get("note") ?? "").trim().slice(0, 200);
+  if (!userId || !periodKey || amount === 0) return;
+  await db.bonus.create({ data: { userId, periodKey, amount, note } });
+  revalidatePath("/timecard");
+}
+
+export async function deleteBonus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessPayroll(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.bonus.delete({ where: { id } });
+  revalidatePath("/timecard");
 }

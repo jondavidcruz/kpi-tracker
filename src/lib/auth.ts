@@ -51,3 +51,15 @@ export function canAccessMarketing(user: User | null): boolean {
   const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   return MARKETING_ACCESS.includes(first);
 }
+
+// Time card + payroll (pay rates, hours, pay) — owner + named payroll staff only.
+// NOTE: intentionally NOT all managers (excludes Marie). Just Jon, Viktoriia, Enrico.
+const PAYROLL_ACCESS = ["viktoriia", "enrico"];
+
+/** Can view the Time Card / payroll. */
+export function canAccessPayroll(user: User | null): boolean {
+  if (!user) return false;
+  if (isAdmin(user)) return true; // Jon
+  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return PAYROLL_ACCESS.includes(first);
+}

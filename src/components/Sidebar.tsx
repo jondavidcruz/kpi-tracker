@@ -5,20 +5,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
 
-type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; badge?: number };
+type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; payrollOnly?: boolean; badge?: number };
 
 export default function Sidebar({
-  name, manager, admin, marketing, newTickets, newSuggestions,
+  name, manager, admin, marketing, payroll, newTickets, newSuggestions,
 }: {
   name: string;
   manager: boolean;
   admin: boolean;
   marketing: boolean;
+  payroll: boolean;
   newTickets: number;
   newSuggestions: number;
 }) {
@@ -32,6 +33,7 @@ export default function Sidebar({
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
+      { href: "/timecard", label: "Time Card & Pay", Icon: Wallet, payrollOnly: true },
     ] },
     { label: "Entrepreneurial Operating System", items: [
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
@@ -73,7 +75,7 @@ export default function Sidebar({
     ] },
   ];
 
-  const visible = (it: Item) => (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing);
+  const visible = (it: Item) => (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.payrollOnly || payroll);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   const Nav = (

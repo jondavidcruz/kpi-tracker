@@ -12,9 +12,13 @@ import TimeClock from "@/components/TimeClock";
 export const dynamic = "force-dynamic";
 
 const TYPE_META: Record<string, { label: string; cls: string }> = {
-  pto: { label: "PTO", cls: "bg-sky-100 text-sky-700" },
-  holiday: { label: "Holiday", cls: "bg-violet-100 text-violet-700" },
+  vacation: { label: "Vacation", cls: "bg-sky-100 text-sky-700" },
+  emergency: { label: "Emergency", cls: "bg-red-100 text-red-700" },
   sick: { label: "Sick", cls: "bg-rose-100 text-rose-700" },
+  special: { label: "Special / Birthday", cls: "bg-violet-100 text-violet-700" },
+  // legacy values still render:
+  pto: { label: "Time off", cls: "bg-slate-200 text-slate-700" },
+  holiday: { label: "Holiday", cls: "bg-slate-200 text-slate-700" },
   unpaid: { label: "Unpaid", cls: "bg-slate-200 text-slate-700" },
 };
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
@@ -93,14 +97,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         {/* Request form */}
         <Card className="p-5 lg:col-span-1" id="request">
           <h3 className="mb-1 text-sm font-bold text-slate-700">Request time off</h3>
-          <p className="mb-3 text-xs text-slate-500">Holiday, PTO, sick, or unpaid. {manager ? "Yours is approved automatically." : "Marie or Jon will approve it."}</p>
+          <p className="mb-3 text-xs text-slate-500">All time off is <strong>unpaid</strong>. {manager ? "Yours is approved automatically." : "Marie or Jon will approve it."}</p>
           <form action={requestTimeOff} className="space-y-2">
             <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Type</span>
-              <select name="type" className={inputCls} defaultValue="pto">
-                <option value="pto">PTO / vacation</option>
-                <option value="holiday">Holiday</option>
+              <select name="type" className={inputCls} defaultValue="vacation">
+                <option value="vacation">Vacation</option>
+                <option value="emergency">Emergency leave</option>
                 <option value="sick">Sick</option>
-                <option value="unpaid">Unpaid</option>
+                <option value="special">Special event (e.g. birthday)</option>
               </select>
             </label>
             <div className="grid grid-cols-2 gap-2">

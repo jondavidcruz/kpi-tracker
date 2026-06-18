@@ -749,3 +749,30 @@ model TeamDoc {
 
   @@index([userId])
 }
+
+// Manager corrections to a person's time card for a single day: a deduction
+// (power/internet outage, etc.) and/or a note. Hours come from Punches.
+model TimeAdjustment {
+  id          String   @id @default(cuid())
+  userId      String
+  date        String // YYYY-MM-DD (org tz)
+  deductHours Float    @default(0) // subtract from paid hours (outage, unavailable)
+  status      String   @default("") // override: working | day_off | "" (auto)
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, date])
+}
+
+// A bonus applied to a pay period (semi-monthly). Pay = hours*rate + bonuses.
+model Bonus {
+  id        String   @id @default(cuid())
+  userId    String
+  periodKey String // e.g. "2026-01-A" (1st-15th) | "2026-01-B" (16th-end)
+  amount    Float    @default(0)
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([userId, periodKey])
+}
