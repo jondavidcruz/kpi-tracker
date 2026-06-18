@@ -7,7 +7,15 @@ const TABS = [
   { key: "novation", label: "Novation", emoji: "📋", blurb: "List at current similar-condition value, cover the seller's closing + commission (no holding — retail buyer). Find the max seller payout." },
   { key: "creative", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
   { key: "listing", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
+  { key: "flip", label: "Flip / Wholetail", emoji: "🔨", blurb: "Full buyer's-lens analysis: Max Offer = ARV + purchase credit − min profit − (property costs + money costs)." },
 ] as const;
+
+// Hard-money lender presets from the team's sheet → [rate%, points%, service fee$]
+const LENDERS: Record<string, { rate: string; points: string; svc: string }> = {
+  "Kiavi (Novice)": { rate: "9.45", points: "2.5", svc: "1500" },
+  "Iron Bridge": { rate: "9", points: "2", svc: "0" },
+  "Zinc Financial": { rate: "11.5", points: "1.75", svc: "0" },
+};
 
 const MARKET_TIERS: [string, string][] = [
   ["85", "Prime Coastal / Ultra-Desirable — 85%"],
@@ -129,6 +137,24 @@ export default function UnderwritingCalculator() {
   const lList = n("lList"), lComm = num(v("lComm") || "2.5"), lRef = num(v("lRef") || "25"), lFlat = n("lFlat");
   const mktFee = lFlat > 0 ? lFlat : lList * (lComm / 100) * (lRef / 100);
 
+  // ---- Flip / Wholetail (from MAO.xlsx) ----
+  const fMinProfit = f.fMinProfit != null && f.fMinProfit !== "" ? n("fMinProfit") : 30000;
+  const fHold = n("fHold") || 6;
+  const fRehab = n("fRehab") || n("sqft") * num(v("rehabSf"));
+  const fComm = arv * (num(v("fComm") || "3") / 100);
+  const fClosing = arv * (num(v("fClosing") || "2") / 100);
+  const fCarry = arv * (num(v("fCarry") || "1") / 100); // utilities, taxes, insurance
+  const fHoaCost = n("fHoa") * fHold;
+  const fPropertyCosts = fRehab + fComm + fClosing + fCarry + fHoaCost + n("fPm");
+  const fLoan = n("fLoan"), fRate = num(v("fRate") || "10") / 100, fPoints = num(v("fPoints") || "1") / 100, fSvc = n("fSvc");
+  const fGap = n("fGap"), fGapRate = num(v("fGapRate") || "15") / 100;
+  const fPointsCost = fLoan * fPoints;
+  const fInterest = (fLoan * fRate / 12) * fHold + (fGap * fGapRate / 12) * fHold;
+  const fMoneyCost = fPointsCost + fInterest + fSvc;
+  const fTotalCosts = fPropertyCosts + fMoneyCost;
+  const fMao = arv + n("fPurchCredit") - fMinProfit - fTotalCosts;
+  const fProfit = arv - fTotalCosts - n("fPurchase");
+
   function buildReport(): { title: string; rows: [string, string][]; comps?: string; note?: string } {
     const addr = v("subject") || "—";
     if (tab === "assignment") {
@@ -155,10 +181,17 @@ export default function UnderwritingCalculator() {
       rows.push(["Our assignment fee (to end buyer)", money(cFee)]);
       return { title: "Creative (Seller-finance / Subject-to) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`, rows, note: "We assign these terms to an end buyer who wants them and collect the assignment fee." };
     }
+    if (tab === "listing") {
+      return {
+        title: "Listing Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`,
+        rows: [["List price", money(lList)], [`Listing commission (${lComm}%)`, money(lList * (lComm / 100))], lFlat > 0 ? ["Flat marketing fee", money(lFlat)] : [`Referral / marketing fee (${lRef}% of commission)`, money(mktFee)], ["Our marketing fee", money(mktFee)]],
+        note: "Standard agent-to-agent referral is 25% of the listing-side commission. A flat $2,500–$5,000 is also common — set whichever you use.",
+      };
+    }
     return {
-      title: "Listing Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`,
-      rows: [["List price", money(lList)], [`Listing commission (${lComm}%)`, money(lList * (lComm / 100))], lFlat > 0 ? ["Flat marketing fee", money(lFlat)] : [`Referral / marketing fee (${lRef}% of commission)`, money(mktFee)], ["Our marketing fee", money(mktFee)]],
-      note: "Standard agent-to-agent referral is 25% of the listing-side commission. A flat $2,500–$5,000 is also common — set whichever you use.",
+      title: "Flip / Wholetail Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`,
+      rows: [["ARV", money(arv)], ["Rehab", money(fRehab)], ["Commission + closing + carrying + HOA + PM", money(fComm + fClosing + fCarry + fHoaCost + n("fPm"))], ["Total property costs", money(fPropertyCosts)], ["Money cost (points + interest + fees)", money(fMoneyCost)], ["Total costs", money(fTotalCosts)], ["Minimum profit", money(fMinProfit)], ["🎯 Max Offer", money(fMao)], ["Profit at your purchase price", money(fProfit)]],
+      note: "Buyer's-lens flip math. Max Offer = ARV + purchase credit − min profit − total costs. Wholetail = same math with a lighter rehab.",
     };
   }
 
@@ -297,6 +330,41 @@ export default function UnderwritingCalculator() {
               <Field k="lFlat" label="…or flat marketing fee (overrides)" prefix="$" span={2} placeholder="2,500" />
             </>
           )}
+          {tab === "flip" && (
+            <>
+              <Field k="arv" label="ARV" prefix="$" placeholder="350,000" />
+              <Field k="fMinProfit" label="Minimum profit" prefix="$" placeholder="30,000" />
+              <div className={sectionCls}>Rehab — direct $, or sqft × $/sf</div>
+              <Field k="fRehab" label="Rehab cost ($) — overrides sqft calc" prefix="$" span={2} />
+              <Field k="sqft" label="Square feet" />
+              <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Condition ($/sf)</span>
+                <select value={v("rehabSf")} onChange={set("rehabSf")} className={inputCls}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
+              </label>
+              <div className={sectionCls}>Property costs (% of ARV)</div>
+              <Field k="fComm" label="Realtor commission" suffix="%" placeholder="3" />
+              <Field k="fClosing" label="Closing costs" suffix="%" placeholder="2" />
+              <Field k="fCarry" label="Utilities / taxes / insurance" suffix="%" placeholder="1" />
+              <Field k="fHoa" label="Monthly HOA ($)" prefix="$" />
+              <Field k="fPm" label="Project manager / misc ($)" prefix="$" />
+              <Field k="fPurchCredit" label="Purchase commission credit ($)" prefix="$" />
+              <div className={sectionCls}>Money costs (hard-money)</div>
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Lender preset (fills rate / points / fee)</span>
+                <select value={v("fLender")} onChange={(e) => { const L = LENDERS[e.target.value]; setF((p) => ({ ...p, fLender: e.target.value, ...(L ? { fRate: L.rate, fPoints: L.points, fSvc: L.svc } : {}) })); }} className={inputCls}>
+                  <option value="">— custom —</option>
+                  {Object.keys(LENDERS).map((k) => <option key={k} value={k}>{k}</option>)}
+                </select>
+              </label>
+              <Field k="fLoan" label="Loan amount" prefix="$" />
+              <Field k="fHold" label="Hold time (months)" placeholder="6" />
+              <Field k="fRate" label="Interest rate" suffix="%" placeholder="10" />
+              <Field k="fPoints" label="Points" suffix="%" placeholder="1" />
+              <Field k="fSvc" label="Service fee ($)" prefix="$" />
+              <Field k="fGap" label="Gap loan amount ($)" prefix="$" />
+              <Field k="fGapRate" label="Gap interest rate" suffix="%" placeholder="15" />
+              <div className={sectionCls}>Profit check</div>
+              <Field k="fPurchase" label="Your purchase price ($)" prefix="$" span={2} />
+            </>
+          )}
         </div>
 
         {/* Results */}
@@ -333,6 +401,16 @@ export default function UnderwritingCalculator() {
               <Res label="Listing commission" value={money(lList * (lComm / 100))} tone="muted" />
               <Res label="🎯 Our marketing / referral fee" value={money(mktFee)} tone={mktFee > 0 ? "good" : "muted"} big />
               <p className="mt-2 text-[11px] text-slate-400">Typical: 25% of the listing-side commission (industry-standard referral), or a flat $2,500–$5,000.</p>
+            </>
+          )}
+          {tab === "flip" && (
+            <>
+              <Res label="Total property costs" value={money(fPropertyCosts)} tone="muted" />
+              <Res label="Total money cost" value={money(fMoneyCost)} tone="muted" />
+              <Res label="Total costs" value={money(fTotalCosts)} tone="muted" />
+              <Res label="− Minimum profit" value={money(fMinProfit)} tone="muted" />
+              <Res label="🎯 Max Offer (flip MAO)" value={money(fMao)} tone={fMao > 0 ? "navy" : "bad"} big />
+              {n("fPurchase") > 0 && <Res label="Profit at your purchase price" value={money(fProfit)} tone={fProfit > 0 ? "good" : "bad"} />}
             </>
           )}
         </div>

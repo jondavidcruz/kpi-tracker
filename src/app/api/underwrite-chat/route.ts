@@ -26,6 +26,8 @@ Also think in the flipper's shoes: subtract their holding/money cost (months × 
 
 6) LISTING — traditional listing with our agent; we collect a referral/marketing fee (industry standard 25% of the listing-side commission, or a flat $2,500–$5,000).
 
+7) FLIP / WHOLETAIL (buyer's-lens) — Max Offer = ARV + purchase-commission credit − minimum profit − TOTAL COSTS. TOTAL COSTS = property costs + money costs. Property costs = rehab + realtor commission (~3% of ARV) + closing (~2%) + utilities/taxes/insurance (~1%) + monthly HOA × hold months + project manager. Money costs (hard money) = points (loan × ~1%) + interest ((loan × rate ÷ 12) × hold months) + service fee (+ optional gap loan interest). Minimum profit target $30k. Hard-money presets: Kiavi ~9.45%/2.5pts/$1500, Iron Bridge ~9%/2pts, Zinc ~11.5%/1.75pts. Wholetail = same math with a lighter rehab.
+
 PROFIT RULES: minimum profit we accept is $15,000; always shoot for 2× ($30,000+).
 
 EXIT DECISION (recommend the best exit):
