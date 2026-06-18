@@ -108,12 +108,23 @@ export async function evaluateAndRecordAlerts(
           });
           created.push(enriched);
         } else if (existing.status === "resolved") {
-          // It had recovered and slipped again — reopen with fresh numbers.
-          await db.alert.update({
-            where: { id: existing.id },
-            data: { status: "open", expected: result.expected, actual: result.actual, message },
-          });
-          created.push(enriched);
+          // Only AUTO-recovered alerts reopen when the number slips again. A
+          // manually justified/resolved miss stays resolved — the number is still
+          // a miss (Marie documented WHY); reopening would erase her resolution.
+          const autoRecovered = existing.resolvedBy === "auto" || existing.resolutionCategory === "recovered";
+          if (autoRecovered) {
+            await db.alert.update({
+              where: { id: existing.id },
+              data: { status: "open", expected: result.expected, actual: result.actual, message },
+            });
+            created.push(enriched);
+          } else {
+            // Keep it resolved; just refresh the current numbers for display.
+            await db.alert.update({
+              where: { id: existing.id },
+              data: { expected: result.expected, actual: result.actual, message },
+            });
+          }
         } else {
           // Still open/ack — keep the numbers and message current.
           await db.alert.update({
