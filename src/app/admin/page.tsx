@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings } from "@/app/actions";
+import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin } from "@/app/actions";
 import { adminConfigured } from "@/lib/supabase/admin";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
 import { toInputNumber, type Unit } from "@/lib/format";
@@ -53,11 +53,29 @@ export default async function AdminPage({
   const removedUsers = users.filter((u) => !u.active);
   const canDelete = isAdmin(me);
 
+  const owner = isAdmin(me);
+  const cats = [
+    { id: "people", emoji: "👥", label: "People", show: true },
+    { id: "access", emoji: "🔑", label: "Logins & passwords", show: true },
+    { id: "pay", emoji: "💵", label: "Pay", show: owner },
+    { id: "kpis", emoji: "🎯", label: "KPIs & goals", show: true },
+    { id: "alerts", emoji: "🔔", label: "Notifications", show: true },
+    { id: "reviews", emoji: "📋", label: "Reviews", show: owner },
+    { id: "data", emoji: "🗄️", label: "Data & security", show: owner },
+  ].filter((c) => c.show);
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight">Admin &amp; Settings</h1>
       </div>
+
+      {/* Quick category nav */}
+      <nav className="sticky top-0 z-10 -mx-2 flex flex-wrap gap-1.5 border-b border-slate-200 bg-white/90 px-2 py-2 backdrop-blur">
+        {cats.map((c) => (
+          <a key={c.id} href={`#${c.id}`} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200">{c.emoji} {c.label}</a>
+        ))}
+      </nav>
 
       {sp.saved && (
         <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
@@ -66,31 +84,126 @@ export default async function AdminPage({
         </div>
       )}
 
-      {/* Backup & security — owner only */}
-      {isAdmin(me) && (
-        <section>
-          <SectionTitle title="🗄️ Backup & security" subtitle="Keep a copy of everything, and control who can get in" accent="bg-slate-500" />
-          <Card className="p-5">
-            <div className="flex flex-wrap items-center gap-3">
-              <a href="/api/backup" className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">⬇️ Download full backup (JSON)</a>
-              <span className="text-xs text-slate-500">A complete export of every table — download anytime.</span>
-            </div>
-            <ul className="mt-4 space-y-2 text-sm text-slate-600">
-              <li>📧 <strong>Nightly off-site backup:</strong> a full JSON export is emailed to you automatically every morning (≈9am UTC) — keep those emails as your rolling copies.</li>
-              <li>⏱️ <strong>Real-time backup (primary):</strong> turn on Supabase <strong>Point-in-Time Recovery</strong> for continuous, restore-to-any-second backups → Supabase dashboard → <em>Database → Backups → enable PITR</em>. (Daily automated backups are already on with the Pro plan.)</li>
-              <li>🔒 <strong>Invite-only signups:</strong> the app already blocks anyone without an account you created — but to fully lock the door, disable public sign-ups in Supabase → <em>Authentication → Sign In / Providers → Email → turn OFF “Allow new users to sign up.”</em> After that, accounts exist <strong>only</strong> when you create them below.</li>
-            </ul>
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <Link href="/admin/access-preview" className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">🕵️ Preview what each member sees</Link>
-              <span className="ml-2 text-xs text-slate-500">Confirm nobody can see sections they shouldn&apos;t.</span>
-            </div>
-          </Card>
-        </section>
-      )}
+      {/* ════ PEOPLE ════ */}
+      <section id="people" className="scroll-mt-20">
+        <SectionTitle title="👥 People" subtitle={`${activeUsers.length} active · position decides which scorecard a rep sees`} accent="bg-sky-400" />
+        <div className="space-y-3">
+          {activeUsers.map((u) => <PersonCard key={u.id} u={u} />)}
+        </div>
 
-      {/* Payroll (biweekly) — owner only */}
-      {isAdmin(me) && (
-        <section>
+        {/* Add a person */}
+        <Card className="mt-4 p-5">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Add a person</p>
+          <form action={saveUser} className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label><span className={labelCls}>Name</span><input name="name" placeholder="Full name" className={inputCls} /></label>
+              <label><span className={labelCls}>Email (personal Gmail for login)</span><input name="email" placeholder="name@gmail.com" className={inputCls} /></label>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label><span className={labelCls}>Access</span><select name="role" defaultValue="rep" className={inputCls}><option value="rep">rep</option><option value="manager">manager</option><option value="admin">admin</option></select></label>
+              <label><span className={labelCls}>Scorecard</span><select name="position" defaultValue="" className={inputCls}><option value="">none</option>{POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
+              <label className="flex items-end gap-4 pb-1">
+                <span className="flex items-center gap-1.5 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked /> active</span>
+                <span className="flex items-center gap-1.5 text-sm text-slate-600" title="Show the internet speed test on this person's entry screen"><input type="checkbox" name="tracksInternet" /> ⚡️ speed test</span>
+              </label>
+            </div>
+            <div><SaveBtn small>+ Add person</SaveBtn></div>
+          </form>
+          <p className="mt-2 text-[11px] text-slate-400">Tip: to give them a password too, use <a href="#access" className="font-semibold text-slate-500 underline">Logins &amp; passwords</a> below — or “Create a new login” there does both at once.</p>
+        </Card>
+
+        {/* Removed / inactive */}
+        {removedUsers.length > 0 && (
+          <details className="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-600">
+              🗄 Removed / inactive ({removedUsers.length}) — hidden from the team
+            </summary>
+            <p className="mt-2 text-xs text-slate-400">These people are locked out and don&apos;t appear on any scorecard. Re-check &quot;active&quot; + Save to bring someone back, or delete permanently to purge their name and history.</p>
+            <div className="mt-3 space-y-3">
+              {removedUsers.map((u) => <PersonCard key={u.id} u={u} removed canDelete={canDelete} />)}
+            </div>
+          </details>
+        )}
+      </section>
+
+      {/* ════ LOGINS & PASSWORDS ════ */}
+      <section id="access" className="scroll-mt-20">
+        <SectionTitle title="🔑 Logins & passwords" subtitle="The team signs in with email + password — no email links needed" accent="bg-brand-gold" />
+
+        {sp.pwok && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Password set for {sp.pwok === "you" ? "you" : sp.pwok}.</div>}
+        {sp.pwerr === "nokey" && <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">Add <code>SUPABASE_SERVICE_ROLE_KEY</code> in Vercel to set team passwords here (see note below).</div>}
+        {sp.pwerr === "short" && <div className="mb-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Password must be at least 8 characters (and name + email are required).</div>}
+        {sp.pwerr === "1" && <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">Couldn&apos;t do that — check the details and try again.</div>}
+
+        {/* Create a new login (owner) — makes the account AND sets the password */}
+        {owner && (
+          <Card className="p-5">
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">➕ Create a new login</p>
+            <p className="mb-3 text-xs text-slate-500">Adds the account and sets a password in one step — use this for anyone who isn&apos;t in the list yet. Share the password with them; they can change it later.</p>
+            {!adminConfigured() ? (
+              <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
+                One-time setup: in Vercel → Settings → Environment Variables, add <code>SUPABASE_SERVICE_ROLE_KEY</code> (Supabase → Settings → API → <code>service_role</code> secret), then redeploy. After that this turns on.
+              </div>
+            ) : (
+              <form action={createTeamLogin} className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <label><span className={labelCls}>Name</span><input name="name" placeholder="Full name" className={inputCls} required /></label>
+                <label><span className={labelCls}>Email</span><input name="email" type="email" placeholder="name@gmail.com" className={inputCls} required /></label>
+                <label><span className={labelCls}>Access</span><select name="role" defaultValue="rep" className={inputCls}><option value="rep">rep</option><option value="manager">manager</option><option value="admin">admin</option></select></label>
+                <label><span className={labelCls}>Password (8+)</span><div className="flex gap-1"><input name="password" type="text" autoComplete="off" minLength={8} placeholder="temp password" className={inputCls} required /><button className="shrink-0 rounded-lg bg-brand-navy px-3 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Create</button></div></label>
+              </form>
+            )}
+          </Card>
+        )}
+
+        {/* Set an existing member's password (owner) */}
+        {owner && (
+          <Card className="mt-4 p-5">
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Set an existing member&apos;s password</p>
+            <p className="mb-3 text-xs text-slate-500">Give each person a password and share it — no emails involved. They can change it later from their own Account screen.</p>
+            {!adminConfigured() ? (
+              <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
+                Needs <code>SUPABASE_SERVICE_ROLE_KEY</code> in Vercel (see above).
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {activeUsers.map((u) => (
+                  <form key={u.id} action={setTeamPassword} className="flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-200">
+                    <input type="hidden" name="email" value={u.email} />
+                    <div className="min-w-40 flex-1">
+                      <div className="text-sm font-semibold text-slate-700">{u.name}</div>
+                      <div className="text-xs text-slate-400">{u.email}</div>
+                    </div>
+                    <input type="password" name="password" autoComplete="new-password" minLength={8} placeholder="new password (8+)" className={`${inputCls} max-w-56`} required />
+                    <button className="rounded-lg bg-brand-navy px-3 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Set</button>
+                  </form>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* Change my own password — any manager */}
+        <Card className="mt-4 p-5">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Change my password</p>
+          <form action={setMyPassword} className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="to" value="/admin" />
+            <label className="flex-1"><span className={labelCls}>New password (8+ characters)</span><input type="password" name="password" autoComplete="new-password" minLength={8} required className={inputCls} /></label>
+            <SaveBtn small>Update my password</SaveBtn>
+          </form>
+        </Card>
+
+        {/* Access preview link */}
+        {owner && (
+          <Card className="mt-4 p-5">
+            <Link href="/admin/access-preview" className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">🕵️ Preview what each member sees</Link>
+            <span className="ml-2 text-xs text-slate-500">Confirm nobody can see sections they shouldn&apos;t.</span>
+          </Card>
+        )}
+      </section>
+
+      {/* ════ PAY ════ */}
+      {owner && (
+        <section id="pay" className="scroll-mt-20">
           <SectionTitle title="💵 Payroll (semi-monthly)" subtitle="Paid the 15th & last day of each month; the payday summary emails automatically on those days" accent="bg-emerald-500" />
           <Card className="p-5">
             <form action={savePayrollSettings} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -105,9 +218,9 @@ export default async function AdminPage({
         </section>
       )}
 
-      {/* Alerts & schedule */}
-      <section>
-        <SectionTitle title="Alerts & schedule" subtitle="Where off-target alerts go, and when missing-entry checks fire" accent="bg-red-400" />
+      {/* ════ NOTIFICATIONS & SCHEDULE ════ */}
+      <section id="alerts" className="scroll-mt-20">
+        <SectionTitle title="🔔 Notifications & schedule" subtitle="Where off-target alerts go, and when missing-entry checks fire" accent="bg-red-400" />
         <Card className="p-6">
           <form action={saveSettings} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label className="sm:col-span-2">
@@ -156,99 +269,10 @@ export default async function AdminPage({
         </Card>
       </section>
 
-      {/* People */}
-      <section>
-        <SectionTitle title="People" subtitle={`${activeUsers.length} active · position decides which scorecard a rep sees`} accent="bg-sky-400" />
-
-        <div className="space-y-3">
-          {activeUsers.map((u) => <PersonCard key={u.id} u={u} />)}
-        </div>
-
-        {/* Add a person */}
-        <Card className="mt-4 p-5">
-          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Add a person</p>
-          <form action={saveUser} className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label><span className={labelCls}>Name</span><input name="name" placeholder="Full name" className={inputCls} /></label>
-              <label><span className={labelCls}>Email (personal Gmail for login)</span><input name="email" placeholder="name@gmail.com" className={inputCls} /></label>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <label><span className={labelCls}>Access</span><select name="role" defaultValue="rep" className={inputCls}><option value="rep">rep</option><option value="manager">manager</option><option value="admin">admin</option></select></label>
-              <label><span className={labelCls}>Scorecard</span><select name="position" defaultValue="" className={inputCls}><option value="">none</option>{POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
-              <label className="flex items-end gap-4 pb-1">
-                <span className="flex items-center gap-1.5 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked /> active</span>
-                <span className="flex items-center gap-1.5 text-sm text-slate-600" title="Show the internet speed test on this person's entry screen"><input type="checkbox" name="tracksInternet" /> ⚡️ speed test</span>
-              </label>
-            </div>
-            <div><SaveBtn small>+ Add person</SaveBtn></div>
-          </form>
-        </Card>
-
-        {/* Removed / inactive — tucked away so the main list stays clean */}
-        {removedUsers.length > 0 && (
-          <details className="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-            <summary className="cursor-pointer text-sm font-semibold text-slate-600">
-              🗄 Removed / inactive ({removedUsers.length}) — hidden from the team
-            </summary>
-            <p className="mt-2 text-xs text-slate-400">These people are locked out and don&apos;t appear on any scorecard. Re-check &quot;active&quot; + Save to bring someone back, or delete permanently to purge their name and history.</p>
-            <div className="mt-3 space-y-3">
-              {removedUsers.map((u) => <PersonCard key={u.id} u={u} removed canDelete={canDelete} />)}
-            </div>
-          </details>
-        )}
-      </section>
-
-      {/* Login & passwords */}
-      <section id="access" className="scroll-mt-4">
-        <SectionTitle title="🔑 Login & passwords" subtitle="The team signs in with email + password — no email links needed" accent="bg-brand-gold" />
-
-        {sp.pwok && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Password set for {sp.pwok === "you" ? "you" : sp.pwok}.</div>}
-        {sp.pwerr === "nokey" && <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">Add <code>SUPABASE_SERVICE_ROLE_KEY</code> in Vercel to set team passwords here (see note below).</div>}
-        {sp.pwerr === "short" && <div className="mb-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Password must be at least 8 characters.</div>}
-        {sp.pwerr === "1" && <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">Couldn&apos;t set that password — try again.</div>}
-
-        {/* Change my own password — any manager */}
-        <Card className="p-5">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Change my password</p>
-          <form action={setMyPassword} className="flex flex-wrap items-end gap-2">
-            <input type="hidden" name="to" value="/admin" />
-            <label className="flex-1"><span className={labelCls}>New password (8+ characters)</span><input type="password" name="password" autoComplete="new-password" minLength={8} required className={inputCls} /></label>
-            <SaveBtn small>Update my password</SaveBtn>
-          </form>
-        </Card>
-
-        {/* Set the team's passwords — owner only */}
-        {isAdmin(me) && (
-          <Card className="mt-4 p-5">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Set a team member&apos;s password</p>
-            <p className="mb-3 text-xs text-slate-500">Give each person a password and share it with them — no emails involved. They can change it later from their own Admin screen.</p>
-            {!adminConfigured() ? (
-              <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
-                One-time setup: in Vercel → your project → Settings → Environment Variables, add <code>SUPABASE_SERVICE_ROLE_KEY</code> (from Supabase → Settings → API → <code>service_role</code> secret), then redeploy. After that this tool turns on.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {activeUsers.map((u) => (
-                  <form key={u.id} action={setTeamPassword} className="flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-200">
-                    <input type="hidden" name="email" value={u.email} />
-                    <div className="min-w-40 flex-1">
-                      <div className="text-sm font-semibold text-slate-700">{u.name}</div>
-                      <div className="text-xs text-slate-400">{u.email}</div>
-                    </div>
-                    <input type="password" name="password" autoComplete="new-password" minLength={8} placeholder="new password (8+)" className={`${inputCls} max-w-56`} required />
-                    <button className="rounded-lg bg-brand-navy px-3 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Set</button>
-                  </form>
-                ))}
-              </div>
-            )}
-          </Card>
-        )}
-      </section>
-
-      {/* Weekly reviews — owner-private (admin only) */}
-      {isAdmin(me) && (
-        <section>
-          <SectionTitle title="Weekly performance reviews 🔒" subtitle="Owner-only · keep / coach / reassign decisions" accent="bg-violet-400" />
+      {/* ════ REVIEWS ════ */}
+      {owner && (
+        <section id="reviews" className="scroll-mt-20">
+          <SectionTitle title="📋 Weekly performance reviews 🔒" subtitle="Owner-only · keep / coach / reassign decisions" accent="bg-violet-400" />
           <Card className="p-6">
             <div className="flex flex-wrap gap-2">
               {users.filter((u) => u.position).map((u) => (
@@ -267,9 +291,9 @@ export default async function AdminPage({
         </section>
       )}
 
-      {/* KPIs */}
-      <section>
-        <SectionTitle title="KPIs & goals" subtitle="Category drives alert urgency · duration goals are in minutes" accent="bg-emerald-400" />
+      {/* ════ KPIs & GOALS ════ */}
+      <section id="kpis" className="scroll-mt-20">
+        <SectionTitle title="🎯 KPIs & goals" subtitle="Category drives alert urgency · duration goals are in minutes" accent="bg-emerald-400" />
         <Card className="p-6">
           {[...POSITIONS.map((p) => ({ key: p.key, label: `${p.emoji} ${p.label}` })), { key: "", label: "🏢 Team / shared" }].map((group) => {
             const groupKpis = kpis.filter((k) => (group.key === "" ? k.scope === "team" : k.roleKey === group.key));
@@ -323,6 +347,24 @@ export default async function AdminPage({
           </div>
         </Card>
       </section>
+
+      {/* ════ DATA & SECURITY ════ */}
+      {owner && (
+        <section id="data" className="scroll-mt-20">
+          <SectionTitle title="🗄️ Data & security" subtitle="Keep a copy of everything, and control who can get in" accent="bg-slate-500" />
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <a href="/api/backup" className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">⬇️ Download full backup (JSON)</a>
+              <span className="text-xs text-slate-500">A complete export of every table — download anytime.</span>
+            </div>
+            <ul className="mt-4 space-y-2 text-sm text-slate-600">
+              <li>📧 <strong>Nightly off-site backup:</strong> a full JSON export is emailed to you automatically every morning (≈9am UTC) — keep those emails as your rolling copies.</li>
+              <li>⏱️ <strong>Real-time backup (primary):</strong> turn on Supabase <strong>Point-in-Time Recovery</strong> for continuous, restore-to-any-second backups → Supabase dashboard → <em>Database → Backups → enable PITR</em>. (Daily automated backups are already on with the Pro plan.)</li>
+              <li>🔒 <strong>Invite-only signups:</strong> the app already blocks anyone without an account you created — but to fully lock the door, disable public sign-ups in Supabase → <em>Authentication → Sign In / Providers → Email → turn OFF “Allow new users to sign up.”</em> After that, accounts exist <strong>only</strong> when you create them above.</li>
+            </ul>
+          </Card>
+        </section>
+      )}
     </div>
   );
 }

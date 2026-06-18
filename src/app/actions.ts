@@ -39,6 +39,30 @@ export async function setTeamPassword(formData: FormData) {
   redirect(`/admin?pwok=${encodeURIComponent(email)}#access`);
 }
 
+/** Owner: create a brand-new login (User row + Supabase password) in one step. */
+export async function createTeamLogin(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  if (!adminConfigured()) redirect("/admin?pwerr=nokey#access");
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const role = ["rep", "manager", "admin"].includes(String(formData.get("role"))) ? String(formData.get("role")) : "rep";
+  const password = String(formData.get("password") ?? "");
+  if (!name || !email) redirect("/admin?pwerr=1#access");
+  if (password.length < 8) redirect("/admin?pwerr=short#access");
+  // Create or update the app User row so they're recognized after sign-in.
+  await db.user.upsert({ where: { email }, update: { name, role, active: true }, create: { name, email, role } });
+  // Create or update the Supabase auth user with the password.
+  const admin = createAdminClient();
+  const authId = await findAuthUserByEmail(email);
+  const res = authId
+    ? await admin.auth.admin.updateUserById(authId, { password, email_confirm: true })
+    : await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  if (res.error) redirect("/admin?pwerr=1#access");
+  revalidatePath("/admin");
+  redirect(`/admin?pwok=${encodeURIComponent(email)}#access`);
+}
+
 /** Any signed-in user sets their own password (uses their session). */
 export async function setMyPassword(formData: FormData) {
   const me = await getCurrentUser();
