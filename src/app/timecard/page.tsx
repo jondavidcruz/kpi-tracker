@@ -17,6 +17,9 @@ const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const LEAVE: Record<string, string> = { vacation: "Vacation", emergency: "Emergency", sick: "Sick", special: "Special", pto: "Time off", holiday: "Holiday", unpaid: "Unpaid" };
 const clock = (d: Date | null) => (d ? new Date(d).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }) : "—");
+const MON_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const weekStartOf = (d: string) => { const dt = new Date(d + "T12:00:00Z"); dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7)); return dt.toISOString().slice(0, 10); };
+const mdShort = (d: string) => { const [, m, dd] = d.split("-").map(Number); return `${MON_SHORT[m - 1]} ${dd}`; };
 
 export default async function TimecardPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = await getCurrentUser();
@@ -146,6 +149,21 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                 </tbody>
               </table>
             </div>
+
+            {/* Weekly subtotals — read the period week by week */}
+            {(() => {
+              const weekly = new Map<string, number>();
+              for (const r of rows) weekly.set(weekStartOf(r.d), (weekly.get(weekStartOf(r.d)) ?? 0) + r.paidH);
+              const weeks = [...weekly.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+              if (weeks.length < 2) return null;
+              return (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {weeks.map(([wk, h]) => (
+                    <span key={wk} className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">Week of {mdShort(wk)}: <span className="tabular-nums text-slate-800">{fmtHours(h)}</span></span>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* Summary — Auto (clock) vs Marie's entered hours, then $ for leadership */}
             <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm">
