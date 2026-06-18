@@ -42,6 +42,7 @@ export function canCurateSoftware(user: User | null): boolean {
 }
 
 // Reps (beyond managers/admin) allowed into the Marketing section.
+// Net effect: Jon + Marie (managers) + Viktoriia + Sharyn.
 const MARKETING_ACCESS = ["viktoriia", "sharyn"];
 
 /** Can view + edit the Marketing section (managers + named reps). */
@@ -52,14 +53,19 @@ export function canAccessMarketing(user: User | null): boolean {
   return MARKETING_ACCESS.includes(first);
 }
 
-// Time card + payroll (pay rates, hours, pay) — owner + named payroll staff only.
-// NOTE: intentionally NOT all managers (excludes Marie). Just Jon + Viktoriia.
-const PAYROLL_ACCESS = ["viktoriia"];
+// PAY figures (rates, gross, bonuses) — leadership only: Jon + Viktoriia + Enrico.
+// Marie (manager) tracks TIME but must NOT see pay.
+const PAYROLL_ACCESS = ["viktoriia", "enrico"];
 
-/** Can view the Time Card / payroll. */
+/** Can see PAY ($ rates, gross, bonuses, totals). Leadership only. */
 export function canAccessPayroll(user: User | null): boolean {
   if (!user) return false;
   if (isAdmin(user)) return true; // Jon
   const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   return PAYROLL_ACCESS.includes(first);
+}
+
+/** Can open the Time Card (track hours). Managers (Marie + Jon) + pay staff. */
+export function canTrackTime(user: User | null): boolean {
+  return isManager(user) || canAccessPayroll(user);
 }

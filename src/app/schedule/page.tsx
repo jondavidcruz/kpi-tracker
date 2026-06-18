@@ -36,7 +36,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const manager = isManager(me);
 
   const [users, punchesToday, timeOff] = await Promise.all([
-    db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.punch.findMany({ where: { date: today }, orderBy: { at: "asc" }, select: { userId: true, kind: true, at: true } }),
     db.timeOff.findMany({ include: { user: { select: { name: true } } }, orderBy: { startDate: "asc" } }),
   ]);

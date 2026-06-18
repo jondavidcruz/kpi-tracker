@@ -15,7 +15,7 @@ export async function GET() {
   const settings = await getSettings();
   const date = todayStr(settings.orgTimezone);
   const [users, punches] = await Promise.all([
-    db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.punch.findMany({ where: { date }, orderBy: { at: "asc" }, select: { userId: true, kind: true, at: true } }),
   ]);
   const byUser = groupByUser(punches);

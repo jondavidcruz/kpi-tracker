@@ -10,16 +10,16 @@ import {
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
 
-type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; payrollOnly?: boolean; badge?: number };
+type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; badge?: number };
 
 export default function Sidebar({
-  name, manager, admin, marketing, payroll, newTickets, newSuggestions,
+  name, manager, admin, marketing, timecard, newTickets, newSuggestions,
 }: {
   name: string;
   manager: boolean;
   admin: boolean;
   marketing: boolean;
-  payroll: boolean;
+  timecard: boolean;
   newTickets: number;
   newSuggestions: number;
 }) {
@@ -33,7 +33,7 @@ export default function Sidebar({
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
-      { href: "/timecard", label: "Time Card & Pay", Icon: Wallet, payrollOnly: true },
+      { href: "/timecard", label: "Time Card", Icon: Wallet, timecardOnly: true },
     ] },
     { label: "Entrepreneurial Operating System", items: [
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
@@ -75,7 +75,7 @@ export default function Sidebar({
     ] },
   ];
 
-  const visible = (it: Item) => (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.payrollOnly || payroll);
+  const visible = (it: Item) => (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   const Nav = (

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, canAccessPayroll } from "@/lib/auth";
+import { getCurrentUser, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { getAllUsers, getSettings } from "@/lib/data";
 import { todayStr, payPeriod, datesInRange } from "@/lib/date";
 import { workedMinutes } from "@/lib/presence";
@@ -19,16 +19,17 @@ const clock = (d: Date | null) => (d ? new Date(d).toLocaleTimeString([], { hour
 
 export default async function TimecardPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = await getCurrentUser();
-  if (!canAccessPayroll(me)) {
+  if (!canTrackTime(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
-        <h1 className="text-xl font-bold">Payroll — restricted</h1>
-        <p className="mt-1 text-sm text-slate-500">Visible to Jon &amp; Viktoriia only.</p>
+        <h1 className="text-xl font-bold">Time Card — restricted</h1>
+        <p className="mt-1 text-sm text-slate-500">Managers only.</p>
         <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
       </Card>
     );
   }
+  const showPay = canAccessPayroll(me); // $ figures — leadership only (Jon/Viktoriia/Enrico)
   const sp = await searchParams;
   const off = Number(sp.p ?? 0) || 0;
   const settings = await getSettings();
@@ -45,7 +46,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
     db.timeOff.findMany({ where: { status: "approved", startDate: { lte: period.end }, endDate: { gte: period.start } }, select: { userId: true, type: true, startDate: true, endDate: true } }),
     db.bonus.findMany({ where: { periodKey: period.key }, orderBy: { createdAt: "asc" } }),
   ]);
-  const active = users.filter((u) => u.active && u.role !== "admin"); // don't pay-track the owner
+  const active = users.filter((u) => u.active && u.role !== "admin" && !u.irregularSchedule); // skip owner + part-timers (Ethan)
   const profByUser = new Map(profiles.map((p) => [p.userId ?? "", p]));
   const punchKey = (uid: string, d: string) => `${uid}|${d}`;
   const punchByDay = new Map<string, { kind: string; at: Date }[]>();
@@ -57,7 +58,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="space-y-5">
-      <SectionTitle title="⏱️ Time Card & Pay" subtitle="Hours from clock-in/out (minus breaks, lunch, outages & time off) → pay each period. Unpaid: breaks, days off, sick, vacation, outages." accent="bg-emerald-500"
+      <SectionTitle title={showPay ? "⏱️ Time Card & Pay" : "⏱️ Time Card"} subtitle="Hours from clock-in/out, minus breaks, lunch, outages & time off. Not counted: breaks, days off, sick, vacation, outages." accent="bg-emerald-500"
         right={
           <div className="flex items-center gap-2 text-sm">
             <Link href={`/timecard?p=${off - 1}`} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-200">←</Link>
@@ -65,7 +66,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             <Link href={`/timecard?p=${off + 1}`} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-200">→</Link>
           </div>
         } />
-      <p className="text-xs text-slate-400">Pays on the 1st &amp; 15th (each ~2 working weeks). Pay = paid hours × hourly rate + bonuses.</p>
+      {showPay && <p className="text-xs text-slate-400">Pays on the 1st &amp; 15th (each ~2 working weeks). Pay = paid hours × hourly rate + bonuses.</p>}
 
       {active.map((u) => {
         const prof = profByUser.get(u.id);
@@ -101,7 +102,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-base font-bold text-slate-800">{u.name}</span>
               <span className="text-xs text-slate-400">{positionLabel(u.position)}</span>
-              <span className="ml-auto text-xs font-semibold text-slate-500">{rate != null ? `${money(rate)}/hr` : (prof?.payScale || "rate: see pay card")}</span>
+              {showPay && <span className="ml-auto text-xs font-semibold text-slate-500">{rate != null ? `${money(rate)}/hr` : (prof?.payScale || "rate: see pay card")}</span>}
             </div>
 
             {/* Daily rows */}
@@ -132,12 +133,12 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
               </table>
             </div>
 
-            {/* Pay summary */}
+            {/* Summary — hours always; $ only for leadership */}
             <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm">
               <span>Paid hours <strong className="tabular-nums">{fmtHours(paidH)}</strong></span>
-              {gross != null && <span>Gross <strong className="tabular-nums">{money(gross)}</strong></span>}
-              {bonusSum > 0 && <span>Bonuses <strong className="tabular-nums text-emerald-700">{money(bonusSum)}</strong></span>}
-              <span className="ml-auto text-base">Pay this period <strong className="tabular-nums text-brand-navy">{gross != null || bonusSum ? money(total) : "—"}</strong></span>
+              {showPay && gross != null && <span>Gross <strong className="tabular-nums">{money(gross)}</strong></span>}
+              {showPay && bonusSum > 0 && <span>Bonuses <strong className="tabular-nums text-emerald-700">{money(bonusSum)}</strong></span>}
+              {showPay && <span className="ml-auto text-base">Pay this period <strong className="tabular-nums text-brand-navy">{gross != null || bonusSum ? money(total) : "—"}</strong></span>}
             </div>
 
             {/* Manager tools: adjust a day + bonuses */}
@@ -160,6 +161,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                 </div>
               </form>
 
+              {showPay && (
               <div className="rounded-lg ring-1 ring-slate-200 p-2.5">
                 <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Bonuses this period</div>
                 {bonusRows.map((b) => (
@@ -177,6 +179,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                   <button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Add</button>
                 </form>
               </div>
+              )}
             </div>
           </Card>
         );
