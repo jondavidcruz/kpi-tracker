@@ -8,6 +8,7 @@ export async function getSettings() {
     (await db.settings.findUnique({ where: { id: 1 } })) ?? {
       id: 1,
       googleChatWebhook: "",
+      timecardChatWebhook: "",
       alertEmailRecipients: "",
       emailFromAddress: "",
       workdayCutoff: "18:00",

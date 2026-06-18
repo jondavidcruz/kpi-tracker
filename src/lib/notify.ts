@@ -5,6 +5,7 @@ import { getSettings } from "./data";
 
 export interface ChannelConfig {
   chatWebhook: string;
+  timecardChatWebhook: string; // separate space for clock-in/break/lunch status posts
   emailRecipients: string[];
   emailFrom: string;
   resendKey: string;
@@ -14,6 +15,7 @@ export async function getChannelConfig(): Promise<ChannelConfig> {
   const s = await getSettings();
   return {
     chatWebhook: s.googleChatWebhook || process.env.GOOGLE_CHAT_WEBHOOK_URL || "",
+    timecardChatWebhook: s.timecardChatWebhook || "",
     emailRecipients: splitList(s.alertEmailRecipients || process.env.ALERT_EMAIL_TO || ""),
     emailFrom: s.emailFromAddress || process.env.ALERT_EMAIL_FROM || "",
     resendKey: process.env.RESEND_API_KEY || "",
@@ -27,18 +29,14 @@ function splitList(s: string): string[] {
     .filter(Boolean);
 }
 
-/** Post a message to Google Chat. Returns true if delivered. */
-export async function sendGoogleChat(
-  text: string,
-  cfg?: ChannelConfig,
-): Promise<boolean> {
-  const c = cfg ?? (await getChannelConfig());
-  if (!c.chatWebhook) {
+/** Low-level: POST text to a specific Google Chat incoming-webhook URL. */
+async function postChatWebhook(url: string, text: string): Promise<boolean> {
+  if (!url) {
     console.log("[notify] Google Chat not configured — would send:\n" + text);
     return false;
   }
   try {
-    const res = await fetch(c.chatWebhook, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=UTF-8" },
       body: JSON.stringify({ text }),
@@ -52,6 +50,19 @@ export async function sendGoogleChat(
     console.error("[notify] Google Chat error:", err);
     return false;
   }
+}
+
+/** Post a message to the main Google Chat space (alerts, digests). */
+export async function sendGoogleChat(text: string, cfg?: ChannelConfig): Promise<boolean> {
+  const c = cfg ?? (await getChannelConfig());
+  return postChatWebhook(c.chatWebhook, text);
+}
+
+/** Post a time-card status update (clock-in / break / lunch) to the Timecard
+ *  space if its webhook is set, otherwise fall back to the main space. */
+export async function sendTimecardChat(text: string, cfg?: ChannelConfig): Promise<boolean> {
+  const c = cfg ?? (await getChannelConfig());
+  return postChatWebhook(c.timecardChatWebhook || c.chatWebhook, text);
 }
 
 /** Send an email via Resend. Returns true if delivered. */

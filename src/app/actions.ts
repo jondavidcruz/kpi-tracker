@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
 import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
-import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat } from "@/lib/notify";
+import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat, sendTimecardChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
@@ -404,6 +404,7 @@ function escapeForEmail(s: string): string {
 export async function saveSettings(formData: FormData) {
   const data = {
     googleChatWebhook: String(formData.get("googleChatWebhook") ?? "").trim(),
+    timecardChatWebhook: String(formData.get("timecardChatWebhook") ?? "").trim(),
     alertEmailRecipients: String(formData.get("alertEmailRecipients") ?? "").trim(),
     emailFromAddress: String(formData.get("emailFromAddress") ?? "").trim(),
     workdayCutoff: String(formData.get("workdayCutoff") ?? "18:00").trim(),
@@ -1563,7 +1564,7 @@ export async function punch(formData: FormData) {
   const tmpl = PUNCH_CHAT[kind];
   if (tmpl) {
     const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
-    sendGoogleChat(`${tmpl.replace("{name}", me.name)} · ${time}`).catch(() => {});
+    sendTimecardChat(`${tmpl.replace("{name}", me.name)} · ${time}`).catch(() => {});
   }
   revalidatePath("/schedule");
 }

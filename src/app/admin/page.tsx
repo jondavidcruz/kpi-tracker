@@ -224,8 +224,13 @@ export default async function AdminPage({
         <Card className="p-6">
           <form action={saveSettings} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label className="sm:col-span-2">
-              <span className={labelCls}>Google Chat webhook URL</span>
+              <span className={labelCls}>Google Chat webhook URL — alerts &amp; digests (main space)</span>
               <input name="googleChatWebhook" defaultValue={settings.googleChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…" className={inputCls} />
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Time-card status webhook — clock-in / break / lunch posts (Timecard space)</span>
+              <input name="timecardChatWebhook" defaultValue={settings.timecardChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/AAQAEZsNlXQ/messages?key=…&token=…" className={inputCls} />
+              <span className="mt-1 block text-[11px] text-slate-400">Create an incoming webhook in the <strong>Timecard</strong> space (⋮ → Apps &amp; integrations → Webhooks → Add). Leave blank to use the main space.</span>
             </label>
             <label className="sm:col-span-2">
               <span className={labelCls}>Alert email recipients (comma-separated)</span>

@@ -347,6 +347,7 @@ model Deal {
 model Settings {
   id                  Int     @id @default(1)
   googleChatWebhook   String  @default("")
+  timecardChatWebhook String  @default("") // separate space for clock/break/lunch status posts
   alertEmailRecipients String @default("") // comma-separated
   emailFromAddress    String  @default("")
   workdayCutoff       String  @default("18:00") // HH:mm local
