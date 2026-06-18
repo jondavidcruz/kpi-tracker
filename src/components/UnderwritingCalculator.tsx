@@ -133,7 +133,9 @@ export default function UnderwritingCalculator() {
   // ---- Novation ----
   const novCompPrices = [n("nComp1p"), n("nComp2p"), n("nComp3p")].filter((x) => x > 0);
   const suggestedList = novCompPrices.length ? Math.min(...novCompPrices) : 0; // conservative → sells fastest
-  const nList = n("nList"), nComm = num(v("nComm") || "5"), nSellerClose = n("nSellerClose"), nMinFee = n("nMinFee"), nRepairCredit = n("nRepairCredit");
+  const nList = n("nList"), nComm = num(v("nComm") || "5"), nMinFee = n("nMinFee"), nRepairCredit = n("nRepairCredit");
+  const nSellerClosePct = num(v("nSellerClosePct") || "1.5"); // seller's closing only — we cover it
+  const nSellerClose = nList * (nSellerClosePct / 100);
   const nNet = nList - nRepairCredit - nList * (nComm / 100) - nSellerClose;
   const novMao = nNet - nMinFee;
   const nAnchorPct = v("nAnchorPct") || "7";
@@ -183,15 +185,15 @@ export default function UnderwritingCalculator() {
       return {
         title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
         rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ["Flipper holding cost", money(holding)], ["Assignment fee", money(aFee)], ["Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
-        note: "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. If the seller won't meet MAO, pivot to Novation.",
+        note: "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. On assignment the end buyer covers BOTH the seller's and the buyer's closing costs, so no closing is deducted here. If the seller won't meet MAO, pivot to Novation.",
       };
     }
     if (tab === "novation") {
       const comps = [1, 2, 3].map((i) => { const a = v(`nComp${i}`); const p = v(`nComp${i}p`); const d = v(`nComp${i}d`); return a ? `${esc(a)} — ${p ? "$" + esc(p) : "?"}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Novation Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>As-is comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["List price (current similar-condition)", money(nList)], ["Buyer repair credit", money(nRepairCredit)], [`Agent commission (${nComm}%)`, money(nList * (nComm / 100))], ["Seller closing costs (we cover)", money(nSellerClose)], ["Net after costs", money(nNet)], ["Our minimum fee", money(nMinFee)], ["Novation MAO (max seller payout)", money(novMao)], [`Anchor / opening payout (${nAnchorPct}% below MAO)`, money(novAnchor)], ["Negotiation range (seller payout)", `${money(novAnchor)} → ${money(novMao)}`], ["Our fee at anchor", money(feeAtAnchor)]],
-        note: "No holding costs (retail buyer). List conservatively to sell under 90 days. Disclose we market higher to make it work.",
+        rows: [["List price (current similar-condition)", money(nList)], ["Buyer repair credit", money(nRepairCredit)], [`Agent commission (${nComm}%)`, money(nList * (nComm / 100))], [`Seller closing ${nSellerClosePct}% (we cover seller side only)`, money(nSellerClose)], ["Net after costs", money(nNet)], ["Our minimum fee", money(nMinFee)], ["Novation MAO (max seller payout)", money(novMao)], [`Anchor / opening payout (${nAnchorPct}% below MAO)`, money(novAnchor)], ["Negotiation range (seller payout)", `${money(novAnchor)} → ${money(novMao)}`], ["Our fee at anchor", money(feeAtAnchor)]],
+        note: "No holding costs (retail buyer). On novation we cover the SELLER's closing only (% of list) — the buyer pays their own. List conservatively to sell under 90 days; disclose we market higher to make it work.",
       };
     }
     if (tab === "creative") {
@@ -313,7 +315,7 @@ export default function UnderwritingCalculator() {
               </div>
               <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" />
               <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" />
-              <Field k="nSellerClose" label="Seller closing (we cover)" prefix="$" placeholder="6,000" />
+              <Field k="nSellerClosePct" label="Seller closing % (we cover)" suffix="%" placeholder="1.5" />
               <Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder="15,000" />
               <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="7" />
               <div className={sectionCls}>As-is comparables — match condition (addr · sold $ · days on market)</div>
