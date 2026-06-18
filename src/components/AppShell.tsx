@@ -24,7 +24,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
   const admin = isAdmin(me);
   const marketing = canAccessMarketing(me);
   const payroll = canAccessPayroll(me);
-  const timecard = manager || payroll; // Marie tracks time; leadership sees pay
+  const timecard = payroll; // Payroll is leadership-only (Jon, Viktoriia, Enrico)
   const [newTickets, newSuggestions] = await Promise.all([
     manager ? db.ticket.count({ where: { status: "new" } }) : Promise.resolve(0),
     admin ? db.suggestion.count({ where: { status: "proposed" } }) : Promise.resolve(0),

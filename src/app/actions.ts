@@ -1695,7 +1695,7 @@ export async function deleteBonus(formData: FormData) {
 /** Marie's authoritative paid hours for a person+period (source of truth for pay). */
 export async function savePayHours(formData: FormData) {
   const me = await getCurrentUser();
-  if (!canTrackTime(me)) return;
+  if (!canAccessPayroll(me)) return;
   const userId = String(formData.get("userId") ?? "");
   const periodKey = String(formData.get("periodKey") ?? "");
   if (!userId || !periodKey) return;

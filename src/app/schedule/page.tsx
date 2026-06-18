@@ -256,7 +256,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       {/* MY TIME CARD — not for the owner (Jon doesn't punch a clock) */}
       {!isOwner(me) && (
         <section>
-          <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} />
+          <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} showLunch={me.name.trim().split(/\s+/)[0]?.toLowerCase() !== "marie"} />
         </section>
       )}
 

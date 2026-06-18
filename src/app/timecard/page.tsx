@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, canAccessPayroll, canTrackTime } from "@/lib/auth";
+import { getCurrentUser, canAccessPayroll } from "@/lib/auth";
 import { getAllUsers, getSettings } from "@/lib/data";
 import { todayStr, payPeriod, datesInRange } from "@/lib/date";
 import { workedMinutes } from "@/lib/presence";
@@ -23,17 +23,17 @@ const mdShort = (d: string) => { const [, m, dd] = d.split("-").map(Number); ret
 
 export default async function TimecardPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = await getCurrentUser();
-  if (!canTrackTime(me)) {
+  if (!canAccessPayroll(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
         <h1 className="text-xl font-bold">Payroll — restricted</h1>
-        <p className="mt-1 text-sm text-slate-500">Managers only.</p>
+        <p className="mt-1 text-sm text-slate-500">Leadership only (Jon, Viktoriia, Enrico).</p>
         <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
       </Card>
     );
   }
-  const showPay = canAccessPayroll(me); // $ figures — leadership only (Jon/Viktoriia/Enrico)
+  const showPay = true; // page is leadership-only now
   const sp = await searchParams;
   const off = Number(sp.p ?? 0) || 0;
   const settings = await getSettings();

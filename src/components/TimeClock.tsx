@@ -48,6 +48,7 @@ export default function TimeClock({
   nowMs,
   capMs,
   shiftEndLabel,
+  showLunch = true,
 }: {
   state: State;
   sinceMs: number | null;
@@ -55,6 +56,7 @@ export default function TimeClock({
   nowMs: number;
   capMs?: number | null;
   shiftEndLabel?: string | null;
+  showLunch?: boolean;
 }) {
   const [extra, setExtra] = useState(0);
   const [pastShift, setPastShift] = useState(false);
@@ -108,14 +110,14 @@ export default function TimeClock({
           <>
             <PunchButton kind="in" label="▶︎ Clock In" cls="bg-emerald-600 text-white hover:bg-emerald-700" />
             <GhostButton label="☕ Start break" title="Available once you clock in" />
-            <GhostButton label="🍽️ Start lunch" title="Available once you clock in" />
+            {showLunch && <GhostButton label="🍽️ Start lunch" title="Available once you clock in" />}
             <GhostButton label="■ End of day" title="Available once you clock in" />
           </>
         )}
         {state === "online" && (
           <>
             <PunchButton kind="break_start" label="☕ Start break" cls="bg-amber-400 text-amber-950 hover:bg-amber-500" />
-            <PunchButton kind="lunch_start" label="🍽️ Start lunch" cls="bg-amber-400 text-amber-950 hover:bg-amber-500" />
+            {showLunch && <PunchButton kind="lunch_start" label="🍽️ Start lunch" cls="bg-amber-400 text-amber-950 hover:bg-amber-500" />}
             <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
           </>
         )}
