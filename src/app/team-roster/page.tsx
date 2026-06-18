@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveTeamProfile } from "@/app/actions";
+import { saveTeamProfile, uploadTeamDoc, deleteTeamDoc } from "@/app/actions";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
@@ -31,7 +31,7 @@ function ageFrom(birthday: string, today: string): string {
   return String(age);
 }
 
-export default async function TeamRosterPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
+export default async function TeamRosterPage({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string }> }) {
   const me = await getCurrentUser();
   if (!isAdmin(me)) {
     return (
@@ -46,15 +46,19 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
-  const [users, profiles, board, ai, seats] = await Promise.all([
+  const [users, profiles, board, ai, seats, docs] = await Promise.all([
     getAllUsers(),
     db.teamProfile.findMany(),
     getAwardBoard(),
     getAiChampions(),
     db.seat.findMany({ orderBy: { sortOrder: "asc" } }),
+    db.teamDoc.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, userId: true, label: true, filename: true, size: true, createdAt: true } }),
   ]);
   const active = users.filter((u) => u.active);
   const byUser = new Map(profiles.map((p) => [p.userId ?? "", p]));
+  const docsByUser = new Map<string, typeof docs>();
+  for (const d of docs) { const arr = docsByUser.get(d.userId) ?? []; arr.push(d); docsByUser.set(d.userId, arr); }
+  const fmtSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
   return (
     <div className="space-y-5">
@@ -68,6 +72,7 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
       </div>
 
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
+      {sp.err && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">{sp.err === "size" ? "That file is over 15MB — compress it and try again." : "Pick a file to upload."}</div>}
 
       {/* EOS Accountability Chart + GWC */}
       <details open={seats.length > 0} className="rounded-xl ring-1 ring-violet-200">
@@ -83,6 +88,8 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
       <div className="space-y-4">
         {active.map((u) => {
           const p = byUser.get(u.id);
+          const isOwner = u.role === "admin";
+          const myDocs = docsByUser.get(u.id) ?? [];
           const wins = board.champions.find((c) => c.rep === u.name)?.wins ?? 0;
           const aiProven = ai.find((c) => c.rep === u.name)?.count ?? 0;
           const tenure = p?.startDate ? yearsBetween(p.startDate, today) : "—";
@@ -102,7 +109,7 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
               {/* Performance snapshot */}
               <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Snap label="With us" value={tenure} />
-                <Snap label="Since promotion" value={sincePromo} />
+                {!isOwner && <Snap label="Since promotion" value={sincePromo} />}
                 <Snap label="Top-perf wins" value={String(wins)} />
                 <Snap label="AI proven" value={String(aiProven)} />
               </div>
@@ -115,20 +122,48 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                 <label><span className={labelCls}>Phone</span><input name="phone" defaultValue={p?.phone ?? ""} className={inputCls} /></label>
                 <label><span className={labelCls}>Started with us</span><input type="date" name="startDate" defaultValue={p?.startDate ?? ""} className={inputCls} /></label>
                 <label className="sm:col-span-3"><span className={labelCls}>Address</span><input name="address" defaultValue={p?.address ?? ""} className={inputCls} /></label>
-                <label><span className={labelCls}>Last promotion</span><input type="date" name="lastPromotion" defaultValue={p?.lastPromotion ?? ""} className={inputCls} /></label>
-                <label><span className={labelCls}>Pay scale / rate</span><input name="payScale" defaultValue={p?.payScale ?? ""} placeholder="$2,000" className={inputCls} /></label>
-                <label><span className={labelCls}>Pay period</span>
-                  <select name="payPeriod" defaultValue={p?.payPeriod ?? ""} className={inputCls}>
-                    <option value="">—</option>
-                    {["monthly", "biweekly", "weekly", "hourly", "per-deal"].map((x) => <option key={x} value={x}>{x}</option>)}
-                  </select>
-                </label>
-                <label><span className={labelCls}>Pay method</span><input name="payMethod" defaultValue={p?.payMethod ?? "Wise"} placeholder="Wise" className={inputCls} /></label>
-                <label className="sm:col-span-2"><span className={labelCls}>Payment details (Wise / bank) 🔒</span><input name="payDetails" defaultValue={p?.payDetails ?? ""} placeholder="Wise email / account / IBAN…" className={inputCls} /></label>
+                {!isOwner && (
+                  <>
+                    <label><span className={labelCls}>Last promotion</span><input type="date" name="lastPromotion" defaultValue={p?.lastPromotion ?? ""} className={inputCls} /></label>
+                    <label><span className={labelCls}>Pay scale / rate</span><input name="payScale" defaultValue={p?.payScale ?? ""} placeholder="$2,000" className={inputCls} /></label>
+                    <label><span className={labelCls}>Pay period</span>
+                      <select name="payPeriod" defaultValue={p?.payPeriod ?? ""} className={inputCls}>
+                        <option value="">—</option>
+                        {["monthly", "biweekly", "weekly", "hourly", "per-deal"].map((x) => <option key={x} value={x}>{x}</option>)}
+                      </select>
+                    </label>
+                    <label><span className={labelCls}>Pay method</span><input name="payMethod" defaultValue={p?.payMethod ?? "Wise"} placeholder="Wise" className={inputCls} /></label>
+                    <label className="sm:col-span-2"><span className={labelCls}>Payment details (Wise / bank) 🔒</span><input name="payDetails" defaultValue={p?.payDetails ?? ""} placeholder="Wise email / account / IBAN…" className={inputCls} /></label>
+                  </>
+                )}
                 <label className="sm:col-span-3"><span className={labelCls}>About them</span><textarea name="about" defaultValue={p?.about ?? ""} rows={2} className={inputCls} /></label>
-                <label className="sm:col-span-3"><span className={labelCls}>Performance & promotion notes</span><textarea name="performance" defaultValue={p?.performance ?? ""} rows={2} className={inputCls} /></label>
+                {!isOwner && <label className="sm:col-span-3"><span className={labelCls}>Performance & promotion notes</span><textarea name="performance" defaultValue={p?.performance ?? ""} rows={2} className={inputCls} /></label>}
                 <div className="sm:col-span-3"><button className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">Save</button></div>
               </form>
+
+              {/* Signed agreements & documents */}
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">📄 Documents (signed agreements)</div>
+                {myDocs.length > 0 ? (
+                  <ul className="mb-2 space-y-1">
+                    {myDocs.map((d) => (
+                      <li key={d.id} className="flex flex-wrap items-center gap-2 text-sm">
+                        <a href={`/api/team-doc/${d.id}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-navy hover:underline">📎 {d.label}</a>
+                        <span className="text-xs text-slate-400">{d.filename} · {fmtSize(d.size)}</span>
+                        <form action={deleteTeamDoc} className="ml-auto"><input type="hidden" name="id" value={d.id} /><button className="text-[11px] font-medium text-slate-300 hover:text-red-600">Remove</button></form>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mb-2 text-xs text-slate-400">No documents uploaded yet.</p>
+                )}
+                <form action={uploadTeamDoc} className="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="userId" value={u.id} />
+                  <input name="label" placeholder="Label (e.g. Contractor Agreement)" defaultValue="Signed agreement" className={`${inputCls} max-w-56`} />
+                  <input type="file" name="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" className="text-xs" required />
+                  <button className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Upload</button>
+                </form>
+              </div>
             </Card>
           );
         })}

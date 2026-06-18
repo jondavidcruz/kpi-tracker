@@ -733,3 +733,19 @@ model Punch {
 
   @@index([userId, date])
 }
+
+// Uploaded HR documents per team member (signed agreements, NDAs…). Stored as
+// bytes in the DB (same pattern as the deal HUD). Owner-only.
+model TeamDoc {
+  id          String   @id @default(cuid())
+  userId      String // the team member this belongs to
+  label       String   @default("Signed agreement")
+  filename    String
+  contentType String   @default("application/octet-stream")
+  size        Int      @default(0)
+  data        Bytes
+  uploadedBy  String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}

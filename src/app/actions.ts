@@ -1582,3 +1582,31 @@ export async function deleteTimeOff(formData: FormData) {
   await db.timeOff.delete({ where: { id } });
   revalidatePath("/schedule");
 }
+
+// --- Team documents (signed agreements) — owner only -------------------------
+
+export async function uploadTeamDoc(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const label = String(formData.get("label") ?? "").trim() || "Signed agreement";
+  const file = formData.get("file");
+  if (!userId || !(file instanceof File) || file.size === 0) redirect("/team-roster?err=file");
+  const f = file as File;
+  if (f.size > 15 * 1024 * 1024) redirect("/team-roster?err=size");
+  const data = Buffer.from(await f.arrayBuffer());
+  await db.teamDoc.create({
+    data: { userId, label, filename: f.name, contentType: f.type || "application/octet-stream", size: f.size, data, uploadedBy: me.name },
+  });
+  revalidatePath("/team-roster");
+  redirect("/team-roster?saved=Document");
+}
+
+export async function deleteTeamDoc(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.teamDoc.delete({ where: { id } });
+  revalidatePath("/team-roster");
+}
