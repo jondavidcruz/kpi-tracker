@@ -3,6 +3,9 @@ import { runScheduledChecks, sendShiftStartSpeedReminders } from "@/lib/alerts";
 import { sendEthanReminder } from "@/lib/ethan-reminder";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
+import { db } from "@/lib/db";
+import { buildBackup } from "@/lib/backup";
+import { sendEmailWithAttachment } from "@/lib/notify";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
 function laNow(): { hour: number; dow: number } {
@@ -42,6 +45,27 @@ export async function GET(request: Request) {
   const force = url.searchParams.get("force") === "1";
   const weekly = url.searchParams.get("weekly") === "1";
   const review = url.searchParams.get("review") === "1";
+
+  // Nightly off-site backup — full DB export emailed to the owner(s) as a JSON
+  // attachment. (Supabase's own PITR/daily backups are the primary; this is a
+  // belt-and-suspenders copy that lands in Jon's inbox.)
+  if (url.searchParams.get("backup") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const backup = await buildBackup();
+    const admins = await db.user.findMany({ where: { active: true, role: "admin" }, select: { email: true } });
+    const to = admins.map((a) => a.email).filter(Boolean);
+    const content = Buffer.from(JSON.stringify(backup), "utf8").toString("base64");
+    const emailed = to.length
+      ? await sendEmailWithAttachment(
+          to,
+          `🗄️ War Room backup — ${today} (${backup.totalRows} rows)`,
+          `<p>Nightly Freedom Offers War Room backup attached — <strong>${backup.totalRows} rows</strong> across ${Object.keys(backup.counts).length} tables. Keep this email; it's a full off-site copy.</p>`,
+          { filename: `war-room-backup-${today}.json`, content },
+        )
+      : false;
+    return NextResponse.json({ ok: true, backedUp: backup.totalRows, emailed });
+  }
 
   // Manual speed-test reminder trigger (no dedicated cron — piggybacks on the
   // runs below). Test: ?speedtest=1&slot=pm&ladow=3 to simulate a slot/day.

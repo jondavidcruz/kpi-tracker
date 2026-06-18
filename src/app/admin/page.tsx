@@ -66,6 +66,24 @@ export default async function AdminPage({
         </div>
       )}
 
+      {/* Backup & security — owner only */}
+      {isAdmin(me) && (
+        <section>
+          <SectionTitle title="🗄️ Backup & security" subtitle="Keep a copy of everything, and control who can get in" accent="bg-slate-500" />
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <a href="/api/backup" className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">⬇️ Download full backup (JSON)</a>
+              <span className="text-xs text-slate-500">A complete export of every table — download anytime.</span>
+            </div>
+            <ul className="mt-4 space-y-2 text-sm text-slate-600">
+              <li>📧 <strong>Nightly off-site backup:</strong> a full JSON export is emailed to you automatically every morning (≈9am UTC) — keep those emails as your rolling copies.</li>
+              <li>⏱️ <strong>Real-time backup (primary):</strong> turn on Supabase <strong>Point-in-Time Recovery</strong> for continuous, restore-to-any-second backups → Supabase dashboard → <em>Database → Backups → enable PITR</em>. (Daily automated backups are already on with the Pro plan.)</li>
+              <li>🔒 <strong>Invite-only signups:</strong> the app already blocks anyone without an account you created — but to fully lock the door, disable public sign-ups in Supabase → <em>Authentication → Sign In / Providers → Email → turn OFF “Allow new users to sign up.”</em> After that, accounts exist <strong>only</strong> when you create them below.</li>
+            </ul>
+          </Card>
+        </section>
+      )}
+
       {/* Alerts & schedule */}
       <section>
         <SectionTitle title="Alerts & schedule" subtitle="Where off-target alerts go, and when missing-entry checks fire" accent="bg-red-400" />

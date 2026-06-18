@@ -113,6 +113,30 @@ export async function sendEmailTo(
   } catch (err) { console.error("[notify] Email-to error:", err); return false; }
 }
 
+/** Send an email with one file attachment (content = base64 string). */
+export async function sendEmailWithAttachment(
+  to: string[],
+  subject: string,
+  html: string,
+  attachment: { filename: string; content: string },
+  cfg?: ChannelConfig,
+): Promise<boolean> {
+  const c = cfg ?? (await getChannelConfig());
+  if (!c.resendKey || to.length === 0 || !c.emailFrom) {
+    console.log(`[notify] Attachment email not configured — would send "${subject}"`);
+    return false;
+  }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.resendKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: c.emailFrom, to, subject, html, attachments: [attachment] }),
+    });
+    if (!res.ok) { console.error("[notify] Attachment email failed:", res.status, await res.text()); return false; }
+    return true;
+  } catch (err) { console.error("[notify] Attachment email error:", err); return false; }
+}
+
 /** Wrap alert lines in a minimal, readable HTML email. */
 export function alertEmailHtml(title: string, lines: string[]): string {
   const items = lines

@@ -4,6 +4,7 @@
     { "path": "/api/cron", "schedule": "30 15 * * 1-5" },
     { "path": "/api/cron", "schedule": "0 2 * * 2-5" },
     { "path": "/api/cron", "schedule": "30 22 * * 5" },
-    { "path": "/api/cron?ethan=1", "schedule": "30 20 * * 1-5" }
+    { "path": "/api/cron?ethan=1", "schedule": "30 20 * * 1-5" },
+    { "path": "/api/cron?backup=1", "schedule": "0 9 * * *" }
   ]
 }
