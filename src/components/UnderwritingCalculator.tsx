@@ -3,11 +3,30 @@
 import { useState } from "react";
 
 const TABS = [
-  { key: "assignment", label: "Assignment", emoji: "🤝", blurb: "Cash offer. Calculate the cash MAO from ARV − repairs − your assignment fee, plus an anchor to open negotiations." },
-  { key: "novation", label: "Novation", emoji: "📋", blurb: "List at current similar-condition value, cover the seller's closing, pay agent commission (no holding — retail buyer). Find the max seller payout." },
+  { key: "assignment", label: "Assignment", emoji: "🤝", blurb: "Cash offer. MAO = (ARV × market %) − repairs − flipper holding − your fee. Anchor opens below MAO." },
+  { key: "novation", label: "Novation", emoji: "📋", blurb: "List at current similar-condition value, cover the seller's closing + commission (no holding — retail buyer). Find the max seller payout." },
   { key: "creative", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
   { key: "listing", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
 ] as const;
+
+const MARKET_TIERS: [string, string][] = [
+  ["80", "Highly Competitive Urban — 80%"],
+  ["75", "Strong Suburban / Metro — 75%"],
+  ["70", "Mid-Tier Cities — 70%"],
+  ["65", "Rural Markets — 65%"],
+  ["60", "Extremely Rural — 60%"],
+];
+const REHAB_LEVELS: [string, string][] = [
+  ["", "— pick condition —"],
+  ["17", "Cleanup (~$17/sf)"],
+  ["22", "Lipstick (~$22/sf)"],
+  ["30", "Interior (~$30/sf)"],
+  ["35", "Full (~$35/sf)"],
+  ["45", "Full + 2 big items (~$45/sf)"],
+  ["55", "Full + 4 big items (~$55/sf)"],
+  ["65", "Full + 6 big items (~$65/sf)"],
+  ["75", "Full gut (~$75/sf)"],
+];
 
 function num(v: string): number {
   const n = Number((v || "").replace(/[^0-9.\-]/g, ""));
@@ -23,7 +42,8 @@ export default function UnderwritingCalculator() {
   const [f, setF] = useState<Record<string, string>>({});
   const v = (k: string) => f[k] ?? "";
   const n = (k: string) => num(v(k));
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
+  const setV = (k: string, val: string) => setF((p) => ({ ...p, [k]: val }));
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV(k, e.target.value);
 
   function Field({ k, label, prefix, suffix, placeholder, span }: { k: string; label: string; prefix?: string; suffix?: string; placeholder?: string; span?: number }) {
     return (
@@ -48,43 +68,47 @@ export default function UnderwritingCalculator() {
   }
 
   // ---- Assignment ----
-  const buyerPct = v("buyerPct") || "70";
-  const arv = n("arv"), repairs = n("repairs"), aFee = n("aFee");
-  const buyerMax = arv * (num(buyerPct) / 100) - repairs;
-  const cashMao = buyerMax - aFee;
-  const aAnchorPct = v("aAnchorPct") || "12";
+  const marketPct = v("marketPct") || "70";
+  const arv = n("arv"), aFee = n("aFee");
+  const sqft = n("sqft"), rehabSf = num(v("rehabSf"));
+  const repairsCalc = sqft * rehabSf;
+  const repairs = n("repairs") || repairsCalc;
+  const holding = n("aHoldMonths") * n("aMonthlyCarry");
+  const flipperTarget = arv * (num(marketPct) / 100);
+  const cashMao = flipperTarget - repairs - holding - aFee;
+  const aAnchorPct = v("aAnchorPct") || "10";
   const aAnchor = cashMao * (1 - num(aAnchorPct) / 100);
 
   // ---- Novation ----
-  const nList = n("nList"), nComm = num(v("nComm") || "5"), nSellerClose = n("nSellerClose"), nMinFee = n("nMinFee");
-  const nNet = nList - nList * (nComm / 100) - nSellerClose;
-  const novMao = nNet - nMinFee; // max payout we can give the seller
-  const nAnchorPct = v("nAnchorPct") || "10";
+  const novCompPrices = [n("nComp1p"), n("nComp2p"), n("nComp3p")].filter((x) => x > 0);
+  const suggestedList = novCompPrices.length ? Math.min(...novCompPrices) : 0; // conservative → sells fastest
+  const nList = n("nList"), nComm = num(v("nComm") || "5"), nSellerClose = n("nSellerClose"), nMinFee = n("nMinFee"), nRepairCredit = n("nRepairCredit");
+  const nNet = nList - nRepairCredit - nList * (nComm / 100) - nSellerClose;
+  const novMao = nNet - nMinFee;
+  const nAnchorPct = v("nAnchorPct") || "7";
   const novAnchor = novMao * (1 - num(nAnchorPct) / 100);
   const feeAtAnchor = nNet - novAnchor;
 
-  // ---- Creative ----
+  // ---- Creative / Listing ----
   const cFee = n("cFee");
-
-  // ---- Listing ----
   const lList = n("lList"), lComm = num(v("lComm") || "2.5"), lRef = num(v("lRef") || "25"), lFlat = n("lFlat");
   const mktFee = lFlat > 0 ? lFlat : lList * (lComm / 100) * (lRef / 100);
 
   function buildReport(): { title: string; rows: [string, string][]; comps?: string; note?: string } {
     const addr = v("subject") || "—";
     if (tab === "assignment") {
-      const comps = ["comp1", "comp2", "comp3"].map((k) => v(k)).filter(Boolean).map(esc).join("<br>");
+      const comps = [1, 2, 3].map((i) => { const a = v(`comp${i}`); const p = v(`comp${i}p`); const d = v(`comp${i}d`); return a ? `${esc(a)}${p ? ` — $${esc(p)}` : ""}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
-        title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps:</strong><br>${comps}` : ""}`,
-        rows: [["ARV", money(arv)], ["Repair estimate", money(repairs)], [`Cash buyer target (${buyerPct}% of ARV)`, money(buyerMax)], ["Assignment fee", money(aFee)], ["Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
-        note: "Open at the anchor, negotiate up to the cash MAO. If the seller won't meet MAO, pivot to Novation.",
+        title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
+        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ["Flipper holding cost", money(holding)], ["Assignment fee", money(aFee)], ["Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
+        note: "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. If the seller won't meet MAO, pivot to Novation.",
       };
     }
     if (tab === "novation") {
       const comps = [1, 2, 3].map((i) => { const a = v(`nComp${i}`); const p = v(`nComp${i}p`); const d = v(`nComp${i}d`); return a ? `${esc(a)} — ${p ? "$" + esc(p) : "?"}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Novation Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>As-is comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["List price (current similar-condition)", money(nList)], [`Agent commission (${nComm}%)`, money(nList * (nComm / 100))], ["Seller closing costs (we cover)", money(nSellerClose)], ["Net after costs", money(nNet)], ["Our minimum fee", money(nMinFee)], ["Novation MAO (max seller payout)", money(novMao)], [`Anchor / opening payout (${nAnchorPct}% below MAO)`, money(novAnchor)], ["Negotiation range (seller payout)", `${money(novAnchor)} → ${money(novMao)}`], ["Our fee at anchor", money(feeAtAnchor)]],
+        rows: [["List price (current similar-condition)", money(nList)], ["Buyer repair credit", money(nRepairCredit)], [`Agent commission (${nComm}%)`, money(nList * (nComm / 100))], ["Seller closing costs (we cover)", money(nSellerClose)], ["Net after costs", money(nNet)], ["Our minimum fee", money(nMinFee)], ["Novation MAO (max seller payout)", money(novMao)], [`Anchor / opening payout (${nAnchorPct}% below MAO)`, money(novAnchor)], ["Negotiation range (seller payout)", `${money(novAnchor)} → ${money(novMao)}`], ["Our fee at anchor", money(feeAtAnchor)]],
         note: "No holding costs (retail buyer). List conservatively to sell under 90 days. Disclose we market higher to make it work.",
       };
     }
@@ -123,9 +147,10 @@ export default function UnderwritingCalculator() {
     setTimeout(() => w.print(), 250);
   }
 
+  const sectionCls = "sm:col-span-2 mt-1 border-t border-slate-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400";
+
   return (
     <div className="space-y-4">
-      {/* Subject address — shared */}
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <label className="block">
           <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">📍 Subject property address</span>
@@ -133,7 +158,6 @@ export default function UnderwritingCalculator() {
         </label>
       </div>
 
-      {/* Tabs */}
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (
           <button key={t.key} type="button" onClick={() => setTab(t.key)} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${tab === t.key ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{t.emoji} {t.label}</button>
@@ -146,30 +170,50 @@ export default function UnderwritingCalculator() {
         <div className="grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:grid-cols-2">
           {tab === "assignment" && (
             <>
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Market tier (% of ARV the flipper supports)</span>
+                <select value={marketPct} onChange={set("marketPct")} className={inputCls}>{MARKET_TIERS.map(([val, l]) => <option key={val} value={val}>{l}</option>)}</select>
+              </label>
               <Field k="arv" label="ARV" prefix="$" placeholder="350,000" />
-              <Field k="repairs" label="Repair estimate" prefix="$" placeholder="40,000" />
-              <Field k="buyerPct" label="Cash buyer target (% of ARV)" suffix="%" placeholder="70" />
-              <Field k="aFee" label="Assignment fee (from underwriter)" prefix="$" placeholder="10,000" />
-              <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="12" />
-              <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">ARV comp addresses (from underwriter)</div>
-              <Field k="comp1" label="Comp 1" span={2} />
-              <Field k="comp2" label="Comp 2" span={2} />
-              <Field k="comp3" label="Comp 3" span={2} />
+              <Field k="aFee" label="Assignment fee" prefix="$" placeholder="15,000" />
+              <div className={sectionCls}>Repairs — type a figure, or estimate from sqft</div>
+              <Field k="repairs" label="Repair estimate ($) — overrides sqft calc" prefix="$" span={2} />
+              <Field k="sqft" label="Square feet" />
+              <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Condition ($/sf)</span>
+                <select value={v("rehabSf")} onChange={set("rehabSf")} className={inputCls}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
+              </label>
+              <div className={sectionCls}>Flipper holding (their money cost)</div>
+              <Field k="aHoldMonths" label="Months held" placeholder="6" />
+              <Field k="aMonthlyCarry" label="Monthly carry (taxes, ins, loan…)" prefix="$" placeholder="1,000" />
+              <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" />
+              <div className={sectionCls}>ARV comps (addr · sold $ · days on market)</div>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
+                  <Field k={`comp${i}`} label={`Comp ${i} address`} span={2} />
+                  <Field k={`comp${i}p`} label="Sold $" prefix="$" />
+                  <Field k={`comp${i}d`} label="DOM" />
+                </div>
+              ))}
             </>
           )}
           {tab === "novation" && (
             <>
-              <Field k="nList" label="List price (current similar-condition value)" prefix="$" span={2} placeholder="420,000" />
+              <div className="sm:col-span-2 flex items-end gap-2">
+                <div className="flex-1"><Field k="nList" label="List price (current similar-condition value)" prefix="$" placeholder="420,000" /></div>
+                {suggestedList > 0 && (
+                  <button type="button" onClick={() => setV("nList", String(suggestedList))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-200" title="Lowest comp — most conservative to sell under 90 days">Use {money(suggestedList)}</button>
+                )}
+              </div>
+              <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" />
               <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" />
-              <Field k="nSellerClose" label="Seller closing costs (we cover)" prefix="$" placeholder="6,000" />
+              <Field k="nSellerClose" label="Seller closing (we cover)" prefix="$" placeholder="6,000" />
               <Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder="15,000" />
-              <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" />
-              <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">As-is comparables — match the condition (addr · price · days on market)</div>
+              <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="7" />
+              <div className={sectionCls}>As-is comparables — match condition (addr · sold $ · days on market)</div>
               {[1, 2, 3].map((i) => (
                 <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
                   <Field k={`nComp${i}`} label={`Comp ${i} address`} span={2} />
                   <Field k={`nComp${i}p`} label="Sold $" prefix="$" />
-                  <Field k={`nComp${i}d`} label="Days on mkt" />
+                  <Field k={`nComp${i}d`} label="DOM" />
                 </div>
               ))}
             </>
@@ -177,10 +221,7 @@ export default function UnderwritingCalculator() {
           {tab === "creative" && (
             <>
               <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Structure</span>
-                <select value={v("cType") || "Seller finance"} onChange={set("cType")} className={inputCls}>
-                  <option>Seller finance</option>
-                  <option>Subject-to</option>
-                </select>
+                <select value={v("cType") || "Seller finance"} onChange={set("cType")} className={inputCls}><option>Seller finance</option><option>Subject-to</option></select>
               </label>
               {(v("cType") || "Seller finance") === "Subject-to" ? (
                 <>
@@ -212,7 +253,10 @@ export default function UnderwritingCalculator() {
         <div className="rounded-2xl bg-gradient-to-b from-slate-50 to-white p-4 ring-1 ring-slate-200">
           {tab === "assignment" && (
             <>
-              <Res label={`Cash buyer target (${buyerPct}% of ARV)`} value={money(buyerMax)} tone="muted" />
+              <Res label={`Flipper resale target (${marketPct}% of ARV)`} value={money(flipperTarget)} tone="muted" />
+              <Res label="− Repairs" value={money(repairs)} tone="muted" />
+              {holding > 0 && <Res label="− Flipper holding" value={money(holding)} tone="muted" />}
+              <Res label="− Assignment fee" value={money(aFee)} tone="muted" />
               <Res label="🎯 Cash MAO (max offer to seller)" value={money(cashMao)} tone={cashMao > 0 ? "navy" : "bad"} big />
               <Res label="⚓ Anchor (open here)" value={money(aAnchor)} tone="good" />
               <Res label="Negotiate" value={`${money(aAnchor)} → ${money(cashMao)}`} tone="muted" />
@@ -220,7 +264,7 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "novation" && (
             <>
-              <Res label="Net after commission + seller closing" value={money(nNet)} tone="muted" />
+              <Res label="Net after credit + commission + seller closing" value={money(nNet)} tone="muted" />
               <Res label="🎯 Novation MAO (max seller payout)" value={money(novMao)} tone={novMao > 0 ? "navy" : "bad"} big />
               <Res label="⚓ Anchor payout (open here)" value={money(novAnchor)} tone="good" />
               <Res label="Our fee at anchor" value={money(feeAtAnchor)} tone="good" />
@@ -246,7 +290,7 @@ export default function UnderwritingCalculator() {
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={exportPdf} className="rounded-lg bg-brand-gold px-5 py-2.5 text-sm font-bold text-brand-navy hover:opacity-90">📄 Export PDF (for the CRM)</button>
-        <span className="text-[11px] text-slate-400">Opens a clean report — choose “Save as PDF” in the print dialog, then upload to REI Reply.</span>
+        <span className="text-[11px] text-slate-400">Opens a clean report — choose “Save as PDF”, then upload to REI Reply.</span>
       </div>
       <p className="text-[11px] text-slate-400">Estimates only — confirm comps, repair scope, and title before making an offer. Next up: Wholetail, Flip, and Luxury assignment tabs.</p>
     </div>
