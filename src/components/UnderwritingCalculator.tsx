@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, createContext, useContext } from "react";
 
 const TABS = [
   { key: "assignment", label: "Assignment", emoji: "🤝", blurb: "Cash offer. MAO = (ARV × market %) − repairs − flipper holding − your fee. Anchor opens below MAO." },
@@ -54,6 +54,36 @@ const esc = (s: string) => (s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", 
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-slate-200";
 
+// Field/Res live at MODULE scope (not inside the component) so they keep a stable
+// identity across renders. Defining them inside the component made React remount
+// every input on each keystroke, which stole focus after a single character.
+type FieldApi = { v: (k: string) => string; set: (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void };
+const FieldCtx = createContext<FieldApi>({ v: () => "", set: () => () => {} });
+
+function Field({ k, label, prefix, suffix, placeholder, span }: { k: string; label: string; prefix?: string; suffix?: string; placeholder?: string; span?: number }) {
+  const { v, set } = useContext(FieldCtx);
+  return (
+    <label className={span === 2 ? "sm:col-span-2" : span === 3 ? "sm:col-span-3" : ""}>
+      <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">{label}</span>
+      <div className="relative">
+        {prefix && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{prefix}</span>}
+        <input inputMode={suffix || prefix ? "decimal" : "text"} value={v(k)} onChange={set(k)} placeholder={placeholder} className={`${inputCls} ${prefix ? "pl-6" : ""} ${suffix ? "pr-8" : ""}`} />
+        {suffix && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{suffix}</span>}
+      </div>
+    </label>
+  );
+}
+
+function Res({ label, value, tone = "navy", big }: { label: string; value: string; tone?: "navy" | "good" | "bad" | "muted"; big?: boolean }) {
+  const cls = tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : tone === "muted" ? "text-slate-500" : "text-brand-navy";
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1.5">
+      <span className="text-sm text-slate-600">{label}</span>
+      <span className={`font-extrabold tabular-nums ${big ? "text-2xl" : "text-base"} ${cls}`}>{value}</span>
+    </div>
+  );
+}
+
 export default function UnderwritingCalculator() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("assignment");
   const [f, setF] = useState<Record<string, string>>({});
@@ -86,28 +116,6 @@ export default function UnderwritingCalculator() {
       setCompMsg(`Pulled ARV ${d.arv ? "$" + Number(d.arv).toLocaleString() : "?"} + ${(d.comps || []).length} comps. Review & adjust before offering.`);
     } catch { setCompMsg("Couldn't reach the comp service."); }
     finally { setComping(false); }
-  }
-
-  function Field({ k, label, prefix, suffix, placeholder, span }: { k: string; label: string; prefix?: string; suffix?: string; placeholder?: string; span?: number }) {
-    return (
-      <label className={span === 2 ? "sm:col-span-2" : span === 3 ? "sm:col-span-3" : ""}>
-        <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">{label}</span>
-        <div className="relative">
-          {prefix && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{prefix}</span>}
-          <input inputMode={suffix || prefix ? "decimal" : "text"} value={v(k)} onChange={set(k)} placeholder={placeholder} className={`${inputCls} ${prefix ? "pl-6" : ""} ${suffix ? "pr-8" : ""}`} />
-          {suffix && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{suffix}</span>}
-        </div>
-      </label>
-    );
-  }
-  function Res({ label, value, tone = "navy", big }: { label: string; value: string; tone?: "navy" | "good" | "bad" | "muted"; big?: boolean }) {
-    const cls = tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : tone === "muted" ? "text-slate-500" : "text-brand-navy";
-    return (
-      <div className="flex items-baseline justify-between gap-3 py-1.5">
-        <span className="text-sm text-slate-600">{label}</span>
-        <span className={`font-extrabold tabular-nums ${big ? "text-2xl" : "text-base"} ${cls}`}>{value}</span>
-      </div>
-    );
   }
 
   // ---- Assignment ----
@@ -218,6 +226,7 @@ export default function UnderwritingCalculator() {
   const sectionCls = "sm:col-span-2 mt-1 border-t border-slate-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400";
 
   return (
+    <FieldCtx.Provider value={{ v, set }}>
     <div className="space-y-4">
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">📍 Subject property address</span>
@@ -422,5 +431,6 @@ export default function UnderwritingCalculator() {
       </div>
       <p className="text-[11px] text-slate-400">Estimates only — confirm comps, repair scope, and title before making an offer. Next up: Wholetail, Flip, and Luxury assignment tabs.</p>
     </div>
+    </FieldCtx.Provider>
   );
 }
