@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
+import { workCapAt } from "@/lib/shift";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,11 @@ export async function GET() {
   ]);
   const byUser = groupByUser(punches);
   const now = new Date();
+  const cap = workCapAt(date, settings.orgTimezone);
   const people = users.map((u) => {
     const ps = byUser.get(u.id) ?? [];
     const { state, since } = stateFromPunches(ps);
-    return { id: u.id, name: u.name, state, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now) };
+    return { id: u.id, name: u.name, state, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
   });
   return NextResponse.json({ date, nowMs: now.getTime(), people });
 }

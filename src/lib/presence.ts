@@ -18,8 +18,19 @@ export function stateFromPunches(punches: { kind: string; at: Date }[]): { state
   return { state: STATE_BY_KIND[last.kind] ?? "offline", since: last.at };
 }
 
-/** Minutes actually worked today = clocked-in time minus breaks/lunch, up to `now`. */
-export function workedMinutes(punches: { kind: string; at: Date }[], now: Date): number {
+/**
+ * Minutes actually worked = clocked-in time minus breaks/lunch.
+ * A still-open session is counted only up to `cap` (the scheduled shift end +
+ * grace) when provided, else up to `now`. This is what stops a forgotten
+ * clock-out from racking up phantom hours overnight or through a vacation.
+ */
+export function workedMinutes(
+  punches: { kind: string; at: Date }[],
+  now: Date,
+  cap?: Date | null,
+): number {
+  // Never count past the shift cap, and never past the real clock.
+  const ceiling = cap && cap.getTime() < now.getTime() ? cap : now;
   let total = 0;
   let inAt: Date | null = null;
   for (const p of punches) {
@@ -32,8 +43,14 @@ export function workedMinutes(punches: { kind: string; at: Date }[], now: Date):
       }
     }
   }
-  if (inAt !== null) total += now.getTime() - inAt.getTime();
+  if (inAt !== null) total += Math.max(0, ceiling.getTime() - inAt.getTime());
   return Math.max(0, Math.round(total / 60000));
+}
+
+/** True if the last punch leaves the person clocked in (online/break/lunch). */
+export function isOpenSession(punches: { kind: string; at: Date }[]): boolean {
+  const { state } = stateFromPunches(punches);
+  return state !== "offline";
 }
 
 export function groupByUser(punches: { userId: string; kind: string; at: Date }[]): Map<string, { kind: string; at: Date }[]> {

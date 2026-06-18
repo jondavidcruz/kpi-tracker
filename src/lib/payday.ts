@@ -4,6 +4,7 @@ import { sendEmailTo } from "./notify";
 import { workedMinutes } from "./presence";
 import { parseHourly, fmtHours } from "./payroll";
 import { datesInRange, biweeklyPeriod } from "./date";
+import { workCapAt } from "./shift";
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -38,7 +39,9 @@ export async function sendPayrollEmail(payday: string): Promise<boolean> {
     let workedH = 0, deductH = 0;
     for (const d of days) {
       const ps = punchByDay.get(`${u.id}|${d}`) ?? [];
-      if (ps.length) workedH += workedMinutes(ps, now) / 60;
+      // Cap each day at its scheduled shift end so a forgotten clock-out can't
+      // inflate pay — never counts past the shift, even if never closed.
+      if (ps.length) workedH += workedMinutes(ps, now, workCapAt(d, settings.orgTimezone)) / 60;
       const adj = adjByDay.get(`${u.id}|${d}`);
       if (adj) deductH += adj.deductHours;
     }

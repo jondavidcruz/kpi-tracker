@@ -8,6 +8,7 @@ import { buildBackup } from "@/lib/backup";
 import { sendEmailWithAttachment } from "@/lib/notify";
 import { isPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
+import { autoCloseAbandonedSessions } from "@/lib/timeclock";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
 function laNow(): { hour: number; dow: number } {
@@ -108,6 +109,8 @@ export async function GET(request: Request) {
     const settings = await getSettings();
     speedTestReminded = await sendShiftStartSpeedReminders(date ?? todayStr(settings.orgTimezone), "am", la.dow);
   }
+  // Close any time card left open past its scheduled shift (forgot to clock out).
+  const autoClockedOut = await autoCloseAbandonedSessions();
   const result = await runScheduledChecks({ date, force, weekly, review });
-  return NextResponse.json({ ok: true, speedTestReminded, ...result });
+  return NextResponse.json({ ok: true, speedTestReminded, autoClockedOut, ...result });
 }

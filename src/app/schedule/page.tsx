@@ -4,6 +4,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
+import { workCapAt, shiftEndLabel } from "@/lib/shift";
 import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
@@ -150,19 +151,22 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const partAvail = manager ? await db.availability.findMany({ where: { date: { gte: today } }, orderBy: { date: "asc" } }) : [];
   const partNames = new Map(manager ? (await db.user.findMany({ where: { active: true }, select: { id: true, name: true } })).map((u) => [u.id, u.name]) : []);
 
-  // Presence (initial render; PresenceBoard then polls live).
+  // Presence (initial render; PresenceBoard then polls live). Worked time is
+  // capped at the scheduled shift end so a forgotten clock-out can't inflate it.
   const byUser = groupByUser(punchesToday);
   const now = new Date();
+  const cap = workCapAt(today, settings.orgTimezone);
+  const capMs = cap ? cap.getTime() : null;
   const people = users.map((u) => {
     const ps = byUser.get(u.id) ?? [];
     const { state, since } = stateFromPunches(ps);
-    return { id: u.id, name: u.name, state, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now) };
+    return { id: u.id, name: u.name, state, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
   });
 
   // My time card today.
   const myPs = byUser.get(me.id) ?? [];
   const myState = stateFromPunches(myPs);
-  const myWorked = workedMinutes(myPs, now);
+  const myWorked = workedMinutes(myPs, now, cap);
 
   // Time off: this month's grid, pending approvals, upcoming list.
   const monthOff = timeOff.filter((t) => t.status !== "denied" && t.startDate <= mb.end && t.endDate >= mb.start);
@@ -215,7 +219,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
       {/* MY TIME CARD */}
       <section>
-        <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} />
+        <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} />
       </section>
 
       {/* TIME OFF */}

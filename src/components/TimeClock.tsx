@@ -32,23 +32,35 @@ export default function TimeClock({
   sinceMs,
   workedMin,
   nowMs,
+  capMs,
+  shiftEndLabel,
 }: {
   state: State;
   sinceMs: number | null;
   workedMin: number;
   nowMs: number;
+  capMs?: number | null;
+  shiftEndLabel?: string | null;
 }) {
   const [extra, setExtra] = useState(0);
+  const [pastShift, setPastShift] = useState(false);
   useEffect(() => {
     if (state !== "online") {
       setExtra(0);
+      // Still flag if they're sitting on break/lunch past shift end.
+      setPastShift(state !== "offline" && capMs != null && Date.now() > capMs);
       return;
     }
-    const tick = () => setExtra(Math.max(0, Math.floor((Date.now() - nowMs) / 60000)));
+    const tick = () => {
+      // Freeze the running clock at the shift cap — never count past shift end.
+      const liveNow = capMs != null ? Math.min(Date.now(), capMs) : Date.now();
+      setExtra(Math.max(0, Math.floor((liveNow - nowMs) / 60000)));
+      setPastShift(capMs != null && Date.now() > capMs);
+    };
     tick();
     const t = setInterval(tick, 15000);
     return () => clearInterval(t);
-  }, [state, nowMs]);
+  }, [state, nowMs, capMs]);
 
   const total = workedMin + (state === "online" ? extra : 0);
   const since = sinceMs ? new Date(sinceMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
@@ -59,12 +71,23 @@ export default function TimeClock({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-bold text-slate-800">⏱️ My time card</h3>
-          <p className="text-sm text-slate-500">Worked today: <strong className="tabular-nums">{hm(total)}</strong></p>
+          <p className="text-sm text-slate-500">
+            Worked today: <strong className="tabular-nums">{hm(total)}</strong>
+            {shiftEndLabel ? <span className="text-slate-400"> · shift ends {shiftEndLabel}</span> : null}
+          </p>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${s.cls}`}>
           {s.label}{since && state !== "offline" ? ` · since ${since}` : ""}
         </span>
       </div>
+
+      {pastShift && (
+        <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
+          ⚠️ You're still clocked in past your shift end{shiftEndLabel ? ` (${shiftEndLabel})` : ""}. Press
+          <strong> End of day</strong> so your hours stay accurate. Your time stops counting at shift end either way —
+          forgotten sessions are auto-closed, so you're never over-counted.
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {state === "offline" && (
@@ -90,6 +113,11 @@ export default function TimeClock({
           </>
         )}
       </div>
+
+      <p className="mt-3 text-xs text-slate-400">
+        Your status is saved on the server — close the tab and come back anytime, your clock keeps running until you press
+        End of day.
+      </p>
     </div>
   );
 }
