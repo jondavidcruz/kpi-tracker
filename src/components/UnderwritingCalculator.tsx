@@ -163,6 +163,19 @@ export default function UnderwritingCalculator() {
   const fMao = arv + n("fPurchCredit") - fMinProfit - fTotalCosts;
   const fProfit = arv - fTotalCosts - n("fPurchase");
 
+  // ---- Deal outcome (shared across every exit): the seller's asking price and
+  // the price they actually accepted, so we can see the TRUE margin at the end. ----
+  const asking = n("askPrice");
+  const accepted = n("acceptedPrice");
+  let dealMax = 0, profitAtAccepted = 0, marginLabel = "Your profit", showAsking = true;
+  if (tab === "assignment") { dealMax = cashMao; profitAtAccepted = (flipperTarget - repairs - holding) - accepted; marginLabel = "Your assignment fee"; }
+  else if (tab === "novation") { dealMax = novMao; profitAtAccepted = nNet - accepted; marginLabel = "Your fee"; }
+  else if (tab === "flip") { dealMax = fMao; profitAtAccepted = arv - fTotalCosts - accepted; marginLabel = "Your profit"; }
+  else if (tab === "creative") { dealMax = n("cPrice"); profitAtAccepted = cFee; marginLabel = "Your assignment fee"; showAsking = false; }
+  else { dealMax = lList; profitAtAccepted = lFlat > 0 ? lFlat : accepted * (lComm / 100) * (lRef / 100); marginLabel = "Your marketing fee"; showAsking = false; }
+  const overAsk = asking - dealMax; // > 0 means the seller is asking above our max offer
+  const buyExit = tab === "assignment" || tab === "novation" || tab === "flip";
+
   function buildReport(): { title: string; rows: [string, string][]; comps?: string; note?: string } {
     const addr = v("subject") || "—";
     if (tab === "assignment") {
@@ -205,6 +218,9 @@ export default function UnderwritingCalculator() {
 
   function exportPdf() {
     const r = buildReport();
+    // Append the real-world outcome so the saved report shows the true margin.
+    if (showAsking && asking > 0) r.rows.push(["Seller's asking price", money(asking) + (overAsk > 0 ? ` (over max by ${money(overAsk)})` : " (within max)")]);
+    if (accepted > 0) { r.rows.push(["Accepted price", money(accepted)], [`${marginLabel} (actual)`, money(profitAtAccepted)]); }
     const w = window.open("", "_blank", "width=820,height=920");
     if (!w) return;
     const rows = r.rows.map(([l, val], i) => `<tr style="background:${i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:7px 12px;color:#475569">${esc(l)}</td><td style="padding:7px 12px;font-weight:700;text-align:right">${esc(val)}</td></tr>`).join("");
@@ -423,6 +439,29 @@ export default function UnderwritingCalculator() {
             </>
           )}
         </div>
+      </div>
+
+      {/* DEAL OUTCOME — one place, fill in as the deal moves: did the seller start
+          too high, and what's the real margin once they accept a number? */}
+      <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+        <div className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700">🧾 Deal outcome <span className="text-[11px] font-normal text-slate-400">— optional, fill in as you negotiate</span></div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {showAsking && <Field k="askPrice" label="Seller's asking price (what they want)" prefix="$" placeholder="e.g. 300,000" />}
+          <Field k="acceptedPrice" label="Accepted price (what they actually took)" prefix="$" placeholder="e.g. 250,000" />
+        </div>
+        {(asking > 0 || accepted > 0) && (
+          <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+            {showAsking && asking > 0 && dealMax > 0 && (
+              overAsk > 0
+                ? <Res label={`Asking is above your max offer (${money(dealMax)})`} value={`${money(overAsk)} over → overpriced`} tone="bad" />
+                : <Res label={`Asking is within your max offer (${money(dealMax)})`} value={`${money(-overAsk)} of room → workable`} tone="good" />
+            )}
+            {accepted > 0 && <Res label={`${marginLabel} at ${money(accepted)} accepted`} value={money(profitAtAccepted)} tone={profitAtAccepted > 0 ? "good" : "bad"} big />}
+            {accepted > 0 && buyExit && dealMax > 0 && (
+              <Res label="vs your max offer" value={accepted <= dealMax ? `${money(dealMax - accepted)} better than max ✅` : `${money(accepted - dealMax)} over max ⚠️`} tone={accepted <= dealMax ? "good" : "bad"} />
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
