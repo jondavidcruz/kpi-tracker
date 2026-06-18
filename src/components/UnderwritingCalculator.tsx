@@ -10,11 +10,20 @@ const TABS = [
 ] as const;
 
 const MARKET_TIERS: [string, string][] = [
+  ["85", "Prime Coastal / Ultra-Desirable — 85%"],
   ["80", "Highly Competitive Urban — 80%"],
   ["75", "Strong Suburban / Metro — 75%"],
   ["70", "Mid-Tier Cities — 70%"],
   ["65", "Rural Markets — 65%"],
   ["60", "Extremely Rural — 60%"],
+];
+const MARKET_GUIDE: [string, string, string][] = [
+  ["Prime Coastal / Ultra-Desirable (85%+)", "Beachfront, water-adjacent or trophy neighborhoods — relentless demand, instant resale, deep developer/cash-buyer pool. Offer aggressively to win; the exit is safe. Push to 88–90% on oceanfront/trophy.", "La Jolla, Del Mar, Coronado, Laguna, Newport Coast"],
+  ["Highly Competitive Urban (80%)", "Dense, fast-moving metros with high investor demand and strong retail-buyer interest. Competitive offers needed to win.", "Downtown SD, central LA/OC core"],
+  ["Strong Suburban / Metro (75%)", "Established, predictable markets with good resale activity and investor appetite.", "Most SD/OC suburbs"],
+  ["Mid-Tier Cities (70%)", "Secondary markets — steady demand but fewer buyers/flippers, so margin matters more.", "Inland secondary cities"],
+  ["Rural Markets (65%)", "Limited buyer pool, longer dispo times — more conservative offers required.", "Outlying / small towns"],
+  ["Extremely Rural (60% or lower)", "Low velocity, few cash buyers, very limited retail exit — large discount required.", "Remote areas"],
 ];
 const REHAB_LEVELS: [string, string][] = [
   ["", "— pick condition —"],
@@ -173,6 +182,19 @@ export default function UnderwritingCalculator() {
               <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Market tier (% of ARV the flipper supports)</span>
                 <select value={marketPct} onChange={set("marketPct")} className={inputCls}>{MARKET_TIERS.map(([val, l]) => <option key={val} value={val}>{l}</option>)}</select>
               </label>
+              <details className="sm:col-span-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
+                <summary className="cursor-pointer text-[11px] font-bold text-slate-600 hover:text-brand-navy">📍 Which market tier should I pick?</summary>
+                <div className="mt-2 space-y-2">
+                  {MARKET_GUIDE.map(([name, desc, ex]) => (
+                    <div key={name} className="text-[11px] leading-snug">
+                      <div className="font-bold text-slate-700">{name}</div>
+                      <div className="text-slate-500">{desc}</div>
+                      <div className="text-slate-400"><span className="font-semibold">e.g.</span> {ex}</div>
+                    </div>
+                  ))}
+                  <p className="text-[10px] italic text-slate-400">Higher tier = more desirable market = offer a higher % of ARV (the flipper accepts a thinner margin because the resale is fast and certain).</p>
+                </div>
+              </details>
               <Field k="arv" label="ARV" prefix="$" placeholder="350,000" />
               <Field k="aFee" label="Assignment fee" prefix="$" placeholder="15,000" />
               <div className={sectionCls}>Repairs — type a figure, or estimate from sqft</div>
