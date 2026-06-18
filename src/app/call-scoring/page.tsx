@@ -6,6 +6,7 @@ import { friendlyDate } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import type { ScoreArea } from "@/lib/score";
 import { CALL_TYPES, callTypeLabel } from "@/lib/call-types";
+import TranscriptField from "@/components/TranscriptField";
 
 const GROUPS = ["Acquisitions", "Dispositions"] as const;
 
@@ -30,14 +31,21 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
   ]);
   const scripts = new Map(scriptRows.map((r) => [r.callType, r.script]));
   const configured = !!process.env.ANTHROPIC_API_KEY;
+  const geminiConfigured = !!process.env.GEMINI_API_KEY;
 
   return (
     <div className="space-y-7">
       <SectionTitle
         title="🎧 Call Scoring"
-        subtitle="Paste an acquisitions call transcript for an instant coaching score. Diagnosis + feedback only."
+        subtitle="Upload a call recording (auto-transcribed) or paste a transcript for an instant coaching score. Diagnosis + feedback only."
         accent="bg-emerald-400"
       />
+
+      {configured && !geminiConfigured && (
+        <div className="rounded-xl bg-slate-50 px-4 py-2.5 text-xs text-slate-500 ring-1 ring-slate-200">
+          Tip: add a free <code>GEMINI_API_KEY</code> in Vercel to let the team upload call recordings and auto-transcribe them — no need to paste. Recordings are transcribed on the fly and never stored.
+        </div>
+      )}
 
       {!configured && (
         <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">
@@ -74,10 +82,7 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
               </select>
             </label>
           </div>
-          <label className="block">
-            <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Call transcript</span>
-            <textarea name="transcript" rows={8} placeholder="Paste the full call transcript here…" className={inputCls} />
-          </label>
+          <TranscriptField inputCls={inputCls} geminiConfigured={geminiConfigured} />
           <div>
             <button disabled={!configured} className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
               Score this call
