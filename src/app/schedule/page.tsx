@@ -4,7 +4,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
-import { requestTimeOff, setTimeOffStatus, deleteTimeOff } from "@/app/actions";
+import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
@@ -35,11 +35,87 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const mb = monthBounds(today);
   const manager = isManager(me);
 
+  // Part-time / irregular members (Ethan) get a focused personal screen: set the
+  // days they can work + request time off. No team board.
+  if (me.irregularSchedule) {
+    const [myTimeOff, myAvail] = await Promise.all([
+      db.timeOff.findMany({ where: { userId: me.id }, orderBy: { startDate: "asc" } }),
+      db.availability.findMany({ where: { userId: me.id, date: { gte: today } }, orderBy: { date: "asc" } }),
+    ]);
+    const upcomingOff = myTimeOff.filter((t) => t.endDate >= today && t.status !== "denied");
+    return (
+      <div className="space-y-6">
+        <SectionTitle title="🗓️ My Schedule" subtitle="Set the days you can work and request time off." accent="bg-indigo-400" right={<span className="text-sm font-semibold text-slate-500">{friendlyDate(today)}</span>} />
+
+        <Card className="p-5">
+          <h3 className="mb-1 text-sm font-bold text-slate-700">📅 When can you work?</h3>
+          <p className="mb-3 text-xs text-slate-500">Add the days &amp; hours you&apos;re available — Jon and Marie schedule around this.</p>
+          {myAvail.length > 0 ? (
+            <ul className="mb-3 space-y-1">
+              {myAvail.map((a) => (
+                <li key={a.id} className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-semibold text-slate-700">{friendlyDate(a.date)}</span>
+                  {a.hours && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">{a.hours}</span>}
+                  {a.note && <span className="text-xs text-slate-500">{a.note}</span>}
+                  <form action={deleteAvailability} className="ml-auto"><input type="hidden" name="id" value={a.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">Remove</button></form>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="mb-3 text-xs text-slate-400">No availability added yet.</p>}
+          <form action={addAvailability} className="flex flex-wrap items-end gap-2">
+            <label className="text-xs"><span className="mb-0.5 block text-slate-500">Date</span><input type="date" name="date" defaultValue={today} className={`${inputCls} w-44`} required /></label>
+            <label className="text-xs"><span className="mb-0.5 block text-slate-500">Hours</span><input name="hours" placeholder="2pm–5pm" className={`${inputCls} w-32`} /></label>
+            <input name="note" placeholder="note (optional)" className={`${inputCls} min-w-40 flex-1`} />
+            <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Add</button>
+          </form>
+        </Card>
+
+        <Card className="p-5" id="request">
+          <h3 className="mb-1 text-sm font-bold text-slate-700">Request time off</h3>
+          <p className="mb-3 text-xs text-slate-500">All time off is <strong>unpaid</strong>. Marie or Jon will approve it.</p>
+          <form action={requestTimeOff} className="space-y-2">
+            <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Type</span>
+              <select name="type" className={inputCls} defaultValue="vacation">
+                <option value="vacation">Vacation</option>
+                <option value="emergency">Emergency leave</option>
+                <option value="sick">Sick</option>
+                <option value="special">Special event (e.g. birthday)</option>
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">From</span><input type="date" name="startDate" required defaultValue={today} className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">To</span><input type="date" name="endDate" defaultValue={today} className={inputCls} /></label>
+            </div>
+            <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Note (optional)</span><input name="note" placeholder="e.g. family trip" className={inputCls} /></label>
+            <button className="w-full rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Submit request</button>
+          </form>
+        </Card>
+
+        <Card className="divide-y divide-slate-100">
+          <div className="p-3 text-sm font-bold text-slate-700">My upcoming time off</div>
+          {upcomingOff.length === 0 && <div className="p-4 text-center text-sm text-slate-400">Nothing scheduled.</div>}
+          {upcomingOff.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center gap-3 p-3">
+              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${TYPE_META[t.type]?.cls ?? "bg-slate-100"}`}>{TYPE_META[t.type]?.label ?? t.type}</span>
+              <span className="text-sm text-slate-600">{t.startDate}{t.endDate !== t.startDate ? ` → ${t.endDate}` : ""}{t.note ? ` · ${t.note}` : ""}</span>
+              <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${t.status === "approved" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{t.status === "approved" ? "approved" : "pending"}</span>
+              <form action={deleteTimeOff}><input type="hidden" name="id" value={t.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">Remove</button></form>
+            </div>
+          ))}
+        </Card>
+      </div>
+    );
+  }
+
   const [users, punchesToday, timeOff] = await Promise.all([
     db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.punch.findMany({ where: { date: today }, orderBy: { at: "asc" }, select: { userId: true, kind: true, at: true } }),
     db.timeOff.findMany({ include: { user: { select: { name: true } } }, orderBy: { startDate: "asc" } }),
   ]);
+
+  // Part-timer availability (Ethan) — managers see when they can work.
+  const partAvail = manager ? await db.availability.findMany({ where: { date: { gte: today } }, orderBy: { date: "asc" } }) : [];
+  const partNames = new Map(manager ? (await db.user.findMany({ where: { active: true }, select: { id: true, name: true } })).map((u) => [u.id, u.name]) : []);
 
   // Presence (initial render; PresenceBoard then polls live).
   const byUser = groupByUser(punchesToday);
@@ -86,6 +162,23 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <PresenceBoard initial={people} />
         </Card>
       </section>
+
+      {/* PART-TIMER AVAILABILITY (managers) */}
+      {manager && partAvail.length > 0 && (
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-slate-700">📅 Part-time availability</h3>
+          <Card className="divide-y divide-slate-100">
+            {partAvail.map((a) => (
+              <div key={a.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
+                <span className="font-semibold text-slate-800">{partNames.get(a.userId) ?? "—"}</span>
+                <span className="text-slate-600">{friendlyDate(a.date)}</span>
+                {a.hours && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">{a.hours}</span>}
+                {a.note && <span className="text-xs text-slate-500">{a.note}</span>}
+              </div>
+            ))}
+          </Card>
+        </section>
+      )}
 
       {/* MY TIME CARD */}
       <section>

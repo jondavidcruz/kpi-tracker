@@ -780,3 +780,16 @@ model Bonus {
 
   @@index([userId, periodKey])
 }
+
+// When a part-time / irregular team member (e.g. Ethan) is available to work.
+// They submit the days + hours they can work; managers schedule around it.
+model Availability {
+  id        String   @id @default(cuid())
+  userId    String
+  date      String // YYYY-MM-DD
+  hours     String   @default("") // e.g. "2pm–5pm" / "afternoon"
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([userId, date])
+}

@@ -1664,3 +1664,28 @@ export async function savePayrollSettings(formData: FormData) {
   revalidatePath("/timecard");
   redirect("/admin?saved=Payroll");
 }
+
+// --- Availability (part-time / irregular members like Ethan) ----------------
+
+export async function addAvailability(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const date = String(formData.get("date") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const hours = String(formData.get("hours") ?? "").trim().slice(0, 60);
+  const note = String(formData.get("note") ?? "").trim().slice(0, 200);
+  await db.availability.create({ data: { userId: me.id, date, hours, note } });
+  revalidatePath("/schedule");
+}
+
+export async function deleteAvailability(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const row = await db.availability.findUnique({ where: { id } });
+  if (!row) return;
+  if (row.userId !== me.id && !isManager(me)) return;
+  await db.availability.delete({ where: { id } });
+  revalidatePath("/schedule");
+}
