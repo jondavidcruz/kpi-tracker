@@ -846,6 +846,21 @@ model Closing {
   expenses   ClosingExpense[]
 }
 
+// Audit trail of every question asked to the Cortana assistant — for insider-threat
+// visibility (who asked what, from which screen). Owner-reviewable.
+model AssistantLog {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   @default("")
+  role      String   @default("")
+  path      String   @default("")
+  question  String   @default("")
+  flagged   Boolean  @default(false) // matched a suspicious pattern
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model ClosingExpense {
   id        String  @id @default(cuid())
   closingId String

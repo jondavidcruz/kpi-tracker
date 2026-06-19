@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin } from "@/app/actions";
+import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess } from "@/app/actions";
 import { adminConfigured } from "@/lib/supabase/admin";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
+import { db } from "@/lib/db";
 import { toInputNumber, type Unit } from "@/lib/format";
 import { categoryMeta } from "@/lib/kpi";
 import { POSITIONS, positionLabel } from "@/lib/roles";
@@ -54,6 +55,7 @@ export default async function AdminPage({
   const canDelete = isAdmin(me);
 
   const owner = isAdmin(me);
+  const aiLog = owner ? await db.assistantLog.findMany({ orderBy: { createdAt: "desc" }, take: 40 }) : [];
   const cats = [
     { id: "people", emoji: "👥", label: "People", show: true },
     { id: "access", emoji: "🔑", label: "Logins & passwords", show: true },
@@ -88,7 +90,7 @@ export default async function AdminPage({
       <section id="people" className="scroll-mt-20">
         <SectionTitle title="👥 People" subtitle={`${activeUsers.length} active · position decides which scorecard a rep sees`} accent="bg-sky-400" />
         <div className="space-y-3">
-          {activeUsers.map((u) => <PersonCard key={u.id} u={u} />)}
+          {activeUsers.map((u) => <PersonCard key={u.id} u={u} revoke={owner && u.id !== me?.id} />)}
         </div>
 
         {/* Add a person */}
@@ -366,7 +368,29 @@ export default async function AdminPage({
               <li>📧 <strong>Nightly off-site backup:</strong> a full JSON export is emailed to you automatically every morning (≈9am UTC) — keep those emails as your rolling copies.</li>
               <li>⏱️ <strong>Real-time backup (primary):</strong> turn on Supabase <strong>Point-in-Time Recovery</strong> for continuous, restore-to-any-second backups → Supabase dashboard → <em>Database → Backups → enable PITR</em>. (Daily automated backups are already on with the Pro plan.)</li>
               <li>🔒 <strong>Invite-only signups:</strong> the app already blocks anyone without an account you created — but to fully lock the door, disable public sign-ups in Supabase → <em>Authentication → Sign In / Providers → Email → turn OFF “Allow new users to sign up.”</em> After that, accounts exist <strong>only</strong> when you create them above.</li>
+              <li>🚪 <strong>Offboarding:</strong> when someone leaves, hit <strong>Revoke access</strong> on their card under People — it deactivates them <em>and</em> bans their login so a saved password or open session can&apos;t get back in.</li>
             </ul>
+          </Card>
+
+          {/* AI assistant audit log — insider-threat visibility */}
+          <Card className="mt-4 p-5">
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">🤖 Cortana audit log — recent questions</p>
+            <p className="mb-3 text-xs text-slate-500">Every question asked to the AI assistant, newest first. Rows flagged 🚩 looked like an attempt to override the rules or pull restricted data. (The bot only ever receives data that person is allowed to see, so nothing leaks — this is purely for your visibility.)</p>
+            {aiLog.length === 0 ? (
+              <p className="text-xs text-slate-400">No assistant questions logged yet.</p>
+            ) : (
+              <div className="max-h-80 space-y-1 overflow-y-auto">
+                {aiLog.map((q) => (
+                  <div key={q.id} className={`flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-xs ${q.flagged ? "bg-red-50 ring-1 ring-red-200" : "bg-slate-50"}`}>
+                    <span className="shrink-0">{q.flagged ? "🚩" : "•"}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-slate-700"><span className="font-semibold">{q.name || "—"}</span> <span className="text-slate-400">· {q.path || "—"} · {new Date(q.createdAt).toLocaleString()}</span></div>
+                      <div className="truncate text-slate-500">{q.question}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </section>
       )}
@@ -383,7 +407,7 @@ function SaveBtn({ children, small }: { children: React.ReactNode; small?: boole
 }
 
 // One person, laid out clearly (name/email on top, role/scorecard/note below).
-function PersonCard({ u, removed, canDelete }: { u: User; removed?: boolean; canDelete?: boolean }) {
+function PersonCard({ u, removed, canDelete, revoke }: { u: User; removed?: boolean; canDelete?: boolean; revoke?: boolean }) {
   // Show an archived role (e.g. retired Cold Call/Lead Mgr) as a labelled option
   // so it doesn't silently fall back to "none".
   const knownPosition = POSITIONS.some((p) => p.key === u.position);
@@ -416,6 +440,14 @@ function PersonCard({ u, removed, canDelete }: { u: User; removed?: boolean; can
           <div className="ml-auto"><SaveBtn small>Save</SaveBtn></div>
         </div>
       </form>
+
+      {revoke && (
+        <form action={revokeTeamAccess} className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2">
+          <input type="hidden" name="id" value={u.id} />
+          <span className="mr-auto text-xs text-slate-400">Offboarding {u.name.split(" ")[0]}? This deactivates them and bans their login immediately.</span>
+          <button className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-50">🚪 Revoke access now</button>
+        </form>
+      )}
 
       {removed && canDelete && (
         <form action={deleteUser} className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2">

@@ -996,6 +996,30 @@ export async function saveUser(formData: FormData) {
 }
 
 /**
+ * Revoke a person's access NOW (offboarding / insider-threat kill switch).
+ * Deactivates them in-app (signed out on next request) AND bans their Supabase
+ * login so a saved password or live session can't get back in. Owner-only.
+ */
+export async function revokeTeamAccess(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id || id === me.id) return; // never lock yourself out
+  const u = await db.user.findUnique({ where: { id } });
+  if (!u) return;
+  await db.user.update({ where: { id }, data: { active: false } });
+  if (adminConfigured() && u.email) {
+    const authId = await findAuthUserByEmail(u.email);
+    if (authId) {
+      const admin = createAdminClient();
+      await admin.auth.admin.updateUserById(authId, { ban_duration: "876000h" }).catch(() => {});
+    }
+  }
+  revalidatePath("/admin");
+  redirect("/admin?saved=Access%20revoked");
+}
+
+/**
  * Permanently delete a person AND all their data (entries, targets, alerts,
  * PIPs, tickets). ADMIN-ONLY and destructive — guarded so it only works on an
  * already-deactivated account, never on yourself. Use to fully purge a name
