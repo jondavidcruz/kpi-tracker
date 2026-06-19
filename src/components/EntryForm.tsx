@@ -46,7 +46,7 @@ export default function EntryForm({
             <h2 className="font-semibold text-lg">{g.title}</h2>
             {g.hint && <p className="text-sm text-slate-500">{g.hint}</p>}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="divide-y divide-slate-100">
             {g.items.map((item) => (
               <Field key={`${item.kpiId}|${item.userId}`} item={item} />
             ))}
@@ -93,37 +93,39 @@ function Field({ item }: { item: EntryItem }) {
   }
 
   return (
-    <div className="block">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-medium text-slate-700">
-          <KpiLabel kpiKey={item.kpiKey} name={item.name} />
-        </span>
-        {item.goalValue !== null && (
-          <span className="text-xs text-slate-400">
-            goal {formatValue(item.unit, item.goalValue)}
-          </span>
-        )}
-      </div>
-      <div
-        className={`flex items-center rounded-lg border-2 px-3 ${cls.border} ${cls.bg} focus-within:ring-2 focus-within:ring-slate-400`}
-      >
-        {item.unit === "currency" && <span className="text-slate-400 mr-1">$</span>}
-        <input
-          name={`v|${item.kpiId}|${item.userId}`}
-          inputMode={item.unit === "duration" ? "text" : "decimal"}
-          value={raw}
-          onChange={(e) => setRaw(e.target.value)}
-          placeholder={item.unit === "duration" ? "1:30" : "—"}
-          className={`w-full bg-transparent py-2.5 text-xl font-semibold outline-none ${cls.text}`}
-          autoComplete="off"
-        />
-        {suffix && item.unit !== "currency" && (
-          <span className="text-slate-400 text-sm ml-1">{suffix}</span>
-        )}
-        <span className={`ml-2 h-2.5 w-2.5 rounded-full ${cls.dot}`} />
+    <div className="py-2">
+      {/* Top-down row: label on the left, value on the right */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-slate-700">
+            <KpiLabel kpiKey={item.kpiKey} name={item.name} />
+          </div>
+          {item.goalValue !== null && (
+            <div className="text-xs text-slate-400">goal {formatValue(item.unit, item.goalValue)}</div>
+          )}
+        </div>
+        <div
+          className={`flex w-36 shrink-0 items-center rounded-lg border-2 px-2.5 ${cls.border} ${cls.bg} focus-within:ring-2 focus-within:ring-slate-400`}
+        >
+          {item.unit === "currency" && <span className="text-slate-400">$</span>}
+          <input
+            name={`v|${item.kpiId}|${item.userId}`}
+            inputMode={item.unit === "duration" ? "text" : "decimal"}
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            placeholder={item.unit === "duration" ? "1:30" : "—"}
+            className={`w-full bg-transparent py-2 text-right text-lg font-semibold outline-none ${cls.text}`}
+            autoComplete="off"
+          />
+          {suffix && item.unit !== "currency" && (
+            <span className="ml-1 text-sm text-slate-400">{suffix}</span>
+          )}
+          <span className={`ml-2 h-2.5 w-2.5 shrink-0 rounded-full ${cls.dot}`} />
+        </div>
       </div>
       {isSpeed && (
-        <div className="mt-1.5 flex items-center gap-2">
+        <div className="mt-1.5 flex items-center justify-end gap-2">
+          {testMsg && <span className="text-xs text-slate-500">{testMsg}</span>}
           <button
             type="button"
             onClick={runSpeedTest}
@@ -132,7 +134,6 @@ function Field({ item }: { item: EntryItem }) {
           >
             {testing ? "Testing…" : "⚡️ Run speed test"}
           </button>
-          {testMsg && <span className="text-xs text-slate-500">{testMsg}</span>}
         </div>
       )}
     </div>

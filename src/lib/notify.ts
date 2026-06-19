@@ -15,7 +15,7 @@ export async function getChannelConfig(): Promise<ChannelConfig> {
   const s = await getSettings();
   return {
     chatWebhook: s.googleChatWebhook || process.env.GOOGLE_CHAT_WEBHOOK_URL || "",
-    timecardChatWebhook: s.timecardChatWebhook || "",
+    timecardChatWebhook: s.timecardChatWebhook || process.env.TIMECARD_CHAT_WEBHOOK || "",
     emailRecipients: splitList(s.alertEmailRecipients || process.env.ALERT_EMAIL_TO || ""),
     emailFrom: s.emailFromAddress || process.env.ALERT_EMAIL_FROM || "",
     resendKey: process.env.RESEND_API_KEY || "",
@@ -62,7 +62,9 @@ export async function sendGoogleChat(text: string, cfg?: ChannelConfig): Promise
  *  space if its webhook is set, otherwise fall back to the main space. */
 export async function sendTimecardChat(text: string, cfg?: ChannelConfig): Promise<boolean> {
   const c = cfg ?? (await getChannelConfig());
-  return postChatWebhook(c.timecardChatWebhook || c.chatWebhook, text);
+  // Only the dedicated Timecard space — never fall back to the main KPI Tracker
+  // space, so clock/break/lunch status posts can't land there.
+  return postChatWebhook(c.timecardChatWebhook, text);
 }
 
 /** Send an email via Resend. Returns true if delivered. */
