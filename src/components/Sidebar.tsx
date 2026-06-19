@@ -33,14 +33,7 @@ export default function Sidebar({
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
-      { href: "/timecard", label: "Payroll", Icon: Wallet, timecardOnly: true },
-    ] },
-    { label: "Entrepreneurial Operating System", items: [
-      { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
-      { href: "/rocks", label: "Rocks", Icon: Mountain },
-      { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },
-      { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
-      { href: "/leadership", label: "Leadership Meeting", Icon: Crown, managerOnly: true },
+      { href: "/operations", label: "Resources & SOPs", Icon: Briefcase, adminOnly: true },
     ] },
     { label: "Performance", items: [
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
@@ -62,17 +55,24 @@ export default function Sidebar({
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
+      { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
     ] },
     { label: "Marketing", items: [
       { href: "/marketing", label: "Markets & Buyers", Icon: Megaphone, marketingOnly: true },
     ] },
     { label: "Operations", items: [
+      { href: "/timecard", label: "Payroll", Icon: Wallet, timecardOnly: true },
       { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },
-      { href: "/operations", label: "Resources & SOPs", Icon: Briefcase, adminOnly: true },
       { href: "/closing", label: "Escrow & Closing", Icon: DollarSign, managerOnly: true },
       { href: "/closed-deals", label: "Closed deals", Icon: DollarSign, adminOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, adminOnly: true },
-      { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
+    ] },
+    { label: "Entrepreneurial Operating System", items: [
+      { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
+      { href: "/rocks", label: "Rocks", Icon: Mountain },
+      { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },
+      { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
+      { href: "/leadership", label: "Leadership Meeting", Icon: Crown, managerOnly: true },
     ] },
   ];
 

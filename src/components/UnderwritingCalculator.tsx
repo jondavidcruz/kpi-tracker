@@ -10,6 +10,16 @@ const TABS = [
   { key: "flip", label: "Flip / Wholetail", emoji: "🔨", blurb: "Full buyer's-lens analysis: Max Offer = ARV + purchase credit − min profit − (property costs + money costs)." },
 ] as const;
 
+// Wholesale (Assignment) vs Novation — quick decision guide (from the team's sheet).
+const EXIT_COMPARE: [string, string, string][] = [
+  ["Speed of exit", "30–45 days (faster with a deeper discount)", "3–6 months (retail MLS timeline)"],
+  ["Buyer type", "Cash buyer or flipper", "Retail buyer using financing (loan + appraisal)"],
+  ["Access needed", "Limited — 1–2 walkthroughs", "Full access (photos, showings, appraisal, inspection)"],
+  ["Complexity", "Lower — assignment or double close", "Higher — MLS listing, agent coordination, disclosures"],
+  ["Ideal property", "Distressed / needs repairs, seller wants a quick sale", "Good or light-cosmetic condition, seller wants top dollar"],
+  ["Price to seller", "Lower offer — trade-off for speed & certainty", "Higher net — but seller waits and cooperates with the listing"],
+];
+
 // Hard-money lender presets from the team's sheet → [rate%, points%, service fee$]
 const LENDERS: Record<string, { rate: string; points: string; svc: string }> = {
   "Kiavi (Novice)": { rate: "9.45", points: "2.5", svc: "1500" },
@@ -261,6 +271,28 @@ export default function UnderwritingCalculator() {
         ))}
       </div>
       <p className="text-xs text-slate-500">{TABS.find((t) => t.key === tab)!.blurb}</p>
+
+      {(tab === "assignment" || tab === "novation") && (
+        <details className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+          <summary className="cursor-pointer text-xs font-bold text-slate-600 hover:text-brand-navy">⚖️ Wholesale vs Novation — which exit fits this deal?</summary>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead><tr className="text-left text-slate-400">
+                <th className="py-1 pr-3"> </th><th className="px-2">🤝 Wholesale (Assignment)</th><th className="px-2">📋 Novation</th>
+              </tr></thead>
+              <tbody>
+                {EXIT_COMPARE.map(([f, w, n]) => (
+                  <tr key={f} className="border-t border-slate-100 align-top">
+                    <td className="py-1.5 pr-3 font-semibold text-slate-600">{f}</td>
+                    <td className="px-2 text-slate-600">{w}</td>
+                    <td className="px-2 text-slate-600">{n}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Inputs */}
