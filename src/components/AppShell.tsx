@@ -9,6 +9,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import Sidebar from "./Sidebar";
 import CortanaBot from "./CortanaBot";
+import PageHelp from "./PageHelp";
 
 export default async function AppShell({ children }: { children: React.ReactNode }) {
   const email = await getSessionEmail();
@@ -79,6 +80,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
         </div>
       </main>
       <CortanaBot />
+      <PageHelp />
     </div>
   );
 }
