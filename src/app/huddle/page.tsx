@@ -3,7 +3,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, friendlyDate } from "@/lib/date";
 import { buildHuddleData } from "@/lib/huddle";
-import { saveStandup, addStandupItem, saveStandupItem, deleteStandupItem, addHuddleTask, toggleHuddleTask, deleteHuddleTask } from "@/app/actions";
+import { saveStandup, saveStandupEod, addStandupItem, saveStandupItem, deleteStandupItem, addHuddleTask, toggleHuddleTask, deleteHuddleTask } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +73,15 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
                 <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">Assign</button>
               </form>
             )}
+          </div>
+        )}
+
+        {/* Carried over from yesterday's end-of-day */}
+        {r.yesterdayFollowup && (
+          <div className="mb-3 rounded-lg bg-sky-50 p-2.5 text-sm ring-1 ring-sky-200">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-sky-500">📌 Follow up from yesterday</span>
+            {r.yesterdayHit && <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold ${r.yesterdayHit === "hit" ? "bg-emerald-100 text-emerald-700" : r.yesterdayHit === "miss" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{r.yesterdayHit}</span>}
+            <div className="mt-0.5 text-slate-700">{r.yesterdayFollowup}</div>
           </div>
         )}
 
@@ -159,6 +168,26 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
             <Link href="/deals" className="mt-1.5 inline-block text-[11px] font-semibold text-slate-400 underline hover:text-brand-navy">Edit deal status & next steps on the Deals board →</Link>
           </div>
         )}
+
+        {/* End of day — recorded at the EOD meeting; follow-ups carry to tomorrow */}
+        {canEdit ? (
+          <form action={saveStandupEod} className="mt-3 rounded-lg bg-slate-900/[0.03] p-2.5 ring-1 ring-slate-200">
+            <input type="hidden" name="userId" value={r.id} />
+            <input type="hidden" name="date" value={date} />
+            <div className="mb-1.5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">🌙 End of day
+              <select name="eodHit" defaultValue={r.eodHit} className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold">
+                <option value="">— hit goal? —</option><option value="hit">✅ Hit</option><option value="partial">🟡 Partial</option><option value="miss">❌ Missed</option>
+              </select>
+            </div>
+            <textarea name="eodNote" defaultValue={r.eodNote} rows={1} placeholder="What happened today?" className={`${inputCls} mb-1.5`} />
+            <textarea name="eodFollowup" defaultValue={r.eodFollowup} rows={1} placeholder="Follow-up / next action for tomorrow (shows on tomorrow's huddle)" className={inputCls} />
+            <div className="mt-1.5 text-right"><button className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Save end of day</button></div>
+          </form>
+        ) : (r.eodHit || r.eodNote || r.eodFollowup) ? (
+          <div className="mt-3 rounded-lg bg-slate-50 p-2.5 text-xs ring-1 ring-slate-200">
+            <span className="font-bold text-slate-500">🌙 EOD:</span> {r.eodHit && <span className="font-semibold">{r.eodHit}</span>} {r.eodNote}{r.eodFollowup && <div className="mt-0.5 text-slate-500">→ Tomorrow: {r.eodFollowup}</div>}
+          </div>
+        ) : null}
       </Card>
     );
   };

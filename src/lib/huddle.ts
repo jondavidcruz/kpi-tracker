@@ -9,6 +9,8 @@ export type HuddleRep = {
   items: { id: string; title: string; status: string; roadblock: string; nextStep: string; todayAction: string; hot: boolean }[];
   deals: { deal: Deal; days: number | null; level: string; recommendation: string }[];
   tasks: { id: string; text: string; assignedBy: string; done: boolean }[];
+  eodHit: string; eodNote: string; eodFollowup: string;
+  yesterdayFollowup: string; yesterdayHit: string;
 };
 export type HuddleData = {
   date: string;
@@ -42,6 +44,8 @@ export async function buildHuddleData(date: string): Promise<HuddleData> {
     db.deal.findMany({ where: { status: { notIn: ["closed", "dead", "lost"] } } }),
     db.huddleTask.findMany({ where: { OR: [{ done: false }, { doneAt: { gte: taskSince } }] }, orderBy: { createdAt: "asc" } }),
   ]);
+  const prevStandups = await db.standup.findMany({ where: { date: prev }, select: { userId: true, eodFollowup: true, eodHit: true } });
+  const prevByUser = new Map(prevStandups.map((s) => [s.userId, s]));
 
   const misses: HuddleMiss[] = alerts.map((a) => ({
     userId: a.userId, name: a.user?.name ?? "Team", kpi: a.kpi?.name ?? "KPI",
@@ -63,6 +67,8 @@ export async function buildHuddleData(date: string): Promise<HuddleData> {
       items: (s?.items ?? []).map((it) => ({ id: it.id, title: it.title, status: it.status, roadblock: it.roadblock, nextStep: it.nextStep, todayAction: it.todayAction, hot: it.hot })),
       deals: role === "Dispositions" ? dealAging.filter((d) => firstName(d.deal.assignedTo) === firstName(u.name)) : [],
       tasks: (tasksByUser.get(u.id) ?? []).map((t) => ({ id: t.id, text: t.text, assignedBy: t.assignedBy, done: t.done })),
+      eodHit: s?.eodHit ?? "", eodNote: s?.eodNote ?? "", eodFollowup: s?.eodFollowup ?? "",
+      yesterdayFollowup: prevByUser.get(u.id)?.eodFollowup ?? "", yesterdayHit: prevByUser.get(u.id)?.eodHit ?? "",
     };
   });
 

@@ -1935,6 +1935,20 @@ export async function saveStandup(formData: FormData) {
   revalidatePath("/huddle");
 }
 
+export async function saveStandupEod(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  if (!(await canEditStandup(userId))) return;
+  const data = {
+    eodHit: ["hit", "partial", "miss", ""].includes(String(formData.get("eodHit"))) ? String(formData.get("eodHit")) : "",
+    eodNote: String(formData.get("eodNote") ?? "").trim().slice(0, 800),
+    eodFollowup: String(formData.get("eodFollowup") ?? "").trim().slice(0, 800),
+  };
+  await db.standup.upsert({ where: { userId_date: { userId, date } }, update: data, create: { userId, date, ...data } });
+  revalidatePath("/huddle");
+}
+
 export async function addStandupItem(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
   const date = String(formData.get("date") ?? "");

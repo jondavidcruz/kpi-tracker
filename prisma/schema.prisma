@@ -918,6 +918,9 @@ model Standup {
   pending   String        @default("")
   note      String        @default("") // dispo: buyers/developers status, lost deals, price reductions
   submitted Boolean       @default(false)
+  eodHit      String      @default("") // end-of-day: hit | partial | miss
+  eodNote     String      @default("") // end-of-day: what happened
+  eodFollowup String      @default("") // next-day follow-up items (shown on tomorrow's huddle)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   items     StandupItem[]
