@@ -12,11 +12,7 @@ type Gate = "all" | "manager" | "admin" | "marketing" | "timecard";
 const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
   { group: "Overview", items: [
     { label: "Dashboard", gate: "all" }, { label: "Process Map", gate: "all" }, { label: "Deals", gate: "all" },
-    { label: "Underwriting", gate: "all" }, { label: "Schedule & Time", gate: "all" }, { label: "Payroll", gate: "timecard" },
-  ] },
-  { group: "EOS", items: [
-    { label: "Vision (V/TO)", gate: "all" }, { label: "Rocks", gate: "all" }, { label: "Issues", gate: "admin" },
-    { label: "Monday Meeting", gate: "manager" }, { label: "Leadership Meeting", gate: "manager" },
+    { label: "Underwriting", gate: "all" }, { label: "Schedule & Time", gate: "all" }, { label: "Resources & SOPs", gate: "admin" },
   ] },
   { group: "Performance", items: [
     { label: "Enter KPIs", gate: "all" }, { label: "Weekly report", gate: "all" }, { label: "Monthly report", gate: "all" },
@@ -27,12 +23,16 @@ const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
   ] },
   { group: "Support", items: [
     { label: "Software & Logins", gate: "all" }, { label: "Change Portal", gate: "all" }, { label: "AI Champion", gate: "all" },
-    { label: "Tickets", gate: "all" }, { label: "AI updates", gate: "admin" },
+    { label: "Tickets", gate: "all" }, { label: "AI updates", gate: "admin" }, { label: "Admin", gate: "manager" },
   ] },
   { group: "Marketing", items: [{ label: "Markets & Buyers", gate: "marketing" }] },
-  { group: "Operations", items: [
-    { label: "Roadmap", gate: "admin" }, { label: "Resources & SOPs", gate: "admin" }, { label: "Closed deals", gate: "admin" },
-    { label: "Team Roster", gate: "admin" }, { label: "Admin", gate: "manager" },
+  { group: "C-Suite", items: [
+    { label: "Payroll", gate: "timecard" }, { label: "Roadmap", gate: "admin" }, { label: "Escrow & Closing", gate: "manager" },
+    { label: "Closed deals", gate: "admin" }, { label: "Team Roster", gate: "admin" },
+  ] },
+  { group: "EOS", items: [
+    { label: "Vision (V/TO)", gate: "all" }, { label: "Rocks", gate: "all" }, { label: "Issues", gate: "admin" },
+    { label: "Monday Meeting", gate: "manager" }, { label: "Leadership Meeting", gate: "manager" },
   ] },
 ];
 

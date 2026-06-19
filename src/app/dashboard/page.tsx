@@ -20,6 +20,7 @@ import { getAwardBoard, getAiChampions } from "@/lib/awards";
 import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
+import DealFunnel from "@/components/DealFunnel";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
@@ -100,7 +101,27 @@ export default async function DashboardPage({
   const closedCount = closedYTD.length;
   const grossRevenue = closedYTD.reduce((s, c) => s + c.revenue, 0);
   const netProfit = closedYTD.reduce((s, c) => s + (c.revenue - c.expenses.reduce((e, x) => e + x.amount, 0)), 0);
+  const falloutYTD = closings.filter((c) => c.status === "fell_through" && (c.closeDate ? c.closeDate >= yearStart : true)).length;
   const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
+
+  // --- Deal funnel (this month): leads → opportunities → appointments → offers → contracts → closed ---
+  const FUNNEL_KEYS = ["ppl_leads", "text_responses", "direct_mail_responses", "quality_convos", "appts_taken", "appts_set", "offers_made", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"];
+  const funnelKpis = await db.kpi.findMany({ where: { key: { in: FUNNEL_KEYS } }, select: { id: true, key: true } });
+  const fIdToKey = new Map(funnelKpis.map((k) => [k.id, k.key]));
+  const fEntries = await db.entry.findMany({ where: { kpiId: { in: funnelKpis.map((k) => k.id) }, date: { gte: monthStart, lte: date } }, select: { kpiId: true, value: true } });
+  const byKey: Record<string, number> = {};
+  for (const e of fEntries) { const key = fIdToKey.get(e.kpiId); if (key) byKey[key] = (byKey[key] ?? 0) + e.value; }
+  const kv = (key: string) => byKey[key] ?? 0;
+  const closedThisMonth = closings.filter((c) => c.status === "closed" && c.closeDate && c.closeDate >= monthStart && c.closeDate <= date).length;
+  const funnelStages = [
+    { label: "Leads", count: kv("ppl_leads") + kv("text_responses") + kv("direct_mail_responses"), source: "PPL + SMS + mail" },
+    { label: "Opportunities", count: kv("quality_convos"), source: "quality conversations" },
+    { label: "Appointments", count: kv("appts_taken") + kv("appts_set"), source: "set + attended" },
+    { label: "Offers", count: kv("offers_made"), source: "verbal offers" },
+    { label: "Contracts", count: kv("acq_signed_assignment") + kv("acq_signed_novation") + kv("acq_signed_listing") + kv("acq_signed_creative"), source: "signed" },
+    { label: "Closed", count: closedThisMonth, source: "escrow → closed" },
+  ];
+  const funnelHasData = funnelStages.some((s) => s.count > 0);
 
   // --- Internet speed: today's recorded reading per rep + a 14-day history/trend ---
   const internetSpeedKpi = perRepKpis.find((k) => k.roleKey === "internet") ?? null;
@@ -229,7 +250,7 @@ export default async function DashboardPage({
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <Link href="/monthly" className="block"><MetricCard label="Contracts sent (mo)" value={Math.round(contractsSentMonth)} icon={<FileSignature size={18} />} hint="acquisitions" /></Link>
           <Link href="/monthly" className="block"><MetricCard label="Contracts signed (mo)" value={Math.round(contractsSignedMonth)} icon={<FileSignature size={18} />} hint="acquisitions" /></Link>
-          <Link href="/closing" className="block"><MetricCard label={`Deals closed (${year})`} value={closedCount} icon={<Building2 size={18} />} hint="dispositions" /></Link>
+          <Link href="/closing" className="block"><MetricCard label={`Deals closed (${year})`} value={closedCount} icon={<Building2 size={18} />} hint={falloutYTD ? `${falloutYTD} fell through` : "dispositions"} hintTone={falloutYTD ? "bad" : "neutral"} /></Link>
           {showMoney ? (
             <>
               <Link href="/closing" className="block"><MetricCard label="Gross revenue (YTD)" value={usd(grossRevenue)} icon={<Banknote size={18} />} /></Link>
@@ -242,6 +263,17 @@ export default async function DashboardPage({
         {showMoney && closedCount === 0 && (
           <p className="mt-2 text-[11px] text-slate-400">No closed deals recorded for {year} yet — add them in <Link href="/closing" className="font-semibold text-slate-500 underline">Escrow &amp; Closing</Link> (set status to “Closed”) and they&apos;ll tally here with net profit.</p>
         )}
+      </section>
+
+      {/* Deal funnel — this month */}
+      <section>
+        <SectionTitle title="🫙 Deal funnel" subtitle="This month: leads → opportunities → appointments → offers → contracts → closed (% = conversion from the stage above)" accent="bg-brand-navy" />
+        <Card className="p-5">
+          <DealFunnel stages={funnelStages} />
+          {!funnelHasData && (
+            <p className="mt-3 text-[11px] text-slate-400">Nothing logged this month yet. The funnel fills in as the team logs leads, appointments, offers and contracts on <Link href="/entry" className="font-semibold text-slate-500 underline">Enter KPIs</Link>, and as deals are closed in Escrow &amp; Closing.</p>
+          )}
+        </Card>
       </section>
 
       {/* Gamified recognition */}

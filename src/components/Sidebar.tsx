@@ -60,7 +60,7 @@ export default function Sidebar({
     { label: "Marketing", items: [
       { href: "/marketing", label: "Markets & Buyers", Icon: Megaphone, marketingOnly: true },
     ] },
-    { label: "Operations", items: [
+    { label: "C-Suite", items: [
       { href: "/timecard", label: "Payroll", Icon: Wallet, timecardOnly: true },
       { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },
       { href: "/closing", label: "Escrow & Closing", Icon: DollarSign, managerOnly: true },
