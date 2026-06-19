@@ -82,6 +82,11 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
               </select>
             </label>
           </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Property address (which lead)</span><input name="address" placeholder="123 Main St…" className={inputCls} /></label>
+            <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Seller name</span><input name="sellerName" placeholder="Jane Seller" className={inputCls} /></label>
+            <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Seller phone (callback)</span><input name="sellerPhone" type="tel" placeholder="(555) 123-4567" className={inputCls} /></label>
+          </div>
           <TranscriptField inputCls={inputCls} geminiConfigured={geminiConfigured} />
           <div>
             <button disabled={!configured} className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
@@ -110,6 +115,13 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
                     </div>
                     <div className={`text-3xl font-extrabold tabular-nums ${scoreColor(s.overall)}`}>{s.overall}<span className="text-base text-slate-400">/100</span></div>
                   </div>
+                  {(s.address || s.sellerName || s.sellerPhone) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                      {s.address && <span>📍 {s.address}</span>}
+                      {s.sellerName && <span>👤 {s.sellerName}</span>}
+                      {s.sellerPhone && <a href={`tel:${s.sellerPhone}`} className="font-semibold text-brand-navy hover:underline">📞 {s.sellerPhone}</a>}
+                    </div>
+                  )}
                   {s.summary && <p className="mt-1 text-sm text-slate-600">{s.summary}</p>}
                   {breakdown.length > 0 && (
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">

@@ -328,6 +328,9 @@ export async function scoreCall(formData: FormData) {
     data: {
       repName: repName || "(unspecified)",
       callType,
+      address: String(formData.get("address") ?? "").trim().slice(0, 200),
+      sellerName: String(formData.get("sellerName") ?? "").trim().slice(0, 120),
+      sellerPhone: String(formData.get("sellerPhone") ?? "").trim().slice(0, 40),
       scoredBy: me.name,
       overall: result.overall,
       breakdown: JSON.stringify(result.breakdown),

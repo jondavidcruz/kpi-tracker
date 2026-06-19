@@ -237,6 +237,9 @@ model CallScore {
   id         String   @id @default(cuid())
   repName    String   @default("")
   callType   String   @default("") // which call type was scored (see lib/call-types)
+  address    String   @default("") // which lead/property the call was about
+  sellerName String   @default("")
+  sellerPhone String  @default("") // callback number for quick feedback
   scoredBy   String   @default("")
   overall    Int      @default(0) // 0-100
   breakdown  String   @default("[]") // JSON [{area, score, note}]
