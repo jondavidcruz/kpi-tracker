@@ -55,6 +55,16 @@ const REHAB_LEVELS: [string, string][] = [
   ["75", "Full gut (~$75/sf)"],
 ];
 
+// Big-ticket repair items → [field key, label, typical cost]. Checking one adds
+// its cost to the rehab estimate (cost is editable).
+const MAJOR: [string, string, number][] = [
+  ["hvac", "HVAC", 7000],
+  ["water_heater", "Water heater", 1800],
+  ["roof", "Roof", 12000],
+  ["windows", "Windows", 8000],
+  ["foundation", "Foundation", 15000],
+];
+
 function num(v: string): number {
   const n = Number((v || "").replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(n) ? n : 0;
@@ -130,12 +140,15 @@ export default function UnderwritingCalculator() {
     finally { setComping(false); }
   }
 
+  // Major / big-ticket repair items — checked items add their cost to the rehab.
+  const majorTotal = MAJOR.reduce((s, [key]) => s + n(`maj_${key}`), 0);
+
   // ---- Assignment ----
   const marketPct = v("marketPct") || "70";
   const arv = n("arv"), aFee = n("aFee");
   const sqft = n("sqft"), rehabSf = num(v("rehabSf"));
   const repairsCalc = sqft * rehabSf;
-  const repairs = n("repairs") || repairsCalc;
+  const repairs = (n("repairs") || repairsCalc) + majorTotal;
   const holding = n("aHoldMonths") * n("aMonthlyCarry");
   const flipperTarget = arv * (num(marketPct) / 100);
   const cashMao = flipperTarget - repairs - holding - aFee;
@@ -169,7 +182,7 @@ export default function UnderwritingCalculator() {
   // ---- Flip / Wholetail (from MAO.xlsx) ----
   const fMinProfit = f.fMinProfit != null && f.fMinProfit !== "" ? n("fMinProfit") : 30000;
   const fHold = n("fHold") || 6;
-  const fRehab = n("fRehab") || n("sqft") * num(v("rehabSf"));
+  const fRehab = (n("fRehab") || n("sqft") * num(v("rehabSf"))) + majorTotal;
   const fComm = arv * (num(v("fComm") || "3") / 100);
   const fClosing = arv * (num(v("fClosing") || "2") / 100);
   const fCarry = arv * (num(v("fCarry") || "1") / 100); // utilities, taxes, insurance
@@ -270,6 +283,30 @@ export default function UnderwritingCalculator() {
     </div>
   );
 
+  // Big-ticket repair checklist — check what's needed; the cost folds into rehab.
+  const majorRepairs = () => (
+    <div className="sm:col-span-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-200">
+      <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Major / big-ticket repairs — check what&apos;s needed (cost adjustable)</div>
+      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+        {MAJOR.map(([key, label, def]) => {
+          const fk = `maj_${key}`;
+          const on = v(fk) !== "";
+          return (
+            <div key={key} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={on} onChange={() => setV(fk, on ? "" : String(def))} className="h-4 w-4" />
+              <span className="flex-1 text-slate-600">{label}</span>
+              <div className="relative w-24">
+                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">$</span>
+                <input inputMode="decimal" value={v(fk)} onChange={set(fk)} placeholder={String(def)} className={`${inputCls} py-1 pl-5 text-xs`} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {majorTotal > 0 && <div className="mt-1 text-right text-[11px] font-semibold text-emerald-600">+ {money(majorTotal)} added to the rehab</div>}
+    </div>
+  );
+
   return (
     <FieldCtx.Provider value={{ v, set }}>
     <div className="space-y-4">
@@ -336,11 +373,12 @@ export default function UnderwritingCalculator() {
               <Field k="arv" label="ARV" prefix="$" placeholder="350,000" req="need" />
               <Field k="aFee" label="Assignment fee" prefix="$" placeholder="15,000" req="need" />
               <div className={reqDiv}>Repairs (required) — type a figure, or estimate from sqft</div>
-              <Field k="repairs" label="Repair estimate ($) — overrides sqft calc" prefix="$" span={2} req="need" />
+              <Field k="repairs" label="Override repair estimate ($)" prefix="$" span={2} req="need" />
               <Field k="sqft" label="Square feet" req="need" />
               <label><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Condition ($/sf)</span>
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
+              {majorRepairs()}
               <div className={optDiv}>Flipper holding (optional — their money cost)</div>
               <Field k="aHoldMonths" label="Months held" placeholder="6" req="opt" />
               <Field k="aMonthlyCarry" label="Monthly carry (taxes, ins, loan…)" prefix="$" placeholder="1,000" req="opt" />
@@ -424,11 +462,12 @@ export default function UnderwritingCalculator() {
               <Field k="arv" label="ARV" prefix="$" placeholder="350,000" req="need" />
               <Field k="fMinProfit" label="Minimum profit" prefix="$" placeholder="30,000" req="opt" />
               <div className={reqDiv}>Rehab (required) — direct $, or sqft × $/sf</div>
-              <Field k="fRehab" label="Rehab cost ($) — overrides sqft calc" prefix="$" span={2} req="need" />
+              <Field k="fRehab" label="Override rehab cost ($)" prefix="$" span={2} req="need" />
               <Field k="sqft" label="Square feet" req="need" />
               <label><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Condition ($/sf)</span>
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
+              {majorRepairs()}
               <div className={optDiv}>Property costs (optional · % of ARV)</div>
               <Field k="fComm" label="Realtor commission" suffix="%" placeholder="3" req="opt" />
               <Field k="fClosing" label="Closing costs" suffix="%" placeholder="2" req="opt" />
