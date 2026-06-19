@@ -408,7 +408,7 @@ export default async function DashboardPage({
       {/* Monthly pace */}
       <section>
         <SectionTitle title={`This Month: Pace (${month})`} accent="bg-emerald-400" />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="divide-y divide-slate-100 p-0">
           {teamMonthly.map((k) => {
             const mtd = mtdSums.get(k.id) ?? 0;
             const goal = resolveGoalWith(targets, k, null, month);
@@ -417,28 +417,23 @@ export default async function DashboardPage({
             const g = goal !== null ? monthlyGap(date, k.goalKind, mtd, goal) : null;
             const pct = goal ? (mtd / goal) * 100 : 0;
             return (
-              <Card key={k.id} className="p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={k.key} name={k.name} /></span>
-                  <Pill tone={status === "hit" ? "good" : status === "close" ? "watch" : status === "miss" ? "bad" : "neutral"}>{cls.label}</Pill>
-                </div>
-                <div className={`mt-1 text-3xl font-extrabold tabular-nums ${cls.text}`}>
-                  {formatValue(k.unit as Unit, mtd)}
-                </div>
-                <div className="mt-2">
-                  <ProgressBar pct={pct} status={status} paceMarker={goal ? fraction * 100 : undefined} />
-                  <div className="mt-1 text-xs text-slate-500">
-                    {goal === null
-                      ? "Tracked"
-                      : g
-                        ? monthlyCatchup(k.unit as Unit, g)
-                        : `Goal ${formatValue(k.unit as Unit, goal)} · on pace`}
+              <div key={k.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="w-40 shrink-0">
+                  <div className="truncate text-sm font-medium text-slate-700"><KpiLabel kpiKey={k.key} name={k.name} /></div>
+                  <div className="mt-0.5 text-[11px] text-slate-400">
+                    {goal === null ? "Tracked" : g ? monthlyCatchup(k.unit as Unit, g) : "on pace"}
                   </div>
                 </div>
-              </Card>
+                <div className="hidden flex-1 sm:block"><ProgressBar pct={pct} status={status} paceMarker={goal ? fraction * 100 : undefined} /></div>
+                <div className="ml-auto w-28 shrink-0 text-right">
+                  <span className={`text-xl font-extrabold tabular-nums ${cls.text}`}>{formatValue(k.unit as Unit, mtd)}</span>
+                  {goal !== null && <span className="text-xs text-slate-400"> / {formatValue(k.unit as Unit, goal)}</span>}
+                </div>
+                <Pill tone={status === "hit" ? "good" : status === "close" ? "watch" : status === "miss" ? "bad" : "neutral"}>{cls.label}</Pill>
+              </div>
             );
           })}
-        </div>
+        </Card>
       </section>
     </div>
   );

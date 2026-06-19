@@ -34,7 +34,6 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="text-base font-bold text-slate-800">{r.name}</span>
           <span className="text-[11px] text-slate-400">{r.role}</span>
-          {r.submitted ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">submitted</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">not submitted</span>}
           {myMiss.length > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">missed {myMiss.length} KPI{myMiss.length > 1 ? "s" : ""} yesterday</span>}
         </div>
 
@@ -93,8 +92,7 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
             <label className="block text-xs"><span className="mb-0.5 block font-semibold text-slate-500">🎯 Goal for today</span><textarea name="goal" defaultValue={r.goal} rows={1} className={inputCls} /></label>
             <label className="block text-xs"><span className="mb-0.5 block font-semibold text-slate-500">⏮ Pending from yesterday</span><textarea name="pending" defaultValue={r.pending} rows={1} className={inputCls} /></label>
             <label className="block text-xs"><span className="mb-0.5 block font-semibold text-slate-500">{r.role === "Dispositions" ? "🧾 Buyers / developers · lost or releasing · price reductions" : "📝 Notes"}</span><textarea name="note" defaultValue={r.note} rows={2} className={inputCls} /></label>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" name="submitted" defaultChecked={r.submitted} /> submitted</label>
+            <div className="flex items-center">
               <button className="ml-auto rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
             </div>
           </form>

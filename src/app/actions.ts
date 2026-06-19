@@ -1894,7 +1894,7 @@ export async function deleteClosingExpense(formData: FormData) {
 
 export async function saveReward(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!canAccessPayroll(me)) return; // C-suite only (Jon / Viktoriia / Enrico)
   const id = String(formData.get("id") ?? "").trim();
   const reward = String(formData.get("reward") ?? "").trim().slice(0, 200);
   if (!reward) return;
@@ -1913,7 +1913,7 @@ export async function saveReward(formData: FormData) {
 
 export async function toggleRewardAchieved(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!canAccessPayroll(me)) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const r = await db.reward.findUnique({ where: { id } });
@@ -1924,10 +1924,32 @@ export async function toggleRewardAchieved(formData: FormData) {
 
 export async function deleteReward(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  if (!canAccessPayroll(me)) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await db.reward.delete({ where: { id } });
+  revalidatePath("/rewards");
+}
+
+/** Any team member submits a reward they'd love to earn. */
+export async function submitRewardWish(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const text = String(formData.get("text") ?? "").trim().slice(0, 300);
+  if (!text) return;
+  await db.rewardWish.create({ data: { userId: me.id, name: me.name, text } });
+  revalidatePath("/rewards");
+}
+
+export async function deleteRewardWish(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const w = await db.rewardWish.findUnique({ where: { id } });
+  if (!w) return;
+  if (w.userId !== me.id && !canAccessPayroll(me)) return; // own wish or C-suite
+  await db.rewardWish.delete({ where: { id } });
   revalidatePath("/rewards");
 }
 

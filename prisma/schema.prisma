@@ -891,6 +891,17 @@ model Reward {
   @@index([scope, userId])
 }
 
+// A reward the team wishes for — submitted by a rep, reviewed by leadership.
+model RewardWish {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   @default("")
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // Persistent "highlights / wins" log for the Monday meeting — separate from the
 // auto-generated KPI sheets. Accumulates over time; shown newest-first.
 model MeetingHighlight {
