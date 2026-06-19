@@ -871,6 +871,30 @@ model ClosingExpense {
   @@index([closingId])
 }
 
+// Offboarding checklist created when access is revoked — kept open (and shown as
+// a mandatory banner) until every shared-access task is checked off.
+model Offboarding {
+  id          String            @id @default(cuid())
+  userId      String
+  name        String
+  startedBy   String            @default("")
+  createdAt   DateTime          @default(now())
+  completedAt DateTime?
+  tasks       OffboardingTask[]
+}
+
+model OffboardingTask {
+  id            String      @id @default(cuid())
+  offboardingId String
+  label         String
+  done          Boolean     @default(false)
+  doneAt        DateTime?
+  sortOrder     Int         @default(0)
+  offboarding   Offboarding @relation(fields: [offboardingId], references: [id], onDelete: Cascade)
+
+  @@index([offboardingId])
+}
+
 // One person's daily 9am-huddle submission: today's goal, what was pending from
 // yesterday, and role-level commentary. Hot leads (acquisitions) hang off it.
 model Standup {

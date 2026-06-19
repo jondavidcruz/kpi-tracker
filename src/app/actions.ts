@@ -1015,8 +1015,47 @@ export async function revokeTeamAccess(formData: FormData) {
       await admin.auth.admin.updateUserById(authId, { ban_duration: "876000h" }).catch(() => {});
     }
   }
+
+  // Spin up a mandatory offboarding checklist — fixed steps + every shared tool
+  // this person had access to (so passwords get changed / access removed).
+  const first = u.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const software = await db.software.findMany({ select: { name: true, accessList: true } });
+  const shared = software.filter((s) => (s.accessList || "").toLowerCase().includes(first) || (s.accessList || "").toLowerCase().includes(u.name.toLowerCase()));
+  const fixed = [
+    "✅ App (War Room) access revoked — confirm they're locked out",
+    "Remove Google Workspace / Gmail account access (Admin console)",
+    "Change the shared Gmail / email password",
+    "Remove them from all Google Chat spaces",
+    "Remove from shared Google Drive folders & Calendars",
+    "Reassign their active deals & leads to another rep",
+    "Collect any company devices / equipment",
+  ];
+  const fromTools = shared.map((s) => `Change password & remove access — ${s.name}`);
+  // Always remind about the core shared tools even if not in the registry yet.
+  const core = ["PropStream", "Batch Dialer", "CRM (REI Reply)"].filter((n) => !shared.some((s) => s.name.toLowerCase().includes(n.split(" ")[0].toLowerCase())));
+  const coreTasks = core.map((n) => `Change password & remove access — ${n}`);
+  const labels = [...fixed, ...fromTools, ...coreTasks];
+  await db.offboarding.create({
+    data: { userId: u.id, name: u.name, startedBy: me.name, tasks: { create: labels.map((label, i) => ({ label, sortOrder: i })) } },
+  });
+
   revalidatePath("/admin");
-  redirect("/admin?saved=Access%20revoked");
+  redirect("/admin?saved=Access%20revoked%20%E2%80%94%20complete%20the%20offboarding%20checklist#offboarding");
+}
+
+export async function toggleOffboardingTask(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const task = await db.offboardingTask.findUnique({ where: { id } });
+  if (!task) return;
+  const done = !task.done;
+  await db.offboardingTask.update({ where: { id }, data: { done, doneAt: done ? new Date() : null } });
+  // Mark the whole offboarding complete when nothing is left.
+  const remaining = await db.offboardingTask.count({ where: { offboardingId: task.offboardingId, done: false } });
+  await db.offboarding.update({ where: { id: task.offboardingId }, data: { completedAt: remaining === 0 ? new Date() : null } });
+  revalidatePath("/admin");
 }
 
 /**

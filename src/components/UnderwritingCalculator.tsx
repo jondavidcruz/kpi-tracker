@@ -155,7 +155,14 @@ export default function UnderwritingCalculator() {
   const feeAtAnchor = nNet - novAnchor;
 
   // ---- Creative / Listing ----
+  // We don't buy on these terms — we ASSIGN them to an end buyer and make money two
+  // ways: our assignment fee + marking up the down payment (charge the end buyer a
+  // bigger down than we owe the seller, and keep the spread).
   const cFee = n("cFee");
+  const cDown = n("cDown"); // down we owe the seller (often $0 on subject-to)
+  const cBuyerDown = n("cBuyerDown"); // down we collect from the end buyer
+  const cDownMarkup = Math.max(0, cBuyerDown - cDown);
+  const cMargin = cFee + cDownMarkup; // total we make on the creative deal
   const lList = n("lList"), lComm = num(v("lComm") || "2.5"), lRef = num(v("lRef") || "25"), lFlat = n("lFlat");
   const mktFee = lFlat > 0 ? lFlat : lList * (lComm / 100) * (lRef / 100);
 
@@ -185,7 +192,7 @@ export default function UnderwritingCalculator() {
   if (tab === "assignment") { dealMax = cashMao; profitAtAccepted = (flipperTarget - repairs - holding) - accepted; marginLabel = "Your assignment fee"; }
   else if (tab === "novation") { dealMax = novMao; profitAtAccepted = nNet - accepted; marginLabel = "Your fee"; }
   else if (tab === "flip") { dealMax = fMao; profitAtAccepted = arv - fTotalCosts - accepted; marginLabel = "Your profit"; }
-  else if (tab === "creative") { dealMax = n("cPrice"); profitAtAccepted = cFee; marginLabel = "Your assignment fee"; showAsking = false; }
+  else if (tab === "creative") { dealMax = n("cPrice"); profitAtAccepted = cMargin; marginLabel = "Your total margin"; showAsking = false; }
   else { dealMax = lList; profitAtAccepted = lFlat > 0 ? lFlat : accepted * (lComm / 100) * (lRef / 100); marginLabel = "Your marketing fee"; showAsking = false; }
   const overAsk = asking - dealMax; // > 0 means the seller is asking above our max offer
   const buyExit = tab === "assignment" || tab === "novation" || tab === "flip";
@@ -210,11 +217,12 @@ export default function UnderwritingCalculator() {
     }
     if (tab === "creative") {
       const type = v("cType") || "Seller finance";
+      // (rows assembled below; margin rows appended after the terms)
       const rows: [string, string][] = [["Structure", type]];
       if (type === "Subject-to") { rows.push(["Loan balance assumed", money(n("cLoan"))], ["Monthly payment (PITI)", money(n("cPmt"))]); }
       else { rows.push(["Agreed price", money(n("cPrice"))], ["Down to seller", money(n("cDown"))], ["Monthly to seller", money(n("cPmt"))], ["Term", v("cTerm") || "—"]); }
-      rows.push(["Our assignment fee (to end buyer)", money(cFee)]);
-      return { title: "Creative (Seller-finance / Subject-to) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`, rows, note: "We assign these terms to an end buyer who wants them and collect the assignment fee." };
+      rows.push(["Down we charge the end buyer", money(cBuyerDown)], ["Down markup we keep", money(cDownMarkup)], ["Our assignment fee", money(cFee)], ["🎯 Total margin (fee + down markup)", money(cMargin)]);
+      return { title: "Creative (Seller-finance / Subject-to) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`, rows, note: "We DON'T buy on these terms — we assign them to an end buyer who wants them. We make our assignment fee PLUS the markup on the down payment (charge the end buyer a higher down than we owe the seller and keep the spread). They assume the exact terms agreed with the seller." };
     }
     if (tab === "listing") {
       return {
@@ -375,23 +383,30 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "creative" && (
             <>
+              {legend}
               <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Structure</span>
                 <select value={v("cType") || "Seller finance"} onChange={set("cType")} className={inputCls}><option>Seller finance</option><option>Subject-to</option></select>
               </label>
+              <div className={reqDiv}>Terms agreed with the seller (we assign these — the end buyer assumes them)</div>
               {(v("cType") || "Seller finance") === "Subject-to" ? (
                 <>
-                  <Field k="cLoan" label="Loan balance assumed" prefix="$" req="opt" />
-                  <Field k="cPmt" label="Monthly payment (PITI)" prefix="$" req="opt" />
+                  <Field k="cLoan" label="Loan balance assumed" prefix="$" req="need" />
+                  <Field k="cPmt" label="Monthly payment (PITI)" prefix="$" req="need" />
+                  <Field k="cDown" label="Down to seller (if any)" prefix="$" req="opt" />
+                  <Field k="cTerm" label="Notes / term" req="opt" />
                 </>
               ) : (
                 <>
-                  <Field k="cPrice" label="Agreed price" prefix="$" req="opt" />
-                  <Field k="cDown" label="Down to seller" prefix="$" req="opt" />
-                  <Field k="cPmt" label="Monthly to seller" prefix="$" req="opt" />
-                  <Field k="cTerm" label="Term (e.g. 60 mo / balloon 5yr)" req="opt" />
+                  <Field k="cPrice" label="Agreed price" prefix="$" req="need" />
+                  <Field k="cDown" label="Down to seller (if any)" prefix="$" req="need" />
+                  <Field k="cPmt" label="Monthly to seller" prefix="$" req="need" />
+                  <Field k="cTerm" label="Term (e.g. 60 mo / balloon 5yr)" req="need" />
                 </>
               )}
-              <Field k="cFee" label="Our assignment fee (to end buyer)" prefix="$" span={2} placeholder="15,000" req="need" />
+              <div className={reqDiv}>Our money — assignment fee + down-payment markup</div>
+              <p className="sm:col-span-2 -mt-1 text-[11px] text-slate-500">We collect a bigger down from the end buyer than we owe the seller and keep the spread (e.g. seller down $5k → tell the end buyer $10–15k), plus our assignment fee.</p>
+              <Field k="cFee" label="Our assignment fee (to end buyer)" prefix="$" placeholder="15,000" req="need" />
+              <Field k="cBuyerDown" label="Down we charge the end buyer" prefix="$" placeholder="15,000" req="need" />
             </>
           )}
           {tab === "listing" && (
@@ -466,8 +481,10 @@ export default function UnderwritingCalculator() {
           {tab === "creative" && (
             <>
               <Res label="Structure" value={v("cType") || "Seller finance"} tone="muted" />
-              <Res label="🎯 Our assignment fee" value={money(cFee)} tone={cFee > 0 ? "good" : "muted"} big />
-              <p className="mt-2 text-[11px] text-slate-400">We assign these terms to an end buyer who wants them — we collect the fee, the buyer takes over the terms.</p>
+              <Res label="Assignment fee" value={money(cFee)} tone="muted" />
+              <Res label={`Down markup (buyer ${money(cBuyerDown)} − seller ${money(cDown)})`} value={money(cDownMarkup)} tone={cDownMarkup > 0 ? "good" : "muted"} />
+              <Res label="🎯 Total margin to us" value={money(cMargin)} tone={cMargin > 0 ? "good" : "muted"} big />
+              <p className="mt-2 text-[11px] text-slate-400">We don&apos;t buy on these terms — we assign them to an end buyer who wants them. We make the assignment fee + the spread on the down payment; they assume the exact agreed terms.</p>
             </>
           )}
           {tab === "listing" && (

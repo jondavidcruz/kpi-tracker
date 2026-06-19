@@ -25,9 +25,10 @@ export default async function AppShell({ children }: { children: React.ReactNode
   const marketing = canAccessMarketing(me);
   const payroll = canAccessPayroll(me);
   const timecard = payroll; // Payroll is leadership-only (Jon, Viktoriia, Enrico)
-  const [newTickets, newSuggestions] = await Promise.all([
+  const [newTickets, newSuggestions, openOffboarding] = await Promise.all([
     manager ? db.ticket.count({ where: { status: "new" } }) : Promise.resolve(0),
     admin ? db.suggestion.count({ where: { status: "proposed" } }) : Promise.resolve(0),
+    manager ? db.offboarding.findFirst({ where: { completedAt: null }, include: { _count: { select: { tasks: { where: { done: false } } } } } }) : Promise.resolve(null),
   ]);
 
   // Start-of-shift nag: if this rep tracks internet and hasn't run today's speed
@@ -51,6 +52,16 @@ export default async function AppShell({ children }: { children: React.ReactNode
       <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} newTickets={newTickets} newSuggestions={newSuggestions} />
       <main className="min-w-0 flex-1">
         <div className="mx-auto w-full max-w-[1320px] px-4 py-6 md:px-8 md:py-8">
+          {openOffboarding && (
+            <Link href="/admin#offboarding" className="mb-5 flex items-center gap-3 rounded-xl bg-red-50 px-4 py-3 ring-1 ring-red-300 transition hover:bg-red-100">
+              <span className="text-xl">🚪</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-red-800">Offboarding {openOffboarding.name} — {openOffboarding._count.tasks} task{openOffboarding._count.tasks === 1 ? "" : "s"} left</div>
+                <div className="text-xs text-red-600">Remove shared access &amp; change shared passwords before this person is fully gone.</div>
+              </div>
+              <span className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white">Finish it →</span>
+            </Link>
+          )}
           {needsSpeedTest && (
             <Link
               href="/entry"

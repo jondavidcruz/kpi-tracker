@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess } from "@/app/actions";
+import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess, toggleOffboardingTask } from "@/app/actions";
 import { adminConfigured } from "@/lib/supabase/admin";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -56,6 +56,7 @@ export default async function AdminPage({
 
   const owner = isAdmin(me);
   const aiLog = owner ? await db.assistantLog.findMany({ orderBy: { createdAt: "desc" }, take: 40 }) : [];
+  const openOffboardings = await db.offboarding.findMany({ where: { completedAt: null }, include: { tasks: { orderBy: { sortOrder: "asc" } } }, orderBy: { createdAt: "desc" } });
   const cats = [
     { id: "people", emoji: "👥", label: "People", show: true },
     { id: "access", emoji: "🔑", label: "Logins & passwords", show: true },
@@ -85,6 +86,33 @@ export default async function AdminPage({
           Saved “{sp.saved}”.
         </div>
       )}
+
+      {/* ════ MANDATORY OFFBOARDING CHECKLISTS ════ */}
+      {openOffboardings.map((o) => {
+        const doneN = o.tasks.filter((t) => t.done).length;
+        return (
+          <section key={o.id} id="offboarding" className="scroll-mt-20">
+            <div className="rounded-2xl bg-red-50 p-5 ring-2 ring-red-300">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-base font-extrabold text-red-700">🚪 Offboarding {o.name} — finish before they&apos;re fully locked out</span>
+                <span className="ml-auto rounded-full bg-red-200 px-2.5 py-0.5 text-xs font-bold text-red-800">{doneN}/{o.tasks.length} done</span>
+              </div>
+              <p className="mt-1 text-xs text-red-600">Their War Room login is already revoked. Now remove every shared access below and change shared passwords. This stays here until all items are checked.</p>
+              <div className="mt-3 space-y-1">
+                {o.tasks.map((t) => (
+                  <form key={t.id} action={toggleOffboardingTask} className="flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-sm ring-1 ring-red-100">
+                    <input type="hidden" name="id" value={t.id} />
+                    <button className={`grid h-5 w-5 shrink-0 place-items-center rounded border ${t.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white text-transparent hover:border-slate-400"}`}>✓</button>
+                    <span className={t.done ? "text-slate-400 line-through" : "text-slate-700"}>{t.label}</span>
+                    {t.done && t.doneAt && <span className="ml-auto text-[10px] text-slate-300">{new Date(t.doneAt).toLocaleDateString()}</span>}
+                  </form>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-red-500">Tip: the shared tools above come from your Software &amp; Logins registry — keep each tool&apos;s &quot;who has access&quot; list current so this checklist is always accurate.</p>
+            </div>
+          </section>
+        );
+      })}
 
       {/* ════ PEOPLE ════ */}
       <section id="people" className="scroll-mt-20">
