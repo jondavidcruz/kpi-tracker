@@ -1782,7 +1782,7 @@ export async function saveClosing(formData: FormData) {
     exit: EXITS.includes(String(formData.get("exit"))) ? String(formData.get("exit")) : "assignment",
     status: CLOSING_STATUSES.includes(String(formData.get("status"))) ? String(formData.get("status")) : "escrow",
     revenue: Math.max(0, parseFloat(String(formData.get("revenue") ?? "0")) || 0),
-    source: ["ppl", "sms", "mail", "other", ""].includes(String(formData.get("source"))) ? String(formData.get("source")) : "",
+    source: ["ppl", "sms", "mail", "cold_call", "referral", "other", ""].includes(String(formData.get("source"))) ? String(formData.get("source")) : "",
     market: String(formData.get("market") ?? "").trim().slice(0, 80),
     falloutReason: String(formData.get("falloutReason") ?? "").trim().slice(0, 80),
     openedDate: String(formData.get("openedDate") ?? "").trim(),

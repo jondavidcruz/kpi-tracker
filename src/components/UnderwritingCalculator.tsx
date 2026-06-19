@@ -70,14 +70,16 @@ const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 t
 type FieldApi = { v: (k: string) => string; set: (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void };
 const FieldCtx = createContext<FieldApi>({ v: () => "", set: () => () => {} });
 
-function Field({ k, label, prefix, suffix, placeholder, span }: { k: string; label: string; prefix?: string; suffix?: string; placeholder?: string; span?: number }) {
+function Field({ k, label, prefix, suffix, placeholder, span, req }: { k: string; label: string; prefix?: string; suffix?: string; placeholder?: string; span?: number; req?: "need" | "opt" }) {
   const { v, set } = useContext(FieldCtx);
+  const labelCls = req === "need" ? "text-red-600" : req === "opt" ? "text-amber-600" : "text-slate-500";
+  const ring = req === "need" ? "border-red-300 focus:ring-red-200" : req === "opt" ? "border-amber-200" : "";
   return (
     <label className={span === 2 ? "sm:col-span-2" : span === 3 ? "sm:col-span-3" : ""}>
-      <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">{label}</span>
+      <span className={`mb-0.5 block text-[11px] font-semibold ${labelCls}`}>{label}</span>
       <div className="relative">
         {prefix && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{prefix}</span>}
-        <input inputMode={suffix || prefix ? "decimal" : "text"} value={v(k)} onChange={set(k)} placeholder={placeholder} className={`${inputCls} ${prefix ? "pl-6" : ""} ${suffix ? "pr-8" : ""}`} />
+        <input inputMode={suffix || prefix ? "decimal" : "text"} value={v(k)} onChange={set(k)} placeholder={placeholder} className={`${inputCls} ${ring} ${prefix ? "pl-6" : ""} ${suffix ? "pr-8" : ""}`} />
         {suffix && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">{suffix}</span>}
       </div>
     </label>
@@ -251,7 +253,14 @@ export default function UnderwritingCalculator() {
     setTimeout(() => w.print(), 250);
   }
 
-  const sectionCls = "sm:col-span-2 mt-1 border-t border-slate-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400";
+  const reqDiv = "sm:col-span-2 mt-1 border-t border-red-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-red-500";
+  const optDiv = "sm:col-span-2 mt-1 border-t border-amber-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-amber-500";
+  const legend = (
+    <div className="sm:col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-[11px] font-semibold ring-1 ring-slate-200">
+      <span className="text-red-600">🔴 Required to give an MAO</span>
+      <span className="text-amber-600">🟡 Optional — refines the number</span>
+    </div>
+  );
 
   return (
     <FieldCtx.Provider value={{ v, set }}>
@@ -299,8 +308,9 @@ export default function UnderwritingCalculator() {
         <div className="grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:grid-cols-2">
           {tab === "assignment" && (
             <>
-              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Market tier (% of ARV the flipper supports)</span>
-                <select value={marketPct} onChange={set("marketPct")} className={inputCls}>{MARKET_TIERS.map(([val, l]) => <option key={val} value={val}>{l}</option>)}</select>
+              {legend}
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Market tier (% of ARV the flipper supports)</span>
+                <select value={marketPct} onChange={set("marketPct")} className={`${inputCls} border-red-300`}>{MARKET_TIERS.map(([val, l]) => <option key={val} value={val}>{l}</option>)}</select>
               </label>
               <details className="sm:col-span-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
                 <summary className="cursor-pointer text-[11px] font-bold text-slate-600 hover:text-brand-navy">📍 Which market tier should I pick?</summary>
@@ -315,42 +325,43 @@ export default function UnderwritingCalculator() {
                   <p className="text-[10px] italic text-slate-400">Higher tier = more desirable market = offer a higher % of ARV (the flipper accepts a thinner margin because the resale is fast and certain).</p>
                 </div>
               </details>
-              <Field k="arv" label="ARV" prefix="$" placeholder="350,000" />
-              <Field k="aFee" label="Assignment fee" prefix="$" placeholder="15,000" />
-              <div className={sectionCls}>Repairs — type a figure, or estimate from sqft</div>
-              <Field k="repairs" label="Repair estimate ($) — overrides sqft calc" prefix="$" span={2} />
-              <Field k="sqft" label="Square feet" />
-              <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Condition ($/sf)</span>
-                <select value={v("rehabSf")} onChange={set("rehabSf")} className={inputCls}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
+              <Field k="arv" label="ARV" prefix="$" placeholder="350,000" req="need" />
+              <Field k="aFee" label="Assignment fee" prefix="$" placeholder="15,000" req="need" />
+              <div className={reqDiv}>Repairs (required) — type a figure, or estimate from sqft</div>
+              <Field k="repairs" label="Repair estimate ($) — overrides sqft calc" prefix="$" span={2} req="need" />
+              <Field k="sqft" label="Square feet" req="need" />
+              <label><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Condition ($/sf)</span>
+                <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
-              <div className={sectionCls}>Flipper holding (their money cost)</div>
-              <Field k="aHoldMonths" label="Months held" placeholder="6" />
-              <Field k="aMonthlyCarry" label="Monthly carry (taxes, ins, loan…)" prefix="$" placeholder="1,000" />
-              <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" />
-              <div className={sectionCls}>ARV comps (addr · sold $ · days on market)</div>
+              <div className={optDiv}>Flipper holding (optional — their money cost)</div>
+              <Field k="aHoldMonths" label="Months held" placeholder="6" req="opt" />
+              <Field k="aMonthlyCarry" label="Monthly carry (taxes, ins, loan…)" prefix="$" placeholder="1,000" req="opt" />
+              <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
+              <div className={optDiv}>ARV comps (optional · addr · sold $ · days on market)</div>
               {[1, 2, 3].map((i) => (
                 <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
-                  <Field k={`comp${i}`} label={`Comp ${i} address`} span={2} />
-                  <Field k={`comp${i}p`} label="Sold $" prefix="$" />
-                  <Field k={`comp${i}d`} label="DOM" />
+                  <Field k={`comp${i}`} label={`Comp ${i} address`} span={2} req="opt" />
+                  <Field k={`comp${i}p`} label="Sold $" prefix="$" req="opt" />
+                  <Field k={`comp${i}d`} label="DOM" req="opt" />
                 </div>
               ))}
             </>
           )}
           {tab === "novation" && (
             <>
+              {legend}
               <div className="sm:col-span-2 flex items-end gap-2">
-                <div className="flex-1"><Field k="nList" label="List price (current similar-condition value)" prefix="$" placeholder="420,000" /></div>
+                <div className="flex-1"><Field k="nList" label="List price (current similar-condition value)" prefix="$" placeholder="420,000" req="need" /></div>
                 {suggestedList > 0 && (
                   <button type="button" onClick={() => setV("nList", String(suggestedList))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-200" title="Lowest comp — most conservative to sell under 90 days">Use {money(suggestedList)}</button>
                 )}
               </div>
-              <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" />
-              <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" />
-              <Field k="nSellerClosePct" label="Seller closing % (we cover)" suffix="%" placeholder="1.5" />
-              <Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder="15,000" />
-              <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="7" />
-              <div className={sectionCls}>As-is comparables — match condition (addr · sold $ · days on market)</div>
+              <Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder="15,000" req="need" />
+              <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" req="opt" />
+              <Field k="nSellerClosePct" label="Seller closing % (we cover)" suffix="%" placeholder="1.5" req="opt" />
+              <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" req="opt" />
+              <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="7" req="opt" />
+              <div className={optDiv}>As-is comparables (optional · addr · sold $ · days on market)</div>
               {[1, 2, 3].map((i) => (
                 <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
                   <Field k={`nComp${i}`} label={`Comp ${i} address`} span={2} />
@@ -367,61 +378,63 @@ export default function UnderwritingCalculator() {
               </label>
               {(v("cType") || "Seller finance") === "Subject-to" ? (
                 <>
-                  <Field k="cLoan" label="Loan balance assumed" prefix="$" />
-                  <Field k="cPmt" label="Monthly payment (PITI)" prefix="$" />
+                  <Field k="cLoan" label="Loan balance assumed" prefix="$" req="opt" />
+                  <Field k="cPmt" label="Monthly payment (PITI)" prefix="$" req="opt" />
                 </>
               ) : (
                 <>
-                  <Field k="cPrice" label="Agreed price" prefix="$" />
-                  <Field k="cDown" label="Down to seller" prefix="$" />
-                  <Field k="cPmt" label="Monthly to seller" prefix="$" />
-                  <Field k="cTerm" label="Term (e.g. 60 mo / balloon 5yr)" />
+                  <Field k="cPrice" label="Agreed price" prefix="$" req="opt" />
+                  <Field k="cDown" label="Down to seller" prefix="$" req="opt" />
+                  <Field k="cPmt" label="Monthly to seller" prefix="$" req="opt" />
+                  <Field k="cTerm" label="Term (e.g. 60 mo / balloon 5yr)" req="opt" />
                 </>
               )}
-              <Field k="cFee" label="Our assignment fee (to end buyer)" prefix="$" span={2} placeholder="15,000" />
+              <Field k="cFee" label="Our assignment fee (to end buyer)" prefix="$" span={2} placeholder="15,000" req="need" />
             </>
           )}
           {tab === "listing" && (
             <>
-              <Field k="lList" label="List price" prefix="$" span={2} />
-              <Field k="lComm" label="Listing-side commission" suffix="%" placeholder="2.5" />
-              <Field k="lRef" label="Referral fee (% of commission)" suffix="%" placeholder="25" />
-              <Field k="lFlat" label="…or flat marketing fee (overrides)" prefix="$" span={2} placeholder="2,500" />
+              {legend}
+              <Field k="lList" label="List price" prefix="$" span={2} req="need" />
+              <Field k="lComm" label="Listing-side commission" suffix="%" placeholder="2.5" req="opt" />
+              <Field k="lRef" label="Referral fee (% of commission)" suffix="%" placeholder="25" req="opt" />
+              <Field k="lFlat" label="…or flat marketing fee (overrides)" prefix="$" span={2} placeholder="2,500" req="opt" />
             </>
           )}
           {tab === "flip" && (
             <>
-              <Field k="arv" label="ARV" prefix="$" placeholder="350,000" />
-              <Field k="fMinProfit" label="Minimum profit" prefix="$" placeholder="30,000" />
-              <div className={sectionCls}>Rehab — direct $, or sqft × $/sf</div>
-              <Field k="fRehab" label="Rehab cost ($) — overrides sqft calc" prefix="$" span={2} />
-              <Field k="sqft" label="Square feet" />
-              <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Condition ($/sf)</span>
-                <select value={v("rehabSf")} onChange={set("rehabSf")} className={inputCls}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
+              {legend}
+              <Field k="arv" label="ARV" prefix="$" placeholder="350,000" req="need" />
+              <Field k="fMinProfit" label="Minimum profit" prefix="$" placeholder="30,000" req="opt" />
+              <div className={reqDiv}>Rehab (required) — direct $, or sqft × $/sf</div>
+              <Field k="fRehab" label="Rehab cost ($) — overrides sqft calc" prefix="$" span={2} req="need" />
+              <Field k="sqft" label="Square feet" req="need" />
+              <label><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Condition ($/sf)</span>
+                <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
-              <div className={sectionCls}>Property costs (% of ARV)</div>
-              <Field k="fComm" label="Realtor commission" suffix="%" placeholder="3" />
-              <Field k="fClosing" label="Closing costs" suffix="%" placeholder="2" />
-              <Field k="fCarry" label="Utilities / taxes / insurance" suffix="%" placeholder="1" />
-              <Field k="fHoa" label="Monthly HOA ($)" prefix="$" />
-              <Field k="fPm" label="Project manager / misc ($)" prefix="$" />
-              <Field k="fPurchCredit" label="Purchase commission credit ($)" prefix="$" />
-              <div className={sectionCls}>Money costs (hard-money)</div>
+              <div className={optDiv}>Property costs (optional · % of ARV)</div>
+              <Field k="fComm" label="Realtor commission" suffix="%" placeholder="3" req="opt" />
+              <Field k="fClosing" label="Closing costs" suffix="%" placeholder="2" req="opt" />
+              <Field k="fCarry" label="Utilities / taxes / insurance" suffix="%" placeholder="1" req="opt" />
+              <Field k="fHoa" label="Monthly HOA ($)" prefix="$" req="opt" />
+              <Field k="fPm" label="Project manager / misc ($)" prefix="$" req="opt" />
+              <Field k="fPurchCredit" label="Purchase commission credit ($)" prefix="$" req="opt" />
+              <div className={optDiv}>Money costs (optional · hard-money)</div>
               <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Lender preset (fills rate / points / fee)</span>
                 <select value={v("fLender")} onChange={(e) => { const L = LENDERS[e.target.value]; setF((p) => ({ ...p, fLender: e.target.value, ...(L ? { fRate: L.rate, fPoints: L.points, fSvc: L.svc } : {}) })); }} className={inputCls}>
                   <option value="">— custom —</option>
                   {Object.keys(LENDERS).map((k) => <option key={k} value={k}>{k}</option>)}
                 </select>
               </label>
-              <Field k="fLoan" label="Loan amount" prefix="$" />
-              <Field k="fHold" label="Hold time (months)" placeholder="6" />
-              <Field k="fRate" label="Interest rate" suffix="%" placeholder="10" />
-              <Field k="fPoints" label="Points" suffix="%" placeholder="1" />
-              <Field k="fSvc" label="Service fee ($)" prefix="$" />
-              <Field k="fGap" label="Gap loan amount ($)" prefix="$" />
-              <Field k="fGapRate" label="Gap interest rate" suffix="%" placeholder="15" />
-              <div className={sectionCls}>Profit check</div>
-              <Field k="fPurchase" label="Your purchase price ($)" prefix="$" span={2} />
+              <Field k="fLoan" label="Loan amount" prefix="$" req="opt" />
+              <Field k="fHold" label="Hold time (months)" placeholder="6" req="opt" />
+              <Field k="fRate" label="Interest rate" suffix="%" placeholder="10" req="opt" />
+              <Field k="fPoints" label="Points" suffix="%" placeholder="1" req="opt" />
+              <Field k="fSvc" label="Service fee ($)" prefix="$" req="opt" />
+              <Field k="fGap" label="Gap loan amount ($)" prefix="$" req="opt" />
+              <Field k="fGapRate" label="Gap interest rate" suffix="%" placeholder="15" req="opt" />
+              <div className={optDiv}>Profit check (optional)</div>
+              <Field k="fPurchase" label="Your purchase price ($)" prefix="$" span={2} req="opt" />
             </>
           )}
         </div>

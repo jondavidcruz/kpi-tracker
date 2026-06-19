@@ -11,7 +11,17 @@ export const dynamic = "force-dynamic";
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
 const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const pct = (n: number) => `${(n * 100).toFixed(n < 0.1 ? 1 : 0)}%`;
-const SRC_LABEL: Record<string, string> = { ppl: "PPL", sms: "SMS", mail: "Direct mail", other: "Other", "": "Unattributed" };
+const SRC_LABEL: Record<string, string> = { ppl: "PPL", sms: "SMS", mail: "Direct mail", cold_call: "Cold call", referral: "Referral", other: "Other", "": "Unattributed" };
+// Normalize free-text/legacy source strings into canonical buckets.
+function normSource(s: string): string {
+  const x = (s || "").toLowerCase().replace(/[\s-]+/g, "_");
+  if (x.includes("ppl") || x.includes("pay_per") || x.includes("paid")) return "ppl";
+  if (x.includes("cold")) return "cold_call";
+  if (x.includes("sms") || x.includes("text")) return "sms";
+  if (x.includes("mail")) return "mail";
+  if (x.includes("refer")) return "referral";
+  return x && x !== "other" ? "other" : "";
+}
 const FALLOUT_LABEL: Record<string, string> = { financing: "Financing", title: "Title", seller: "Seller backed out", inspection: "Inspection", no_buyer: "No buyer", other: "Other", "": "Unspecified" };
 
 export default async function BenchmarksPage() {
@@ -38,12 +48,13 @@ export default async function BenchmarksPage() {
   const kpis = await db.kpi.findMany({ where: { key: { in: KEYS } }, select: { id: true, key: true } });
   const idToKey = new Map(kpis.map((k) => [k.id, k.key]));
   const ids = kpis.map((k) => k.id);
-  const [monthEntries, yearEntries, closings, buyers, deals] = await Promise.all([
+  const [monthEntries, yearEntries, closings, buyers, deals, ledger] = await Promise.all([
     db.entry.findMany({ where: { kpiId: { in: ids }, date: { gte: monthStart, lte: today } }, select: { kpiId: true, value: true } }),
     db.entry.findMany({ where: { kpiId: { in: ids }, date: { gte: yearStart, lte: today } }, select: { kpiId: true, value: true } }),
     db.closing.findMany({ include: { expenses: true } }),
     db.marketContact.findMany({ select: { vetStage: true } }),
     db.deal.findMany({ select: { contractDate: true, soldDate: true } }),
+    db.closedDeal.findMany({ select: { profit: true, leadSource: true } }),
   ]);
   const sumBy = (rows: { kpiId: string; value: number }[]) => {
     const m: Record<string, number> = {};
@@ -90,6 +101,21 @@ export default async function BenchmarksPage() {
   const falloutByReason = fallout.reduce((m, c) => { const r = c.falloutReason || ""; m[r] = (m[r] ?? 0) + 1; return m; }, {} as Record<string, number>);
   // By-market avg fee (YTD closed)
   const byMarket = closedYTD.reduce((m, c) => { const k = c.market || "—"; (m[k] ??= []).push(c.revenue); return m; }, {} as Record<string, number[]>);
+
+  // Closed deals by lead source — ALL-TIME (HUD ledger history + escrow tracker),
+  // so the cold-call era shows next to PPL. Track count, total net, biggest, avg.
+  const bySource = new Map<string, { count: number; net: number; biggest: number }>();
+  const addSrc = (raw: string, net: number) => {
+    const k = normSource(raw);
+    const a = bySource.get(k) ?? { count: 0, net: 0, biggest: 0 };
+    a.count++; a.net += net; a.biggest = Math.max(a.biggest, net);
+    bySource.set(k, a);
+  };
+  for (const d of ledger) addSrc(d.leadSource, d.profit);
+  for (const c of closings.filter((c) => c.status === "closed")) addSrc(c.source, netOf(c));
+  const sourceRows = [...bySource.entries()].map(([k, a]) => ({ key: k, ...a, avg: a.count ? a.net / a.count : 0 })).sort((x, y) => y.net - x.net);
+  const bestByTotal = sourceRows[0]?.key;
+  const bestByAvg = [...sourceRows].sort((a, b) => b.avg - a.avg)[0]?.key;
 
   // Ops snapshot
   const activeBuyers = buyers.filter((b) => b.vetStage === "active").length;
@@ -152,6 +178,46 @@ export default async function BenchmarksPage() {
           <Stat label="Avg days to close" value={dayDiffs.length ? `${Math.round(avgEscrowDays)} days` : "—"} sub="escrow open → close" />
           <Stat label="Company ROI (mo)" value={spendTotal + opexMonth ? `${(companyRoiMonth * 100).toFixed(0)}%` : "—"} sub="after mktg + opex" />
         </div>
+      </section>
+
+      {/* Closed deals by lead source — all-time (which channel produces best) */}
+      <section>
+        <h2 className="mb-2 text-sm font-bold text-slate-700">🎯 Closed deals by lead source <span className="font-normal text-slate-400">— all-time (ledger + escrow)</span></h2>
+        {sourceRows.length === 0 ? (
+          <Card className="p-4 text-sm text-slate-400">No closed deals with a source yet. Tag each deal&apos;s source in <Link href="/closing" className="underline">Escrow &amp; Closing</Link> (and the historical ledger in Closed deals) to compare channels.</Card>
+        ) : (
+          <Card className="p-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-400">
+                    <th className="py-1.5 pr-3">Source</th>
+                    <th className="px-2 text-right">Deals</th>
+                    <th className="px-2 text-right">Total net profit</th>
+                    <th className="px-2 text-right">Avg / deal</th>
+                    <th className="px-2 text-right">Biggest</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourceRows.map((r) => (
+                    <tr key={r.key} className="border-b border-slate-50">
+                      <td className="py-1.5 pr-3 font-semibold text-slate-700">
+                        {SRC_LABEL[r.key] ?? r.key}
+                        {r.key === bestByTotal && <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">most profit</span>}
+                        {r.key === bestByAvg && r.key !== bestByTotal && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">biggest deals</span>}
+                      </td>
+                      <td className="px-2 text-right tabular-nums">{r.count}</td>
+                      <td className="px-2 text-right font-semibold tabular-nums text-emerald-700">{usd(r.net)}</td>
+                      <td className="px-2 text-right tabular-nums">{usd(r.avg)}</td>
+                      <td className="px-2 text-right tabular-nums text-slate-500">{usd(r.biggest)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">“Most profit” = biggest total contribution (volume). “Biggest deals” = highest average per deal (quality). PPL tends to win on volume; cold call often wins on deal size.</p>
+          </Card>
+        )}
       </section>
 
       {/* Avg fee by market */}

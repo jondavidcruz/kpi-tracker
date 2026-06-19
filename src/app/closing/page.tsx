@@ -13,7 +13,7 @@ const STATUSES: [string, string][] = [["escrow", "In escrow"], ["closed", "Close
 const STATUS_CLS: Record<string, string> = { escrow: "bg-amber-100 text-amber-700", closed: "bg-emerald-100 text-emerald-700", fell_through: "bg-slate-200 text-slate-500" };
 // Common expense lines to make it one-tap to add the usual costs.
 const PRESETS = ["Title / escrow fee", "Transaction coordinator", "Buyer-side concession", "EMD applied", "Marketing", "Wire / recording fee", "Agent commission", "Repairs credit", "Other"];
-const SOURCES: [string, string][] = [["", "— source —"], ["ppl", "PPL"], ["sms", "SMS"], ["mail", "Direct mail"], ["other", "Other"]];
+const SOURCES: [string, string][] = [["", "— source —"], ["ppl", "PPL"], ["sms", "SMS"], ["mail", "Direct mail"], ["cold_call", "Cold call"], ["referral", "Referral"], ["other", "Other"]];
 const FALLOUT: [string, string][] = [["", "— reason —"], ["financing", "Financing fell through"], ["title", "Title issue"], ["seller", "Seller backed out"], ["inspection", "Inspection"], ["no_buyer", "No buyer found"], ["other", "Other"]];
 
 export default async function ClosingPage() {
