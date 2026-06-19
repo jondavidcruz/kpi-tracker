@@ -925,6 +925,20 @@ model Standup {
   @@unique([userId, date])
 }
 
+// A task or note a leader (Jon / Marie) assigns a rep in the huddle. Persists
+// across days until the rep marks it done.
+model HuddleTask {
+  id         String    @id @default(cuid())
+  userId     String // the rep it's assigned to
+  text       String
+  assignedBy String    @default("")
+  done       Boolean   @default(false)
+  doneAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
 // A hot lead / deal a rep is working, brought to the huddle (acquisitions).
 model StandupItem {
   id          String  @id @default(cuid())

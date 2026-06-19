@@ -8,6 +8,7 @@ export type HuddleRep = {
   goal: string; pending: string; note: string; submitted: boolean;
   items: { id: string; title: string; status: string; roadblock: string; nextStep: string; todayAction: string; hot: boolean }[];
   deals: { deal: Deal; days: number | null; level: string; recommendation: string }[];
+  tasks: { id: string; text: string; assignedBy: string; done: boolean }[];
 };
 export type HuddleData = {
   date: string;
@@ -32,12 +33,14 @@ const roleOf = (position: string): HuddleRep["role"] =>
 
 export async function buildHuddleData(date: string): Promise<HuddleData> {
   const prev = prevWorkday(date);
-  const [users, alerts, pips, standups, deals] = await Promise.all([
+  const taskSince = new Date(Date.now() - 7 * 86400000);
+  const [users, alerts, pips, standups, deals, huddleTasks] = await Promise.all([
     db.user.findMany({ where: { active: true, position: { not: "" } }, orderBy: { name: "asc" }, select: { id: true, name: true, position: true } }),
     db.alert.findMany({ where: { date: prev }, include: { kpi: { select: { name: true } }, user: { select: { name: true } } } }),
     db.pip.findMany({ where: { status: "open" }, include: { user: { select: { name: true } } } }),
     db.standup.findMany({ where: { date }, include: { items: { orderBy: { createdAt: "asc" } } } }),
     db.deal.findMany({ where: { status: { notIn: ["closed", "dead", "lost"] } } }),
+    db.huddleTask.findMany({ where: { OR: [{ done: false }, { doneAt: { gte: taskSince } }] }, orderBy: { createdAt: "asc" } }),
   ]);
 
   const misses: HuddleMiss[] = alerts.map((a) => ({
@@ -46,6 +49,8 @@ export async function buildHuddleData(date: string): Promise<HuddleData> {
   }));
   const pipNames = pips.map((p) => ({ name: p.user?.name ?? "—", kpiName: p.kpiName || p.kpiKey }));
   const standupByUser = new Map(standups.map((s) => [s.userId, s]));
+  const tasksByUser = new Map<string, typeof huddleTasks>();
+  for (const t of huddleTasks) { const a = tasksByUser.get(t.userId) ?? []; a.push(t); tasksByUser.set(t.userId, a); }
   const dealAging = deals.map((deal) => { const a = analyzeDeal(deal, date); return { deal, days: a.days, level: a.level, recommendation: a.recommendation }; });
 
   const owners = users.filter((u) => firstName(u.name) === "jon");
@@ -57,6 +62,7 @@ export async function buildHuddleData(date: string): Promise<HuddleData> {
       goal: s?.goal ?? "", pending: s?.pending ?? "", note: s?.note ?? "", submitted: s?.submitted ?? false,
       items: (s?.items ?? []).map((it) => ({ id: it.id, title: it.title, status: it.status, roadblock: it.roadblock, nextStep: it.nextStep, todayAction: it.todayAction, hot: it.hot })),
       deals: role === "Dispositions" ? dealAging.filter((d) => firstName(d.deal.assignedTo) === firstName(u.name)) : [],
+      tasks: (tasksByUser.get(u.id) ?? []).map((t) => ({ id: t.id, text: t.text, assignedBy: t.assignedBy, done: t.done })),
     };
   });
 

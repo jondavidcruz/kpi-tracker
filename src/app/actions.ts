@@ -1973,6 +1973,39 @@ export async function saveStandupItem(formData: FormData) {
   revalidatePath("/huddle");
 }
 
+// Leader (Jon/Marie) assigns a task / note to a rep in the huddle.
+export async function addHuddleTask(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const text = String(formData.get("text") ?? "").trim().slice(0, 300);
+  if (!userId || !text) return;
+  await db.huddleTask.create({ data: { userId, text, assignedBy: me!.name } });
+  revalidatePath("/huddle");
+}
+
+export async function toggleHuddleTask(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const t = await db.huddleTask.findUnique({ where: { id } });
+  if (!t) return;
+  if (t.userId !== me.id && !isManager(me)) return; // rep can mark their own done; managers any
+  const done = !t.done;
+  await db.huddleTask.update({ where: { id }, data: { done, doneAt: done ? new Date() : null } });
+  revalidatePath("/huddle");
+}
+
+export async function deleteHuddleTask(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.huddleTask.delete({ where: { id } });
+  revalidatePath("/huddle");
+}
+
 export async function deleteStandupItem(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;

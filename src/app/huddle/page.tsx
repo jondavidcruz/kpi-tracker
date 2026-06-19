@@ -3,7 +3,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, friendlyDate } from "@/lib/date";
 import { buildHuddleData } from "@/lib/huddle";
-import { saveStandup, addStandupItem, saveStandupItem, deleteStandupItem } from "@/app/actions";
+import { saveStandup, addStandupItem, saveStandupItem, deleteStandupItem, addHuddleTask, toggleHuddleTask, deleteHuddleTask } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +45,34 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
             {myMiss.map((m, i) => (
               <div key={i} className="mt-1 text-red-800">• <strong>{m.kpi}</strong>: {Math.round(m.actual)} vs goal {Math.round(m.expected)}{m.repReason ? ` — “${m.repReason}”` : ""}{m.fix ? ` → fix: ${m.fix}` : ""}</div>
             ))}
+          </div>
+        )}
+
+        {/* From the leader — assigned tasks / notes (Jon or Marie) */}
+        {(r.tasks.length > 0 || manager) && (
+          <div className="mb-3 rounded-lg bg-indigo-50 p-2.5 ring-1 ring-indigo-200">
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-indigo-500">📋 From your leader</div>
+            <div className="space-y-1">
+              {r.tasks.length === 0 && <div className="text-xs text-indigo-300">No tasks assigned.</div>}
+              {r.tasks.map((t) => (
+                <div key={t.id} className="flex items-center gap-2 text-sm">
+                  <form action={toggleHuddleTask}>
+                    <input type="hidden" name="id" value={t.id} />
+                    <button title={r.id === me.id || manager ? "Toggle done" : ""} className={`grid h-4 w-4 place-items-center rounded border text-[10px] ${t.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-indigo-300 bg-white text-transparent hover:border-indigo-400"}`}>✓</button>
+                  </form>
+                  <span className={t.done ? "flex-1 text-slate-400 line-through" : "flex-1 text-slate-700"}>{t.text}</span>
+                  {t.assignedBy && <span className="text-[10px] text-slate-400">— {t.assignedBy.split(" ")[0]}</span>}
+                  {manager && <form action={deleteHuddleTask}><input type="hidden" name="id" value={t.id} /><button className="text-slate-300 hover:text-red-600">×</button></form>}
+                </div>
+              ))}
+            </div>
+            {manager && (
+              <form action={addHuddleTask} className="mt-1.5 flex flex-wrap items-end gap-2">
+                <input type="hidden" name="userId" value={r.id} />
+                <input name="text" placeholder={`Assign ${r.name.split(" ")[0]} a task or note…`} className={`${inputCls} min-w-48 flex-1`} required />
+                <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">Assign</button>
+              </form>
+            )}
           </div>
         )}
 
