@@ -39,6 +39,22 @@ export interface NewAlert {
   userName: string | null;
 }
 
+// Dispositions developer/luxury day: dialer KPIs don't count; on a traditional
+// day, the developer-outreach KPIs don't count. A rep's focus lives on Standup.
+const DEV_KEYS = new Set(["dev_instagram", "dev_linkedin", "dev_website", "dev_wordofmouth", "dev_conversations"]);
+const DIALER_KEYS = new Set(["buyers_contacted", "ds_talk_time", "ds_dialer_talk_time"]);
+
+/** Map of userId → today's focus ("developer" | "traditional"). */
+async function getFocusMap(date: string): Promise<Map<string, string>> {
+  const rows = await db.standup.findMany({ where: { date }, select: { userId: true, focus: true } });
+  return new Map(rows.map((r) => [r.userId, r.focus]));
+}
+
+/** A KPI a rep shouldn't be judged on today, given their day focus. */
+function exemptForFocus(kpiKey: string, focus: string | undefined): boolean {
+  return (focus === "developer" ? DIALER_KEYS : DEV_KEYS).has(kpiKey);
+}
+
 /**
  * Evaluate the given KPIs for `date`. Records new alerts for misses and
  * resolves open alerts that have recovered. Returns the alerts newly created
@@ -51,6 +67,7 @@ export async function evaluateAndRecordAlerts(
   const month = monthOf(date);
   const fraction = paceFraction(date);
   const reps = await getActiveReps();
+  const focusMap = await getFocusMap(date);
 
   const kpis = await db.kpi.findMany({
     where: {
@@ -75,6 +92,7 @@ export async function evaluateAndRecordAlerts(
         : [{ userId: null, userName: null }];
 
     for (const subj of subjects) {
+      if (subj.userId && exemptForFocus(kpi.key, focusMap.get(subj.userId))) continue;
       const result = await evaluateOne(kpi, subj.userId, date, month, fraction);
       if (!result) continue; // no entry yet -> nothing to judge here
 
@@ -291,6 +309,7 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
   const dow = new Date(date + "T12:00:00Z").getUTCDay(); // 0=Sun..6=Sat
   if (dow === 0 || dow === 6) return [];
   const reps = await getActiveReps();
+  const focusMap = await getFocusMap(date);
   const kpis = await db.kpi.findMany({
     where: {
       active: true,
@@ -308,6 +327,7 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
     for (const rep of reps.filter((r) => (kpi.roleKey === "internet" ? r.tracksInternet : r.position === kpi.roleKey))) {
       if (rep.role === "admin") continue; // the owner manages the team; no missing-entry nags
       if (rep.irregularSchedule) continue; // no set schedule, don't nag on off days
+      if (exemptForFocus(kpi.key, focusMap.get(rep.id))) continue; // off-focus KPI today
       const entry = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: rep.id, date } });
       if (entry) continue; // they logged something, nothing missing
       const existing = await db.alert.findFirst({
@@ -339,10 +359,11 @@ export async function sendMissingKpiEmail(date: string): Promise<boolean> {
   const dow = new Date(date + "T12:00:00Z").getUTCDay();
   if (dow === 0 || dow === 6) return false; // no weekends
 
-  const [reps, dailyKpis, entries] = await Promise.all([
+  const [reps, dailyKpis, entries, focusMap] = await Promise.all([
     getActiveReps(),
     db.kpi.findMany({ where: { active: true, computed: false, scope: "per_rep", cadence: "daily", goalKind: { not: "tracked" } } }),
     db.entry.findMany({ where: { date, userId: { not: null } }, select: { kpiId: true, userId: true } }),
+    getFocusMap(date),
   ]);
   const have = new Set(entries.map((e) => `${e.kpiId}|${e.userId}`));
 
@@ -350,7 +371,9 @@ export async function sendMissingKpiEmail(date: string): Promise<boolean> {
   for (const rep of reps) {
     if (rep.role === "admin") continue; // owner isn't nagged
     if (rep.irregularSchedule) continue; // no set schedule (e.g. part-time) — don't nag
-    const roleKpis = dailyKpis.filter((k) => (k.roleKey === "internet" ? rep.tracksInternet : k.roleKey === rep.position));
+    const roleKpis = dailyKpis
+      .filter((k) => (k.roleKey === "internet" ? rep.tracksInternet : k.roleKey === rep.position))
+      .filter((k) => !exemptForFocus(k.key, focusMap.get(rep.id)));
     if (roleKpis.length === 0) continue;
     const missing = roleKpis.filter((k) => !have.has(`${k.id}|${rep.id}`));
     if (missing.length === roleKpis.length) {

@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { saveDay, addRepReason } from "@/app/actions";
+import { saveDay, addRepReason, setDayFocus } from "@/app/actions";
 import { db } from "@/lib/db";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
 import SpeedTestCard from "@/components/SpeedTestCard";
+import { Card } from "@/components/ui";
 import {
   getActiveReps,
   getAllTargets,
@@ -11,9 +12,15 @@ import {
   getSettings,
   resolveGoalWith,
 } from "@/lib/data";
+import { statusVsGoal } from "@/lib/kpi";
 import { todayStr, friendlyDate, monthOf } from "@/lib/date";
 import { toInputNumber, type Unit } from "@/lib/format";
 import { positionLabel } from "@/lib/roles";
+
+// Developer/luxury outreach KPIs (shown only on a developer-focus day).
+const DEV_KEYS = new Set(["dev_instagram", "dev_linkedin", "dev_website", "dev_wordofmouth", "dev_conversations"]);
+// Dialer/buyer-calling KPIs — not counted on a developer-focus day.
+const DIALER_KEYS = new Set(["buyers_contacted", "ds_talk_time", "ds_dialer_talk_time"]);
 
 export const dynamic = "force-dynamic";
 
@@ -61,24 +68,55 @@ export default async function EntryPage({
   const internetInitial =
     internetKpi && rep ? values.get(`${internetKpi.id}|${rep.id}`) ?? null : null;
 
+  // Dispositions reps can flip between traditional (dialer) and developer/luxury
+  // outreach for the day. The focus decides which KPIs show + how they're scored.
+  const isDispo = rep?.position === "dispositions";
+  const standup = rep && isDispo ? await db.standup.findUnique({ where: { userId_date: { userId: rep.id, date } } }) : null;
+  const focus: "traditional" | "developer" = standup?.focus === "developer" ? "developer" : "traditional";
+
+  // Decide which KPIs to show (and which dialer KPIs to grey out on a dev day).
+  let shown = roleKpis.filter((k) => !DEV_KEYS.has(k.key));
+  let mutedKpis: typeof roleKpis = [];
+  if (rep && isDispo && focus === "developer") {
+    shown = roleKpis.filter((k) => !DIALER_KEYS.has(k.key)); // includes dev KPIs
+    mutedKpis = roleKpis.filter((k) => DIALER_KEYS.has(k.key));
+  }
+
+  const toItem = (k: (typeof roleKpis)[number]) => ({
+    kpiId: k.id,
+    kpiKey: k.key,
+    name: k.name,
+    emoji: k.emoji,
+    unit: k.unit as Unit,
+    goalValue: rep ? resolveGoalWith(targets, k, rep.id, month) : null,
+    goalKind: k.goalKind,
+    userId: rep?.id ?? "",
+    initial: toInputNumber(k.unit as Unit, values.get(`${k.id}|${rep?.id ?? ""}`)),
+  });
+
+  // Separate Money (results) from Activity (effort) — the scorecard layout.
+  const moneyKpis = shown.filter((k) => k.category === "green");
+  const activityKpis = shown.filter((k) => k.category !== "green");
+
+  // Money / Activity score: goals hit out of goals set (from values saved so far).
+  const hitOf = (k: (typeof roleKpis)[number]): boolean | null => {
+    if (!rep) return null;
+    const goal = resolveGoalWith(targets, k, rep.id, month);
+    if (goal === null) return null; // tracked-only KPI, not scored
+    const v = values.get(`${k.id}|${rep.id}`);
+    if (v === undefined || v === null) return false;
+    return statusVsGoal(k.goalKind, v, goal) === "hit";
+  };
+  const moneyScores = moneyKpis.map(hitOf).filter((x): x is boolean => x !== null);
+  const actScores = activityKpis.map(hitOf).filter((x): x is boolean => x !== null);
+  const moneyHit = moneyScores.filter(Boolean).length, moneyTot = moneyScores.length;
+  const actHit = actScores.filter(Boolean).length, actTot = actScores.length;
+  const onTrack = moneyTot > 0 ? moneyHit === moneyTot : actTot > 0 ? actHit >= Math.ceil(actTot * 0.6) : false;
+
   const groups: EntryGroup[] = [];
   if (rep) {
-    const items = roleKpis.map((k) => ({
-      kpiId: k.id,
-      kpiKey: k.key,
-      name: k.name,
-      emoji: k.emoji,
-      unit: k.unit as Unit,
-      goalValue: resolveGoalWith(targets, k, rep.id, month),
-      goalKind: k.goalKind,
-      userId: rep.id,
-      initial: toInputNumber(k.unit as Unit, values.get(`${k.id}|${rep.id}`)),
-    }));
-    groups.push({
-      title: `${rep.name} · ${positionLabel(rep.position)}`,
-      hint: "Your activity for the day.",
-      items,
-    });
+    if (moneyKpis.length > 0) groups.push({ title: "💰 Money — results", hint: "The outcomes that move revenue.", items: moneyKpis.map(toItem) });
+    if (activityKpis.length > 0) groups.push({ title: focus === "developer" ? "📊 Activity — developer outreach" : "📊 Activity", hint: "Your daily effort.", items: activityKpis.map(toItem) });
   }
   if (teamDaily.length > 0) {
     groups.push({
@@ -139,6 +177,43 @@ export default async function EntryPage({
         <button className="rounded-md bg-slate-200 px-3 py-1.5 font-medium hover:bg-slate-300">Go</button>
       </form>
 
+      {rep && isDispo && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-700">Today&apos;s focus</div>
+            <div className="text-xs text-slate-400">Developer/luxury days score outreach, not the dialer.</div>
+          </div>
+          <div className="flex rounded-lg bg-slate-100 p-1">
+            {(["traditional", "developer"] as const).map((f) => (
+              <form key={f} action={setDayFocus}>
+                <input type="hidden" name="userId" value={rep.id} />
+                <input type="hidden" name="date" value={date} />
+                <input type="hidden" name="focus" value={f} />
+                <button className={`rounded-md px-3 py-1.5 text-sm font-semibold ${focus === f ? "bg-brand-navy text-white shadow" : "text-slate-500 hover:text-slate-700"}`}>
+                  {f === "traditional" ? "Traditional" : "Developer / luxury"}
+                </button>
+              </form>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {rep && (moneyTot > 0 || actTot > 0) && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Card className="p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">💰 Money</div>
+            <div className={`mt-0.5 text-3xl font-extrabold tabular-nums ${moneyTot > 0 && moneyHit === moneyTot ? "text-emerald-600" : "text-slate-800"}`}>{moneyHit} / {moneyTot}</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">📊 Activity</div>
+            <div className={`mt-0.5 text-3xl font-extrabold tabular-nums ${actTot > 0 && actHit === actTot ? "text-emerald-600" : "text-slate-800"}`}>{actHit} / {actTot}</div>
+          </Card>
+          <Card className={`col-span-2 grid place-items-center p-4 sm:col-span-1 ${onTrack ? "bg-emerald-900/90" : "bg-slate-100"}`}>
+            <div className={`text-lg font-bold ${onTrack ? "text-emerald-300" : "text-slate-500"}`}>{onTrack ? "✓ On track" : "In progress"}</div>
+          </Card>
+        </div>
+      )}
+
       {rep && myAlerts.length > 0 && (
         <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
           <h2 className="text-base font-bold text-slate-800">⚠️ Your flagged KPIs</h2>
@@ -179,6 +254,17 @@ export default async function EntryPage({
         </div>
       ) : (
         <EntryForm groups={groups} date={date} enteredBy={rep?.name ?? "team"} action={saveDay} />
+      )}
+
+      {mutedKpis.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          {mutedKpis.map((k) => (
+            <div key={k.id} className="flex items-center justify-between text-sm text-slate-400">
+              <span>{k.emoji} {k.name}</span>
+              <span className="text-xs">not counted today · developer focus</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

@@ -1,0 +1,1 @@
+ALTER TABLE "Standup" ADD COLUMN IF NOT EXISTS "focus" TEXT NOT NULL DEFAULT 'traditional';

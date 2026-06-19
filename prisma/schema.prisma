@@ -951,6 +951,7 @@ model Standup {
   eodHit      String      @default("") // end-of-day: hit | partial | miss
   eodNote     String      @default("") // end-of-day: what happened
   eodFollowup String      @default("") // next-day follow-up items (shown on tomorrow's huddle)
+  focus       String      @default("traditional") // dispositions day focus: traditional | developer
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   items     StandupItem[]

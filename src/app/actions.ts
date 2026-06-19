@@ -1986,6 +1986,18 @@ async function ensureStandup(userId: string, date: string) {
   return db.standup.upsert({ where: { userId_date: { userId, date } }, update: {}, create: { userId, date } });
 }
 
+/** Set a dispositions rep's daily focus: traditional vs developer/luxury. */
+export async function setDayFocus(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  const focus = String(formData.get("focus")) === "developer" ? "developer" : "traditional";
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  if (!(await canEditStandup(userId))) return;
+  await db.standup.upsert({ where: { userId_date: { userId, date } }, update: { focus }, create: { userId, date, focus } });
+  revalidatePath("/entry");
+  revalidatePath("/huddle");
+}
+
 export async function saveStandup(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
   const date = String(formData.get("date") ?? "");
