@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -42,6 +42,7 @@ export default function Sidebar({
       { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/trends", label: "Trends", Icon: TrendingUp, managerOnly: true },
+      { href: "/benchmarks", label: "Benchmarks", Icon: Target, managerOnly: true },
     ] },
     { label: "Coaching", items: [
       { href: "/alerts", label: "Alerts", Icon: Bell, managerOnly: true },

@@ -13,6 +13,8 @@ const STATUSES: [string, string][] = [["escrow", "In escrow"], ["closed", "Close
 const STATUS_CLS: Record<string, string> = { escrow: "bg-amber-100 text-amber-700", closed: "bg-emerald-100 text-emerald-700", fell_through: "bg-slate-200 text-slate-500" };
 // Common expense lines to make it one-tap to add the usual costs.
 const PRESETS = ["Title / escrow fee", "Transaction coordinator", "Buyer-side concession", "EMD applied", "Marketing", "Wire / recording fee", "Agent commission", "Repairs credit", "Other"];
+const SOURCES: [string, string][] = [["", "— source —"], ["ppl", "PPL"], ["sms", "SMS"], ["mail", "Direct mail"], ["other", "Other"]];
+const FALLOUT: [string, string][] = [["", "— reason —"], ["financing", "Financing fell through"], ["title", "Title issue"], ["seller", "Seller backed out"], ["inspection", "Inspection"], ["no_buyer", "No buyer found"], ["other", "Other"]];
 
 export default async function ClosingPage() {
   const me = await getCurrentUser();
@@ -50,10 +52,12 @@ export default async function ClosingPage() {
       <Card className="p-5">
         <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">+ Add a deal in escrow</p>
         <form action={saveClosing} className="grid grid-cols-1 gap-2 sm:grid-cols-12">
-          <input name="address" placeholder="Property address" className={`${inputCls} sm:col-span-5`} required />
+          <input name="address" placeholder="Property address" className={`${inputCls} sm:col-span-4`} required />
           <input name="buyer" placeholder="Buyer" className={`${inputCls} sm:col-span-3`} />
           <select name="exit" defaultValue="assignment" className={`${inputCls} sm:col-span-2`}>{EXITS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          <select name="source" defaultValue="" className={`${inputCls} sm:col-span-3`}>{SOURCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           <input name="revenue" type="number" step="0.01" placeholder="Revenue $" className={`${inputCls} sm:col-span-2`} />
+          <input name="market" placeholder="Market (e.g. La Jolla)" className={`${inputCls} sm:col-span-3`} />
           <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 sm:col-span-12">Add deal</button>
         </form>
       </Card>
@@ -76,6 +80,9 @@ export default async function ClosingPage() {
               <label className="text-xs sm:col-span-3"><span className="mb-0.5 block text-slate-500">Revenue in ($)</span><input name="revenue" type="number" step="0.01" defaultValue={c.revenue || ""} className={inputCls} /></label>
               <label className="text-xs sm:col-span-3"><span className="mb-0.5 block text-slate-500">Escrow opened</span><input name="openedDate" type="date" defaultValue={c.openedDate} className={inputCls} /></label>
               <label className="text-xs sm:col-span-3"><span className="mb-0.5 block text-slate-500">Close date</span><input name="closeDate" type="date" defaultValue={c.closeDate} className={inputCls} /></label>
+              <label className="text-xs sm:col-span-3"><span className="mb-0.5 block text-slate-500">Lead source</span><select name="source" defaultValue={c.source} className={inputCls}>{SOURCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+              <label className="text-xs sm:col-span-3"><span className="mb-0.5 block text-slate-500">Market</span><input name="market" defaultValue={c.market} placeholder="e.g. La Jolla" className={inputCls} /></label>
+              <label className="text-xs sm:col-span-3"><span className="mb-0.5 block text-slate-500">If fell through — why?</span><select name="falloutReason" defaultValue={c.falloutReason} className={inputCls}>{FALLOUT.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
               <input name="note" defaultValue={c.note} placeholder="note" className={`${inputCls} sm:col-span-3`} />
               <div className="flex items-center gap-2 sm:col-span-12">
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${STATUS_CLS[c.status]}`}>{STATUSES.find(([v]) => v === c.status)?.[1]}</span>

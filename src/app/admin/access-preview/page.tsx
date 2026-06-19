@@ -16,7 +16,7 @@ const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
   ] },
   { group: "Performance", items: [
     { label: "Enter KPIs", gate: "all" }, { label: "Weekly report", gate: "all" }, { label: "Monthly report", gate: "all" },
-    { label: "Internet Speed", gate: "manager" }, { label: "Analytics", gate: "manager" }, { label: "Trends", gate: "manager" },
+    { label: "Internet Speed", gate: "manager" }, { label: "Analytics", gate: "manager" }, { label: "Trends", gate: "manager" }, { label: "Benchmarks", gate: "manager" },
   ] },
   { group: "Coaching", items: [
     { label: "Alerts", gate: "manager" }, { label: "PIPs", gate: "manager" }, { label: "Call scoring", gate: "all" }, { label: "Scripts", gate: "all" },

@@ -1782,6 +1782,9 @@ export async function saveClosing(formData: FormData) {
     exit: EXITS.includes(String(formData.get("exit"))) ? String(formData.get("exit")) : "assignment",
     status: CLOSING_STATUSES.includes(String(formData.get("status"))) ? String(formData.get("status")) : "escrow",
     revenue: Math.max(0, parseFloat(String(formData.get("revenue") ?? "0")) || 0),
+    source: ["ppl", "sms", "mail", "other", ""].includes(String(formData.get("source"))) ? String(formData.get("source")) : "",
+    market: String(formData.get("market") ?? "").trim().slice(0, 80),
+    falloutReason: String(formData.get("falloutReason") ?? "").trim().slice(0, 80),
     openedDate: String(formData.get("openedDate") ?? "").trim(),
     closeDate: String(formData.get("closeDate") ?? "").trim(),
     note: String(formData.get("note") ?? "").trim().slice(0, 500),
@@ -1818,6 +1821,33 @@ export async function deleteClosingExpense(formData: FormData) {
   if (!id) return;
   await db.closingExpense.delete({ where: { id } });
   revalidatePath("/closing");
+}
+
+/** Save this month's marketing inputs (per-channel spend + email rates) for the Benchmarks page. */
+export async function saveBenchmarkInputs(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isManager(me)) return;
+  const month = String(formData.get("month") ?? "");
+  if (!/^\d{4}-\d{2}$/.test(month)) return;
+  const date = `${month}-01`;
+  const keys = ["spend_ppl", "spend_sms", "spend_mail", "email_open_rate", "email_ctr"];
+  const kpis = await db.kpi.findMany({ where: { key: { in: keys } }, select: { id: true, key: true } });
+  const idByKey = new Map(kpis.map((k) => [k.key, k.id]));
+  for (const key of keys) {
+    const raw = formData.get(key);
+    const kpiId = idByKey.get(key);
+    if (!kpiId) continue;
+    const str = raw == null ? "" : String(raw).trim();
+    const existing = await db.entry.findFirst({ where: { kpiId, userId: null, date } });
+    if (str === "") {
+      if (existing) await db.entry.delete({ where: { id: existing.id } });
+      continue;
+    }
+    const value = parseFloat(str) || 0;
+    if (existing) await db.entry.update({ where: { id: existing.id }, data: { value } });
+    else await db.entry.create({ data: { kpiId, userId: null, date, value, enteredBy: me.name } });
+  }
+  revalidatePath("/benchmarks");
 }
 
 /** Save biweekly payroll settings (anchor payday + recipients). Owner only. */
