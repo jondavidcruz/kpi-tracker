@@ -70,10 +70,10 @@ const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 t
 type FieldApi = { v: (k: string) => string; set: (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void };
 const FieldCtx = createContext<FieldApi>({ v: () => "", set: () => () => {} });
 
-function Field({ k, label, prefix, suffix, placeholder, span, req }: { k: string; label: string; prefix?: string; suffix?: string; placeholder?: string; span?: number; req?: "need" | "opt" }) {
+function Field({ k, label, prefix, suffix, placeholder, span, req }: { k: string; label: string; prefix?: string; suffix?: string; placeholder?: string; span?: number; req?: "need" | "opt" | "good" }) {
   const { v, set } = useContext(FieldCtx);
-  const labelCls = req === "need" ? "text-red-600" : req === "opt" ? "text-amber-600" : "text-slate-500";
-  const ring = req === "need" ? "border-red-300 focus:ring-red-200" : req === "opt" ? "border-amber-200" : "";
+  const labelCls = req === "need" ? "text-red-600" : req === "opt" ? "text-amber-600" : req === "good" ? "text-emerald-600" : "text-slate-500";
+  const ring = req === "need" ? "border-red-300 focus:ring-red-200" : req === "opt" ? "border-amber-200" : req === "good" ? "border-emerald-300 focus:ring-emerald-200" : "";
   return (
     <label className={span === 2 ? "sm:col-span-2" : span === 3 ? "sm:col-span-3" : ""}>
       <span className={`mb-0.5 block text-[11px] font-semibold ${labelCls}`}>{label}</span>
@@ -337,12 +337,13 @@ export default function UnderwritingCalculator() {
               <Field k="aHoldMonths" label="Months held" placeholder="6" req="opt" />
               <Field k="aMonthlyCarry" label="Monthly carry (taxes, ins, loan…)" prefix="$" placeholder="1,000" req="opt" />
               <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
-              <div className={optDiv}>ARV comps (optional · addr · sold $ · days on market)</div>
+              <div className={reqDiv}>ARV comps (required · addr · sold $ · days on market)</div>
+              <p className="sm:col-span-2 -mt-1 text-[11px] text-red-500">Pull comps AND do your own manual check — verify each on the MLS / county records, then record all 3 here. Never send an offer without comps backing the ARV.</p>
               {[1, 2, 3].map((i) => (
                 <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
-                  <Field k={`comp${i}`} label={`Comp ${i} address`} span={2} req="opt" />
-                  <Field k={`comp${i}p`} label="Sold $" prefix="$" req="opt" />
-                  <Field k={`comp${i}d`} label="DOM" req="opt" />
+                  <Field k={`comp${i}`} label={`Comp ${i} address`} span={2} req="need" />
+                  <Field k={`comp${i}p`} label="Sold $" prefix="$" req="need" />
+                  <Field k={`comp${i}d`} label="DOM" req="need" />
                 </div>
               ))}
             </>
@@ -361,12 +362,13 @@ export default function UnderwritingCalculator() {
               <Field k="nSellerClosePct" label="Seller closing % (we cover)" suffix="%" placeholder="1.5" req="opt" />
               <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" req="opt" />
               <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="7" req="opt" />
-              <div className={optDiv}>As-is comparables (optional · addr · sold $ · days on market)</div>
+              <div className={reqDiv}>As-is comparables (required · addr · sold $ · days on market)</div>
+              <p className="sm:col-span-2 -mt-1 text-[11px] text-red-500">Pull comps AND do your own manual check — verify each on the MLS / county records, then record all 3 here. The list price has to be backed by real as-is comps.</p>
               {[1, 2, 3].map((i) => (
                 <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
-                  <Field k={`nComp${i}`} label={`Comp ${i} address`} span={2} />
-                  <Field k={`nComp${i}p`} label="Sold $" prefix="$" />
-                  <Field k={`nComp${i}d`} label="DOM" />
+                  <Field k={`nComp${i}`} label={`Comp ${i} address`} span={2} req="need" />
+                  <Field k={`nComp${i}p`} label="Sold $" prefix="$" req="need" />
+                  <Field k={`nComp${i}d`} label="DOM" req="need" />
                 </div>
               ))}
             </>
@@ -493,8 +495,8 @@ export default function UnderwritingCalculator() {
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <div className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700">🧾 Deal outcome <span className="text-[11px] font-normal text-slate-400">— optional, fill in as you negotiate</span></div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {showAsking && <Field k="askPrice" label="Seller's asking price (what they want)" prefix="$" placeholder="e.g. 300,000" />}
-          <Field k="acceptedPrice" label="Accepted price (what they actually took)" prefix="$" placeholder="e.g. 250,000" />
+          {showAsking && <Field k="askPrice" label="Seller's asking price (what they want)" prefix="$" placeholder="e.g. 300,000" req="need" />}
+          <Field k="acceptedPrice" label="Accepted price (what they actually took)" prefix="$" placeholder="e.g. 250,000" req="good" />
         </div>
         {(asking > 0 || accepted > 0) && (
           <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
