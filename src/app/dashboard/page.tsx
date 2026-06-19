@@ -21,8 +21,9 @@ import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
 import { db } from "@/lib/db";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
-import { CircleCheck, TrendingDown, Bell, Users, Banknote, ShieldAlert, Building2, type LucideIcon } from "lucide-react";
+import { CircleCheck, TrendingDown, Bell, Users, Banknote, ShieldAlert, Building2, FileSignature, type LucideIcon } from "lucide-react";
 import type { Kpi, Target, User } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,35 @@ export default async function DashboardPage({
   const agingDeals = dealsNeedingAttention(openDeals, date);
   const trends = await getDailyTrends(date, 14);
   const [awardBoard, aiChampions] = await Promise.all([getAwardBoard(), getAiChampions()]);
+
+  // --- Company scoreboard: auto-tallied from the real sources (acquisitions
+  // entries + the Escrow & Closing tracker), so nothing needs double-entry. ---
+  const me = await getCurrentUser();
+  const showMoney = isManager(me);
+  const monthStart = `${month}-01`;
+  const year = date.slice(0, 4);
+  const yearStart = `${year}-01-01`;
+  const [acqKpis, closings] = await Promise.all([
+    db.kpi.findMany({ where: { key: { in: ["acq_contracts_sent", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"] } }, select: { id: true, key: true } }),
+    db.closing.findMany({ where: { status: "closed" }, include: { expenses: true } }),
+  ]);
+  const sentId = acqKpis.find((k) => k.key === "acq_contracts_sent")?.id;
+  const signedIds = acqKpis.filter((k) => k.key.startsWith("acq_signed_")).map((k) => k.id);
+  const sumEntries = async (kpiIds: string[]) => {
+    if (kpiIds.length === 0) return 0;
+    const rows = await db.entry.findMany({ where: { kpiId: { in: kpiIds }, date: { gte: monthStart, lte: date } }, select: { value: true } });
+    return rows.reduce((s, r) => s + r.value, 0);
+  };
+  const [contractsSentMonth, contractsSignedMonth] = await Promise.all([
+    sumEntries(sentId ? [sentId] : []),
+    sumEntries(signedIds),
+  ]);
+  // Closed deals this year (use closeDate when set; an undated "closed" counts as current year).
+  const closedYTD = closings.filter((c) => (c.closeDate ? c.closeDate >= yearStart && c.closeDate <= `${year}-12-31` : true));
+  const closedCount = closedYTD.length;
+  const grossRevenue = closedYTD.reduce((s, c) => s + c.revenue, 0);
+  const netProfit = closedYTD.reduce((s, c) => s + (c.revenue - c.expenses.reduce((e, x) => e + x.amount, 0)), 0);
+  const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
   // --- Internet speed: today's recorded reading per rep + a 14-day history/trend ---
   const internetSpeedKpi = perRepKpis.find((k) => k.roleKey === "internet") ?? null;
@@ -192,6 +222,27 @@ export default async function DashboardPage({
         <MetricCard label="Open alerts" value={openAlerts} icon={<Bell size={18} />} spark={alertSeries} hint={openAlerts ? "needs review" : "all clear"} hintTone={openAlerts ? "bad" : "good"} />
         <MetricCard label="Logged today" value={repsLoggedToday} icon={<Users size={18} />} spark={loggedSeries} delta={wkDelta(loggedSeries)} deltaTone={wkDelta(loggedSeries) >= 0 ? "good" : "neutral"} />
       </div>
+
+      {/* Company scoreboard — acquisitions output (this month) + closings (this year) */}
+      <section>
+        <SectionTitle title="📊 Company scoreboard" subtitle={`Acquisitions output this month · closings year-to-date (${year})`} accent="bg-brand-gold" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <Link href="/monthly" className="block"><MetricCard label="Contracts sent (mo)" value={Math.round(contractsSentMonth)} icon={<FileSignature size={18} />} hint="acquisitions" /></Link>
+          <Link href="/monthly" className="block"><MetricCard label="Contracts signed (mo)" value={Math.round(contractsSignedMonth)} icon={<FileSignature size={18} />} hint="acquisitions" /></Link>
+          <Link href="/closing" className="block"><MetricCard label={`Deals closed (${year})`} value={closedCount} icon={<Building2 size={18} />} hint="dispositions" /></Link>
+          {showMoney ? (
+            <>
+              <Link href="/closing" className="block"><MetricCard label="Gross revenue (YTD)" value={usd(grossRevenue)} icon={<Banknote size={18} />} /></Link>
+              <Link href="/closing" className="block"><MetricCard label="Net profit (YTD)" value={usd(netProfit)} icon={<Banknote size={18} />} hint="after expenses & closing" hintTone={netProfit >= 0 ? "good" : "bad"} /></Link>
+            </>
+          ) : (
+            <Card className="flex items-center justify-center p-3 text-center text-[11px] text-slate-400 lg:col-span-2">Revenue &amp; profit are visible to managers.</Card>
+          )}
+        </div>
+        {showMoney && closedCount === 0 && (
+          <p className="mt-2 text-[11px] text-slate-400">No closed deals recorded for {year} yet — add them in <Link href="/closing" className="font-semibold text-slate-500 underline">Escrow &amp; Closing</Link> (set status to “Closed”) and they&apos;ll tally here with net profit.</p>
+        )}
+      </section>
 
       {/* Gamified recognition */}
       <RecognitionBoards champions={awardBoard.champions} aiChampions={aiChampions} variant="light" />
