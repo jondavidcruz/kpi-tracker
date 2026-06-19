@@ -870,3 +870,36 @@ model ClosingExpense {
 
   @@index([closingId])
 }
+
+// One person's daily 9am-huddle submission: today's goal, what was pending from
+// yesterday, and role-level commentary. Hot leads (acquisitions) hang off it.
+model Standup {
+  id        String        @id @default(cuid())
+  userId    String
+  date      String // YYYY-MM-DD (org tz)
+  goal      String        @default("")
+  pending   String        @default("")
+  note      String        @default("") // dispo: buyers/developers status, lost deals, price reductions
+  submitted Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  items     StandupItem[]
+
+  @@unique([userId, date])
+}
+
+// A hot lead / deal a rep is working, brought to the huddle (acquisitions).
+model StandupItem {
+  id          String  @id @default(cuid())
+  standupId   String
+  title       String // seller address / lead
+  status      String  @default("")
+  roadblock   String  @default("")
+  nextStep    String  @default("")
+  todayAction String  @default("")
+  hot         Boolean @default(true)
+  createdAt   DateTime @default(now())
+  standup     Standup @relation(fields: [standupId], references: [id], onDelete: Cascade)
+
+  @@index([standupId])
+}

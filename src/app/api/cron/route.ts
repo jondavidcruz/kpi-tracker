@@ -9,6 +9,7 @@ import { sendEmailWithAttachment } from "@/lib/notify";
 import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
+import { sendHuddleBrief } from "@/lib/huddle-brief";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
 function laNow(): { hour: number; dow: number } {
@@ -90,6 +91,14 @@ export async function GET(request: Request) {
     const dow = url.searchParams.has("ladow") ? Number(url.searchParams.get("ladow")) : laNow().dow;
     const reminded = await sendShiftStartSpeedReminders(date ?? todayStr(settings.orgTimezone), slot, dow);
     return NextResponse.json({ ok: true, slot, laDow: dow, speedTestReminded: reminded });
+  }
+
+  // Daily 9am-huddle brief (≈8:45am PT, Mon–Fri) → Google Chat + leadership email.
+  if (url.searchParams.get("huddle") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const sent = await sendHuddleBrief(today);
+    return NextResponse.json({ ok: true, huddle: sent });
   }
 
   // Midday run (1:30pm PT): Ethan's shift-end reminder + Marie's 1pm speed-test nudge.

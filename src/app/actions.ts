@@ -1847,6 +1847,80 @@ export async function deleteClosingExpense(formData: FormData) {
   revalidatePath("/closing");
 }
 
+// --- Daily huddle (stand-up) -------------------------------------------------
+
+async function canEditStandup(targetUserId: string): Promise<boolean> {
+  const me = await getCurrentUser();
+  if (!me) return false;
+  return me.id === targetUserId || isManager(me);
+}
+
+async function ensureStandup(userId: string, date: string) {
+  return db.standup.upsert({ where: { userId_date: { userId, date } }, update: {}, create: { userId, date } });
+}
+
+export async function saveStandup(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  if (!(await canEditStandup(userId))) return;
+  const data = {
+    goal: String(formData.get("goal") ?? "").trim().slice(0, 500),
+    pending: String(formData.get("pending") ?? "").trim().slice(0, 800),
+    note: String(formData.get("note") ?? "").trim().slice(0, 1500),
+    submitted: formData.get("submitted") === "on" || formData.get("submitted") === "1",
+  };
+  await db.standup.upsert({ where: { userId_date: { userId, date } }, update: data, create: { userId, date, ...data } });
+  revalidatePath("/huddle");
+}
+
+export async function addStandupItem(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  const title = String(formData.get("title") ?? "").trim().slice(0, 200);
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !title) return;
+  if (!(await canEditStandup(userId))) return;
+  const s = await ensureStandup(userId, date);
+  await db.standupItem.create({
+    data: {
+      standupId: s.id,
+      title,
+      status: String(formData.get("status") ?? "").trim().slice(0, 120),
+      roadblock: String(formData.get("roadblock") ?? "").trim().slice(0, 300),
+      nextStep: String(formData.get("nextStep") ?? "").trim().slice(0, 300),
+      todayAction: String(formData.get("todayAction") ?? "").trim().slice(0, 300),
+    },
+  });
+  revalidatePath("/huddle");
+}
+
+export async function saveStandupItem(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const item = await db.standupItem.findUnique({ where: { id }, include: { standup: true } });
+  if (!item || !(await canEditStandup(item.standup.userId))) return;
+  await db.standupItem.update({
+    where: { id },
+    data: {
+      status: String(formData.get("status") ?? "").trim().slice(0, 120),
+      roadblock: String(formData.get("roadblock") ?? "").trim().slice(0, 300),
+      nextStep: String(formData.get("nextStep") ?? "").trim().slice(0, 300),
+      todayAction: String(formData.get("todayAction") ?? "").trim().slice(0, 300),
+      hot: formData.get("hot") === "on" || formData.get("hot") === "1",
+    },
+  });
+  revalidatePath("/huddle");
+}
+
+export async function deleteStandupItem(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const item = await db.standupItem.findUnique({ where: { id }, include: { standup: true } });
+  if (!item || !(await canEditStandup(item.standup.userId))) return;
+  await db.standupItem.delete({ where: { id } });
+  revalidatePath("/huddle");
+}
+
 /** Save this month's marketing inputs (per-channel spend + email rates) for the Benchmarks page. */
 export async function saveBenchmarkInputs(formData: FormData) {
   const me = await getCurrentUser();

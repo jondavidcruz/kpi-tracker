@@ -29,6 +29,7 @@ export default function Sidebar({
   const groups: { label: string; items: Item[] }[] = [
     { label: "Overview", items: [
       { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+      { href: "/huddle", label: "Daily Huddle", Icon: Megaphone },
       { href: "/process", label: "Process Map", Icon: Workflow },
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },

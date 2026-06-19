@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 type Gate = "all" | "manager" | "admin" | "marketing" | "timecard";
 const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
   { group: "Overview", items: [
-    { label: "Dashboard", gate: "all" }, { label: "Process Map", gate: "all" }, { label: "Deals", gate: "all" },
+    { label: "Dashboard", gate: "all" }, { label: "Daily Huddle", gate: "all" }, { label: "Process Map", gate: "all" }, { label: "Deals", gate: "all" },
     { label: "Underwriting", gate: "all" }, { label: "Schedule & Time", gate: "all" }, { label: "Resources & SOPs", gate: "admin" },
   ] },
   { group: "Performance", items: [
