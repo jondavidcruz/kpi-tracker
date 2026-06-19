@@ -432,6 +432,7 @@ export async function saveMeetingSettings(formData: FormData) {
     mtgAnnouncements: String(formData.get("mtgAnnouncements") ?? "").trim(),
     mtgComingSoon: String(formData.get("mtgComingSoon") ?? "").trim(),
     teamMeetLink: String(formData.get("teamMeetLink") ?? "").trim(),
+    huddleMeetLink: String(formData.get("huddleMeetLink") ?? "").trim(),
   };
   await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
   revalidatePath("/meeting");

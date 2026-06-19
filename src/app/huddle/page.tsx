@@ -139,7 +139,15 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
     <div className="space-y-5">
       <SectionTitle title="🗣️ Daily Huddle — 9 AM" subtitle="Run it role by role. Each person fills in before the meeting; leaders edit live."
         accent="bg-brand-gold"
-        right={<span className="text-sm font-semibold text-slate-500">{friendlyDate(date)}</span>} />
+        right={
+          <div className="flex items-center gap-3">
+            {settings.huddleMeetLink && <a href={settings.huddleMeetLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">🎥 Join Meet</a>}
+            <span className="text-sm font-semibold text-slate-500">{friendlyDate(date)}</span>
+          </div>
+        } />
+      {settings.huddleMeetLink && (
+        <p className="-mt-2 text-[11px] text-slate-400">📞 Dial-in: (US) +1 413-829-7688 · PIN 517 408 335#</p>
+      )}
 
       {/* Accountability */}
       <Card className="p-4">

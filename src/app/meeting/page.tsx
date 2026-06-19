@@ -184,8 +184,12 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
               <textarea name="mtgComingSoon" defaultValue={settings.mtgComingSoon} rows={4} className={inputCls} />
             </label>
             <label className="sm:col-span-2">
-              <span className={labelCls}>🎥 Google Meet link (Join button)</span>
+              <span className={labelCls}>🎥 Monday meeting — Google Meet link (Join button)</span>
               <input name="teamMeetLink" defaultValue={settings.teamMeetLink} placeholder="https://meet.google.com/…" className={inputCls} />
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>🎥 Daily huddle — Google Meet link (Join button on the Huddle page)</span>
+              <input name="huddleMeetLink" defaultValue={settings.huddleMeetLink} placeholder="https://meet.google.com/…" className={inputCls} />
             </label>
             <div className="sm:col-span-2">
               <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save deck content</button>

@@ -27,6 +27,7 @@ export async function getSettings() {
       leadActionItems: "",
       teamMeetLink: "",
       leadershipMeetLink: "",
+      huddleMeetLink: "",
       marketingMarkets: "",
       marketingResearch: "",
       outreachTemplates: "",

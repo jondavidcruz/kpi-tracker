@@ -368,6 +368,7 @@ model Settings {
   leadActionItems    String @default("") // leadership deck: Decisions / action items
   teamMeetLink       String @default("") // Google Meet link for the Monday all-call
   leadershipMeetLink String @default("") // Google Meet link for the leadership meeting
+  huddleMeetLink     String @default("") // Google Meet link for the daily 9am huddle
 
   // ---- Marketing research ----
   marketingMarkets  String @default("") // markets we're in (newline list)
