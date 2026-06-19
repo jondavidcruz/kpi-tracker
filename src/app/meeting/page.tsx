@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording } from "@/app/actions";
+import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording, addMeetingHighlight, deleteMeetingHighlight } from "@/app/actions";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings, getKpis } from "@/lib/data";
 import { db } from "@/lib/db";
-import { getMeetingDeck } from "@/lib/meeting";
+import { getMeetingDeck, buildMeetingSummary } from "@/lib/meeting";
 import { todayStr } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import MeetingDeckView from "@/components/MeetingDeck";
@@ -27,15 +27,26 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
     );
   }
   const sp = await searchParams;
-  const [settings, kpis, tips, notes, recordings] = await Promise.all([
+  const [settings, kpis, tips, notes, recordings, highlights] = await Promise.all([
     getSettings(),
     getKpis(),
     db.trainingTip.findMany({ orderBy: { createdAt: "desc" } }),
     db.meetingNote.findMany({ where: { meeting: "monday" }, orderBy: { createdAt: "desc" }, take: 50 }),
     db.meetingRecording.findMany({ where: { meeting: "monday" }, orderBy: { createdAt: "desc" }, take: 30 }),
+    db.meetingHighlight.findMany({ orderBy: { createdAt: "desc" }, take: 60 }),
   ]);
   const greenKpis = kpis.filter((k) => k.scope === "per_rep" && k.category === "green");
-  const deck = await getMeetingDeck(todayStr(settings.orgTimezone));
+  const today = todayStr(settings.orgTimezone);
+  const deck = await getMeetingDeck(today);
+  const summary = await buildMeetingSummary(today, deck);
+  const summarySections: { title: string; items: string[] }[] = [
+    { title: "🏆 Wins & highlights", items: summary.wins },
+    { title: "📊 The numbers (vs last week)", items: summary.numbers },
+    { title: "⚠️ Needs attention", items: summary.attention },
+    { title: "🏠 Pipeline & closings", items: summary.pipeline },
+    { title: "🎯 Focus this week", items: summary.focus },
+    { title: "🙌 Accountability & shout-outs", items: summary.shoutouts },
+  ];
   const fmtWhen = (d: Date) => new Intl.DateTimeFormat("en-US", {
     timeZone: settings.orgTimezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   }).format(d);
@@ -53,6 +64,48 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
           </div>
         }
       />
+
+      {/* Auto talking points — same structure every week, content changes. Your script. */}
+      <Card className="p-5 ring-2 ring-brand-gold/30">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <span className="text-base font-extrabold text-slate-800">🎤 This week&apos;s talking points</span>
+          <span className="text-xs text-slate-400">{summary.weekLabel} · auto-generated</span>
+        </div>
+        <p className="mb-3 text-xs text-slate-500">Same six sections every week — read down the list. Numbers pull live; you don&apos;t have to prep.</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {summarySections.filter((s) => s.items.length > 0).map((s) => (
+            <div key={s.title} className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+              <div className="mb-1 text-xs font-bold text-slate-600">{s.title}</div>
+              <ul className="space-y-1 text-sm text-slate-700">{s.items.map((it, i) => <li key={i} className="flex gap-1.5"><span className="text-slate-300">•</span><span>{it}</span></li>)}</ul>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Highlights log — persistent wins, kept separate from the auto KPI sheets */}
+      <Card className="p-5">
+        <div className="mb-1 text-base font-bold text-slate-800">🌟 Highlights log</div>
+        <p className="mb-3 text-xs text-slate-500">Lasting wins & milestones — these stay here week to week, separate from the live KPI sheets. Add one whenever something good happens.</p>
+        <form action={addMeetingHighlight} className="mb-3 flex flex-wrap items-end gap-2">
+          <input type="hidden" name="weekOf" value={today} />
+          <input name="text" placeholder="e.g. Closed the Hutchins deal for $20k — biggest of the quarter" className={`${inputCls} min-w-64 flex-1`} required />
+          <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">+ Add highlight</button>
+        </form>
+        {highlights.length === 0 ? (
+          <p className="text-sm text-slate-400">No highlights yet — add your first win above.</p>
+        ) : (
+          <ul className="space-y-1">
+            {highlights.map((hl) => (
+              <li key={hl.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-sm">
+                <span className="text-amber-500">🌟</span>
+                <span className="text-slate-700">{hl.text}</span>
+                <span className="text-[10px] text-slate-300">{new Date(hl.createdAt).toLocaleDateString()}{hl.addedBy ? ` · ${hl.addedBy.split(" ")[0]}` : ""}</span>
+                <form action={deleteMeetingHighlight} className="ml-auto"><input type="hidden" name="id" value={hl.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">remove</button></form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <MeetingDeckView deck={deck} />
 

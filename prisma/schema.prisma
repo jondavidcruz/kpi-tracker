@@ -871,6 +871,18 @@ model ClosingExpense {
   @@index([closingId])
 }
 
+// Persistent "highlights / wins" log for the Monday meeting — separate from the
+// auto-generated KPI sheets. Accumulates over time; shown newest-first.
+model MeetingHighlight {
+  id        String   @id @default(cuid())
+  text      String
+  weekOf    String   @default("") // YYYY-MM-DD Monday (optional grouping)
+  addedBy   String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // Offboarding checklist created when access is revoked — kept open (and shown as
 // a mandatory banner) until every shared-access task is checked off.
 model Offboarding {

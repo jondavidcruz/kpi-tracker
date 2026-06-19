@@ -1886,6 +1886,27 @@ export async function deleteClosingExpense(formData: FormData) {
   revalidatePath("/closing");
 }
 
+// --- Monday-meeting highlights log -------------------------------------------
+
+export async function addMeetingHighlight(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const text = String(formData.get("text") ?? "").trim().slice(0, 300);
+  if (!text) return;
+  const weekOf = String(formData.get("weekOf") ?? "").trim();
+  await db.meetingHighlight.create({ data: { text, weekOf, addedBy: me!.name } });
+  revalidatePath("/meeting");
+}
+
+export async function deleteMeetingHighlight(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.meetingHighlight.delete({ where: { id } });
+  revalidatePath("/meeting");
+}
+
 // --- Daily huddle (stand-up) -------------------------------------------------
 
 async function canEditStandup(targetUserId: string): Promise<boolean> {

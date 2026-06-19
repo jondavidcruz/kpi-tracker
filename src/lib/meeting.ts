@@ -264,3 +264,77 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     trainingTip,
   };
 }
+
+// ── Auto talking-points summary ──────────────────────────────────────────────
+// A consistent, same-structure-every-week briefing of what to talk about,
+// generated from the week's data. Separate from the KPI sheets.
+export interface MeetingSummary {
+  weekLabel: string;
+  wins: string[];
+  numbers: string[];
+  attention: string[];
+  pipeline: string[];
+  focus: string[];
+  shoutouts: string[];
+}
+
+const SUMMARY_KPIS: { keys: string[]; label: string }[] = [
+  { keys: ["ppl_leads", "text_responses", "direct_mail_responses"], label: "Leads" },
+  { keys: ["appts_set", "appts_taken"], label: "Appointments" },
+  { keys: ["offers_made"], label: "Offers" },
+  { keys: ["acq_contracts_sent"], label: "Contracts sent" },
+  { keys: ["acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"], label: "Contracts signed" },
+  { keys: ["new_buyers"], label: "New buyers" },
+];
+
+const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
+
+export async function buildMeetingSummary(today: string, deck: MeetingDeck): Promise<MeetingSummary> {
+  const thisW = lastWeekRange(today); // the just-finished week
+  const prior = lastWeekRange(thisW.start); // the week before that
+  const [sumsThis, sumsPrior, kpis, pips] = await Promise.all([
+    getRangeSums(thisW.start, thisW.end),
+    getRangeSums(prior.start, prior.end),
+    getKpis({ computed: false }),
+    db.pip.findMany({ where: { status: "open" }, include: { user: { select: { name: true } } } }),
+  ]);
+  const idByKey = new Map(kpis.map((k) => [k.key, k.id]));
+  const sumKeys = (sums: Map<string, number>, keys: string[]) => {
+    let total = 0;
+    for (const key of keys) { const id = idByKey.get(key); if (!id) continue; for (const [k, v] of sums) if (k.startsWith(id + "|")) total += v; }
+    return total;
+  };
+
+  const numbers: string[] = [];
+  const attention: string[] = [];
+  for (const s of SUMMARY_KPIS) {
+    const a = sumKeys(sumsThis, s.keys), b = sumKeys(sumsPrior, s.keys);
+    if (a === 0 && b === 0) continue;
+    const arrow = a > b ? "▲" : a < b ? "▼" : "▬";
+    numbers.push(`${arrow} ${s.label}: ${Math.round(a)} (was ${Math.round(b)})`);
+    if (a < b) attention.push(`${s.label} dropped to ${Math.round(a)} from ${Math.round(b)} — dig into why.`);
+  }
+
+  const wins: string[] = [];
+  for (const r of deck.recognition.slice(0, 3)) wins.push(`🏆 ${r.rep} led ${r.role} — ${r.kpi} ${r.value}`);
+  if (deck.monthly.closedCount > 0) wins.push(`Closed ${deck.monthly.closedCount} deal${deck.monthly.closedCount > 1 ? "s" : ""} for ${usd(deck.monthly.revenueClosed)} so far this month.`);
+  if (wins.length === 0) wins.push("Set the tone — call out one thing the team did well last week.");
+
+  const pipeline: string[] = [];
+  if (deck.monthly.inEscrow > 0) pipeline.push(`${usd(deck.monthly.inEscrow)} in escrow / pending.`);
+  const closingSoon = deck.pipeline.filter((p) => p.days != null && p.days < 21).slice(0, 4);
+  for (const p of closingSoon) pipeline.push(`${p.address} — ${p.status}${p.days != null ? ` (${p.days}d)` : ""}`);
+  const stale = deck.pipeline.filter((p) => p.days != null && p.days >= 30).slice(0, 4);
+  for (const p of stale) attention.push(`${p.address} stale at ${p.days}d — price reduction or switch buyers.`);
+  if (pipeline.length === 0) pipeline.push("Walk the active pipeline — what's closest to closing?");
+
+  const focus: string[] = [];
+  if (deck.trainingTip) focus.push(`Skill focus: ${deck.trainingTip.text}`);
+  if (deck.goal.revenueGoal > 0) focus.push(`Goal: ${usd(deck.goal.revenueClosed)} of ${usd(deck.goal.revenueGoal)} (${deck.goal.pct}%) — keep the board moving.`);
+  if (focus.length === 0) focus.push("Pick one number to move this week and make it the rallying point.");
+
+  const shoutouts: string[] = [];
+  for (const p of pips) shoutouts.push(`🟠 ${p.user?.name ?? "—"} on a PIP (${p.kpiName || p.kpiKey}) → works Saturday.`);
+
+  return { weekLabel: thisW.label, wins, numbers, attention, pipeline, focus, shoutouts };
+}
