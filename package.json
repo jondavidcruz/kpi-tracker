@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && (prisma migrate resolve --rolled-back 20260618380000_marie_dev_targets || true) && prisma migrate deploy && next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "postinstall": "prisma generate",
     "lint": "eslint",
