@@ -1890,6 +1890,47 @@ export async function deleteClosingExpense(formData: FormData) {
   revalidatePath("/closing");
 }
 
+// --- Team & individual rewards -----------------------------------------------
+
+export async function saveReward(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "").trim();
+  const reward = String(formData.get("reward") ?? "").trim().slice(0, 200);
+  if (!reward) return;
+  const scope = String(formData.get("scope")) === "individual" ? "individual" : "team";
+  const data = {
+    scope,
+    userId: scope === "individual" ? String(formData.get("userId") ?? "").trim() : "",
+    goal: String(formData.get("goal") ?? "").trim().slice(0, 200),
+    reward,
+    icon: String(formData.get("icon") ?? "🎁").trim().slice(0, 8) || "🎁",
+  };
+  if (id) await db.reward.update({ where: { id }, data });
+  else await db.reward.create({ data });
+  revalidatePath("/rewards");
+}
+
+export async function toggleRewardAchieved(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const r = await db.reward.findUnique({ where: { id } });
+  if (!r) return;
+  await db.reward.update({ where: { id }, data: { achieved: !r.achieved } });
+  revalidatePath("/rewards");
+}
+
+export async function deleteReward(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.reward.delete({ where: { id } });
+  revalidatePath("/rewards");
+}
+
 // --- Monday-meeting highlights log -------------------------------------------
 
 export async function addMeetingHighlight(formData: FormData) {

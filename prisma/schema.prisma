@@ -875,6 +875,22 @@ model ClosingExpense {
   @@index([closingId])
 }
 
+// Rewards the team can earn. Team rewards (everyone sees) tie a goal to a reward;
+// individual rewards are personal benefits assigned to one member.
+model Reward {
+  id        String   @id @default(cuid())
+  scope     String   @default("team") // team | individual
+  userId    String   @default("") // set when scope = individual
+  goal      String   @default("") // what to hit, e.g. "Hit the monthly contract goal"
+  reward    String   @default("") // what they get
+  icon      String   @default("🎁")
+  achieved  Boolean  @default(false) // manager marks it unlocked/earned
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([scope, userId])
+}
+
 // Persistent "highlights / wins" log for the Monday meeting — separate from the
 // auto-generated KPI sheets. Accumulates over time; shown newest-first.
 model MeetingHighlight {
