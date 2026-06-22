@@ -37,7 +37,6 @@ export default function Sidebar({
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
       { href: "/marketing", label: "Markets & Buyers", Icon: Megaphone, marketingOnly: true },
       { href: "/rewards", label: "Rewards", Icon: Gift },
-      { href: "/operations", label: "Resources & SOPs", Icon: Briefcase, adminOnly: true },
     ] },
     { label: "Performance", items: [
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },

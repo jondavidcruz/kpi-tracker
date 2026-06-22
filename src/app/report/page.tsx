@@ -15,6 +15,7 @@ import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { KpiLabel } from "@/lib/kpiIcons";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
+import RepRoleBars from "@/components/RepRoleBars";
 import type { Kpi, User, Target } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -136,15 +137,20 @@ export default async function ReportPage({
             const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
             if (roleReps.length === 0) return null;
             return (
-              <RoleWeekTable
+              <RepRoleBars
                 key={pos.key}
-                title={`${pos.emoji} ${pos.label}`}
+                emoji={pos.emoji}
+                label={pos.label}
                 reps={roleReps}
                 kpis={roleKpis}
-                sums={sums}
-                targets={targets}
-                month={month}
-                workdays={workdays}
+                cell={(repId, k) => {
+                  const val = sums.get(`${k.id}|${repId}`) ?? 0;
+                  const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;
+                  const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdays : null;
+                  const pct = weeklyGoal ? Math.min(100, (val / weeklyGoal) * 100) : null;
+                  const status = weeklyGoal ? (val >= weeklyGoal ? "hit" : val >= weeklyGoal * 0.7 ? "close" : "miss") : "tracked";
+                  return { value: val, pct, status, goalText: weeklyGoal ? `/ ${formatValue(k.unit as Unit, weeklyGoal)} wk` : undefined };
+                }}
               />
             );
           })}
@@ -225,61 +231,3 @@ function RevCard({ label, value, tone }: { label: string; value: string; tone?: 
   );
 }
 
-function RoleWeekTable({
-  title,
-  reps,
-  kpis,
-  sums,
-  targets,
-  month,
-  workdays,
-}: {
-  title: string;
-  reps: User[];
-  kpis: Kpi[];
-  sums: Map<string, number>;
-  targets: Target[];
-  month: string;
-  workdays: number;
-}) {
-  return (
-    <div>
-      <h3 className="mb-2 text-sm font-bold text-slate-600">{title}</h3>
-      <Card className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/70">
-              <th className="sticky left-0 bg-slate-50/70 px-4 py-2.5 text-left font-semibold">Rep</th>
-              {kpis.map((k) => (
-                <th key={k.id} className="whitespace-nowrap px-3 py-2.5 text-center font-semibold">
-                  <KpiLabel kpiKey={k.key} name={k.name} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {reps.map((rep) => (
-              <tr key={rep.id} className="border-b border-slate-100 last:border-0">
-                <td className="sticky left-0 bg-white px-4 py-2.5 font-semibold text-slate-800">{rep.name}</td>
-                {kpis.map((k) => {
-                  const val = sums.get(`${k.id}|${rep.id}`) ?? 0;
-                  // Per-rep weekly target = their per-day goal × working days this week.
-                  const dailyGoal = (k.goalKind === "at_least") ? resolveGoalWith(targets, k, rep.id, month) : null;
-                  const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdays : null;
-                  const pct = weeklyGoal ? Math.round((val / weeklyGoal) * 100) : null;
-                  const pctCls = pct == null ? "" : pct >= 100 ? "text-emerald-600" : pct >= 70 ? "text-amber-600" : "text-red-600";
-                  return (
-                    <td key={k.id} className="px-3 py-2.5 text-center tabular-nums text-slate-700">
-                      {formatValue(k.unit as Unit, val)}
-                      {pct != null && <span className={`ml-1 text-[10px] font-semibold ${pctCls}`}>{pct}%</span>}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-}

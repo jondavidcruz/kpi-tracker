@@ -6,6 +6,7 @@ import { todayStr, monthBounds, monthOf, daysInMonth, dayOfMonth } from "@/lib/d
 import { formatValue, toInputNumber, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
+import RepRoleBars from "@/components/RepRoleBars";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import {
   computeDerived,
@@ -26,6 +27,10 @@ export default async function MonthlyPage({
   const today = todayStr(settings.orgTimezone);
   const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : monthOf(today);
   const monthStart = `${month}-01`;
+  // Working days (Mon–Fri) in the month → per-rep monthly target for the KPI bars.
+  const [mY, mM] = month.split("-").map(Number);
+  let workdaysInMonth = 0;
+  for (let dd = 1; dd <= new Date(Date.UTC(mY, mM, 0)).getUTCDate(); dd++) { const dow = new Date(Date.UTC(mY, mM - 1, dd)).getUTCDay(); if (dow >= 1 && dow <= 5) workdaysInMonth++; }
   const { end: monthEnd } = monthBounds(monthStart);
   const isCurrentMonth = month === monthOf(today);
   const fraction = isCurrentMonth ? dayOfMonth(today) / daysInMonth(today) : 1;
@@ -191,38 +196,21 @@ export default async function MonthlyPage({
             const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
             if (roleReps.length === 0 || roleKpis.length === 0) return null;
             return (
-              <div key={pos.key}>
-                <h3 className="mb-2 text-sm font-bold text-slate-600">{pos.emoji} {pos.label}</h3>
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50/70">
-                        <th className="sticky left-0 bg-slate-50/70 px-4 py-2.5 text-left font-semibold">Rep</th>
-                        {roleKpis.map((k) => (
-                          <th key={k.id} className="whitespace-nowrap px-3 py-2.5 text-center font-semibold"><KpiLabel kpiKey={k.key} name={k.name} /></th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {roleReps.map((rep) => (
-                        <tr key={rep.id} className="border-b border-slate-100 last:border-0">
-                          <td className="sticky left-0 bg-white px-4 py-2.5 font-semibold text-slate-800">{rep.name}</td>
-                          {roleKpis.map((k) => {
-                            const total = monthSums.get(`${k.id}|${rep.id}`) ?? 0;
-                            const goal = resolveGoalWith(targets, k, rep.id, month);
-                            return (
-                              <td key={k.id} className="px-3 py-2.5 text-center tabular-nums text-slate-700">
-                                {formatValue(k.unit as Unit, total)}
-                                {goal !== null && <span className="ml-1 text-[10px] text-slate-400">({formatValue(k.unit as Unit, goal)}/day)</span>}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <RepRoleBars
+                key={pos.key}
+                emoji={pos.emoji}
+                label={pos.label}
+                reps={roleReps}
+                kpis={roleKpis}
+                cell={(repId, k) => {
+                  const total = monthSums.get(`${k.id}|${repId}`) ?? 0;
+                  const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;
+                  const monthlyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdaysInMonth : null;
+                  const pct = monthlyGoal ? Math.min(100, (total / monthlyGoal) * 100) : null;
+                  const status = monthlyGoal ? (total >= monthlyGoal ? "hit" : total >= monthlyGoal * 0.7 ? "close" : "miss") : "tracked";
+                  return { value: total, pct, status, goalText: dailyGoal ? `/ ${formatValue(k.unit as Unit, dailyGoal)}/day` : undefined };
+                }}
+              />
             );
           })}
         </div>
