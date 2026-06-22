@@ -21,9 +21,11 @@ const DEPT = {
   Dispositions: { chip: "bg-violet-100 text-violet-700", dot: "bg-violet-500", sel: "ring-violet-400 bg-violet-50", bar: "bg-violet-400" },
   Escrow: { chip: "bg-indigo-100 text-indigo-700", dot: "bg-indigo-500", sel: "ring-indigo-400 bg-indigo-50", bar: "bg-indigo-400" },
   Closing: { chip: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500", sel: "ring-emerald-400 bg-emerald-50", bar: "bg-emerald-400" },
+  Listings: { chip: "bg-rose-100 text-rose-700", dot: "bg-rose-500", sel: "ring-rose-400 bg-rose-50", bar: "bg-rose-400" },
+  Legal: { chip: "bg-slate-200 text-slate-700", dot: "bg-slate-500", sel: "ring-slate-400 bg-slate-50", bar: "bg-slate-400" },
 } as const;
 
-const PHASES: Phase[] = [
+const STANDARD: Phase[] = [
   { n: 1, title: "Lead generation", dept: "Marketing", owner: "Marketing / PPL",
     summary: "A new lead enters from PPL, text, direct mail, or an off-market source and is logged so acquisitions can work it fast.",
     steps: ["Lead lands in the CRM (REI Reply) + War Room", "Auto first-touch fires (speed-to-lead)", "Routed to the right acquisitions rep"],
@@ -84,10 +86,125 @@ const PHASES: Phase[] = [
     aiAuto: ["HUD line-item verification + discrepancy flagging"] },
 ];
 
-const DEPTS = Array.from(new Set(PHASES.map((p) => p.dept)));
+// ── Workflow 2: seller rejected every offer → list with Ethan, else refer out ──
+const REJECTED: Phase[] = [
+  { n: 1, title: "Offers exhausted", dept: "Acquisitions", owner: "Acquisitions / Jon",
+    summary: "Michelle made offers, Jon co-closed, and the seller still said no. Document why before pivoting to a listing.",
+    steps: ["Confirm every angle was tried (cash, novation, creative)", "Log the rejection reason + their price expectation", "Decide: pivot to listing or long-term nurture", "Tag the lead 'rejected — listing path'"],
+    aiAssist: ["Summarize the objections + suggest a listing pitch"], aiAuto: ["Auto-tag rejected leads into the listing queue"] },
+  { n: 2, title: "Pitch the listing option", dept: "Acquisitions", owner: "Acquisitions → Ethan",
+    summary: "Offer a traditional listing as the win-win — the seller gets retail, we earn a referral/listing fee.",
+    steps: ["Explain the listing option + their likely net", "Get a verbal yes to list", "Warm-introduce Ethan (licensed agent)", "Hand the lead + all notes to Ethan"],
+    aiAssist: ["Draft the listing-pitch talk track"], aiAuto: [] },
+  { n: 3, title: "Ethan lists it", dept: "Listings", owner: "Ethan (Listings)",
+    summary: "Ethan signs the listing agreement and gets it live. He's listings-only and part-time, so move fast.",
+    steps: ["Sign the listing agreement", "Price from comps", "Photos + MLS live", "Market to buyers / agents"],
+    branches: ["Listed", "Can't list in-house"],
+    aiAssist: ["CMA pricing", "Listing description"], aiAuto: [] },
+  { n: 4, title: "If not listed → refer out", dept: "Listings", owner: "Ethan",
+    summary: "If Ethan can't list it (out of area, no fit, capacity), refer it to a partner agent for a referral fee — never drop it.",
+    steps: ["Decide it won't be listed in-house", "Pick a partner agent / iBuyer", "Send the referral with a signed agreement", "Confirm the referral-fee terms"],
+    aiAssist: ["Match to a partner agent by market"], aiAuto: [] },
+  { n: 5, title: "Track + collect the fee", dept: "Dispositions", owner: "Ethan / Dispo",
+    summary: "Follow the listing or referral all the way to close and collect our fee.",
+    steps: ["Track to contract + close", "Confirm our fee at close", "Log the outcome + revenue"],
+    aiAssist: ["Deadline reminders"], aiAuto: ["Fee-at-close verification"] },
+];
+
+// ── Workflow 3: occupied property — cash for keys (tenant move-out) ──
+const CASHKEYS: Phase[] = [
+  { n: 1, title: "Confirm occupancy", dept: "Acquisitions", owner: "Acquisitions",
+    summary: "Someone's living there. Confirm who and their legal rights before promising anything.",
+    steps: ["Tenant vs owner-occupant vs holdover/squatter", "Get names + contact info", "Pull the lease (or confirm none)", "Note state/city tenant protections"],
+    aiAssist: ["Summarize local tenant-rights rules"], aiAuto: [] },
+  { n: 2, title: "Offer cash for keys", dept: "Acquisitions", owner: "Acquisitions / Jon",
+    summary: "Negotiate a clean, voluntary move-out for a cash incentive — far faster and cheaper than eviction.",
+    steps: ["Calculate a fair cash-for-keys amount", "Present the offer + a move-out date", "Negotiate the number + timeline", "Get a written cash-for-keys agreement signed"],
+    aiAssist: ["Draft the cash-for-keys agreement"], aiAuto: [] },
+  { n: 3, title: "Move-out + verify", dept: "Dispositions", owner: "Dispo / Field",
+    summary: "Confirm the unit is fully vacated and broom-clean before any money moves.",
+    steps: ["Confirm the move-out date", "Inspect: fully vacated + broom clean", "Photos of the empty unit", "Collect all keys"],
+    branches: ["Vacated", "Refused → eviction path"],
+    aiAssist: [], aiAuto: [] },
+  { n: 4, title: "Release payment", dept: "Closing", owner: "Jon / Escrow",
+    summary: "Pay on keys + confirmed vacancy only, and document everything.",
+    steps: ["Release the agreed payment on keys", "Signed receipt / release", "Re-key + secure the property", "Log the cost to the deal"],
+    aiAssist: [], aiAuto: [] },
+];
+
+// ── Workflow 4: pre-foreclosure (racing the auction clock) ──
+const PREFORECLOSURE: Phase[] = [
+  { n: 1, title: "Pin the timeline", dept: "Acquisitions", owner: "Acquisitions",
+    summary: "Pre-foreclosure is a race against the sale date. Lock the exact dates first.",
+    steps: ["Confirm NOD/NOS filed + the auction/sale date", "Get the lender + loan number", "Signed authorization to discuss with the lender", "Flag as time-sensitive in the CRM"],
+    aiAssist: ["Explain the foreclosure timeline for the state"], aiAuto: ["Auction-date countdown alerts"] },
+  { n: 2, title: "Get the figures", dept: "Underwriting", owner: "Underwriting",
+    summary: "Pull reinstatement + payoff so the math is real, not guessed.",
+    steps: ["Request the reinstatement amount", "Request the full payoff", "Check for junior liens", "Underwrite equity vs payoff vs ARV"],
+    aiAssist: ["Equity + exit math"], aiAuto: [] },
+  { n: 3, title: "Offer + structure", dept: "Acquisitions", owner: "Acquisitions / Jon",
+    summary: "Pick the structure that beats the clock: cash, subject-to, or reinstate-and-resell.",
+    steps: ["Choose cash / subject-to / reinstate", "Present the offer + how it stops the auction", "Lock terms in writing", "Loop in lender + title early"],
+    branches: ["Cash", "Subject-to", "Reinstate"],
+    aiAssist: ["Subject-to vs cash recommendation"], aiAuto: [] },
+  { n: 4, title: "Stop the clock + close", dept: "Closing", owner: "Jon / Escrow",
+    summary: "Postpone the sale if needed and close before the auction date.",
+    steps: ["Request a postponement if needed", "Rush title + escrow", "Confirm funds / reinstatement to the lender", "Close + record before the sale date"],
+    aiAssist: ["Deadline monitoring"], aiAuto: [] },
+];
+
+// ── Workflow 5: probate (estate sale) ──
+const PROBATE: Phase[] = [
+  { n: 1, title: "Confirm authority", dept: "Legal", owner: "Acquisitions / Legal",
+    summary: "You can only buy from someone with legal authority to sell. Confirm the estate's status first.",
+    steps: ["Identify the executor / administrator", "Confirm probate is open in court", "Get Letters Testamentary / Administration", "Confirm authority to sell (full vs limited)"],
+    aiAssist: ["Explain probate authority requirements"], aiAuto: [] },
+  { n: 2, title: "Underwrite + offer", dept: "Underwriting", owner: "Underwriting / Acquisitions",
+    summary: "Underwrite normally, but structure for court rules (confirmation/overbid where required).",
+    steps: ["Comps + ARV + repairs", "Offer (note: subject to court confirmation if limited authority)", "Explain the timeline to the heir(s)", "Get the offer accepted in writing"],
+    aiAssist: ["Exit recommendation"], aiAuto: [] },
+  { n: 3, title: "Court + attorney", dept: "Legal", owner: "Legal / Escrow",
+    summary: "Coordinate with the estate attorney and the court process.",
+    steps: ["Coordinate with the estate attorney", "File / give notice as required", "Handle court confirmation / overbid if required", "Confirm a clear path to close"],
+    branches: ["Full authority — close normally", "Limited — court confirmation"],
+    aiAssist: [], aiAuto: [] },
+  { n: 4, title: "Close through escrow", dept: "Closing", owner: "Jon / Escrow",
+    summary: "Close once authority + any court requirements are satisfied.",
+    steps: ["Open escrow + title", "Satisfy court / attorney conditions", "Close + record", "Confirm funds disbursed to the estate"],
+    aiAssist: [], aiAuto: [] },
+];
+
+// ── Workflow 6: other issues (title, liens, code, disputes) ──
+const OTHER: Phase[] = [
+  { n: 1, title: "Identify the issue", dept: "Acquisitions", owner: "Acquisitions",
+    summary: "Catch-all for a complication — title cloud, lien, code violation, boundary, unpermitted work, partner dispute, etc.",
+    steps: ["Name the exact issue", "Gather the docs (title, citation, lien)", "Assess severity + deal impact", "Flag in the CRM with the issue type"],
+    aiAssist: ["Classify the issue + likely path"], aiAuto: [] },
+  { n: 2, title: "Loop in the expert", dept: "Legal", owner: "Legal / Title / Escrow",
+    summary: "Get the right specialist on it fast — title officer, attorney, city, or contractor.",
+    steps: ["Pick the right expert", "Send the docs + a clear question", "Get a resolution path + cost + timeline", "Decide: solvable or pass/refer"],
+    aiAssist: ["Draft the question to the expert"], aiAuto: [] },
+  { n: 3, title: "Resolve + adjust", dept: "Acquisitions", owner: "Acquisitions / Jon",
+    summary: "Fix the issue or re-price the deal to absorb it — and disclose.",
+    steps: ["Resolve the issue or negotiate a credit", "Re-underwrite with the new cost", "Disclose to buyer / all parties", "Proceed to close or refer out"],
+    branches: ["Resolved → continue", "Pass / refer"],
+    aiAssist: ["Re-underwrite the adjusted numbers"], aiAuto: [] },
+];
+
+type Process = { key: string; name: string; emoji: string; blurb: string; phases: Phase[] };
+const PROCESSES: Process[] = [
+  { key: "standard", name: "Standard Closing", emoji: "✅", blurb: "Easy lead, no issues — fresh lead to recorded close, A→Z.", phases: STANDARD },
+  { key: "rejected", name: "Rejected → List / Refer", emoji: "🏷️", blurb: "Seller rejected every offer → Ethan lists it; if he can't, he refers it out.", phases: REJECTED },
+  { key: "cashkeys", name: "Cash for Keys", emoji: "🔑", blurb: "Occupied property — negotiate a clean, voluntary tenant move-out.", phases: CASHKEYS },
+  { key: "preforeclosure", name: "Pre-foreclosure", emoji: "⏰", blurb: "Race the auction clock — reinstate, subject-to, or cash before the sale.", phases: PREFORECLOSURE },
+  { key: "probate", name: "Probate", emoji: "⚖️", blurb: "Estate sale — confirm authority, work the court + attorney, then close.", phases: PROBATE },
+  { key: "other", name: "Other Issues", emoji: "🧩", blurb: "Title, liens, code, disputes — identify, loop in the expert, resolve or refer.", phases: OTHER },
+];
+
 const STORE_KEY = "fo_process_checks";
 
 export default function ProcessMap() {
+  const [procKey, setProcKey] = useState("standard");
   const [sel, setSel] = useState(1);
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [checks, setChecks] = useState<Record<string, boolean>>({});
@@ -101,13 +218,36 @@ export default function ProcessMap() {
     return next;
   });
 
-  const phase = PHASES.find((p) => p.n === sel)!;
+  const proc = PROCESSES.find((p) => p.key === procKey)!;
+  const PHASES = proc.phases;
+  const DEPTS = Array.from(new Set(PHASES.map((p) => p.dept)));
+  const ck = (n: number, i: number) => `${procKey}:${n}:${i}`;
+  const pickProcess = (key: string) => { setProcKey(key); setSel(1); setRoleFilter(""); };
+
+  const phase = PHASES.find((p) => p.n === sel) ?? PHASES[0];
   const d = DEPT[phase.dept];
   const visible = PHASES.filter((p) => !roleFilter || p.dept === roleFilter);
-  const doneCount = phase.steps.filter((_, i) => checks[`${phase.n}:${i}`]).length;
+  const doneCount = phase.steps.filter((_, i) => checks[ck(phase.n, i)]).length;
 
   return (
     <div className="space-y-5">
+      {/* Process picker — choose the workflow */}
+      <div>
+        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">Choose a process</div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {PROCESSES.map((p) => {
+            const on = p.key === procKey;
+            return (
+              <button key={p.key} type="button" onClick={() => pickProcess(p.key)}
+                className={`rounded-xl border p-2.5 text-left transition ${on ? "border-brand-navy bg-brand-navy text-white" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                <div className="text-sm font-bold">{p.emoji} {p.name}</div>
+                <div className={`mt-0.5 text-[11px] leading-tight ${on ? "text-white/70" : "text-slate-400"}`}>{p.blurb}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Role filter — each role's slice of the pipeline = their SOP */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] font-semibold text-slate-400">View role:</span>
@@ -124,7 +264,7 @@ export default function ProcessMap() {
             const pd = DEPT[p.dept];
             const active = p.n === sel;
             const total = p.steps.length;
-            const done = p.steps.filter((_, idx) => checks[`${p.n}:${idx}`]).length;
+            const done = p.steps.filter((_, idx) => checks[ck(p.n, idx)]).length;
             const complete = done === total && total > 0;
             return (
               <div key={p.n} className="flex items-stretch">
@@ -165,7 +305,7 @@ export default function ProcessMap() {
             </div>
             <ul className="space-y-1.5">
               {phase.steps.map((s, i) => {
-                const key = `${phase.n}:${i}`;
+                const key = ck(phase.n, i);
                 const on = !!checks[key];
                 return (
                   <li key={i}>
