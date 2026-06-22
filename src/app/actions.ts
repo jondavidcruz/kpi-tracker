@@ -1635,7 +1635,12 @@ export async function punch(formData: FormData) {
   await db.punch.create({ data: { userId: me.id, kind, date } });
   // Logging back in auto-clears any live outage flagged for them.
   if (kind === "in") {
-    await db.outage.updateMany({ where: { userId: me.id, date, ongoing: true }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
+    const ongoing = await db.outage.findMany({ where: { userId: me.id, date, ongoing: true } });
+    if (ongoing.length) {
+      await db.outage.updateMany({ where: { userId: me.id, date, ongoing: true }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
+      const t = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
+      sendTimecardChat(`🟢 ${me.name} is BACK online — ${ongoing[0].kind === "power" ? "⚡ power" : "📶 internet"} outage cleared · ${t}`).catch(() => {});
+    }
   }
   // Mirror the status change to the team Google Chat room (replaces the manual
   // "on break / back from lunch" typing the team used to do).
@@ -1857,6 +1862,9 @@ export async function startOutage(formData: FormData) {
   if (existing) return; // already flagged
   const now = nowLocalMin(settings.orgTimezone);
   await db.outage.create({ data: { userId, date, kind, startMin: now, endMin: now, ongoing: true, reportedBy: me!.name } });
+  const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
+  sendTimecardChat(`🔴 ${u?.name ?? "Team member"} is OFFLINE — ${kind === "power" ? "⚡ power" : kind === "internet" ? "📶 internet"  : ""} outage · ${time}`).catch(() => {});
   revalidatePath("/schedule");
   revalidatePath("/timecard");
 }
@@ -1880,6 +1888,8 @@ export async function confirmDropOutage(formData: FormData) {
   const startMin = localMinOf(sinceMs, settings.orgTimezone);
   const endMin = Math.max(startMin + 1, nowLocalMin(settings.orgTimezone));
   await db.outage.create({ data: { userId: me.id, date, kind, startMin, endMin, ongoing: false, reportedBy: "auto-detected", note: "Dropped offline — confirmed by rep." } });
+  const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
+  sendTimecardChat(`🟢 ${me.name} is BACK online — had a ${kind === "power" ? "⚡ power" : "📶 internet"} outage (~${endMin - startMin} min) · ${time}`).catch(() => {});
   revalidatePath("/schedule");
   revalidatePath("/timecard");
 }
@@ -1891,7 +1901,13 @@ export async function endOutage(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const settings = await getSettings();
+  const row = await db.outage.findUnique({ where: { id } });
   await db.outage.update({ where: { id }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
+  if (row?.ongoing) {
+    const u = await db.user.findUnique({ where: { id: row.userId }, select: { name: true } });
+    const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
+    sendTimecardChat(`🟢 ${u?.name ?? "Team member"} is BACK online — ${row.kind === "power" ? "⚡ power" : "📶 internet"} outage cleared · ${time}`).catch(() => {});
+  }
   revalidatePath("/schedule");
   revalidatePath("/timecard");
 }
