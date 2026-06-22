@@ -80,6 +80,20 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
         } />
       {showPay && <p className="text-xs text-slate-400">Semi-monthly: paid on the <strong>15th</strong> and the <strong>last day</strong> of each month (periods 1–15 & 16–end). Pay = paid hours × hourly rate + bonuses − discrepancies. Marie&apos;s entered hours are what pay; the clock-tracked hours are shown beside them as a check.</p>}
 
+      {/* Minute → decimal conversion reference (for exact per-minute pay) */}
+      <details className="rounded-xl border border-slate-200 bg-white p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-600">🕐 Minute → decimal conversion chart</summary>
+        <p className="mb-2 mt-1 text-[11px] text-slate-400">Pay is exact to the minute: decimal hours = minutes ÷ 60. Example: <b>5h 59m = 5.98 hrs</b> → at $5.00/hr that&apos;s <b>$29.90</b>.</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs tabular-nums sm:grid-cols-4">
+          {Array.from({ length: 60 }, (_, i) => i + 1).map((m) => (
+            <div key={m} className={`flex justify-between rounded px-1.5 py-0.5 ${m % 2 ? "" : "bg-slate-50"}`}>
+              <span className="font-semibold text-slate-700">{m} min</span>
+              <span className="text-slate-500">{m === 60 ? "1.00" : `.${String(Math.round((m / 60) * 100)).padStart(2, "0")}`}</span>
+            </div>
+          ))}
+        </div>
+      </details>
+
       {active.map((u) => {
         const prof = profByUser.get(u.id);
         const rate = parseHourly(prof?.payScale);
@@ -168,7 +182,8 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             {/* Summary — Auto (clock) vs Marie's entered hours, then $ for leadership */}
             <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm">
               <span className="text-slate-500">Clock-tracked <strong className="tabular-nums text-slate-700">{fmtHours(autoPaidH)}</strong></span>
-              <span>Paid hours <strong className="tabular-nums">{fmtHours(paidH)}</strong>{manualH != null ? <span className="ml-1 text-[11px] text-slate-400">(entered)</span> : <span className="ml-1 text-[11px] text-slate-400">(auto)</span>}</span>
+              <span>Paid hours <strong className="tabular-nums">{fmtHours(paidH)}</strong> <span className="text-[11px] font-semibold text-slate-400">= {paidH.toFixed(2)} hrs</span>{manualH != null ? <span className="ml-1 text-[11px] text-slate-400">(entered)</span> : <span className="ml-1 text-[11px] text-slate-400">(auto)</span>}</span>
+              {showPay && rate != null && <span className="text-[11px] text-slate-400">{paidH.toFixed(2)} × {money(rate)}/hr</span>}
               {manualH != null && Math.abs(variance) >= 0.25 && (
                 <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${variance > 0 ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>
                   {variance > 0 ? "+" : "−"}{fmtHours(Math.abs(variance))} vs clock

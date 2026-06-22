@@ -176,18 +176,20 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
           </div>
         </Card>
 
-        {/* ── Year to date — the real picture ── */}
+        {/* ── Year-to-date income (the real cumulative picture) ── */}
         <Card className="mt-4 p-4">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm font-bold text-slate-700">📅 Year to date ({year})</span>
-            <span className="text-[11px] text-slate-400">Income only counts in the month a deal actually closed.</span>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">📅 Year-to-date income ({year})</div>
+              <div className="mt-0.5 text-3xl font-extrabold tabular-nums text-emerald-600">{usd(ytdIncome)}</div>
+              <div className="text-[11px] text-slate-400">Income only counts in the month a deal actually closed.</div>
+            </div>
+            <div className="text-right text-sm text-slate-500">
+              <div>Expenses YTD <b className="tabular-nums text-rose-600">{usd(ytdExpenses)}</b></div>
+              <div>Net YTD <b className={`tabular-nums ${ytdNet >= 0 ? "text-emerald-600" : "text-red-600"}`}>{usd(ytdNet)}{ytdNet < 0 ? " (loss)" : ""}</b></div>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Income YTD</div><div className="text-xl font-extrabold tabular-nums text-emerald-600">{usd(ytdIncome)}</div></div>
-            <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Expenses YTD</div><div className="text-xl font-extrabold tabular-nums text-rose-600">{usd(ytdExpenses)}</div></div>
-            <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Net YTD</div><div className={`text-xl font-extrabold tabular-nums ${ytdNet >= 0 ? "text-emerald-600" : "text-red-600"}`}>{usd(ytdNet)}</div></div>
-          </div>
-          {ytdNet < 0 && <p className="mt-2 text-[11px] font-semibold text-red-500">⚠️ Net negative for the year — expenses are outrunning closed income. A profitable month doesn&apos;t mean a profitable year. See the cut-the-fat ideas below.</p>}
+          {ytdNet < 0 && <p className="mt-2 text-[11px] font-semibold text-red-500">⚠️ Net negative for the year — a profitable single month doesn&apos;t mean a profitable year. See the cut-the-fat ideas below.</p>}
         </Card>
 
         {/* ── Where the money goes (breakdown) ── */}
