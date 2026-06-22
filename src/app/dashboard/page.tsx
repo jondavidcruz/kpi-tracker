@@ -543,15 +543,20 @@ function RoleScorecard({
                   const goal = resolveGoalWith(targets, k, rep.id, month);
                   const status: Status = value === null ? "none" : statusVsGoal(k.goalKind, value, goal);
                   const cls = statusClasses(status);
-                  const dot = status === "hit" ? "bg-emerald-500" : status === "close" ? "bg-amber-500" : status === "miss" ? "bg-red-500" : "bg-slate-200";
+                  const bar = status === "hit" ? "bg-emerald-500" : status === "close" ? "bg-amber-500" : status === "miss" ? "bg-red-500" : "bg-slate-300";
+                  const pct = goal && goal > 0 && value !== null ? Math.min(100, (value / goal) * 100) : value !== null && value > 0 ? 100 : 0;
                   return (
-                    <div key={k.id} className="flex items-center gap-3 px-4 py-2">
-                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
-                      <span className="min-w-0 flex-1 truncate text-sm text-slate-600"><KpiLabel kpiKey={k.key} name={k.name} /></span>
-                      <span className="shrink-0 text-right tabular-nums">
-                        <span className={`text-base font-extrabold ${cls.text}`}>{value === null ? "—" : formatValue(k.unit as Unit, value)}</span>
-                        {goal !== null && <span className="text-xs text-slate-400"> / {formatValue(k.unit as Unit, goal)}</span>}
-                      </span>
+                    <div key={k.id} className="px-4 py-2">
+                      <div className="flex items-center gap-3">
+                        <span className="min-w-0 flex-1 truncate text-sm text-slate-600"><KpiLabel kpiKey={k.key} name={k.name} /></span>
+                        <span className="shrink-0 text-right tabular-nums">
+                          <span className={`text-base font-extrabold ${cls.text}`}>{value === null ? "—" : formatValue(k.unit as Unit, value)}</span>
+                          {goal !== null && <span className="text-xs text-slate-400"> / {formatValue(k.unit as Unit, goal)}</span>}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div className={`h-full rounded-full ${bar}`} style={{ width: `${pct}%` }} />
+                      </div>
                     </div>
                   );
                 })}

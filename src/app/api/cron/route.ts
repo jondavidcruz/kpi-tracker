@@ -10,6 +10,7 @@ import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
 import { sendHuddleBrief } from "@/lib/huddle-brief";
+import { sendLeaksReport } from "@/lib/diagnostics";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
 function laNow(): { hour: number; dow: number } {
@@ -91,6 +92,14 @@ export async function GET(request: Request) {
     const dow = url.searchParams.has("ladow") ? Number(url.searchParams.get("ladow")) : laNow().dow;
     const reminded = await sendShiftStartSpeedReminders(date ?? todayStr(settings.orgTimezone), slot, dow);
     return NextResponse.json({ ok: true, slot, laDow: dow, speedTestReminded: reminded });
+  }
+
+  // Weekly Leaks report — Friday end of day (Sat 01:00 UTC ≈ Fri 6pm PT) → C-suite email.
+  if (url.searchParams.get("leaks") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const sent = await sendLeaksReport(today);
+    return NextResponse.json({ ok: true, leaks: sent });
   }
 
   // Daily huddle brief — 9:45am PT, Mon–Fri (after the 9am huddle, so the team has

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -64,6 +64,7 @@ export default function Sidebar({
       { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
     ] },
     { label: "C-Suite", items: [
+      { href: "/leaks", label: "War Room Health", Icon: Activity, timecardOnly: true },
       { href: "/expenses", label: "Profit & Loss Report", Icon: Receipt, timecardOnly: true },
       { href: "/timecard", label: "Payroll", Icon: Wallet, timecardOnly: true },
       { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },
