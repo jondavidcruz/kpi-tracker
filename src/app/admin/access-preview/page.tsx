@@ -27,7 +27,7 @@ const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
   ] },
   { group: "Marketing", items: [{ label: "Markets & Buyers", gate: "marketing" }] },
   { group: "C-Suite", items: [
-    { label: "Expenses & P&L", gate: "timecard" }, { label: "Payroll", gate: "timecard" }, { label: "Roadmap", gate: "admin" }, { label: "Escrow & Closing", gate: "manager" },
+    { label: "Profit & Loss Report", gate: "timecard" }, { label: "Payroll", gate: "timecard" }, { label: "Roadmap", gate: "admin" }, { label: "Escrow & Closing", gate: "manager" },
     { label: "Closed deals", gate: "admin" }, { label: "Team Roster", gate: "admin" },
   ] },
   { group: "EOS", items: [

@@ -63,7 +63,7 @@ export default function Sidebar({
       { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
     ] },
     { label: "C-Suite", items: [
-      { href: "/expenses", label: "Expenses & P&L", Icon: Receipt, timecardOnly: true },
+      { href: "/expenses", label: "Profit & Loss Report", Icon: Receipt, timecardOnly: true },
       { href: "/timecard", label: "Payroll", Icon: Wallet, timecardOnly: true },
       { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },
       { href: "/closing", label: "Escrow & Closing", Icon: DollarSign, managerOnly: true },

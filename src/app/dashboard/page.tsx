@@ -530,54 +530,36 @@ function RoleScorecard({
   return (
     <section>
       <SectionTitle title={title} subtitle={blurb} accent="bg-slate-300" right={<Legend />} />
-      <Card className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/70">
-              <th className="sticky left-0 bg-slate-50/70 px-4 py-3 text-left font-semibold">Rep</th>
-              {kpis.map((k) => (
-                <th key={k.id} className="whitespace-nowrap px-3 py-3 text-center font-semibold">
-                  <KpiLabel kpiKey={k.key} name={k.name} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {reps.map((rep) => (
-              <tr key={rep.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                <td className="sticky left-0 bg-white px-4 py-3 font-semibold text-slate-800">{rep.name}</td>
+      {reps.length === 0 ? (
+        <Card className="p-6 text-slate-400">No one assigned to this role yet. Add them in Admin.</Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {reps.map((rep) => (
+            <Card key={rep.id} className="overflow-hidden p-0">
+              <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2 font-bold text-slate-800">{rep.name}</div>
+              <div className="divide-y divide-slate-100">
                 {kpis.map((k) => {
                   const value = dailyValues.get(`${k.id}|${rep.id}`) ?? null;
                   const goal = resolveGoalWith(targets, k, rep.id, month);
                   const status: Status = value === null ? "none" : statusVsGoal(k.goalKind, value, goal);
                   const cls = statusClasses(status);
+                  const dot = status === "hit" ? "bg-emerald-500" : status === "close" ? "bg-amber-500" : status === "miss" ? "bg-red-500" : "bg-slate-200";
                   return (
-                    <td key={k.id} className="px-3 py-2 text-center">
-                      <span
-                        className={`inline-flex min-w-16 flex-col items-center rounded-lg border px-2.5 py-1.5 font-bold tabular-nums ${cls.bg} ${cls.border} ${cls.text}`}
-                      >
-                        {value === null ? "—" : formatValue(k.unit as Unit, value)}
-                        {goal !== null && (
-                          <span className="text-[10px] font-medium text-slate-400">
-                            /{formatValue(k.unit as Unit, goal)}
-                          </span>
-                        )}
+                    <div key={k.id} className="flex items-center gap-3 px-4 py-2">
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-600"><KpiLabel kpiKey={k.key} name={k.name} /></span>
+                      <span className="shrink-0 text-right tabular-nums">
+                        <span className={`text-base font-extrabold ${cls.text}`}>{value === null ? "—" : formatValue(k.unit as Unit, value)}</span>
+                        {goal !== null && <span className="text-xs text-slate-400"> / {formatValue(k.unit as Unit, goal)}</span>}
                       </span>
-                    </td>
+                    </div>
                   );
                 })}
-              </tr>
-            ))}
-            {reps.length === 0 && (
-              <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={kpis.length + 1}>
-                  No one assigned to this role yet. Add them in Admin.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

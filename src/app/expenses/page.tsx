@@ -88,8 +88,8 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-5 pb-24">
       <SectionTitle
-        title="🧾 Expenses & P&L"
-        subtitle="Where the money goes each month — and what's left over. Private to the C-suite."
+        title="📊 Profit & Loss Report"
+        subtitle="Income, expenses, and profit each month — like your accountant's P&L. Private to the C-suite."
         accent="bg-emerald-500"
         right={<span className="text-xs text-slate-400">Jon · Viktoriia · Enrico</span>}
       />
@@ -115,14 +115,14 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         <Card className="p-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-100">
-              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">💵 Money in</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">💵 Total income</div>
               <div className="mt-1 flex items-center gap-1">
                 <Money name="netSales" value={netSales} big />
                 <span className="text-xs text-slate-400">net sales</span>
               </div>
             </div>
             <div className="rounded-xl bg-rose-50 p-4 ring-1 ring-rose-100">
-              <div className="text-xs font-semibold uppercase tracking-wide text-rose-700">🔻 Money out</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-rose-700">🔻 Total expenses</div>
               <div className="mt-1 text-2xl font-extrabold tabular-nums text-rose-700">{usd(totalActual)}</div>
               <div className="text-[11px] text-slate-400">total spent this month</div>
             </div>
@@ -182,56 +182,90 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         {lines.length === 0 ? (
           <Card className="mt-4 p-8 text-center text-slate-500">No expenses for {fmtMonth(month)} yet. Hit “+ Start {fmtMonth(nextNewMonth)}” above to copy last month&apos;s items, or add a line below.</Card>
         ) : (
-          <div className="mt-4 space-y-4">
+          <Card className="mt-4 overflow-hidden p-0">
+            {/* Statement header */}
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3">
+              <div>
+                <div className="text-base font-bold text-slate-800">Profit &amp; Loss</div>
+                <div className="text-[11px] text-slate-400">{fmtMonth(month)}</div>
+              </div>
+              <div className="hidden items-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:flex">
+                <span className="w-24 text-center">Budget</span>
+                <span className="w-28 text-center">Total</span>
+                <span className="w-12 text-right">% inc</span>
+                <span className="w-5" />
+              </div>
+            </div>
+
+            {/* INCOME */}
+            <div className="px-5 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">Income</div>
+            <div className="flex items-center gap-3 px-5 py-1.5">
+              <span className="min-w-0 flex-1 text-sm text-slate-700">Net sales</span>
+              <span className="hidden w-24 sm:block" />
+              <div className="w-28 text-right"><Money name="netSales" value={netSales} big /></div>
+              <span className="w-12 text-right text-[11px] text-slate-400">100%</span>
+              <span className="w-5" />
+            </div>
+            <div className="flex items-center gap-3 border-y border-slate-100 bg-slate-50/60 px-5 py-2">
+              <span className="flex-1 text-sm font-bold text-slate-700">Total income</span>
+              <span className="hidden w-24 sm:block" />
+              <span className="w-28 text-right text-sm font-extrabold tabular-nums text-slate-900">{usd(netSales)}</span>
+              <span className="w-12 text-right text-[11px] text-slate-400">100%</span>
+              <span className="w-5" />
+            </div>
+
+            {/* EXPENSES */}
+            <div className="px-5 pb-1 pt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">Expenses</div>
             {EXPENSE_CATEGORIES.map((cat) => {
               const rows = lines.filter((l) => l.category === cat.key);
               if (rows.length === 0) return null;
-              const c = CAT_COLOR[cat.key];
               const spent = rows.reduce((s, l) => s + l.actual, 0);
-              const budget = rows.reduce((s, l) => s + l.projected, 0);
-              const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
-              const over = budget > 0 && spent > budget;
+              const catPct = netSales > 0 ? Math.round((spent / netSales) * 100) : null;
               return (
-                <Card key={cat.key} className={`overflow-hidden p-0 ring-1 ${c.ring}`}>
-                  <div className={`flex items-center justify-between gap-3 px-4 py-3 ${c.soft}`}>
-                    <div className="min-w-0">
-                      <div className={`text-sm font-bold ${c.text}`}>{cat.emoji} {cat.label}</div>
-                      <div className="text-[11px] text-slate-400">{cat.hint}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-lg font-extrabold tabular-nums ${c.text}`}>{usd(spent)}</div>
-                      {budget > 0 && <div className={`text-[11px] tabular-nums ${over ? "text-red-500" : "text-slate-400"}`}>{over ? "over" : "of"} {usd(budget)} budget</div>}
-                    </div>
+                <div key={cat.key}>
+                  <div className="flex items-center gap-3 px-5 py-1.5">
+                    <span className="flex-1 text-sm font-bold text-slate-700"><span className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${CAT_COLOR[cat.key].dot}`} />{cat.label}</span>
+                    <span className="hidden w-24 sm:block" />
+                    <span className="w-28 text-right text-sm font-bold tabular-nums text-slate-800">{usd(spent)}</span>
+                    <span className="w-12 text-right text-[11px] text-slate-400">{catPct != null ? `${catPct}%` : ""}</span>
+                    <span className="w-5" />
                   </div>
-                  {budget > 0 && <div className="h-1.5 bg-slate-100"><div className={`h-full ${over ? "bg-red-500" : c.bar}`} style={{ width: `${pct}%` }} /></div>}
-
-                  {/* column hint (desktop) */}
-                  <div className="hidden items-center gap-3 px-4 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-300 sm:flex">
-                    <span className="flex-1" />
-                    <span className="w-24 text-center">Spent</span>
-                    <span className="w-20 text-center">Budget</span>
-                    <span className="w-20 text-center">+ Tax</span>
-                    <span className="w-4" />
-                  </div>
-
-                  <div className="divide-y divide-slate-100">
-                    {rows.map((l) => (
-                      <div key={l.id} className="flex items-center gap-3 px-4 py-2.5">
+                  {rows.map((l) => {
+                    const linePct = netSales > 0 ? Math.round((l.actual / netSales) * 100) : null;
+                    return (
+                      <div key={l.id} className="flex items-center gap-3 px-5 py-1 pl-9">
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-slate-700">{l.label}</div>
-                          <input name={`note_${l.id}`} defaultValue={l.note} placeholder="add a note…" className="mt-0.5 w-full bg-transparent text-xs text-slate-400 placeholder:text-slate-300 focus:outline-none" />
+                          <div className="truncate text-sm text-slate-600">{l.label}</div>
+                          <input name={`note_${l.id}`} defaultValue={l.note} placeholder="add a note…" className="w-full bg-transparent text-[11px] text-slate-400 placeholder:text-slate-300 focus:outline-none" />
                         </div>
-                        <Money name={`actual_${l.id}`} value={l.actual} big />
-                        <div className="hidden sm:block"><Money name={`projected_${l.id}`} value={l.projected} /></div>
-                        <div className="hidden sm:block"><Money name={`withTax_${l.id}`} value={l.withTax} placeholder="—" /></div>
-                        <button name="id" value={l.id} formAction={deleteExpenseLine} formNoValidate className="text-slate-300 hover:text-red-600" title="delete line">×</button>
+                        <div className="hidden w-24 sm:block"><Money name={`projected_${l.id}`} value={l.projected} /></div>
+                        <div className="w-28 text-right"><Money name={`actual_${l.id}`} value={l.actual} big /></div>
+                        <span className="w-12 text-right text-[11px] text-slate-400">{linePct != null ? `${linePct}%` : ""}</span>
+                        <input type="hidden" name={`withTax_${l.id}`} value={l.withTax ?? ""} />
+                        <button name="id" value={l.id} formAction={deleteExpenseLine} formNoValidate className="w-5 text-slate-300 hover:text-red-600" title="delete line">×</button>
                       </div>
-                    ))}
-                  </div>
-                </Card>
+                    );
+                  })}
+                </div>
               );
             })}
-          </div>
+            <div className="flex items-center gap-3 border-y border-slate-100 bg-slate-50/60 px-5 py-2">
+              <span className="flex-1 text-sm font-bold text-slate-700">Total expenses</span>
+              <span className="hidden w-24 sm:block" />
+              <span className="w-28 text-right text-sm font-extrabold tabular-nums text-rose-700">{usd(totalActual)}</span>
+              <span className="w-12 text-right text-[11px] text-slate-400">{netSales > 0 ? `${Math.round((totalActual / netSales) * 100)}%` : ""}</span>
+              <span className="w-5" />
+            </div>
+
+            {/* NET INCOME */}
+            <div className={`flex items-center gap-3 border-t-2 px-5 py-3 ${netProfit >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+              <span className="flex-1 text-base font-extrabold text-slate-800">Net income</span>
+              <span className="hidden w-24 sm:block" />
+              <span className={`w-28 text-right text-lg font-extrabold tabular-nums ${netProfit >= 0 ? "text-emerald-700" : "text-red-700"}`}>{usd(netProfit)}</span>
+              <span className="w-12 text-right text-[11px] font-semibold text-slate-500">{margin != null ? `${Math.round(margin)}%` : ""}</span>
+              <span className="w-5" />
+            </div>
+          </Card>
         )}
 
         {/* sticky save bar */}

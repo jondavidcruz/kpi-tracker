@@ -10,6 +10,7 @@ import { formatValue, type Unit } from "./format";
 import { POSITIONS, positionLabel } from "./roles";
 import { analyzeDeal } from "./deals";
 import { quarterOf, quarterLabel } from "./eos";
+import { EXPENSE_CATEGORIES, LEAD_KPI_KEYS } from "./expenses";
 
 export interface Glance { key: string; name: string; value: string }
 export interface RoleTable {
@@ -91,6 +92,13 @@ function glanceFrom(
   return out;
 }
 
+export interface FinanceSnapshot {
+  monthLabel: string;
+  income: number; spent: number; profit: number; margin: number | null;
+  categories: { label: string; total: number; color: string }[];
+  leads: number; costPerLead: number;
+}
+
 export interface LeadershipDeck {
   generatedOn: string;
   agenda: string[];
@@ -99,12 +107,42 @@ export interface LeadershipDeck {
   goal: MeetingDeck["goal"];
   monthly: MeetingDeck["monthly"];
   pipelineCount: number;
+  finance: FinanceSnapshot | null;
 }
 
 /** Leadership-meeting deck — its own agenda/talking-points/action-items plus a
- *  high-level business snapshot (reuses the Monday deck's computed numbers). */
-export async function getLeadershipDeck(today: string): Promise<LeadershipDeck> {
+ *  high-level business snapshot. When the viewer is C-suite, the snapshot syncs
+ *  live from the Profit & Loss report (costs + leads). */
+export async function getLeadershipDeck(today: string, cSuite = false): Promise<LeadershipDeck> {
   const [deck, settings] = await Promise.all([getMeetingDeck(today), getSettings()]);
+
+  let finance: FinanceSnapshot | null = null;
+  if (cSuite) {
+    const monthRow = await db.expenseLine.findFirst({ orderBy: { month: "desc" }, select: { month: true } });
+    if (monthRow) {
+      const m = monthRow.month;
+      const [lines, meta, leadKpis] = await Promise.all([
+        db.expenseLine.findMany({ where: { month: m } }),
+        db.expenseMonth.findUnique({ where: { month: m } }),
+        db.kpi.findMany({ where: { key: { in: LEAD_KPI_KEYS } }, select: { id: true } }),
+      ]);
+      const spent = lines.reduce((s, l) => s + l.actual, 0);
+      const income = meta?.netSales ?? 0;
+      const leadEntries = leadKpis.length
+        ? await db.entry.findMany({ where: { kpiId: { in: leadKpis.map((k) => k.id) }, date: { gte: `${m}-01`, lte: `${m}-31` } }, select: { value: true } })
+        : [];
+      const leads = leadEntries.reduce((s, e) => s + e.value, 0);
+      const categories = EXPENSE_CATEGORIES
+        .map((c) => ({ label: c.label, color: c.color, total: lines.filter((l) => l.category === c.key).reduce((s, l) => s + l.actual, 0) }))
+        .filter((c) => c.total > 0);
+      finance = {
+        monthLabel: new Date(m + "-01T00:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+        income, spent, profit: income - spent, margin: income > 0 ? ((income - spent) / income) * 100 : null,
+        categories, leads, costPerLead: leads > 0 ? spent / leads : 0,
+      };
+    }
+  }
+
   return {
     generatedOn: deck.generatedOn,
     agenda: bullets(settings.leadAgenda ?? ""),
@@ -113,6 +151,7 @@ export async function getLeadershipDeck(today: string): Promise<LeadershipDeck> 
     goal: deck.goal,
     monthly: deck.monthly,
     pipelineCount: deck.pipeline.length,
+    finance,
   };
 }
 

@@ -35,10 +35,9 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
     db.meetingRecording.findMany({ where: { meeting: "leadership" }, orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
   const today = todayStr(settings.orgTimezone);
-  const [deck, l10] = await Promise.all([getLeadershipDeck(today), getL10(today)]);
-
   // C-suite only — this month's expense / P&L snapshot for the leadership meeting.
   const cSuite = canAccessPayroll(me);
+  const [deck, l10] = await Promise.all([getLeadershipDeck(today, cSuite), getL10(today)]);
   const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   let expense: { month: string; spent: number; netSales: number; profit: number } | null = null;
   if (cSuite) {
@@ -76,8 +75,8 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
       {cSuite && expense && (
         <Card className="p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-bold text-slate-700">💼 Expenses & P&amp;L — {fmtMonth(expense.month)}</span>
-            <Link href="/expenses" className="text-xs font-semibold text-brand-navy hover:underline">Open tracker →</Link>
+            <span className="text-sm font-bold text-slate-700">📊 Profit &amp; Loss Report — {fmtMonth(expense.month)}</span>
+            <Link href="/expenses" className="text-xs font-semibold text-brand-navy hover:underline">Open report →</Link>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Spent</div><div className="text-xl font-extrabold tabular-nums text-rose-600">{usd(expense.spent)}</div></div>
