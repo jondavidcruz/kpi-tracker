@@ -26,6 +26,7 @@ model User {
   tracksInternet    Boolean @default(true) // logs daily internet speed + gets low-speed nags (whole team)
   active    Boolean  @default(true)
   timezone  String   @default("America/New_York")
+  lastSeenAt DateTime? // heartbeat — last time the app pinged; used to detect drops/outages
   createdAt DateTime @default(now())
 
   entries Entry[]

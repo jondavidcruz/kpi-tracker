@@ -171,7 +171,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   }
 
   const [users, punchesToday, timeOff] = await Promise.all([
-    db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true, lastSeenAt: true } }),
     db.punch.findMany({ where: { date: today }, orderBy: { at: "asc" }, select: { userId: true, kind: true, at: true } }),
     db.timeOff.findMany({ include: { user: { select: { name: true } } }, orderBy: { startDate: "asc" } }),
   ]);
@@ -185,8 +185,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const myOutages = isOwner(me) ? [] : await db.outage.findMany({ where: { userId: me.id, date: { gte: tenDaysAgo } }, orderBy: [{ date: "desc" }, { startMin: "asc" }] });
   const outHHMM = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
 
-  // Live outages a manager flagged today (one per person/kind while ongoing).
-  const liveOutages = manager ? await db.outage.findMany({ where: { date: today, ongoing: true } }) : [];
+  // Live outages today (drives both the manager report board and the presence board).
+  const liveOutages = await db.outage.findMany({ where: { date: today, ongoing: true } });
   const liveByUser = new Map<string, (typeof liveOutages)[number]>();
   for (const o of liveOutages) if (!liveByUser.has(o.userId)) liveByUser.set(o.userId, o);
 
@@ -196,12 +196,18 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const now = new Date();
   const cap = workCapAt(today, settings.orgTimezone);
   const capMs = cap ? cap.getTime() : null;
+  const STALE = 5 * 60 * 1000;
   const people = users
     .filter((u) => !isOwner(u)) // owner isn't a tracked employee
     .map((u) => {
       const ps = byUser.get(u.id) ?? [];
       const { state, since } = stateFromPunches(ps);
-      return { id: u.id, name: u.name, state, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
+      const working = state === "online" || state === "break" || state === "lunch";
+      const o = liveByUser.get(u.id);
+      let st: string = state;
+      if (o) st = "outage";
+      else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
+      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
     });
 
   // My time card today.

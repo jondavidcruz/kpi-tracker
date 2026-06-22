@@ -1861,6 +1861,29 @@ export async function startOutage(formData: FormData) {
   revalidatePath("/timecard");
 }
 
+/** Local minutes-from-midnight for an arbitrary epoch, in the org timezone. */
+function localMinOf(ms: number, tz: string): number {
+  const s = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ms));
+  const [h, m] = s.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/** The rep confirms a detected drop was a power/internet outage — records the window. */
+export async function confirmDropOutage(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const kind = ["power", "internet", "other"].includes(String(formData.get("kind"))) ? String(formData.get("kind")) : "internet";
+  const sinceMs = parseInt(String(formData.get("sinceMs") ?? ""), 10);
+  if (!Number.isFinite(sinceMs)) return;
+  const settings = await getSettings();
+  const date = todayStr(settings.orgTimezone);
+  const startMin = localMinOf(sinceMs, settings.orgTimezone);
+  const endMin = Math.max(startMin + 1, nowLocalMin(settings.orgTimezone));
+  await db.outage.create({ data: { userId: me.id, date, kind, startMin, endMin, ongoing: false, reportedBy: "auto-detected", note: "Dropped offline — confirmed by rep." } });
+  revalidatePath("/schedule");
+  revalidatePath("/timecard");
+}
+
 /** Manager marks a live outage resolved (rep back online). */
 export async function endOutage(formData: FormData) {
   const me = await getCurrentUser();

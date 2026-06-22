@@ -11,6 +11,7 @@ import { todayStr } from "@/lib/date";
 import Sidebar from "./Sidebar";
 import CortanaBot from "./CortanaBot";
 import PageHelp from "./PageHelp";
+import HeartbeatPing from "./HeartbeatPing";
 
 export default async function AppShell({ children }: { children: React.ReactNode }) {
   const email = await getSessionEmail();
@@ -90,6 +91,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
       </main>
       <CortanaBot />
       <PageHelp />
+      <HeartbeatPing />
     </div>
   );
 }
