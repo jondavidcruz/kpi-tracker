@@ -3,6 +3,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
+import HubTabs from "@/components/HubTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function ChangePortalPage({ searchParams }: { searchParams:
 
   return (
     <div className="space-y-6">
+      <HubTabs tabs={[{ href: "/tickets", label: "Tickets" }, { href: "/change-portal", label: "Suggestions" }]} />
       <SectionTitle title="🛠 Change / Improvement Portal" subtitle="Request a change to a script, schedule, process, or anything in the business. Leadership reviews and replies." accent="bg-brand-gold" />
 
       {sp.sent && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Submitted. Leadership will review and reply here.</div>}

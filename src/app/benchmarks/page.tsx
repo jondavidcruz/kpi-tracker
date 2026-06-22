@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, friendlyDate } from "@/lib/date";
 import { saveBenchmarkInputs } from "@/app/actions";
 import { Card, SectionTitle, MetricCard } from "@/components/ui";
+import HubTabs from "@/components/HubTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +134,7 @@ export default async function BenchmarksPage() {
 
   return (
     <div className="space-y-6">
+      <HubTabs tabs={[{ href: "/analytics", label: "Year analytics" }, { href: "/trends", label: "Trends" }, { href: "/benchmarks", label: "Benchmarks" }]} />
       <SectionTitle title="📐 Marketing & Financial Benchmarks" subtitle={`Marketing for ${friendlyDate(monthStart).replace(/, \d{4}/, "")} · closings & financials year-to-date (${year})`} accent="bg-indigo-500"
         right={<span className="text-xs text-slate-400">Managers only</span>} />
 

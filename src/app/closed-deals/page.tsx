@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { friendlyDate } from "@/lib/date";
 import { Card, SectionTitle, MetricCard } from "@/components/ui";
+import HubTabs from "@/components/HubTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export default async function ClosedDealsPage() {
 
   return (
     <div className="space-y-7">
+      <HubTabs tabs={[{ href: "/deals", label: "Active deals" }, { href: "/closing", label: "Escrow & Closing" }, { href: "/closed-deals", label: "Closed deals" }]} />
       <SectionTitle title="💰 Closed Deals" subtitle="Every paid deal, profit verified from the HUD statements. Owner-only." accent="bg-emerald-400" />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

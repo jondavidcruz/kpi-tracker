@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { submitTicket, setTicketStatus, deleteTicket } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
+import HubTabs from "@/components/HubTabs";
 import TicketSubmitButton from "@/components/TicketSubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="space-y-7">
+      <HubTabs tabs={[{ href: "/tickets", label: "Tickets" }, { href: "/change-portal", label: "Suggestions" }]} />
       <SectionTitle
         title="🎫 Tracker Tickets"
         subtitle="Report something broken or confusing in the app. Nothing changes until an admin approves it."

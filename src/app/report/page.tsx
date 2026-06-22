@@ -15,6 +15,7 @@ import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { KpiLabel } from "@/lib/kpiIcons";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
+import HubTabs from "@/components/HubTabs";
 import RepRoleBars from "@/components/RepRoleBars";
 import type { Kpi, User, Target } from "@prisma/client";
 
@@ -87,6 +88,7 @@ export default async function ReportPage({
 
   return (
     <div className="space-y-8">
+      <HubTabs tabs={[{ href: "/report", label: "Weekly report" }, { href: "/monthly", label: "Monthly report" }]} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Weekly Report</h1>

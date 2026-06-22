@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { todayStr } from "@/lib/date";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { Card, SectionTitle } from "@/components/ui";
+import HubTabs from "@/components/HubTabs";
 import type { Deal } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +86,7 @@ export default async function DealsPage({
 
   return (
     <div className="space-y-6">
+      <HubTabs tabs={[{ href: "/deals", label: "Active deals" }, { href: "/closing", label: "Escrow & Closing" }, { href: "/closed-deals", label: "Closed deals" }]} />
       <SectionTitle
         title="🤝 Deals Board"
         subtitle="Dispositions pipeline with real-time aging & next-step tracking."

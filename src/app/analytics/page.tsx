@@ -6,6 +6,7 @@ import { formatValue, type Unit } from "@/lib/format";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { POSITIONS } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
+import HubTabs from "@/components/HubTabs";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,7 @@ export default async function AnalyticsPage({
 
   return (
     <div className="space-y-7">
+      <HubTabs tabs={[{ href: "/analytics", label: "Year analytics" }, { href: "/trends", label: "Trends" }, { href: "/benchmarks", label: "Benchmarks" }]} />
       <SectionTitle
         title={`📈 Year Analytics: ${year}`}
         subtitle="Year-to-date totals and monthly trend per rep · includes imported history"

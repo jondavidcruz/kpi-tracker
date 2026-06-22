@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getMonthlyHistory, derive, type YearData } from "@/lib/history";
 import { Card, SectionTitle } from "@/components/ui";
+import HubTabs from "@/components/HubTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export default async function TrendsPage() {
 
   return (
     <div className="space-y-7">
+      <HubTabs tabs={[{ href: "/analytics", label: "Year analytics" }, { href: "/trends", label: "Trends" }, { href: "/benchmarks", label: "Benchmarks" }]} />
       <SectionTitle title="📈 Multi-Year Trends" subtitle="Growth, year-over-year, and the cold-call → pay-per-lead shift" accent="bg-brand-gold" />
 
       {/* Narrative callout */}

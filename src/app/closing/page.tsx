@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { saveClosing, deleteClosing, addClosingExpense, deleteClosingExpense } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
+import HubTabs from "@/components/HubTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function ClosingPage() {
 
   return (
     <div className="space-y-5">
+      <HubTabs tabs={[{ href: "/deals", label: "Active deals" }, { href: "/closing", label: "Escrow & Closing" }, { href: "/closed-deals", label: "Closed deals" }]} />
       <SectionTitle title="🏦 Escrow & Closing" subtitle="Track every expense on a deal in escrow and see the true net profit at close." accent="bg-emerald-500" />
 
       {/* Top-line summary */}

@@ -30,22 +30,19 @@ export default function Sidebar({
   const groups: { label: string; items: Item[] }[] = [
     { label: "Overview", items: [
       { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+      { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/huddle", label: "Daily Huddle", Icon: Megaphone },
-      { href: "/process", label: "Process Map", Icon: Workflow },
       { href: "/deals", label: "Deals", Icon: Building2 },
+      { href: "/process", label: "Process Map", Icon: Workflow },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
       { href: "/marketing", label: "Markets & Buyers", Icon: Megaphone, marketingOnly: true },
       { href: "/rewards", label: "Rewards", Icon: Gift },
     ] },
-    { label: "Performance", items: [
-      { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
+    { label: "Reports & Analytics", items: [
       { href: "/report", label: "Weekly report", Icon: FileText },
-      { href: "/monthly", label: "Monthly report", Icon: CalendarDays },
-      { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
-      { href: "/trends", label: "Trends", Icon: TrendingUp, managerOnly: true },
-      { href: "/benchmarks", label: "Benchmarks", Icon: Target, managerOnly: true },
+      { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
     ] },
     { label: "Coaching", items: [
       { href: "/training", label: "Training Portal", Icon: GraduationCap, managerOnly: true },
@@ -54,29 +51,26 @@ export default function Sidebar({
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
     ] },
-    { label: "Support", items: [
-      { href: "/software", label: "Software & Logins", Icon: KeyRound },
-      { href: "/change-portal", label: "Change Portal", Icon: Lightbulb },
-      { href: "/ai-champion", label: "AI Champion", Icon: Bot },
-      { href: "/tickets", label: "Tickets", Icon: Ticket, badge: newTickets },
-      { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
-      { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
+    { label: "EOS", items: [
+      { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
+      { href: "/leadership", label: "Leadership Meeting", Icon: Crown, managerOnly: true },
+      { href: "/rocks", label: "Rocks", Icon: Mountain },
+      { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },
+      { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
     ] },
     { label: "C-Suite", items: [
       { href: "/leaks", label: "War Room Health", Icon: Activity, timecardOnly: true },
       { href: "/expenses", label: "Profit & Loss Report", Icon: Receipt, timecardOnly: true },
       { href: "/timecard", label: "Payroll", Icon: Wallet, timecardOnly: true },
       { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },
-      { href: "/closing", label: "Escrow & Closing", Icon: DollarSign, managerOnly: true },
-      { href: "/closed-deals", label: "Closed deals", Icon: DollarSign, adminOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, adminOnly: true },
     ] },
-    { label: "Entrepreneurial Operating System", items: [
-      { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
-      { href: "/rocks", label: "Rocks", Icon: Mountain },
-      { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },
-      { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
-      { href: "/leadership", label: "Leadership Meeting", Icon: Crown, managerOnly: true },
+    { label: "Requests & Support", items: [
+      { href: "/tickets", label: "Requests", Icon: Ticket, badge: newTickets },
+      { href: "/software", label: "Software & Logins", Icon: KeyRound },
+      { href: "/ai-champion", label: "AI Champion", Icon: Bot },
+      { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
+      { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
     ] },
   ];
 
