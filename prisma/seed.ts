@@ -80,7 +80,7 @@ const USERS = [
   { name: "Irish", email: "irish@example.com", role: "rep", position: "cc_lm", note: "Hybrid cold caller + lead manager (25h/wk). Stretch goal: 3 appts/day." },
   { name: "Sharyn", email: "sharyn@example.com", role: "rep", position: "dispositions", note: "" },
   { name: "Marie", email: "marie@example.com", role: "manager", position: "dispositions", note: "Manager access + own Dispositions scorecard." },
-  { name: "Jon", email: "jon@example.com", role: "admin", position: "acquisitions", note: "Owner/admin + own Acquisitions scorecard." },
+  { name: "Jon", email: "jon@example.com", role: "admin", position: "", note: "Owner/admin — not on a KPI scorecard (off acquisitions; excluded from KPI reports)." },
 ];
 
 // Per-rep goal overrides (Target). period null = standing.

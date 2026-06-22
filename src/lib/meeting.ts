@@ -18,7 +18,7 @@ export interface RoleTable {
   rows: { rep: string; cells: string[] }[];
 }
 export interface Recognition { role: string; rep: string; kpi: string; value: string }
-export interface PipelineRow { address: string; status: string; rep: string; days: number | null; profit: number | null }
+export interface PipelineRow { address: string; status: string; rep: string; days: number | null; level: string; profit: number | null; contractPrice: number | null; nextSteps: string }
 
 export interface MeetingDeck {
   weekLabel: string;
@@ -29,7 +29,7 @@ export interface MeetingDeck {
   talkingPoints: string[];
   lastWeek: { glance: Glance[]; roleTables: RoleTable[] };
   monthly: {
-    label: string; financials: Glance[];
+    label: string; financials: Glance[]; glance: Glance[]; roleTables: RoleTable[];
     revenueClosed: number; revenuePending: number; inEscrow: number; closedCount: number; goalRemaining: number;
   };
   pipeline: PipelineRow[];
@@ -42,7 +42,29 @@ export interface MeetingDeck {
   trainingTip: { text: string; targetKpi: string } | null;
 }
 
-const ROLLUP_KEYS = ["appts_set", "appts_taken", "offers_made", "deals_sold", "new_buyers"];
+const ROLLUP_KEYS = ["offers_made", "deals_sold", "new_buyers"];
+// KPIs hidden from the meeting deck for now (per Jon).
+const EXCLUDE_KPIS = new Set(["text_responses", "appts_set", "appts_taken"]);
+
+// Per-position KPI tables for a given sums map (last week or month-to-date).
+function buildRoleTables(
+  reps: { id: string; name: string; position: string }[],
+  perRepKpis: { id: string; key: string; name: string; unit: string; roleKey: string }[],
+  sums: Map<string, number>,
+): RoleTable[] {
+  const tables: RoleTable[] = [];
+  for (const pos of POSITIONS) {
+    const roleReps = reps.filter((r) => r.position === pos.key);
+    const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key && !EXCLUDE_KPIS.has(k.key));
+    if (!roleReps.length || !roleKpis.length) continue;
+    tables.push({
+      label: pos.label, emoji: pos.emoji,
+      columns: roleKpis.map((k) => ({ key: k.key, name: k.name })),
+      rows: roleReps.map((rep) => ({ rep: rep.name, cells: roleKpis.map((k) => formatValue(k.unit as Unit, sums.get(`${k.id}|${rep.id}`) ?? 0)) })),
+    });
+  }
+  return tables;
+}
 
 function bullets(s: string): string[] {
   return s.split("\n").map((l) => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean);
@@ -59,6 +81,7 @@ function glanceFrom(
 ): Glance[] {
   const out: Glance[] = [];
   for (const k of teamKpis) {
+    if (EXCLUDE_KPIS.has(k.key)) continue;
     out.push({ key: k.key, name: k.name, value: formatValue(k.unit as Unit, sums.get(`${k.id}|`) ?? 0) });
   }
   for (const k of perRepKpis.filter((x) => ROLLUP_KEYS.includes(x.key) && x.category === "green")) {
@@ -163,20 +186,12 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
 
   // ---- Last week: at-a-glance + per-role tables ----
   const lastGlance = glanceFrom(teamKpis, perRepKpis, reps, wkSums);
-  const roleTables: RoleTable[] = [];
-  for (const pos of POSITIONS) {
-    const roleReps = reps.filter((r) => r.position === pos.key);
-    const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
-    if (!roleReps.length || !roleKpis.length) continue;
-    roleTables.push({
-      label: pos.label, emoji: pos.emoji,
-      columns: roleKpis.map((k) => ({ key: k.key, name: k.name })),
-      rows: roleReps.map((rep) => ({
-        rep: rep.name,
-        cells: roleKpis.map((k) => formatValue(k.unit as Unit, wkSums.get(`${k.id}|${rep.id}`) ?? 0)),
-      })),
-    });
-  }
+  const roleTables = buildRoleTables(reps, perRepKpis, wkSums);
+
+  // ---- Month-to-date: same KPI breakdown, summed across the whole month ----
+  const monthSums = await getRangeSums(mb.start, today);
+  const monthGlance = glanceFrom(teamKpis, perRepKpis, reps, monthSums);
+  const monthRoleTables = buildRoleTables(reps, perRepKpis, monthSums);
 
   // ---- Annual goal — synced from the Closed Deals ledger (this year). Every
   // closed deal = one homeowner helped; revenue = sum of verified profit. ----
@@ -236,20 +251,26 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     lastWeek: { glance: lastGlance, roleTables },
     monthly: {
       label: friendlyDate(mb.start).replace(/,.*/, "") + " – today",
-      financials,
+      financials, glance: monthGlance, roleTables: monthRoleTables,
       revenueClosed: closedRevenueYTD,
       revenuePending: dealMetrics.revenuePendingEscrow,
       inEscrow: dealMetrics.inEscrowCount,
       closedCount: homeownersDone,
       goalRemaining,
     },
-    pipeline: deals.slice(0, 12).map((d) => ({
-      address: d.address,
-      status: d.status,
-      rep: d.assignedTo || "—",
-      days: analyzeDeal(d, today).days,
-      profit: d.assignmentFee ?? null,
-    })),
+    pipeline: deals.slice(0, 12).map((d) => {
+      const a = analyzeDeal(d, today);
+      return {
+        address: d.address,
+        status: d.status,
+        rep: d.assignedTo || "—",
+        days: a.days,
+        level: a.level,
+        profit: d.assignmentFee ?? null,
+        contractPrice: d.contractPrice ?? null,
+        nextSteps: d.nextSteps || (a.level !== "fresh" ? a.recommendation : ""),
+      };
+    }),
     goal: {
       homeownersDone,
       homeownersGoal: settings.homeownersGoal ?? 24,

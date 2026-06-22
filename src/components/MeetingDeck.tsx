@@ -7,6 +7,59 @@ export default function MeetingDeckView({ deck }: { deck: MeetingDeck }) {
   return <Deck slides={buildSlides(deck)} />;
 }
 
+const TEAM = [
+  { name: "Jon Cruz", title: "Founder & President" },
+  { name: "Enrico C.", title: "Vice President" },
+  { name: "Viktoriia C.", title: "Marketing Director" },
+  { name: "Cortana C.", title: "Technology Director" },
+  { name: "Marie M.", title: "Operations Director" },
+  { name: "Sharyn M.", title: "Dispositions Director" },
+  { name: "Ethan D.", title: "Licensed Real Estate Agent" },
+  { name: "Michelle L.", title: "Acquisitions Officer" },
+];
+
+// One position's KPI table, full width — positions stack top-to-bottom.
+function RoleBlock({ rt }: { rt: MeetingDeck["lastWeek"]["roleTables"][number] }) {
+  return (
+    <div className="overflow-hidden rounded-lg ring-1 ring-slate-200">
+      <div className="bg-brand-navy px-3 py-1 font-bold text-white" style={{ fontSize: "clamp(9px,1.3cqw,16px)" }}>{rt.emoji} {rt.label}</div>
+      <table className="w-full" style={{ fontSize: "clamp(8px,1.15cqw,15px)" }}>
+        <thead><tr className="bg-slate-50 text-slate-500">
+          <th className="px-2 py-1 text-left">Rep</th>
+          {rt.columns.map((c) => <th key={c.key} className="px-1.5 py-1 text-center">{c.name}</th>)}
+        </tr></thead>
+        <tbody>
+          {rt.rows.map((r) => (
+            <tr key={r.rep} className="border-t border-slate-100">
+              <td className="px-2 py-1 font-semibold text-slate-700">{r.rep}</td>
+              {r.cells.map((c, ci) => <td key={ci} className="px-1.5 py-1 text-center font-bold tabular-nums text-slate-800">{c}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Shared KPI slide — glance tiles + per-position tables stacked vertically.
+function KpiSlide({ title, glance, roleTables }: { title: string; glance: MeetingDeck["lastWeek"]["glance"]; roleTables: MeetingDeck["lastWeek"]["roleTables"] }) {
+  return (
+    <Light title={title}>
+      <div className="grid grid-cols-4 gap-[1.5%]">
+        {glance.slice(0, 8).map((g) => (
+          <div key={g.key} className="rounded-lg bg-slate-50 p-[2.5%] ring-1 ring-slate-200">
+            <div className="text-slate-500" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{g.name}</div>
+            <div className="font-extrabold tabular-nums text-slate-900" style={{ fontSize: "clamp(14px,2.4cqw,32px)" }}>{g.value}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-[2.5%] space-y-[1.5%]">
+        {roleTables.map((rt) => <RoleBlock key={rt.label} rt={rt} />)}
+      </div>
+    </Light>
+  );
+}
+
 function buildSlides(d: MeetingDeck): Slide[] {
   const s: Slide[] = [];
 
@@ -23,9 +76,23 @@ function buildSlides(d: MeetingDeck): Slide[] {
     </div>
   )});
 
-  // 2. Meet the team — the exact Canva slide
+  // 2. Meet the team — native, on-brand roster
   s.push({ name: "Team", node: (
-    <div className="h-full w-full bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: "url(/meeting/team.png)" }} />
+    <div className="flex h-full w-full flex-col bg-[#f5ede4] px-[5%] py-[4%]">
+      <div className="text-center">
+        <div className="font-extrabold text-brand-navy" style={{ fontSize: "clamp(20px,3.4cqw,46px)" }}>A small team. <span className="italic text-emerald-700">By design.</span></div>
+        <div className="mt-1 text-slate-500" style={{ fontSize: "clamp(10px,1.4cqw,18px)" }}>Eight people, working directly with you. No middlemen, no call centers, no scripts.</div>
+      </div>
+      <div className="mt-[3%] grid flex-1 grid-cols-4 gap-[2%]">
+        {TEAM.map((p) => (
+          <div key={p.name} className="flex flex-col items-center justify-start text-center">
+            <div className="grid aspect-square w-[62%] place-items-center rounded-full bg-brand-navy font-bold text-brand-gold-soft" style={{ fontSize: "clamp(16px,2.6cqw,34px)" }}>{p.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</div>
+            <div className="mt-[8%] font-bold text-slate-800" style={{ fontSize: "clamp(10px,1.4cqw,18px)" }}>{p.name}</div>
+            <div className="uppercase tracking-wide text-emerald-700" style={{ fontSize: "clamp(7px,0.95cqw,12px)", letterSpacing: "0.08em" }}>{p.title}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   )});
 
   // 3. Announcements
@@ -38,90 +105,49 @@ function buildSlides(d: MeetingDeck): Slide[] {
     <Navy title="Change / Coming Soon"><Bullets items={d.comingSoon} empty="Add upcoming changes below in Edit deck content." /></Navy>
   )});
 
-  // 5. Last week KPIs
-  s.push({ name: "Last Week KPIs", node: (
-    <Light title="Last Week's KPIs">
-      <div className="grid grid-cols-4 gap-[1.5%]">
-        {d.lastWeek.glance.slice(0, 8).map((g) => (
-          <div key={g.key} className="rounded-lg bg-slate-50 p-[3%] ring-1 ring-slate-200">
-            <div className="text-slate-500" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{g.name}</div>
-            <div className="font-extrabold tabular-nums text-slate-900" style={{ fontSize: "clamp(15px,2.6cqw,34px)" }}>{g.value}</div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-[2%] grid gap-[2%]" style={{ gridTemplateColumns: `repeat(${Math.min(d.lastWeek.roleTables.length, 2)},1fr)` }}>
-        {d.lastWeek.roleTables.map((rt) => (
-          <div key={rt.label} className="overflow-hidden rounded-lg ring-1 ring-slate-200">
-            <div className="bg-brand-navy px-3 py-1 font-bold text-white" style={{ fontSize: "clamp(9px,1.2cqw,15px)" }}>{rt.emoji} {rt.label}</div>
-            <table className="w-full" style={{ fontSize: "clamp(7px,0.95cqw,12px)" }}>
-              <thead><tr className="bg-slate-50 text-slate-500">
-                <th className="px-1.5 py-0.5 text-left">Rep</th>
-                {rt.columns.map((c) => <th key={c.key} className="px-1 py-0.5 text-center">{c.name}</th>)}
-              </tr></thead>
-              <tbody>
-                {rt.rows.map((r) => (
-                  <tr key={r.rep} className="border-t border-slate-100">
-                    <td className="px-1.5 py-0.5 font-semibold text-slate-700">{r.rep}</td>
-                    {r.cells.map((c, ci) => <td key={ci} className="px-1 py-0.5 text-center tabular-nums text-slate-700">{c}</td>)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-      </div>
-    </Light>
-  )});
+  // 5. Last week KPIs — per position, top to bottom
+  s.push({ name: "Last Week KPIs", node: <KpiSlide title="Last Week — Team KPIs" glance={d.lastWeek.glance} roleTables={d.lastWeek.roleTables} /> });
 
-  // 6. Monthly dashboard
-  s.push({ name: "Monthly Dashboard", node: (
-    <Navy title="Month-to-Date Dashboard">
-      <div className="grid grid-cols-3 gap-[1.6%]">
-        {d.monthly.financials.map((g) => (
-          <div key={g.key} className="rounded-lg bg-white/5 p-[3%] ring-1 ring-white/10">
-            <div className="text-white/60" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{g.name}</div>
-            <div className="font-extrabold tabular-nums text-white" style={{ fontSize: "clamp(15px,2.6cqw,34px)" }}>{g.value}</div>
-          </div>
-        ))}
-        {!d.monthly.financials.length && <div className="col-span-3 text-center text-white/50" style={{ fontSize: "clamp(11px,1.6cqw,20px)" }}>No monthly KPIs entered yet this month.</div>}
-      </div>
-      <div className="mt-[3%] grid grid-cols-5 gap-[1.6%]">
-        {[
-          { l: "Revenue Closed (YTD)", v: money(d.monthly.revenueClosed), gold: true },
-          { l: "Pending in Escrow", v: money(d.monthly.revenuePending) },
-          { l: "In Escrow", v: String(d.monthly.inEscrow) },
-          { l: "Closed Deals", v: String(d.monthly.closedCount) },
-          { l: "Goal Remaining", v: money(d.monthly.goalRemaining), gold: true },
-        ].map((c) => (
-          <div key={c.l} className="rounded-lg bg-white/5 p-[3%] text-center ring-1 ring-white/10">
-            <div className="text-white/60" style={{ fontSize: "clamp(8px,0.95cqw,12px)" }}>{c.l}</div>
-            <div className={`font-extrabold tabular-nums ${c.gold ? "text-brand-gold" : "text-white"}`} style={{ fontSize: "clamp(13px,2cqw,26px)" }}>{c.v}</div>
-          </div>
-        ))}
-      </div>
-    </Navy>
-  )});
+  // 6. This month KPIs — same view, month-to-date
+  s.push({ name: "This Month KPIs", node: <KpiSlide title={`This Month — Team KPIs (${d.monthly.label})`} glance={d.monthly.glance} roleTables={d.monthly.roleTables} /> });
 
-  // 7. Pipeline
+  // 7. Pipeline — richer, more visual
   s.push({ name: "Active Pipeline", node: (
     <Light title="Active Deal Pipeline">
+      <div className="mb-[2%] grid grid-cols-3 gap-[2%]">
+        {[
+          { l: "Active deals", v: String(d.pipeline.length) },
+          { l: "Total est. profit", v: money(d.pipeline.reduce((s2, p) => s2 + (p.profit ?? 0), 0)) },
+          { l: "Aging (30d+)", v: String(d.pipeline.filter((p) => p.days != null && p.days >= 30).length) },
+        ].map((c) => (
+          <div key={c.l} className="rounded-lg bg-slate-50 p-[2.5%] text-center ring-1 ring-slate-200">
+            <div className="text-slate-500" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{c.l}</div>
+            <div className="font-extrabold tabular-nums text-slate-900" style={{ fontSize: "clamp(14px,2.3cqw,30px)" }}>{c.v}</div>
+          </div>
+        ))}
+      </div>
       <div className="overflow-hidden rounded-lg ring-1 ring-slate-200">
-        <table className="w-full" style={{ fontSize: "clamp(8px,1.15cqw,15px)" }}>
+        <table className="w-full" style={{ fontSize: "clamp(7px,1.05cqw,14px)" }}>
           <thead><tr className="bg-slate-50 text-left text-slate-500">
-            <th className="px-3 py-1">Property</th><th className="px-2 py-1">Status</th><th className="px-2 py-1">Rep</th>
-            <th className="px-2 py-1 text-center">Days</th><th className="px-2 py-1 text-right">Est. profit</th>
+            <th className="px-2.5 py-1">Property</th><th className="px-1.5 py-1">Status</th><th className="px-1.5 py-1">Rep</th>
+            <th className="px-1.5 py-1 text-center">Days</th><th className="px-1.5 py-1 text-right">Contract</th><th className="px-1.5 py-1 text-right">Profit</th><th className="px-1.5 py-1">Next step</th>
           </tr></thead>
           <tbody>
-            {d.pipeline.map((p, i) => (
-              <tr key={i} className="border-t border-slate-100">
-                <td className="px-3 py-1 font-semibold text-slate-800">{p.address}</td>
-                <td className="px-2 py-1 text-slate-600">{p.status.replace(/_/g, " ")}</td>
-                <td className="px-2 py-1 text-slate-600">{p.rep}</td>
-                <td className="px-2 py-1 text-center tabular-nums text-slate-600">{p.days ?? "—"}</td>
-                <td className="px-2 py-1 text-right tabular-nums text-slate-700">{p.profit != null ? money(p.profit) : "—"}</td>
-              </tr>
-            ))}
-            {!d.pipeline.length && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">No active deals.</td></tr>}
+            {d.pipeline.map((p, i) => {
+              const ageCls = p.level === "stale" ? "bg-red-100 text-red-700" : p.level === "reduce" ? "bg-orange-100 text-orange-700" : p.level === "watch" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700";
+              return (
+                <tr key={i} className="border-t border-slate-100 align-top">
+                  <td className="px-2.5 py-1 font-semibold text-slate-800">{p.address}</td>
+                  <td className="px-1.5 py-1"><span className="rounded-full bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800" style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>{p.status.replace(/_/g, " ")}</span></td>
+                  <td className="px-1.5 py-1 text-slate-600">{p.rep}</td>
+                  <td className="px-1.5 py-1 text-center">{p.days == null ? <span className="text-slate-400">—</span> : <span className={`rounded-full px-1.5 py-0.5 font-bold ${ageCls}`} style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>{p.days}d</span>}</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums text-slate-600">{p.contractPrice != null ? money(p.contractPrice) : "—"}</td>
+                  <td className="px-1.5 py-1 text-right font-bold tabular-nums text-emerald-700">{p.profit != null ? money(p.profit) : "—"}</td>
+                  <td className="px-1.5 py-1 text-slate-500">{p.nextSteps || "—"}</td>
+                </tr>
+              );
+            })}
+            {!d.pipeline.length && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">No active deals.</td></tr>}
           </tbody>
         </table>
       </div>

@@ -148,6 +148,7 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
         ...perRep.filter((k) => k.roleKey === rep.position),
         ...(rep.tracksInternet ? perRep.filter((k) => k.roleKey === "internet") : []),
       ];
+      if (repKpis.length === 0) return ""; // owner / unassigned (Jon) — not on a scorecard
       const logged = repKpis.some((k) => valByUserKpi.has(`${rep.id}|${k.id}`));
 
       const rows = repKpis
