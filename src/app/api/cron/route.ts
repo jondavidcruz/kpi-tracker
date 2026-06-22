@@ -93,7 +93,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, slot, laDow: dow, speedTestReminded: reminded });
   }
 
-  // Daily 9am-huddle brief (≈8:45am PT, Mon–Fri) → Google Chat + leadership email.
+  // Daily huddle brief — 9:45am PT, Mon–Fri (after the 9am huddle, so the team has
+  // updated their goals first) → Google Chat + leadership email.
   if (url.searchParams.get("huddle") === "1") {
     const settings = await getSettings();
     const today = date ?? todayStr(settings.orgTimezone);

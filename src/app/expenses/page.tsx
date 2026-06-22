@@ -63,6 +63,19 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   const netSales = monthMeta?.netSales ?? 0;
   const netProfit = netSales - totalActual;
   const costPerLead = leads > 0 ? totalActual / leads : 0;
+
+  // True lead cost = iSpeedToLead credit spend ÷ leads pulled. Credits are lumpy
+  // (a $1k top-up every 2–3 months), so the honest figure is cumulative across all
+  // tracked months, not this month alone.
+  const speedLines = await db.expenseLine.findMany({ where: { label: { contains: "speed", mode: "insensitive" } }, select: { actual: true } });
+  const leadCreditTotal = speedLines.reduce((s, l) => s + l.actual, 0);
+  const earliest = months[months.length - 1] ?? month;
+  const allLeadEntries = leadKpis.length
+    ? await db.entry.findMany({ where: { kpiId: { in: leadKpis.map((k) => k.id) }, date: { gte: `${earliest}-01`, lte: `${months[0] ?? month}-31` } }, select: { value: true } })
+    : [];
+  const leadsAll = allLeadEntries.reduce((s, e) => s + e.value, 0);
+  const trueCpl = leadsAll > 0 ? leadCreditTotal / leadsAll : 0;
+
   const margin = netSales > 0 ? (netProfit / netSales) * 100 : null;
   const maxIO = Math.max(netSales, totalActual, 1);
 
@@ -136,9 +149,10 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
 
           {/* lead economics chips */}
           <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3 text-sm">
-            <span className="rounded-lg bg-slate-50 px-3 py-1.5 text-slate-600">🎟️ <b className="tabular-nums">{leads.toLocaleString()}</b> leads</span>
-            <span className="rounded-lg bg-slate-50 px-3 py-1.5 text-slate-600">📉 Cost / lead <b className="tabular-nums">{leads > 0 ? usd2(costPerLead) : "—"}</b></span>
-            <span className="text-[11px] text-slate-400 self-center">cost per lead = total spent ÷ leads logged this month</span>
+            <span className="rounded-lg bg-slate-50 px-3 py-1.5 text-slate-600">🎟️ <b className="tabular-nums">{leads.toLocaleString()}</b> leads this month</span>
+            <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-emerald-800 ring-1 ring-emerald-100">🎯 True cost / lead <b className="tabular-nums">{leadsAll > 0 ? usd2(trueCpl) : "—"}</b></span>
+            <span className="rounded-lg bg-slate-50 px-3 py-1.5 text-slate-600">📉 All-in cost / lead <b className="tabular-nums">{leads > 0 ? usd2(costPerLead) : "—"}</b></span>
+            <span className="self-center text-[11px] text-slate-400">True = iSpeedToLead credits ÷ leads pulled (all months). All-in = every expense ÷ this month&apos;s leads.</span>
           </div>
         </Card>
 
