@@ -891,6 +891,46 @@ model Reward {
   @@index([scope, userId])
 }
 
+// Training portal — per-rep coaching focus areas, recurring schedule, session log.
+model TrainingFocus {
+  id        String   @id @default(cuid())
+  userId    String
+  skill     String // Rapport building, Negotiation, Underwriting, Leadership, Developer assertiveness…
+  priority  Int      @default(1) // 1 = top focus
+  status    String   @default("active") // active | improving | mastered
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model TrainingSchedule {
+  id        String   @id @default(cuid())
+  userId    String
+  cadence   String // daily | weekly | mon-fri
+  time      String   @default("") // e.g. "9:30 AM"
+  focus     String // what the session covers
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model CoachingSession {
+  id        String   @id @default(cuid())
+  userId    String // the rep being coached
+  coach     String   @default("")
+  date      String // YYYY-MM-DD
+  type      String   @default("call_review") // call_review | live_coaching | one_on_one
+  skill     String   @default("")
+  notes     String
+  nextStep  String   @default("")
+  rating    Int? // optional 1–5: how it went
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
 // A checkable huddle item — a goal for today or a pending item from yesterday.
 model HuddleCheck {
   id        String    @id @default(cuid())

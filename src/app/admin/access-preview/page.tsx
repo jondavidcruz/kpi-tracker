@@ -12,7 +12,7 @@ type Gate = "all" | "manager" | "admin" | "marketing" | "timecard";
 const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
   { group: "Overview", items: [
     { label: "Dashboard", gate: "all" }, { label: "Daily Huddle", gate: "all" }, { label: "Process Map", gate: "all" }, { label: "Deals", gate: "all" },
-    { label: "Underwriting", gate: "all" }, { label: "Schedule & Time", gate: "all" }, { label: "Rewards", gate: "all" }, { label: "Resources & SOPs", gate: "admin" },
+    { label: "Underwriting", gate: "all" }, { label: "Schedule & Time", gate: "all" }, { label: "Training Portal", gate: "manager" }, { label: "Rewards", gate: "all" }, { label: "Resources & SOPs", gate: "admin" },
   ] },
   { group: "Performance", items: [
     { label: "Enter KPIs", gate: "all" }, { label: "Weekly report", gate: "all" }, { label: "Monthly report", gate: "all" },

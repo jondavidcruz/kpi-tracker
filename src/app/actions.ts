@@ -2193,6 +2193,81 @@ export async function deleteStandupItem(formData: FormData) {
   revalidatePath("/huddle");
 }
 
+// --- Training portal ----------------------------------------------------------
+
+export async function addTrainingFocus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const skill = String(formData.get("skill") ?? "").trim().slice(0, 120);
+  if (!userId || !skill) return;
+  const max = await db.trainingFocus.aggregate({ where: { userId }, _max: { priority: true } });
+  await db.trainingFocus.create({ data: { userId, skill, priority: (max._max.priority ?? 0) + 1, notes: String(formData.get("notes") ?? "").trim().slice(0, 300) } });
+  revalidatePath("/training");
+}
+
+export async function updateTrainingFocus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const data: { status?: string; notes?: string } = {};
+  const status = String(formData.get("status") ?? "");
+  if (status) data.status = status;
+  if (formData.has("notes")) data.notes = String(formData.get("notes") ?? "").trim().slice(0, 300);
+  await db.trainingFocus.update({ where: { id }, data });
+  revalidatePath("/training");
+}
+
+export async function deleteTrainingFocus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) { await db.trainingFocus.delete({ where: { id } }); revalidatePath("/training"); }
+}
+
+export async function addTrainingSchedule(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const focus = String(formData.get("focus") ?? "").trim().slice(0, 200);
+  if (!userId || !focus) return;
+  await db.trainingSchedule.create({ data: { userId, focus, cadence: String(formData.get("cadence") || "weekly"), time: String(formData.get("time") ?? "").trim().slice(0, 40) } });
+  revalidatePath("/training");
+}
+
+export async function deleteTrainingSchedule(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) { await db.trainingSchedule.delete({ where: { id } }); revalidatePath("/training"); }
+}
+
+export async function logCoachingSession(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim().slice(0, 1500);
+  const date = String(formData.get("date") ?? "");
+  if (!userId || !notes || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const ratingRaw = parseInt(String(formData.get("rating") ?? ""), 10);
+  await db.coachingSession.create({ data: {
+    userId, coach: me!.name, date,
+    type: String(formData.get("type") || "call_review"),
+    skill: String(formData.get("skill") ?? "").trim().slice(0, 120),
+    notes, nextStep: String(formData.get("nextStep") ?? "").trim().slice(0, 500),
+    rating: Number.isFinite(ratingRaw) ? ratingRaw : null,
+  } });
+  revalidatePath("/training");
+}
+
+export async function deleteCoachingSession(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) { await db.coachingSession.delete({ where: { id } }); revalidatePath("/training"); }
+}
+
 // --- Huddle checklists (goals for today / pending from yesterday) -------------
 
 export async function addHuddleCheck(formData: FormData) {
