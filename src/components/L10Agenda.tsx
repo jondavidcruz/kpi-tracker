@@ -29,15 +29,15 @@ export default function L10Agenda({ l10, showIssues = true }: { l10: L10; showIs
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-base font-bold text-slate-900">📋 Level 10 Meeting</h2>
-        <span className="rounded-full bg-brand-gold/20 px-2.5 py-0.5 text-xs font-semibold text-brand-navy">Same day, same time, 90 min, same agenda</span>
+        <span className="rounded-full bg-brand-gold/20 px-2.5 py-0.5 text-xs font-semibold text-brand-navy">Same day, same time, 30 min, same agenda — keep it tight</span>
         <span className="ml-auto text-xs text-slate-400">{l10.generatedOn} · {l10.quarterLabel}</span>
       </div>
 
-      <Seg n={1} title="Segue" mins={5}>
+      <Seg n={1} title="Segue" mins={2}>
         <p className="text-sm text-slate-500">Round the table — one piece of <strong>good news</strong> each, personal and business. Transition into work mode.</p>
       </Seg>
 
-      <Seg n={2} title="Scorecard" mins={5} href="/dashboard" hrefLabel="Full dashboard">
+      <Seg n={2} title="Scorecard" mins={4} href="/dashboard" hrefLabel="Full dashboard">
         {l10.scorecard.length === 0
           ? <p className="text-sm text-slate-400">No weekly numbers yet.</p>
           : <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -51,7 +51,7 @@ export default function L10Agenda({ l10, showIssues = true }: { l10: L10; showIs
         <p className="mt-2 text-xs text-slate-500">Each owner: on-track or off-track? Off-track numbers become an issue — drop them down to the issues list to solve.</p>
       </Seg>
 
-      <Seg n={3} title="Rock Review" mins={5} href="/rocks" hrefLabel="Rocks board">
+      <Seg n={3} title="Rock Review" mins={4} href="/rocks" hrefLabel="Rocks board">
         <div className="mb-2 flex gap-2 text-xs">
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">{l10.rocks.onTrack} on track</span>
           {l10.rocks.offTrack > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700">{l10.rocks.offTrack} off track</span>}
@@ -71,11 +71,11 @@ export default function L10Agenda({ l10, showIssues = true }: { l10: L10; showIs
         <p className="mt-2 text-xs text-slate-500">Off-track Rock? Don&apos;t solve it here — drop it to the Issues list to identify, discuss &amp; solve.</p>
       </Seg>
 
-      <Seg n={4} title="Customer / Employee Headlines" mins={5}>
+      <Seg n={4} title="Customer / Employee Headlines" mins={2}>
         <p className="text-sm text-slate-500">Quick bullet headlines — wins, concerns, anything the team should know. No discussion; anything that needs solving becomes an issue.</p>
       </Seg>
 
-      <Seg n={5} title="To-Do List" mins={5} href={showIssues ? "/issues" : undefined} hrefLabel={showIssues ? "Open list" : undefined}>
+      <Seg n={5} title="To-Do List" mins={3} href={showIssues ? "/issues" : undefined} hrefLabel={showIssues ? "Open list" : undefined}>
         <div className="mb-2 flex items-center gap-2">
           <div className="relative h-2 w-40 overflow-hidden rounded-full bg-slate-200">
             <div className="absolute inset-y-0 left-0 rounded-full bg-emerald-500" style={{ width: `${l10.todos.donePct}%` }} />
@@ -94,7 +94,7 @@ export default function L10Agenda({ l10, showIssues = true }: { l10: L10; showIs
             </ul>}
       </Seg>
 
-      <Seg n={6} title="Identify, Discuss, Solve" mins={60} href={showIssues ? "/issues" : undefined} hrefLabel={showIssues ? "Issues list" : undefined}>
+      <Seg n={6} title="Identify, Discuss, Solve" mins={13} href={showIssues ? "/issues" : undefined} hrefLabel={showIssues ? "Issues list" : undefined}>
         <p className="mb-2 text-sm text-slate-500">The heart of the meeting. Prioritize the top 3, then solve #1 all the way through before moving on.</p>
         {!showIssues
           ? <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500 ring-1 ring-slate-200">🔒 The issues list is owner-only — the owner walks the team through the top issues live.</p>
@@ -111,7 +111,7 @@ export default function L10Agenda({ l10, showIssues = true }: { l10: L10; showIs
             </ol>}
       </Seg>
 
-      <Seg n={7} title="Conclude" mins={5} href="#notes" hrefLabel="Notes & rating">
+      <Seg n={7} title="Conclude" mins={2} href="#notes" hrefLabel="Notes & rating">
         <ul className="space-y-1 text-sm text-slate-600">
           <li>• Recap new <strong>to-dos</strong> created while solving issues — each with an owner and a 7-day due date.</li>
           <li>• Decide the <strong>cascading message</strong> — what to communicate to the rest of the team.</li>

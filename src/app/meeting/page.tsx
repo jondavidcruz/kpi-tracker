@@ -54,8 +54,8 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
   return (
     <div className="space-y-5">
       <SectionTitle
-        title="🗓 Monday Meeting"
-        subtitle="One-click all-call deck — live from your KPIs. Hit Present for full screen; edit the content below."
+        title="🗓 Monday Meeting — 30 min"
+        subtitle="One-click all-call deck — live from your KPIs. Keep it to 30 minutes: hit the highlights, don't read every number."
         accent="bg-brand-gold"
         right={
           <div className="flex items-center gap-3">

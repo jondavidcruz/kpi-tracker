@@ -60,8 +60,8 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
   return (
     <div className="space-y-5">
       <SectionTitle
-        title="👔 Leadership Meeting"
-        subtitle="Run the EOS Level 10 agenda below — Scorecard, Rocks, To-Dos, and issues to solve, all live."
+        title="👔 Leadership Meeting — 30 min"
+        subtitle="Run the EOS Level 10 agenda below — Scorecard, Rocks, To-Dos, and issues to solve, all live. Keep it to 30 minutes."
         accent="bg-brand-navy"
         right={
           <div className="flex items-center gap-3">
@@ -87,7 +87,7 @@ export default async function LeadershipPage({ searchParams }: { searchParams: P
         </Card>
       )}
 
-      {/* EOS Level 10 Meeting — the live 90-min agenda runner */}
+      {/* EOS Level 10 Meeting — the live 30-min agenda runner */}
       <L10Agenda l10={l10} showIssues={owner} />
 
       {/* Present-mode deck (screen-share slides) */}
