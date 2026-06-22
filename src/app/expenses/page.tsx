@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { saveExpensesBulk, addExpenseLine, deleteExpenseLine, startExpenseMonth } from "@/app/actions";
 import { EXPENSE_CATEGORIES, LEAD_KPI_KEYS } from "@/lib/expenses";
 import { Card, SectionTitle } from "@/components/ui";
+import ExpenseAdvisor from "@/components/ExpenseAdvisor";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +83,25 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   // Per-category totals for the breakdown.
   const catTotals = EXPENSE_CATEGORIES.map((c) => ({ ...c, total: lines.filter((l) => l.category === c.key).reduce((s, l) => s + l.actual, 0) }));
 
+  // Year-to-date truth: income only lands in the month a deal closed, so the real
+  // picture is income-YTD vs expenses-YTD (this is where the actual loss shows).
+  const year = month.slice(0, 4);
+  const [ytdLineRows, ytdMonthRows] = await Promise.all([
+    db.expenseLine.findMany({ where: { month: { startsWith: year } }, select: { actual: true } }),
+    db.expenseMonth.findMany({ where: { month: { startsWith: year } }, select: { netSales: true } }),
+  ]);
+  const ytdExpenses = ytdLineRows.reduce((s, l) => s + l.actual, 0);
+  const ytdIncome = ytdMonthRows.reduce((s, m) => s + m.netSales, 0);
+  const ytdNet = ytdIncome - ytdExpenses;
+
+  const advisorData = JSON.stringify({
+    business: "San Diego real-estate wholesaling, small team, currently unprofitable",
+    ytd: { income: Math.round(ytdIncome), expenses: Math.round(ytdExpenses), net: Math.round(ytdNet) },
+    thisMonth: { label: fmtMonth(month), income: Math.round(netSales), expenses: Math.round(totalActual) },
+    categories: catTotals.map((c) => ({ name: c.label, total: Math.round(c.total) })),
+    topLines: [...lines].sort((a, b) => b.actual - a.actual).slice(0, 12).map((l) => ({ label: l.label, category: l.category, monthly: Math.round(l.actual) })),
+  });
+
   const prevMonth = months.find((m) => m < month) ?? addMonth(month, -1);
   const nextNewMonth = addMonth(months[0] ?? month, 1);
 
@@ -154,6 +174,20 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
             <span className="rounded-lg bg-slate-50 px-3 py-1.5 text-slate-600">📉 All-in cost / lead <b className="tabular-nums">{leads > 0 ? usd2(costPerLead) : "—"}</b></span>
             <span className="self-center text-[11px] text-slate-400">True = iSpeedToLead credits ÷ leads pulled (all months). All-in = every expense ÷ this month&apos;s leads.</span>
           </div>
+        </Card>
+
+        {/* ── Year to date — the real picture ── */}
+        <Card className="mt-4 p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-bold text-slate-700">📅 Year to date ({year})</span>
+            <span className="text-[11px] text-slate-400">Income only counts in the month a deal actually closed.</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Income YTD</div><div className="text-xl font-extrabold tabular-nums text-emerald-600">{usd(ytdIncome)}</div></div>
+            <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Expenses YTD</div><div className="text-xl font-extrabold tabular-nums text-rose-600">{usd(ytdExpenses)}</div></div>
+            <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Net YTD</div><div className={`text-xl font-extrabold tabular-nums ${ytdNet >= 0 ? "text-emerald-600" : "text-red-600"}`}>{usd(ytdNet)}</div></div>
+          </div>
+          {ytdNet < 0 && <p className="mt-2 text-[11px] font-semibold text-red-500">⚠️ Net negative for the year — expenses are outrunning closed income. A profitable month doesn&apos;t mean a profitable year. See the cut-the-fat ideas below.</p>}
         </Card>
 
         {/* ── Where the money goes (breakdown) ── */}
@@ -291,6 +325,9 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         </form>
         <p className="mt-2 text-[11px] text-slate-400"><b>Spent</b> = what actually left the bank this month (drives profit + cost-per-lead). <b>Budget</b> = what you planned. <b>+ Tax</b> = the all-in figure from your tracker. Prior month: <Link href={`/expenses?month=${prevMonth}`} className="underline">{fmtMonth(prevMonth)}</Link>.</p>
       </Card>
+
+      {/* Cut-the-fat AI advisor */}
+      <ExpenseAdvisor data={advisorData} />
     </div>
   );
 }
