@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, DollarSign, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, Receipt,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -34,6 +34,7 @@ export default function Sidebar({
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
+      { href: "/marketing", label: "Markets & Buyers", Icon: Megaphone, marketingOnly: true },
       { href: "/rewards", label: "Rewards", Icon: Gift },
       { href: "/operations", label: "Resources & SOPs", Icon: Briefcase, adminOnly: true },
     ] },
@@ -60,10 +61,8 @@ export default function Sidebar({
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
       { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
     ] },
-    { label: "Marketing", items: [
-      { href: "/marketing", label: "Markets & Buyers", Icon: Megaphone, marketingOnly: true },
-    ] },
     { label: "C-Suite", items: [
+      { href: "/expenses", label: "Expenses & P&L", Icon: Receipt, timecardOnly: true },
       { href: "/timecard", label: "Payroll", Icon: Wallet, timecardOnly: true },
       { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },
       { href: "/closing", label: "Escrow & Closing", Icon: DollarSign, managerOnly: true },

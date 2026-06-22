@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, canAccessPayroll } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, friendlyDate } from "@/lib/date";
 import { saveBenchmarkInputs } from "@/app/actions";
@@ -26,6 +26,7 @@ const FALLOUT_LABEL: Record<string, string> = { financing: "Financing", title: "
 
 export default async function BenchmarksPage() {
   const me = await getCurrentUser();
+  const cSuite = canAccessPayroll(me); // expense/spend/profit figures are C-suite only
   if (!isManager(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
@@ -155,11 +156,11 @@ export default async function BenchmarksPage() {
         <h2 className="mb-2 text-sm font-bold text-slate-700">📣 Marketing — this month</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <Stat label="Leads" value={String(Math.round(leadsTotal))} sub={`PPL ${leadsByCh.ppl} · SMS ${leadsByCh.sms} · Mail ${leadsByCh.mail}`} />
-          <Stat label="Spend" value={usd(spendTotal)} sub={`PPL ${usd(spendByCh.ppl)} · SMS ${usd(spendByCh.sms)} · Mail ${usd(spendByCh.mail)}`} />
-          <Stat label="Cost / lead" value={leadsTotal ? usd(cpl(spendTotal, leadsTotal)) : "—"} sub={`PPL ${leadsByCh.ppl ? usd(cpl(spendByCh.ppl, leadsByCh.ppl)) : "—"} · SMS ${leadsByCh.sms ? usd(cpl(spendByCh.sms, leadsByCh.sms)) : "—"} · Mail ${leadsByCh.mail ? usd(cpl(spendByCh.mail, leadsByCh.mail)) : "—"}`} />
-          <Stat label="Cost / contracted deal" value={contractsMonth ? usd(costPerContract) : "—"} sub={`${Math.round(contractsMonth)} signed this month`} />
+          {cSuite && <Stat label="Spend" value={usd(spendTotal)} sub={`PPL ${usd(spendByCh.ppl)} · SMS ${usd(spendByCh.sms)} · Mail ${usd(spendByCh.mail)}`} />}
+          {cSuite && <Stat label="Cost / lead" value={leadsTotal ? usd(cpl(spendTotal, leadsTotal)) : "—"} sub={`PPL ${leadsByCh.ppl ? usd(cpl(spendByCh.ppl, leadsByCh.ppl)) : "—"} · SMS ${leadsByCh.sms ? usd(cpl(spendByCh.sms, leadsByCh.sms)) : "—"} · Mail ${leadsByCh.mail ? usd(cpl(spendByCh.mail, leadsByCh.mail)) : "—"}`} />}
+          {cSuite && <Stat label="Cost / contracted deal" value={contractsMonth ? usd(costPerContract) : "—"} sub={`${Math.round(contractsMonth)} signed this month`} />}
           <Stat label="Lead → contract" value={leadsTotal ? pct(contractsMonth / leadsTotal) : "—"} />
-          <Stat label="Marketing ROI (mo)" value={spendTotal ? `${mktRoiMonth.toFixed(1)}×` : "—"} sub={`rev ${usd(monthRev)} vs spend ${usd(spendTotal)}`} />
+          {cSuite && <Stat label="Marketing ROI (mo)" value={spendTotal ? `${mktRoiMonth.toFixed(1)}×` : "—"} sub={`rev ${usd(monthRev)} vs spend ${usd(spendTotal)}`} />}
           <Stat label="Email open" value={mv("email_open_rate") ? `${mv("email_open_rate")}%` : "—"} />
           <Stat label="Email CTR" value={mv("email_ctr") ? `${mv("email_ctr")}%` : "—"} />
         </div>
@@ -171,12 +172,12 @@ export default async function BenchmarksPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <Stat label="Deals closed" value={String(closedCount)} />
           <Stat label="Gross revenue" value={usd(grossRev)} />
-          <Stat label="Net profit" value={usd(netProfit)} sub="after all expenses & closing costs" />
-          <Stat label="Net profit / deal" value={closedCount ? usd(netPerDeal) : "—"} />
+          {cSuite && <Stat label="Net profit" value={usd(netProfit)} sub="after all expenses & closing costs" />}
+          {cSuite && <Stat label="Net profit / deal" value={closedCount ? usd(netPerDeal) : "—"} />}
           <Stat label="Avg assignment fee" value={assignments.length ? usd(avgAssignFee) : "—"} sub={`${assignments.length} assignments`} />
           <Stat label="Contract → close" value={contractsYear ? pct(contractToClose) : "—"} sub={`${Math.round(contractsYear)} signed YTD`} />
           <Stat label="Avg days to close" value={dayDiffs.length ? `${Math.round(avgEscrowDays)} days` : "—"} sub="escrow open → close" />
-          <Stat label="Company ROI (mo)" value={spendTotal + opexMonth ? `${(companyRoiMonth * 100).toFixed(0)}%` : "—"} sub="after mktg + opex" />
+          {cSuite && <Stat label="Company ROI (mo)" value={spendTotal + opexMonth ? `${(companyRoiMonth * 100).toFixed(0)}%` : "—"} sub="after mktg + opex" />}
         </div>
       </section>
 

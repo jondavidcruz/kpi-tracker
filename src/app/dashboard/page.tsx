@@ -22,7 +22,7 @@ import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
 import DealFunnel from "@/components/DealFunnel";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, canAccessPayroll } from "@/lib/auth";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
 import { CircleCheck, TrendingDown, Bell, Users, Banknote, ShieldAlert, Building2, FileSignature, type LucideIcon } from "lucide-react";
 import type { Kpi, Target, User } from "@prisma/client";
@@ -78,6 +78,7 @@ export default async function DashboardPage({
   // entries + the Escrow & Closing tracker), so nothing needs double-entry. ---
   const me = await getCurrentUser();
   const showMoney = isManager(me);
+  const cSuite = canAccessPayroll(me); // Jon / Viktoriia / Enrico — see expense-derived figures
   const monthStart = `${month}-01`;
   const year = date.slice(0, 4);
   const yearStart = `${year}-01-01`;
@@ -251,14 +252,12 @@ export default async function DashboardPage({
           <Link href="/monthly" className="block"><MetricCard label="Contracts sent (mo)" value={Math.round(contractsSentMonth)} icon={<FileSignature size={18} />} hint="acquisitions" /></Link>
           <Link href="/monthly" className="block"><MetricCard label="Contracts signed (mo)" value={Math.round(contractsSignedMonth)} icon={<FileSignature size={18} />} hint="acquisitions" /></Link>
           <Link href="/closing" className="block"><MetricCard label={`Deals closed (${year})`} value={closedCount} icon={<Building2 size={18} />} hint={falloutYTD ? `${falloutYTD} fell through` : "dispositions"} hintTone={falloutYTD ? "bad" : "neutral"} /></Link>
-          {showMoney ? (
-            <>
-              <Link href="/closing" className="block"><MetricCard label="Gross revenue (YTD)" value={usd(grossRevenue)} icon={<Banknote size={18} />} /></Link>
-              <Link href="/closing" className="block"><MetricCard label="Net profit (YTD)" value={usd(netProfit)} icon={<Banknote size={18} />} hint="after expenses & closing" hintTone={netProfit >= 0 ? "good" : "bad"} /></Link>
-            </>
-          ) : (
-            <Card className="flex items-center justify-center p-3 text-center text-[11px] text-slate-400 lg:col-span-2">Revenue &amp; profit are visible to managers.</Card>
-          )}
+          {showMoney && <Link href="/closing" className="block"><MetricCard label="Gross revenue (YTD)" value={usd(grossRevenue)} icon={<Banknote size={18} />} /></Link>}
+          {cSuite ? (
+            <Link href="/expenses" className="block"><MetricCard label="Net profit (YTD)" value={usd(netProfit)} icon={<Banknote size={18} />} hint="after expenses · C-suite" hintTone={netProfit >= 0 ? "good" : "bad"} /></Link>
+          ) : !showMoney ? (
+            <Card className="flex items-center justify-center p-3 text-center text-[11px] text-slate-400 lg:col-span-2">Revenue &amp; profit are visible to leadership.</Card>
+          ) : null}
         </div>
         {showMoney && closedCount === 0 && (
           <p className="mt-2 text-[11px] text-slate-400">No closed deals recorded for {year} yet — add them in <Link href="/closing" className="font-semibold text-slate-500 underline">Escrow &amp; Closing</Link> (set status to “Closed”) and they&apos;ll tally here with net profit.</p>

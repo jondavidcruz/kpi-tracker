@@ -1953,6 +1953,92 @@ export async function deleteRewardWish(formData: FormData) {
   revalidatePath("/rewards");
 }
 
+// --- C-suite expense tracker (P&L) -------------------------------------------
+
+const num = (fd: FormData, key: string): number => {
+  const v = String(fd.get(key) ?? "").replace(/[$,\s]/g, "");
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** Bulk-save every line's numbers for a month, plus net sales. C-suite only. */
+export async function saveExpensesBulk(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessPayroll(me)) return;
+  const month = String(formData.get("month") ?? "");
+  if (!/^\d{4}-\d{2}$/.test(month)) return;
+
+  await db.expenseMonth.upsert({
+    where: { month },
+    update: { netSales: num(formData, "netSales") },
+    create: { month, netSales: num(formData, "netSales") },
+  });
+
+  const lines = await db.expenseLine.findMany({ where: { month }, select: { id: true } });
+  await Promise.all(
+    lines.map((l) => {
+      const wtRaw = String(formData.get(`withTax_${l.id}`) ?? "").replace(/[$,\s]/g, "");
+      const withTax = wtRaw === "" ? null : (Number.isFinite(parseFloat(wtRaw)) ? parseFloat(wtRaw) : null);
+      return db.expenseLine.update({
+        where: { id: l.id },
+        data: {
+          projected: num(formData, `projected_${l.id}`),
+          actual: num(formData, `actual_${l.id}`),
+          withTax,
+          note: String(formData.get(`note_${l.id}`) ?? "").trim().slice(0, 200),
+        },
+      });
+    }),
+  );
+  revalidatePath("/expenses");
+}
+
+/** Add a custom line item to a category. C-suite only. */
+export async function addExpenseLine(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessPayroll(me)) return;
+  const month = String(formData.get("month") ?? "");
+  const category = String(formData.get("category") ?? "");
+  const label = String(formData.get("label") ?? "").trim().slice(0, 120);
+  if (!/^\d{4}-\d{2}$/.test(month) || !category || !label) return;
+  const max = await db.expenseLine.aggregate({ where: { month, category }, _max: { sortOrder: true } });
+  await db.expenseLine.upsert({
+    where: { month_category_label: { month, category, label } },
+    update: {},
+    create: { month, category, label, sortOrder: (max._max.sortOrder ?? 0) + 1, actual: num(formData, "actual") },
+  });
+  revalidatePath("/expenses");
+}
+
+export async function deleteExpenseLine(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessPayroll(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.expenseLine.delete({ where: { id } });
+  revalidatePath("/expenses");
+}
+
+/** Start a new month by copying the prior month's line items (zeroed actuals). */
+export async function startExpenseMonth(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessPayroll(me)) return;
+  const month = String(formData.get("month") ?? "");
+  const from = String(formData.get("from") ?? "");
+  if (!/^\d{4}-\d{2}$/.test(month)) return;
+  const existing = await db.expenseLine.count({ where: { month } });
+  if (existing > 0) { revalidatePath("/expenses"); return; }
+  const template = await db.expenseLine.findMany({ where: { month: from } });
+  if (template.length > 0) {
+    await db.expenseLine.createMany({
+      data: template.map((t) => ({ month, category: t.category, label: t.label, projected: t.projected, actual: 0, sortOrder: t.sortOrder })),
+      skipDuplicates: true,
+    });
+  }
+  await db.expenseMonth.upsert({ where: { month }, update: {}, create: { month } });
+  revalidatePath("/expenses");
+}
+
 // --- Monday-meeting highlights log -------------------------------------------
 
 export async function addMeetingHighlight(formData: FormData) {

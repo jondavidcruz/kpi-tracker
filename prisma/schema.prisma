@@ -891,6 +891,30 @@ model Reward {
   @@index([scope, userId])
 }
 
+// C-suite expense tracker (P&L). One row per line item per month.
+// `actual` = real spend; `withTax` = amount including additional tax expenses.
+model ExpenseLine {
+  id        String  @id @default(cuid())
+  month     String // YYYY-MM
+  category  String // payroll | software | dues | realestate | controllable
+  label     String
+  projected Float   @default(0)
+  actual    Float   @default(0)
+  withTax   Float? // includes the additional tax buffer (from Jon's tracker)
+  note      String  @default("")
+  sortOrder Int     @default(0)
+
+  @@unique([month, category, label])
+  @@index([month])
+}
+
+// Month-level finance figures that pair with the expense lines.
+model ExpenseMonth {
+  month    String @id // YYYY-MM
+  netSales Float  @default(0)
+  note     String @default("")
+}
+
 // A reward the team wishes for — submitted by a rep, reviewed by leadership.
 model RewardWish {
   id        String   @id @default(cuid())
