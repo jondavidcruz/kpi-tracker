@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
 import { workCapAt, shiftEndLabel } from "@/lib/shift";
-import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage } from "@/app/actions";
+import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
@@ -185,6 +185,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const myOutages = isOwner(me) ? [] : await db.outage.findMany({ where: { userId: me.id, date: { gte: tenDaysAgo } }, orderBy: [{ date: "desc" }, { startMin: "asc" }] });
   const outHHMM = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
 
+  // Live outages a manager flagged today (one per person/kind while ongoing).
+  const liveOutages = manager ? await db.outage.findMany({ where: { date: today, ongoing: true } }) : [];
+  const liveByUser = new Map<string, (typeof liveOutages)[number]>();
+  for (const o of liveOutages) if (!liveByUser.has(o.userId)) liveByUser.set(o.userId, o);
+
   // Presence (initial render; PresenceBoard then polls live). Worked time is
   // capped at the scheduled shift end so a forgotten clock-out can't inflate it.
   const byUser = groupByUser(punchesToday);
@@ -235,6 +240,35 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <PresenceBoard initial={people} />
         </Card>
       </section>
+
+      {/* MANAGER: quick-report a live outage per person (power/internet) */}
+      {manager && (
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-slate-700">⚡ Report an outage</h3>
+          <Card className="divide-y divide-slate-100 p-0">
+            {users.filter((u) => !isOwner(u)).map((u) => {
+              const live = liveByUser.get(u.id);
+              return (
+                <div key={u.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+                  <span className="w-32 shrink-0 font-semibold text-slate-800">{u.name.split(" ")[0]}</span>
+                  {live ? (
+                    <>
+                      <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700">{live.kind === "power" ? "⚡ Power out" : live.kind === "internet" ? "📶 Internet out" : "⚠️ Out"} · since {outHHMM(live.startMin)}{live.reportedBy ? ` · ${live.reportedBy.split(" ")[0]}` : ""}</span>
+                      <form action={endOutage} className="ml-auto"><input type="hidden" name="id" value={live.id} /><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back online</button></form>
+                    </>
+                  ) : (
+                    <div className="ml-auto flex gap-2">
+                      <form action={startOutage}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="power" /><button className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200">⚡ Power outage</button></form>
+                      <form action={startOutage}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="internet" /><button className="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-200">📶 Internet outage</button></form>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </Card>
+          <p className="mt-1.5 text-[11px] text-slate-400">Start time is logged automatically. Clears on its own when they punch back in, or hit “Back online.” Excused from KPI alerts while out.</p>
+        </section>
+      )}
 
       {/* PART-TIMER AVAILABILITY (managers) */}
       {manager && partAvail.length > 0 && (

@@ -1618,6 +1618,13 @@ const PUNCH_CHAT: Record<string, string> = {
   lunch_end: "🟢 {name} is back from lunch",
 };
 
+/** Current local time as minutes-from-midnight in the org timezone. */
+function nowLocalMin(tz: string): number {
+  const s = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+  const [h, m] = s.split(":").map(Number);
+  return h * 60 + m;
+}
+
 export async function punch(formData: FormData) {
   const me = await getCurrentUser();
   if (!me) return;
@@ -1626,6 +1633,10 @@ export async function punch(formData: FormData) {
   const settings = await getSettings();
   const date = todayStr(settings.orgTimezone);
   await db.punch.create({ data: { userId: me.id, kind, date } });
+  // Logging back in auto-clears any live outage flagged for them.
+  if (kind === "in") {
+    await db.outage.updateMany({ where: { userId: me.id, date, ongoing: true }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
+  }
   // Mirror the status change to the team Google Chat room (replaces the manual
   // "on break / back from lunch" typing the team used to do).
   const tmpl = PUNCH_CHAT[kind];
@@ -1828,6 +1839,36 @@ export async function deleteOutage(formData: FormData) {
   if (!row) return;
   if (row.userId !== me.id && !canTrackTime(me)) return;
   await db.outage.delete({ where: { id } });
+  revalidatePath("/schedule");
+  revalidatePath("/timecard");
+}
+
+/** Manager taps a button to flag a live outage for a rep (start time = now).
+ *  It clears automatically when they punch back in, or a manager ends it. */
+export async function startOutage(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canTrackTime(me)) return; // managers + pay staff
+  const userId = String(formData.get("userId") ?? "");
+  const kind = ["internet", "power", "other"].includes(String(formData.get("kind"))) ? String(formData.get("kind")) : "power";
+  if (!userId) return;
+  const settings = await getSettings();
+  const date = todayStr(settings.orgTimezone);
+  const existing = await db.outage.findFirst({ where: { userId, date, kind, ongoing: true } });
+  if (existing) return; // already flagged
+  const now = nowLocalMin(settings.orgTimezone);
+  await db.outage.create({ data: { userId, date, kind, startMin: now, endMin: now, ongoing: true, reportedBy: me!.name } });
+  revalidatePath("/schedule");
+  revalidatePath("/timecard");
+}
+
+/** Manager marks a live outage resolved (rep back online). */
+export async function endOutage(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canTrackTime(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const settings = await getSettings();
+  await db.outage.update({ where: { id }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
   revalidatePath("/schedule");
   revalidatePath("/timecard");
 }

@@ -821,11 +821,13 @@ model Outage {
   id        String   @id @default(cuid())
   userId    String
   date      String // YYYY-MM-DD (org tz)
-  kind      String   @default("internet") // internet | power | other
-  startMin  Int // minutes from midnight, local
-  endMin    Int
-  note      String   @default("")
-  createdAt DateTime @default(now())
+  kind       String   @default("internet") // internet | power | other
+  startMin   Int // minutes from midnight, local
+  endMin     Int
+  ongoing    Boolean  @default(false) // true = still out (live); cleared on punch-in or by a manager
+  reportedBy String   @default("") // manager who flagged it (for the quick report button)
+  note       String   @default("")
+  createdAt  DateTime @default(now())
 
   @@index([userId, date])
 }
