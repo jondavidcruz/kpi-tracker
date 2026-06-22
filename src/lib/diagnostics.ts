@@ -95,6 +95,76 @@ export async function buildLeaks(today: string, range: "week" | "month" | "ytd")
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
+export interface LeaksNarrative { headline: string; biggest: string; meaning: string[]; actions: string[] }
+
+/** Plain-English read of the funnel + economics — what's wrong and what to do. */
+export function buildLeaksNarrative(d: Leaks): LeaksNarrative {
+  const sc = (k: string) => d.stages.find((s) => s.key === k)?.count ?? 0;
+  const leads = sc("leads"), calls = sc("calls"), offers = sc("offers"), signed = sc("signed"), closed = sc("closed");
+
+  if (leads === 0) {
+    return {
+      headline: "Not enough logged yet to diagnose this range.",
+      biggest: "No leads were logged for this period.",
+      meaning: ["The funnel and these numbers fill in automatically as the team logs leads, process calls, offers, and contracts each day."],
+      actions: ["Make sure Michelle logs her process calls, offers, and contracts daily — that's what powers this whole diagnostic."],
+    };
+  }
+
+  const pct = (a: number, b: number) => (b > 0 ? Math.round((1 - a / b) * 100) : 0);
+  const meaning: string[] = [];
+  const actions: string[] = [];
+  let biggest = "";
+
+  // Interpret the single worst leak in plain English.
+  const wl = d.worstLeak;
+  if (wl) {
+    const key = `${wl.from}→${wl.to}`;
+    if (key === "Leads→Process calls") {
+      biggest = `Your biggest leak is the very top: ${pct(calls, leads)}% of the leads you paid for never even got a call.`;
+      meaning.push("You can't close a seller nobody talks to. This is a follow-up / speed-to-lead problem — not a closing problem. It's the most expensive leak because you already paid for those leads.");
+      actions.push("Make 'every lead gets called + put in a multi-touch follow-up' the #1 daily standard. If Michelle can't reach someone, they go into a follow-up sequence — never the trash.");
+    } else if (key === "Process calls→Offers made") {
+      biggest = `Your biggest leak is calls → offers: you're reaching sellers but only ${Math.round((offers / Math.max(1, calls)) * 100)}% turn into an offer.`;
+      meaning.push("Either the leads aren't motivated/qualified, or the offer isn't being made on the call. You're doing the hard part (the conversation) and not asking for the deal.");
+      actions.push("Drill the offer step: every qualified call should end in a verbal offer or a clear next step. Use the AI coach for the offer talk track.");
+    } else if (key === "Offers made→Contracts signed") {
+      biggest = `Your biggest leak is offers → signed: you're making offers but only ${Math.round((signed / Math.max(1, offers)) * 100)}% get signed.`;
+      meaning.push("This is the negotiation and the close — exactly the Jon→Michelle handoff. Offers that don't sign means the close is the bottleneck while Michelle is still ramping.");
+      actions.push("Co-close: Michelle presents and builds rapport, you step into the negotiation until her signed-rate proves out. Drill 'negotiating to signed' daily.");
+    } else if (key === "Contracts signed→Closed for cash") {
+      biggest = `Your biggest leak is signed → closed: contracts are signing but only ${Math.round((closed / Math.max(1, signed)) * 100)}% make it to cash.`;
+      meaning.push("Deals are dying after contract — buyers walking or escrow fallout. That's a dispositions / escrow problem, not acquisitions.");
+      actions.push("Tighten dispo: faster buyer matching, make EMD hard, and watch the deal-aging board so nothing rots.");
+    } else {
+      biggest = `Your biggest drop-off is ${wl.from} → ${wl.to} (${Math.round(wl.lostPct)}% lost there).`;
+      meaning.push("Focus your energy on the step where the most deals fall out — fixing it has the highest leverage.");
+    }
+  } else {
+    biggest = "No single dominant leak this period — the funnel is fairly even.";
+  }
+
+  // Economics read.
+  if (d.econ.costPerLead != null && d.econ.costPerLead <= 25) {
+    meaning.push(`Lead cost is healthy (about ${usd(d.econ.costPerLead)}/lead). Your problem isn't lead price — it's conversion. Raising the funnel even a point or two multiplies contracts off the same spend.`);
+  }
+  if (d.econ.net < 0) {
+    meaning.push(`Net is negative (${usd(d.econ.net)}) — expenses are outrunning closed revenue. A profitable single month doesn't mean a profitable period; you have to close more, not spend more.`);
+  } else if (d.econ.revenue > 0) {
+    meaning.push(`Net is positive (${usd(d.econ.net)}) for this range — protect the close and keep the funnel full.`);
+  }
+  if (d.refunded > 0 || d.refundRequested > 0) {
+    meaning.push(`${d.refunded} of ${d.refundRequested} requested lead refunds came back — keep flagging bad leads so you only pay for usable ones.`);
+  }
+  if (actions.length < 2) actions.push("Keep the team logging every step daily so this diagnostic stays sharp and the leak can't hide.");
+
+  const headline = d.econ.net < 0
+    ? `Bottom line: you're not failing at leads or cost — you're failing at converting them, and it's costing you money (${usd(d.econ.net)} net this range).`
+    : `Bottom line: the funnel is working — the lever now is keeping the close tight and the pipeline full.`;
+
+  return { headline, biggest, meaning, actions };
+}
+
 /** Friday EOD Leaks report — emailed to the C-suite (this week + YTD). */
 export async function sendLeaksReport(today: string): Promise<boolean> {
   const settings = await getSettings();

@@ -2,8 +2,9 @@ import Link from "next/link";
 import { getCurrentUser, canAccessPayroll } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
-import { buildLeaks } from "@/lib/diagnostics";
+import { buildLeaks, buildLeaksNarrative } from "@/lib/diagnostics";
 import { Card, SectionTitle } from "@/components/ui";
+import LeaksExplain from "@/components/LeaksExplain";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function LeaksPage({ searchParams }: { searchParams: Promis
     return "bg-brand-navy";
   };
   const econ = d.econ;
+  const narrative = buildLeaksNarrative(d);
   const RANGES: { k: string; label: string }[] = [{ k: "week", label: "Last 7 days" }, { k: "month", label: "This month" }, { k: "ytd", label: "Year to date" }];
 
   return (
@@ -97,6 +99,29 @@ export default async function LeaksPage({ searchParams }: { searchParams: Promis
         </div>
         <p className="mt-2 text-[11px] text-slate-400">The lever isn&apos;t lead cost (already cheap) — it&apos;s conversion. Raising lead→signed even a point or two multiplies contracts off the same spend.</p>
       </Card>
+
+      {/* What this means — plain English, always shown */}
+      <Card className="border-l-4 border-brand-gold p-5">
+        <div className="mb-1 text-base font-bold text-slate-800">📋 What this means</div>
+        <p className="text-sm font-semibold text-slate-700">{narrative.headline}</p>
+        <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-100">🚨 {narrative.biggest}</div>
+        {narrative.meaning.length > 0 && (
+          <ul className="mt-3 space-y-1.5 text-sm text-slate-600">
+            {narrative.meaning.map((m, i) => <li key={i} className="flex gap-2"><span className="text-slate-300">•</span><span>{m}</span></li>)}
+          </ul>
+        )}
+        {narrative.actions.length > 0 && (
+          <div className="mt-3 rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-100">
+            <div className="mb-1 text-xs font-bold uppercase tracking-wide text-emerald-700">✅ What to do</div>
+            <ul className="space-y-1 text-sm text-emerald-900">
+              {narrative.actions.map((a, i) => <li key={i} className="flex gap-2"><span className="text-emerald-500">›</span><span>{a}</span></li>)}
+            </ul>
+          </div>
+        )}
+      </Card>
+
+      {/* AI deep-dive — the full strategic breakdown on demand */}
+      <LeaksExplain data={JSON.stringify({ rangeLabel: d.rangeLabel, stages: d.stages, worstLeak: d.worstLeak, econ: d.econ, leads: d.leads, refundRequested: d.refundRequested, refunded: d.refunded })} />
     </div>
   );
 }
