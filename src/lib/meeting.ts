@@ -5,7 +5,7 @@ import { db } from "./db";
 import {
   getSettings, getActiveReps, getKpis, getRangeSums, getMonthlyValues, getOpenDeals, getDealMetrics,
 } from "./data";
-import { lastWeekRange, monthBounds, friendlyDate } from "./date";
+import { lastWeekRange, currentWeekRange, monthBounds, friendlyDate } from "./date";
 import { formatValue, type Unit } from "./format";
 import { POSITIONS, positionLabel } from "./roles";
 import { analyzeDeal } from "./deals";
@@ -19,10 +19,25 @@ export interface RoleTable {
   rows: { rep: string; cells: string[] }[];
 }
 export interface Recognition { role: string; rep: string; kpi: string; value: string }
-export interface PipelineRow { address: string; status: string; rep: string; days: number | null; level: string; profit: number | null; contractPrice: number | null; nextSteps: string }
+export interface PipelineRow { address: string; status: string; rep: string; days: number | null; level: string; profit: number | null; contractPrice: number | null; askingPrice: number | null; nextSteps: string }
+
+// A rotating, team-themed verse to close the Monday all-call on.
+const TEAM_VERSES: { text: string; ref: string }[] = [
+  { text: "Whatever you do, work heartily, as for the Lord and not for men.", ref: "Colossians 3:23" },
+  { text: "Commit your work to the Lord, and your plans will be established.", ref: "Proverbs 16:3" },
+  { text: "Two are better than one, because they have a good reward for their toil.", ref: "Ecclesiastes 4:9" },
+  { text: "As iron sharpens iron, so one person sharpens another.", ref: "Proverbs 27:17" },
+  { text: "Let us not grow weary of doing good, for in due season we will reap, if we do not give up.", ref: "Galatians 6:9" },
+  { text: "Be strong and courageous… for the Lord your God is with you wherever you go.", ref: "Joshua 1:9" },
+  { text: "Do you see a man skillful in his work? He will stand before kings.", ref: "Proverbs 22:29" },
+  { text: "…always abounding in the work of the Lord, knowing that in the Lord your labor is not in vain.", ref: "1 Corinthians 15:58" },
+  { text: "I can do all things through Christ who strengthens me.", ref: "Philippians 4:13" },
+];
 
 export interface MeetingDeck {
   weekLabel: string;
+  thisWeekLabel: string;
+  verse: { text: string; ref: string };
   generatedOn: string;
   team: { name: string; role: string }[];
   announcements: string[];
@@ -43,7 +58,8 @@ export interface MeetingDeck {
   trainingTip: { text: string; targetKpi: string } | null;
 }
 
-const ROLLUP_KEYS = ["offers_made", "deals_sold", "new_buyers"];
+const ROLLUP_KEYS = ["offers_made", "acq_contracts_sent", "deals_sold", "new_buyers"];
+const SIGNED_KEYS = ["acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"];
 // KPIs hidden from the meeting deck for now (per Jon).
 const EXCLUDE_KPIS = new Set(["text_responses", "appts_set", "appts_taken"]);
 
@@ -88,6 +104,13 @@ function glanceFrom(
   for (const k of perRepKpis.filter((x) => ROLLUP_KEYS.includes(x.key) && x.category === "green")) {
     let total = 0; for (const r of reps) total += sums.get(`${k.id}|${r.id}`) ?? 0;
     out.push({ key: k.key, name: k.name, value: formatValue(k.unit as Unit, total) });
+  }
+  // "Contracts Signed (after verbal)" — combine the four signed-contract types.
+  const signedKpis = perRepKpis.filter((k) => SIGNED_KEYS.includes(k.key));
+  if (signedKpis.length) {
+    let total = 0;
+    for (const k of signedKpis) for (const r of reps) total += sums.get(`${k.id}|${r.id}`) ?? 0;
+    out.push({ key: "contracts_signed_total", name: "Contracts Signed", value: formatValue("count", total) });
   }
   return out;
 }
@@ -280,8 +303,11 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     ? { text: chosen.text, targetKpi: weakest && targeted.length ? weakest.name : "" }
     : null;
 
+  const thisWeek = currentWeekRange(today);
   return {
     weekLabel: wk.label,
+    thisWeekLabel: thisWeek.label,
+    verse: TEAM_VERSES[hashWeek(thisWeek.start) % TEAM_VERSES.length],
     generatedOn: friendlyDate(today),
     team: reps.map((r) => ({ name: r.name, role: positionLabel(r.position) })),
     announcements: bullets(settings.mtgAnnouncements ?? ""),
@@ -307,6 +333,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
         level: a.level,
         profit: d.assignmentFee ?? null,
         contractPrice: d.contractPrice ?? null,
+        askingPrice: d.askingPrice ?? null,
         nextSteps: d.nextSteps || (a.level !== "fresh" ? a.recommendation : ""),
       };
     }),

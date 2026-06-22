@@ -7,17 +7,6 @@ export default function MeetingDeckView({ deck }: { deck: MeetingDeck }) {
   return <Deck slides={buildSlides(deck)} />;
 }
 
-const TEAM = [
-  { name: "Jon Cruz", title: "Founder & President" },
-  { name: "Enrico C.", title: "Vice President" },
-  { name: "Viktoriia C.", title: "Marketing Director" },
-  { name: "Cortana C.", title: "Technology Director" },
-  { name: "Marie M.", title: "Operations Director" },
-  { name: "Sharyn M.", title: "Dispositions Director" },
-  { name: "Ethan D.", title: "Licensed Real Estate Agent" },
-  { name: "Michelle L.", title: "Acquisitions Officer" },
-];
-
 // One position's KPI table, full width — positions stack top-to-bottom.
 function RoleBlock({ rt }: { rt: MeetingDeck["lastWeek"]["roleTables"][number] }) {
   return (
@@ -70,29 +59,15 @@ function buildSlides(d: MeetingDeck): Slide[] {
         <div className="rounded-full bg-brand-navy/85 px-6 py-2 text-center text-white shadow-lg backdrop-blur-sm">
           <span className="font-bold" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>Monday All-Call</span>
           <span className="mx-2 text-brand-gold">·</span>
-          <span className="text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>{d.weekLabel}</span>
+          <span className="text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>{d.thisWeekLabel}</span>
         </div>
       </div>
     </div>
   )});
 
-  // 2. Meet the team — native, on-brand roster
+  // 2. Meet the team — the Canva team slide image (public/meeting/team.png)
   s.push({ name: "Team", node: (
-    <div className="flex h-full w-full flex-col bg-[#f5ede4] px-[5%] py-[4%]">
-      <div className="text-center">
-        <div className="font-extrabold text-brand-navy" style={{ fontSize: "clamp(20px,3.4cqw,46px)" }}>A small team. <span className="italic text-emerald-700">By design.</span></div>
-        <div className="mt-1 text-slate-500" style={{ fontSize: "clamp(10px,1.4cqw,18px)" }}>Eight people, working directly with you. No middlemen, no call centers, no scripts.</div>
-      </div>
-      <div className="mt-[3%] grid flex-1 grid-cols-4 gap-[2%]">
-        {TEAM.map((p) => (
-          <div key={p.name} className="flex flex-col items-center justify-start text-center">
-            <div className="grid aspect-square w-[62%] place-items-center rounded-full bg-brand-navy font-bold text-brand-gold-soft" style={{ fontSize: "clamp(16px,2.6cqw,34px)" }}>{p.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</div>
-            <div className="mt-[8%] font-bold text-slate-800" style={{ fontSize: "clamp(10px,1.4cqw,18px)" }}>{p.name}</div>
-            <div className="uppercase tracking-wide text-emerald-700" style={{ fontSize: "clamp(7px,0.95cqw,12px)", letterSpacing: "0.08em" }}>{p.title}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <div className="h-full w-full bg-[#f5ede4] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: "url(/meeting/team.png)" }} />
   )});
 
   // 3. Announcements
@@ -130,7 +105,7 @@ function buildSlides(d: MeetingDeck): Slide[] {
         <table className="w-full" style={{ fontSize: "clamp(7px,1.05cqw,14px)" }}>
           <thead><tr className="bg-slate-50 text-left text-slate-500">
             <th className="px-2.5 py-1">Property</th><th className="px-1.5 py-1">Status</th><th className="px-1.5 py-1">Rep</th>
-            <th className="px-1.5 py-1 text-center">Days</th><th className="px-1.5 py-1 text-right">Contract</th><th className="px-1.5 py-1 text-right">Profit</th><th className="px-1.5 py-1">Next step</th>
+            <th className="px-1.5 py-1 text-center">Days</th><th className="px-1.5 py-1 text-right">Contract</th><th className="px-1.5 py-1 text-right">Marketing $</th><th className="px-1.5 py-1 text-right">Profit</th><th className="px-1.5 py-1">Next step</th>
           </tr></thead>
           <tbody>
             {d.pipeline.map((p, i) => {
@@ -142,12 +117,13 @@ function buildSlides(d: MeetingDeck): Slide[] {
                   <td className="px-1.5 py-1 text-slate-600">{p.rep}</td>
                   <td className="px-1.5 py-1 text-center">{p.days == null ? <span className="text-slate-400">—</span> : <span className={`rounded-full px-1.5 py-0.5 font-bold ${ageCls}`} style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>{p.days}d</span>}</td>
                   <td className="px-1.5 py-1 text-right tabular-nums text-slate-600">{p.contractPrice != null ? money(p.contractPrice) : "—"}</td>
+                  <td className="px-1.5 py-1 text-right font-semibold tabular-nums text-sky-700">{p.askingPrice != null ? money(p.askingPrice) : "—"}</td>
                   <td className="px-1.5 py-1 text-right font-bold tabular-nums text-emerald-700">{p.profit != null ? money(p.profit) : "—"}</td>
                   <td className="px-1.5 py-1 text-slate-500">{p.nextSteps || "—"}</td>
                 </tr>
               );
             })}
-            {!d.pipeline.length && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">No active deals.</td></tr>}
+            {!d.pipeline.length && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">No active deals.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -205,6 +181,15 @@ function buildSlides(d: MeetingDeck): Slide[] {
     <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy text-center text-white">
       <div className="font-extrabold" style={{ fontSize: "clamp(22px,4cqw,56px)" }}>That&apos;s the all-call 🙌</div>
       <div className="mt-2 text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>Let&apos;s have a great week.</div>
+    </div>
+  )});
+
+  // Verse of the week — always close on this.
+  s.push({ name: "Verse of the week", node: (
+    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-brand-navy-950 via-brand-navy to-amber-900 px-[10%] text-center text-white">
+      <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>VERSE OF THE WEEK</div>
+      <div className="mt-[4%] max-w-[85%] font-bold italic leading-snug" style={{ fontSize: "clamp(16px,3cqw,42px)" }}>&ldquo;{d.verse.text}&rdquo;</div>
+      <div className="mt-[3%] font-semibold text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.8cqw,24px)" }}>— {d.verse.ref}</div>
     </div>
   )});
 
