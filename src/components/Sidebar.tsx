@@ -35,7 +35,6 @@ export default function Sidebar({
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
-      { href: "/training", label: "Training Portal", Icon: GraduationCap, managerOnly: true },
       { href: "/marketing", label: "Markets & Buyers", Icon: Megaphone, marketingOnly: true },
       { href: "/rewards", label: "Rewards", Icon: Gift },
       { href: "/operations", label: "Resources & SOPs", Icon: Briefcase, adminOnly: true },
@@ -50,6 +49,7 @@ export default function Sidebar({
       { href: "/benchmarks", label: "Benchmarks", Icon: Target, managerOnly: true },
     ] },
     { label: "Coaching", items: [
+      { href: "/training", label: "Training Portal", Icon: GraduationCap, managerOnly: true },
       { href: "/alerts", label: "Alerts", Icon: Bell, managerOnly: true },
       { href: "/pip", label: "PIPs", Icon: ShieldAlert, managerOnly: true },
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },

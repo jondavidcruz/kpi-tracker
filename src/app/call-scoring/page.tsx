@@ -7,6 +7,7 @@ import { Card, SectionTitle } from "@/components/ui";
 import type { ScoreArea } from "@/lib/score";
 import { CALL_TYPES, callTypeLabel } from "@/lib/call-types";
 import TranscriptField from "@/components/TranscriptField";
+import CallLeadFields from "@/components/CallLeadFields";
 
 const GROUPS = ["Acquisitions", "Dispositions"] as const;
 
@@ -66,33 +67,12 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
 
       <Card className="p-5">
         <form action={scoreCall} className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="sm:col-span-1">
-              <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Whose call?</span>
-              <select name="repName" className={inputCls} defaultValue="">
-                <option value="">Pick a rep…</option>
-                {reps.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
-              </select>
-            </label>
-            <label className="sm:col-span-2">
-              <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Call type</span>
-              <select name="callType" required className={inputCls} defaultValue="">
-                <option value="" disabled>Pick a call type…</option>
-                {GROUPS.map((g) => (
-                  <optgroup key={g} label={g}>
-                    {CALL_TYPES.filter((c) => c.group === g).map((c) => (
-                      <option key={c.key} value={c.key}>{scripts.get(c.key) ? "✓ " : ""}{c.label}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Property address (which lead)</span><input name="address" placeholder="123 Main St…" className={inputCls} /></label>
-            <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Seller name</span><input name="sellerName" placeholder="Jane Seller" className={inputCls} /></label>
-            <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Seller phone (callback)</span><input name="sellerPhone" type="tel" placeholder="(555) 123-4567" className={inputCls} /></label>
-          </div>
+          <CallLeadFields
+            inputCls={inputCls}
+            reps={reps.map((r) => r.name)}
+            types={CALL_TYPES.map((c) => ({ key: c.key, label: c.label, group: c.group, hasScript: scripts.has(c.key) }))}
+            groups={[...GROUPS]}
+          />
           <TranscriptField inputCls={inputCls} geminiConfigured={geminiConfigured} />
           <div>
             <button disabled={!configured} className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">

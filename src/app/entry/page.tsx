@@ -266,6 +266,21 @@ export default async function EntryPage({
           ))}
         </div>
       )}
+
+      {/* End-of-day reminder to upload calls for scoring */}
+      {rep && ["acquisitions", "dispositions", "listings"].includes(rep.position) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border-l-4 border-emerald-400 bg-emerald-50/70 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-slate-800">📞 Before you log off — upload your calls for scoring</div>
+            <div className="text-xs text-slate-500">
+              {rep.position === "acquisitions"
+                ? "Upload your process calls, offer calls, and contract calls (sent / rejected) so we can review and coach."
+                : "Upload your buyer & developer calls so we can review and coach."}
+            </div>
+          </div>
+          <Link href="/call-scoring" className="shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">🎧 Upload a call →</Link>
+        </div>
+      )}
     </div>
   );
 }
