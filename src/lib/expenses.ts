@@ -1,10 +1,11 @@
 // Expense categories for the C-suite P&L tracker (mirrors the spreadsheet).
+// `hint` explains the bucket in plain English for non-accountants.
 export const EXPENSE_CATEGORIES = [
-  { key: "payroll", label: "Payroll", emoji: "👥" },
-  { key: "software", label: "Software & Operations", emoji: "💻" },
-  { key: "dues", label: "Dues, Licenses & Membership", emoji: "📜" },
-  { key: "realestate", label: "Real Estate", emoji: "🏠" },
-  { key: "controllable", label: "Controllable", emoji: "🎛️" },
+  { key: "payroll", label: "Payroll", emoji: "👥", color: "indigo", hint: "Team pay — contractors, salaries, payout fees" },
+  { key: "software", label: "Software & Tools", emoji: "💻", color: "sky", hint: "CRMs, dialer, lead tools, subscriptions" },
+  { key: "dues", label: "Dues & Licenses", emoji: "📜", color: "amber", hint: "Memberships, domains, AI tools, fees" },
+  { key: "realestate", label: "Real Estate", emoji: "🏠", color: "emerald", hint: "Deal costs — escrow, repairs, closing" },
+  { key: "controllable", label: "Controllable", emoji: "🎛️", color: "rose", hint: "Car, travel, meals, supplies, training" },
 ] as const;
 
 export type ExpenseCategoryKey = (typeof EXPENSE_CATEGORIES)[number]["key"];
