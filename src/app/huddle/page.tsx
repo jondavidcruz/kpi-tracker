@@ -3,7 +3,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, friendlyDate } from "@/lib/date";
 import { buildHuddleData } from "@/lib/huddle";
-import { saveStandup, saveStandupEod, addStandupItem, saveStandupItem, deleteStandupItem, addHuddleTask, toggleHuddleTask, deleteHuddleTask } from "@/app/actions";
+import { saveStandup, saveStandupEod, addStandupItem, saveStandupItem, deleteStandupItem, addHuddleTask, toggleHuddleTask, deleteHuddleTask, addHuddleCheck, toggleHuddleCheck, deleteHuddleCheck } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,35 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
   const other = h.reps.filter((r) => r.role === "Team");
   const missByUser = new Map<string, typeof h.misses>();
   for (const m of h.misses) { const k = m.userId ?? "team"; const arr = missByUser.get(k) ?? []; arr.push(m); missByUser.set(k, arr); }
+
+  // A click-to-complete checklist (goals for today / pending from yesterday).
+  const Checklist = ({ label, kind, items, canEdit, userId, legacy }: { label: string; kind: "goal" | "pending"; items: { id: string; text: string; done: boolean }[]; canEdit: boolean; userId: string; legacy?: string }) => (
+    <div>
+      <div className="mb-1 text-xs font-semibold text-slate-500">{label}</div>
+      <div className="space-y-1">
+        {items.length === 0 && !legacy && <div className="text-xs text-slate-300">Nothing yet.</div>}
+        {legacy && items.length === 0 && <div className="text-xs text-slate-400">{legacy}</div>}
+        {items.map((it) => (
+          <div key={it.id} className="flex items-center gap-2 text-sm">
+            {canEdit ? (
+              <form action={toggleHuddleCheck}><input type="hidden" name="id" value={it.id} /><button title="Toggle done" className={`grid h-4 w-4 place-items-center rounded border text-[10px] ${it.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white text-transparent hover:border-emerald-400"}`}>✓</button></form>
+            ) : (
+              <span className={`grid h-4 w-4 place-items-center rounded border text-[10px] ${it.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-200 text-transparent"}`}>✓</span>
+            )}
+            <span className={it.done ? "flex-1 text-slate-400 line-through" : "flex-1 text-slate-700"}>{it.text}</span>
+            {canEdit && <form action={deleteHuddleCheck}><input type="hidden" name="id" value={it.id} /><button className="text-slate-300 hover:text-red-600">×</button></form>}
+          </div>
+        ))}
+      </div>
+      {canEdit && (
+        <form action={addHuddleCheck} className="mt-1 flex items-center gap-2">
+          <input type="hidden" name="userId" value={userId} /><input type="hidden" name="date" value={date} /><input type="hidden" name="kind" value={kind} />
+          <input name="text" placeholder={kind === "goal" ? "add a goal…" : "add a pending item…"} className={inputCls} required />
+          <button className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-800">+</button>
+        </form>
+      )}
+    </div>
+  );
 
   const RepCard = ({ r }: { r: (typeof h.reps)[number] }) => {
     const canEdit = manager || me.id === r.id;
@@ -84,25 +113,26 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
           </div>
         )}
 
-        {/* Goal / pending / note */}
-        {canEdit ? (
-          <form action={saveStandup} className="space-y-2">
-            <input type="hidden" name="userId" value={r.id} />
-            <input type="hidden" name="date" value={date} />
-            <label className="block text-xs"><span className="mb-0.5 block font-semibold text-slate-500">🎯 Goal for today</span><textarea name="goal" defaultValue={r.goal} rows={1} className={inputCls} /></label>
-            <label className="block text-xs"><span className="mb-0.5 block font-semibold text-slate-500">⏮ Pending from yesterday</span><textarea name="pending" defaultValue={r.pending} rows={1} className={inputCls} /></label>
-            <label className="block text-xs"><span className="mb-0.5 block font-semibold text-slate-500">{r.role === "Dispositions" ? "🧾 Buyers / developers · lost or releasing · price reductions" : "📝 Notes"}</span><textarea name="note" defaultValue={r.note} rows={2} className={inputCls} /></label>
-            <div className="flex items-center">
-              <button className="ml-auto rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
-            </div>
-          </form>
-        ) : (
-          <div className="space-y-1 text-sm">
-            <p><span className="font-semibold text-slate-500">🎯 Goal:</span> {r.goal || <span className="text-slate-400">—</span>}</p>
-            <p><span className="font-semibold text-slate-500">⏮ Pending:</span> {r.pending || <span className="text-slate-400">—</span>}</p>
-            {r.note && <p><span className="font-semibold text-slate-500">📝</span> {r.note}</p>}
-          </div>
-        )}
+        {/* Goals + Pending — click-to-complete checklists */}
+        <div className="space-y-3">
+          <Checklist label="🎯 Goals for today" kind="goal" items={r.goals} canEdit={canEdit} userId={r.id} legacy={r.goal} />
+          {r.role === "Acquisitions" && <p className="-mt-1.5 text-[11px] text-amber-600">👇 Base today&apos;s goals on your hottest leads below — what will you do to close them?</p>}
+          <Checklist label="⏮ Pending from yesterday" kind="pending" items={r.pendings} canEdit={canEdit} userId={r.id} legacy={r.pending} />
+
+          {/* Notes */}
+          {canEdit ? (
+            <form action={saveStandup} className="space-y-1">
+              <input type="hidden" name="userId" value={r.id} />
+              <input type="hidden" name="date" value={date} />
+              <input type="hidden" name="goal" value={r.goal} />
+              <input type="hidden" name="pending" value={r.pending} />
+              <label className="block text-xs"><span className="mb-0.5 block font-semibold text-slate-500">{r.role === "Dispositions" ? "🧾 Buyers / developers · lost or releasing · price reductions" : "📝 Notes"}</span><textarea name="note" defaultValue={r.note} rows={2} className={inputCls} /></label>
+              <div className="flex items-center"><button className="ml-auto rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Save notes</button></div>
+            </form>
+          ) : r.note ? (
+            <p className="text-sm"><span className="font-semibold text-slate-500">📝</span> {r.note}</p>
+          ) : null}
+        </div>
 
         {/* Acquisitions — hottest leads */}
         {r.role === "Acquisitions" && (
@@ -177,6 +207,11 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
                 <option value="">— hit goal? —</option><option value="hit">✅ Hit</option><option value="partial">🟡 Partial</option><option value="miss">❌ Missed</option>
               </select>
             </div>
+            {r.role === "Acquisitions" && r.items.length > 0 && (
+              <div className="mb-1.5 rounded-lg bg-amber-50 p-2 text-[11px] text-amber-800 ring-1 ring-amber-100">
+                🔥 Hot leads to update: {r.items.map((it) => it.title).join(" · ")} — where did each one move today, and what&apos;s the next step to close?
+              </div>
+            )}
             <textarea name="eodNote" defaultValue={r.eodNote} rows={1} placeholder="What happened today?" className={`${inputCls} mb-1.5`} />
             <textarea name="eodFollowup" defaultValue={r.eodFollowup} rows={1} placeholder="Follow-up / next action for tomorrow (shows on tomorrow's huddle)" className={inputCls} />
             <div className="mt-1.5 text-right"><button className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Save end of day</button></div>
@@ -197,6 +232,7 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
         right={
           <div className="flex items-center gap-3">
             {settings.huddleMeetLink && <a href={settings.huddleMeetLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">🎥 Join Meet</a>}
+            <Link href="/huddle/history" className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-200">📜 History</Link>
             <span className="text-sm font-semibold text-slate-500">{friendlyDate(date)}</span>
           </div>
         } />

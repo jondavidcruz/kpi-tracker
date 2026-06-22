@@ -3,6 +3,7 @@
 // scheduled pace/missing-entry checks.
 import { db } from "./db";
 import { getActiveReps, getSettings, resolveGoal } from "./data";
+import { navAllowlist } from "./auth";
 import { monthOf, paceFraction, todayStr } from "./date";
 import { formatValue, type Unit } from "./format";
 import { alertSeverity, statusVsGoal, statusVsPace } from "./kpi";
@@ -87,6 +88,7 @@ export async function evaluateAndRecordAlerts(
       kpi.scope === "per_rep"
         ? reps
             .filter((r) => r.role !== "admin") // the owner manages the team; no KPI alerts on their own lane
+            .filter((r) => !navAllowlist(r)) // restricted/part-time reps (Ethan) aren't on the daily scorecard
             .filter((r) => (kpi.roleKey === "internet" ? r.tracksInternet : r.position === kpi.roleKey))
             .map((r) => ({ userId: r.id, userName: r.name }))
         : [{ userId: null, userName: null }];
@@ -327,6 +329,7 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
     for (const rep of reps.filter((r) => (kpi.roleKey === "internet" ? r.tracksInternet : r.position === kpi.roleKey))) {
       if (rep.role === "admin") continue; // the owner manages the team; no missing-entry nags
       if (rep.irregularSchedule) continue; // no set schedule, don't nag on off days
+      if (navAllowlist(rep)) continue; // restricted/part-time reps (Ethan) — not on the daily scorecard
       if (exemptForFocus(kpi.key, focusMap.get(rep.id))) continue; // off-focus KPI today
       const entry = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: rep.id, date } });
       if (entry) continue; // they logged something, nothing missing
@@ -371,6 +374,7 @@ export async function sendMissingKpiEmail(date: string): Promise<boolean> {
   for (const rep of reps) {
     if (rep.role === "admin") continue; // owner isn't nagged
     if (rep.irregularSchedule) continue; // no set schedule (e.g. part-time) — don't nag
+    if (navAllowlist(rep)) continue; // restricted/part-time reps (Ethan) — off the scorecard
     const roleKpis = dailyKpis
       .filter((k) => (k.roleKey === "internet" ? rep.tracksInternet : k.roleKey === rep.position))
       .filter((k) => !exemptForFocus(k.key, focusMap.get(rep.id)));

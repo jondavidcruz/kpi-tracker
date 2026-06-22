@@ -891,6 +891,21 @@ model Reward {
   @@index([scope, userId])
 }
 
+// A checkable huddle item — a goal for today or a pending item from yesterday.
+model HuddleCheck {
+  id        String    @id @default(cuid())
+  userId    String
+  date      String // YYYY-MM-DD
+  kind      String // goal | pending
+  text      String
+  done      Boolean   @default(false)
+  doneAt    DateTime?
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([userId, date])
+}
+
 // C-suite expense tracker (P&L). One row per line item per month.
 // `actual` = real spend; `withTax` = amount including additional tax expenses.
 model ExpenseLine {

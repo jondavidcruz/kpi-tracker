@@ -70,6 +70,26 @@ export function canTrackTime(user: User | null): boolean {
   return isManager(user) || canAccessPayroll(user);
 }
 
+// Restricted users see ONLY these page prefixes (first = their home page).
+// Ethan is part-time, listings-only — no acquisitions scorecard, just his pipeline.
+const RESTRICTED_NAV: Record<string, string[]> = {
+  ethan: ["/deals", "/process", "/underwriting", "/schedule", "/rewards", "/call-scoring", "/scripts", "/account"],
+};
+
+/** Allowed page prefixes for a restricted user, or null if they see everything. */
+export function navAllowlist(user: { name: string } | null): string[] | null {
+  if (!user) return null;
+  if (isManager(user as User)) return null; // managers/admin are never restricted
+  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return RESTRICTED_NAV[first] ?? null;
+}
+
+/** True if `path` is reachable under the given allowlist (always allow auth/api). */
+export function isPathAllowed(path: string, allow: string[]): boolean {
+  if (path.startsWith("/auth") || path.startsWith("/api")) return true;
+  return allow.some((p) => path === p || path.startsWith(p + "/"));
+}
+
 /** The owner (Jon). Not a tracked employee — no personal time card / not on the board. */
 export function isOwner(user: { name: string } | null): boolean {
   if (!user) return false;

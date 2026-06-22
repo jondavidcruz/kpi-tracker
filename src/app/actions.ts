@@ -2193,6 +2193,42 @@ export async function deleteStandupItem(formData: FormData) {
   revalidatePath("/huddle");
 }
 
+// --- Huddle checklists (goals for today / pending from yesterday) -------------
+
+export async function addHuddleCheck(formData: FormData) {
+  const userId = String(formData.get("userId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  const kind = String(formData.get("kind")) === "pending" ? "pending" : "goal";
+  const text = String(formData.get("text") ?? "").trim().slice(0, 300);
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !text) return;
+  if (!(await canEditStandup(userId))) return;
+  const max = await db.huddleCheck.aggregate({ where: { userId, date, kind }, _max: { sortOrder: true } });
+  await db.huddleCheck.create({ data: { userId, date, kind, text, sortOrder: (max._max.sortOrder ?? 0) + 1 } });
+  revalidatePath("/huddle");
+}
+
+export async function toggleHuddleCheck(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const c = await db.huddleCheck.findUnique({ where: { id } });
+  if (!c) return;
+  if (c.userId !== me.id && !isManager(me)) return;
+  const done = !c.done;
+  await db.huddleCheck.update({ where: { id }, data: { done, doneAt: done ? new Date() : null } });
+  revalidatePath("/huddle");
+}
+
+export async function deleteHuddleCheck(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const c = await db.huddleCheck.findUnique({ where: { id } });
+  if (!c || !(await canEditStandup(c.userId))) return;
+  await db.huddleCheck.delete({ where: { id } });
+  revalidatePath("/huddle");
+}
+
 /** Save this month's marketing inputs (per-channel spend + email rates) for the Benchmarks page. */
 export async function saveBenchmarkInputs(formData: FormData) {
   const me = await getCurrentUser();

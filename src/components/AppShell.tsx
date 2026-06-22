@@ -3,7 +3,8 @@
 // display render without chrome.
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionEmail, getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll } from "@/lib/auth";
+import { headers } from "next/headers";
+import { getSessionEmail, getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, navAllowlist, isPathAllowed } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
@@ -20,6 +21,14 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   // Not signed in (login page) → no chrome.
   if (!me) return <>{children}</>;
+
+  // Restricted users (e.g. Ethan — listings only) can only reach their allowed
+  // pages; bounce them to their home page if they land anywhere else.
+  const allow = navAllowlist(me);
+  if (allow) {
+    const path = (await headers()).get("x-pathname") ?? "/";
+    if (!isPathAllowed(path, allow)) redirect(allow[0]);
+  }
 
   const manager = isManager(me);
   const admin = isAdmin(me);
@@ -50,7 +59,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   return (
     <div className="md:flex md:min-h-screen">
-      <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} newTickets={newTickets} newSuggestions={newSuggestions} />
+      <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} allowedPaths={allow} newTickets={newTickets} newSuggestions={newSuggestions} />
       <main className="min-w-0 flex-1">
         <div className="mx-auto w-full max-w-[1320px] px-4 py-6 md:px-8 md:py-8">
           {openOffboarding && (

@@ -41,9 +41,15 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
         accent="bg-emerald-400"
       />
 
-      {configured && !geminiConfigured && (
-        <div className="rounded-xl bg-slate-50 px-4 py-2.5 text-xs text-slate-500 ring-1 ring-slate-200">
-          Tip: add a free <code>GEMINI_API_KEY</code> in Vercel to let the team upload call recordings and auto-transcribe them — no need to paste. Recordings are transcribed on the fly and never stored.
+      {!geminiConfigured && (
+        <div className="rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-900 ring-1 ring-sky-200">
+          <div className="font-bold">🎙️ Turn on “upload a recording → auto-transcribe” (free)</div>
+          <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-[13px] text-sky-800">
+            <li>Get a free Gemini key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold underline">aistudio.google.com/apikey</a> (Create API key).</li>
+            <li>In Vercel → your project → <b>Settings → Environment Variables</b>, add <code className="rounded bg-white px-1">GEMINI_API_KEY</code> = your key (Production).</li>
+            <li><b>Redeploy</b> (Deployments → ⋯ → Redeploy). The upload button appears here automatically.</li>
+          </ol>
+          <p className="mt-1 text-[11px] text-sky-700">Until then, paste the transcript below. Recordings are transcribed on the fly and never stored. (Don&apos;t paste the key in chat — it goes only in Vercel.)</p>
         </div>
       )}
 

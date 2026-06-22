@@ -3,9 +3,11 @@ import { analyzeDeal } from "./deals";
 import type { Deal } from "@prisma/client";
 
 export type HuddleMiss = { userId: string | null; name: string; kpi: string; expected: number; actual: number; repReason: string; fix: string };
+export type HuddleCheckItem = { id: string; text: string; done: boolean };
 export type HuddleRep = {
   id: string; name: string; position: string; role: "Acquisitions" | "Dispositions" | "Team";
   goal: string; pending: string; note: string; submitted: boolean;
+  goals: HuddleCheckItem[]; pendings: HuddleCheckItem[];
   items: { id: string; title: string; status: string; roadblock: string; nextStep: string; todayAction: string; hot: boolean }[];
   deals: { deal: Deal; days: number | null; level: string; recommendation: string }[];
   tasks: { id: string; text: string; assignedBy: string; done: boolean }[];
@@ -44,6 +46,9 @@ export async function buildHuddleData(date: string): Promise<HuddleData> {
     db.deal.findMany({ where: { status: { notIn: ["closed", "dead", "lost"] } } }),
     db.huddleTask.findMany({ where: { OR: [{ done: false }, { doneAt: { gte: taskSince } }] }, orderBy: { createdAt: "asc" } }),
   ]);
+  const checks = await db.huddleCheck.findMany({ where: { date }, orderBy: { sortOrder: "asc" } });
+  const checksByUser = new Map<string, typeof checks>();
+  for (const c of checks) { const a = checksByUser.get(c.userId) ?? []; a.push(c); checksByUser.set(c.userId, a); }
   const prevStandups = await db.standup.findMany({ where: { date: prev }, select: { userId: true, eodFollowup: true, eodHit: true } });
   const prevByUser = new Map(prevStandups.map((s) => [s.userId, s]));
 
@@ -64,6 +69,8 @@ export async function buildHuddleData(date: string): Promise<HuddleData> {
     return {
       id: u.id, name: u.name, position: u.position, role,
       goal: s?.goal ?? "", pending: s?.pending ?? "", note: s?.note ?? "", submitted: s?.submitted ?? false,
+      goals: (checksByUser.get(u.id) ?? []).filter((c) => c.kind === "goal").map((c) => ({ id: c.id, text: c.text, done: c.done })),
+      pendings: (checksByUser.get(u.id) ?? []).filter((c) => c.kind === "pending").map((c) => ({ id: c.id, text: c.text, done: c.done })),
       items: (s?.items ?? []).map((it) => ({ id: it.id, title: it.title, status: it.status, roadblock: it.roadblock, nextStep: it.nextStep, todayAction: it.todayAction, hot: it.hot })),
       deals: role === "Dispositions" ? dealAging.filter((d) => firstName(d.deal.assignedTo) === firstName(u.name)) : [],
       tasks: (tasksByUser.get(u.id) ?? []).map((t) => ({ id: t.id, text: t.text, assignedBy: t.assignedBy, done: t.done })),

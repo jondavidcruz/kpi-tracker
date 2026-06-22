@@ -13,13 +13,14 @@ import Logo from "./Logo";
 type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; badge?: number };
 
 export default function Sidebar({
-  name, manager, admin, marketing, timecard, newTickets, newSuggestions,
+  name, manager, admin, marketing, timecard, allowedPaths, newTickets, newSuggestions,
 }: {
   name: string;
   manager: boolean;
   admin: boolean;
   marketing: boolean;
   timecard: boolean;
+  allowedPaths?: string[] | null;
   newTickets: number;
   newSuggestions: number;
 }) {
@@ -78,7 +79,9 @@ export default function Sidebar({
     ] },
   ];
 
-  const visible = (it: Item) => (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard);
+  const visible = (it: Item) =>
+    (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard) &&
+    (!allowedPaths || allowedPaths.some((p) => it.href === p || it.href.startsWith(p + "/")));
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   const Nav = (
