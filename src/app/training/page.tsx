@@ -6,13 +6,14 @@ import { db } from "@/lib/db";
 import { positionLabel } from "@/lib/roles";
 import { addTrainingFocus, updateTrainingFocus, deleteTrainingFocus, addTrainingSchedule, deleteTrainingSchedule, logCoachingSession, deleteCoachingSession } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
+import AICoach from "@/components/AICoach";
 
 export const dynamic = "force-dynamic";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
 const STATUS_CLS: Record<string, string> = { active: "bg-amber-100 text-amber-700", improving: "bg-sky-100 text-sky-700", mastered: "bg-emerald-100 text-emerald-700" };
 const TYPE_LABEL: Record<string, string> = { call_review: "📞 Call review", live_coaching: "🎧 Live coaching", one_on_one: "🧑‍🏫 1:1" };
-const CADENCE_LABEL: Record<string, string> = { daily: "Daily", weekly: "Weekly", "mon-fri": "Mon–Fri" };
+const CADENCE_LABEL: Record<string, string> = { daily: "Daily", weekly: "Weekly", "mon-fri": "Mon–Fri", "tue-fri": "Tue–Fri" };
 
 export default async function TrainingPage() {
   const me = await getCurrentUser();
@@ -34,8 +35,11 @@ export default async function TrainingPage() {
 
   return (
     <div className="space-y-5">
-      <SectionTitle title="🎓 Training Portal" subtitle="Per-rep coaching plans, schedule, and a log of every call review & live-coaching session." accent="bg-brand-gold"
+      <SectionTitle title="🎓 Training Portal" subtitle="Per-rep coaching plans, schedule, an AI coaching assistant, and a log of every session." accent="bg-brand-gold"
         right={<Link href="/call-scoring" className="text-sm font-semibold text-brand-navy hover:underline">🎧 Score a call →</Link>} />
+
+      {/* AI coaching assistant — the live training aid */}
+      <AICoach reps={team.map((r) => ({ name: r.name, role: r.position, skills: focusBy(r.id).map((f) => f.skill) }))} />
 
       {/* Weekly schedule board */}
       <Card className="p-4">
@@ -109,7 +113,7 @@ export default async function TrainingPage() {
                   </div>
                   <form action={addTrainingSchedule} className="mt-1 flex flex-wrap items-end gap-1.5">
                     <input type="hidden" name="userId" value={rep.id} />
-                    <select name="cadence" defaultValue="weekly" className="rounded border border-slate-300 px-1.5 py-1 text-xs"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="mon-fri">Mon–Fri</option></select>
+                    <select name="cadence" defaultValue="weekly" className="rounded border border-slate-300 px-1.5 py-1 text-xs"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="mon-fri">Mon–Fri</option><option value="tue-fri">Tue–Fri</option></select>
                     <input name="time" placeholder="9:30 AM" className="w-20 rounded border border-slate-300 px-1.5 py-1 text-xs" />
                     <input name="focus" placeholder="what it covers" required className="min-w-32 flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs" />
                     <button className="rounded bg-slate-700 px-2 py-1 text-xs font-semibold text-white">+</button>
