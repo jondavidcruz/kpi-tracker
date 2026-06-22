@@ -76,7 +76,7 @@ const KPIS = [
 // Reps with their positions. Emails are placeholders — edit in Admin.
 const USERS = [
   { name: "Michelle", email: "michelle@example.com", role: "rep", position: "acquisitions", note: "Lead Mgr + Dispositions Mgr + Acquisition closer. Goals halved (split across roles); higher commission, reduced base." },
-  { name: "Ethan", email: "ethan@example.com", role: "rep", position: "acquisitions", irregularSchedule: true, note: "Part-time CA, no set schedule (exempt from missing-entry alerts). Listing appts for out-of-buy-box deals. Limited lead access." },
+  { name: "Ethan", email: "ethan@example.com", role: "rep", position: "listings", irregularSchedule: true, note: "Part-time CA, listings-only (off acquisitions). Closes deals already offered on; leads sent to his pipeline. Restricted nav. ~3–9 hrs/week, exempt from KPI alerts." },
   { name: "Irish", email: "irish@example.com", role: "rep", position: "cc_lm", note: "Hybrid cold caller + lead manager (25h/wk). Stretch goal: 3 appts/day." },
   { name: "Sharyn", email: "sharyn@example.com", role: "rep", position: "dispositions", note: "" },
   { name: "Marie", email: "marie@example.com", role: "manager", position: "dispositions", note: "Manager access + own Dispositions scorecard." },

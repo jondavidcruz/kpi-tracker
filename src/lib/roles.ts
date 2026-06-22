@@ -22,6 +22,13 @@ export const POSITIONS: Position[] = [
     emoji: "🤝",
     blurb: "Finds buyers and moves deals under contract, sold as fast as possible.",
   },
+  {
+    key: "listings",
+    label: "Listings",
+    short: "LST",
+    emoji: "🏷️",
+    blurb: "Closes listing deals already offered on — works his own pipeline of leads.",
+  },
 ];
 
 export const POSITION_KEYS = POSITIONS.map((p) => p.key);
