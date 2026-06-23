@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { saveMarketContact } from "@/app/actions";
+import MultiSelect from "@/components/MultiSelect";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
 const labelCls = "mb-0.5 block text-[11px] font-semibold text-slate-500";
@@ -63,7 +64,7 @@ export default function MarketContactForm({ c, defaultCategory }: { c?: CD; defa
       </label>
       <Inp name="title" label="Title / role" c={c} />
       <Inp name="company" label={isDev ? "Company / Dev firm" : "Company"} c={c} span={2} />
-      <Sel name="preferredContact" label="Preferred contact method" c={c} options={PREFERRED_CONTACT} />
+      <MultiSelect name="preferredContact" label="Preferred contact method" defaultValue={val(c, "preferredContact")} options={PREFERRED_CONTACT} labelCls={labelCls} />
       <label><span className={labelCls}>Vetting stage</span>
         <select name="vetStage" defaultValue={val(c, "vetStage") || "to_vet"} className={inputCls}>
           {VET_STAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -78,8 +79,8 @@ export default function MarketContactForm({ c, defaultCategory }: { c?: CD; defa
       {isDev ? (
         <>
           <div className={sectionCls}>Developer buy box</div>
-          <Sel name="dealType" label="Deal type" c={c} options={DEAL_TYPE} />
-          <Sel name="buildType" label="Build type" c={c} options={BUILD_TYPE} />
+          <MultiSelect name="dealType" label="Deal type (pick all)" defaultValue={val(c, "dealType")} options={DEAL_TYPE} labelCls={labelCls} />
+          <MultiSelect name="buildType" label="Build type (pick all)" defaultValue={val(c, "buildType")} options={BUILD_TYPE} labelCls={labelCls} />
           <Sel name="closingSpeed" label="Move speed" c={c} options={SPEED} />
           <Inp name="priceRange" label="Price range per lot" c={c} placeholder="$400k–$700k" />
           <Inp name="minLotSize" label="Minimum lot size" c={c} placeholder="7,000 sf" />
@@ -90,10 +91,10 @@ export default function MarketContactForm({ c, defaultCategory }: { c?: CD; defa
           <div className={sectionCls}>Fix / flip buy box</div>
           <Inp name="buyBoxAreas" label="🎯 Preferred markets (searched by the map)" c={c} span={2} placeholder="La Jolla, Clairemont…" />
           <Inp name="priceRange" label="Price range buy box" c={c} placeholder="$300k–$800k" />
-          <Sel name="propertyType" label="Property type" c={c} options={PROPERTY_TYPE} />
+          <MultiSelect name="propertyType" label="Property type (pick all)" defaultValue={val(c, "propertyType")} options={PROPERTY_TYPE} labelCls={labelCls} />
           <Inp name="minBeds" label="Minimum bedrooms" c={c} />
           <Inp name="maxBaths" label="Maximum bathrooms" c={c} />
-          <Sel name="conditionTolerance" label="Condition tolerance" c={c} options={CONDITION} />
+          <MultiSelect name="conditionTolerance" label="Condition tolerance (pick all)" defaultValue={val(c, "conditionTolerance")} options={CONDITION} labelCls={labelCls} />
           <Sel name="closingSpeed" label="Closing speed" c={c} options={SPEED} />
           <Sel name="needsView" label="Needs to view before offer?" c={c} options={NEEDS_VIEW} />
           <Inp name="marketDetails" label="Market details" c={c} span={2} />

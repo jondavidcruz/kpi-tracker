@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { setBuyerStatus, logBuyerOutreach, saveProspectField, saveProspect, saveBuyerBox } from "@/app/actions";
+import MultiSelect from "@/components/MultiSelect";
 
 export type Prospect = {
   id: string; name: string; website: string; email: string; phone: string; phone2: string;
@@ -95,12 +96,12 @@ function BuyBoxPanel({ p }: { p: Prospect }) {
       </label>
       <Inp name="title" label="Contact name / title" def={p.title} />
       <Inp name="company" label="Company / Dev firm" def={p.company} />
-      <Sel name="preferredContact" label="Preferred contact" def={p.preferredContact} options={PREFERRED_CONTACT} />
+      <MultiSelect name="preferredContact" label="Preferred contact" defaultValue={p.preferredContact} options={PREFERRED_CONTACT} />
 
       {dev ? (
         <>
-          <Sel name="dealType" label="Deal type" def={p.dealType} options={DEAL_TYPE} />
-          <Sel name="buildType" label="Build type" def={p.buildType} options={BUILD_TYPE} />
+          <MultiSelect name="dealType" label="Deal type (pick all)" defaultValue={p.dealType} options={DEAL_TYPE} />
+          <MultiSelect name="buildType" label="Build type (pick all)" defaultValue={p.buildType} options={BUILD_TYPE} />
           <Sel name="closingSpeed" label="Move speed" def={p.closingSpeed} options={SPEED} />
           <Inp name="priceRange" label="Price range per lot" def={p.priceRange} placeholder="$400k–$700k" />
           <Inp name="minLotSize" label="Minimum lot size" def={p.minLotSize} placeholder="7,000 sf" />
@@ -114,11 +115,11 @@ function BuyBoxPanel({ p }: { p: Prospect }) {
         </>
       ) : (
         <>
-          <Sel name="propertyType" label="Property type" def={p.propertyType} options={PROPERTY_TYPE} />
+          <MultiSelect name="propertyType" label="Property type (pick all)" defaultValue={p.propertyType} options={PROPERTY_TYPE} />
           <Inp name="priceRange" label="Price range buy box" def={p.priceRange} placeholder="$300k–$800k" />
           <Inp name="minBeds" label="Min bedrooms" def={p.minBeds} />
           <Inp name="maxBaths" label="Max bathrooms" def={p.maxBaths} />
-          <Sel name="conditionTolerance" label="Condition tolerance" def={p.conditionTolerance} options={CONDITION} />
+          <MultiSelect name="conditionTolerance" label="Condition tolerance (pick all)" defaultValue={p.conditionTolerance} options={CONDITION} />
           <Sel name="closingSpeed" label="Closing speed" def={p.closingSpeed} options={SPEED} />
           <Sel name="needsView" label="Needs to view first?" def={p.needsView} options={NEEDS_VIEW} />
           <Inp name="marketDetails" label="Market details" def={p.marketDetails} />
