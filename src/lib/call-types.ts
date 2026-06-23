@@ -14,6 +14,7 @@ export const CALL_TYPES: CallType[] = [
   { key: "ds_agent_pocket_deal", label: "DS: Agent Pocket Deal Call", group: "Dispositions" },
   { key: "ds_flipper_intro", label: "DS: Flipper Intro Call", group: "Dispositions" },
   { key: "ds_developer_intro", label: "DS: Developer Intro Call", group: "Dispositions" },
+  { key: "ds_receptionist_gatekeeper", label: "DS: Receptionist / Gatekeeper Call", group: "Dispositions" },
   { key: "ds_seller_reduction", label: "DS: Seller Reduction Call", group: "Dispositions" },
   { key: "ds_buyer_offer", label: "DS: Buyer Offer Call", group: "Dispositions" },
 ];
