@@ -35,9 +35,25 @@ const firstName = (n: string) => n.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
 const roleOf = (position: string): HuddleRep["role"] =>
   position === "dispositions" ? "Dispositions" : position === "acquisitions" || position === "cc_lm" ? "Acquisitions" : "Team";
 
-export async function buildHuddleData(date: string): Promise<HuddleData> {
+export async function buildHuddleData(date: string, opts?: { carry?: boolean }): Promise<HuddleData> {
   const prev = prevWorkday(date);
   const taskSince = new Date(Date.now() - 7 * 86400000);
+
+  // Auto-carry: anything from yesterday that wasn't accomplished (an undone goal
+  // OR an undone pending) rolls into today's "Pending from yesterday" so nothing
+  // slips. Idempotent — dedupes by text, only runs on the live (today) view.
+  if (opts?.carry) {
+    const prevUndone = await db.huddleCheck.findMany({ where: { date: prev, done: false } });
+    if (prevUndone.length) {
+      const todayPending = await db.huddleCheck.findMany({ where: { date, kind: "pending" }, select: { userId: true, text: true } });
+      const have = new Set(todayPending.map((c) => `${c.userId}|${c.text.trim().toLowerCase()}`));
+      const toCreate = prevUndone
+        .filter((c) => c.text.trim() && !have.has(`${c.userId}|${c.text.trim().toLowerCase()}`))
+        .map((c) => ({ userId: c.userId, date, kind: "pending", text: c.text }));
+      if (toCreate.length) await db.huddleCheck.createMany({ data: toCreate });
+    }
+  }
+
   const [users, alerts, pips, standups, deals, huddleTasks] = await Promise.all([
     db.user.findMany({ where: { active: true, position: { not: "" } }, orderBy: { name: "asc" }, select: { id: true, name: true, position: true } }),
     db.alert.findMany({ where: { date: prev }, include: { kpi: { select: { name: true } }, user: { select: { name: true } } } }),

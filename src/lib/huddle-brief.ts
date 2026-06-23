@@ -7,7 +7,7 @@ import { friendlyDate } from "./date";
  *  9am meeting (and accountability) runs even when Jon isn't there. */
 export async function sendHuddleBrief(date: string): Promise<{ chat: boolean; email: boolean }> {
   const settings = await getSettings();
-  const h = await buildHuddleData(date);
+  const h = await buildHuddleData(date, { carry: true }); // morning brief = carry yesterday's undone items
 
   // ---- Plain text (Google Chat) ----
   const lines: string[] = [`*🗣️ Daily Huddle — ${friendlyDate(date)}*`];

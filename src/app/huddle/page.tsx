@@ -18,7 +18,7 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
   const settings = await getSettings();
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayStr(settings.orgTimezone);
   const manager = isManager(me);
-  const h = await buildHuddleData(date);
+  const h = await buildHuddleData(date, { carry: date === todayStr(settings.orgTimezone) });
 
   const acq = h.reps.filter((r) => r.role === "Acquisitions");
   const dispo = h.reps.filter((r) => r.role === "Dispositions");
