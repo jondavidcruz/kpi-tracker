@@ -108,6 +108,17 @@ const HELP: Record<string, Topic> = {
     ],
     tip: "Follow-ups due today show in the red card up top. Start a new area when a new deal comes in.",
   },
+  "/kpi-sources": {
+    title: "KPI Sources",
+    intro: "Where every KPI's number comes from — auto vs. manual.",
+    steps: [
+      "🟢 REI Reply = auto from the CRM (calls + pipeline stages), every 15 min.",
+      "🔵 Buyer Research = auto the instant a rep adds/vets a buyer.",
+      "✋ Manual = typed in by the rep. The table shows which is which per role.",
+      "If you change a pipeline stage in REI Reply, update the mapping so the KPI keeps counting.",
+    ],
+    tip: "Use this anytime you tweak KPIs or the CRM so nothing silently stops tracking.",
+  },
   "/report": {
     title: "KPI Reports",
     intro: "Team & per-rep KPI totals for any day, week, or month.",

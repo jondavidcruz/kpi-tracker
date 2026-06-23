@@ -43,6 +43,7 @@ export default function Sidebar({
     { label: "Performance", items: [
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/report", label: "KPI Reports", Icon: FileText },
+      { href: "/kpi-sources", label: "KPI Sources", Icon: ScrollText },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
     ] },
