@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { reiReplyConfigured } from "@/lib/reireply";
-import { pullDay, writeDay } from "@/lib/crm-sync";
+import { pullDay, writeDay, pullOpps, writeOpps } from "@/lib/crm-sync";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -23,8 +23,15 @@ export async function GET(request: Request) {
 
   if (write) {
     const { result, wrote } = await writeDay(date, tz);
-    return NextResponse.json({ ok: true, wrote: true, date, scanned: result.scanned, perAgent: wrote });
+    const opps = await writeOpps(date, tz);
+    return NextResponse.json({ ok: true, wrote: true, date, scanned: result.scanned, calls: wrote, offersContracts: opps.counts });
   }
   const result = await pullDay(date, tz);
-  return NextResponse.json({ ok: true, wrote: false, date, scanned: result.scanned, pages: result.pages, perAgent: result.per, note: "Dry run — compare to the Agent report. Add &write=1 to save to the scorecard." });
+  const opps = await pullOpps(date, tz);
+  return NextResponse.json({
+    ok: true, wrote: false, date,
+    calls: { scanned: result.scanned, pages: result.pages, perAgent: result.per },
+    offersContracts: { scanned: opps.scanned, counts: opps.counts, sample: opps.sample },
+    note: "Dry run — compare to the Agent report. Add &write=1 to save to the scorecard.",
+  });
 }

@@ -10,6 +10,7 @@ import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
 import { sendHuddleBrief, sendHuddleNudge } from "@/lib/huddle-brief";
+import { writeDay, writeOpps } from "@/lib/crm-sync";
 import { sendLeaksReport } from "@/lib/diagnostics";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
@@ -100,6 +101,20 @@ export async function GET(request: Request) {
     const today = date ?? todayStr(settings.orgTimezone);
     const sent = await sendLeaksReport(today);
     return NextResponse.json({ ok: true, leaks: sent });
+  }
+
+  // Nightly REI Reply CRM sync — pulls YESTERDAY's calls + offer/contract stage
+  // moves and writes them to the scorecard (talk time, conversations, dials,
+  // offers made, contracts sent). 1am PT.
+  if (url.searchParams.get("crm") === "1") {
+    const settings = await getSettings();
+    const tz = settings.orgTimezone;
+    const today = date ?? todayStr(tz);
+    const y = new Date(today + "T12:00:00Z"); y.setUTCDate(y.getUTCDate() - 1);
+    const yesterday = url.searchParams.get("date") ?? y.toISOString().slice(0, 10);
+    const calls = await writeDay(yesterday, tz);
+    const opps = await writeOpps(yesterday, tz);
+    return NextResponse.json({ ok: true, date: yesterday, calls: calls.wrote, offersContracts: opps.counts });
   }
 
   // Daily huddle brief — 9:45am PT, Mon–Fri (after the 9am huddle, so the team has

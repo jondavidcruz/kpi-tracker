@@ -43,6 +43,12 @@ export async function getPipelines() {
   return ghl("/opportunities/pipelines", { locationId: loc });
 }
 
+/** Opportunities in a pipeline (current stage + assignedTo + last-change date). */
+export async function searchOpportunities(pipelineId: string, extra?: Record<string, string>) {
+  const loc = process.env.REIREPLY_LOCATION_ID ?? "";
+  return ghl("/opportunities/search", { location_id: loc, pipeline_id: pipelineId, limit: "100", ...extra });
+}
+
 /** Probe a few recent conversations and report the SHAPE of call messages (no PII)
  *  so we can build the daily aggregation against the real field names. */
 export async function probeCallShape(): Promise<unknown> {

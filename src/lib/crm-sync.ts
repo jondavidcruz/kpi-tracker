@@ -1,5 +1,16 @@
 import { db } from "./db";
-import { searchConversations, getMessages } from "./reireply";
+import { searchConversations, getMessages, searchOpportunities } from "./reireply";
+
+// Acquisitions pipelines (Developer + Traditional) and the stage → KPI map.
+const ACQ_PIPELINES = ["KkdpJx35dU4cLtYY9vXP", "8R4HDQD1nUGOUxGCxuCe"];
+const STAGE_KPI: Record<string, string> = {
+  // ⚓ VERBAL OFFER (Co-Close/Jon) → Offers Made
+  "6549e8ff-7695-4cd9-9705-e0316be52d7c": "offers_made",
+  "c31d1b15-ad0f-4306-9eb3-8cce3909b7be": "offers_made",
+  // 📩 CONTRACT SENT (Co-Close/Jon) → Contracts Sent
+  "28862a2e-e19d-47aa-820f-b95f6b85445c": "acq_contracts_sent",
+  "eee45ef4-63ca-4941-9382-abef8ebabba4": "acq_contracts_sent",
+};
 
 // CRM agent → our rep, with the KPI keys each call metric feeds. Connected = a
 // TYPE_CALL whose meta.call.duration ≥ convMin (so voicemails/quick no-answers
@@ -78,6 +89,50 @@ export async function pullDay(date: string, tz: string): Promise<PullResult> {
     if (!anyInRange || !cursor) break;
   }
   return { date, scanned, pages, per };
+}
+
+// --- Opportunities (stage moves → Offers Made / Contracts Sent) ----------------
+export type OppPull = { date: string; counts: Record<string, number>; scanned: number; sample?: unknown };
+
+/** Count opportunities that ENTERED an offer/contract stage on `date`, by CRM user. */
+export async function pullOpps(date: string, tz: string): Promise<OppPull> {
+  const { start, end } = dayBounds(date, tz);
+  const counts: Record<string, number> = {}; // `${crmUserId}|${kpiKey}` -> count
+  let scanned = 0;
+  let sample: unknown;
+  for (const pid of ACQ_PIPELINES) {
+    const res = await searchOpportunities(pid, { order: "desc", sortBy: "last_stage_changed_at" });
+    if (!res.ok) continue;
+    const body = res.body as { opportunities?: Array<Record<string, unknown>> };
+    for (const o of body.opportunities ?? []) {
+      if (!sample) sample = { keys: Object.keys(o), pipelineStageId: o.pipelineStageId, assignedTo: o.assignedTo, lastStageChangeAt: o.lastStageChangeAt, lastStatusChangeAt: o.lastStatusChangeAt, updatedAt: o.updatedAt };
+      scanned++;
+      const kpi = STAGE_KPI[String(o.pipelineStageId ?? "")];
+      if (!kpi) continue;
+      const changeRaw = (o.lastStageChangeAt ?? o.lastStatusChangeAt ?? o.updatedAt) as string | number | undefined;
+      const ms = typeof changeRaw === "number" ? changeRaw : Date.parse(String(changeRaw ?? 0));
+      if (!(ms >= start && ms < end)) continue;
+      const uid = String(o.assignedTo ?? "");
+      const k = `${uid}|${kpi}`;
+      counts[k] = (counts[k] ?? 0) + 1;
+    }
+  }
+  return { date, counts, scanned, sample };
+}
+
+/** Write the opportunity-derived KPI entries (Offers Made, Contracts Sent). */
+export async function writeOpps(date: string, tz: string): Promise<OppPull> {
+  const pull = await pullOpps(date, tz);
+  const users = await db.user.findMany({ select: { id: true, name: true } });
+  const userByFirst = new Map(users.map((u) => [u.name.trim().split(/\s+/)[0].toLowerCase(), u.id]));
+  const crmToFirst = new Map(AGENTS.map((a) => [a.crm, a.first]));
+  for (const [k, value] of Object.entries(pull.counts)) {
+    const [crmId, kpiKey] = k.split("|");
+    const first = crmToFirst.get(crmId);
+    const uid = first ? userByFirst.get(first) : undefined;
+    if (uid) await upsertEntry(kpiKey, uid, date, value);
+  }
+  return pull;
 }
 
 async function upsertEntry(kpiKey: string, userId: string, date: string, value: number): Promise<void> {
