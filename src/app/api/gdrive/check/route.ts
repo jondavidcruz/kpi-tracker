@@ -18,7 +18,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, hasServiceAccount: hasJson, hasFolderId: hasFolder, hint: "Set GOOGLE_SERVICE_ACCOUNT_JSON + GDRIVE_FOLDER_ID in Vercel, then redeploy." });
   }
   const check = await driveCheck();
-  if (!check.ok) return NextResponse.json({ ok: false, error: check.error, hint: "Share the Shared Drive folder with the service-account email as Content manager." });
+  if (!check.ok) {
+    const isJsonErr = /JSON|Unexpected token/i.test(check.error ?? "");
+    return NextResponse.json({
+      ok: false,
+      error: check.error,
+      hint: isJsonErr
+        ? "GOOGLE_SERVICE_ACCOUNT_JSON must be the ENTIRE contents of the downloaded .json key file (the whole {…} object), not the service-account email. Re-paste it in Vercel and redeploy."
+        : "Couldn't reach the folder — confirm GDRIVE_FOLDER_ID is the Shared Drive ID and the service-account email is a Content manager on it.",
+    });
+  }
 
   if (new URL(request.url).searchParams.get("migrate") === "1") {
     const res = await migrateRecordingsToDrive();
