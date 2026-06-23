@@ -96,7 +96,7 @@ export default async function MonthlyPage({
 
   return (
     <div className="space-y-8">
-      <HubTabs tabs={[{ href: "/report", label: "Weekly report" }, { href: "/monthly", label: "Monthly report" }]} />
+      <HubTabs tabs={[{ href: "/report", label: "KPI Reports" }, { href: "/monthly", label: "Monthly financials" }]} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Monthly</h1>

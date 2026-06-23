@@ -109,6 +109,7 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
                     </div>
                   )}
                   {s.summary && <p className="mt-1 text-sm text-slate-600">{s.summary}</p>}
+                  {s.audioUrl && <audio controls src={s.audioUrl} className="mt-2 h-9 w-full max-w-md" />}
                   {breakdown.length > 0 && (
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {breakdown.map((b, i) => (

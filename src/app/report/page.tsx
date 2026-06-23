@@ -8,7 +8,7 @@ import {
   getAllTargets,
   resolveGoalWith,
 } from "@/lib/data";
-import { todayStr, lastWeekRange, currentWeekRange, datesInRange } from "@/lib/date";
+import { todayStr, lastWeekRange, currentWeekRange, datesInRange, monthBounds, monthOf } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
@@ -31,17 +31,37 @@ function money(n: number | null): string {
   return n === null || n === undefined ? "—" : `$${n.toLocaleString()}`;
 }
 
+// Pretty label for a single day, e.g. "Mon, Jun 22".
+function dayLabel(d: string): string {
+  return new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 export default async function ReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; week?: string }>;
+  searchParams: Promise<{ date?: string; week?: string; range?: string; prev?: string }>;
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
   const today = sp.date ?? todayStr(settings.orgTimezone);
-  // Default to THIS week so today's entered KPIs show; ?week=last for review.
-  const showLast = sp.week === "last";
-  const wk = showLast ? lastWeekRange(today) : currentWeekRange(today);
+  // Day / week / month view; ?prev=1 shows the previous one (yesterday / last week / last month).
+  const range = sp.range === "day" || sp.range === "month" ? sp.range : "week";
+  const prev = sp.prev === "1" || sp.week === "last"; // ?week=last kept for old links
+  let wk: { start: string; end: string; label: string };
+  if (range === "day") {
+    const d = new Date(today + "T00:00:00Z");
+    if (prev) d.setUTCDate(d.getUTCDate() - 1);
+    const ds = d.toISOString().slice(0, 10);
+    wk = { start: ds, end: ds, label: dayLabel(ds) };
+  } else if (range === "month") {
+    let m = monthOf(today);
+    if (prev) { const [y, mm] = m.split("-").map(Number); const pd = new Date(Date.UTC(y, mm - 2, 1)); m = `${pd.getUTCFullYear()}-${String(pd.getUTCMonth() + 1).padStart(2, "0")}`; }
+    const mb = monthBounds(`${m}-01`);
+    wk = { start: `${m}-01`, end: mb.end, label: new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) };
+  } else {
+    wk = prev ? lastWeekRange(today) : currentWeekRange(today);
+  }
+  const rangeNoun = range === "day" ? "day" : range === "month" ? "month" : "week";
 
   const year = today.slice(0, 4);
   const [reps, perRepKpis, teamKpis, sums, deals, dealMetrics, targets] = await Promise.all([
@@ -55,7 +75,7 @@ export default async function ReportPage({
   ]);
   // Working days in the week → turns each rep's per-day goal into a weekly target,
   // so the scoreboard shows % against each person's OWN goal (fair across hours).
-  const month = today.slice(0, 7);
+  const month = wk.start.slice(0, 7);
   const workdays = Math.max(1, datesInRange(wk.start, wk.end).filter((d) => {
     const dow = new Date(d + "T00:00:00Z").getUTCDay();
     return dow >= 1 && dow <= 5;
@@ -88,18 +108,24 @@ export default async function ReportPage({
 
   return (
     <div className="space-y-8">
-      <HubTabs tabs={[{ href: "/report", label: "Weekly report" }, { href: "/monthly", label: "Monthly report" }]} />
+      <HubTabs tabs={[{ href: "/report", label: "KPI Reports" }, { href: "/monthly", label: "Monthly financials" }]} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Weekly Report</h1>
-          <p className="text-slate-500">{showLast ? "Last week" : "This week"} · {wk.label}</p>
+          <h1 className="text-2xl font-extrabold tracking-tight">KPI Reports</h1>
+          <p className="text-slate-500">{prev ? `Previous ${rangeNoun}` : `This ${rangeNoun}`} · {wk.label}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Day / Week / Month */}
           <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-200">
-            <a href="/report" className={`px-3 py-1.5 text-xs font-semibold ${!showLast ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>This week</a>
-            <a href="/report?week=last" className={`px-3 py-1.5 text-xs font-semibold ${showLast ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>Last week</a>
+            {(["day", "week", "month"] as const).map((rg) => (
+              <a key={rg} href={`/report?range=${rg}`} className={`px-3 py-1.5 text-xs font-semibold capitalize ${range === rg ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>{rg}</a>
+            ))}
           </div>
-          <span className="rounded-full bg-brand-navy px-3 py-1 text-xs font-semibold text-white">Freedom Offers</span>
+          {/* This vs. previous */}
+          <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-200">
+            <a href={`/report?range=${range}`} className={`px-3 py-1.5 text-xs font-semibold ${!prev ? "bg-brand-gold text-brand-navy" : "bg-white text-slate-600 hover:bg-slate-100"}`}>This {rangeNoun}</a>
+            <a href={`/report?range=${range}&prev=1`} className={`px-3 py-1.5 text-xs font-semibold ${prev ? "bg-brand-gold text-brand-navy" : "bg-white text-slate-600 hover:bg-slate-100"}`}>Previous</a>
+          </div>
         </div>
       </div>
 
@@ -132,7 +158,7 @@ export default async function ReportPage({
 
       {/* ===== Full team KPIs by role (everyone — the scoreboard) ===== */}
       <section>
-        <SectionTitle title="② Team KPIs" subtitle="Every rep's weekly totals by role" accent="bg-sky-400" />
+        <SectionTitle title="② Team KPIs" subtitle={`Every rep's ${rangeNoun} totals by role`} accent="bg-sky-400" />
         <div className="space-y-5">
           {POSITIONS.map((pos) => {
             const roleReps = reps.filter((r) => r.position === pos.key);
@@ -151,7 +177,7 @@ export default async function ReportPage({
                   const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdays : null;
                   const pct = weeklyGoal ? Math.min(100, (val / weeklyGoal) * 100) : null;
                   const status = weeklyGoal ? (val >= weeklyGoal ? "hit" : val >= weeklyGoal * 0.7 ? "close" : "miss") : "tracked";
-                  return { value: val, pct, status, goalText: weeklyGoal ? `/ ${formatValue(k.unit as Unit, weeklyGoal)} wk` : undefined };
+                  return { value: val, pct, status, goalText: weeklyGoal ? `/ ${formatValue(k.unit as Unit, weeklyGoal)} ${rangeNoun === "day" ? "day" : rangeNoun}` : undefined };
                 }}
               />
             );

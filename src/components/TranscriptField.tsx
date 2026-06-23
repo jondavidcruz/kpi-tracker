@@ -1,12 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
-// The call-transcript field: paste text, OR upload a recording and Gemini
-// transcribes it straight into the box. The audio is never stored — it's sent
-// to /api/transcribe, transcribed in memory, and discarded.
+// Upload a recording → it goes STRAIGHT to Supabase Storage (no Vercel size
+// limit), gets transcribed by Gemini, and the playable URL is saved with the
+// score so the team can listen back / share it.
 export default function TranscriptField({ inputCls, geminiConfigured }: { inputCls: string; geminiConfigured: boolean }) {
   const [value, setValue] = useState("");
+  const [audioUrl, setAudioUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; tone: "info" | "ok" | "err" } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -20,17 +22,41 @@ export default function TranscriptField({ inputCls, geminiConfigured }: { inputC
       return;
     }
     setBusy(true);
-    setMsg({ text: `Transcribing “${f.name}” with Gemini… this can take 10–40 seconds.`, tone: "info" });
+    setAudioUrl("");
+    setMsg({ text: `Uploading “${f.name}”…`, tone: "info" });
     try {
-      const fd = new FormData();
-      fd.append("audio", f);
-      const r = await fetch("/api/transcribe", { method: "POST", body: fd });
-      const d = await r.json();
-      if (d.transcript) {
-        setValue((v) => (v.trim() ? v.trim() + "\n\n" + d.transcript : d.transcript));
-        setMsg({ text: "✓ Transcript ready — give it a quick read, then Score this call.", tone: "ok" });
+      const ext = (f.name.split(".").pop() || "m4a").toLowerCase();
+      // 1) Get a one-time signed URL, then upload straight to storage (no Vercel limit).
+      const signRes = await fetch("/api/recording-upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ext }) });
+      const sign = await signRes.json();
+      if (sign.path && sign.token) {
+        const supabase = createClient();
+        const { error: upErr } = await supabase.storage.from("call-recordings").uploadToSignedUrl(sign.path, sign.token, f);
+        if (upErr) throw new Error("storage upload failed");
+        const url = sign.publicUrl as string;
+        setAudioUrl(url);
+        // 2) Transcribe from the stored URL.
+        setMsg({ text: "Transcribing with Gemini… 10–40 seconds.", tone: "info" });
+        const r = await fetch("/api/transcribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
+        const d = await r.json();
+        if (d.transcript) {
+          setValue((v) => (v.trim() ? v.trim() + "\n\n" + d.transcript : d.transcript));
+          setMsg({ text: "✓ Uploaded + transcribed — read it, then Score this call.", tone: "ok" });
+        } else {
+          setMsg({ text: (d.error || "Couldn't transcribe that file.") + " (Recording saved — you can still paste a transcript.)", tone: "err" });
+        }
       } else {
-        setMsg({ text: d.error || "Couldn't transcribe that file.", tone: "err" });
+        // Fallback: storage not set up → small files only, posted straight to transcribe.
+        if (f.size > 4 * 1024 * 1024) {
+          setMsg({ text: sign.error || "Recording storage isn't set up — ask an admin to add SUPABASE_SERVICE_ROLE_KEY so large files upload.", tone: "err" });
+          return;
+        }
+        setMsg({ text: "Transcribing with Gemini…", tone: "info" });
+        const fd = new FormData(); fd.append("audio", f);
+        const r = await fetch("/api/transcribe", { method: "POST", body: fd });
+        const d = await r.json();
+        if (d.transcript) { setValue((v) => (v.trim() ? v.trim() + "\n\n" + d.transcript : d.transcript)); setMsg({ text: "✓ Transcript ready — read it, then Score this call.", tone: "ok" }); }
+        else setMsg({ text: d.error || "Couldn't transcribe that file.", tone: "err" });
       }
     } catch {
       setMsg({ text: "Upload failed — check your connection and try again.", tone: "err" });
@@ -48,25 +74,17 @@ export default function TranscriptField({ inputCls, geminiConfigured }: { inputC
       {geminiConfigured && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <input ref={fileRef} type="file" accept="audio/*" onChange={onFile} className="hidden" />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {busy ? "Transcribing…" : "🎙️ Upload a recording"}
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+            {busy ? "Working…" : "🎙️ Upload a recording"}
           </button>
-          {msg ? <span className={`text-xs ${toneCls}`}>{msg.text}</span> : <span className="text-xs text-slate-400">mp3, m4a, wav… the recording isn&apos;t saved anywhere.</span>}
+          {msg ? <span className={`text-xs ${toneCls}`}>{msg.text}</span> : <span className="text-xs text-slate-400">mp3, m4a, wav… uploads straight to storage, so any size works and it&apos;s saved to play back.</span>}
         </div>
       )}
-      <textarea
-        name="transcript"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        rows={8}
+      {audioUrl && <audio controls src={audioUrl} className="mb-2 h-9 w-full max-w-md" />}
+      <input type="hidden" name="audioUrl" value={audioUrl} />
+      <textarea name="transcript" value={value} onChange={(e) => setValue(e.target.value)} rows={8}
         placeholder={geminiConfigured ? "Upload a recording above to auto-transcribe — or paste a transcript here…" : "Paste the full call transcript here…"}
-        className={inputCls}
-      />
+        className={inputCls} />
     </label>
   );
 }

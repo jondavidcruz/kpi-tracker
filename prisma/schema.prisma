@@ -246,6 +246,7 @@ model CallScore {
   breakdown  String   @default("[]") // JSON [{area, score, note}]
   summary    String   @default("")
   transcript String   @default("")
+  audioUrl   String   @default("") // stored recording (Supabase Storage) for playback
   createdAt  DateTime @default(now())
 
   @@index([createdAt])

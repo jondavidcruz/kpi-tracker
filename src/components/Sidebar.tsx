@@ -31,7 +31,6 @@ export default function Sidebar({
   const groups: { label: string; items: Item[] }[] = [
     { label: "Overview", items: [
       { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
-      { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/huddle", label: "Daily Huddle", Icon: Megaphone },
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/process", label: "Process Map", Icon: Workflow },
@@ -40,8 +39,9 @@ export default function Sidebar({
       { href: "/marketing", label: "Markets & Buyers", Icon: Megaphone, marketingOnly: true },
       { href: "/rewards", label: "Rewards", Icon: Gift },
     ] },
-    { label: "Reports & Analytics", items: [
-      { href: "/report", label: "Weekly report", Icon: FileText },
+    { label: "Performance", items: [
+      { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
+      { href: "/report", label: "KPI Reports", Icon: FileText },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
     ] },

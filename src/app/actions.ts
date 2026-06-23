@@ -324,6 +324,7 @@ export async function scoreCall(formData: FormData) {
   if (!result.configured) redirect("/call-scoring?setup=1");
   if (result.error) redirect(`/call-scoring?err=${encodeURIComponent(result.error)}`);
 
+  const audioUrl = String(formData.get("audioUrl") ?? "").trim().slice(0, 500);
   await db.callScore.create({
     data: {
       repName: repName || "(unspecified)",
@@ -336,8 +337,14 @@ export async function scoreCall(formData: FormData) {
       breakdown: JSON.stringify(result.breakdown),
       summary: result.summary,
       transcript: transcript.slice(0, 20000),
+      audioUrl,
     },
   });
+  // Post the score (and a link to the recording, if one was uploaded) to Google Chat.
+  if (audioUrl) {
+    const label = callType ? callTypeLabel(callType) : "Call";
+    await sendGoogleChat(`🎧 *Call scored — ${repName || "rep"}* · ${label} · *${result.overall}/100*\n▶️ Listen: ${audioUrl}`).catch(() => {});
+  }
   revalidatePath("/call-scoring");
   redirect("/call-scoring?scored=1");
 }
