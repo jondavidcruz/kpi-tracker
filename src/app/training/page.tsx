@@ -13,7 +13,17 @@ export const dynamic = "force-dynamic";
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
 const STATUS_CLS: Record<string, string> = { active: "bg-amber-100 text-amber-700", improving: "bg-sky-100 text-sky-700", mastered: "bg-emerald-100 text-emerald-700" };
 const TYPE_LABEL: Record<string, string> = { call_review: "📞 Call review", live_coaching: "🎧 Live coaching", one_on_one: "🧑‍🏫 1:1" };
-const CADENCE_LABEL: Record<string, string> = { daily: "Daily", weekly: "Weekly", "mon-fri": "Mon–Fri", "tue-fri": "Tue–Fri" };
+const CADENCE_LABEL: Record<string, string> = { daily: "Daily", weekly: "Weekly", "mon-fri": "Mon–Fri", "tue-fri": "Tue–Fri", mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday" };
+
+// Suggested coaching method for a focus skill — when to audit calls vs. other drills.
+function methodFor(skill: string): string {
+  const s = skill.toLowerCase();
+  if (/underwrit|comp|mao|number/.test(s)) return "🧮 Deal drills, not call audits — review 2–3 real deals together and re-underwrite live.";
+  if (/leadership|manage|girls|team/.test(s)) return "🧑‍🏫 1:1 + role-play — practice the hard conversation, not a recording.";
+  if (/gatekeep|receptionist|assertive|developer/.test(s)) return "🎧 Audit gatekeeper calls weekly + role-play the receptionist until the opener lands.";
+  if (/rapport|negotiat|objection|close|sign|price|reduction/.test(s)) return "🎧 Audit 1–2 recorded calls/week + live-coach live calls in the moment.";
+  return "🎧 Audit a recent call + a short drill on this skill.";
+}
 
 export default async function TrainingPage() {
   const me = await getCurrentUser();
@@ -50,13 +60,40 @@ export default async function TrainingPage() {
               const rep = reps.find((r) => r.id === s.userId);
               return (
                 <div key={s.id} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
-                  <span className="rounded-md bg-brand-navy px-1.5 py-0.5 text-[10px] font-bold text-white">{CADENCE_LABEL[s.cadence] ?? s.cadence}{s.time ? ` · ${s.time}` : ""}</span>
+                  <span className="rounded-md bg-brand-navy px-1.5 py-0.5 text-[10px] font-bold text-white">{CADENCE_LABEL[s.cadence] ?? s.cadence}{s.time ? ` · ${s.time}` : ""} · 30 min</span>
                   <div className="min-w-0 flex-1"><div className="font-semibold text-slate-700">{rep?.name?.split(" ")[0] ?? "—"}</div><div className="text-xs text-slate-500">{s.focus}</div></div>
                 </div>
               );
             })}
           </div>
         )}
+      </Card>
+
+      {/* Coaching-method guide — when to audit calls vs. other drills */}
+      <Card className="p-4">
+        <div className="mb-1 text-sm font-bold text-slate-700">💡 When to audit calls vs. other coaching</div>
+        <p className="mb-2 text-xs text-slate-500">All sessions are 30 min — pick the method that fits the skill so you&apos;re not just listening to recordings for everything.</p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="rounded-lg bg-slate-50 p-2.5 text-sm ring-1 ring-slate-200">
+            <div className="font-bold text-emerald-700">🎧 Audit recordings when…</div>
+            <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+              <li>• It shows up on a <b>call</b> — rapport, objection handling, negotiating, the close, the developer gatekeeper.</li>
+              <li>• Cadence: <b>1–2 calls/week per rep</b> — their best + their worst, not every call.</li>
+              <li>• Pick calls that <b>didn&apos;t convert</b> (offer that didn&apos;t sign, gatekeeper that blocked) — that&apos;s where the lesson is.</li>
+              <li>• Score it in <Link href="/call-scoring" className="underline">Call Scoring</Link> first, then debrief from the score.</li>
+            </ul>
+          </div>
+          <div className="rounded-lg bg-slate-50 p-2.5 text-sm ring-1 ring-slate-200">
+            <div className="font-bold text-sky-700">🧠 Use a different method when…</div>
+            <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+              <li>• <b>Underwriting / numbers</b> (Marie) → 🧮 review 2–3 real deals and re-underwrite live, not a recording.</li>
+              <li>• <b>Leadership</b> (Marie) → 🧑‍🏫 1:1 + role-play the hard conversation.</li>
+              <li>• <b>Rapport / closing</b> (Michelle) → 🎧 live-coach her live calls in the moment, then audit one after.</li>
+              <li>• <b>On-the-spot habits</b> → drill a 5-minute rep before the shift, not a 30-min review.</li>
+            </ul>
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">Each focus skill below shows its suggested method automatically.</p>
       </Card>
 
       {/* Per-rep coaching plans */}
@@ -69,7 +106,7 @@ export default async function TrainingPage() {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="text-lg font-bold text-slate-800">{rep.name}</span>
               <span className="text-xs text-slate-400">{positionLabel(rep.position)}</span>
-              {repSched.map((s) => <span key={s.id} className="rounded-full bg-brand-gold/20 px-2 py-0.5 text-[11px] font-semibold text-brand-navy">{CADENCE_LABEL[s.cadence] ?? s.cadence}{s.time ? ` ${s.time}` : ""}</span>)}
+              {repSched.map((s) => <span key={s.id} className="rounded-full bg-brand-gold/20 px-2 py-0.5 text-[11px] font-semibold text-brand-navy">{CADENCE_LABEL[s.cadence] ?? s.cadence}{s.time ? ` ${s.time}` : ""} · 30 min</span>)}
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -87,6 +124,7 @@ export default async function TrainingPage() {
                         <form action={deleteTrainingFocus}><input type="hidden" name="id" value={f.id} /><button className="text-slate-300 hover:text-red-600">×</button></form>
                       </div>
                       {f.notes && <div className="mt-0.5 pl-7 text-xs text-slate-500">{f.notes}</div>}
+                      <div className="mt-0.5 pl-7 text-[11px] text-emerald-700">{methodFor(f.skill)}</div>
                       <form action={updateTrainingFocus} className="mt-1 flex items-center gap-1.5 pl-7">
                         <input type="hidden" name="id" value={f.id} />
                         <select name="status" defaultValue={f.status} className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px]">
@@ -113,7 +151,7 @@ export default async function TrainingPage() {
                   </div>
                   <form action={addTrainingSchedule} className="mt-1 flex flex-wrap items-end gap-1.5">
                     <input type="hidden" name="userId" value={rep.id} />
-                    <select name="cadence" defaultValue="weekly" className="rounded border border-slate-300 px-1.5 py-1 text-xs"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="mon-fri">Mon–Fri</option><option value="tue-fri">Tue–Fri</option></select>
+                    <select name="cadence" defaultValue="weekly" className="rounded border border-slate-300 px-1.5 py-1 text-xs"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="mon-fri">Mon–Fri</option><option value="tue-fri">Tue–Fri</option><option value="mon">Monday</option><option value="tue">Tuesday</option><option value="wed">Wednesday</option><option value="thu">Thursday</option><option value="fri">Friday</option></select>
                     <input name="time" placeholder="9:30 AM" className="w-20 rounded border border-slate-300 px-1.5 py-1 text-xs" />
                     <input name="focus" placeholder="what it covers" required className="min-w-32 flex-1 rounded border border-slate-300 px-1.5 py-1 text-xs" />
                     <button className="rounded bg-slate-700 px-2 py-1 text-xs font-semibold text-white">+</button>
