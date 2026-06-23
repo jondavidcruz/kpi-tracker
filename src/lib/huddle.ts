@@ -13,6 +13,7 @@ export type HuddleRep = {
   tasks: { id: string; text: string; assignedBy: string; done: boolean }[];
   eodHit: string; eodNote: string; eodFollowup: string;
   yesterdayFollowup: string; yesterdayHit: string;
+  updatedToday: boolean; updatedAt: string | null; openCount: number;
 };
 export type HuddleData = {
   date: string;
@@ -82,11 +83,20 @@ export async function buildHuddleData(date: string, opts?: { carry?: boolean }):
   const reps: HuddleRep[] = users.filter((u) => !owners.includes(u)).map((u) => {
     const s = standupByUser.get(u.id);
     const role = roleOf(u.position);
+    const repChecks = checksByUser.get(u.id) ?? [];
+    const goalChecks = repChecks.filter((c) => c.kind === "goal");
+    // "Updated today" = a deliberate action: set a goal, checked something off,
+    // logged hot-lead items, or wrote a note. (Auto-carried pendings don't count.)
+    const updatedToday = goalChecks.length > 0 || repChecks.some((c) => c.done) || (s?.goal?.trim() ?? "") !== "" || (s?.items?.length ?? 0) > 0 || (s?.note?.trim() ?? "") !== "";
+    const stamps = repChecks.map((c) => (c.doneAt ?? c.createdAt)).filter(Boolean) as Date[];
+    const updatedAt = updatedToday && stamps.length ? new Date(Math.max(...stamps.map((d) => d.getTime()))).toISOString() : null;
+    const openCount = repChecks.filter((c) => !c.done).length;
     return {
       id: u.id, name: u.name, position: u.position, role,
       goal: s?.goal ?? "", pending: s?.pending ?? "", note: s?.note ?? "", submitted: s?.submitted ?? false,
-      goals: (checksByUser.get(u.id) ?? []).filter((c) => c.kind === "goal").map((c) => ({ id: c.id, text: c.text, done: c.done })),
-      pendings: (checksByUser.get(u.id) ?? []).filter((c) => c.kind === "pending").map((c) => ({ id: c.id, text: c.text, done: c.done })),
+      updatedToday, updatedAt, openCount,
+      goals: goalChecks.map((c) => ({ id: c.id, text: c.text, done: c.done })),
+      pendings: repChecks.filter((c) => c.kind === "pending").map((c) => ({ id: c.id, text: c.text, done: c.done })),
       items: (s?.items ?? []).map((it) => ({ id: it.id, title: it.title, status: it.status, roadblock: it.roadblock, nextStep: it.nextStep, todayAction: it.todayAction, hot: it.hot })),
       deals: role === "Dispositions" ? dealAging.filter((d) => firstName(d.deal.assignedTo) === firstName(u.name)) : [],
       tasks: (tasksByUser.get(u.id) ?? []).map((t) => ({ id: t.id, text: t.text, assignedBy: t.assignedBy, done: t.done })),

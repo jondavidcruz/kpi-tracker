@@ -55,3 +55,24 @@ export async function sendHuddleBrief(date: string): Promise<{ chat: boolean; em
   ]);
   return { chat, email };
 }
+
+/** Nudge anyone who hasn't kept the huddle current. `am` = hasn't set today's
+ *  goals yet (fires ~9:30 after the 9am huddle); `pm` = end-of-day reminder to
+ *  check off what's done / roll the rest (anyone not updated or with open items). */
+export async function sendHuddleNudge(date: string, slot: "am" | "pm"): Promise<{ chat: boolean; nudged: string[] }> {
+  const h = await buildHuddleData(date, { carry: slot === "am" });
+  const targets = slot === "am"
+    ? h.reps.filter((r) => !r.updatedToday)
+    : h.reps.filter((r) => !r.updatedToday || r.openCount > 0);
+  if (targets.length === 0) {
+    // Everyone's current — celebrate it so the channel sees the streak.
+    if (slot === "am") await sendGoogleChat(`✅ *Huddle's in* — everyone set today's goals. Let's go. 🚀`);
+    return { chat: false, nudged: [] };
+  }
+  const names = targets.map((r) => r.name.split(/\s+/)[0]).join(", ");
+  const msg = slot === "am"
+    ? `⏰ *Huddle reminder* — haven't set today's goals yet: *${names}*. 30 seconds in the War Room → Daily Huddle. 🎯`
+    : `🌙 *End-of-day check* — before you log off, mark what you finished and roll the rest: *${names}*. War Room → Daily Huddle.`;
+  const chat = await sendGoogleChat(msg);
+  return { chat, nudged: targets.map((r) => r.name) };
+}

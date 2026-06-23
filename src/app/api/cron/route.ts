@@ -9,7 +9,7 @@ import { sendEmailWithAttachment } from "@/lib/notify";
 import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
-import { sendHuddleBrief } from "@/lib/huddle-brief";
+import { sendHuddleBrief, sendHuddleNudge } from "@/lib/huddle-brief";
 import { sendLeaksReport } from "@/lib/diagnostics";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
@@ -109,6 +109,16 @@ export async function GET(request: Request) {
     const today = date ?? todayStr(settings.orgTimezone);
     const sent = await sendHuddleBrief(today);
     return NextResponse.json({ ok: true, huddle: sent });
+  }
+
+  // Huddle nudge — 9:30am PT (am) + 4:30pm PT (pm), Mon–Fri. Pings whoever hasn't
+  // set today's goals / has open items, so the manager doesn't have to chase.
+  if (url.searchParams.get("huddlenudge")) {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const slot = url.searchParams.get("huddlenudge") === "pm" ? "pm" : "am";
+    const res = await sendHuddleNudge(today, slot);
+    return NextResponse.json({ ok: true, huddlenudge: res });
   }
 
   // Midday run (1:30pm PT): Ethan's shift-end reminder + Marie's 1pm speed-test nudge.

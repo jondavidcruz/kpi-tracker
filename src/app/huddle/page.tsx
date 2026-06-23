@@ -249,6 +249,38 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
         <p className="-mt-2 text-[11px] text-slate-400">📞 Dial-in: (US) +1 413-829-7688 · PIN 517 408 335#</p>
       )}
 
+      {/* Who's updated today — accountability strip + personal nudge */}
+      {(() => {
+        const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone }) : "";
+        const mine = h.reps.find((r) => r.id === me.id);
+        const doneCount = h.reps.filter((r) => r.updatedToday).length;
+        return (
+          <>
+            {mine && !mine.updatedToday && (
+              <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">
+                ⏰ You haven&apos;t set today&apos;s goals yet — add them on your card below. Takes 30 seconds.
+              </div>
+            )}
+            {h.reps.length > 0 && (
+              <Card className="p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">✅ Updated today</span>
+                  <span className="text-[11px] font-semibold text-slate-500">{doneCount}/{h.reps.length} in</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {h.reps.map((r) => (
+                    <span key={r.id} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${r.updatedToday ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                      {r.updatedToday ? "✅" : "⏳"} {r.name.split(" ")[0]}
+                      {r.updatedToday && r.updatedAt && <span className="font-normal text-emerald-600/70">{fmt(r.updatedAt)}</span>}
+                    </span>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </>
+        );
+      })()}
+
       {/* Accountability */}
       <Card className="p-4">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
