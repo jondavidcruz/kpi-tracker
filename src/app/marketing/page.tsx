@@ -117,7 +117,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="space-y-6">
-      <SectionTitle title="🗺 Markets / Vetted Buyers" subtitle="Our vetted buyers & developers and their buy boxes — search a market to see exactly who'd want the deal. Sourcing new buyers? That's in Buyer Vetting." accent="bg-brand-gold"
+      <SectionTitle title="🏛 Vetted Buyers" subtitle="Our vetted buyers & developers and their buy boxes — search a market to see exactly who'd want the deal. Sourcing new buyers? Start in Buyer Research." accent="bg-brand-gold"
         right={<Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🔎 Buyer Research</Link>} />
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
       {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} contact{sp.imp === "1" ? "" : "s"}.</div>}
@@ -171,16 +171,19 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         </details>
       </Card>
 
-      {/* Rolodex by category — VETTED buyers only */}
+      {/* Rolodex by category — VETTED buyers only. New buyers start in Buyer
+          Research, then graduate here once vetted. */}
+      <Card className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-emerald-300 bg-emerald-50/40 p-3">
+        <span className="text-xs text-slate-600">These are your vetted buyers. To add or research a new buyer, start in <strong>Buyer Research</strong> — mark them ✓ Vetted there and they appear here automatically.</span>
+        <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700">🔎 Go to Buyer Research</Link>
+      </Card>
       <div>
         <SectionTitle title="🏛 Luxury / Developers" subtitle={`${luxury.length} vetted developers & luxury buyers`} accent="bg-brand-navy" />
         <Rolodex items={luxury} />
-        <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a luxury buyer / developer</h4><MarketContactForm defaultCategory="luxury" /></Card>
       </div>
       <div>
         <SectionTitle title="🔨 Distressed / Flippers" subtitle={`${distressed.length} vetted flippers & cash buyers`} accent="bg-amber-400" />
         <Rolodex items={distressed} />
-        <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a flipper / cash buyer</h4><MarketContactForm defaultCategory="distressed" /></Card>
       </div>
 
     </div>

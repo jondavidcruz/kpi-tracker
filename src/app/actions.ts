@@ -1500,6 +1500,21 @@ export async function setBuyerStatus(formData: FormData) {
   redirect("/vetting");
 }
 
+/** Inline single-cell autosave from the spreadsheet view. Revalidates without a
+ *  redirect so editing feels live (no page jump). */
+export async function saveProspectField(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const field = String(formData.get("field") ?? "");
+  const value = String(formData.get("value") ?? "").slice(0, 4000);
+  const ALLOWED = ["name", "phone", "phone2", "email", "website", "buyBoxAreas", "outreachLog"];
+  if (!id || !ALLOWED.includes(field)) return;
+  if (field === "name" && !value.trim()) return;
+  await db.marketContact.update({ where: { id }, data: { [field]: value } });
+  revalidatePath("/vetting");
+}
+
 /** Inline-edit a prospect's core fields from the spreadsheet (name, contact, area). */
 export async function saveProspect(formData: FormData) {
   const me = await getCurrentUser();

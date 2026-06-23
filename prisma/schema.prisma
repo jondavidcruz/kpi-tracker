@@ -502,6 +502,7 @@ model MarketContact {
   vetStage    String   @default("to_vet") // vetting workflow: to_vet | vetted | active | hold | dead
   email       String   @default("")
   phone       String   @default("")
+  phone2      String   @default("") // second number (spreadsheet has two "Number" columns)
   website     String   @default("")
   buyBox      String   @default("") // price range / criteria / what they want
   buyBoxAreas String   @default("") // target neighborhoods (matched by the area search)
