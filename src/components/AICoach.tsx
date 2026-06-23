@@ -4,17 +4,17 @@ import { useState } from "react";
 
 type Rep = { name: string; role: string; skills: string[] };
 const MODES = [
-  { key: "openers", label: "💬 Rapport openers" },
-  { key: "objections", label: "🛡️ Objection bank" },
-  { key: "roleplay", label: "🎭 Role-play script" },
+  { key: "lesson", label: "📋 Lesson plan" },
+  { key: "exercises", label: "🏋️ Exercises & drills" },
+  { key: "ideas", label: "💡 Coaching ideas" },
+  { key: "roleplay", label: "🎭 Role-play scenario" },
   { key: "feedback", label: "🔍 Review a call" },
-  { key: "drill", label: "🏋️ Practice drill" },
 ];
 
 export default function AICoach({ reps }: { reps: Rep[] }) {
   const [repName, setRepName] = useState(reps[0]?.name ?? "");
   const [skill, setSkill] = useState("");
-  const [mode, setMode] = useState("openers");
+  const [mode, setMode] = useState("lesson");
   const [context, setContext] = useState("");
   const [loading, setLoading] = useState(false);
   const [reply, setReply] = useState("");
@@ -44,8 +44,8 @@ export default function AICoach({ reps }: { reps: Rep[] }) {
   const sel = "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
   return (
     <div className="rounded-2xl bg-brand-navy p-4 text-white ring-1 ring-brand-navy">
-      <div className="mb-1 text-base font-bold">🤖 AI Coaching Assistant</div>
-      <p className="mb-3 text-xs text-white/60">Pick a rep + skill, then generate live coaching — openers, objection responses, a role-play to practice, feedback on a real call, or a drill.</p>
+      <div className="mb-1 text-base font-bold">🤖 AI Training Designer</div>
+      <p className="mb-3 text-xs text-white/60">Pick a rep + topic, then generate training you can run this week — a lesson plan, practice exercises, coaching ideas (when to audit calls vs. other methods), a role-play scenario, or feedback on a real call.</p>
       <div className="flex flex-wrap gap-2">
         <select value={repName} onChange={(e) => { setRepName(e.target.value); setSkill(""); }} className={sel}>
           {reps.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}

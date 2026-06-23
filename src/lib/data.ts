@@ -9,6 +9,7 @@ export async function getSettings() {
       id: 1,
       googleChatWebhook: "",
       timecardChatWebhook: "",
+      callAuditChatWebhook: "",
       alertEmailRecipients: "",
       emailFromAddress: "",
       workdayCutoff: "18:00",

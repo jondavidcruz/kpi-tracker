@@ -3,17 +3,18 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-const SYSTEM = `You are an elite phone-sales coach for Freedom Offers, a San Diego real-estate wholesaling team (veteran-owned, small team that works leads directly — no call centers, no scripts read robotically).
+const SYSTEM = `You are an elite sales TRAINER and coach for Freedom Offers, a San Diego real-estate wholesaling team (veteran-owned, small team that works leads directly).
 
 Who the team talks to:
 - ACQUISITIONS (e.g. Michelle) talk to SELLERS — discovery, build rapport, make a verbal offer, and get the contract SIGNED.
 - DISPOSITIONS (e.g. Sharyn, Marie) talk to BUYERS and DEVELOPERS — find cash buyers, sell deals fast, negotiate price, and reach luxury developers (often through a receptionist/gatekeeper who is wary of scammers).
 
-Coaching rules:
-- Give EXACT words to say — real, natural talking tracks the rep can use on the next call. Not theory.
-- Sound human and credible, never pushy or "salesy." Developers especially must feel we're legit professionals, not scammers.
-- Be concise. Use short labeled sections and bullets. Bold the key lines.
-- Tailor everything to the specific rep, skill, and situation given.`;
+Your job is to design TRAINING — lesson plans, practice exercises/drills, and coaching activities a team lead can actually run with a rep this week. NOT robotic scripts.
+Rules:
+- Make it practical and runnable: clear objective, steps, time estimates, and how to tell it worked.
+- When you include example lines, label them as teaching examples to adapt — never a script to read word-for-word.
+- Be concise. Short labeled sections + bullets. Bold the key takeaways.
+- Tailor everything to the specific rep, skill, and audience.`;
 
 const audienceFor = (role: string) => (role === "acquisitions" ? "home sellers" : "cash buyers and real-estate developers (often via a gatekeeper)");
 
@@ -22,18 +23,18 @@ function buildPrompt(rep: string, role: string, skill: string, mode: string, con
   const focus = skill || "their sales calls";
   const ctx = context.trim() ? `\n\nSituation / transcript provided:\n${context.trim().slice(0, 8000)}` : "";
   switch (mode) {
-    case "openers":
-      return `Give ${rep} 4 strong, natural openers / rapport-building lines for "${focus}" when talking to ${who}. Each should be one or two sentences they can say verbatim, plus a one-line why-it-works.${ctx}`;
-    case "objections":
-      return `List the 6 most common objections ${rep} will hear related to "${focus}" from ${who}, and the best word-for-word response to each. Keep responses short and human.${ctx}`;
+    case "lesson":
+      return `Build a focused LESSON PLAN to teach ${rep} "${focus}" (audience: ${who}). Include: 🎯 Objective (what they'll be able to do), 🧠 3–5 key teaching points, 💬 1–2 example lines to illustrate each (clearly marked as examples to adapt), 🏋️ one practice activity to run live, and ✅ how to measure that it stuck. Keep it to something a lead can run in ~20 minutes.${ctx}`;
+    case "exercises":
+      return `Design 3–5 concrete PRACTICE EXERCISES / drills ${rep} can do to build "${focus}" (with ${who}). For each: a name, what to do (steps), how long, and "what good looks like". Make them repeatable so they can be done daily.${ctx}`;
+    case "ideas":
+      return `Give a coach's playbook of IDEAS for improving ${rep}'s "${focus}" (with ${who}): when a recorded-call audit is the right tool vs. live coaching, role-play, shadowing, or homework — and 4–6 specific activities to try, each with the point of it. Be tactical.${ctx}`;
     case "roleplay":
-      return `Write a realistic role-play script to practice "${focus}" with ${who}. Make the prospect tough but realistic. 6–8 back-and-forth exchanges (Prospect: / ${rep}:), then 2 short coaching notes on what to watch for.${ctx}`;
+      return `Write a realistic role-play SCENARIO to practice "${focus}" with ${who}. Set the scene, give the prospect a tough-but-realistic personality, then 6–8 back-and-forth exchanges (Prospect: / ${rep}:), and end with 2–3 coaching notes on what to watch for. Frame it as a practice rep, not a script to memorize.${ctx}`;
     case "feedback":
-      return `Coach ${rep} on "${focus}". Review the situation/transcript below and give: ✅ what worked, ⚠️ what to fix, and 🎯 the exact lines to use next time. Be specific and direct.${ctx}`;
-    case "drill":
-      return `Design a focused 10-minute practice drill ${rep} can do to build "${focus}" (with ${who}), plus a single one-line homework assignment for this week.${ctx}`;
+      return `Review the situation/transcript below for ${rep} on "${focus}" and turn it into a coaching moment: ✅ what worked, ⚠️ what to fix, 🏋️ one drill to fix it, and 🎯 a one-line homework assignment for this week. Be specific and direct.${ctx}`;
     default:
-      return `Coach ${rep} on "${focus}" with ${who}. Give the most useful, specific, actionable guidance with exact lines to say.${ctx}`;
+      return `Design a short training activity to help ${rep} improve "${focus}" with ${who} — objective, steps, and how to measure it.${ctx}`;
   }
 }
 

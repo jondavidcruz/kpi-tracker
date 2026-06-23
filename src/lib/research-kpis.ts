@@ -3,7 +3,7 @@ import { db } from "./db";
 // Auto-tracked dispo KPIs derived straight from Buyer Research activity — no
 // self-reporting. Each is recomputed from the attribution columns and written as
 // a real KPI Entry so it flows into the scorecard/report/alerts like any other.
-const KEYS = { added: "new_buyers", box: "buy_boxes_captured", vetted: "buyers_vetted" };
+const KEYS = { added: "new_buyers", box: "buy_boxes_captured", vetted: "buyers_vetted", touched: "developers_contacted" };
 
 export function orgToday(tz: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
@@ -23,6 +23,7 @@ export async function rollupResearchKpis(userId: string, date: string): Promise<
     [KEYS.added]: await db.marketContact.count({ where: { addedById: userId, addedOn: date } }),
     [KEYS.box]: await db.marketContact.count({ where: { boxById: userId, boxOn: date } }),
     [KEYS.vetted]: await db.marketContact.count({ where: { vettedById: userId, vettedOn: date } }),
+    [KEYS.touched]: await db.marketContact.count({ where: { touchById: userId, touchOn: date } }),
   };
 
   for (const [key, value] of Object.entries(counts)) {

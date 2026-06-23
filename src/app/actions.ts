@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
 import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
-import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat, sendTimecardChat } from "@/lib/notify";
+import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat, sendTimecardChat, sendCallAuditChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
@@ -341,10 +341,11 @@ export async function scoreCall(formData: FormData) {
       audioUrl,
     },
   });
-  // Post the score (and a link to the recording, if one was uploaded) to Google Chat.
+  // Post the score (and a link to the recording, if one was uploaded) to the
+  // Call Audit Google Chat space (not the KPI space).
   if (audioUrl) {
     const label = callType ? callTypeLabel(callType) : "Call";
-    await sendGoogleChat(`🎧 *Call scored — ${repName || "rep"}* · ${label} · *${result.overall}/100*\n▶️ Listen: ${audioUrl}`).catch(() => {});
+    await sendCallAuditChat(`🎧 *Call scored — ${repName || "rep"}* · ${label} · *${result.overall}/100*\n▶️ Listen: ${audioUrl}`).catch(() => {});
   }
   revalidatePath("/call-scoring");
   redirect("/call-scoring?scored=1");
@@ -416,6 +417,7 @@ export async function saveSettings(formData: FormData) {
   const data = {
     googleChatWebhook: String(formData.get("googleChatWebhook") ?? "").trim(),
     timecardChatWebhook: String(formData.get("timecardChatWebhook") ?? "").trim(),
+    callAuditChatWebhook: String(formData.get("callAuditChatWebhook") ?? "").trim(),
     alertEmailRecipients: String(formData.get("alertEmailRecipients") ?? "").trim(),
     emailFromAddress: String(formData.get("emailFromAddress") ?? "").trim(),
     workdayCutoff: String(formData.get("workdayCutoff") ?? "18:00").trim(),
@@ -1599,7 +1601,8 @@ export async function logBuyerOutreach(formData: FormData) {
   const existing = await db.marketContact.findUnique({ where: { id }, select: { outreachLog: true } });
   const stamped = note ? `${today}: ${note}` : `${today}: reached out`;
   const log = existing?.outreachLog ? `${stamped}\n${existing.outreachLog}` : stamped;
-  await db.marketContact.update({ where: { id }, data: { lastContacted: today, nextFollowUp: nextStr, outreachLog: log.slice(0, 4000), vetStatus: "contacted" } });
+  await db.marketContact.update({ where: { id }, data: { lastContacted: today, nextFollowUp: nextStr, outreachLog: log.slice(0, 4000), vetStatus: "contacted", touchById: me!.id, touchOn: today } });
+  await rollupResearchKpis(me!.id, today); // → Developers Contacted
   revalidatePath("/vetting");
   redirect("/vetting");
 }

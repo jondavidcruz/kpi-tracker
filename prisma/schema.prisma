@@ -353,6 +353,7 @@ model Settings {
   id                  Int     @id @default(1)
   googleChatWebhook   String  @default("")
   timecardChatWebhook String  @default("") // separate space for clock/break/lunch status posts
+  callAuditChatWebhook String @default("") // separate space for scored-call audit posts
   alertEmailRecipients String @default("") // comma-separated
   emailFromAddress    String  @default("")
   workdayCutoff       String  @default("18:00") // HH:mm local
@@ -538,6 +539,8 @@ model MarketContact {
   boxOn         String @default("") // YYYY-MM-DD the buy box was captured
   vettedById    String @default("") // rep who vetted them
   vettedOn      String @default("") // YYYY-MM-DD they were vetted
+  touchById     String @default("") // rep who last logged a touch (for Developers Contacted)
+  touchOn       String @default("") // YYYY-MM-DD of that touch
   igHandle      String @default("") // Instagram handle
   bestContact   String @default("") // best way / sequence to reach them
   lastContacted String @default("") // YYYY-MM-DD of last touch

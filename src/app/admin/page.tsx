@@ -263,6 +263,11 @@ export default async function AdminPage({
               <span className="mt-1 block text-[11px] text-slate-400">Create an incoming webhook in the <strong>Timecard</strong> space (⋮ → Apps &amp; integrations → Webhooks → Add). Leave blank to use the main space.</span>
             </label>
             <label className="sm:col-span-2">
+              <span className={labelCls}>Call-audit webhook — scored-call audit posts (Call Audit space)</span>
+              <input name="callAuditChatWebhook" defaultValue={settings.callAuditChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…/messages?key=…&token=…" className={inputCls} />
+              <span className="mt-1 block text-[11px] text-slate-400">Scored calls (with recordings) post here instead of the KPI space. Leave blank to use the main space.</span>
+            </label>
+            <label className="sm:col-span-2">
               <span className={labelCls}>Alert email recipients (comma-separated)</span>
               <input name="alertEmailRecipients" defaultValue={settings.alertEmailRecipients} placeholder="manager@co.com, owner@co.com" className={inputCls} />
             </label>

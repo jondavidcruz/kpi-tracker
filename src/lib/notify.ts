@@ -6,6 +6,7 @@ import { getSettings } from "./data";
 export interface ChannelConfig {
   chatWebhook: string;
   timecardChatWebhook: string; // separate space for clock-in/break/lunch status posts
+  callAuditChatWebhook: string; // separate space for scored-call audit posts
   emailRecipients: string[];
   emailFrom: string;
   resendKey: string;
@@ -16,6 +17,7 @@ export async function getChannelConfig(): Promise<ChannelConfig> {
   return {
     chatWebhook: s.googleChatWebhook || process.env.GOOGLE_CHAT_WEBHOOK_URL || "",
     timecardChatWebhook: s.timecardChatWebhook || process.env.TIMECARD_CHAT_WEBHOOK || "",
+    callAuditChatWebhook: s.callAuditChatWebhook || process.env.CALL_AUDIT_CHAT_WEBHOOK || "",
     emailRecipients: splitList(s.alertEmailRecipients || process.env.ALERT_EMAIL_TO || ""),
     emailFrom: s.emailFromAddress || process.env.ALERT_EMAIL_FROM || "",
     resendKey: process.env.RESEND_API_KEY || "",
@@ -56,6 +58,13 @@ async function postChatWebhook(url: string, text: string): Promise<boolean> {
 export async function sendGoogleChat(text: string, cfg?: ChannelConfig): Promise<boolean> {
   const c = cfg ?? (await getChannelConfig());
   return postChatWebhook(c.chatWebhook, text);
+}
+
+/** Post a scored-call audit to the dedicated Call Audit space if its webhook is
+ *  set, otherwise fall back to the main space. */
+export async function sendCallAuditChat(text: string, cfg?: ChannelConfig): Promise<boolean> {
+  const c = cfg ?? (await getChannelConfig());
+  return postChatWebhook(c.callAuditChatWebhook || c.chatWebhook, text);
 }
 
 /** Post a time-card status update (clock-in / break / lunch) to the Timecard
