@@ -1,13 +1,11 @@
 import Link from "next/link";
-import { saveMarketContact, deleteMarketContact, saveMarketingNotes, importMarketContacts } from "@/app/actions";
+import { deleteMarketContact, saveMarketingNotes } from "@/app/actions";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
-import CopyButton from "@/components/CopyButton";
 import MarketContactForm from "@/components/MarketContactForm";
-import MarketRolodexFilter from "@/components/MarketRolodexFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -120,7 +118,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-6">
       <SectionTitle title="🗺 Markets / Vetted Buyers" subtitle="Our vetted buyers & developers and their buy boxes — search a market to see exactly who'd want the deal. Sourcing new buyers? That's in Buyer Vetting." accent="bg-brand-gold"
-        right={<Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🔎 Buyer Vetting</Link>} />
+        right={<Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🔎 Buyer Research</Link>} />
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
       {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} contact{sp.imp === "1" ? "" : "s"}.</div>}
       {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
@@ -168,36 +166,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           <form action={saveMarketingNotes} className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label><span className={labelCls}>Markets we&apos;re in (one per line)</span><textarea name="marketingMarkets" defaultValue={settings.marketingMarkets} rows={4} className={inputCls} /></label>
             <label><span className={labelCls}>Research notes</span><textarea name="marketingResearch" defaultValue={settings.marketingResearch} rows={4} className={inputCls} /></label>
-            <label className="sm:col-span-2"><span className={labelCls}>Outreach templates (openers, leverage, sequence)</span><textarea name="outreachTemplates" defaultValue={settings.outreachTemplates} rows={8} className={inputCls} /></label>
             <div className="sm:col-span-2"><button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save</button></div>
           </form>
         </details>
       </Card>
 
-      {/* Outreach templates — copy-paste playbook */}
-      {settings.outreachTemplates && (
-        <Card className="p-5">
-          <div className="mb-2 flex items-center gap-2">
-            <h3 className="text-sm font-bold text-slate-700">📣 Outreach templates &amp; playbook</h3>
-            <span className="ml-auto"><CopyButton text={settings.outreachTemplates} label="Copy all" /></span>
-          </div>
-          <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs text-slate-700 ring-1 ring-slate-200">{settings.outreachTemplates}</pre>
-        </Card>
-      )}
-
-      {/* CSV bulk import — for the dispo team to add vetted developers/flippers fast */}
-      <Card className="border-l-4 border-emerald-300 bg-emerald-50/40 p-5">
-        <h3 className="mb-1 text-sm font-bold text-slate-700">⬆️ Bulk import (CSV)</h3>
-        <p className="mb-2 text-xs text-slate-500">Add many vetted developers / flippers at once. Header row columns (any subset): <span className="font-mono">name, category (luxury|distressed), company, title, market, status, vetStage, email, phone, website, preferredContact, decisionMaker, buyingFrequency, priceRange, closingSpeed, dealType, buildType, minLotSize, propertyType, minBeds, maxBaths, conditionTolerance, needsView, buyBoxAreas (target geography / preferred markets), marketDetails, igHandle, bestContact, lat, lng, notes</span>. Only <strong>name</strong> is required.</p>
-        <form action={importMarketContacts} className="grid grid-cols-1 gap-2">
-          <input type="file" name="file" accept=".csv,text/csv" className="text-xs text-slate-600" />
-          <textarea name="csv" rows={3} placeholder="…or paste CSV here (first row = headers)" className={inputCls} />
-          <div><button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Import rows</button></div>
-        </form>
-      </Card>
-
       {/* Rolodex by category — VETTED buyers only */}
-      <MarketRolodexFilter />
       <div>
         <SectionTitle title="🏛 Luxury / Developers" subtitle={`${luxury.length} vetted developers & luxury buyers`} accent="bg-brand-navy" />
         <Rolodex items={luxury} />

@@ -37,7 +37,7 @@ export default function Sidebar({
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
       { href: "/marketing", label: "Markets / Vetted Buyers", Icon: Megaphone, marketingOnly: true },
-      { href: "/vetting", label: "Buyer Vetting", Icon: Search, marketingOnly: true },
+      { href: "/vetting", label: "Buyer Research", Icon: Search, marketingOnly: true },
       { href: "/rewards", label: "Rewards", Icon: Gift },
     ] },
     { label: "Performance", items: [

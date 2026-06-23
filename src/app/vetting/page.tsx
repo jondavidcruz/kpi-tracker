@@ -23,20 +23,26 @@ export default async function VettingPage() {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
   const weekAgo = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date(Date.now() - 7 * 86400000));
 
-  // Everything we're sourcing by deal/area lives here (vetArea set).
-  const rows = await db.marketContact.findMany({
-    where: { vetArea: { not: "" } },
-    orderBy: [{ vetArea: "asc" }, { name: "asc" }],
-  });
+  // Every UNVETTED buyer lives here — the research pool. Vetted/active buyers
+  // graduate to Markets / Vetted Buyers and drop off this page.
+  const [rows, vettedCount] = await Promise.all([
+    db.marketContact.findMany({
+      where: { vetStage: { notIn: ["vetted", "active"] } },
+      orderBy: [{ vetArea: "asc" }, { name: "asc" }],
+    }),
+    db.marketContact.count({ where: { vetStage: { in: ["vetted", "active"] } } }),
+  ]);
+  const UNASSIGNED = "Unassigned / general buyers";
   const toProspect = (r: typeof rows[number]): Prospect => ({
     id: r.id, name: r.name, website: r.website, email: r.email, phone: r.phone,
     buyBoxAreas: r.buyBoxAreas, outreachLog: r.outreachLog, lastContacted: r.lastContacted,
     nextFollowUp: r.nextFollowUp, vetStage: r.vetStage, vetStatus: r.vetStatus, igHandle: r.igHandle,
   });
   const areaMap = new Map<string, Prospect[]>();
-  for (const r of rows) { const a = areaMap.get(r.vetArea) ?? []; a.push(toProspect(r)); areaMap.set(r.vetArea, a); }
+  for (const r of rows) { const k = r.vetArea || UNASSIGNED; const a = areaMap.get(k) ?? []; a.push(toProspect(r)); areaMap.set(k, a); }
+  // Keep the catch-all bucket last; sort the rest by size.
   const areas = Array.from(areaMap.entries()).map(([area, prospects]) => ({ area, prospects }))
-    .sort((a, b) => b.prospects.length - a.prospects.length);
+    .sort((a, b) => (a.area === UNASSIGNED ? 1 : b.area === UNASSIGNED ? -1 : b.prospects.length - a.prospects.length));
 
   const inPipeline = (s: string) => s === "to_vet" || s === "hold";
   const dueRows = rows
@@ -45,13 +51,13 @@ export default async function VettingPage() {
   const stats = {
     pipeline: rows.filter((r) => inPipeline(r.vetStage)).length,
     contacted7: rows.filter((r) => r.lastContacted && r.lastContacted >= weekAgo).length,
-    vetted: rows.filter((r) => r.vetStage === "vetted" || r.vetStage === "active").length,
+    vetted: vettedCount,
     dueToday: rows.filter((r) => r.nextFollowUp && r.nextFollowUp <= today && inPipeline(r.vetStage)).length,
   };
 
   return (
     <div className="space-y-6">
-      <SectionTitle title="🔎 Buyer Vetting" subtitle="Outbound pipeline — the developers we're sourcing in each deal's area before they're vetted. Better than the spreadsheet: search, sort, one-click status + follow-ups, wired to your KPIs." accent="bg-sky-400"
+      <SectionTitle title="🔎 Buyer Research" subtitle="Every unvetted buyer / developer we're researching, by deal area. Work the lists, log touches, and graduate the good ones to Markets / Vetted Buyers. Better than the spreadsheet: search, sort, one-click status + follow-ups, wired to your KPIs." accent="bg-sky-400"
         right={<Link href="/marketing" className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-200">→ Vetted buyers</Link>} />
 
       {/* KPI tie-in */}
