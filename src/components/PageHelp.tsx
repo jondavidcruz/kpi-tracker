@@ -87,14 +87,196 @@ const HELP: Record<string, Topic> = {
     ],
   },
   "/marketing": {
-    title: "Markets & Buyers",
-    intro: "Your cash-buyer & developer rolodex with buy boxes.",
+    title: "Vetted Buyers",
+    intro: "Your vetted cash-buyers & developers and their buy boxes — match a deal to the right buyer.",
     steps: [
-      "Each contact has a structured buy box (price, areas, property type, terms).",
-      "Filter the rolodex by type, market, or vetting stage.",
-      "Move a buyer through the vetting workflow: to-vet → vetted → active.",
+      "Search the map by market to see which vetted buyers buy there.",
+      "Same spreadsheet as Buyer Research, grouped Developers / Fix & Flippers — click any cell to edit; ⊕ opens the full buy box.",
+      "The Buy box column shows deal/build type, price, and areas at a glance.",
+      "New buyers are added in Buyer Research first; set a buyer's Status back to a working stage to send them there.",
     ],
     tip: "Restricted to Sharyn, Marie, Viktoriia, and Jon.",
+  },
+  "/vetting": {
+    title: "Buyer Research",
+    intro: "Source and vet new buyers/developers before they graduate to Vetted Buyers.",
+    steps: [
+      "One spreadsheet table per deal area — the developers we're researching for that opportunity (columns mirror your old sheet).",
+      "Click any cell to edit (autosaves). The ⊕ by a name opens the full buy box — Deal Type & Build Type let you pick MULTIPLE.",
+      "Set Status: To contact → Contacted → Messaged → Following up. Hit ✓ Vetted to move them to Vetted Buyers, or ✕ Not interested to archive.",
+      "📇 logs a touch (counts toward Buyers Contacted) + sets a 3-day follow-up. Use the search + type/status filters up top.",
+    ],
+    tip: "Follow-ups due today show in the red card up top. Start a new area when a new deal comes in.",
+  },
+  "/report": {
+    title: "KPI Reports",
+    intro: "Team & per-rep KPI totals for any day, week, or month.",
+    steps: [
+      "Toggle Day / Week / Month and This / Previous up top — goals scale to the range.",
+      "KPIs at a Glance = team totals; Team KPIs = every rep vs their own goal, color-coded.",
+      "Revenue pipeline + active deals show for leadership.",
+    ],
+    tip: "Switch to Monthly financials with the tab at the top.",
+  },
+  "/monthly": {
+    title: "Monthly Financials",
+    intro: "Monthly company numbers, computed ratios, and per-rep monthly totals.",
+    steps: [
+      "Enter the month's company numbers (leadership only).",
+      "Computed ratios — cost/lead, ROI, net margin — calculate live, no spreadsheet drift.",
+      "Per-rep totals roll up each rep's daily entries for the month.",
+    ],
+  },
+  "/analytics": {
+    title: "Year Analytics",
+    intro: "Year-to-date totals and monthly KPI movement.",
+    steps: [
+      "YTD totals up top; monthly trend below.",
+      "Use it to spot what's rising or falling across the year.",
+    ],
+    tip: "Leadership only.",
+  },
+  "/internet": {
+    title: "Internet Speed",
+    intro: "Connectivity tracking for the team.",
+    steps: [
+      "See each rep's logged speeds and any low-speed flags.",
+      "Slow speeds trigger alerts so connectivity issues get fixed fast.",
+    ],
+  },
+  "/training": {
+    title: "Training Portal",
+    intro: "Coaching schedule, focus areas, and an AI coach.",
+    steps: [
+      "Each rep's 30-min training sessions + their focus areas with the right coaching method.",
+      "Use the AI Coach for openers, objection handling, role-play, feedback, or a quick drill.",
+      "The coaching-method guide shows when to audit calls vs use other methods.",
+    ],
+  },
+  "/leaks": {
+    title: "War Room Health",
+    intro: "Where the funnel leaks — diagnosed in plain English.",
+    steps: [
+      "Funnel bars: leads → process calls → offers → signed → closed, with the biggest leak called out.",
+      "Lead/refund accounting + unit economics by conversion.",
+      "'What this means' explains it; the AI deep-dive goes further.",
+    ],
+    tip: "A Leaks report auto-posts to C-Suite every Friday.",
+  },
+  "/expenses": {
+    title: "Profit & Loss",
+    intro: "QuickBooks-style P&L — income, expenses, and what to trim.",
+    steps: [
+      "Year-to-date income leads; categorized expenses below.",
+      "Track actual monthly spend per category; cost-per-lead is baked in.",
+      "The 'Cut the fat' AI CFO suggests where to trim.",
+    ],
+    tip: "C-Suite only (Jon, Viktoriia, Enrico).",
+  },
+  "/deals": {
+    title: "Deals",
+    intro: "The dispositions pipeline — active deals being sold.",
+    steps: [
+      "Each deal: address, status, assigned rep, contract price, est. profit, next steps.",
+      "Aging flags old deals; reduction alerts fire when a deal sits too long.",
+      "Move deals through the pipeline toward escrow and closed.",
+    ],
+  },
+  "/rewards": {
+    title: "Rewards",
+    intro: "Team rewards and the wishlist.",
+    steps: [
+      "See rewards the team can earn.",
+      "The team can submit a wishlist of what they'd like.",
+    ],
+    tip: "Visible to Jon, Viktoriia, and Enrico.",
+  },
+  "/tickets": {
+    title: "Requests & Tickets",
+    intro: "Submit and triage support / change requests.",
+    steps: [
+      "Anyone can submit a ticket describing the issue or request.",
+      "Managers triage: prioritize, assign, and resolve.",
+    ],
+  },
+  "/pip": {
+    title: "PIPs",
+    intro: "Performance Improvement Plans.",
+    steps: [
+      "Reps on a PIP for repeated misses work Saturday until cleared.",
+      "Track the plan and clear it when the KPI recovers.",
+    ],
+    tip: "Managers only.",
+  },
+  "/rocks": {
+    title: "Rocks",
+    intro: "EOS Rocks — the quarterly priorities.",
+    steps: [
+      "Each Rock has an owner and a due date.",
+      "Mark on / off track and review them at L10.",
+    ],
+  },
+  "/issues": {
+    title: "Issues List",
+    intro: "EOS Issues — IDS (Identify, Discuss, Solve).",
+    steps: [
+      "Drop any issue here as it comes up.",
+      "At L10, work the top issues IDS-style and mark them solved.",
+    ],
+  },
+  "/vto": {
+    title: "Vision / Traction (V/TO)",
+    intro: "The company vision on one page.",
+    steps: [
+      "Core values, focus, 10-year target, marketing strategy.",
+      "1-year plan + quarterly Rocks keep it actionable.",
+    ],
+  },
+  "/meeting": {
+    title: "Leadership Meeting",
+    intro: "The Monday leadership meeting view.",
+    steps: [
+      "Pulls the week's KPIs, revenue, and priorities into a meeting flow.",
+      "Run it top to bottom with the leadership team.",
+    ],
+  },
+  "/operations": {
+    title: "Vendors & Tools",
+    intro: "The vendor / software registry.",
+    steps: [
+      "Each tool or vendor: what it's for, cost, and who owns the login.",
+      "Reference it when onboarding or reviewing spend.",
+    ],
+  },
+  "/closed-deals": {
+    title: "Closed Deals",
+    intro: "Every closed deal and its profit.",
+    steps: [
+      "Closed deals here feed the dashboard scoreboard and Benchmarks.",
+    ],
+  },
+  "/trends": {
+    title: "Trends",
+    intro: "KPI movement over time.",
+    steps: ["See how each KPI moves week over week to catch drift early."],
+  },
+  "/scripts": {
+    title: "Scripts",
+    intro: "Approved call scripts.",
+    steps: [
+      "Reference the script for each call type.",
+      "Call Scoring grades calls against these.",
+    ],
+  },
+  "/change-portal": {
+    title: "Change Portal",
+    intro: "Request a change to the War Room.",
+    steps: ["Describe what you want changed or added — it's tracked like a ticket."],
+  },
+  "/roadmap": {
+    title: "Roadmap",
+    intro: "What's shipped and what's coming.",
+    steps: ["See delivered features and what's planned next."],
   },
   "/process": {
     title: "Process Map",
@@ -142,11 +324,26 @@ function topicFor(path: string): Topic | null {
   return best ? HELP[best] : null;
 }
 
+// Fallback so EVERY page always has a "how to use" tutorial, even brand-new ones.
+function genericTopic(path: string): Topic {
+  const seg = (path || "").split("?")[0].split("/").filter(Boolean)[0] || "page";
+  const title = seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return {
+    title,
+    intro: `Quick guide to the ${title} page.`,
+    steps: [
+      "Everything here updates live from the team's real data — no manual refresh.",
+      "Leadership and managers may see extra sections others don't.",
+      "Hover or tap a control to see what it does; most edits save on the spot.",
+    ],
+    tip: "Need specifics? Tap the Cortana orb (bottom-right) — it can read this exact screen and walk you through it.",
+  };
+}
+
 export default function PageHelp() {
   const path = usePathname();
   const [open, setOpen] = useState(false);
-  const topic = topicFor(path);
-  if (!topic) return null; // no tutorial for this page → hide the button
+  const topic = topicFor(path) ?? genericTopic(path); // always show a tutorial
 
   return (
     <>
