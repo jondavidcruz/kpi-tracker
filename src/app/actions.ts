@@ -1466,6 +1466,40 @@ export async function deleteMarketContact(formData: FormData) {
   redirect("/marketing");
 }
 
+/** Move a vetting prospect to a new stage (vetted / to_vet / hold / dead).
+ *  Promoting to "vetted" is what graduates them into Markets & Buyers. */
+export async function setBuyerStage(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const stage = String(formData.get("stage") ?? "");
+  if (!id || !["to_vet", "vetted", "active", "hold", "dead"].includes(stage)) return;
+  await db.marketContact.update({ where: { id }, data: { vetStage: stage } });
+  revalidatePath("/marketing");
+  redirect("/marketing#vetting");
+}
+
+/** Log an outreach touch on a prospect: stamps last-contacted = today, appends the
+ *  note to the running log, and sets the next follow-up. Mirrors a KPI touch
+ *  (Buyers Contacted) so the dispo effort is captured where they actually work. */
+export async function logBuyerOutreach(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const note = String(formData.get("note") ?? "").trim().slice(0, 300);
+  const settings = await getSettings();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
+  const next = new Date(); next.setDate(next.getDate() + 3);
+  const nextStr = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(next);
+  const existing = await db.marketContact.findUnique({ where: { id }, select: { outreachLog: true } });
+  const stamped = note ? `${today}: ${note}` : `${today}: reached out`;
+  const log = existing?.outreachLog ? `${stamped}\n${existing.outreachLog}` : stamped;
+  await db.marketContact.update({ where: { id }, data: { lastContacted: today, nextFollowUp: nextStr, outreachLog: log.slice(0, 4000) } });
+  revalidatePath("/marketing");
+  redirect("/marketing#vetting");
+}
+
 export async function saveMarketingNotes(formData: FormData) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) return;

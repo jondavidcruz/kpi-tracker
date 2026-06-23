@@ -8,6 +8,7 @@ import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
 import CopyButton from "@/components/CopyButton";
 import MarketContactForm from "@/components/MarketContactForm";
 import MarketRolodexFilter from "@/components/MarketRolodexFilter";
+import BuyerVetting from "@/components/BuyerVetting";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ const TYPES = ["developer", "custom", "remodeler", "flipper", "cash_buyer", "inv
 const REGIONS = [["SD", "San Diego Co."], ["OC", "Orange Co."], ["LA", "Los Angeles"], ["other", "Other / TBD"]];
 
 type MC = Buyer & {
-  sortOrder: number; vetStage: string; igHandle: string; bestContact: string; lastContacted: string; nextFollowUp: string; outreachLog: string;
+  sortOrder: number; vetStage: string; vetArea: string; igHandle: string; bestContact: string; lastContacted: string; nextFollowUp: string; outreachLog: string;
   company: string; title: string; preferredContact: string; decisionMaker: string; buyingFrequency: string; priceRange: string; closingSpeed: string;
   dealType: string; buildType: string; minLotSize: string;
   marketDetails: string; minBeds: string; maxBaths: string; propertyType: string; conditionTolerance: string; needsView: string;
@@ -102,15 +103,35 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   ]);
   const marketsForMap: Market[] = targets.map((t) => ({ id: t.id, name: t.name, tier: t.tier, score: t.score, lat: t.lat, lng: t.lng }));
   const TIER_PILL: Record<string, string> = { S: "bg-red-100 text-red-700", "1": "bg-orange-100 text-orange-700", "2": "bg-amber-100 text-amber-700", "3": "bg-sky-100 text-sky-700" };
-  const buyers: Buyer[] = rows.map((r) => ({
-    id: r.id, name: r.name, category: r.category, type: r.type, region: r.region, market: r.market,
-    status: r.status, email: r.email, phone: r.phone, website: r.website, buyBox: r.buyBox,
-    buyBoxAreas: r.buyBoxAreas, lat: r.lat, lng: r.lng, notes: r.notes,
-  }));
-  const luxury = rows.filter((r) => r.category === "luxury") as MC[];
-  const distressed = rows.filter((r) => r.category !== "luxury") as MC[];
+  const buyers: Buyer[] = rows
+    .filter((r) => r.vetStage === "vetted" || r.vetStage === "active")
+    .map((r) => ({
+      id: r.id, name: r.name, category: r.category, type: r.type, region: r.region, market: r.market,
+      status: r.status, email: r.email, phone: r.phone, website: r.website, buyBox: r.buyBox,
+      buyBoxAreas: r.buyBoxAreas, lat: r.lat, lng: r.lng, notes: r.notes,
+    }));
+  // Markets & Buyers shows ONLY vetted/active buyers. Everyone else is in the
+  // Buyer Vetting pipeline below (unvetted) or archived (not interested).
+  const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
+  const vettedRows = rows.filter(VETTED);
+  const luxury = vettedRows.filter((r) => r.category === "luxury") as MC[];
+  const distressed = vettedRows.filter((r) => r.category !== "luxury") as MC[];
   const markets = settings.marketingMarkets.split("\n").map((m) => m.trim()).filter(Boolean);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
+
+  // ---- Buyer Vetting pipeline (unvetted), grouped by deal/area like the spreadsheet ----
+  const weekAgo = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date(Date.now() - 7 * 86400000));
+  const toProspect = (r: MC) => ({ id: r.id, name: r.name, website: r.website, email: r.email, phone: r.phone, buyBoxAreas: r.buyBoxAreas, outreachLog: r.outreachLog, lastContacted: r.lastContacted, nextFollowUp: r.nextFollowUp, vetStage: r.vetStage, igHandle: r.igHandle });
+  const vettingRows = (rows as MC[]).filter((r) => r.vetStage === "to_vet" || r.vetStage === "hold");
+  const deadRows = (rows as MC[]).filter((r) => r.vetStage === "dead").map(toProspect);
+  const areaMap = new Map<string, ReturnType<typeof toProspect>[]>();
+  for (const r of vettingRows) { const k = r.vetArea || r.market || "Unassigned"; const a = areaMap.get(k) ?? []; a.push(toProspect(r)); areaMap.set(k, a); }
+  const vettingAreas = Array.from(areaMap.entries()).map(([area, prospects]) => ({ area, prospects })).sort((a, b) => b.prospects.length - a.prospects.length);
+  const vettingStats = {
+    pipeline: vettingRows.length,
+    contacted7: (rows as MC[]).filter((r) => r.lastContacted && r.lastContacted >= weekAgo).length,
+    vetted: vettedRows.length,
+  };
   const dueRows = (rows as MC[]).filter((r) => r.nextFollowUp && r.nextFollowUp <= today).sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp));
 
   return (
@@ -209,17 +230,23 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         </form>
       </Card>
 
-      {/* Rolodex by category */}
+      {/* Rolodex by category — VETTED buyers only */}
       <MarketRolodexFilter />
       <div>
-        <SectionTitle title="🏛 Luxury / Developers" subtitle={`${luxury.length} developers & luxury buyers`} accent="bg-brand-navy" />
+        <SectionTitle title="🏛 Luxury / Developers" subtitle={`${luxury.length} vetted developers & luxury buyers`} accent="bg-brand-navy" />
         <Rolodex items={luxury} />
         <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a luxury buyer / developer</h4><MarketContactForm defaultCategory="luxury" /></Card>
       </div>
       <div>
-        <SectionTitle title="🔨 Distressed / Flippers" subtitle={`${distressed.length} flippers & cash buyers`} accent="bg-amber-400" />
+        <SectionTitle title="🔨 Distressed / Flippers" subtitle={`${distressed.length} vetted flippers & cash buyers`} accent="bg-amber-400" />
         <Rolodex items={distressed} />
         <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a flipper / cash buyer</h4><MarketContactForm defaultCategory="distressed" /></Card>
+      </div>
+
+      {/* ===== Buyer Vetting — the unvetted outbound pipeline, by deal/area ===== */}
+      <div className="border-t-2 border-dashed border-slate-200 pt-6">
+        <SectionTitle title="🔎 Buyer Vetting" subtitle="Outbound pipeline — developers we're sourcing in each deal's area, before they're vetted. Work the lists, log every touch, graduate the good ones above." accent="bg-sky-400" />
+        <BuyerVetting areas={vettingAreas} dead={deadRows} canEdit={canAccessMarketing(me)} stats={vettingStats} />
       </div>
     </div>
   );
