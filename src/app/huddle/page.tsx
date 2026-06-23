@@ -20,8 +20,17 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
   const manager = isManager(me);
   const h = await buildHuddleData(date, { carry: date === todayStr(settings.orgTimezone) });
 
-  const acq = h.reps.filter((r) => r.role === "Acquisitions");
-  const dispo = h.reps.filter((r) => r.role === "Dispositions");
+  // Group front-line reps by when their shift STARTS, not by role — Michelle (Acq)
+  // and Sharyn (Dispo) both start at 9 AM, so they sit together; Marie starts 2 PM.
+  const START_HOUR: Record<string, number> = { michelle: 9, sharyn: 9, jon: 9, ethan: 9, marie: 14 };
+  const fn = (n: string) => n.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const ROLE_RANK: Record<string, number> = { Acquisitions: 0, Dispositions: 1, Team: 2 };
+  const startHour = (r: { name: string }) => START_HOUR[fn(r.name)] ?? 9;
+  const hourLabel = (hr: number) => `${hr % 12 === 0 ? 12 : hr % 12} ${hr < 12 ? "AM" : "PM"}`;
+  const frontline = h.reps.filter((r) => r.role !== "Team");
+  const startHours = Array.from(new Set(frontline.map(startHour))).sort((a, b) => a - b);
+  const repsAt = (hr: number) =>
+    frontline.filter((r) => startHour(r) === hr).sort((a, b) => (ROLE_RANK[a.role] - ROLE_RANK[b.role]) || a.name.localeCompare(b.name));
   const other = h.reps.filter((r) => r.role === "Team");
   const missByUser = new Map<string, typeof h.misses>();
   for (const m of h.misses) { const k = m.userId ?? "team"; const arr = missByUser.get(k) ?? []; arr.push(m); missByUser.set(k, arr); }
@@ -62,7 +71,7 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
       <Card className="p-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="text-base font-bold text-slate-800">{r.name}</span>
-          <span className="text-[11px] text-slate-400">{r.role}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${r.role === "Acquisitions" ? "bg-amber-100 text-amber-700" : r.role === "Dispositions" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600"}`}>{r.role === "Dispositions" ? "Disposition" : r.role}</span>
           {myMiss.length > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">missed {myMiss.length} KPI{myMiss.length > 1 ? "s" : ""} yesterday</span>}
         </div>
 
@@ -265,21 +274,13 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
         </div>
       </Card>
 
-      {/* Acquisitions */}
-      {acq.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-bold text-slate-700">🎯 Acquisitions</h2>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{acq.map((r) => <RepCard key={r.id} r={r} />)}</div>
+      {/* Front-line reps grouped by shift start (each card shows the rep's role) */}
+      {startHours.map((hr) => (
+        <section key={hr}>
+          <h2 className="mb-2 text-sm font-bold text-slate-700">🕘 {hourLabel(hr)} start</h2>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{repsAt(hr).map((r) => <RepCard key={r.id} r={r} />)}</div>
         </section>
-      )}
-
-      {/* Dispositions */}
-      {dispo.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-bold text-slate-700">📦 Dispositions</h2>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{dispo.map((r) => <RepCard key={r.id} r={r} />)}</div>
-        </section>
-      )}
+      ))}
 
       {other.length > 0 && (
         <section>
