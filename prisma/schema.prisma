@@ -529,6 +529,7 @@ model MarketContact {
   needsView   String   @default("") // needs to view before offer?
   // Dispo outreach tracking (separate from the CRM):
   vetArea       String @default("") // the deal/area we're sourcing developers for (spreadsheet "tab")
+  vetStatus     String @default("to_contact") // working status: to_contact | contacted | messaged | following_up
   igHandle      String @default("") // Instagram handle
   bestContact   String @default("") // best way / sequence to reach them
   lastContacted String @default("") // YYYY-MM-DD of last touch

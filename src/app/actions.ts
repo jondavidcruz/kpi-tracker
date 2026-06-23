@@ -1475,8 +1475,54 @@ export async function setBuyerStage(formData: FormData) {
   const stage = String(formData.get("stage") ?? "");
   if (!id || !["to_vet", "vetted", "active", "hold", "dead"].includes(stage)) return;
   await db.marketContact.update({ where: { id }, data: { vetStage: stage } });
-  revalidatePath("/marketing");
-  redirect("/marketing#vetting");
+  revalidatePath("/vetting");
+  redirect("/vetting");
+}
+
+/** Single Status dropdown on the vetting spreadsheet. Working statuses keep them
+ *  in the pipeline; "vetted" graduates them to Markets & Buyers; "not_interested"
+ *  archives them. */
+export async function setBuyerStatus(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "");
+  if (!id) return;
+  const WORKING = ["to_contact", "contacted", "messaged", "following_up"];
+  if (WORKING.includes(status)) {
+    await db.marketContact.update({ where: { id }, data: { vetStatus: status, vetStage: "to_vet" } });
+  } else if (status === "vetted") {
+    await db.marketContact.update({ where: { id }, data: { vetStage: "vetted" } });
+  } else if (status === "not_interested") {
+    await db.marketContact.update({ where: { id }, data: { vetStage: "dead" } });
+  } else return;
+  revalidatePath("/vetting");
+  redirect("/vetting");
+}
+
+/** Inline-edit a prospect's core fields from the spreadsheet (name, contact, area). */
+export async function saveProspect(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const data = {
+    name: String(formData.get("name") ?? "").trim().slice(0, 200),
+    phone: String(formData.get("phone") ?? "").trim().slice(0, 120),
+    email: String(formData.get("email") ?? "").trim().slice(0, 200),
+    website: String(formData.get("website") ?? "").trim().slice(0, 400),
+    buyBoxAreas: String(formData.get("buyBoxAreas") ?? "").trim().slice(0, 400),
+    nextFollowUp: String(formData.get("nextFollowUp") ?? "").trim().slice(0, 10),
+  };
+  if (!data.name) return;
+  if (id) {
+    await db.marketContact.update({ where: { id }, data });
+  } else {
+    // New row — needs a target area.
+    const vetArea = String(formData.get("vetArea") ?? "").trim().slice(0, 200);
+    await db.marketContact.create({ data: { ...data, vetArea, category: "luxury", type: "developer", vetStage: "to_vet", vetStatus: "to_contact" } });
+  }
+  revalidatePath("/vetting");
+  redirect("/vetting");
 }
 
 /** Log an outreach touch on a prospect: stamps last-contacted = today, appends the
@@ -1495,9 +1541,9 @@ export async function logBuyerOutreach(formData: FormData) {
   const existing = await db.marketContact.findUnique({ where: { id }, select: { outreachLog: true } });
   const stamped = note ? `${today}: ${note}` : `${today}: reached out`;
   const log = existing?.outreachLog ? `${stamped}\n${existing.outreachLog}` : stamped;
-  await db.marketContact.update({ where: { id }, data: { lastContacted: today, nextFollowUp: nextStr, outreachLog: log.slice(0, 4000) } });
-  revalidatePath("/marketing");
-  redirect("/marketing#vetting");
+  await db.marketContact.update({ where: { id }, data: { lastContacted: today, nextFollowUp: nextStr, outreachLog: log.slice(0, 4000), vetStatus: "contacted" } });
+  revalidatePath("/vetting");
+  redirect("/vetting");
 }
 
 export async function saveMarketingNotes(formData: FormData) {

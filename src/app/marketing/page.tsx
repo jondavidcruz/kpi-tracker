@@ -8,7 +8,6 @@ import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
 import CopyButton from "@/components/CopyButton";
 import MarketContactForm from "@/components/MarketContactForm";
 import MarketRolodexFilter from "@/components/MarketRolodexFilter";
-import BuyerVetting from "@/components/BuyerVetting";
 
 export const dynamic = "force-dynamic";
 
@@ -119,19 +118,6 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const markets = settings.marketingMarkets.split("\n").map((m) => m.trim()).filter(Boolean);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
 
-  // ---- Buyer Vetting pipeline (unvetted), grouped by deal/area like the spreadsheet ----
-  const weekAgo = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date(Date.now() - 7 * 86400000));
-  const toProspect = (r: MC) => ({ id: r.id, name: r.name, website: r.website, email: r.email, phone: r.phone, buyBoxAreas: r.buyBoxAreas, outreachLog: r.outreachLog, lastContacted: r.lastContacted, nextFollowUp: r.nextFollowUp, vetStage: r.vetStage, igHandle: r.igHandle });
-  const vettingRows = (rows as MC[]).filter((r) => r.vetStage === "to_vet" || r.vetStage === "hold");
-  const deadRows = (rows as MC[]).filter((r) => r.vetStage === "dead").map(toProspect);
-  const areaMap = new Map<string, ReturnType<typeof toProspect>[]>();
-  for (const r of vettingRows) { const k = r.vetArea || r.market || "Unassigned"; const a = areaMap.get(k) ?? []; a.push(toProspect(r)); areaMap.set(k, a); }
-  const vettingAreas = Array.from(areaMap.entries()).map(([area, prospects]) => ({ area, prospects })).sort((a, b) => b.prospects.length - a.prospects.length);
-  const vettingStats = {
-    pipeline: vettingRows.length,
-    contacted7: (rows as MC[]).filter((r) => r.lastContacted && r.lastContacted >= weekAgo).length,
-    vetted: vettedRows.length,
-  };
   const dueRows = (rows as MC[]).filter((r) => r.nextFollowUp && r.nextFollowUp <= today).sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp));
 
   return (
@@ -243,11 +229,14 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a flipper / cash buyer</h4><MarketContactForm defaultCategory="distressed" /></Card>
       </div>
 
-      {/* ===== Buyer Vetting — the unvetted outbound pipeline, by deal/area ===== */}
-      <div className="border-t-2 border-dashed border-slate-200 pt-6">
-        <SectionTitle title="🔎 Buyer Vetting" subtitle="Outbound pipeline — developers we're sourcing in each deal's area, before they're vetted. Work the lists, log every touch, graduate the good ones above." accent="bg-sky-400" />
-        <BuyerVetting areas={vettingAreas} dead={deadRows} canEdit={canAccessMarketing(me)} stats={vettingStats} />
-      </div>
+      {/* Buyer Vetting moved to its own page → /vetting */}
+      <Card className="flex flex-wrap items-center justify-between gap-3 border-l-4 border-sky-300 bg-sky-50/40 p-4">
+        <div>
+          <h3 className="text-sm font-bold text-slate-700">🔎 Looking for new developers?</h3>
+          <p className="text-xs text-slate-500">The outbound pipeline (unvetted developers we&apos;re sourcing per deal/area) lives on its own page now.</p>
+        </div>
+        <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">Open Buyer Vetting →</Link>
+      </Card>
     </div>
   );
 }
