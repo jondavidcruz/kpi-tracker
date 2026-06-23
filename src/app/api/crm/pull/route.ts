@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true, wrote: false, date,
     calls: { scanned: result.scanned, pages: result.pages, perAgent: result.per },
-    offersContracts: { scanned: opps.scanned, counts: opps.counts, sample: opps.sample },
+    offersContracts: { scanned: opps.scanned, counts: opps.counts, sample: opps.sample, debug: opps.debug },
     note: "Dry run — compare to the Agent report. Add &write=1 to save to the scorecard.",
   });
 }

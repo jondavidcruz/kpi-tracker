@@ -112,7 +112,7 @@ export async function pullDay(date: string, tz: string): Promise<PullResult> {
 }
 
 // --- Opportunities (stage moves → Offers Made / Contracts Sent) ----------------
-export type OppPull = { date: string; counts: Record<string, number>; scanned: number; sample?: unknown };
+export type OppPull = { date: string; counts: Record<string, number>; scanned: number; sample?: unknown; debug?: unknown[] };
 
 /** Count opportunities that ENTERED an offer/contract stage on `date`, by CRM user. */
 export async function pullOpps(date: string, tz: string): Promise<OppPull> {
@@ -120,8 +120,11 @@ export async function pullOpps(date: string, tz: string): Promise<OppPull> {
   const counts: Record<string, number> = {}; // `${crmUserId}|${kpiKey}` -> count
   let scanned = 0;
   let sample: unknown;
+  const debug: unknown[] = [];
   for (const pid of PIPELINES) {
-    const res = await searchOpportunities(pid, { order: "desc", sortBy: "last_stage_changed_at" });
+    const res = await searchOpportunities(pid);
+    const b0 = res.body as { opportunities?: unknown[] } | undefined;
+    debug.push({ pipeline: pid, status: res.status, ok: res.ok, oppCount: Array.isArray(b0?.opportunities) ? b0.opportunities.length : null, bodyKeys: b0 && typeof b0 === "object" ? Object.keys(b0) : typeof res.body, err: res.ok ? undefined : String(JSON.stringify(res.body)).slice(0, 200) });
     if (!res.ok) continue;
     const body = res.body as { opportunities?: Array<Record<string, unknown>> };
     for (const o of body.opportunities ?? []) {
@@ -140,7 +143,7 @@ export async function pullOpps(date: string, tz: string): Promise<OppPull> {
       counts[k] = (counts[k] ?? 0) + 1;
     }
   }
-  return { date, counts, scanned, sample };
+  return { date, counts, scanned, sample, debug };
 }
 
 /** Write the opportunity-derived KPI entries (Offers Made, Contracts Sent). */
