@@ -58,7 +58,8 @@ export async function probeCallShape(): Promise<unknown> {
   const convs = cb?.conversations ?? [];
   const typesSeen = new Set<string>();
   const callSamples: unknown[] = [];
-  for (const c of convs.slice(0, 8)) {
+  const callSourcesSeen: Record<string, number> = {}; // e.g. { workflow: 5, app: 3 } → which is the dialer?
+  for (const c of convs.slice(0, 12)) {
     const m = await getMessages(c.id);
     if (!m.ok) continue;
     const mb = m.body as { messages?: { messages?: unknown[] } | unknown[] };
@@ -67,18 +68,20 @@ export async function probeCallShape(): Promise<unknown> {
       const x = msg as Record<string, unknown>;
       const mt = String(x.messageType ?? x.type ?? "");
       typesSeen.add(mt);
-      if (/call/i.test(mt) && callSamples.length < 6) {
-        // Pick only structural / non-PII fields.
-        callSamples.push({
-          keys: Object.keys(x),
-          messageType: x.messageType, type: x.type, direction: x.direction, status: x.status,
-          dateAdded: x.dateAdded, userId: x.userId, callDuration: x.callDuration, duration: x.duration,
-          meta: x.meta, attachments: undefined,
-        });
+      if (/call/i.test(mt)) {
+        const src = `${String(x.source ?? "?")}|${String((x.meta as { call?: { source?: string } } | undefined)?.call?.source ?? "")}`;
+        callSourcesSeen[src] = (callSourcesSeen[src] ?? 0) + 1;
+        if (callSamples.length < 6) {
+          callSamples.push({
+            keys: Object.keys(x),
+            messageType: x.messageType, type: x.type, direction: x.direction, status: x.status,
+            source: x.source, dateAdded: x.dateAdded, userId: x.userId, duration: x.duration, meta: x.meta,
+          });
+        }
       }
     }
   }
-  return { conversationsScanned: convs.length, messageTypesSeen: [...typesSeen], callSamples };
+  return { conversationsScanned: convs.length, messageTypesSeen: [...typesSeen], callSourcesSeen, callSamples };
 }
 
 /** List the CRM users for our location — verifies auth + gives the agent→rep map. */
