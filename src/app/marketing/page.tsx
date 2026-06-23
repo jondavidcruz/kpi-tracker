@@ -116,35 +116,15 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const luxury = vettedRows.filter((r) => r.category === "luxury") as MC[];
   const distressed = vettedRows.filter((r) => r.category !== "luxury") as MC[];
   const markets = settings.marketingMarkets.split("\n").map((m) => m.trim()).filter(Boolean);
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
-
-  const dueRows = (rows as MC[]).filter((r) => r.nextFollowUp && r.nextFollowUp <= today).sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp));
 
   return (
     <div className="space-y-6">
-      <SectionTitle title="🗺 Markets & Buyers" subtitle="Interactive map of our target markets and the developers + flippers who buy there. Search an area to see who matches." accent="bg-brand-gold" />
+      <SectionTitle title="🗺 Markets / Vetted Buyers" subtitle="Our vetted buyers & developers and their buy boxes — search a market to see exactly who'd want the deal. Sourcing new buyers? That's in Buyer Vetting." accent="bg-brand-gold"
+        right={<Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🔎 Buyer Vetting</Link>} />
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
       {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} contact{sp.imp === "1" ? "" : "s"}.</div>}
       {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
       {sp.imp === "noname" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Your CSV needs a header row with a &ldquo;name&rdquo; column.</div>}
-
-      {/* Follow-ups due — the daily driver */}
-      {dueRows.length > 0 && (
-        <Card className="border-l-4 border-red-400 bg-red-50/50 p-4">
-          <h3 className="mb-2 text-sm font-bold text-red-800">⏰ Follow-ups due ({dueRows.length}) — reach out today</h3>
-          <div className="space-y-1.5">
-            {dueRows.map((r) => (
-              <div key={r.id} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-semibold text-slate-800">{r.name}</span>
-                {r.market && <span className="text-xs text-slate-400">📍 {r.market}</span>}
-                {r.bestContact && <span className="text-xs text-violet-700">📣 {r.bestContact}</span>}
-                {[r.phone, r.email, r.igHandle].filter(Boolean).length > 0 && <span className="text-xs text-brand-navy">{[r.phone, r.email, r.igHandle].filter(Boolean).join(" · ")}</span>}
-                <span className={`ml-auto text-[11px] font-semibold ${r.nextFollowUp < today ? "text-red-600" : "text-amber-600"}`}>{r.nextFollowUp < today ? "overdue" : "today"} · {r.nextFollowUp}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
 
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">
@@ -229,14 +209,6 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         <Card className="mt-3 p-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Add a flipper / cash buyer</h4><MarketContactForm defaultCategory="distressed" /></Card>
       </div>
 
-      {/* Buyer Vetting moved to its own page → /vetting */}
-      <Card className="flex flex-wrap items-center justify-between gap-3 border-l-4 border-sky-300 bg-sky-50/40 p-4">
-        <div>
-          <h3 className="text-sm font-bold text-slate-700">🔎 Looking for new developers?</h3>
-          <p className="text-xs text-slate-500">The outbound pipeline (unvetted developers we&apos;re sourcing per deal/area) lives on its own page now.</p>
-        </div>
-        <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">Open Buyer Vetting →</Link>
-      </Card>
     </div>
   );
 }
