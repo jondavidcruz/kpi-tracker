@@ -531,6 +531,13 @@ model MarketContact {
   // Dispo outreach tracking (separate from the CRM):
   vetArea       String @default("") // the deal/area we're sourcing developers for (spreadsheet "tab")
   vetStatus     String @default("to_contact") // working status: to_contact | contacted | messaged | following_up
+  // Attribution for AUTO-tracked dispo KPIs (who did the work + the org-tz day).
+  addedById     String @default("") // rep who added this buyer/developer
+  addedOn       String @default("") // YYYY-MM-DD they were added
+  boxById       String @default("") // rep who first captured the buy box
+  boxOn         String @default("") // YYYY-MM-DD the buy box was captured
+  vettedById    String @default("") // rep who vetted them
+  vettedOn      String @default("") // YYYY-MM-DD they were vetted
   igHandle      String @default("") // Instagram handle
   bestContact   String @default("") // best way / sequence to reach them
   lastContacted String @default("") // YYYY-MM-DD of last touch

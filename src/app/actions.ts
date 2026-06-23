@@ -13,6 +13,7 @@ import { isExcusedReason } from "@/lib/alert-resolution";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
+import { rollupResearchKpis, orgToday } from "@/lib/research-kpis";
 import { todayStr } from "@/lib/date";
 import { quarterOf, quarterEnd } from "@/lib/eos";
 import { encryptSecret, vaultConfigured } from "@/lib/crypto";
@@ -1474,7 +1475,12 @@ export async function setBuyerStage(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const stage = String(formData.get("stage") ?? "");
   if (!id || !["to_vet", "vetted", "active", "hold", "dead"].includes(stage)) return;
-  await db.marketContact.update({ where: { id }, data: { vetStage: stage } });
+  const today = orgToday((await getSettings()).orgTimezone);
+  const prev = await db.marketContact.findUnique({ where: { id }, select: { vetStage: true } });
+  const data: { vetStage: string; vettedById?: string; vettedOn?: string } = { vetStage: stage };
+  if (stage === "vetted" && prev?.vetStage !== "vetted") { data.vettedById = me!.id; data.vettedOn = today; }
+  await db.marketContact.update({ where: { id }, data });
+  await rollupResearchKpis(me!.id, today);
   revalidatePath("/vetting");
   redirect("/vetting");
 }
@@ -1489,13 +1495,16 @@ export async function setBuyerStatus(formData: FormData) {
   const status = String(formData.get("status") ?? "");
   if (!id) return;
   const WORKING = ["to_contact", "contacted", "messaged", "following_up"];
+  const today = orgToday((await getSettings()).orgTimezone);
   if (WORKING.includes(status)) {
     await db.marketContact.update({ where: { id }, data: { vetStatus: status, vetStage: "to_vet" } });
   } else if (status === "vetted") {
-    await db.marketContact.update({ where: { id }, data: { vetStage: "vetted" } });
+    const prev = await db.marketContact.findUnique({ where: { id }, select: { vetStage: true } });
+    await db.marketContact.update({ where: { id }, data: { vetStage: "vetted", ...(prev?.vetStage !== "vetted" ? { vettedById: me!.id, vettedOn: today } : {}) } });
   } else if (status === "not_interested") {
     await db.marketContact.update({ where: { id }, data: { vetStage: "dead" } });
   } else return;
+  await rollupResearchKpis(me!.id, today);
   revalidatePath("/vetting");
   redirect("/vetting");
 }
@@ -1524,6 +1533,11 @@ export async function saveBuyerBox(formData: FormData) {
   if (!id) return;
   const g = (k: string) => String(formData.get(k) ?? "").slice(0, 300);
   const category = g("category") === "luxury" ? "luxury" : "distressed";
+  // "Buy box captured" = at least one real buy-box field is filled. Stamp the first
+  // time it happens so it counts once toward the rep's Buy Boxes Captured KPI.
+  const hasBox = [g("dealType"), g("buildType"), g("priceRange"), g("minLotSize"), g("propertyType"), g("conditionTolerance"), g("buyingFrequency")].some((x) => x.trim());
+  const prev = await db.marketContact.findUnique({ where: { id }, select: { boxOn: true } });
+  const today = orgToday((await getSettings()).orgTimezone);
   await db.marketContact.update({
     where: { id },
     data: {
@@ -1535,8 +1549,10 @@ export async function saveBuyerBox(formData: FormData) {
       propertyType: g("propertyType"), minBeds: g("minBeds"), maxBaths: g("maxBaths"),
       conditionTolerance: g("conditionTolerance"), needsView: g("needsView"), marketDetails: g("marketDetails"),
       decisionMaker: g("decisionMaker"), buyingFrequency: g("buyingFrequency"), bestContact: g("bestContact"),
+      ...(hasBox && !prev?.boxOn ? { boxById: me!.id, boxOn: today } : {}),
     },
   });
+  if (hasBox && !prev?.boxOn) await rollupResearchKpis(me!.id, today);
   revalidatePath("/vetting");
 }
 
@@ -1557,9 +1573,11 @@ export async function saveProspect(formData: FormData) {
   if (id) {
     await db.marketContact.update({ where: { id }, data });
   } else {
-    // New row — needs a target area.
+    // New row — needs a target area. Credit the rep who added it (auto KPI).
     const vetArea = String(formData.get("vetArea") ?? "").trim().slice(0, 200);
-    await db.marketContact.create({ data: { ...data, vetArea, category: "luxury", type: "developer", vetStage: "to_vet", vetStatus: "to_contact" } });
+    const today = orgToday((await getSettings()).orgTimezone);
+    await db.marketContact.create({ data: { ...data, vetArea, category: "luxury", type: "developer", vetStage: "to_vet", vetStatus: "to_contact", addedById: me!.id, addedOn: today } });
+    await rollupResearchKpis(me!.id, today);
   }
   revalidatePath("/vetting");
   redirect("/vetting");
