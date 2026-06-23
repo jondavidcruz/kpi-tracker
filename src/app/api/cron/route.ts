@@ -11,6 +11,7 @@ import { sendPayrollEmail } from "@/lib/payday";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
 import { sendHuddleBrief, sendHuddleNudge } from "@/lib/huddle-brief";
 import { writeDay, writeOpps } from "@/lib/crm-sync";
+import { migrateRecordingsToDrive } from "@/lib/recording-migrate";
 import { sendLeaksReport } from "@/lib/diagnostics";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
@@ -101,6 +102,12 @@ export async function GET(request: Request) {
     const today = date ?? todayStr(settings.orgTimezone);
     const sent = await sendLeaksReport(today);
     return NextResponse.json({ ok: true, leaks: sent });
+  }
+
+  // Nightly: move call recordings off Supabase Storage into Google Drive (free).
+  if (url.searchParams.get("recordings") === "1") {
+    const res = await migrateRecordingsToDrive();
+    return NextResponse.json({ ok: true, recordings: res });
   }
 
   // Nightly REI Reply CRM sync — pulls YESTERDAY's calls + offer/contract stage
