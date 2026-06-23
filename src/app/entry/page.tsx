@@ -240,6 +240,7 @@ export default async function EntryPage({
 
       {rep && internetKpi && (
         <SpeedTestCard
+          key={`${rep.id}|${date}`}
           userId={rep.id}
           date={date}
           goal={internetGoal ?? 50}
