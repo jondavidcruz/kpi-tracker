@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { setBuyerStatus, logBuyerOutreach, saveProspectField, saveProspect, saveBuyerBox } from "@/app/actions";
+import { setBuyerStatus, logBuyerOutreach, saveProspectField, saveProspect, saveBuyerBox, deleteProspect } from "@/app/actions";
 import MultiSelect from "@/components/MultiSelect";
 
 export type Prospect = {
@@ -267,6 +267,10 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                               <form action={logBuyerOutreach}>
                                 <input type="hidden" name="id" value={p.id} />
                                 <button className="rounded bg-sky-600 px-1.5 py-1 text-[10px] font-semibold text-white hover:bg-sky-700" title="Log a touch (counts toward Buyers Contacted) + 3-day follow-up">📇</button>
+                              </form>
+                              <form action={deleteProspect}>
+                                <input type="hidden" name="id" value={p.id} />
+                                <button onClick={(e) => { if (!confirm(`Delete ${p.name}? This can't be undone.`)) e.preventDefault(); }} className="rounded px-1.5 py-1 text-[10px] font-semibold text-slate-300 hover:bg-red-50 hover:text-red-600" title="Delete this buyer">🗑</button>
                               </form>
                             </div>
                           ) : <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${m.cls}`}>{m.label}</span>}

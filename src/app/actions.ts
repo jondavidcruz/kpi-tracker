@@ -1533,6 +1533,18 @@ export async function setBuyerStatus(formData: FormData) {
   redirect("/vetting");
 }
 
+/** Permanently delete a buyer/prospect from Buyer Research. */
+export async function deleteProspect(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.marketContact.delete({ where: { id } });
+  revalidatePath("/vetting");
+  revalidatePath("/marketing");
+  redirect("/vetting");
+}
+
 /** Inline single-cell autosave from the spreadsheet view. Revalidates without a
  *  redirect so editing feels live (no page jump). */
 export async function saveProspectField(formData: FormData) {
