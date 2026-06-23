@@ -37,6 +37,12 @@ export async function getMessages(conversationId: string) {
   return ghl(`/conversations/${conversationId}/messages`);
 }
 
+/** Pipelines + their stages (id + name) — to map stage moves → Offers/Contracts KPIs. */
+export async function getPipelines() {
+  const loc = process.env.REIREPLY_LOCATION_ID ?? "";
+  return ghl("/opportunities/pipelines", { locationId: loc });
+}
+
 /** Probe a few recent conversations and report the SHAPE of call messages (no PII)
  *  so we can build the daily aggregation against the real field names. */
 export async function probeCallShape(): Promise<unknown> {
