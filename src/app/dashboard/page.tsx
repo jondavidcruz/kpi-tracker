@@ -23,11 +23,13 @@ import RecognitionBoards from "@/components/RecognitionBoards";
 import DealFunnel from "@/components/DealFunnel";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canAccessPayroll } from "@/lib/auth";
+import { refreshCrmToday } from "@/app/actions";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
 import { CircleCheck, TrendingDown, Bell, Users, Banknote, ShieldAlert, Building2, FileSignature, type LucideIcon } from "lucide-react";
 import type { Kpi, Target, User } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 90;
 
 interface GapItem {
   who: string;
@@ -229,12 +231,19 @@ export default async function DashboardPage({
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Team dashboard</h1>
           <p className="text-sm text-slate-500">{friendlyDate(date)}</p>
         </div>
-        <Link
-          href="/entry"
-          className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-navy-700"
-        >
-          + Enter KPIs
-        </Link>
+        <div className="flex items-center gap-2">
+          {isManager(me) && (
+            <form action={refreshCrmToday}>
+              <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700" title="Pull today's calls + offers/contracts from REI Reply right now">🔄 Sync CRM</button>
+            </form>
+          )}
+          <Link
+            href="/entry"
+            className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-navy-700"
+          >
+            + Enter KPIs
+          </Link>
+        </div>
       </div>
 
       {/* Headline metrics */}

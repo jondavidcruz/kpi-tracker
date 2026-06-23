@@ -30,7 +30,7 @@ export async function refreshCrmToday() {
   await crmWriteOpps(today, tz);
   revalidatePath("/report");
   revalidatePath("/dashboard");
-  redirect("/report?synced=1");
+  // No redirect — refresh in place so it works from either page.
 }
 import { todayStr } from "@/lib/date";
 import { quarterOf, quarterEnd } from "@/lib/eos";
