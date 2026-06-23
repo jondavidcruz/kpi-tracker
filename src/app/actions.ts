@@ -15,7 +15,23 @@ import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
 import { rollupResearchKpis, orgToday } from "@/lib/research-kpis";
 import { migrateScoreById } from "@/lib/recording-migrate";
+import { writeDay as crmWriteDay, writeOpps as crmWriteOpps } from "@/lib/crm-sync";
 import { after } from "next/server";
+
+/** Pull today's CRM numbers (calls + offers/contracts) on demand so the scorecard
+ *  is live right now. Managers only. */
+export async function refreshCrmToday() {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const settings = await getSettings();
+  const tz = settings.orgTimezone;
+  const today = todayStr(tz);
+  await crmWriteDay(today, tz);
+  await crmWriteOpps(today, tz);
+  revalidatePath("/report");
+  revalidatePath("/dashboard");
+  redirect("/report?synced=1");
+}
 import { todayStr } from "@/lib/date";
 import { quarterOf, quarterEnd } from "@/lib/eos";
 import { encryptSecret, vaultConfigured } from "@/lib/crypto";

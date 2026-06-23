@@ -29,6 +29,7 @@ function laNow(): { hour: number; dow: number } {
 }
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 90;
 
 /**
  * Scheduled alert check. Vercel Cron calls this with
@@ -108,6 +109,17 @@ export async function GET(request: Request) {
   if (url.searchParams.get("recordings") === "1") {
     const res = await migrateRecordingsToDrive();
     return NextResponse.json({ ok: true, recordings: res });
+  }
+
+  // Live CRM sync — pulls TODAY's calls + offer/contract stage moves every ~15 min
+  // so the scorecard is current throughout the day, not just at night.
+  if (url.searchParams.get("crmtoday") === "1") {
+    const settings = await getSettings();
+    const tz = settings.orgTimezone;
+    const today = date ?? todayStr(tz);
+    const calls = await writeDay(today, tz);
+    const opps = await writeOpps(today, tz);
+    return NextResponse.json({ ok: true, date: today, calls: calls.wrote, offersContracts: opps.counts });
   }
 
   // Nightly REI Reply CRM sync — pulls YESTERDAY's calls + offer/contract stage

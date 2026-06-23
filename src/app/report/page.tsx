@@ -14,12 +14,14 @@ import { POSITIONS } from "@/lib/roles";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { KpiLabel } from "@/lib/kpiIcons";
 import { getCurrentUser, isManager } from "@/lib/auth";
+import { refreshCrmToday } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import HubTabs from "@/components/HubTabs";
 import RepRoleBars from "@/components/RepRoleBars";
 import type { Kpi, User, Target } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 90;
 
 const DEAL_STATUS = {
   under_contract: { label: "Under Contract", cls: "bg-sky-100 text-sky-800" },
@@ -39,7 +41,7 @@ function dayLabel(d: string): string {
 export default async function ReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; week?: string; range?: string; prev?: string }>;
+  searchParams: Promise<{ date?: string; week?: string; range?: string; prev?: string; synced?: string }>;
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
@@ -126,8 +128,14 @@ export default async function ReportPage({
             <a href={`/report?range=${range}`} className={`px-3 py-1.5 text-xs font-semibold ${!prev ? "bg-brand-gold text-brand-navy" : "bg-white text-slate-600 hover:bg-slate-100"}`}>This {rangeNoun}</a>
             <a href={`/report?range=${range}&prev=1`} className={`px-3 py-1.5 text-xs font-semibold ${prev ? "bg-brand-gold text-brand-navy" : "bg-white text-slate-600 hover:bg-slate-100"}`}>Previous</a>
           </div>
+          {manager && (
+            <form action={refreshCrmToday}>
+              <button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700" title="Pull today's calls + offers/contracts from REI Reply right now">🔄 Sync CRM now</button>
+            </form>
+          )}
         </div>
       </div>
+      {sp.synced && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Synced from REI Reply — KPIs are current.</div>}
 
       {/* ===== Revenue / escrow band (managers only) ===== */}
       {manager && (
