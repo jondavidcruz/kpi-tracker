@@ -33,12 +33,12 @@ const STAGE_FIXED_REP: Record<string, string> = {
 // CRM agent → our rep, with the KPI keys each call metric feeds. Connected = a
 // TYPE_CALL whose meta.call.duration ≥ convMin (so voicemails/quick no-answers
 // never count as a real conversation).
-type AgentCfg = { crm: string; first: string; talk: string; conv?: string; convMin?: number; dials?: string };
+type AgentCfg = { crm: string; first: string; talk: string; conv?: string; convMin?: number; dials?: string; answered?: string };
 export const AGENTS: AgentCfg[] = [
   { crm: "Up6W3UdNQ4tDkitQfUJq", first: "jon", talk: "acq_talk_time" },
   { crm: "FT34Pug9AUHAG0Kpwg9j", first: "michelle", talk: "acq_talk_time" },
-  { crm: "vFYB3vWFG2o0VOVwwEYd", first: "sharyn", talk: "ds_talk_time", conv: "dev_conversations", convMin: 90, dials: "buyers_contacted" },
-  { crm: "IqYEt2UrQ6gVToOzsaaw", first: "marie", talk: "ds_talk_time", conv: "buyer_conversations", convMin: 60, dials: "buyers_contacted" },
+  { crm: "vFYB3vWFG2o0VOVwwEYd", first: "sharyn", talk: "ds_talk_time", conv: "dev_conversations", convMin: 90, dials: "buyers_contacted", answered: "answered_calls" },
+  { crm: "IqYEt2UrQ6gVToOzsaaw", first: "marie", talk: "ds_talk_time", conv: "buyer_conversations", convMin: 60, dials: "buyers_contacted", answered: "answered_calls" },
 ];
 
 // UTC ms bounds of a calendar day in `tz` (DST-safe).
@@ -55,7 +55,7 @@ function dayBounds(date: string, tz: string): { start: number; end: number } {
   return { start, end: start + 24 * 3600 * 1000 };
 }
 
-export type Agg = { dials: number; connected: number; talkSec: number; voicemails: number };
+export type Agg = { dials: number; answered: number; connected: number; talkSec: number; voicemails: number };
 export type PullResult = { date: string; scanned: number; pages: number; per: Record<string, Agg> };
 
 /** Crawl conversations + their messages for one day; aggregate call stats per agent. */
@@ -63,7 +63,7 @@ export async function pullDay(date: string, tz: string): Promise<PullResult> {
   const { start, end } = dayBounds(date, tz);
   const cfgByCrm = new Map(AGENTS.map((a) => [a.crm, a]));
   const per: Record<string, Agg> = {};
-  for (const a of AGENTS) per[a.crm] = { dials: 0, connected: 0, talkSec: 0, voicemails: 0 };
+  for (const a of AGENTS) per[a.crm] = { dials: 0, answered: 0, connected: 0, talkSec: 0, voicemails: 0 };
 
   let cursor: string | undefined;
   let pages = 0;
@@ -98,8 +98,10 @@ export async function pullDay(date: string, tz: string): Promise<PullResult> {
         agg.dials++;
         const dur = Number(msg.meta?.call?.duration ?? 0) || 0;
         agg.talkSec += dur;
+        const completed = (msg.meta?.call?.status ?? msg.status) === "completed";
+        if (completed && dur > 0) agg.answered++;
         const min = cfgByCrm.get(String(msg.userId))?.convMin ?? 60;
-        if (dur >= min && (msg.meta?.call?.status ?? msg.status) === "completed") agg.connected++;
+        if (dur >= min && completed) agg.connected++;
       }
     }
     const last = convs[convs.length - 1]?.lastMessageDate;
@@ -176,6 +178,7 @@ export async function writeDay(date: string, tz: string): Promise<{ result: Pull
     if (!uid || !agg) continue;
     await upsertEntry(a.talk, uid, date, agg.talkSec);
     if (a.dials) await upsertEntry(a.dials, uid, date, agg.dials);
+    if (a.answered) await upsertEntry(a.answered, uid, date, agg.answered);
     if (a.conv) await upsertEntry(a.conv, uid, date, agg.connected);
     wrote[a.first] = agg;
   }
