@@ -11,8 +11,8 @@ const STAGE_KPI: Record<string, string> = {
   // Process call done = card reaches comp/numbers review (per Jon)
   "276eae09-9722-434a-a47b-e97b012e7ce7": "completed_process_calls", // trad COMP TO OFFER
   "2d6a497d-625f-4d65-92b8-19f8b651d30e": "completed_process_calls", // dev REVIEW NUMBERS
-  // 🧑🏻‍⚖️ COMP REVIEW (AQM) → Comps Done
-  "381d0841-7ffb-4f74-8f34-cdee2cdc0868": "comps_done",
+  // 🧑🏻‍⚖️ COMP REVIEW (AQM) → Deals Comped (always credited to Marie, see below)
+  "381d0841-7ffb-4f74-8f34-cdee2cdc0868": "deals_comped",
   // ⚓ VERBAL OFFER → Offers Made
   "6549e8ff-7695-4cd9-9705-e0316be52d7c": "offers_made",
   "c31d1b15-ad0f-4306-9eb3-8cce3909b7be": "offers_made",
@@ -24,6 +24,10 @@ const STAGE_KPI: Record<string, string> = {
   "08541c62-3363-4c2c-b04c-970b3b123399": "contracts_signed",
   // DS: Close Profits — 📣 ON MARKET → Deals Sent to Buyers
   "408fafdb-27c7-4779-a3b1-34b425f73046": "deals_sold",
+};
+// Stages whose credit goes to a FIXED rep, not the card's assignedTo.
+const STAGE_FIXED_REP: Record<string, string> = {
+  "381d0841-7ffb-4f74-8f34-cdee2cdc0868": "marie", // COMP REVIEW → Marie comped it
 };
 
 // CRM agent → our rep, with the KPI keys each call metric feeds. Connected = a
@@ -126,8 +130,11 @@ export async function pullOpps(date: string, tz: string): Promise<OppPull> {
       const changeRaw = (o.lastStageChangeAt ?? o.lastStatusChangeAt ?? o.updatedAt) as string | number | undefined;
       const ms = typeof changeRaw === "number" ? changeRaw : Date.parse(String(changeRaw ?? 0));
       if (!(ms >= start && ms < end)) continue;
-      const uid = String(o.assignedTo ?? "");
-      const k = `${uid}|${kpi}`;
+      // Some stages always credit a fixed rep regardless of the card owner — e.g.
+      // COMP REVIEW means Marie comped it, even on Michelle's AQ pipeline.
+      const fixed = STAGE_FIXED_REP[String(o.pipelineStageId ?? "")];
+      const owner = fixed ? `fixed:${fixed}` : String(o.assignedTo ?? "");
+      const k = `${owner}|${kpi}`;
       counts[k] = (counts[k] ?? 0) + 1;
     }
   }
@@ -141,8 +148,8 @@ export async function writeOpps(date: string, tz: string): Promise<OppPull> {
   const userByFirst = new Map(users.map((u) => [u.name.trim().split(/\s+/)[0].toLowerCase(), u.id]));
   const crmToFirst = new Map(AGENTS.map((a) => [a.crm, a.first]));
   for (const [k, value] of Object.entries(pull.counts)) {
-    const [crmId, kpiKey] = k.split("|");
-    const first = crmToFirst.get(crmId);
+    const [owner, kpiKey] = k.split("|");
+    const first = owner.startsWith("fixed:") ? owner.slice(6) : crmToFirst.get(owner);
     const uid = first ? userByFirst.get(first) : undefined;
     if (uid) await upsertEntry(kpiKey, uid, date, value);
   }
