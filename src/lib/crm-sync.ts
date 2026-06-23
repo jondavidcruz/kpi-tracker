@@ -1,15 +1,29 @@
 import { db } from "./db";
 import { searchConversations, getMessages, searchOpportunities } from "./reireply";
 
-// Acquisitions pipelines (Developer + Traditional) and the stage → KPI map.
-const ACQ_PIPELINES = ["KkdpJx35dU4cLtYY9vXP", "8R4HDQD1nUGOUxGCxuCe"];
+// Pipelines we read for stage-move KPIs: AQ Developer + Traditional (Michelle) and
+// DS: Close Profits (Marie/Sharyn). Each opportunity is credited to its assignedTo.
+const PIPELINES = ["KkdpJx35dU4cLtYY9vXP", "8R4HDQD1nUGOUxGCxuCe", "Jm90sKZNvl8e5fKparhv"];
 const STAGE_KPI: Record<string, string> = {
-  // ⚓ VERBAL OFFER (Co-Close/Jon) → Offers Made
+  // 📅 APT SET (Process/Offer Call) → Appointments Set
+  "48cbe48a-abbb-440f-97f8-c56e5776103d": "appts_set",
+  "d405ca99-35e1-4446-8440-47aa8df1ab9e": "appts_set",
+  // Process call done = card reaches comp/numbers review (per Jon)
+  "276eae09-9722-434a-a47b-e97b012e7ce7": "completed_process_calls", // trad COMP TO OFFER
+  "2d6a497d-625f-4d65-92b8-19f8b651d30e": "completed_process_calls", // dev REVIEW NUMBERS
+  // 🧑🏻‍⚖️ COMP REVIEW (AQM) → Comps Done
+  "381d0841-7ffb-4f74-8f34-cdee2cdc0868": "comps_done",
+  // ⚓ VERBAL OFFER → Offers Made
   "6549e8ff-7695-4cd9-9705-e0316be52d7c": "offers_made",
   "c31d1b15-ad0f-4306-9eb3-8cce3909b7be": "offers_made",
-  // 📩 CONTRACT SENT (Co-Close/Jon) → Contracts Sent
+  // 📩 CONTRACT SENT → Contracts Sent
   "28862a2e-e19d-47aa-820f-b95f6b85445c": "acq_contracts_sent",
   "eee45ef4-63ca-4941-9382-abef8ebabba4": "acq_contracts_sent",
+  // 📝 CONTRACT SIGNED (Dispo) → Contracts Signed
+  "e41c86fb-bf38-4aea-88aa-3e8c3f4fd7be": "contracts_signed",
+  "08541c62-3363-4c2c-b04c-970b3b123399": "contracts_signed",
+  // DS: Close Profits — 📣 ON MARKET → Deals Sent to Buyers
+  "408fafdb-27c7-4779-a3b1-34b425f73046": "deals_sold",
 };
 
 // CRM agent → our rep, with the KPI keys each call metric feeds. Connected = a
@@ -100,7 +114,7 @@ export async function pullOpps(date: string, tz: string): Promise<OppPull> {
   const counts: Record<string, number> = {}; // `${crmUserId}|${kpiKey}` -> count
   let scanned = 0;
   let sample: unknown;
-  for (const pid of ACQ_PIPELINES) {
+  for (const pid of PIPELINES) {
     const res = await searchOpportunities(pid, { order: "desc", sortBy: "last_stage_changed_at" });
     if (!res.ok) continue;
     const body = res.body as { opportunities?: Array<Record<string, unknown>> };
