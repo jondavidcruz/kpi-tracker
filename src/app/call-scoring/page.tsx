@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getActiveReps } from "@/lib/data";
-import { scoreCall, saveCallScript } from "@/app/actions";
+import { scoreCall, saveCallScript, deleteCallScore } from "@/app/actions";
 import { friendlyDate } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import type { ScoreArea } from "@/lib/score";
@@ -99,7 +99,15 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
                       <span className="font-bold text-slate-800">{s.repName}</span>
                       <span className="font-normal text-slate-400"> · scored by {s.scoredBy} · {friendlyDate(s.createdAt.toISOString().slice(0, 10))}</span>
                     </div>
-                    <div className={`text-3xl font-extrabold tabular-nums ${scoreColor(s.overall)}`}>{s.overall}<span className="text-base text-slate-400">/100</span></div>
+                    <div className="flex items-center gap-3">
+                      <div className={`text-3xl font-extrabold tabular-nums ${scoreColor(s.overall)}`}>{s.overall}<span className="text-base text-slate-400">/100</span></div>
+                      {(leader || me.name === s.scoredBy) && (
+                        <form action={deleteCallScore}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <button className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-300 hover:bg-red-50 hover:text-red-600" title="Delete this score + its recording">🗑 Delete</button>
+                        </form>
+                      )}
+                    </div>
                   </div>
                   {(s.address || s.sellerName || s.sellerPhone) && (
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">

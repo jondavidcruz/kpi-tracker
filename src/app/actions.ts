@@ -351,6 +351,28 @@ export async function scoreCall(formData: FormData) {
   redirect("/call-scoring?scored=1");
 }
 
+/** Delete a scored call + its recording from storage (frees Supabase space).
+ *  The scorer or a manager can delete (handy for duplicate uploads). */
+export async function deleteCallScore(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const score = await db.callScore.findUnique({ where: { id }, select: { audioUrl: true, scoredBy: true } });
+  if (!score) return;
+  if (!isManager(me) && me.name !== score.scoredBy) return; // own calls or managers
+  // Remove the audio file from Supabase Storage so it doesn't keep costing space.
+  const marker = "/call-recordings/";
+  const idx = score.audioUrl ? score.audioUrl.indexOf(marker) : -1;
+  if (idx >= 0 && adminConfigured()) {
+    const path = score.audioUrl.slice(idx + marker.length);
+    try { await createAdminClient().storage.from("call-recordings").remove([path]); } catch {}
+  }
+  await db.callScore.delete({ where: { id } });
+  revalidatePath("/call-scoring");
+  redirect("/call-scoring");
+}
+
 /** Save/update the approved script for a call type. Managers only. */
 export async function saveCallScript(formData: FormData) {
   const me = await getCurrentUser();
