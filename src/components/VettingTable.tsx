@@ -39,6 +39,13 @@ const meta = (k: string) => STATUS.find((s) => s.key === k) ?? STATUS[0];
 const siteOf = (s: string) => (s || "").split(/\s+/)[0];
 const hostOf = (s: string) => { try { return new URL(siteOf(s)).hostname.replace(/^www\./, ""); } catch { return siteOf(s).replace(/^https?:\/\//, "").split("/")[0]; } };
 const isDev = (p: Prospect) => p.category === "luxury" || p.type === "developer";
+// Compact buy-box summary shown inline (detail without expanding).
+function buyBoxChips(p: Prospect): string[] {
+  const parts = isDev(p)
+    ? [p.dealType, p.buildType, p.priceRange, p.minLotSize && `lot ${p.minLotSize}`, p.closingSpeed]
+    : [p.propertyType, p.priceRange, p.conditionTolerance, (p.minBeds || p.maxBaths) && `${p.minBeds || "?"}bd/${p.maxBaths || "?"}ba`, p.closingSpeed];
+  return parts.flatMap((x) => (x ? String(x).split(",").map((s) => s.trim()) : [])).filter(Boolean);
+}
 
 type SortKey = "name" | "status";
 
@@ -139,10 +146,11 @@ function BuyBoxPanel({ p }: { p: Prospect }) {
   );
 }
 
-export default function VettingTable({ areas, canEdit, today }: {
+export default function VettingTable({ areas, canEdit, today, allowAdd = true }: {
   areas: { area: string; prospects: Prospect[] }[];
   canEdit: boolean;
   today: string;
+  allowAdd?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -191,10 +199,10 @@ export default function VettingTable({ areas, canEdit, today }: {
       {shown.map(({ area, rows }) => (
         <details key={area} open className="overflow-hidden rounded-xl border border-slate-200">
           <summary className="cursor-pointer bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700">
-            🏗 {area} <span className="font-normal text-slate-400">· {rows.length}</span>
+            {area} <span className="font-normal text-slate-400">· {rows.length}</span>
           </summary>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px] border-collapse text-xs">
+            <table className="w-full min-w-[1240px] border-collapse text-xs">
               <thead>
                 <tr className="border-y border-slate-200 bg-white text-[10px] uppercase tracking-wide text-slate-500 [&>th]:border-r [&>th]:border-slate-100 [&>th]:px-2 [&>th]:py-2 [&>th]:text-left">
                   <th className="w-24">Website</th>
@@ -202,8 +210,9 @@ export default function VettingTable({ areas, canEdit, today }: {
                   <th className="w-32">Number</th>
                   <th className="w-32">Number</th>
                   <th className="w-44">Email</th>
-                  <th className="w-[360px]">Notes</th>
-                  <th className="w-40">Buying area</th>
+                  <th className="w-[340px]">Notes</th>
+                  <th className="w-36">Buying area</th>
+                  <th className="w-44">Buy box</th>
                   <th className="w-28">Status</th>
                 </tr>
               </thead>
@@ -239,6 +248,12 @@ export default function VettingTable({ areas, canEdit, today }: {
                         <td className="px-1 py-1 text-slate-600">{canEdit ? <NotesCell id={p.id} value={p.outreachLog} /> : <span className="whitespace-pre-wrap px-1.5">{p.outreachLog}</span>}</td>
                         {/* Buying area */}
                         <td className="px-1 py-1 text-emerald-700">{canEdit ? <Cell id={p.id} field="buyBoxAreas" value={p.buyBoxAreas} placeholder="areas they buy" /> : <span className="px-1.5">{p.buyBoxAreas}</span>}</td>
+                        {/* Buy box summary (edit via ⊕) */}
+                        <td className="px-1.5 py-1 align-top">
+                          {(() => { const chips = buyBoxChips(p); return chips.length
+                            ? <div className="flex flex-wrap gap-0.5">{chips.map((x, i) => <span key={i} className="rounded bg-slate-100 px-1 py-0.5 text-[9px] font-medium text-slate-600">{x}</span>)}</div>
+                            : canEdit ? <button onClick={() => toggleOpen(p.id)} className="text-[10px] text-slate-300 hover:text-brand-navy">+ buy box</button> : <span className="text-slate-300">—</span>; })()}
+                        </td>
                         {/* Status + quick log */}
                         <td className="px-1.5 py-1.5">
                           {canEdit ? (
@@ -260,7 +275,7 @@ export default function VettingTable({ areas, canEdit, today }: {
                       </tr>
                       {canEdit && expanded && (
                         <tr key={p.id + "-box"}>
-                          <td colSpan={8} className="border-b border-slate-200 p-0"><BuyBoxPanel p={p} /></td>
+                          <td colSpan={9} className="border-b border-slate-200 p-0"><BuyBoxPanel p={p} /></td>
                         </tr>
                       )}
                     </Fragment>
@@ -271,7 +286,7 @@ export default function VettingTable({ areas, canEdit, today }: {
           </div>
 
           {/* Add a developer to this area */}
-          {canEdit && (
+          {canEdit && allowAdd && (
             <div className="border-t border-slate-100 bg-slate-50/50 px-3 py-2">
               <details>
                 <summary className="cursor-pointer text-xs font-semibold text-brand-navy">+ Add a buyer to this area</summary>

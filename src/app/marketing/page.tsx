@@ -1,84 +1,31 @@
 import Link from "next/link";
-import { deleteMarketContact, saveMarketingNotes } from "@/app/actions";
+import { saveMarketingNotes } from "@/app/actions";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
-import MarketContactForm from "@/components/MarketContactForm";
+import VettingTable, { type Prospect } from "@/components/VettingTable";
 
 export const dynamic = "force-dynamic";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
 const labelCls = "mb-0.5 block text-[11px] font-semibold text-slate-500";
 
-const TYPES = ["developer", "custom", "remodeler", "flipper", "cash_buyer", "investor", "agent", "other"];
-const REGIONS = [["SD", "San Diego Co."], ["OC", "Orange Co."], ["LA", "Los Angeles"], ["other", "Other / TBD"]];
-
-type MC = Buyer & {
-  sortOrder: number; vetStage: string; vetArea: string; igHandle: string; bestContact: string; lastContacted: string; nextFollowUp: string; outreachLog: string;
-  company: string; title: string; preferredContact: string; decisionMaker: string; buyingFrequency: string; priceRange: string; closingSpeed: string;
-  dealType: string; buildType: string; minLotSize: string;
-  marketDetails: string; minBeds: string; maxBaths: string; propertyType: string; conditionTolerance: string; needsView: string;
-};
-
-function Rolodex({ items }: { items: MC[] }) {
-  return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      {items.length === 0 && <Card className="p-6 text-center text-sm text-slate-400 lg:col-span-2">None yet.</Card>}
-      {items.map((c) => {
-        const stage = c.vetStage || "to_vet";
-        const stageMeta: Record<string, { label: string; cls: string }> = {
-          to_vet: { label: "To vet", cls: "bg-slate-200 text-slate-600" },
-          vetted: { label: "Vetted", cls: "bg-sky-100 text-sky-700" },
-          active: { label: "Active", cls: "bg-emerald-100 text-emerald-700" },
-          hold: { label: "On hold", cls: "bg-amber-100 text-amber-700" },
-          dead: { label: "Dead", cls: "bg-red-100 text-red-700" },
-        };
-        const sm = stageMeta[stage] ?? stageMeta.to_vet;
-        const hay = [c.name, c.company, c.market, c.buyBoxAreas, c.priceRange, c.dealType, c.buildType, c.propertyType, c.status, c.email, c.phone, c.igHandle].filter(Boolean).join(" ").toLowerCase();
-        return (
-        <div key={c.id} data-mc-card data-search={hay} data-stage={stage}>
-        <Card className="p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-bold text-slate-800">{c.name}</span>
-            <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${sm.cls}`}>{sm.label}</span>
-            {c.status && <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{c.status}</span>}
-            {c.market && <span className="ml-auto text-xs text-slate-400">📍 {c.market}</span>}
-          </div>
-          {(c.phone || c.email || c.igHandle) && <p className="mt-1 text-xs text-brand-navy">{[c.phone, c.email, c.igHandle].filter(Boolean).join(" · ")}</p>}
-          {c.website && <a href={`https://${c.website.replace(/^https?:\/\//, "")}`} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:underline">{c.website} ↗</a>}
-          {(c.company || c.title) && <p className="text-[11px] text-slate-500">{[c.company, c.title].filter(Boolean).join(" · ")}</p>}
-          {c.buyBoxAreas && <p className="text-xs text-emerald-700">🎯 {c.buyBoxAreas}</p>}
-          {(() => {
-            const box = c.category === "luxury"
-              ? [c.dealType, c.buildType, c.minLotSize && `lot ${c.minLotSize}`, c.priceRange]
-              : [c.propertyType, c.minBeds && `${c.minBeds}+ bd`, c.maxBaths && `${c.maxBaths} ba`, c.conditionTolerance, c.priceRange];
-            const extra = [c.closingSpeed, c.buyingFrequency, c.needsView, c.decisionMaker, c.preferredContact && `via ${c.preferredContact}`];
-            const all = [...box, ...extra].filter(Boolean);
-            return all.length ? (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {all.map((x, i) => <span key={i} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{x}</span>)}
-              </div>
-            ) : null;
-          })()}
-          {c.buyBox && <p className="text-xs text-slate-600">{c.buyBox}</p>}
-          {c.bestContact && <p className="text-xs text-violet-700">📣 Reach: {c.bestContact}</p>}
-          {c.lastContacted && <p className="text-[11px] text-slate-400">Last contacted {c.lastContacted}</p>}
-          {c.outreachLog && <p className="mt-0.5 rounded bg-slate-50 px-2 py-1 text-[11px] text-slate-600">📋 {c.outreachLog}</p>}
-          {c.notes && <p className="mt-0.5 text-xs italic text-slate-500">{c.notes}</p>}
-          <details className="mt-1.5">
-            <summary className="cursor-pointer text-[11px] font-medium text-slate-400 hover:text-brand-navy">Edit / delete</summary>
-            <div className="mt-2"><MarketContactForm c={c} /></div>
-            <form action={deleteMarketContact} className="mt-1"><input type="hidden" name="id" value={c.id} /><button className="text-[11px] font-medium text-slate-300 hover:text-red-600">Delete</button></form>
-          </details>
-        </Card>
-        </div>
-        );
-      })}
-    </div>
-  );
+// Same row shape the Buyer Research spreadsheet uses — both pages share one table.
+function toProspect(r: Record<string, unknown>): Prospect {
+  const s = (k: string) => String(r[k] ?? "");
+  return {
+    id: s("id"), name: s("name"), website: s("website"), email: s("email"), phone: s("phone"), phone2: s("phone2"),
+    buyBoxAreas: s("buyBoxAreas"), outreachLog: s("outreachLog"), lastContacted: s("lastContacted"), nextFollowUp: s("nextFollowUp"),
+    vetStage: s("vetStage"), vetStatus: s("vetStatus"), igHandle: s("igHandle"),
+    category: s("category"), type: s("type"), title: s("title"), company: s("company"), preferredContact: s("preferredContact"),
+    dealType: s("dealType"), buildType: s("buildType"), closingSpeed: s("closingSpeed"), priceRange: s("priceRange"), minLotSize: s("minLotSize"),
+    propertyType: s("propertyType"), minBeds: s("minBeds"), maxBaths: s("maxBaths"), conditionTolerance: s("conditionTolerance"), needsView: s("needsView"),
+    marketDetails: s("marketDetails"), decisionMaker: s("decisionMaker"), buyingFrequency: s("buyingFrequency"), bestContact: s("bestContact"),
+  };
 }
+
 
 export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ saved?: string; imp?: string }> }) {
   const me = await getCurrentUser();
@@ -107,12 +54,18 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       status: r.status, email: r.email, phone: r.phone, website: r.website, buyBox: r.buyBox,
       buyBoxAreas: r.buyBoxAreas, lat: r.lat, lng: r.lng, notes: r.notes,
     }));
-  // Markets & Buyers shows ONLY vetted/active buyers. Everyone else is in the
-  // Buyer Vetting pipeline below (unvetted) or archived (not interested).
+  // Vetted Buyers shows ONLY vetted/active buyers — same spreadsheet table as Buyer
+  // Research, grouped by type so it reads consistently across both pages.
   const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
   const vettedRows = rows.filter(VETTED);
-  const luxury = vettedRows.filter((r) => r.category === "luxury") as MC[];
-  const distressed = vettedRows.filter((r) => r.category !== "luxury") as MC[];
+  const isDevRow = (r: { category: string; type: string }) => r.category === "luxury" || r.type === "developer";
+  const devs = vettedRows.filter(isDevRow).map(toProspect);
+  const flips = vettedRows.filter((r) => !isDevRow(r)).map(toProspect);
+  const buyerGroups = [
+    { area: "🏗 Developers", prospects: devs },
+    { area: "🔨 Fix & Flippers", prospects: flips },
+  ].filter((g) => g.prospects.length > 0);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
   const markets = settings.marketingMarkets.split("\n").map((m) => m.trim()).filter(Boolean);
 
   return (
@@ -171,20 +124,15 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         </details>
       </Card>
 
-      {/* Rolodex by category — VETTED buyers only. New buyers start in Buyer
-          Research, then graduate here once vetted. */}
+      {/* Vetted buyers — same spreadsheet view as Buyer Research, grouped by type.
+          New buyers start in Buyer Research and graduate here once vetted. */}
       <Card className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-emerald-300 bg-emerald-50/40 p-3">
-        <span className="text-xs text-slate-600">These are your vetted buyers. To add or research a new buyer, start in <strong>Buyer Research</strong> — mark them ✓ Vetted there and they appear here automatically.</span>
+        <span className="text-xs text-slate-600">{devs.length + flips.length} vetted {devs.length + flips.length === 1 ? "buyer" : "buyers"}. Click any cell to edit · ⊕ opens the buy box · set Status back to a working stage to send one to Buyer Research.</span>
         <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700">🔎 Go to Buyer Research</Link>
       </Card>
-      <div>
-        <SectionTitle title="🏛 Luxury / Developers" subtitle={`${luxury.length} vetted developers & luxury buyers`} accent="bg-brand-navy" />
-        <Rolodex items={luxury} />
-      </div>
-      <div>
-        <SectionTitle title="🔨 Distressed / Flippers" subtitle={`${distressed.length} vetted flippers & cash buyers`} accent="bg-amber-400" />
-        <Rolodex items={distressed} />
-      </div>
+      {buyerGroups.length === 0
+        ? <Card className="p-6 text-center text-sm text-slate-400">No vetted buyers yet — vet developers in Buyer Research and they&apos;ll show here.</Card>
+        : <VettingTable areas={buyerGroups} canEdit={canAccessMarketing(me)} today={today} allowAdd={false} />}
 
     </div>
   );
