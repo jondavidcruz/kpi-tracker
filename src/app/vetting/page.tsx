@@ -37,6 +37,10 @@ export default async function VettingPage() {
     id: r.id, name: r.name, website: r.website, email: r.email, phone: r.phone, phone2: r.phone2,
     buyBoxAreas: r.buyBoxAreas, outreachLog: r.outreachLog, lastContacted: r.lastContacted,
     nextFollowUp: r.nextFollowUp, vetStage: r.vetStage, vetStatus: r.vetStatus, igHandle: r.igHandle,
+    category: r.category, type: r.type, title: r.title, company: r.company, preferredContact: r.preferredContact,
+    dealType: r.dealType, buildType: r.buildType, closingSpeed: r.closingSpeed, priceRange: r.priceRange, minLotSize: r.minLotSize,
+    propertyType: r.propertyType, minBeds: r.minBeds, maxBaths: r.maxBaths, conditionTolerance: r.conditionTolerance, needsView: r.needsView,
+    marketDetails: r.marketDetails, decisionMaker: r.decisionMaker, buyingFrequency: r.buyingFrequency, bestContact: r.bestContact,
   });
   const areaMap = new Map<string, Prospect[]>();
   for (const r of rows) { const k = r.vetArea || UNASSIGNED; const a = areaMap.get(k) ?? []; a.push(toProspect(r)); areaMap.set(k, a); }

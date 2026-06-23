@@ -1515,6 +1515,31 @@ export async function saveProspectField(formData: FormData) {
   revalidatePath("/vetting");
 }
 
+/** Save the CRM buy-box detail for a Buyer Research row (the expandable panel):
+ *  type (developer vs fix/flip) + the dropdown fields, matching the CRM form. */
+export async function saveBuyerBox(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const g = (k: string) => String(formData.get(k) ?? "").slice(0, 300);
+  const category = g("category") === "luxury" ? "luxury" : "distressed";
+  await db.marketContact.update({
+    where: { id },
+    data: {
+      category,
+      type: category === "luxury" ? "developer" : "flipper",
+      title: g("title"), company: g("company"), preferredContact: g("preferredContact"),
+      dealType: g("dealType"), buildType: g("buildType"), closingSpeed: g("closingSpeed"),
+      priceRange: g("priceRange"), minLotSize: g("minLotSize"),
+      propertyType: g("propertyType"), minBeds: g("minBeds"), maxBaths: g("maxBaths"),
+      conditionTolerance: g("conditionTolerance"), needsView: g("needsView"), marketDetails: g("marketDetails"),
+      decisionMaker: g("decisionMaker"), buyingFrequency: g("buyingFrequency"), bestContact: g("bestContact"),
+    },
+  });
+  revalidatePath("/vetting");
+}
+
 /** Inline-edit a prospect's core fields from the spreadsheet (name, contact, area). */
 export async function saveProspect(formData: FormData) {
   const me = await getCurrentUser();
