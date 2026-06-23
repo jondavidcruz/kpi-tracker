@@ -27,8 +27,11 @@ function methodFor(skill: string): string {
 
 export default async function TrainingPage() {
   const me = await getCurrentUser();
-  if (!isManager(me)) {
-    return <Card className="mx-auto max-w-md p-8 text-center"><div className="mb-2 text-3xl">🔒</div><h1 className="text-xl font-bold">Managers only</h1><Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link></Card>;
+  const firstName = me?.name?.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const manager = isManager(me); // Jon + Marie — can edit
+  const canView = manager || ["michelle", "marie", "sharyn"].includes(firstName); // reps can view their own
+  if (!me || !canView) {
+    return <Card className="mx-auto max-w-md p-8 text-center"><div className="mb-2 text-3xl">🔒</div><h1 className="text-xl font-bold">Not available</h1><Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link></Card>;
   }
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
@@ -39,6 +42,8 @@ export default async function TrainingPage() {
     db.coachingSession.findMany({ orderBy: { date: "desc" }, take: 200 }),
   ]);
   const team = reps.filter((r) => r.position !== "");
+  // Reps only see (and only read) their own plan; managers see + edit everyone.
+  const visibleTeam = manager ? team : team.filter((r) => r.id === me.id);
   const focusBy = (id: string) => focuses.filter((f) => f.userId === id);
   const schedBy = (id: string) => schedules.filter((s) => s.userId === id);
   const sessBy = (id: string) => sessions.filter((s) => s.userId === id).slice(0, 6);
@@ -48,8 +53,8 @@ export default async function TrainingPage() {
       <SectionTitle title="🎓 Training Portal" subtitle="Per-rep coaching plans, schedule, an AI coaching assistant, and a log of every session." accent="bg-brand-gold"
         right={<Link href="/call-scoring" className="text-sm font-semibold text-brand-navy hover:underline">🎧 Score a call →</Link>} />
 
-      {/* AI coaching assistant — the live training aid */}
-      <AICoach reps={team.map((r) => ({ name: r.name, role: r.position, skills: focusBy(r.id).map((f) => f.skill) }))} />
+      {/* AI coaching assistant — managers run it */}
+      {manager && <AICoach reps={team.map((r) => ({ name: r.name, role: r.position, skills: focusBy(r.id).map((f) => f.skill) }))} />}
 
       {/* Weekly schedule board */}
       <Card className="p-4">
@@ -97,7 +102,7 @@ export default async function TrainingPage() {
       </Card>
 
       {/* Per-rep coaching plans */}
-      {team.map((rep) => {
+      {visibleTeam.map((rep) => {
         const repFocuses = focusBy(rep.id);
         const repSched = schedBy(rep.id);
         const repSess = sessBy(rep.id);
@@ -121,10 +126,11 @@ export default async function TrainingPage() {
                         <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-navy text-[10px] font-bold text-white">{i + 1}</span>
                         <span className="flex-1 text-sm font-semibold text-slate-700">{f.skill}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_CLS[f.status] ?? "bg-slate-100"}`}>{f.status}</span>
-                        <form action={deleteTrainingFocus}><input type="hidden" name="id" value={f.id} /><button className="text-slate-300 hover:text-red-600">×</button></form>
+                        {manager && <form action={deleteTrainingFocus}><input type="hidden" name="id" value={f.id} /><button className="text-slate-300 hover:text-red-600">×</button></form>}
                       </div>
                       {f.notes && <div className="mt-0.5 pl-7 text-xs text-slate-500">{f.notes}</div>}
                       <div className="mt-0.5 pl-7 text-[11px] text-emerald-700">{methodFor(f.skill)}</div>
+                      {manager && (
                       <form action={updateTrainingFocus} className="mt-1 flex items-center gap-1.5 pl-7">
                         <input type="hidden" name="id" value={f.id} />
                         <select name="status" defaultValue={f.status} className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px]">
@@ -132,9 +138,11 @@ export default async function TrainingPage() {
                         </select>
                         <button className="rounded bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-300">update</button>
                       </form>
+                      )}
                     </div>
                   ))}
                 </div>
+                {manager && (
                 <form action={addTrainingFocus} className="mt-2 space-y-1.5">
                   <input type="hidden" name="userId" value={rep.id} />
                   <input name="skill" placeholder="Add a focus skill…" required className={inputCls} />
@@ -143,7 +151,9 @@ export default async function TrainingPage() {
                     <button className="shrink-0 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">+ Add</button>
                   </div>
                 </form>
+                )}
                 {/* Schedule editing */}
+                {manager && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-[11px] font-semibold text-slate-400 hover:text-brand-navy">🗓 Edit schedule</summary>
                   <div className="mt-1 space-y-1">
@@ -157,11 +167,13 @@ export default async function TrainingPage() {
                     <button className="rounded bg-slate-700 px-2 py-1 text-xs font-semibold text-white">+</button>
                   </form>
                 </details>
+                )}
               </div>
 
               {/* Coaching log */}
               <div>
                 <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-400">🧑‍🏫 Coaching log</div>
+                {manager && (
                 <form action={logCoachingSession} className="space-y-1.5 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
                   <input type="hidden" name="userId" value={rep.id} />
                   <div className="flex gap-1.5">
@@ -176,6 +188,7 @@ export default async function TrainingPage() {
                     <button className="shrink-0 rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-navy-700">Log</button>
                   </div>
                 </form>
+                )}
                 <div className="mt-2 space-y-1.5">
                   {repSess.length === 0 && <div className="text-xs text-slate-400">No sessions logged yet.</div>}
                   {repSess.map((s) => (
@@ -185,7 +198,7 @@ export default async function TrainingPage() {
                         {s.skill && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{s.skill}</span>}
                         {s.rating != null && <span className="text-amber-500">{"★".repeat(s.rating)}</span>}
                         <span className="ml-auto text-[10px] text-slate-300">{friendlyDate(s.date)}</span>
-                        <form action={deleteCoachingSession}><input type="hidden" name="id" value={s.id} /><button className="text-slate-300 hover:text-red-600">×</button></form>
+                        {manager && <form action={deleteCoachingSession}><input type="hidden" name="id" value={s.id} /><button className="text-slate-300 hover:text-red-600">×</button></form>}
                       </div>
                       <div className="mt-0.5 text-slate-600">{s.notes}</div>
                       {s.nextStep && <div className="mt-0.5 text-emerald-700">→ {s.nextStep}</div>}

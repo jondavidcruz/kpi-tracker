@@ -10,16 +10,17 @@ import {
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
 
-type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; badge?: number };
+type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; trainingOnly?: boolean; badge?: number };
 
 export default function Sidebar({
-  name, manager, admin, marketing, timecard, allowedPaths, newTickets, newSuggestions,
+  name, manager, admin, marketing, timecard, training, allowedPaths, newTickets, newSuggestions,
 }: {
   name: string;
   manager: boolean;
   admin: boolean;
   marketing: boolean;
   timecard: boolean;
+  training: boolean;
   allowedPaths?: string[] | null;
   newTickets: number;
   newSuggestions: number;
@@ -45,7 +46,7 @@ export default function Sidebar({
       { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
     ] },
     { label: "Coaching", items: [
-      { href: "/training", label: "Training Portal", Icon: GraduationCap, managerOnly: true },
+      { href: "/training", label: "Training Portal", Icon: GraduationCap, trainingOnly: true },
       { href: "/alerts", label: "Alerts", Icon: Bell, managerOnly: true },
       { href: "/pip", label: "PIPs", Icon: ShieldAlert, managerOnly: true },
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
@@ -75,7 +76,7 @@ export default function Sidebar({
   ];
 
   const visible = (it: Item) =>
-    (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard) &&
+    (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard) && (!it.trainingOnly || training) &&
     (!allowedPaths || allowedPaths.some((p) => it.href === p || it.href.startsWith(p + "/")));
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 

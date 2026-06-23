@@ -36,6 +36,8 @@ export default async function AppShell({ children }: { children: React.ReactNode
   const marketing = canAccessMarketing(me);
   const payroll = canAccessPayroll(me);
   const timecard = payroll; // Payroll is leadership-only (Jon, Viktoriia, Enrico)
+  const trainFirst = me.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const training = manager || ["michelle", "marie", "sharyn"].includes(trainFirst); // can view the Training Portal
   const [newTickets, newSuggestions, openOffboarding] = await Promise.all([
     manager ? db.ticket.count({ where: { status: "new" } }) : Promise.resolve(0),
     admin ? db.suggestion.count({ where: { status: "proposed" } }) : Promise.resolve(0),
@@ -60,7 +62,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   return (
     <div className="md:flex md:min-h-screen">
-      <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} allowedPaths={allow} newTickets={newTickets} newSuggestions={newSuggestions} />
+      <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} training={training} allowedPaths={allow} newTickets={newTickets} newSuggestions={newSuggestions} />
       <main className="min-w-0 flex-1">
         <div className="mx-auto w-full max-w-[1320px] px-4 py-6 md:px-8 md:py-8">
           {openOffboarding && (
