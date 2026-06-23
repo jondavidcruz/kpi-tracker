@@ -28,6 +28,47 @@ async function ghl(path: string, params?: Record<string, string>): Promise<GhlRe
 
 export type CrmUser = { id: string; name: string; email: string };
 
+export async function searchConversations(extra?: Record<string, string>) {
+  const loc = process.env.REIREPLY_LOCATION_ID ?? "";
+  return ghl("/conversations/search", { locationId: loc, limit: "20", ...extra });
+}
+
+export async function getMessages(conversationId: string) {
+  return ghl(`/conversations/${conversationId}/messages`);
+}
+
+/** Probe a few recent conversations and report the SHAPE of call messages (no PII)
+ *  so we can build the daily aggregation against the real field names. */
+export async function probeCallShape(): Promise<unknown> {
+  const conv = await searchConversations();
+  if (!conv.ok) return { step: "search", status: conv.status, error: conv.body };
+  const cb = conv.body as { conversations?: Array<{ id: string; lastMessageType?: string }> };
+  const convs = cb?.conversations ?? [];
+  const typesSeen = new Set<string>();
+  const callSamples: unknown[] = [];
+  for (const c of convs.slice(0, 8)) {
+    const m = await getMessages(c.id);
+    if (!m.ok) continue;
+    const mb = m.body as { messages?: { messages?: unknown[] } | unknown[] };
+    const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []);
+    for (const msg of list) {
+      const x = msg as Record<string, unknown>;
+      const mt = String(x.messageType ?? x.type ?? "");
+      typesSeen.add(mt);
+      if (/call/i.test(mt) && callSamples.length < 6) {
+        // Pick only structural / non-PII fields.
+        callSamples.push({
+          keys: Object.keys(x),
+          messageType: x.messageType, type: x.type, direction: x.direction, status: x.status,
+          dateAdded: x.dateAdded, userId: x.userId, callDuration: x.callDuration, duration: x.duration,
+          meta: x.meta, attachments: undefined,
+        });
+      }
+    }
+  }
+  return { conversationsScanned: convs.length, messageTypesSeen: [...typesSeen], callSamples };
+}
+
 /** List the CRM users for our location — verifies auth + gives the agent→rep map. */
 export async function listCrmUsers(): Promise<{ ok: boolean; status: number; users: CrmUser[]; raw: unknown }> {
   const loc = process.env.REIREPLY_LOCATION_ID ?? "";
