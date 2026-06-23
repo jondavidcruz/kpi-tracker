@@ -14,6 +14,8 @@ import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
 import { rollupResearchKpis, orgToday } from "@/lib/research-kpis";
+import { migrateScoreById } from "@/lib/recording-migrate";
+import { after } from "next/server";
 import { todayStr } from "@/lib/date";
 import { quarterOf, quarterEnd } from "@/lib/eos";
 import { encryptSecret, vaultConfigured } from "@/lib/crypto";
@@ -326,7 +328,7 @@ export async function scoreCall(formData: FormData) {
   if (result.error) redirect(`/call-scoring?err=${encodeURIComponent(result.error)}`);
 
   const audioUrl = String(formData.get("audioUrl") ?? "").trim().slice(0, 500);
-  await db.callScore.create({
+  const created = await db.callScore.create({
     data: {
       repName: repName || "(unspecified)",
       callType,
@@ -347,6 +349,9 @@ export async function scoreCall(formData: FormData) {
     const label = callType ? callTypeLabel(callType) : "Call";
     await sendCallAuditChat(`🎧 *Call scored — ${repName || "rep"}* · ${label} · *${result.overall}/100*\n▶️ Listen: ${audioUrl}`).catch(() => {});
   }
+  // Move the recording to Google Drive right away (runs after the response, so the
+  // user isn't kept waiting). Nightly sweep is the fallback if this misses.
+  if (audioUrl) after(() => migrateScoreById(created.id).catch(() => {}));
   revalidatePath("/call-scoring");
   redirect("/call-scoring?scored=1");
 }
