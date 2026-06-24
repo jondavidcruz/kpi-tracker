@@ -147,6 +147,12 @@ export default function UnderwritingCalculator() {
   const setV = (k: string, val: string) => setF((p) => ({ ...p, [k]: val }));
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV(k, e.target.value);
 
+  // Additional-cost rows (cash-for-keys, eviction, liens…) — 1 by default, "+ add" for more.
+  const [aExtraN, setAExtraN] = useState(1);
+  const [nExtraN, setNExtraN] = useState(1);
+  const extraSum = (prefix: string, count: number) => Array.from({ length: count }, (_, i) => n(`${prefix}${i}`)).reduce((s, x) => s + x, 0);
+  const extraItems = (prefix: string, count: number) => Array.from({ length: count }, (_, i) => ({ amt: n(`${prefix}${i}`), note: v(`${prefix}Note${i}`) })).filter((x) => x.amt > 0);
+
   const [comping, setComping] = useState(false);
   const [compMsg, setCompMsg] = useState("");
   async function pullComps() {
@@ -189,7 +195,7 @@ export default function UnderwritingCalculator() {
   // it). We only subtract KNOWN, deal-specific costs: HOA/special dues + extras
   // (cash-for-keys, eviction, liens). Detailed money-cost math lives on the Flip tab.
   const aHoa = n("aHoa");
-  const aExtra = n("aExtra");
+  const aExtra = extraSum("aExtra", aExtraN);
   const flipperTarget = arv * (num(marketPct) / 100);
   const cashMao = flipperTarget - repairs - aHoa - aExtra - aFee;
   const aAnchorPct = v("aAnchorPct") || "10";
@@ -208,7 +214,7 @@ export default function UnderwritingCalculator() {
   const nSellerClose = nList * (nSellerClosePct / 100);
   const nHoldMonths = n("nHoldMonths") || 2;        // months on market before it sells
   const nHoaCost = n("nHoa") * nHoldMonths;          // HOA dues while listed
-  const nExtra = n("nExtra");                        // manual override: cash-for-keys, eviction, etc.
+  const nExtra = extraSum("nExtra", nExtraN);        // manual override: cash-for-keys, eviction, etc.
   const nNet = nList - nRepairCredit - nList * (nComm / 100) - nSellerClose - nHoaCost - nExtra;
   const novMao = nNet - nMinFee;
   const nAnchorPct = v("nAnchorPct") || "7";
@@ -267,7 +273,7 @@ export default function UnderwritingCalculator() {
       const comps = [1, 2, 3].map((i) => { const a = v(`comp${i}`); const p = v(`comp${i}p`); const d = v(`comp${i}d`); return a ? `${esc(a)}${p ? ` — $${esc(p)}` : ""}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...(aExtra > 0 ? ([[v("aExtraNote") || "Additional costs", money(aExtra)]] as [string, string][]) : []), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
+        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...extraItems("aExtra", aExtraN).map((x) => [x.note || "Additional cost", money(x.amt)] as [string, string]), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
         note: "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. On assignment the end buyer covers BOTH the seller's and the buyer's closing costs, so no closing is deducted here. If the seller won't meet MAO, pivot to Novation.",
       };
     }
@@ -275,7 +281,7 @@ export default function UnderwritingCalculator() {
       const comps = [1, 2, 3].map((i) => { const a = v(`nComp${i}`); const p = v(`nComp${i}p`); const d = v(`nComp${i}d`); return a ? `${esc(a)} — ${p ? "$" + esc(p) : "?"}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Novation Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>As-is comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["List price (current similar-condition)", money(nList)], ["Buyer repair credit", money(nRepairCredit)], [`Agent commission (${nComm}%)`, money(nList * (nComm / 100))], [`Seller closing ${nSellerClosePct}% (we cover seller side only)`, money(nSellerClose)], ...(nHoaCost > 0 ? ([[`HOA dues (${nHoldMonths} mo)`, money(nHoaCost)]] as [string, string][]) : []), ...(nExtra > 0 ? ([[v("nExtraNote") || "Additional costs", money(nExtra)]] as [string, string][]) : []), ["Net after costs", money(nNet)], ["Our minimum fee", money(nMinFee)], ["🎯 Novation MAO (max seller payout)", money(novMao)], [`Anchor / opening payout (${nAnchorPct}% below MAO)`, money(novAnchor)], ["Negotiation range (seller payout)", `${money(novAnchor)} → ${money(novMao)}`], ["Our fee at anchor", money(feeAtAnchor)]],
+        rows: [["List price (current similar-condition)", money(nList)], ["Buyer repair credit", money(nRepairCredit)], [`Agent commission (${nComm}%)`, money(nList * (nComm / 100))], [`Seller closing ${nSellerClosePct}% (we cover seller side only)`, money(nSellerClose)], ...(nHoaCost > 0 ? ([[`HOA dues (${nHoldMonths} mo)`, money(nHoaCost)]] as [string, string][]) : []), ...extraItems("nExtra", nExtraN).map((x) => [x.note || "Additional cost", money(x.amt)] as [string, string]), ["Net after costs", money(nNet)], ["Our minimum fee", money(nMinFee)], ["🎯 Novation MAO (max seller payout)", money(novMao)], [`Anchor / opening payout (${nAnchorPct}% below MAO)`, money(novAnchor)], ["Negotiation range (seller payout)", `${money(novAnchor)} → ${money(novMao)}`], ["Our fee at anchor", money(feeAtAnchor)]],
         note: "No holding costs (retail buyer). On novation we cover the SELLER's closing only (% of list) — the buyer pays their own. List conservatively to sell under 90 days; disclose we market higher to make it work.",
       };
     }
@@ -405,6 +411,23 @@ export default function UnderwritingCalculator() {
     );
   };
 
+  // Repeatable additional-cost rows — 1 by default, "+ add another" for more line items.
+  const additionalCosts = (prefix: string, count: number, setCount: (n: number) => void) => (
+    <>
+      <div className={optDiv}>Additional costs (cash-for-keys, eviction, liens…)</div>
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Field k={`${prefix}${i}`} label={count > 1 ? `Extra cost ${i + 1} ($)` : "Extra cost ($)"} prefix="$" placeholder="0" req="opt" />
+          <Field k={`${prefix}Note${i}`} label="What is it?" placeholder="e.g. cash for keys" req="opt" />
+        </div>
+      ))}
+      <div className="sm:col-span-2 flex items-center gap-3">
+        <button type="button" onClick={() => setCount(count + 1)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-200">+ Add another cost</button>
+        {count > 1 && <button type="button" onClick={() => setCount(count - 1)} className="text-[11px] font-semibold text-slate-400 hover:text-red-500">− Remove last</button>}
+      </div>
+    </>
+  );
+
   // Big-ticket repair checklist — check what's needed; the cost folds into rehab.
   const majorRepairs = () => (
     <div className="sm:col-span-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-200">
@@ -509,9 +532,7 @@ export default function UnderwritingCalculator() {
               <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
               <Field k="aHoa" label="HOA / special dues ($)" prefix="$" placeholder="0" req="opt" />
               <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 No need to enter the flipper&apos;s holding or money costs — the market tier % already builds in their carry and profit. Detailed money-cost math lives on the Flip / Wholetail tab.</p>
-              <div className={optDiv}>Additional costs (cash-for-keys, eviction, liens…)</div>
-              <Field k="aExtra" label="Extra cost ($)" prefix="$" placeholder="0" req="opt" />
-              <Field k="aExtraNote" label="What is it?" placeholder="e.g. cash for keys" req="opt" />
+              {additionalCosts("aExtra", aExtraN, setAExtraN)}
               <div className={goodDiv}>🟢 ARV comps (required · addr · sold $ · days on market)</div>
               <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">{compsNote}</p>
               {[1, 2, 3].map((i) => (
@@ -543,9 +564,7 @@ export default function UnderwritingCalculator() {
               <Field k="nHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="nHoldMonths" label="Months on market" placeholder="2" req="opt" />
               <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="7" req="opt" />
-              <div className={optDiv}>Additional costs (manual override — cash-for-keys, eviction, liens…)</div>
-              <Field k="nExtra" label="Extra cost ($)" prefix="$" placeholder="0" req="opt" />
-              <Field k="nExtraNote" label="What is it?" placeholder="e.g. eviction" req="opt" />
+              {additionalCosts("nExtra", nExtraN, setNExtraN)}
               <div className={goodDiv}>🟢 As-is comparables (required · addr · sold $ · days on market)</div>
               <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">{compsNote}</p>
               {[1, 2, 3].map((i) => (
@@ -654,7 +673,7 @@ export default function UnderwritingCalculator() {
               <Res label={`Flipper resale target (${marketPct}% of ARV)`} value={money(flipperTarget)} tone="muted" />
               <Res label="− Repairs" value={money(repairs)} tone="muted" />
               {aHoa > 0 && <Res label="− HOA / special dues" value={money(aHoa)} tone="muted" />}
-              {aExtra > 0 && <Res label={`− ${v("aExtraNote") || "Additional costs"}`} value={money(aExtra)} tone="muted" />}
+              {extraItems("aExtra", aExtraN).map((x, i) => <Res key={i} label={`− ${x.note || "Additional cost"}`} value={money(x.amt)} tone="muted" />)}
               <Res label="− Assignment fee" value={money(aFee)} tone="muted" />
               <Res label="🎯 Cash MAO (max offer to seller)" value={money(cashMao)} tone={cashMao > 0 ? "navy" : "bad"} big />
               <Res label="⚓ Anchor (open here)" value={money(aAnchor)} tone="good" />
@@ -664,7 +683,7 @@ export default function UnderwritingCalculator() {
           {tab === "novation" && (
             <>
               {nHoaCost > 0 && <Res label={`− HOA dues (${nHoldMonths} mo)`} value={money(nHoaCost)} tone="muted" />}
-              {nExtra > 0 && <Res label={`− ${v("nExtraNote") || "Additional costs"}`} value={money(nExtra)} tone="muted" />}
+              {extraItems("nExtra", nExtraN).map((x, i) => <Res key={i} label={`− ${x.note || "Additional cost"}`} value={money(x.amt)} tone="muted" />)}
               <Res label="Net after credit, commission, closing, HOA + extras" value={money(nNet)} tone="muted" />
               <Res label="🎯 Novation MAO (max seller payout)" value={money(novMao)} tone={novMao > 0 ? "navy" : "bad"} big />
               <Res label="⚓ Anchor payout (open here)" value={money(novAnchor)} tone="good" />
