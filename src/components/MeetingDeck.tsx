@@ -34,19 +34,32 @@ function RoleBlock({ rt }: { rt: MeetingDeck["lastWeek"]["roleTables"][number] }
 function KpiSlide({ title, glance, roleTables }: { title: string; glance: MeetingDeck["lastWeek"]["glance"]; roleTables: MeetingDeck["lastWeek"]["roleTables"] }) {
   return (
     <Light title={title}>
-      <div className="grid grid-cols-4 gap-[1.5%]">
-        {glance.slice(0, 8).map((g) => (
-          <div key={g.key} className="rounded-lg bg-slate-50 p-[2.5%] ring-1 ring-slate-200">
-            <div className="text-slate-500" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{g.name}</div>
-            <div className="font-extrabold tabular-nums text-slate-900" style={{ fontSize: "clamp(14px,2.4cqw,32px)" }}>{g.value}</div>
-          </div>
-        ))}
-      </div>
+      {glance.length > 0 && (
+        <div className="grid grid-cols-4 gap-[1.5%]">
+          {glance.slice(0, 8).map((g) => (
+            <div key={g.key} className="rounded-lg bg-slate-50 p-[2.5%] ring-1 ring-slate-200">
+              <div className="text-slate-500" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{g.name}</div>
+              <div className="font-extrabold tabular-nums text-slate-900" style={{ fontSize: "clamp(14px,2.4cqw,32px)" }}>{g.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="mt-[2.5%] space-y-[1.5%]">
         {roleTables.map((rt) => <RoleBlock key={rt.label} rt={rt} />)}
       </div>
     </Light>
   );
+}
+
+// Split a KPI section across slides so no position's table gets clipped: the first
+// slide carries the glance tiles + the first position; remaining positions (incl.
+// Dispositions) get their own roomy slide.
+function pushKpiSlides(s: Slide[], title: string, section: MeetingDeck["lastWeek"]) {
+  const tables = section.roleTables;
+  s.push({ name: `${title} KPIs`, node: <KpiSlide title={`${title} — Team KPIs`} glance={section.glance} roleTables={tables.slice(0, 1)} /> });
+  if (tables.length > 1) {
+    s.push({ name: `${title} KPIs (cont.)`, node: <KpiSlide title={`${title} — Team KPIs (cont.)`} glance={[]} roleTables={tables.slice(1)} /> });
+  }
 }
 
 function buildSlides(d: MeetingDeck): Slide[] {
@@ -80,11 +93,11 @@ function buildSlides(d: MeetingDeck): Slide[] {
     <Navy title="Change / Coming Soon"><Bullets items={d.comingSoon} empty="Add upcoming changes below in Edit deck content." /></Navy>
   )});
 
-  // 5. Last week KPIs — per position, top to bottom
-  s.push({ name: "Last Week KPIs", node: <KpiSlide title="Last Week — Team KPIs" glance={d.lastWeek.glance} roleTables={d.lastWeek.roleTables} /> });
+  // 5. Last week KPIs — split so each position (incl. Dispositions) is fully visible
+  pushKpiSlides(s, "Last Week", d.lastWeek);
 
-  // 6. This month KPIs — same view, month-to-date
-  s.push({ name: "This Month KPIs", node: <KpiSlide title={`This Month — Team KPIs (${d.monthly.label})`} glance={d.monthly.glance} roleTables={d.monthly.roleTables} /> });
+  // 6. This month KPIs — same split, month-to-date
+  pushKpiSlides(s, `This Month (${d.monthly.label})`, d.monthly);
 
   // 7. Pipeline — richer, more visual
   s.push({ name: "Active Pipeline", node: (
