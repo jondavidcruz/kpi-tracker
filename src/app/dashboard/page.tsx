@@ -254,6 +254,9 @@ export default async function DashboardPage({
         <MetricCard label="Logged today" value={repsLoggedToday} icon={<Users size={18} />} spark={loggedSeries} delta={wkDelta(loggedSeries)} deltaTone={wkDelta(loggedSeries) >= 0 ? "good" : "neutral"} />
       </div>
 
+      {/* CRM activity — managers only: who's actually working the CRM today */}
+      {isManager(me) && <CrmActivityStrip />}
+
       {/* Company scoreboard — acquisitions output (this month) + closings (this year) */}
       <section>
         <SectionTitle title="📊 Company scoreboard" subtitle={`Acquisitions output this month · closings year-to-date (${year})`} accent="bg-brand-gold" />
@@ -278,7 +281,9 @@ export default async function DashboardPage({
         <SectionTitle title="🫙 Deal funnel" subtitle="This month: leads → opportunities → offers → contracts → closed (% = conversion from the stage above)" accent="bg-brand-navy" />
         <Card className="p-5">
           <DealFunnel stages={funnelStages} />
-          {!funnelHasData && (
+          {funnelHasData ? (
+            <p className="mt-3 text-[11px] text-slate-400">Each stage is logged separately, so a stage can read over 100% of the one above it — e.g. conversations from leads generated in earlier months still count this month. <strong>Contracts</strong> here = contracts <em>signed</em>; <strong>Contracts sent (mo)</strong> above counts contracts <em>sent</em>, so the two differ. <strong>Closed</strong> fills in from Escrow &amp; Closing.</p>
+          ) : (
             <p className="mt-3 text-[11px] text-slate-400">Nothing logged this month yet. The funnel fills in as the team logs leads, conversations, offers and contracts on <Link href="/entry" className="font-semibold text-slate-500 underline">Enter KPIs</Link>, and as deals are closed in Escrow &amp; Closing.</p>
           )}
         </Card>
@@ -303,9 +308,6 @@ export default async function DashboardPage({
           </div>
         </Card>
       )}
-
-      {/* CRM activity — managers only: who's actually working the CRM today */}
-      {isManager(me) && <CrmActivityStrip />}
 
       {/* Performance gaps */}
       <section>

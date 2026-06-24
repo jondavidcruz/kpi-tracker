@@ -13,7 +13,7 @@ export default async function CrmActivityStrip() {
     return (
       <Card className="p-4">
         <div className="mb-1 text-sm font-bold text-slate-700">📋 CRM activity today</div>
-        <p className="text-xs text-slate-400">No CRM activity synced yet today. Hit <strong>↻ Refresh CRM</strong> at the top of this page to pull it now (calls, texts, emails, pipeline moves) — it also fills automatically on each daily sync.</p>
+        <p className="text-xs text-slate-400">No CRM activity synced yet today. Click the green <strong>🔄 Sync CRM</strong> button at the top-right of this page to pull it now (calls, texts, emails, pipeline moves) — it also fills automatically on each daily sync.</p>
       </Card>
     );
   }

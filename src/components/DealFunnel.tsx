@@ -8,7 +8,11 @@ export default function DealFunnel({ stages }: { stages: { label: string; count:
   const H = stages.length * STAGE_H + 6;
   const cx = OX + W / 2;
   const top = Math.max(1, stages[0].count);
-  const wf = (c: number) => Math.max(0.16, c / top); // never thinner than 16%
+  // Widths must NEVER widen going down — a funnel narrows. Clamp each stage to be no
+  // wider than the one above it, even when a later stage was logged with a higher count
+  // (e.g. more conversations than leads, since leads carry over across months).
+  let prevW = 1;
+  const widths = stages.map((s) => { const w = Math.max(0.16, Math.min(prevW, s.count / top)); prevW = w; return w; });
 
   return (
     <svg viewBox={`0 0 600 ${H}`} className="w-full" role="img" aria-label="Deal funnel: leads through closed">
@@ -19,9 +23,8 @@ export default function DealFunnel({ stages }: { stages: { label: string; count:
         </linearGradient>
       </defs>
       {stages.map((s, i) => {
-        const wTop = wf(s.count) * W;
-        const nextCount = i < stages.length - 1 ? stages[i + 1].count : s.count * 0.88;
-        const wBot = Math.max(0.14, nextCount / top) * W;
+        const wTop = widths[i] * W;
+        const wBot = (i < stages.length - 1 ? widths[i + 1] : widths[i] * 0.88) * W;
         const y = i * STAGE_H + 3;
         const yb = y + STAGE_H - 6;
         const pts = `${cx - wTop / 2},${y} ${cx + wTop / 2},${y} ${cx + wBot / 2},${yb} ${cx - wBot / 2},${yb}`;
