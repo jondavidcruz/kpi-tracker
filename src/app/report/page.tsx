@@ -16,7 +16,7 @@ import { Card, SectionTitle } from "@/components/ui";
 import RepRoleBars from "@/components/RepRoleBars";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 60;
 
 // Pretty label for a single day, e.g. "Mon, Jun 22".
 function dayLabel(d: string): string {

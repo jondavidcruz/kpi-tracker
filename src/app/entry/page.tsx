@@ -24,7 +24,7 @@ const DEV_KEYS = new Set(["dev_instagram", "dev_linkedin", "dev_website", "dev_w
 const DIALER_KEYS = new Set(["buyers_contacted", "ds_talk_time"]);
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 60;
 
 export default async function EntryPage({
   searchParams,

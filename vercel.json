@@ -11,7 +11,11 @@
     { "path": "/api/cron?huddlenudge=am", "schedule": "30 16 * * 1-5" },
     { "path": "/api/cron?huddlenudge=pm", "schedule": "30 23 * * 1-5" },
     { "path": "/api/cron?crm=1", "schedule": "0 9 * * *" },
-    { "path": "/api/cron?crmtoday=1", "schedule": "*/15 14-23,0-5 * * *" },
+    { "path": "/api/cron?crmtoday=1", "schedule": "0 15 * * 1-5" },
+    { "path": "/api/cron?crmtoday=1", "schedule": "30 17 * * 1-5" },
+    { "path": "/api/cron?crmtoday=1", "schedule": "0 20 * * 1-5" },
+    { "path": "/api/cron?crmtoday=1", "schedule": "30 22 * * 1-5" },
+    { "path": "/api/cron?crmtoday=1", "schedule": "30 0 * * 2-6" },
     { "path": "/api/cron?recordings=1", "schedule": "30 10 * * *" },
     { "path": "/api/cron?leaks=1", "schedule": "0 1 * * 6" }
   ]

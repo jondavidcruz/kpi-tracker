@@ -29,7 +29,7 @@ import { CircleCheck, TrendingDown, Bell, Users, Banknote, ShieldAlert, Building
 import type { Kpi, Target, User } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 60;
 
 interface GapItem {
   who: string;

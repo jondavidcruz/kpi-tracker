@@ -29,7 +29,7 @@ function laNow(): { hour: number; dow: number } {
 }
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 60;
 
 /**
  * Scheduled alert check. Vercel Cron calls this with
