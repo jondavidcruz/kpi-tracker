@@ -4,7 +4,8 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { todayStr } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import { upcomingCulture, prettyMMDD, whenLabel, ordinal, type Person } from "@/lib/culture";
-import { saveCultureDates, addTeamEvent, deleteTeamEvent } from "@/app/actions";
+import { addTeamEvent, deleteTeamEvent } from "@/app/actions";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,21 @@ export default async function CulturePage() {
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
 
-  const [people, events] = await Promise.all([
-    db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, birthday: true, hireDate: true, position: true } }),
+  // Birthdays + start dates live in the Team Roster (TeamProfile) — pull from there so
+  // there's one source of truth, no double entry.
+  const [users, profiles, events] = await Promise.all([
+    db.user.findMany({ where: { active: true }, select: { id: true } }),
+    db.teamProfile.findMany({ orderBy: { name: "asc" }, select: { userId: true, name: true, birthday: true, startDate: true } }),
     db.teamEvent.findMany({ orderBy: { date: "asc" } }),
   ]);
-
-  const persons: Person[] = people.map((p) => ({ name: p.name, birthday: p.birthday, hireDate: p.hireDate }));
+  const activeIds = new Set(users.map((u) => u.id));
+  const persons: Person[] = profiles
+    .filter((p) => !p.userId || activeIds.has(p.userId))
+    .map((p) => ({
+      name: p.name,
+      birthday: /^\d{4}-\d{2}-\d{2}$/.test(p.birthday) ? p.birthday.slice(5) : null,
+      hireDate: /^\d{4}-\d{2}-\d{2}$/.test(p.startDate) ? p.startDate : null,
+    }));
   const upcoming = upcomingCulture(persons, today, 60);
   const todays = upcoming.filter((u) => u.daysUntil === 0);
   const birthdays = upcoming.filter((u) => u.kind === "birthday");
@@ -130,35 +140,9 @@ export default async function CulturePage() {
         </div>
       </section>
 
-      {/* Manager: set each person's dates */}
-      {manager && (
-        <section>
-          <h2 className="mb-2 text-sm font-bold text-slate-700">⚙️ Set birthdays &amp; hire dates</h2>
-          <Card className="overflow-x-auto p-0">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-slate-200 bg-slate-50/70 text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-2 font-semibold">Team member</th><th className="px-3 py-2 font-semibold">Birthday</th><th className="px-3 py-2 font-semibold">Hire date</th><th className="px-3 py-2"></th>
-              </tr></thead>
-              <tbody>
-                {people.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-2 font-semibold text-slate-800">{p.name}</td>
-                    <td colSpan={3} className="px-3 py-2">
-                      <form action={saveCultureDates} className="flex flex-wrap items-center gap-2">
-                        <input type="hidden" name="id" value={p.id} />
-                        <label className="text-xs text-slate-400">Birthday<input type="date" name="birthday" defaultValue={p.birthday ? `2000-${p.birthday}` : ""} className="ml-1 rounded border border-slate-300 px-2 py-1 text-sm" /></label>
-                        <label className="text-xs text-slate-400">Hired<input type="date" name="hireDate" defaultValue={p.hireDate ?? ""} className="ml-1 rounded border border-slate-300 px-2 py-1 text-sm" /></label>
-                        <button className="rounded-lg bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-300">Save</button>
-                      </form>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="px-4 py-2 text-[11px] text-slate-400">Birthdays celebrate the month/day only (year ignored). The team gets a 🎉 reminder in Google Chat on the morning of each birthday &amp; anniversary.</p>
-          </Card>
-        </section>
-      )}
+      <Card className="bg-slate-50 p-4 text-[13px] text-slate-500">
+        Birthdays &amp; start dates are pulled from the <Link href="/team-roster" className="font-semibold text-brand-navy hover:underline">Team Roster</Link> (owner-only HR records) — edit them there and they show up here. The team gets a 🎉 reminder in Google Chat on the morning of each birthday &amp; anniversary (year is hidden — only the day is celebrated).
+      </Card>
     </div>
   );
 }

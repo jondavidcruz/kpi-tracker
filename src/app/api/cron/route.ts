@@ -93,7 +93,15 @@ export async function GET(request: Request) {
   if (url.searchParams.get("culture") === "1") {
     const settings = await getSettings();
     const today = date ?? todayStr(settings.orgTimezone);
-    const people = await db.user.findMany({ where: { active: true }, select: { name: true, birthday: true, hireDate: true } });
+    // Dates come from the Team Roster (TeamProfile): birthday + startDate.
+    const [activeUsers, profiles] = await Promise.all([
+      db.user.findMany({ where: { active: true }, select: { id: true } }),
+      db.teamProfile.findMany({ select: { userId: true, name: true, birthday: true, startDate: true } }),
+    ]);
+    const activeIds = new Set(activeUsers.map((u) => u.id));
+    const people = profiles
+      .filter((p) => !p.userId || activeIds.has(p.userId))
+      .map((p) => ({ name: p.name, birthday: /^\d{4}-\d{2}-\d{2}$/.test(p.birthday) ? p.birthday.slice(5) : null, hireDate: /^\d{4}-\d{2}-\d{2}$/.test(p.startDate) ? p.startDate : null }));
     const up = upcomingCulture(people, today, 7);
     const todays = up.filter((u) => u.daysUntil === 0);
     const isMonday = laNow().dow === 1;
