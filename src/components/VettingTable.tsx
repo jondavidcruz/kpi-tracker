@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { setBuyerStatus, logBuyerOutreach, saveProspectField, saveProspect, saveBuyerBox, deleteProspect } from "@/app/actions";
 import MultiSelect from "@/components/MultiSelect";
 
@@ -69,17 +69,23 @@ function Cell({ id, field, value, placeholder, mono }: { id: string; field: stri
 function NotesCell({ id, value }: { id: string; value: string }) {
   const [status, setStatus] = useState<"idle" | "dirty" | "saved">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  // Auto-grow to fit all the text (developer/buyer notes are long) so nothing is hidden
+  // behind a scrollbar — capped so one giant note can't take over the screen.
+  const grow = (ta: HTMLTextAreaElement) => { ta.style.height = "auto"; ta.style.height = `${Math.min(ta.scrollHeight, 520)}px`; };
+  useEffect(() => { if (taRef.current) grow(taRef.current); }, []);
   const save = (ta: HTMLTextAreaElement) => { if (ta.value !== value) { ta.form?.requestSubmit(); setStatus("saved"); } };
   return (
     <form action={saveProspectField} className="contents">
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="field" value="outreachLog" />
-      <div className="min-w-[300px]">
+      <div className="min-w-[420px]">
         <textarea
-          name="value" defaultValue={value} placeholder="notes — touches, replies, who to ask for, next step…" rows={3}
-          onChange={(e) => { const ta = e.currentTarget; setStatus("dirty"); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => save(ta), 1000); }}
+          ref={taRef}
+          name="value" defaultValue={value} placeholder="notes — touches, replies, who to ask for, next step…" rows={4}
+          onChange={(e) => { const ta = e.currentTarget; grow(ta); setStatus("dirty"); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => save(ta), 1000); }}
           onBlur={(e) => { if (timer.current) clearTimeout(timer.current); save(e.currentTarget); }}
-          className="w-full resize-y whitespace-pre-wrap rounded border border-transparent bg-transparent px-1.5 py-1 leading-snug hover:border-slate-200 focus:border-sky-400 focus:bg-white focus:outline-none"
+          className="block w-full resize-y overflow-hidden whitespace-pre-wrap break-words rounded border border-transparent bg-transparent px-2 py-1.5 text-[13px] leading-relaxed hover:border-slate-200 focus:border-sky-400 focus:bg-white focus:outline-none"
         />
         <div className="h-3 px-1 text-[9px] font-semibold">
           {status === "dirty" && <span className="text-amber-600">● typing… autosaves</span>}
