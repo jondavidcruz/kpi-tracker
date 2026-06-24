@@ -1625,8 +1625,9 @@ export async function saveProspectField(formData: FormData) {
   if (!id || !ALLOWED.includes(field)) return;
   if (field === "name" && !value.trim()) return;
   await db.marketContact.update({ where: { id }, data: { [field]: value } });
-  revalidatePath("/vetting");
-  revalidatePath("/marketing");
+  // NO revalidatePath here on purpose: this is an inline autosave and the field already
+  // shows the typed value on the client. Revalidating re-renders the whole page, which
+  // jumps the scroll back to the top and adds a visible lag on every keystroke-save.
 }
 
 /** Save the CRM buy-box detail for a Buyer Research row (the expandable panel):
