@@ -13,6 +13,7 @@ import ContentWrap from "./ContentWrap";
 import CortanaBot from "./CortanaBot";
 import PageHelp from "./PageHelp";
 import HeartbeatPing from "./HeartbeatPing";
+import PresenceWidget from "./PresenceWidget";
 
 export default async function AppShell({ children }: { children: React.ReactNode }) {
   const email = await getSessionEmail();
@@ -94,6 +95,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
         </ContentWrap>
       </main>
       <CortanaBot />
+      {manager && <PresenceWidget />}
       <PageHelp />
       <HeartbeatPing />
     </div>
