@@ -364,10 +364,14 @@ export default function UnderwritingCalculator() {
 
   const reqDiv = "sm:col-span-2 mt-1 border-t border-red-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-red-500";
   const optDiv = "sm:col-span-2 mt-1 border-t border-amber-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-amber-500";
+  const goodDiv = "sm:col-span-2 mt-1 border-t border-emerald-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-emerald-600";
+  // Reused under both comps sections — explains why comps are GREEN (hard facts).
+  const compsNote = "🟢 Green = hard facts — real, recent closed sales in the area, not speculation or hopeful pricing. Pull them, then verify each on the MLS / county records before recording all 3. Never send an offer that isn't backed by comps.";
   const legend = (
     <div className="sm:col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-[11px] font-semibold ring-1 ring-slate-200">
       <span className="text-red-600">🔴 Required to give an MAO</span>
       <span className="text-amber-600">🟡 Optional — refines the number</span>
+      <span className="text-emerald-600">🟢 Hard facts — actual closed sales, not speculation</span>
     </div>
   );
 
@@ -505,13 +509,13 @@ export default function UnderwritingCalculator() {
               <div className={optDiv}>Additional costs (manual override — cash-for-keys, eviction, liens…)</div>
               <Field k="aExtra" label="Extra cost ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="aExtraNote" label="What is it?" placeholder="e.g. cash for keys" req="opt" />
-              <div className={reqDiv}>ARV comps (required · addr · sold $ · days on market)</div>
-              <p className="sm:col-span-2 -mt-1 text-[11px] text-red-500">Pull comps AND do your own manual check — verify each on the MLS / county records, then record all 3 here. Never send an offer without comps backing the ARV.</p>
+              <div className={goodDiv}>🟢 ARV comps (required · addr · sold $ · days on market)</div>
+              <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">{compsNote}</p>
               {[1, 2, 3].map((i) => (
                 <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
-                  <Field k={`comp${i}`} label={`Comp ${i} address`} span={2} req="need" />
-                  <Field k={`comp${i}p`} label="Sold $" prefix="$" req="need" />
-                  <Field k={`comp${i}d`} label="DOM" req="need" />
+                  <Field k={`comp${i}`} label={`Comp ${i} address`} span={2} req="good" />
+                  <Field k={`comp${i}p`} label="Sold $" prefix="$" req="good" />
+                  <Field k={`comp${i}d`} label="DOM" req="good" />
                 </div>
               ))}
             </>
@@ -539,13 +543,13 @@ export default function UnderwritingCalculator() {
               <div className={optDiv}>Additional costs (manual override — cash-for-keys, eviction, liens…)</div>
               <Field k="nExtra" label="Extra cost ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="nExtraNote" label="What is it?" placeholder="e.g. eviction" req="opt" />
-              <div className={reqDiv}>As-is comparables (required · addr · sold $ · days on market)</div>
-              <p className="sm:col-span-2 -mt-1 text-[11px] text-red-500">Pull comps AND do your own manual check — verify each on the MLS / county records, then record all 3 here. The list price has to be backed by real as-is comps.</p>
+              <div className={goodDiv}>🟢 As-is comparables (required · addr · sold $ · days on market)</div>
+              <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">{compsNote}</p>
               {[1, 2, 3].map((i) => (
                 <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
-                  <Field k={`nComp${i}`} label={`Comp ${i} address`} span={2} req="need" />
-                  <Field k={`nComp${i}p`} label="Sold $" prefix="$" req="need" />
-                  <Field k={`nComp${i}d`} label="DOM" req="need" />
+                  <Field k={`nComp${i}`} label={`Comp ${i} address`} span={2} req="good" />
+                  <Field k={`nComp${i}p`} label="Sold $" prefix="$" req="good" />
+                  <Field k={`nComp${i}d`} label="DOM" req="good" />
                 </div>
               ))}
             </>
