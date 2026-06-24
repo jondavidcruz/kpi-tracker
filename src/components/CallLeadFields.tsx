@@ -24,17 +24,28 @@ export default function CallLeadFields({ inputCls, reps, types, groups }: { inpu
             {reps.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </label>
-        <label className="sm:col-span-2">
-          <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Call type(s)</span>
-          <select name="callType" required multiple size={8} className={`${inputCls} h-auto`} value={callTypes} onChange={(e) => setCallTypes(Array.from(e.target.selectedOptions, (o) => o.value))}>
+        <div className="sm:col-span-2">
+          <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Call type(s) — check all that apply</span>
+          <div className="rounded-lg border border-slate-300 p-2.5">
             {groups.map((g) => (
-              <optgroup key={g} label={g}>
-                {types.filter((c) => c.group === g).map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-              </optgroup>
+              <div key={g} className="mb-2 last:mb-0">
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">{g}</div>
+                <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+                  {types.filter((c) => c.group === g).map((c) => {
+                    const on = callTypes.includes(c.key);
+                    return (
+                      <label key={c.key} className={`flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-[13px] ${on ? "bg-sky-50 font-semibold text-sky-800" : "text-slate-600 hover:bg-slate-50"}`}>
+                        <input type="checkbox" name="callType" value={c.key} checked={on} onChange={(e) => setCallTypes((prev) => (e.target.checked ? [...prev, c.key] : prev.filter((k) => k !== c.key)))} className="h-3.5 w-3.5 accent-sky-600" />
+                        {c.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
-          </select>
-          <span className="mt-0.5 block text-[11px] text-slate-400">Pick one — or ⌘/Ctrl-click (Shift to drag) to tag several when a recording has multiple calls. It&apos;ll be scored against each.</span>
-        </label>
+          </div>
+          <span className="mt-0.5 block text-[11px] text-slate-400">Check every type this recording covers — it&apos;ll be scored against each.</span>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">{L.addr}</span><input name="address" placeholder={L.addrP} className={inputCls} /></label>
