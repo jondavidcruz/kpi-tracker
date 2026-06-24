@@ -56,7 +56,7 @@ function dayBounds(date: string, tz: string): { start: number; end: number } {
   return { start, end: start + 24 * 3600 * 1000 };
 }
 
-export type Agg = { dials: number; answered: number; connected: number; talkSec: number; voicemails: number };
+export type Agg = { dials: number; answered: number; connected: number; talkSec: number; voicemails: number; texts: number; emails: number };
 export type PullResult = { date: string; scanned: number; pages: number; per: Record<string, Agg> };
 
 /** Crawl conversations + their messages for one day; aggregate call stats per agent. */
@@ -64,7 +64,7 @@ export async function pullDay(date: string, tz: string): Promise<PullResult> {
   const { start, end } = dayBounds(date, tz);
   const cfgByCrm = new Map(AGENTS.map((a) => [a.crm, a]));
   const per: Record<string, Agg> = {};
-  for (const a of AGENTS) per[a.crm] = { dials: 0, answered: 0, connected: 0, talkSec: 0, voicemails: 0 };
+  for (const a of AGENTS) per[a.crm] = { dials: 0, answered: 0, connected: 0, talkSec: 0, voicemails: 0, texts: 0, emails: 0 };
 
   let cursor: string | undefined;
   let pages = 0;
@@ -88,13 +88,16 @@ export async function pullDay(date: string, tz: string): Promise<PullResult> {
       const mb = m.body as { messages?: unknown[] | { messages?: unknown[] } };
       const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []);
       for (const raw of list) {
-        const msg = raw as { dateAdded?: string; userId?: string; messageType?: string; status?: string; meta?: { call?: { duration?: number; status?: string } } };
+        const msg = raw as { dateAdded?: string; userId?: string; messageType?: string; status?: string; direction?: string; meta?: { call?: { duration?: number; status?: string } } };
         const dt = Date.parse(String(msg.dateAdded ?? 0));
         if (!(dt >= start && dt < end)) continue;
         const agg = per[String(msg.userId ?? "")];
         if (!agg) continue; // untracked agent
         const mt = String(msg.messageType ?? "");
+        const outbound = msg.direction !== "inbound"; // a rep-sent touch (has their userId)
         if (mt === "TYPE_CAMPAIGN_VOICEMAIL") { agg.voicemails++; continue; }
+        if (mt === "TYPE_SMS") { if (outbound) agg.texts++; continue; }
+        if (mt === "TYPE_EMAIL") { if (outbound) agg.emails++; continue; }
         if (mt !== "TYPE_CALL") continue;
         agg.dials++;
         const dur = Number(msg.meta?.call?.duration ?? 0) || 0;
@@ -187,4 +190,38 @@ export async function writeDay(date: string, tz: string): Promise<{ result: Pull
     wrote[a.first] = agg;
   }
   return { result, wrote };
+}
+
+/** Persist daily per-rep CRM activity (calls + texts + emails + stage moves). Takes the
+ *  already-computed call aggregate + opp pull so it doesn't re-crawl the CRM. */
+export async function writeActivity(date: string, callAgg: Record<string, Agg>, oppPull: OppPull): Promise<Record<string, number>> {
+  const users = await db.user.findMany({ select: { id: true, name: true } });
+  const userByFirst = new Map(users.map((u) => [u.name.trim().split(/\s+/)[0].toLowerCase(), u.id]));
+  const crmToFirst = new Map(AGENTS.map((a) => [a.crm, a.first]));
+
+  const movesByFirst: Record<string, number> = {};
+  for (const [k, n] of Object.entries(oppPull.counts)) {
+    const owner = k.split("|")[0];
+    const first = owner.startsWith("fixed:") ? owner.slice(6) : crmToFirst.get(owner);
+    if (!first) continue;
+    movesByFirst[first] = (movesByFirst[first] ?? 0) + n;
+  }
+
+  const totals: Record<string, number> = {};
+  const firsts = new Set<string>([...Object.keys(callAgg), ...Object.keys(movesByFirst)]);
+  for (const first of firsts) {
+    const uid = userByFirst.get(first);
+    if (!uid) continue;
+    const a = callAgg[first];
+    const calls = a?.dials ?? 0, texts = a?.texts ?? 0, emails = a?.emails ?? 0;
+    const stageMoves = movesByFirst[first] ?? 0;
+    const total = calls + texts + emails + stageMoves;
+    await db.crmActivity.upsert({
+      where: { userId_date: { userId: uid, date } },
+      update: { calls, texts, emails, stageMoves, total },
+      create: { userId: uid, date, calls, texts, emails, stageMoves, total },
+    });
+    totals[first] = total;
+  }
+  return totals;
 }

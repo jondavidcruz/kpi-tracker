@@ -1108,3 +1108,20 @@ model TeamEvent {
 
   @@index([date])
 }
+
+// Daily per-rep CRM activity pulled from REI Reply (calls, texts, emails, pipeline
+// moves) — a "are they actually working?" signal alongside the goal KPIs.
+model CrmActivity {
+  id         String   @id @default(cuid())
+  userId     String
+  date       String   // org-local YYYY-MM-DD
+  calls      Int      @default(0) // dials placed
+  texts      Int      @default(0) // SMS sent
+  emails     Int      @default(0) // emails sent
+  stageMoves Int      @default(0) // opportunities advanced a stage
+  total      Int      @default(0) // sum of the above
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+}

@@ -11,7 +11,7 @@ import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
 import { sendHuddleBrief, sendHuddleNudge } from "@/lib/huddle-brief";
-import { writeDay, writeOpps } from "@/lib/crm-sync";
+import { writeDay, writeOpps, writeActivity } from "@/lib/crm-sync";
 import { migrateRecordingsToDrive } from "@/lib/recording-migrate";
 import { sendLeaksReport } from "@/lib/diagnostics";
 
@@ -150,7 +150,8 @@ export async function GET(request: Request) {
     const today = date ?? todayStr(tz);
     const calls = await writeDay(today, tz);
     const opps = await writeOpps(today, tz);
-    return NextResponse.json({ ok: true, date: today, calls: calls.wrote, offersContracts: opps.counts });
+    const activity = await writeActivity(today, calls.wrote, opps);
+    return NextResponse.json({ ok: true, date: today, calls: calls.wrote, offersContracts: opps.counts, activity });
   }
 
   // Nightly REI Reply CRM sync — pulls YESTERDAY's calls + offer/contract stage
@@ -164,7 +165,8 @@ export async function GET(request: Request) {
     const yesterday = url.searchParams.get("date") ?? y.toISOString().slice(0, 10);
     const calls = await writeDay(yesterday, tz);
     const opps = await writeOpps(yesterday, tz);
-    return NextResponse.json({ ok: true, date: yesterday, calls: calls.wrote, offersContracts: opps.counts });
+    const activity = await writeActivity(yesterday, calls.wrote, opps);
+    return NextResponse.json({ ok: true, date: yesterday, calls: calls.wrote, offersContracts: opps.counts, activity });
   }
 
   // Daily huddle brief — 9:45am PT, Mon–Fri (after the 9am huddle, so the team has

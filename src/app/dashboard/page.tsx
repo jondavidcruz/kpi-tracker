@@ -21,6 +21,7 @@ import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
 import DealFunnel from "@/components/DealFunnel";
+import CrmActivityStrip from "@/components/CrmActivityStrip";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canAccessPayroll } from "@/lib/auth";
 import { refreshCrmToday } from "@/app/actions";
@@ -302,6 +303,9 @@ export default async function DashboardPage({
           </div>
         </Card>
       )}
+
+      {/* CRM activity — managers only: who's actually working the CRM today */}
+      {isManager(me) && <CrmActivityStrip />}
 
       {/* Performance gaps */}
       <section>

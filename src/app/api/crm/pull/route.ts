@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { reiReplyConfigured } from "@/lib/reireply";
-import { pullDay, writeDay, pullOpps, writeOpps } from "@/lib/crm-sync";
+import { pullDay, writeDay, pullOpps, writeOpps, writeActivity } from "@/lib/crm-sync";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,7 +24,8 @@ export async function GET(request: Request) {
   if (write) {
     const { result, wrote } = await writeDay(date, tz);
     const opps = await writeOpps(date, tz);
-    return NextResponse.json({ ok: true, wrote: true, date, scanned: result.scanned, calls: wrote, offersContracts: opps.counts });
+    const activity = await writeActivity(date, wrote, opps);
+    return NextResponse.json({ ok: true, wrote: true, date, scanned: result.scanned, calls: wrote, offersContracts: opps.counts, activity });
   }
   const result = await pullDay(date, tz);
   const opps = await pullOpps(date, tz);
