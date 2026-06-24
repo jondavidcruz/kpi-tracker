@@ -107,8 +107,8 @@ export default async function DashboardPage({
   const falloutYTD = closings.filter((c) => c.status === "fell_through" && (c.closeDate ? c.closeDate >= yearStart : true)).length;
   const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
-  // --- Deal funnel (this month): leads → opportunities → appointments → offers → contracts → closed ---
-  const FUNNEL_KEYS = ["ppl_leads", "text_responses", "direct_mail_responses", "quality_convos", "appts_taken", "appts_set", "offers_made", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"];
+  // --- Deal funnel (this month): leads → opportunities → offers → contracts → closed ---
+  const FUNNEL_KEYS = ["ppl_leads", "text_responses", "direct_mail_responses", "quality_convos", "offers_made", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"];
   const funnelKpis = await db.kpi.findMany({ where: { key: { in: FUNNEL_KEYS } }, select: { id: true, key: true } });
   const fIdToKey = new Map(funnelKpis.map((k) => [k.id, k.key]));
   const fEntries = await db.entry.findMany({ where: { kpiId: { in: funnelKpis.map((k) => k.id) }, date: { gte: monthStart, lte: date } }, select: { kpiId: true, value: true } });
@@ -119,7 +119,6 @@ export default async function DashboardPage({
   const funnelStages = [
     { label: "Leads", count: kv("ppl_leads") + kv("text_responses") + kv("direct_mail_responses"), source: "PPL + SMS + mail" },
     { label: "Opportunities", count: kv("quality_convos"), source: "quality conversations" },
-    { label: "Appointments", count: kv("appts_taken") + kv("appts_set"), source: "set + attended" },
     { label: "Offers", count: kv("offers_made"), source: "verbal offers" },
     { label: "Contracts", count: kv("acq_signed_assignment") + kv("acq_signed_novation") + kv("acq_signed_listing") + kv("acq_signed_creative"), source: "signed" },
     { label: "Closed", count: closedThisMonth, source: "escrow → closed" },
@@ -275,11 +274,11 @@ export default async function DashboardPage({
 
       {/* Deal funnel — this month */}
       <section>
-        <SectionTitle title="🫙 Deal funnel" subtitle="This month: leads → opportunities → appointments → offers → contracts → closed (% = conversion from the stage above)" accent="bg-brand-navy" />
+        <SectionTitle title="🫙 Deal funnel" subtitle="This month: leads → opportunities → offers → contracts → closed (% = conversion from the stage above)" accent="bg-brand-navy" />
         <Card className="p-5">
           <DealFunnel stages={funnelStages} />
           {!funnelHasData && (
-            <p className="mt-3 text-[11px] text-slate-400">Nothing logged this month yet. The funnel fills in as the team logs leads, appointments, offers and contracts on <Link href="/entry" className="font-semibold text-slate-500 underline">Enter KPIs</Link>, and as deals are closed in Escrow &amp; Closing.</p>
+            <p className="mt-3 text-[11px] text-slate-400">Nothing logged this month yet. The funnel fills in as the team logs leads, conversations, offers and contracts on <Link href="/entry" className="font-semibold text-slate-500 underline">Enter KPIs</Link>, and as deals are closed in Escrow &amp; Closing.</p>
           )}
         </Card>
       </section>
