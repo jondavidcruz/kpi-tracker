@@ -43,7 +43,7 @@ export interface NewAlert {
 // Dispositions developer/luxury day: dialer KPIs don't count; on a traditional
 // day, the developer-outreach KPIs don't count. A rep's focus lives on Standup.
 const DEV_KEYS = new Set(["dev_instagram", "dev_linkedin", "dev_website", "dev_wordofmouth", "dev_conversations"]);
-const DIALER_KEYS = new Set(["buyers_contacted", "ds_talk_time", "ds_dialer_talk_time"]);
+const DIALER_KEYS = new Set(["buyers_contacted", "ds_talk_time"]);
 
 /** Map of userId → today's focus ("developer" | "traditional"). */
 async function getFocusMap(date: string): Promise<Map<string, string>> {

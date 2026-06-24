@@ -5,9 +5,6 @@ import { searchConversations, getMessages, searchOpportunities } from "./reirepl
 // DS: Close Profits (Marie/Sharyn). Each opportunity is credited to its assignedTo.
 const PIPELINES = ["KkdpJx35dU4cLtYY9vXP", "8R4HDQD1nUGOUxGCxuCe", "Jm90sKZNvl8e5fKparhv"];
 const STAGE_KPI: Record<string, string> = {
-  // 📅 APT SET (Process/Offer Call) → Appointments Set
-  "48cbe48a-abbb-440f-97f8-c56e5776103d": "appts_set",
-  "d405ca99-35e1-4446-8440-47aa8df1ab9e": "appts_set",
   // Process call done = card reaches comp/numbers review (per Jon)
   "276eae09-9722-434a-a47b-e97b012e7ce7": "completed_process_calls", // trad COMP TO OFFER
   "2d6a497d-625f-4d65-92b8-19f8b651d30e": "completed_process_calls", // dev REVIEW NUMBERS

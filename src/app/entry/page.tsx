@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { saveDay, addRepReason, setDayFocus } from "@/app/actions";
+import { saveDay, addRepReason, setDayFocus, refreshCrmToday } from "@/app/actions";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { db } from "@/lib/db";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
 import SpeedTestCard from "@/components/SpeedTestCard";
@@ -20,9 +21,10 @@ import { positionLabel } from "@/lib/roles";
 // Developer/luxury outreach KPIs (shown only on a developer-focus day).
 const DEV_KEYS = new Set(["dev_instagram", "dev_linkedin", "dev_website", "dev_wordofmouth", "dev_conversations"]);
 // Dialer/buyer-calling KPIs — not counted on a developer-focus day.
-const DIALER_KEYS = new Set(["buyers_contacted", "ds_talk_time", "ds_dialer_talk_time"]);
+const DIALER_KEYS = new Set(["buyers_contacted", "ds_talk_time"]);
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 90;
 
 export default async function EntryPage({
   searchParams,
@@ -31,6 +33,7 @@ export default async function EntryPage({
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
+  const me = await getCurrentUser();
   const date = sp.date ?? todayStr(settings.orgTimezone);
   const month = monthOf(date);
 
@@ -138,9 +141,16 @@ export default async function EntryPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Enter KPIs</h1>
-        <p className="text-slate-500">{friendlyDate(date)}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Enter KPIs</h1>
+          <p className="text-slate-500">{friendlyDate(date)}</p>
+        </div>
+        {isManager(me) && (
+          <form action={refreshCrmToday}>
+            <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700" title="Pull today's calls + offers/contracts from REI Reply now">🔄 Sync CRM</button>
+          </form>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
