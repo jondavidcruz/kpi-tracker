@@ -3,7 +3,7 @@
 import { useState, createContext, useContext } from "react";
 
 const TABS = [
-  { key: "assignment", label: "Assignment", emoji: "🤝", blurb: "Cash offer. MAO = (ARV × market %) − repairs − flipper holding − your fee. Anchor opens below MAO." },
+  { key: "assignment", label: "Assignment", emoji: "🤝", blurb: "Cash offer. MAO = (ARV × market %) − repairs − your fee. The market % already covers the flipper's carry + profit. Anchor opens below MAO." },
   { key: "novation", label: "Novation", emoji: "📋", blurb: "List at current similar-condition value, cover the seller's closing + commission (no holding — retail buyer). Find the max seller payout." },
   { key: "creative", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
   { key: "listing", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
@@ -184,16 +184,14 @@ export default function UnderwritingCalculator() {
   const sqft = n("sqft"), rehabSf = num(v("rehabSf"));
   const repairsCalc = sqft * rehabSf;
   const repairs = (n("repairs") || repairsCalc) + majorTotal;
-  const aHoldMonths = n("aHoldMonths");
-  // Monthly carry auto-suggests from ARV (taxes ~1.1% + insurance ~0.4% per year ≈
-  // 1.5%/yr, plus ~$150/mo utilities) so reps don't have to guess.
-  const suggestedCarry = arv > 0 ? Math.round((arv * 0.015 / 12 + 150) / 50) * 50 : 0;
-  const aMonthlyCarry = f.aMonthlyCarry != null && f.aMonthlyCarry !== "" ? n("aMonthlyCarry") : suggestedCarry;
-  const holding = aHoldMonths * aMonthlyCarry;
-  const aHoaCost = n("aHoa") * aHoldMonths;        // HOA dues while the flipper holds
-  const aExtra = n("aExtra");                       // manual override: cash-for-keys, eviction, etc.
+  // The market tier % ALREADY builds in the flipper's profit AND their carry / money
+  // costs — so we don't make the team estimate the flipper's holding (they rarely know
+  // it). We only subtract KNOWN, deal-specific costs: HOA/special dues + extras
+  // (cash-for-keys, eviction, liens). Detailed money-cost math lives on the Flip tab.
+  const aHoa = n("aHoa");
+  const aExtra = n("aExtra");
   const flipperTarget = arv * (num(marketPct) / 100);
-  const cashMao = flipperTarget - repairs - holding - aHoaCost - aExtra - aFee;
+  const cashMao = flipperTarget - repairs - aHoa - aExtra - aFee;
   const aAnchorPct = v("aAnchorPct") || "10";
   const aAnchor = cashMao * (1 - num(aAnchorPct) / 100);
 
@@ -255,7 +253,7 @@ export default function UnderwritingCalculator() {
   const asking = n("askPrice");
   const accepted = n("acceptedPrice");
   let dealMax = 0, profitAtAccepted = 0, marginLabel = "Your profit", showAsking = true;
-  if (tab === "assignment") { dealMax = cashMao; profitAtAccepted = (flipperTarget - repairs - holding) - accepted; marginLabel = "Your assignment fee"; }
+  if (tab === "assignment") { dealMax = cashMao; profitAtAccepted = (flipperTarget - repairs - aHoa - aExtra) - accepted; marginLabel = "Your assignment fee"; }
   else if (tab === "novation") { dealMax = novMao; profitAtAccepted = nNet - accepted; marginLabel = "Your fee"; }
   else if (tab === "flip") { dealMax = fMao; profitAtAccepted = arv - fTotalCosts - accepted; marginLabel = "Your profit"; }
   else if (tab === "creative") { dealMax = n("cPrice"); profitAtAccepted = cMargin; marginLabel = "Your total margin"; showAsking = false; }
@@ -269,7 +267,7 @@ export default function UnderwritingCalculator() {
       const comps = [1, 2, 3].map((i) => { const a = v(`comp${i}`); const p = v(`comp${i}p`); const d = v(`comp${i}d`); return a ? `${esc(a)}${p ? ` — $${esc(p)}` : ""}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ["Flipper holding cost", money(holding)], ...(aHoaCost > 0 ? ([["HOA dues", money(aHoaCost)]] as [string, string][]) : []), ...(aExtra > 0 ? ([[v("aExtraNote") || "Additional costs", money(aExtra)]] as [string, string][]) : []), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
+        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...(aExtra > 0 ? ([[v("aExtraNote") || "Additional costs", money(aExtra)]] as [string, string][]) : []), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
         note: "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. On assignment the end buyer covers BOTH the seller's and the buyer's closing costs, so no closing is deducted here. If the seller won't meet MAO, pivot to Novation.",
       };
     }
@@ -507,16 +505,11 @@ export default function UnderwritingCalculator() {
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
               {majorRepairs()}
-              <div className={optDiv}>Flipper holding (optional — their money cost)</div>
-              <Field k="aHoldMonths" label="Months held" placeholder="6" req="opt" />
-              <div className="flex items-end gap-2">
-                <div className="flex-1"><Field k="aMonthlyCarry" label="Monthly carry (taxes, ins, utils)" prefix="$" placeholder={suggestedCarry ? suggestedCarry.toLocaleString() : "1,000"} req="opt" /></div>
-                {suggestedCarry > 0 && <button type="button" onClick={() => setV("aMonthlyCarry", String(suggestedCarry))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title="Auto-estimated from ARV (taxes + insurance + utilities)">Use {money(suggestedCarry)}</button>}
-              </div>
-              {suggestedCarry > 0 && <p className="sm:col-span-2 -mt-1.5 text-[10px] text-slate-400">🔁 Auto-estimated carry from ARV: <span className="font-semibold text-slate-500">{money(suggestedCarry)}/mo</span> — used automatically if left blank.</p>}
-              <Field k="aHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
+              <div className={optDiv}>Optional — refine the offer</div>
               <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
-              <div className={optDiv}>Additional costs (manual override — cash-for-keys, eviction, liens…)</div>
+              <Field k="aHoa" label="HOA / special dues ($)" prefix="$" placeholder="0" req="opt" />
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 No need to enter the flipper&apos;s holding or money costs — the market tier % already builds in their carry and profit. Detailed money-cost math lives on the Flip / Wholetail tab.</p>
+              <div className={optDiv}>Additional costs (cash-for-keys, eviction, liens…)</div>
               <Field k="aExtra" label="Extra cost ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="aExtraNote" label="What is it?" placeholder="e.g. cash for keys" req="opt" />
               <div className={goodDiv}>🟢 ARV comps (required · addr · sold $ · days on market)</div>
@@ -660,8 +653,7 @@ export default function UnderwritingCalculator() {
             <>
               <Res label={`Flipper resale target (${marketPct}% of ARV)`} value={money(flipperTarget)} tone="muted" />
               <Res label="− Repairs" value={money(repairs)} tone="muted" />
-              {holding > 0 && <Res label="− Flipper holding" value={money(holding)} tone="muted" />}
-              {aHoaCost > 0 && <Res label={`− HOA dues (${aHoldMonths || 0} mo)`} value={money(aHoaCost)} tone="muted" />}
+              {aHoa > 0 && <Res label="− HOA / special dues" value={money(aHoa)} tone="muted" />}
               {aExtra > 0 && <Res label={`− ${v("aExtraNote") || "Additional costs"}`} value={money(aExtra)} tone="muted" />}
               <Res label="− Assignment fee" value={money(aFee)} tone="muted" />
               <Res label="🎯 Cash MAO (max offer to seller)" value={money(cashMao)} tone={cashMao > 0 ? "navy" : "bad"} big />
