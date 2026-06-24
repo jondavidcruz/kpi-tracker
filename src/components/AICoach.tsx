@@ -33,7 +33,12 @@ export default function AICoach({ reps }: { reps: Rep[] }) {
         body: JSON.stringify({ rep: repName, role: rep?.role ?? "", skill: skill || skillOptions[0] || "", mode: m, context }),
       });
       const data = await res.json();
-      setReply(data.reply ?? data.error ?? "No response.");
+      // Clean any stray markdown so plain text reads right (no literal * or ** showing).
+      const clean = String(data.reply ?? data.error ?? "No response.")
+        .replace(/\*\*(.*?)\*\*/g, "$1")   // **bold** -> bold
+        .replace(/^\s*[*-]\s+/gm, "• ")    // * / - bullets -> •
+        .replace(/\*/g, "");                // any remaining stray asterisks
+      setReply(clean);
     } catch {
       setReply("Couldn't reach the AI coach — try again.");
     } finally {

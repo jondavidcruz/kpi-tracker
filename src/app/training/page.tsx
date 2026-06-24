@@ -16,6 +16,32 @@ const STATUS_CLS: Record<string, string> = { active: "bg-amber-100 text-amber-70
 const TYPE_LABEL: Record<string, string> = { call_review: "📞 Call review", live_coaching: "🎧 Live coaching", one_on_one: "🧑‍🏫 1:1" };
 const CADENCE_LABEL: Record<string, string> = { daily: "Daily", weekly: "Weekly", "mon-fri": "Mon–Fri", "tue-fri": "Tue–Fri", mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday" };
 
+// Ready-to-run drills per lane. Acquisitions (Michelle) talk to SELLERS; Dispositions
+// (Sharyn, Marie) talk to BUYERS — developers + fix/flippers (often via a gatekeeper).
+const DRILL_LANES = [
+  {
+    key: "acq", emoji: "📞", title: "Acquisitions — seller calls", who: "Michelle · talking to home sellers", cls: "bg-sky-50 ring-sky-200",
+    drills: [
+      { name: "Rapport in 60 seconds", how: "First minute only: match their pace, find one genuine personal connection before anything about the house. Record + replay.", win: "Seller is talking freely before you mention price." },
+      { name: "Motivation dig (5 whys)", how: "Ask 5 layered 'why / what happens if you don't sell' questions until the REAL reason surfaces. Write the one-line motivation.", win: "You can state their true motivation in one sentence." },
+      { name: "Offer + silence", how: "Present the number with the range + the reason, then go completely silent. Partner times how long you hold it — aim 10+ sec.", win: "You never talk first after the number." },
+      { name: "Objection volley", how: "Partner fires 10 common seller objections rapid-fire ('too low', 'I'll think about it', 'another buyer offered more'). Answer each in under 10 sec.", win: "Calm, ready answer to all 10 — no stumbling." },
+      { name: "Close for signature", how: "Drill the transition from verbal yes → 'let's get it signed today' and handle the stall. 5 reps.", win: "Smooth ask for the signature, every time." },
+    ],
+  },
+  {
+    key: "ds", emoji: "🤝", title: "Dispositions — buyer / developer calls", who: "Sharyn & Marie · developers + fix/flippers", cls: "bg-violet-50 ring-violet-200",
+    drills: [
+      { name: "Past the gatekeeper", how: "Role-play 5 ways to reach the decision-maker through a receptionist — credible, specific, not salesy. Track which opener gets you through.", win: "You get the developer/owner on the line (or a direct callback)." },
+      { name: "Buy-box in one call", how: "On a single mock call, fill EVERY buy-box field — areas, price range, property type, condition, build type, buying frequency. Time it.", win: "Complete buy box captured, nothing left blank." },
+      { name: "30-second deal pitch", how: "Pitch a live deal to a buyer in 30 sec: address, the numbers, and why it fits THEIR box. Cut every wasted word.", win: "Buyer asks a follow-up question — they're interested." },
+      { name: "Developer credibility reps", how: "Practice sounding like a pro, not a scammer — reference specific areas/projects, talk lot size & zoning, speak their language for 2 min.", win: "Developer treats you as a peer, not a cold caller." },
+      { name: "Flipper objection volley", how: "Partner fires buyer objections ('margin's too thin', 'I'm not buying right now', 'send it over and I'll look'). Answer each in under 10 sec.", win: "You re-engage on every objection instead of hanging up." },
+      { name: "Reduction call (Sharyn)", how: "Role-play asking a seller for a price reduction backed by comps + days-on-market — lead with evidence, not apology.", win: "You ask for the reduction with data, no flinching." },
+    ],
+  },
+];
+
 // Suggested coaching method for a focus skill — when to audit calls vs. other drills.
 function methodFor(skill: string): string {
   const s = skill.toLowerCase();
@@ -42,7 +68,8 @@ export default async function TrainingPage() {
     db.trainingSchedule.findMany({ where: { active: true } }),
     db.coachingSession.findMany({ orderBy: { date: "desc" }, take: 200 }),
   ]);
-  const team = reps.filter((r) => r.position !== "");
+  // Coaching is for the reps, not the owner — exclude admins (Jon).
+  const team = reps.filter((r) => r.position !== "" && r.role !== "admin");
   // Reps only see (and only read) their own plan; managers see + edit everyone.
   const visibleTeam = manager ? team : team.filter((r) => r.id === me.id);
   const focusBy = (id: string) => focuses.filter((f) => f.userId === id);
@@ -81,6 +108,29 @@ export default async function TrainingPage() {
           <span>📞 <span className="font-semibold">Call audits:</span> everyone, twice weekly</span>
           <span>🧮 <span className="font-semibold">Underwriting:</span> Marie + Michelle</span>
           <span>🤝 <span className="font-semibold">Rapport:</span> Marie, Sharyn, Michelle</span>
+        </div>
+      </Card>
+
+      {/* Role-specific drills library — ready-to-run exercises per lane */}
+      <Card className="p-4">
+        <div className="mb-1 text-sm font-bold text-slate-700">🏋️ Exercises &amp; Drills by role</div>
+        <p className="mb-3 text-xs text-slate-500">Ready-to-run reps — repeat them daily/weekly. (Need something tailored to a person or a real call? Use the AI Training Designer above.)</p>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {DRILL_LANES.map((lane) => (
+            <div key={lane.key} className={`rounded-xl p-3 ring-1 ${lane.cls}`}>
+              <div className="mb-0.5 text-sm font-bold text-slate-800">{lane.emoji} {lane.title}</div>
+              <div className="mb-2 text-[11px] font-semibold text-slate-500">{lane.who}</div>
+              <div className="space-y-2">
+                {lane.drills.map((d) => (
+                  <div key={d.name} className="rounded-lg bg-white/70 p-2.5 ring-1 ring-slate-200">
+                    <div className="text-[13px] font-bold text-slate-800">{d.name}</div>
+                    <div className="text-[12px] leading-snug text-slate-600">{d.how}</div>
+                    <div className="mt-0.5 text-[11px] text-emerald-700">✅ {d.win}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </Card>
 

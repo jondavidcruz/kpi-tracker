@@ -13,7 +13,8 @@ Your job is to design TRAINING — lesson plans, practice exercises/drills, and 
 Rules:
 - Make it practical and runnable: clear objective, steps, time estimates, and how to tell it worked.
 - When you include example lines, label them as teaching examples to adapt — never a script to read word-for-word.
-- Be concise. Short labeled sections + bullets. Bold the key takeaways.
+- Be concise. Short labeled sections + bullets.
+- PLAIN TEXT ONLY: no markdown, no asterisks (*), no bold (**), and do NOT wrap words in quotation marks for emphasis. Use emoji or UPPERCASE for headers and "• " for bullets. (Quotation marks are fine ONLY around an exact phrase the rep should say out loud.)
 - Tailor everything to the specific rep, skill, and audience.`;
 
 const audienceFor = (role: string) => (role === "acquisitions" ? "home sellers" : "cash buyers and real-estate developers (often via a gatekeeper)");
@@ -24,17 +25,17 @@ function buildPrompt(rep: string, role: string, skill: string, mode: string, con
   const ctx = context.trim() ? `\n\nSituation / transcript provided:\n${context.trim().slice(0, 8000)}` : "";
   switch (mode) {
     case "lesson":
-      return `Build a focused LESSON PLAN to teach ${rep} "${focus}" (audience: ${who}). Include: 🎯 Objective (what they'll be able to do), 🧠 3–5 key teaching points, 💬 1–2 example lines to illustrate each (clearly marked as examples to adapt), 🏋️ one practice activity to run live, and ✅ how to measure that it stuck. Keep it to something a lead can run in ~20 minutes.${ctx}`;
+      return `Build a focused LESSON PLAN to teach ${rep} ${focus} (audience: ${who}). Include: 🎯 Objective (what they'll be able to do), 🧠 3–5 key teaching points, 💬 1–2 example lines to illustrate each (clearly marked as examples to adapt), 🏋️ one practice activity to run live, and ✅ how to measure that it stuck. Keep it to something a lead can run in ~20 minutes.${ctx}`;
     case "exercises":
-      return `Design 3–5 concrete PRACTICE EXERCISES / drills ${rep} can do to build "${focus}" (with ${who}). For each: a name, what to do (steps), how long, and "what good looks like". Make them repeatable so they can be done daily.${ctx}`;
+      return `Design 3–5 concrete PRACTICE EXERCISES / drills ${rep} can do to build ${focus} (with ${who}). For each: a name, what to do (steps), how long, and "what good looks like". Make them repeatable so they can be done daily.${ctx}`;
     case "ideas":
-      return `Give a coach's playbook of IDEAS for improving ${rep}'s "${focus}" (with ${who}): when a recorded-call audit is the right tool vs. live coaching, role-play, shadowing, or homework — and 4–6 specific activities to try, each with the point of it. Be tactical.${ctx}`;
+      return `Give a coach's playbook of IDEAS for improving ${rep}'s ${focus} (with ${who}): when a recorded-call audit is the right tool vs. live coaching, role-play, shadowing, or homework — and 4–6 specific activities to try, each with the point of it. Be tactical.${ctx}`;
     case "roleplay":
-      return `Write a realistic role-play SCENARIO to practice "${focus}" with ${who}. Set the scene, give the prospect a tough-but-realistic personality, then 6–8 back-and-forth exchanges (Prospect: / ${rep}:), and end with 2–3 coaching notes on what to watch for. Frame it as a practice rep, not a script to memorize.${ctx}`;
+      return `Write a realistic role-play SCENARIO to practice ${focus} with ${who}. Set the scene, give the prospect a tough-but-realistic personality, then 6–8 back-and-forth exchanges (Prospect: / ${rep}:), and end with 2–3 coaching notes on what to watch for. Frame it as a practice rep, not a script to memorize.${ctx}`;
     case "feedback":
-      return `Review the situation/transcript below for ${rep} on "${focus}" and turn it into a coaching moment: ✅ what worked, ⚠️ what to fix, 🏋️ one drill to fix it, and 🎯 a one-line homework assignment for this week. Be specific and direct.${ctx}`;
+      return `Review the situation/transcript below for ${rep} on ${focus} and turn it into a coaching moment: ✅ what worked, ⚠️ what to fix, 🏋️ one drill to fix it, and 🎯 a one-line homework assignment for this week. Be specific and direct.${ctx}`;
     default:
-      return `Design a short training activity to help ${rep} improve "${focus}" with ${who} — objective, steps, and how to measure it.${ctx}`;
+      return `Design a short training activity to help ${rep} improve ${focus} with ${who} — objective, steps, and how to measure it.${ctx}`;
   }
 }
 
