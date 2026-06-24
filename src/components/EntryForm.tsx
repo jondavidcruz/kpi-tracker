@@ -17,6 +17,7 @@ export interface EntryItem {
   goalKind: string;
   userId: string; // "" for team scope
   initial: string; // input-ready value (minutes for duration)
+  auto?: boolean; // value was auto-filled from data we already have
 }
 
 export interface EntryGroup {
@@ -70,6 +71,12 @@ function Field({ item }: { item: EntryItem }) {
   const cls = statusClasses(status);
   const suffix = inputSuffix(item.unit);
   const isSpeed = item.kpiKey === "internet_speed";
+  // Empty = no number entered yet → flag it RED so it's obvious it still needs a value.
+  const empty = raw.trim() === "";
+  const boxCls = empty ? "border-red-300 bg-red-50 focus-within:ring-red-300" : `${cls.border} ${cls.bg} focus-within:ring-slate-400`;
+  const dotCls = empty ? "bg-red-400" : cls.dot;
+  const textCls = empty ? "text-red-600" : cls.text;
+  const autoFilled = item.auto && !empty;
 
   async function runSpeedTest() {
     setTesting(true);
@@ -97,30 +104,32 @@ function Field({ item }: { item: EntryItem }) {
       {/* Top-down row: label on the left, value on the right */}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-slate-700">
+          <div className="flex items-center gap-2 truncate text-sm font-medium text-slate-700">
             <KpiLabel kpiKey={item.kpiKey} name={item.name} />
+            {autoFilled && <span className="shrink-0 rounded bg-emerald-100 px-1.5 text-[9px] font-bold uppercase text-emerald-700" title="Auto-filled from data we already track — edit to override">auto</span>}
+            {empty && <span className="shrink-0 rounded bg-red-100 px-1.5 text-[9px] font-bold uppercase text-red-600">needs entry</span>}
           </div>
           {item.goalValue !== null && (
             <div className="text-xs text-slate-400">goal {formatValue(item.unit, item.goalValue)}</div>
           )}
         </div>
         <div
-          className={`flex w-36 shrink-0 items-center rounded-lg border-2 px-2.5 ${cls.border} ${cls.bg} focus-within:ring-2 focus-within:ring-slate-400`}
+          className={`flex w-36 shrink-0 items-center rounded-lg border-2 px-2.5 focus-within:ring-2 ${boxCls}`}
         >
-          {item.unit === "currency" && <span className="text-slate-400">$</span>}
+          {item.unit === "currency" && <span className={empty ? "text-red-400" : "text-slate-400"}>$</span>}
           <input
             name={`v|${item.kpiId}|${item.userId}`}
             inputMode={item.unit === "duration" ? "text" : "decimal"}
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
             placeholder={item.unit === "duration" ? "1:30" : "—"}
-            className={`w-full bg-transparent py-2 text-right text-lg font-semibold outline-none ${cls.text}`}
+            className={`w-full bg-transparent py-2 text-right text-lg font-semibold outline-none ${textCls}`}
             autoComplete="off"
           />
           {suffix && item.unit !== "currency" && (
             <span className="ml-1 text-sm text-slate-400">{suffix}</span>
           )}
-          <span className={`ml-2 h-2.5 w-2.5 shrink-0 rounded-full ${cls.dot}`} />
+          <span className={`ml-2 h-2.5 w-2.5 shrink-0 rounded-full ${dotCls}`} />
         </div>
       </div>
       {isSpeed && (

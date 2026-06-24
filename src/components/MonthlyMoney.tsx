@@ -29,8 +29,38 @@ export default async function MonthlyMoney() {
     : [];
   const totalLeads = leadEntries.reduce((s, e) => s + e.value, 0);
 
+  // ── Auto-fill from data we already track ───────────────────────────────────
+  // Deals closed + gross revenue from ClosedDeal; contracts from the synced KPI
+  // entries; operating expenses from the P&L expense lines.
+  const y = +month.slice(0, 4), mo = +month.slice(5, 7);
+  const [closed, contractKpis, expCount, expSum] = await Promise.all([
+    db.closedDeal.aggregate({ where: { year: y, month: mo }, _count: { _all: true }, _sum: { profit: true } }),
+    db.kpi.findMany({ where: { key: { in: ["acq_contracts_sent", "contracts_signed"] } }, select: { id: true, key: true } }),
+    db.expenseLine.count({ where: { month } }),
+    db.expenseLine.aggregate({ where: { month }, _sum: { actual: true } }),
+  ]);
+  const cEntries = contractKpis.length
+    ? await db.entry.findMany({ where: { kpiId: { in: contractKpis.map((k) => k.id) }, date: { gte: monthStart, lte: monthEnd } }, select: { kpiId: true, value: true } })
+    : [];
+  const keyByKpiId = new Map(contractKpis.map((k) => [k.id, k.key]));
+  const contractSums: Record<string, number> = {};
+  for (const e of cEntries) { const key = keyByKpiId.get(e.kpiId); if (key) contractSums[key] = (contractSums[key] ?? 0) + e.value; }
+
+  // Only auto-fill a field when we genuinely have the data behind it.
+  const AUTO: Record<string, number> = {
+    deals_closed: closed._count._all,
+    gross_revenue: closed._sum.profit ?? 0,
+    acq_contracts_sent: contractSums.acq_contracts_sent ?? 0,
+    contracts_signed: contractSums.contracts_signed ?? 0,
+    ...(expCount > 0 ? { operating_expenses: expSum._sum.actual ?? 0 } : {}),
+  };
+
   const byKey = new Map(enteredKpis.map((k) => [k.key, k]));
-  const valOf = (key: string) => { const k = byKey.get(key); return k ? monthlyValues.get(k.id) ?? 0 : 0; };
+  const valOf = (key: string) => {
+    const k = byKey.get(key);
+    const manual = k ? monthlyValues.get(k.id) : undefined;
+    return manual !== undefined ? manual : (AUTO[key] ?? 0);
+  };
   const inputs: MonthlyInputs = {
     totalLeads,
     dealsClosed: valOf("deals_closed"),
@@ -41,12 +71,19 @@ export default async function MonthlyMoney() {
 
   const entryGroup: EntryGroup = {
     title: "Monthly money",
-    hint: "Entered once per month for the whole company.",
-    items: enteredKpis.map((k) => ({
-      kpiId: k.id, kpiKey: k.key, name: k.name, emoji: k.emoji, unit: k.unit as Unit,
-      goalValue: k.goalValue, goalKind: k.goalKind, userId: "",
-      initial: toInputNumber(k.unit as Unit, monthlyValues.get(k.id)),
-    })),
+    hint: "🟢 auto = filled from data we already track (deals, revenue, contracts, expenses). 🔴 needs entry = no data source, type it in.",
+    items: enteredKpis.map((k) => {
+      const manual = monthlyValues.get(k.id);
+      const hasManual = manual !== undefined;
+      const auto = AUTO[k.key];
+      const val = hasManual ? manual : auto;
+      return {
+        kpiId: k.id, kpiKey: k.key, name: k.name, emoji: k.emoji, unit: k.unit as Unit,
+        goalValue: k.goalValue, goalKind: k.goalKind, userId: "",
+        initial: val !== undefined ? toInputNumber(k.unit as Unit, val) : "",
+        auto: !hasManual && auto !== undefined,
+      };
+    }),
   };
 
   return (
