@@ -9,15 +9,17 @@ import {
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
+import StatusDot from "./StatusDot";
 
 type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
 
 export default function Sidebar({
-  name, manager, admin, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions,
+  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions,
 }: {
   name: string;
   manager: boolean;
   admin: boolean;
+  owner: boolean;
   marketing: boolean;
   timecard: boolean;
   csuite: boolean;
@@ -90,9 +92,12 @@ export default function Sidebar({
 
   const Nav = (
     <div className="flex h-full flex-col">
-      <Link href="/dashboard" onClick={() => setOpen(false)} className="block px-4 py-5">
-        <Logo size="sm" tagline />
-      </Link>
+      <div className="px-4 pt-5 pb-3">
+        <Link href="/dashboard" onClick={() => setOpen(false)} className="block">
+          <Logo size="sm" tagline />
+        </Link>
+        {owner && <div className="mt-2"><StatusDot /></div>}
+      </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
         {groups.map((g) => {

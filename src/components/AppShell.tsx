@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { getSessionEmail, getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canAccessCSuite, navAllowlist, isPathAllowed } from "@/lib/auth";
+import { getSessionEmail, getCurrentUser, isManager, isAdmin, isOwner, canAccessMarketing, canAccessPayroll, canAccessCSuite, navAllowlist, isPathAllowed } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
@@ -67,7 +67,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   return (
     <div className="md:flex md:min-h-screen">
-      <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} />
+      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} />
       <main className="min-w-0 flex-1">
         <ContentWrap>
           {openOffboarding && (
