@@ -7,7 +7,6 @@ import { formatValue, toInputNumber, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import RepRoleBars from "@/components/RepRoleBars";
-import HubTabs from "@/components/HubTabs";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import {
   computeDerived,
@@ -96,7 +95,6 @@ export default async function MonthlyPage({
 
   return (
     <div className="space-y-8">
-      <HubTabs tabs={[{ href: "/report", label: "KPI Reports" }, { href: "/monthly", label: "Monthly financials" }]} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Monthly</h1>

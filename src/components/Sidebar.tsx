@@ -44,6 +44,7 @@ export default function Sidebar({
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/report", label: "KPI Reports", Icon: FileText },
       { href: "/kpi-sources", label: "KPI Sources", Icon: ScrollText },
+      { href: "/monthly", label: "Monthly Financials", Icon: DollarSign, managerOnly: true },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
     ] },
