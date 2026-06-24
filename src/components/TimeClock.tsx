@@ -60,9 +60,11 @@ export default function TimeClock({
 }) {
   const [extra, setExtra] = useState(0);
   const [pastShift, setPastShift] = useState(false);
+  const [contMin, setContMin] = useState(0); // minutes online without a break, right now
   useEffect(() => {
     if (state !== "online") {
       setExtra(0);
+      setContMin(0);
       // Still flag if they're sitting on break/lunch past shift end.
       setPastShift(state !== "offline" && capMs != null && Date.now() > capMs);
       return;
@@ -72,11 +74,15 @@ export default function TimeClock({
       const liveNow = capMs != null ? Math.min(Date.now(), capMs) : Date.now();
       setExtra(Math.max(0, Math.floor((liveNow - nowMs) / 60000)));
       setPastShift(capMs != null && Date.now() > capMs);
+      setContMin(sinceMs ? Math.max(0, Math.floor((Date.now() - sinceMs) / 60000)) : 0);
     };
     tick();
     const t = setInterval(tick, 15000);
     return () => clearInterval(t);
-  }, [state, nowMs, capMs]);
+  }, [state, nowMs, capMs, sinceMs]);
+
+  // Health nudge: been heads-down for 100+ min without a break.
+  const needsBreak = state === "online" && contMin >= 100;
 
   const total = workedMin + (state === "online" ? extra : 0);
   const since = sinceMs ? new Date(sinceMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
@@ -96,6 +102,12 @@ export default function TimeClock({
           {s.label}{since && state !== "offline" ? ` · since ${since}` : ""}
         </span>
       </div>
+
+      {needsBreak && (
+        <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
+          ☕ You&apos;ve been heads-down for <strong>{hm(contMin)}</strong> straight — take a quick break to reset. Tap <strong>Start break</strong>{showLunch ? " or Start lunch" : ""} when you step away.
+        </div>
+      )}
 
       {pastShift && (
         <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">

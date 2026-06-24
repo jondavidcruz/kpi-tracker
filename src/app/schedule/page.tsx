@@ -3,12 +3,13 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
-import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
+import { stateFromPunches, workedMinutes, groupByUser, daySegments } from "@/lib/presence";
 import { workCapAt, shiftEndLabel } from "@/lib/shift";
 import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
+import BreakHistory from "@/components/BreakHistory";
 
 export const dynamic = "force-dynamic";
 
@@ -300,8 +301,33 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
       {/* MY TIME CARD — not for the owner (Jon doesn't punch a clock) */}
       {!isOwner(me) && (
-        <section>
+        <section className="space-y-2">
           <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} showLunch={me.name.trim().split(/\s+/)[0]?.toLowerCase() !== "marie"} />
+          <BreakHistory timeline={daySegments(myPs, now)} tz={settings.orgTimezone} />
+        </section>
+      )}
+
+      {/* TEAM BREAKS TODAY (managers) — when each person took breaks/lunch + how long */}
+      {manager && (
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-slate-700">☕ Breaks &amp; lunch today</h3>
+          <Card className="divide-y divide-slate-100">
+            {users.map((u) => {
+              const tl = daySegments(byUser.get(u.id) ?? [], now);
+              if (!tl.clockInMs && tl.segments.length === 0) return null;
+              const onLong = tl.continuousMin >= 100;
+              return (
+                <div key={u.id} className="flex flex-col gap-1.5 p-3 sm:flex-row sm:items-center">
+                  <div className="flex w-32 shrink-0 items-center gap-2">
+                    <span className="font-semibold text-slate-800">{u.name.split(" ")[0]}</span>
+                    {onLong && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" title={`On ${Math.floor(tl.continuousMin / 60)}h ${tl.continuousMin % 60}m without a break`}>needs a break</span>}
+                  </div>
+                  <div className="min-w-0 flex-1"><BreakHistory timeline={tl} tz={settings.orgTimezone} compact /></div>
+                </div>
+              );
+            })}
+          </Card>
+          <p className="mt-1.5 text-[11px] text-slate-400">Sharyn lunches 12–1, Michelle 1–2; Marie takes one 15-min break. “Needs a break” flags anyone on 100+ min straight.</p>
         </section>
       )}
 
