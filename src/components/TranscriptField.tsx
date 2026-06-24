@@ -35,15 +35,19 @@ export default function TranscriptField({ inputCls, geminiConfigured }: { inputC
         if (upErr) throw new Error("storage upload failed");
         const url = sign.publicUrl as string;
         setAudioUrl(url);
-        // 2) Transcribe from the stored URL.
-        setMsg({ text: "Transcribing with Gemini… 10–40 seconds.", tone: "info" });
-        const r = await fetch("/api/transcribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
-        const d = await r.json();
-        if (d.transcript) {
-          setValue((v) => (v.trim() ? v.trim() + "\n\n" + d.transcript : d.transcript));
-          setMsg({ text: "✓ Uploaded + transcribed — read it, then Score this call.", tone: "ok" });
+        if (!geminiConfigured) {
+          setMsg({ text: "✓ Recording saved — now paste the transcript below, then Score this call.", tone: "ok" });
         } else {
-          setMsg({ text: (d.error || "Couldn't transcribe that file.") + " (Recording saved — you can still paste a transcript.)", tone: "err" });
+          // 2) Transcribe from the stored URL.
+          setMsg({ text: "Transcribing with Gemini… 10–40 seconds.", tone: "info" });
+          const r = await fetch("/api/transcribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
+          const d = await r.json();
+          if (d.transcript) {
+            setValue((v) => (v.trim() ? v.trim() + "\n\n" + d.transcript : d.transcript));
+            setMsg({ text: "✓ Uploaded + transcribed — read it, then Score this call.", tone: "ok" });
+          } else {
+            setMsg({ text: (d.error || "Couldn't transcribe that file.") + " (Recording saved — you can still paste a transcript.)", tone: "err" });
+          }
         }
       } else {
         // Fallback: storage not set up → small files only, posted straight to transcribe.
@@ -70,16 +74,16 @@ export default function TranscriptField({ inputCls, geminiConfigured }: { inputC
 
   return (
     <label className="block">
-      <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Call transcript</span>
-      {geminiConfigured && (
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <input ref={fileRef} type="file" accept="audio/*" onChange={onFile} className="hidden" />
-          <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-            {busy ? "Working…" : "🎙️ Upload a recording"}
-          </button>
-          {msg ? <span className={`text-xs ${toneCls}`}>{msg.text}</span> : <span className="text-xs text-slate-400">mp3, m4a, wav… uploads straight to storage, so any size works and it&apos;s saved to play back.</span>}
-        </div>
-      )}
+      <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Call recording <span className="text-red-500">(required)</span> + transcript</span>
+      <div className={`mb-2 flex flex-wrap items-center gap-2 ${audioUrl ? "" : "rounded-lg bg-red-50 p-2 ring-1 ring-red-200"}`}>
+        <input ref={fileRef} type="file" accept="audio/*" onChange={onFile} className="hidden" />
+        <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+          {busy ? "Working…" : audioUrl ? "🎙️ Replace recording" : "🎙️ Upload the recording"}
+        </button>
+        {msg ? <span className={`text-xs ${toneCls}`}>{msg.text}</span>
+          : audioUrl ? <span className="text-xs text-emerald-600">✓ Recording attached.</span>
+          : <span className="text-xs font-semibold text-red-600">Required — upload the audio file (mp3, m4a, wav…). A transcript alone won&apos;t save.</span>}
+      </div>
       {audioUrl && <audio controls src={audioUrl} className="mb-2 h-9 w-full max-w-md" />}
       <input type="hidden" name="audioUrl" value={audioUrl} />
       <textarea name="transcript" value={value} onChange={(e) => setValue(e.target.value)} rows={8}

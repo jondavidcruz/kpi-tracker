@@ -374,6 +374,8 @@ export async function scoreCall(formData: FormData) {
   if (transcript.length < 40) redirect("/call-scoring?err=short");
 
   const audioUrl = String(formData.get("audioUrl") ?? "").trim().slice(0, 500);
+  // The recording itself is required — a transcript alone isn't enough to verify the call.
+  if (!audioUrl) redirect("/call-scoring?err=noaudio");
   const address = String(formData.get("address") ?? "").trim().slice(0, 200);
   const sellerName = String(formData.get("sellerName") ?? "").trim().slice(0, 120);
   const sellerPhone = String(formData.get("sellerPhone") ?? "").trim().slice(0, 40);
