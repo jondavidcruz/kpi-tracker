@@ -5,9 +5,13 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
 import { workCapAt } from "@/lib/shift";
-import { sendTimecardChat } from "@/lib/notify";
+import { sendTimecardChat, sendEmailTo } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
+
+// Marie reviews disconnects — emailed directly so it reaches her phone (Chat webhooks
+// can't @ping by email).
+const REVIEW_EMAIL = "rosemae08@gmail.com";
 
 /** Live availability board data — polled by the Schedule page's PresenceBoard. */
 export async function GET() {
@@ -50,6 +54,8 @@ export async function GET() {
       const won = await db.user.updateMany({ where: { id: u.id, dropAlertedAt: null }, data: { dropAlertedAt: now } });
       if (won.count === 1) {
         await sendTimecardChat(`🔴 *${u.name} disconnected — unknown reason.* Dropped off mid-shift with no power/internet outage logged. 👀 Marie — confirm with them when they're back whether it was a power or internet outage, and log it.`).catch(() => {});
+        await sendEmailTo([REVIEW_EMAIL], `🔴 ${u.name} disconnected — unknown reason`,
+          `<p><strong>${u.name}</strong> dropped off mid-shift with no power/internet outage logged (heartbeat lost for 5+ min).</p><p>Please confirm with them when they're back whether it was a <strong>power</strong> or <strong>internet</strong> outage, and log it on their record.</p>`).catch(() => {});
       }
     } else if (!dropped && u.dropAlertedAt) {
       const won = await db.user.updateMany({ where: { id: u.id, dropAlertedAt: { not: null } }, data: { dropAlertedAt: null } });
@@ -57,6 +63,8 @@ export async function GET() {
         const back = stateById.get(u.id);
         if (back === "online" || back === "break" || back === "lunch") {
           await sendTimecardChat(`🟢 *${u.name} is back online* after a disconnect. 👀 Marie — confirm if it was a power or internet outage and log it on their record.`).catch(() => {});
+          await sendEmailTo([REVIEW_EMAIL], `🟢 ${u.name} is back online after a disconnect`,
+            `<p><strong>${u.name}</strong> is back online after dropping off mid-shift.</p><p>Confirm with them if it was a <strong>power</strong> or <strong>internet</strong> outage and log it on their record.</p>`).catch(() => {});
         }
       }
     }
