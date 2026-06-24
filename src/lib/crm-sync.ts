@@ -19,8 +19,10 @@ const STAGE_KPI: Record<string, string> = {
   // 📝 CONTRACT SIGNED (Dispo) → Contracts Signed
   "e41c86fb-bf38-4aea-88aa-3e8c3f4fd7be": "contracts_signed",
   "08541c62-3363-4c2c-b04c-970b3b123399": "contracts_signed",
-  // DS: Close Profits — 📣 ON MARKET → Deals Sent to Buyers
-  "408fafdb-27c7-4779-a3b1-34b425f73046": "deals_sold",
+  // NOTE: "Deals Sent to Buyers" is NOT pulled from the ON MARKET stage — going on the
+  // MLS ≠ blasting an off-market deal to our buyer list. That's tracked manually (or, later,
+  // from email/SMS campaign sends). Likewise ESCROW CLOSED → contracts_assigned is wired
+  // separately once we have that DS stage id.
 };
 // Stages whose credit goes to a FIXED rep, not the card's assignedTo.
 const STAGE_FIXED_REP: Record<string, string> = {
@@ -34,8 +36,10 @@ type AgentCfg = { crm: string; first: string; talk: string; conv?: string; convM
 export const AGENTS: AgentCfg[] = [
   { crm: "Up6W3UdNQ4tDkitQfUJq", first: "jon", talk: "acq_talk_time" },
   { crm: "FT34Pug9AUHAG0Kpwg9j", first: "michelle", talk: "acq_talk_time" },
-  { crm: "vFYB3vWFG2o0VOVwwEYd", first: "sharyn", talk: "ds_talk_time", conv: "dev_conversations", convMin: 90, dials: "buyers_contacted", answered: "answered_calls" },
-  { crm: "IqYEt2UrQ6gVToOzsaaw", first: "marie", talk: "ds_talk_time", conv: "buyer_conversations", convMin: 60, dials: "buyers_contacted", answered: "answered_calls" },
+  // Talk time + dials + answered are auto. Developer vs Fix/Flipper CONVERSATIONS are NOT
+  // auto — the CRM can't tell which buyer type a call was with — so reps log those manually.
+  { crm: "vFYB3vWFG2o0VOVwwEYd", first: "sharyn", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls" },
+  { crm: "IqYEt2UrQ6gVToOzsaaw", first: "marie", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls" },
 ];
 
 // UTC ms bounds of a calendar day in `tz` (DST-safe).

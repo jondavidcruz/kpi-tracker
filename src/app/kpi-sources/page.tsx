@@ -14,16 +14,16 @@ const SOURCE: Record<string, { tag: string; how: string }> = {
   ds_talk_time: { tag: "🟢 REI Reply", how: "Sum of connected call seconds" },
   buyers_contacted: { tag: "🟢 REI Reply", how: "Total dials (all call attempts)" },
   answered_calls: { tag: "🟢 REI Reply", how: "Calls that connected (any length)" },
-  dev_conversations: { tag: "🟢 REI Reply", how: "Connected calls ≥ 90s — Sharyn*" },
-  buyer_conversations: { tag: "🟢 REI Reply", how: "Connected calls ≥ 60s — Marie*" },
   // 🟢 REI Reply CRM — pipeline stage moves
   offers_made: { tag: "🟢 REI Reply", how: "Card → ⚓ VERBAL OFFER stage" },
   acq_contracts_sent: { tag: "🟢 REI Reply", how: "Card → 📩 CONTRACT SENT stage" },
   contracts_signed: { tag: "🟢 REI Reply", how: "Card → 📝 CONTRACT SIGNED stage" },
   completed_process_calls: { tag: "🟢 REI Reply", how: "Card → COMP TO OFFER / REVIEW NUMBERS stage" },
-  appts_set: { tag: "🟢 REI Reply", how: "Card → 📅 APT SET stage" },
   deals_comped: { tag: "🟢 REI Reply", how: "Card → 🧑‍⚖️ COMP REVIEW stage → credited to Marie" },
-  deals_sold: { tag: "🟢 REI Reply", how: "Deal → 📣 ON MARKET (DS pipeline)" },
+  // ✋ Manual — the CRM can't distinguish these, so reps enter them on Enter KPIs
+  dev_conversations: { tag: "✋ Manual", how: "Developer conversations — CRM can't tell buyer type, so log manually" },
+  buyer_conversations: { tag: "✋ Manual", how: "Fix/flipper conversations — CRM can't tell buyer type, so log manually" },
+  deals_sold: { tag: "✋ Manual", how: "Off-market deals blasted to the buyer list (email/SMS) — ON MARKET ≠ sent" },
   // 🔵 Buyer Research (instant)
   new_buyers: { tag: "🔵 Buyer Research", how: "When you add a buyer/developer" },
   buy_boxes_captured: { tag: "🔵 Buyer Research", how: "When you fill in a buy box" },

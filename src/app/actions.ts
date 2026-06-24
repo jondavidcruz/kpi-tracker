@@ -1653,7 +1653,10 @@ export async function logBuyerOutreach(formData: FormData) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
   const next = new Date(); next.setDate(next.getDate() + 3);
   const nextStr = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(next);
-  const existing = await db.marketContact.findUnique({ where: { id }, select: { outreachLog: true } });
+  const existing = await db.marketContact.findUnique({ where: { id }, select: { outreachLog: true, touchOn: true } });
+  // One touch per lead per day — pressing 📇 again on the same lead doesn't re-count or
+  // re-log. Notes still autosave separately; this just protects Developers Contacted.
+  if (existing?.touchOn === today) { revalidatePath("/vetting"); redirect("/vetting"); }
   const stamped = note ? `${today}: ${note}` : `${today}: reached out`;
   const log = existing?.outreachLog ? `${stamped}\n${existing.outreachLog}` : stamped;
   await db.marketContact.update({ where: { id }, data: { lastContacted: today, nextFollowUp: nextStr, outreachLog: log.slice(0, 4000), vetStatus: "contacted", touchById: me!.id, touchOn: today } });

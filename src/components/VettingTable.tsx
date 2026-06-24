@@ -1,13 +1,13 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { setBuyerStatus, logBuyerOutreach, saveProspectField, saveProspect, saveBuyerBox, deleteProspect } from "@/app/actions";
 import MultiSelect from "@/components/MultiSelect";
 
 export type Prospect = {
   id: string; name: string; website: string; email: string; phone: string; phone2: string;
   buyBoxAreas: string; outreachLog: string; lastContacted: string; nextFollowUp: string;
-  vetStage: string; vetStatus: string; igHandle: string;
+  vetStage: string; vetStatus: string; igHandle: string; touchOn?: string;
   // CRM buy-box detail
   category: string; type: string; title: string; company: string; preferredContact: string;
   dealType: string; buildType: string; closingSpeed: string; priceRange: string; minLotSize: string;
@@ -64,17 +64,28 @@ function Cell({ id, field, value, placeholder, mono }: { id: string; field: stri
     </form>
   );
 }
-// Bigger multi-line Notes cell — like the spreadsheet's Notes column.
+// Bigger multi-line Notes cell — autosaves ~1s after you stop typing AND on blur, so
+// notes never get lost (e.g. if you click "Log touch" right after typing).
 function NotesCell({ id, value }: { id: string; value: string }) {
+  const [status, setStatus] = useState<"idle" | "dirty" | "saved">("idle");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const save = (ta: HTMLTextAreaElement) => { if (ta.value !== value) { ta.form?.requestSubmit(); setStatus("saved"); } };
   return (
     <form action={saveProspectField} className="contents">
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="field" value="outreachLog" />
-      <textarea
-        name="value" defaultValue={value} placeholder="notes — touches, replies, who to ask for, next step…" rows={3}
-        onBlur={(e) => { if (e.currentTarget.value !== value) e.currentTarget.form?.requestSubmit(); }}
-        className="w-full min-w-[300px] resize-y whitespace-pre-wrap rounded border border-transparent bg-transparent px-1.5 py-1 leading-snug hover:border-slate-200 focus:border-sky-400 focus:bg-white focus:outline-none"
-      />
+      <div className="min-w-[300px]">
+        <textarea
+          name="value" defaultValue={value} placeholder="notes — touches, replies, who to ask for, next step…" rows={3}
+          onChange={(e) => { const ta = e.currentTarget; setStatus("dirty"); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => save(ta), 1000); }}
+          onBlur={(e) => { if (timer.current) clearTimeout(timer.current); save(e.currentTarget); }}
+          className="w-full resize-y whitespace-pre-wrap rounded border border-transparent bg-transparent px-1.5 py-1 leading-snug hover:border-slate-200 focus:border-sky-400 focus:bg-white focus:outline-none"
+        />
+        <div className="h-3 px-1 text-[9px] font-semibold">
+          {status === "dirty" && <span className="text-amber-600">● typing… autosaves</span>}
+          {status === "saved" && <span className="text-emerald-600">✓ saved</span>}
+        </div>
+      </div>
     </form>
   );
 }
@@ -264,10 +275,14 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                                   {STATUS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                                 </select>
                               </form>
-                              <form action={logBuyerOutreach}>
-                                <input type="hidden" name="id" value={p.id} />
-                                <button className="rounded bg-sky-600 px-1.5 py-1 text-[10px] font-semibold text-white hover:bg-sky-700" title="Log a touch (counts toward Buyers Contacted) + 3-day follow-up">📇</button>
-                              </form>
+                              {p.touchOn === today ? (
+                                <span className="rounded bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700" title="Already logged a touch on this lead today — counts once toward Developers Contacted">✓ Logged today</span>
+                              ) : (
+                                <form action={logBuyerOutreach}>
+                                  <input type="hidden" name="id" value={p.id} />
+                                  <button className="rounded-md bg-sky-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm hover:bg-sky-700" title="Log a developer touch — counts toward Developers Contacted + sets a 3-day follow-up. Save your note first.">📇 Log touch</button>
+                                </form>
+                              )}
                               <form action={deleteProspect}>
                                 <input type="hidden" name="id" value={p.id} />
                                 <button onClick={(e) => { if (!confirm(`Delete ${p.name}? This can't be undone.`)) e.preventDefault(); }} className="rounded px-1.5 py-1 text-[10px] font-semibold text-slate-300 hover:bg-red-50 hover:text-red-600" title="Delete this buyer">🗑</button>

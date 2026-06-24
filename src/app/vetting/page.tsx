@@ -36,7 +36,7 @@ export default async function VettingPage() {
   const toProspect = (r: typeof rows[number]): Prospect => ({
     id: r.id, name: r.name, website: r.website, email: r.email, phone: r.phone, phone2: r.phone2,
     buyBoxAreas: r.buyBoxAreas, outreachLog: r.outreachLog, lastContacted: r.lastContacted,
-    nextFollowUp: r.nextFollowUp, vetStage: r.vetStage, vetStatus: r.vetStatus, igHandle: r.igHandle,
+    nextFollowUp: r.nextFollowUp, vetStage: r.vetStage, vetStatus: r.vetStatus, igHandle: r.igHandle, touchOn: r.touchOn,
     category: r.category, type: r.type, title: r.title, company: r.company, preferredContact: r.preferredContact,
     dealType: r.dealType, buildType: r.buildType, closingSpeed: r.closingSpeed, priceRange: r.priceRange, minLotSize: r.minLotSize,
     propertyType: r.propertyType, minBeds: r.minBeds, maxBaths: r.maxBaths, conditionTolerance: r.conditionTolerance, needsView: r.needsView,
