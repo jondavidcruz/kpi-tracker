@@ -297,11 +297,14 @@ export default function UnderwritingCalculator() {
         note: "Standard agent-to-agent referral is 25% of the listing-side commission. A flat $2,500–$5,000 is also common — set whichever you use.",
       };
     }
-    return {
-      title: "Flip / Wholetail Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`,
+    {
+      const comps = [1, 2, 3].map((i) => { const a = v(`comp${i}`); const p = v(`comp${i}p`); const d = v(`comp${i}d`); return a ? `${esc(a)}${p ? ` — $${esc(p)}` : ""}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
+      return {
+      title: "Flip / Wholetail Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
       rows: [["ARV", money(arv)], ["Rehab", money(fRehab)], ["Commission + closing + carrying + HOA + PM", money(fComm + fClosing + fCarry + fHoaCost + n("fPm"))], ["Total property costs", money(fPropertyCosts)], ["Money cost (points + interest + fees)", money(fMoneyCost)], ["Total costs", money(fTotalCosts)], ["Minimum profit", money(fMinProfit)], ["🎯 Max Offer", money(fMao)], ["Profit at your purchase price", money(fProfit)]],
       note: "Buyer's-lens flip math. Max Offer = ARV + purchase credit − min profit − total costs. Wholetail = same math with a lighter rehab.",
     };
+    }
   }
 
   function exportPdf() {
@@ -603,6 +606,15 @@ export default function UnderwritingCalculator() {
               {legend}
               <Field k="arv" label="ARV" prefix="$" placeholder="350,000" req="need" />
               <Field k="fMinProfit" label="Minimum profit" prefix="$" placeholder="30,000" req="opt" />
+              <div className={goodDiv}>🟢 ARV comps (required · addr · sold $ · days on market)</div>
+              <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">{compsNote}</p>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
+                  <Field k={`comp${i}`} label={`Comp ${i} address`} span={2} req="good" />
+                  <Field k={`comp${i}p`} label="Sold $" prefix="$" req="good" />
+                  <Field k={`comp${i}d`} label="DOM" req="good" />
+                </div>
+              ))}
               <div className={reqDiv}>Rehab (required) — direct $, or sqft × $/sf</div>
               <Field k="fRehab" label="Override rehab cost ($)" prefix="$" span={2} req="need" />
               <Field k="sqft" label="Square feet" req="need" />
