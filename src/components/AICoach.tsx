@@ -41,7 +41,9 @@ export default function AICoach({ reps }: { reps: Rep[] }) {
     }
   }
 
-  const sel = "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
+  // text-slate-800 is required — the panel is dark (text-white), so without it the
+  // select/input text inherits white and the names are invisible on the white field.
+  const sel = "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-200";
   return (
     <div className="rounded-2xl bg-brand-navy p-4 text-white ring-1 ring-brand-navy">
       <div className="mb-1 text-base font-bold">🤖 AI Training Designer</div>

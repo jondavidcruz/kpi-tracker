@@ -1,12 +1,10 @@
 import { saveDay } from "@/app/actions";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
 import { db } from "@/lib/db";
-import { getKpis, getMonthlyValues, getSettings, getActiveReps, getRangeSums, getAllTargets, resolveGoalWith } from "@/lib/data";
+import { getKpis, getMonthlyValues, getSettings } from "@/lib/data";
 import { todayStr, monthBounds, monthOf, daysInMonth, dayOfMonth } from "@/lib/date";
 import { formatValue, toInputNumber, type Unit } from "@/lib/format";
-import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
-import RepRoleBars from "@/components/RepRoleBars";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import {
   computeDerived,
@@ -27,22 +25,14 @@ export default async function MonthlyPage({
   const today = todayStr(settings.orgTimezone);
   const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : monthOf(today);
   const monthStart = `${month}-01`;
-  // Working days (Mon–Fri) in the month → per-rep monthly target for the KPI bars.
-  const [mY, mM] = month.split("-").map(Number);
-  let workdaysInMonth = 0;
-  for (let dd = 1; dd <= new Date(Date.UTC(mY, mM, 0)).getUTCDate(); dd++) { const dow = new Date(Date.UTC(mY, mM - 1, dd)).getUTCDay(); if (dow >= 1 && dow <= 5) workdaysInMonth++; }
   const { end: monthEnd } = monthBounds(monthStart);
   const isCurrentMonth = month === monthOf(today);
   const fraction = isCurrentMonth ? dayOfMonth(today) / daysInMonth(today) : 1;
 
-  const [enteredKpis, computedKpis, monthlyValues, reps, perRepKpis, monthSums, targets] = await Promise.all([
+  const [enteredKpis, computedKpis, monthlyValues] = await Promise.all([
     getKpis({ scope: "team", cadence: "monthly", computed: false }),
     getKpis({ scope: "team", cadence: "monthly", computed: true }),
     getMonthlyValues(monthStart),
-    getActiveReps(),
-    getKpis({ scope: "per_rep", cadence: "daily", computed: false }),
-    getRangeSums(monthStart, monthEnd),
-    getAllTargets(),
   ]);
 
   // Total leads for the month = daily "Leads Generated" + "PPL Leads" entries.
@@ -185,37 +175,8 @@ export default async function MonthlyPage({
       </section>
       )}
 
-      {/* Per-rep monthly totals — daily KPIs rolled up for the whole month (everyone) */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Per-rep totals this month
-        </h2>
-        <div className="space-y-5">
-          {POSITIONS.map((pos) => {
-            const roleReps = reps.filter((r) => r.position === pos.key);
-            const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
-            if (roleReps.length === 0 || roleKpis.length === 0) return null;
-            return (
-              <RepRoleBars
-                key={pos.key}
-                emoji={pos.emoji}
-                label={pos.label}
-                reps={roleReps}
-                kpis={roleKpis}
-                cell={(repId, k) => {
-                  const total = monthSums.get(`${k.id}|${repId}`) ?? 0;
-                  const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;
-                  const monthlyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdaysInMonth : null;
-                  const pct = monthlyGoal ? Math.min(100, (total / monthlyGoal) * 100) : null;
-                  const status = monthlyGoal ? (total >= monthlyGoal ? "hit" : total >= monthlyGoal * 0.7 ? "close" : "miss") : "tracked";
-                  return { value: total, pct, status, goalText: dailyGoal ? `/ ${formatValue(k.unit as Unit, dailyGoal)}/day` : undefined };
-                }}
-              />
-            );
-          })}
-        </div>
-        <p className="mt-2 text-xs text-slate-400">Sum of each rep&apos;s daily entries for {month}. Goals shown are the daily target for reference.</p>
-      </section>
+      {/* Per-rep KPI totals intentionally live on KPI Reports (month view), not here —
+          Monthly Financials is money only. */}
 
       {/* Editable monthly inputs — company money, managers only */}
       {manager && (

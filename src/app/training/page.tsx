@@ -57,6 +57,33 @@ export default async function TrainingPage() {
       {/* AI coaching assistant — managers run it */}
       {manager && <AICoach reps={team.map((r) => ({ name: r.name, role: r.position, skills: focusBy(r.id).map((f) => f.skill) }))} />}
 
+      {/* Set weekly training rhythm — what we run each day */}
+      <Card className="p-4">
+        <div className="mb-1 text-sm font-bold text-slate-700">🗓️ Weekly Training Rhythm</div>
+        <p className="mb-3 text-xs text-slate-500">The set cadence for the whole team. Everyone also gets <span className="font-semibold text-emerald-700">daily live coaching</span> — we unmute their live calls and whisper feedback in real time.</p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+          {[
+            { day: "Mon", emoji: "📞", title: "Call Audit", desc: "Score 2–3 recorded calls each + debrief. Sets the week's focus.", cls: "bg-sky-50 ring-sky-200" },
+            { day: "Tue", emoji: "🧮", title: "Underwriting", desc: "MAO / numbers drills. Marie leads; Michelle on offer structuring.", cls: "bg-violet-50 ring-violet-200" },
+            { day: "Wed", emoji: "🤝", title: "Rapport & Objections", desc: "Role-play exercises — rapport, gatekeepers, objection handling.", cls: "bg-amber-50 ring-amber-200" },
+            { day: "Thu", emoji: "📞", title: "Call Audit #2", desc: "Re-audit targeting the week's weak spot from Monday.", cls: "bg-sky-50 ring-sky-200" },
+            { day: "Fri", emoji: "🎯", title: "Closing Drills", desc: "Price negotiation + closing exercises, then week recap.", cls: "bg-emerald-50 ring-emerald-200" },
+          ].map((d) => (
+            <div key={d.day} className={`rounded-xl p-3 ring-1 ${d.cls}`}>
+              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{d.day}</div>
+              <div className="mt-0.5 text-sm font-bold text-slate-800">{d.emoji} {d.title}</div>
+              <p className="mt-1 text-[11px] leading-snug text-slate-600">{d.desc}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+          <span>🎧 <span className="font-semibold text-emerald-700">Daily:</span> live whisper coaching on real calls (all reps)</span>
+          <span>📞 <span className="font-semibold">Call audits:</span> everyone, twice weekly</span>
+          <span>🧮 <span className="font-semibold">Underwriting:</span> Marie + Michelle</span>
+          <span>🤝 <span className="font-semibold">Rapport:</span> Marie, Sharyn, Michelle</span>
+        </div>
+      </Card>
+
       {/* Weekly schedule board */}
       <Card className="p-4">
         <div className="mb-2 text-sm font-bold text-slate-700">🗓 Training schedule</div>
