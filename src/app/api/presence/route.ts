@@ -5,13 +5,12 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
 import { workCapAt } from "@/lib/shift";
-import { sendTimecardChat, sendEmailTo } from "@/lib/notify";
+import { sendTimecardChat } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
-// Marie reviews disconnects — emailed directly so it reaches her phone (Chat webhooks
-// can't @ping by email).
-const REVIEW_EMAIL = "rosemae08@gmail.com";
+// Tag Marie in the Timecard Google Chat space so she's pinged to review disconnects.
+const MARIE_MENTION = "<users/rosemae08@gmail.com>";
 
 /** Live availability board data — polled by the Schedule page's PresenceBoard. */
 export async function GET() {
@@ -23,24 +22,28 @@ export async function GET() {
   const [users, punches, outages] = await Promise.all([
     db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true, lastSeenAt: true, dropAlertedAt: true } }),
     db.punch.findMany({ where: { date }, orderBy: { at: "asc" }, select: { userId: true, kind: true, at: true } }),
-    db.outage.findMany({ where: { date, ongoing: true }, select: { userId: true, kind: true } }),
+    db.outage.findMany({ where: { date, ongoing: true }, select: { userId: true, kind: true, startMin: true } }),
   ]);
   const byUser = groupByUser(punches);
-  const outByUser = new Map(outages.map((o) => [o.userId, o.kind]));
+  const outByUser = new Map(outages.map((o) => [o.userId, o]));
   const now = new Date();
   const STALE = 5 * 60 * 1000; // working but no heartbeat for 5 min = likely dropped
   const cap = workCapAt(date, settings.orgTimezone);
+  // Current minutes-from-midnight in the org timezone, for outage duration.
+  const np = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
+  const nowMin = (+(np.find((p) => p.type === "hour")?.value ?? 0) % 24) * 60 + +(np.find((p) => p.type === "minute")?.value ?? 0);
   const people = users
     .filter((u) => !isOwner(u))
     .map((u) => {
       const ps = byUser.get(u.id) ?? [];
       const { state, since } = stateFromPunches(ps);
       const working = state === "online" || state === "break" || state === "lunch";
-      const outageKind = outByUser.get(u.id);
+      const out = outByUser.get(u.id);
       let st: string = state;
-      if (outageKind) st = "outage";
+      if (out) st = "outage";
       else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
-      return { id: u.id, name: u.name, state: st, outageKind: outageKind ?? null, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
+      const outageMin = out ? Math.max(0, nowMin - out.startMin) : null;
+      return { id: u.id, name: u.name, state: st, outageKind: out?.kind ?? null, outageMin, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
     });
 
   // Disconnect alerts: a rep who dropped mid-shift with NO logged power/internet outage
@@ -53,18 +56,14 @@ export async function GET() {
     if (dropped && !u.dropAlertedAt) {
       const won = await db.user.updateMany({ where: { id: u.id, dropAlertedAt: null }, data: { dropAlertedAt: now } });
       if (won.count === 1) {
-        await sendTimecardChat(`🔴 *${u.name} disconnected — unknown reason.* Dropped off mid-shift with no power/internet outage logged. 👀 Marie — confirm with them when they're back whether it was a power or internet outage, and log it.`).catch(() => {});
-        await sendEmailTo([REVIEW_EMAIL], `🔴 ${u.name} disconnected — unknown reason`,
-          `<p><strong>${u.name}</strong> dropped off mid-shift with no power/internet outage logged (heartbeat lost for 5+ min).</p><p>Please confirm with them when they're back whether it was a <strong>power</strong> or <strong>internet</strong> outage, and log it on their record.</p>`).catch(() => {});
+        await sendTimecardChat(`🔴 *${u.name} disconnected — unknown reason.* Dropped off mid-shift with no power/internet outage logged. ${MARIE_MENTION} — confirm with them when they're back whether it was a power or internet outage, and log it.`).catch(() => {});
       }
     } else if (!dropped && u.dropAlertedAt) {
       const won = await db.user.updateMany({ where: { id: u.id, dropAlertedAt: { not: null } }, data: { dropAlertedAt: null } });
       if (won.count === 1) {
         const back = stateById.get(u.id);
         if (back === "online" || back === "break" || back === "lunch") {
-          await sendTimecardChat(`🟢 *${u.name} is back online* after a disconnect. 👀 Marie — confirm if it was a power or internet outage and log it on their record.`).catch(() => {});
-          await sendEmailTo([REVIEW_EMAIL], `🟢 ${u.name} is back online after a disconnect`,
-            `<p><strong>${u.name}</strong> is back online after dropping off mid-shift.</p><p>Confirm with them if it was a <strong>power</strong> or <strong>internet</strong> outage and log it on their record.</p>`).catch(() => {});
+          await sendTimecardChat(`🟢 *${u.name} is back online* after a disconnect. ${MARIE_MENTION} — confirm if it was a power or internet outage and log it on their record.`).catch(() => {});
         }
       }
     }

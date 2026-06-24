@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 type State = "online" | "break" | "lunch" | "offline" | "outage" | "dropped";
-type Person = { id: string; name: string; state: State; outageKind?: string | null; sinceMs: number | null; workedMin: number };
+type Person = { id: string; name: string; state: State; outageKind?: string | null; outageMin?: number | null; sinceMs: number | null; workedMin: number };
 
 const DOT: Record<State, string> = {
   online: "bg-emerald-500",
@@ -81,6 +81,7 @@ export default function PresenceBoard({ initial }: { initial: Person[] }) {
               <div className="truncate text-sm font-semibold text-slate-800">{p.name}</div>
               <div className={`truncate text-[11px] ${p.state === "outage" || p.state === "dropped" ? "font-semibold text-red-600" : "text-slate-500"}`}>
                 {p.state === "outage" ? outageLabel(p.outageKind) : LABEL[p.state]}
+                {p.state === "outage" && p.outageMin ? ` · ${hm(p.outageMin)} out` : ""}
                 {(p.state === "online" || p.state === "break" || p.state === "lunch") && p.sinceMs ? ` · since ${clockSince(p.sinceMs)}` : ""}
                 {p.workedMin > 0 ? ` · ${hm(p.workedMin)} today` : ""}
               </div>
