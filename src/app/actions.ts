@@ -8,7 +8,7 @@ import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat, sendTimecardChat, sendCallAuditChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, isManager, isAdmin, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, isOwner, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
@@ -20,6 +20,14 @@ import { after } from "next/server";
 
 /** Pull today's CRM numbers (calls + offers/contracts) on demand so the scorecard
  *  is live right now. Managers only. */
+/** Owner sends themselves a test email to confirm Resend is wired correctly. */
+export async function sendTestEmail() {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const ok = await sendEmailTo([me!.email], "✅ War Room — Resend test", "<p>If you're reading this, your email alerts (Resend) are working. 🎉</p><p>— The War Room</p>");
+  redirect(`/system-check?email=${ok ? "ok" : "fail"}`);
+}
+
 export async function refreshCrmToday() {
   const me = await getCurrentUser();
   if (!isManager(me)) return;

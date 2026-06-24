@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentUser, isOwner } from "@/lib/auth";
 import { computeHealth, type CheckStatus } from "@/lib/health";
 import { Card, SectionTitle } from "@/components/ui";
+import { sendTestEmail } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,10 @@ const OVERALL: Record<string, { bg: string; title: string; sub: string }> = {
   red: { bg: "from-red-500 to-red-600", title: "🔴 Major issue", sub: "Something critical is down — see the red item(s) below." },
 };
 
-export default async function SystemCheckPage() {
+export default async function SystemCheckPage({ searchParams }: { searchParams: Promise<{ email?: string }> }) {
+  const sp = await searchParams;
   const me = await getCurrentUser();
-  if (!isOwner(me)) {
+  if (!me || !isOwner(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
@@ -60,6 +62,17 @@ export default async function SystemCheckPage() {
           );
         })}
       </div>
+
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <form action={sendTestEmail}>
+            <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">✉️ Send myself a test email</button>
+          </form>
+          <span className="text-xs text-slate-500">Sends a real email to <strong>{me.email}</strong> via Resend — the true test that email actually works (not just that a key exists).</span>
+        </div>
+        {sp.email === "ok" && <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Sent! Check your inbox ({me.email}). Resend is working.</div>}
+        {sp.email === "fail" && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 ring-1 ring-red-200">✗ Send failed — the Resend key or sending domain isn&apos;t right yet. Re-check RESEND_API_KEY (the <code>re_…</code> value, not code) and that the from-domain is verified in Resend.</div>}
+      </Card>
 
       <p className="text-[11px] text-slate-400">Re-checked every time you open this page or hover the status dot by the logo. Most fixes are env vars in Vercel → Settings → Environment Variables (then redeploy).</p>
     </div>
