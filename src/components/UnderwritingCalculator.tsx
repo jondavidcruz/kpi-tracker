@@ -313,60 +313,90 @@ export default function UnderwritingCalculator() {
 
   function exportPdf() {
     const r = buildReport();
-    // Append the real-world outcome so the saved report shows the true margin.
-    if (showAsking && asking > 0) r.rows.push(["Seller's asking price", money(asking) + (overAsk > 0 ? ` (over max by ${money(overAsk)})` : " (within max)")]);
-    if (accepted > 0) { r.rows.push(["Accepted price", money(accepted)], [`${marginLabel} (actual)`, money(profitAtAccepted)]); }
-    const w = window.open("", "_blank", "width=820,height=920");
+    const w = window.open("", "_blank", "width=860,height=940");
     if (!w) return;
 
-    // Color-code each row so the offer call is easy to read at a glance.
-    const toneFor = (label: string): { c: string; bg: string } => {
-      const L = label.toLowerCase();
-      if (label.startsWith("🎯") || L.includes("max offer") || (L.includes("margin") && !L.includes("markup")) || L.includes("your fee") || L.includes("marketing fee")) return { c: "#047857", bg: "#ecfdf5" }; // green = the money number
-      if (L.includes("anchor")) return { c: "#b45309", bg: "#fffbeb" };       // amber = open here
-      if (L.includes("over max") || L.includes("over by") || L.includes("overpriced") || (L.includes("over max by"))) return { c: "#b91c1c", bg: "#fef2f2" }; // red = problem
-      if (L.startsWith("−") || L.includes("repair") || L.includes("cost") || L.includes("holding") || L.includes("commission") || L.includes("closing") || L.includes("hoa") || L.includes("dues") || L.includes("credit")) return { c: "#b91c1c", bg: "#fff" }; // red text = a deduction
-      if (L.includes("negotiat")) return { c: "#1e3a8a", bg: "#eff6ff" };
-      return { c: "#0f172a", bg: "#fff" };
+    const isAssign = tab === "assignment", isNov = tab === "novation", isFlip = tab === "flip", isCreative = tab === "creative";
+    // The single headline number (MAO / max offer) — biggest thing on the page.
+    const heroVal = isAssign ? cashMao : isNov ? novMao : isFlip ? fMao : isCreative ? cMargin : mktFee;
+    const heroLabel = isAssign ? "Cash MAO · the most we offer the seller" : isNov ? "Novation MAO · max seller payout" : isFlip ? "Max Offer · flip MAO" : isCreative ? "Total margin to us" : "Our marketing fee";
+    const rLo = isAssign ? aAnchor : isNov ? novAnchor : 0;
+    const rHi = isAssign ? cashMao : isNov ? novMao : 0;
+    const feeAnchor = isAssign ? (flipperTarget - repairs - aHoa - aExtra - aAnchor) : isNov ? feeAtAnchor : 0;
+    const feeMao = isAssign ? aFee : isNov ? nMinFee : 0;
+    const valLabel = (isAssign || isFlip) ? "ARV (after-repair value)" : isNov ? "List price (similar-condition · EMV)" : "";
+    const valVal = (isAssign || isFlip) ? arv : isNov ? nList : 0;
+
+    // A colored decision box.
+    type Tone = "navy" | "amber" | "green" | "slate" | "red";
+    const TONES: Record<Tone, { bg: string; bd: string; lc: string; vc: string }> = {
+      navy: { bg: "#eef2ff", bd: "#c7d2fe", lc: "#4338ca", vc: "#1e3a8a" },
+      amber: { bg: "#fffbeb", bd: "#fde68a", lc: "#b45309", vc: "#b45309" },
+      green: { bg: "#ecfdf5", bd: "#a7f3d0", lc: "#047857", vc: "#047857" },
+      slate: { bg: "#f8fafc", bd: "#e2e8f0", lc: "#64748b", vc: "#0f172a" },
+      red: { bg: "#fef2f2", bd: "#fecaca", lc: "#b91c1c", vc: "#b91c1c" },
     };
-    const heroIdx = r.rows.findIndex(([l]) => l.startsWith("🎯"));
-    const hero = heroIdx >= 0 ? r.rows[heroIdx] : null;
-    const rows = r.rows.map(([l, val], i) => {
-      const t = toneFor(l);
-      const strong = l.startsWith("🎯");
-      return `<tr style="background:${strong ? t.bg : i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:8px 12px;color:#475569;${strong ? "font-weight:700" : ""}">${esc(l)}</td><td style="padding:8px 12px;font-weight:800;text-align:right;color:${t.c};font-size:${strong ? "16px" : "14px"}">${esc(val)}</td></tr>`;
-    }).join("");
+    const card = (label: string, value: string, tone: Tone, sub?: string) => {
+      const t = TONES[tone];
+      return `<div style="flex:1 1 160px;background:${t.bg};border:1px solid ${t.bd};border-radius:10px;padding:11px 14px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${t.lc}">${esc(label)}</div>
+        <div style="font-size:19px;font-weight:800;color:${t.vc};margin-top:2px">${esc(value)}</div>
+        ${sub ? `<div style="font-size:10px;color:#94a3b8;margin-top:1px">${esc(sub)}</div>` : ""}
+      </div>`;
+    };
 
-    // Negotiation-range bar (anchor → MAO) for the buy exits.
-    const rangeLo = tab === "assignment" ? aAnchor : tab === "novation" ? novAnchor : 0;
-    const rangeHi = tab === "assignment" ? cashMao : tab === "novation" ? novMao : 0;
-    const rangeBar = (buyExit && rangeHi > 0 && rangeLo > 0) ? `
-      <div style="margin:6px 0 18px">
-        <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:4px">
-          <span style="color:#b45309">⚓ Open ${esc(money(rangeLo))}</span>
-          <span style="color:#047857">🎯 Max ${esc(money(rangeHi))}</span>
-        </div>
-        <div style="height:14px;border-radius:8px;background:linear-gradient(90deg,#fcd34d,#34d399)"></div>
-        <div style="font-size:10px;color:#94a3b8;text-align:center;margin-top:3px">Open at the anchor, negotiate up to the max — never past it.</div>
-      </div>` : "";
+    let boxes: string[] = [];
+    if (isAssign || isNov) {
+      boxes = [
+        card("Negotiation range", `${money(rLo)} → ${money(rHi)}`, "navy", "open low, work up to the MAO"),
+        card("Your fee at the opening (anchor)", money(feeAnchor), "amber", "if they take your first number"),
+        card("Your fee at the MAO", money(feeMao), "green", "your minimum at the top of the range"),
+        card(valLabel, money(valVal), "slate"),
+      ];
+    } else if (isFlip) {
+      boxes = [
+        card("Min profit kept", money(fMinProfit), "green"),
+        card("ARV (after-repair value)", money(arv), "slate"),
+        ...(n("fPurchase") > 0 ? [card("Profit at your purchase price", money(fProfit), fProfit > 0 ? "green" : "red")] : []),
+      ];
+    } else if (isCreative) {
+      boxes = [card("Our assignment fee", money(cFee), "green"), card("Down markup we keep", money(cDownMarkup), "amber")];
+    }
+    const boxesHtml = boxes.length ? `<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px">${boxes.join("")}</div>` : "";
 
-    const conflict = maoConflict ? `<div style="margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;font-weight:600">⚠️ Cash MAO (${esc(money(cashMao))}) is higher than the Novation MAO (${esc(money(novMao))}) — novation should usually allow a higher offer. Re-check the novation inputs.</div>` : "";
+    // Seller's asking vs our max — a clear green/red callout.
+    const askHtml = (showAsking && asking > 0 && dealMax > 0)
+      ? `<div style="margin:0 0 12px;padding:10px 14px;border-radius:10px;font-weight:700;font-size:13px;${overAsk > 0 ? "background:#fef2f2;border:1px solid #fecaca;color:#b91c1c" : "background:#ecfdf5;border:1px solid #a7f3d0;color:#047857"}">Seller's asking: ${money(asking)} ${overAsk > 0 ? `— over your max by ${money(overAsk)} ⚠️` : `— within your max ✅`}</div>`
+      : "";
+    const acceptedHtml = (accepted > 0)
+      ? `<div style="margin:0 0 12px;padding:10px 14px;border-radius:10px;font-weight:700;font-size:13px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534">If they accept ${money(accepted)} → ${esc(marginLabel.toLowerCase())}: ${money(profitAtAccepted)}</div>`
+      : "";
+
+    const conflict = maoConflict ? `<div style="margin:0 0 14px;padding:10px 14px;border-radius:10px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;font-weight:600">⚠️ Cash MAO (${esc(money(cashMao))}) is higher than the Novation MAO (${esc(money(novMao))}) — novation should usually allow a higher offer. Re-check the novation inputs.</div>` : "";
+
+    // Full cost breakdown — minus the headline numbers already shown in boxes above.
+    const detail = r.rows.filter(([l]) => !/🎯|anchor|negotiat/i.test(l));
+    const rowsHtml = detail.map(([l, val], i) => `<tr style="background:${i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:7px 12px;color:#475569">${esc(l)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;color:#0f172a">${esc(val)}</td></tr>`).join("");
 
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(r.title)}</title></head>
-      <body style="font-family:system-ui,Arial,sans-serif;color:#0f172a;max-width:720px;margin:28px auto;padding:0 18px">
-        <div style="border-bottom:3px solid #0b1f3a;padding-bottom:8px;margin-bottom:14px">
+      <body style="font-family:system-ui,Arial,sans-serif;color:#0f172a;max-width:760px;margin:24px auto;padding:0 18px">
+        <div style="border-bottom:3px solid #0b1f3a;padding-bottom:8px;margin-bottom:6px">
           <div style="font-weight:800;font-size:18px;color:#0b1f3a">Freedom Offers — War Room</div>
           <div style="color:#64748b;font-size:13px">${esc(r.title)} · ${new Date().toLocaleDateString()}</div>
         </div>
-        ${hero ? `<div style="background:#0b1f3a;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:13px;color:#cbd5e1;font-weight:600">${esc(hero[0].replace("🎯 ", ""))}</span>
-          <span style="font-size:26px;font-weight:800;color:#fcd34d">${esc(hero[1])}</span>
-        </div>` : ""}
+        ${r.comps ? `<div style="margin:10px 0 12px;color:#334155;line-height:1.5;font-size:13px">${r.comps}</div>` : ""}
+        <div style="background:linear-gradient(135deg,#065f46,#059669);border-radius:14px;padding:18px 22px;margin:0 0 14px;text-align:center;color:#fff">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a7f3d0">🎯 ${esc(heroLabel)}</div>
+          <div style="font-size:42px;font-weight:800;line-height:1.1;margin-top:3px">${esc(money(heroVal))}</div>
+          ${(rLo && rHi) ? `<div style="font-size:12px;color:#d1fae5;margin-top:5px">Open at ${esc(money(rLo))} · negotiate up to ${esc(money(rHi))} — never past it</div>` : ""}
+        </div>
         ${conflict}
-        ${rangeBar}
-        ${r.comps ? `<div style="margin-bottom:14px;color:#334155;line-height:1.5;font-size:13px">${r.comps}</div>` : ""}
-        <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${rows}</table>
-        ${r.note ? `<p style="margin-top:16px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
+        ${boxesHtml}
+        ${askHtml}
+        ${acceptedHtml}
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin:4px 0 4px">How the number breaks down</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${rowsHtml}</table>
+        ${r.note ? `<p style="margin-top:14px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
       </body></html>`);
     w.document.close();
     w.focus();
