@@ -120,6 +120,15 @@ function feeForArv(arv: number): number {
   for (const [cap, fee] of FEE_TIERS) if (arv < cap) return fee;
   return 40000; // $1M+ → $40k
 }
+// Display ladder for the on-screen reference table (matches feeForArv).
+const FEE_TIER_ROWS: [string, number][] = [
+  ["Under $200k", 10000],
+  ["$200k–350k", 15000],
+  ["$350k–500k", 20000],
+  ["$500k–750k", 25000],
+  ["$750k–1M", 30000],
+  ["$1M+", 40000],
+];
 function tierLabel(arv: number): string {
   if (arv <= 0) return "";
   if (arv < 200000) return "under $200k";
@@ -362,6 +371,28 @@ export default function UnderwritingCalculator() {
     </div>
   );
 
+  // Fee-floor reference: the minimum assignment / novation fee to aim for at each ARV
+  // band, with the band matching the current ARV highlighted. Same fee applies to both
+  // exits. Keeps reps from under-charging on a pricey house or over-charging (and
+  // lowballing the seller) on a cheap one.
+  const feeTiers = (
+    <div className="sm:col-span-2 rounded-lg bg-amber-50/60 px-3 py-2 ring-1 ring-amber-200">
+      <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">📐 Minimum fee to aim for, by ARV{arv > 0 ? ` — yours: ${tierLabel(arv)} → ${money(suggestedFee)}` : ""}</div>
+      <div className="grid grid-cols-3 gap-1 text-[11px] sm:grid-cols-6">
+        {FEE_TIER_ROWS.map(([band, fee]) => {
+          const active = arv > 0 && suggestedFee === fee;
+          return (
+            <div key={band} className={`flex flex-col rounded px-1.5 py-1 text-center ${active ? "bg-emerald-600 font-bold text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+              <span className="text-[10px]">{band}</span>
+              <span className="font-bold">{money(fee)}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-1 text-[10px] italic text-amber-700/80">The floor scales with ARV — don&apos;t leave money on a high-value house, and don&apos;t force a lowball offer chasing an oversized fee on a cheap one. Enter ARV on the Assignment tab to light up your band.</p>
+    </div>
+  );
+
   // Big-ticket repair checklist — check what's needed; the cost folds into rehab.
   const majorRepairs = () => (
     <div className="sm:col-span-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-200">
@@ -454,7 +485,7 @@ export default function UnderwritingCalculator() {
                 <div className="flex-1"><Field k="aFee" label="Assignment fee" prefix="$" placeholder={suggestedFee ? suggestedFee.toLocaleString() : "15,000"} req="need" /></div>
                 {suggestedFee > 0 && <button type="button" onClick={() => setV("aFee", String(suggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(arv)} ARV`}>Use {money(suggestedFee)}</button>}
               </div>
-              {suggestedFee > 0 && <p className="sm:col-span-2 -mt-1.5 text-[10px] text-slate-400">📐 Suggested minimum fee for <span className="font-semibold text-slate-500">{tierLabel(arv)}</span> ARV: <span className="font-semibold text-slate-500">{money(suggestedFee)}</span> — used automatically if left blank.</p>}
+              {feeTiers}
               <div className={reqDiv}>Repairs (required) — type a figure, or estimate from sqft</div>
               <Field k="repairs" label="Override repair estimate ($)" prefix="$" span={2} req="need" />
               <Field k="sqft" label="Square feet" req="need" />
@@ -498,7 +529,7 @@ export default function UnderwritingCalculator() {
                 <div className="flex-1"><Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder={suggestedFee ? suggestedFee.toLocaleString() : "15,000"} req="need" /></div>
                 {suggestedFee > 0 && <button type="button" onClick={() => setV("nMinFee", String(suggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(arv)} ARV`}>Use {money(suggestedFee)}</button>}
               </div>
-              {suggestedFee > 0 && <p className="sm:col-span-2 -mt-1.5 text-[10px] text-slate-400">📐 Suggested minimum fee for <span className="font-semibold text-slate-500">{tierLabel(arv)}</span> ARV: <span className="font-semibold text-slate-500">{money(suggestedFee)}</span> — used automatically if left blank. (Set ARV on the Assignment tab to tier this.)</p>}
+              {feeTiers}
               <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" req="opt" />
               <Field k="nSellerClosePct" label="Seller closing % (we cover)" suffix="%" placeholder="1.5" req="opt" />
               <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" req="opt" />
