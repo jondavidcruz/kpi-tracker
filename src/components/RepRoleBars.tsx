@@ -5,8 +5,11 @@ import { Card } from "@/components/ui";
 type Kpi = { id: string; key: string; name: string; unit: string; goalKind: string; goalValue: number | null };
 export type RepCell = { value: number; pct: number | null; status: "hit" | "close" | "miss" | "tracked"; goalText?: string };
 
-const BAR: Record<string, string> = { hit: "bg-emerald-500", close: "bg-amber-500", miss: "bg-red-500", tracked: "bg-slate-300" };
-const TXT: Record<string, string> = { hit: "text-emerald-600", close: "text-amber-600", miss: "text-red-600", tracked: "text-slate-700" };
+// "tracked" = a logged activity with no pass/fail goal (talk time, etc.) — show it in
+// sky blue (matches the 🔵 activity legend) so a full bar reads as "logged," not the
+// old gray that looked like an unfinished/empty metric.
+const BAR: Record<string, string> = { hit: "bg-emerald-500", close: "bg-amber-500", miss: "bg-red-500", tracked: "bg-sky-400" };
+const TXT: Record<string, string> = { hit: "text-emerald-600", close: "text-amber-600", miss: "text-red-600", tracked: "text-sky-700" };
 
 /** Per-rep KPIs read top-to-bottom with color-coded bars (one card per rep). */
 export default function RepRoleBars({ emoji, label, reps, kpis, cell }: {

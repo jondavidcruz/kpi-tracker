@@ -140,7 +140,7 @@ export function Legend() {
     { c: "bg-emerald-500", t: "On goal" },
     { c: "bg-amber-500", t: "Close" },
     { c: "bg-red-500", t: "Behind" },
-    { c: "bg-slate-300", t: "Tracked" },
+    { c: "bg-sky-400", t: "Tracked (no goal)" },
   ];
   return (
     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
