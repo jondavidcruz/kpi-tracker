@@ -56,6 +56,24 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
           <strong>Setup needed:</strong> add an <code>ANTHROPIC_API_KEY</code> in Vercel → Settings → Environment Variables, then redeploy. Scoring runs on your own pay-as-you-go key (~1-5¢ per call). Until then, scoring is disabled.
         </div>
       )}
+
+      {/* Nudge reps to add their own Gemini key so uploads don't share one quota. */}
+      {geminiConfigured && !me?.geminiKey && (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200">
+          <div className="font-bold">🎙️ Add your own Gemini key (2 min) — so the team never shares one transcription limit</div>
+          <p className="mt-1 text-[13px] text-amber-800">Right now your uploads use a shared key that can hit its daily cap. Add your own free key and your uploads run on <b>your</b> quota — no more caps.</p>
+          <details className="mt-1.5">
+            <summary className="cursor-pointer text-[13px] font-semibold text-amber-900 hover:underline">How to get your key →</summary>
+            <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-[13px] text-amber-800">
+              <li>Open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold underline">aistudio.google.com/apikey</a> and sign in with Google.</li>
+              <li>Click <b>Create API key</b>, then <b>Copy</b> it (starts with <code className="rounded bg-white px-1">AIza…</code>).</li>
+              <li>Come back → <a href="/account" className="font-semibold underline">My Account → My Gemini key</a> → paste → <b>Save key</b>.</li>
+            </ol>
+            <p className="mt-1 text-[11px] text-amber-700">Free for our usage. Keep your key private — don&apos;t share it or post it in chat.</p>
+          </details>
+          <a href="/account" className="mt-2 inline-block rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700">Add my key →</a>
+        </div>
+      )}
       {sp.scored && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Scored and saved below.</div>}
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved “{sp.saved}”.</div>}
       {sp.setup && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Scoring isn&apos;t configured yet — add the ANTHROPIC_API_KEY (see above).</div>}
