@@ -52,6 +52,9 @@ export default async function SystemCheckPage() {
                   <span className={`ml-auto text-[10px] font-bold uppercase ${s.text}`}>{s.label}</span>
                 </div>
                 <div className="text-[12px] text-slate-600">{c.detail}</div>
+                {c.fix && c.status !== "ok" && (
+                  <div className="mt-1.5 rounded-md bg-white/70 px-2 py-1.5 text-[11px] text-slate-600 ring-1 ring-slate-200"><span className="font-bold text-slate-700">How to fix:</span> {c.fix}</div>
+                )}
               </div>
             </div>
           );

@@ -96,7 +96,9 @@ export default async function AppShell({ children }: { children: React.ReactNode
         </ContentWrap>
       </main>
       <CortanaBot />
-      {manager && <PresenceWidget />}
+      {/* Team availability window — everyone sees it so the whole team knows if
+          someone dropped (power/internet outage), not just managers. */}
+      <PresenceWidget />
       <HeartbeatPing />
     </div>
   );
