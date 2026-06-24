@@ -16,8 +16,8 @@ export default function TranscriptField({ inputCls, geminiConfigured }: { inputC
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (f.size > 18 * 1024 * 1024) {
-      setMsg({ text: "That recording is over 18 MB — please trim or compress it first.", tone: "err" });
+    if (f.size > 200 * 1024 * 1024) {
+      setMsg({ text: "That recording is over 200 MB — please trim or compress it first.", tone: "err" });
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
