@@ -12,7 +12,6 @@ import Sidebar from "./Sidebar";
 import ContentWrap from "./ContentWrap";
 import { parseNavHidden, isPathHidden } from "@/lib/navItems";
 import CortanaBot from "./CortanaBot";
-import PageHelp from "./PageHelp";
 import HeartbeatPing from "./HeartbeatPing";
 import PresenceWidget from "./PresenceWidget";
 
@@ -98,7 +97,6 @@ export default async function AppShell({ children }: { children: React.ReactNode
       </main>
       <CortanaBot />
       {manager && <PresenceWidget />}
-      <PageHelp />
       <HeartbeatPing />
     </div>
   );

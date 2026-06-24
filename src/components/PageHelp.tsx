@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 
-type Topic = { title: string; intro: string; steps: string[]; tip?: string };
+export type Topic = { title: string; intro: string; steps: string[]; tip?: string };
 
 // One tutorial per section. Keyed by route prefix; longest match wins.
 const HELP: Record<string, Topic> = {
@@ -328,7 +328,7 @@ const HELP: Record<string, Topic> = {
   },
 };
 
-function topicFor(path: string): Topic | null {
+export function topicFor(path: string): Topic | null {
   const p = (path || "").split("?")[0];
   let best: string | null = null;
   for (const key of Object.keys(HELP)) if (p.startsWith(key) && (!best || key.length > best.length)) best = key;
@@ -336,7 +336,7 @@ function topicFor(path: string): Topic | null {
 }
 
 // Fallback so EVERY page always has a "how to use" tutorial, even brand-new ones.
-function genericTopic(path: string): Topic {
+export function genericTopic(path: string): Topic {
   const seg = (path || "").split("?")[0].split("/").filter(Boolean)[0] || "page";
   const title = seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return {

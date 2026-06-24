@@ -2,8 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { topicFor, genericTopic } from "./PageHelp";
 
 type Msg = { role: "user" | "assistant"; content: string };
+
+// Formats the page tutorial as a Cortana chat message (instant — no AI call).
+function helpMessage(path: string): string {
+  const t = topicFor(path) ?? genericTopic(path);
+  const steps = t.steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
+  return `📖 How to use ${t.title}\n\n${t.intro}\n\n${steps}${t.tip ? `\n\n💡 Tip: ${t.tip}` : ""}\n\nWant more detail on any of these? Just ask.`;
+}
 
 // Friendly label + a starter prompt per section, so the suggestions match the
 // screen the user is looking at.
@@ -54,6 +62,11 @@ export default function CortanaBot() {
     }
   }
 
+  function showHelp() {
+    setOpen(true);
+    setMsgs((m) => [...m, { role: "assistant", content: helpMessage(path) }]);
+  }
+
   return (
     <>
       {/* Launcher — glowing Cortana orb, bottom-right, on every page */}
@@ -93,6 +106,7 @@ export default function CortanaBot() {
                   Hi {""}— I&apos;m <span className="font-semibold text-cyan-300">Cortana</span>. I can explain any part of the War Room and analyze whatever screen you&apos;re on. You&apos;re looking at <span className="font-semibold text-cyan-300">{hint.label}</span> — ask me anything.
                 </div>
                 <div className="flex flex-wrap gap-1.5">
+                  <button onClick={showHelp} className="rounded-full bg-cyan-500/15 px-3 py-1.5 text-[11px] font-semibold text-cyan-200 ring-1 ring-cyan-400/40 hover:bg-cyan-500/25">📖 How to use this page</button>
                   {hint.prompts.map((p) => (
                     <button key={p} onClick={() => send(p)} className="rounded-full bg-slate-800 px-3 py-1.5 text-[11px] font-medium text-cyan-200 ring-1 ring-cyan-400/20 hover:bg-slate-700">{p}</button>
                   ))}
@@ -118,6 +132,11 @@ export default function CortanaBot() {
               </div>
             )}
           </div>
+
+          {/* Quick help — always available */}
+          {msgs.length > 0 && (
+            <button onClick={showHelp} className="border-t border-white/10 bg-slate-900 px-3 py-1.5 text-left text-[11px] font-semibold text-cyan-300 hover:bg-slate-800">📖 How to use this page</button>
+          )}
 
           {/* Input */}
           <form
