@@ -2075,7 +2075,9 @@ export async function reportOutage(formData: FormData) {
   const endMin = toMinutes(String(formData.get("end") ?? ""));
   if (startMin === null || endMin === null || endMin <= startMin) return;
   const note = String(formData.get("note") ?? "").trim().slice(0, 300);
-  await db.outage.create({ data: { userId: me.id, date, kind, startMin, endMin, note } });
+  // System's last heartbeat for this rep today — to cross-check the reported start.
+  const detectedMin = me.lastSeenAt ? localMinOf(me.lastSeenAt.getTime(), settings.orgTimezone) : null;
+  await db.outage.create({ data: { userId: me.id, date, kind, startMin, endMin, detectedMin: detectedMin ?? undefined, note } });
   revalidatePath("/schedule");
   revalidatePath("/timecard");
 }
@@ -2106,7 +2108,12 @@ export async function startOutage(formData: FormData) {
   const existing = await db.outage.findFirst({ where: { userId, date, kind, ongoing: true } });
   if (existing) return; // already flagged
   const now = nowLocalMin(settings.orgTimezone);
-  await db.outage.create({ data: { userId, date, kind, startMin: now, endMin: now, ongoing: true, reportedBy: me!.name } });
+  // Cross-check against the system's last heartbeat: if they already went silent, use that
+  // real drop time as the outage start (so the reported time matches the detected disconnect).
+  const u0 = await db.user.findUnique({ where: { id: userId }, select: { name: true, lastSeenAt: true } });
+  const detectedMin = u0?.lastSeenAt ? localMinOf(u0.lastSeenAt.getTime(), settings.orgTimezone) : null;
+  const startMin = detectedMin !== null && now - detectedMin >= 5 ? detectedMin : now;
+  await db.outage.create({ data: { userId, date, kind, startMin, endMin: now, detectedMin: detectedMin ?? undefined, ongoing: true, reportedBy: me!.name } });
   const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
   const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
   sendTimecardChat(`🔴 ${u?.name ?? "Team member"} is OFFLINE — ${kind === "power" ? "⚡ power" : kind === "internet" ? "📶 internet"  : ""} outage · ${time}`).catch(() => {});
@@ -2132,7 +2139,7 @@ export async function confirmDropOutage(formData: FormData) {
   const date = todayStr(settings.orgTimezone);
   const startMin = localMinOf(sinceMs, settings.orgTimezone);
   const endMin = Math.max(startMin + 1, nowLocalMin(settings.orgTimezone));
-  await db.outage.create({ data: { userId: me.id, date, kind, startMin, endMin, ongoing: false, reportedBy: "auto-detected", note: "Dropped offline — confirmed by rep." } });
+  await db.outage.create({ data: { userId: me.id, date, kind, startMin, endMin, detectedMin: startMin, ongoing: false, reportedBy: "auto-detected", note: "Dropped offline — confirmed by rep." } });
   const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
   sendTimecardChat(`🟢 ${me.name} is BACK online — had a ${kind === "power" ? "⚡ power" : "📶 internet"} outage (~${endMin - startMin} min) · ${time}`).catch(() => {});
   revalidatePath("/schedule");

@@ -260,6 +260,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                   {live ? (
                     <>
                       <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700">{live.kind === "power" ? "⚡ Power out" : live.kind === "internet" ? "📶 Internet out" : "⚠️ Out"} · since {outHHMM(live.startMin)}{live.reportedBy ? ` · ${live.reportedBy.split(" ")[0]}` : ""}</span>
+                      {live.detectedMin != null && (
+                        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ring-1 ${Math.abs(live.startMin - live.detectedMin) <= 10 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"}`} title="Reported outage start vs when the system last saw them active online">
+                          {Math.abs(live.startMin - live.detectedMin) <= 10 ? `✓ matches system · last active ${outHHMM(live.detectedMin)}` : `⚠️ system last active ${outHHMM(live.detectedMin)} (${Math.abs(live.startMin - live.detectedMin)}m off)`}
+                        </span>
+                      )}
                       <form action={endOutage} className="ml-auto"><input type="hidden" name="id" value={live.id} /><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back online</button></form>
                     </>
                   ) : (

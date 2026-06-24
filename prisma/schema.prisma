@@ -849,6 +849,7 @@ model Outage {
   kind       String   @default("internet") // internet | power | other
   startMin   Int // minutes from midnight, local
   endMin     Int
+  detectedMin Int? // when the system last saw them active (last heartbeat) — to verify the reported start
   ongoing    Boolean  @default(false) // true = still out (live); cleared on punch-in or by a manager
   reportedBy String   @default("") // manager who flagged it (for the quick report button)
   note       String   @default("")

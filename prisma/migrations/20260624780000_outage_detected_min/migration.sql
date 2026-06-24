@@ -1,0 +1,1 @@
+ALTER TABLE "Outage" ADD COLUMN IF NOT EXISTS "detectedMin" INTEGER;
