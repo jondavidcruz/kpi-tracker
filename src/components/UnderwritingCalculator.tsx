@@ -264,6 +264,11 @@ export default function UnderwritingCalculator() {
   else if (tab === "flip") { dealMax = fMao; profitAtAccepted = arv - fTotalCosts - accepted; marginLabel = "Your profit"; }
   else if (tab === "creative") { dealMax = n("cPrice"); profitAtAccepted = cMargin; marginLabel = "Your total margin"; showAsking = false; }
   else { dealMax = lList; profitAtAccepted = lFlat > 0 ? lFlat : accepted * (lComm / 100) * (lRef / 100); marginLabel = "Your marketing fee"; showAsking = false; }
+  // ROI on the deal: (list/sale price − the price we get it under contract for) ÷ contract.
+  // Sale price defaults to ARV (cash/flip) or the list price (novation/listing); editable.
+  const saleDefault = tab === "novation" ? nList : tab === "listing" ? lList : tab === "creative" ? n("cPrice") : arv;
+  const salePrice = n("salePrice") || saleDefault;
+  const roi = accepted > 0 && salePrice > 0 ? ((salePrice - accepted) / accepted) * 100 : null;
   const overAsk = asking - dealMax; // > 0 means the seller is asking above our max offer
   const buyExit = tab === "assignment" || tab === "novation" || tab === "flip";
 
@@ -371,6 +376,9 @@ export default function UnderwritingCalculator() {
     const acceptedHtml = (accepted > 0)
       ? `<div style="margin:0 0 12px;padding:10px 14px;border-radius:10px;font-weight:700;font-size:13px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534">If they accept ${money(accepted)} → ${esc(marginLabel.toLowerCase())}: ${money(profitAtAccepted)}</div>`
       : "";
+    const roiHtml = (roi != null)
+      ? `<div style="margin:0 0 12px;padding:10px 14px;border-radius:10px;font-weight:700;font-size:13px;${roi > 0 ? "background:#f0fdf4;border:1px solid #bbf7d0;color:#166534" : "background:#fef2f2;border:1px solid #fecaca;color:#b91c1c"}">📈 ROI: ${roi >= 0 ? "+" : ""}${roi.toFixed(0)}% — ${money(salePrice)} sale vs ${money(accepted)} under contract</div>`
+      : "";
 
     const conflict = maoConflict ? `<div style="margin:0 0 14px;padding:10px 14px;border-radius:10px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;font-weight:600">⚠️ Cash MAO (${esc(money(cashMao))}) is higher than the Novation MAO (${esc(money(novMao))}) — novation should usually allow a higher offer. Re-check the novation inputs.</div>` : "";
 
@@ -394,6 +402,7 @@ export default function UnderwritingCalculator() {
         ${boxesHtml}
         ${askHtml}
         ${acceptedHtml}
+        ${roiHtml}
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin:4px 0 4px">How the number breaks down</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${rowsHtml}</table>
         ${r.note ? `<p style="margin-top:14px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
@@ -756,7 +765,8 @@ export default function UnderwritingCalculator() {
         <div className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700">🧾 Deal outcome <span className="text-[11px] font-normal text-slate-400">— optional, fill in as you negotiate</span></div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {showAsking && <Field k="askPrice" label="Seller's asking price (what they want)" prefix="$" placeholder="e.g. 300,000" req="need" />}
-          <Field k="acceptedPrice" label="Accepted price (what they actually took)" prefix="$" placeholder="e.g. 250,000" req="good" />
+          <Field k="acceptedPrice" label="Under-contract price (what we lock with the seller)" prefix="$" placeholder="e.g. 250,000" req="good" />
+          <Field k="salePrice" label={`List / sale price (defaults to ${tab === "novation" || tab === "listing" ? "list" : "ARV"})`} prefix="$" placeholder={saleDefault ? saleDefault.toLocaleString() : "e.g. 350,000"} req="opt" />
         </div>
         {(asking > 0 || accepted > 0) && (
           <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
@@ -769,6 +779,7 @@ export default function UnderwritingCalculator() {
             {accepted > 0 && buyExit && dealMax > 0 && (
               <Res label="vs your max offer" value={accepted <= dealMax ? `${money(dealMax - accepted)} better than max ✅` : `${money(accepted - dealMax)} over max ⚠️`} tone={accepted <= dealMax ? "good" : "bad"} />
             )}
+            {roi != null && <Res label={`📈 ROI · ${money(salePrice)} sale vs ${money(accepted)} contract`} value={`${roi >= 0 ? "+" : ""}${roi.toFixed(0)}%`} tone={roi > 0 ? "good" : "bad"} big />}
           </div>
         )}
       </div>
