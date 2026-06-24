@@ -41,28 +41,14 @@ export function canCurateSoftware(user: User | null): boolean {
   return SOFTWARE_CURATORS.includes(first);
 }
 
-// Reps (beyond managers/admin) allowed into the Marketing section.
-// Net effect: Jon + Marie (managers) + Viktoriia + Sharyn.
-const MARKETING_ACCESS = ["viktoriia", "sharyn"];
-
-/** Can view + edit the Marketing section (managers + named reps). */
+/** Can view + edit the Marketing section. Editable per-user (Admin → Access preview). */
 export function canAccessMarketing(user: User | null): boolean {
-  if (!user) return false;
-  if (isManager(user)) return true; // Marie + Jon
-  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-  return MARKETING_ACCESS.includes(first);
+  return !!user?.accessMarketing;
 }
 
-// PAY figures (rates, gross, bonuses) — leadership only: Jon + Viktoriia + Enrico.
-// Marie (manager) tracks TIME but must NOT see pay.
-const PAYROLL_ACCESS = ["viktoriia", "enrico"];
-
-/** Can see PAY ($ rates, gross, bonuses, totals). Leadership only. */
+/** Can see PAY ($ rates, gross, bonuses, totals). Editable per-user. */
 export function canAccessPayroll(user: User | null): boolean {
-  if (!user) return false;
-  if (isAdmin(user)) return true; // Jon
-  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-  return PAYROLL_ACCESS.includes(first);
+  return !!user?.accessPayroll;
 }
 
 /** Can open the Time Card (track hours). Managers (Marie + Jon) + pay staff. */
@@ -70,15 +56,10 @@ export function canTrackTime(user: User | null): boolean {
   return isManager(user) || canAccessPayroll(user);
 }
 
-// C-Suite — leadership only, by name, so it's excluded even from other admins/managers
-// (e.g. Marie). Covers War Room Health, P&L, Payroll, Roadmap, Team Roster.
-const CSUITE_ACCESS = ["jon", "enrico", "viktoriia"];
-
-/** Can see the C-Suite section (financials, roadmap, roster). Leadership trio only. */
+/** Can see the C-Suite section (financials, roadmap, roster). Editable per-user
+ *  (Admin → Access preview), so it's excluded even from other admins/managers like Marie. */
 export function canAccessCSuite(user: User | null): boolean {
-  if (!user) return false;
-  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-  return CSUITE_ACCESS.includes(first);
+  return !!user?.accessCsuite;
 }
 
 // Restricted users see ONLY these page prefixes (first = their home page).

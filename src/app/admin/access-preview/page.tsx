@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canTrackTime, isOwner } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canAccessCSuite, canTrackTime, isOwner } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
+import { saveUserAccess } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
 // Mirrors the sidebar groups + their gating, so this preview shows exactly what
 // menu a given person sees. Keep in sync with src/components/Sidebar.tsx.
-type Gate = "all" | "manager" | "admin" | "marketing" | "timecard";
+type Gate = "all" | "manager" | "admin" | "marketing" | "timecard" | "csuite";
 const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
   { group: "Overview", items: [
     { label: "Dashboard", gate: "all" }, { label: "Daily Huddle", gate: "all" }, { label: "Process Map", gate: "all" }, { label: "Deals", gate: "all" },
@@ -27,8 +28,7 @@ const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
   ] },
   { group: "Marketing", items: [{ label: "Markets & Buyers", gate: "marketing" }] },
   { group: "C-Suite", items: [
-    { label: "War Room Health", gate: "timecard" }, { label: "Profit & Loss Report", gate: "timecard" }, { label: "Payroll", gate: "timecard" }, { label: "Roadmap", gate: "admin" }, { label: "Escrow & Closing", gate: "manager" },
-    { label: "Closed deals", gate: "admin" }, { label: "Team Roster", gate: "admin" },
+    { label: "War Room Health", gate: "csuite" }, { label: "Profit & Loss Report", gate: "csuite" }, { label: "Payroll", gate: "csuite" }, { label: "Roadmap", gate: "csuite" }, { label: "Team Roster", gate: "csuite" },
   ] },
   { group: "EOS", items: [
     { label: "Vision (V/TO)", gate: "all" }, { label: "Rocks", gate: "all" }, { label: "Issues", gate: "admin" },
@@ -36,9 +36,9 @@ const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
   ] },
 ];
 
-const GATE_LABEL: Record<Gate, string> = { all: "Everyone", manager: "Managers (you + Marie)", admin: "Owner-level", marketing: "Marketing crew", timecard: "Time/pay staff" };
+const GATE_LABEL: Record<Gate, string> = { all: "Everyone", manager: "Managers (you + Marie)", admin: "Owner-level", marketing: "Marketing crew", timecard: "Time/pay staff", csuite: "C-Suite (leadership)" };
 
-export default async function AccessPreviewPage({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
+export default async function AccessPreviewPage({ searchParams }: { searchParams: Promise<{ as?: string; saved?: string }> }) {
   const me = await getCurrentUser();
   if (!isManager(me)) {
     return (
@@ -61,6 +61,7 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
     marketing: canAccessMarketing(selected),
     timecard: canTrackTime(selected),
     payroll: canAccessPayroll(selected),
+    csuite: canAccessCSuite(selected),
     owner: isOwner(selected),
   };
   const can = (gate: Gate) =>
@@ -68,17 +69,20 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
     gate === "manager" ? flags.manager :
     gate === "admin" ? flags.admin :
     gate === "marketing" ? flags.marketing :
-    gate === "timecard" ? flags.timecard : false;
+    gate === "timecard" ? flags.timecard :
+    gate === "csuite" ? flags.csuite : false;
+  const editable = isAdmin(me); // only the owner edits access
 
   // Sensitive-data confirmations — the things you most want to verify.
   const sensitive = [
-    { label: "Pay amounts ($ rates, gross, totals)", ok: flags.payroll, who: "Jon, Viktoriia, Enrico" },
-    { label: "Payroll / Time Card page", ok: flags.timecard, who: "Managers + pay staff" },
-    { label: "Markets & Buyers (buy boxes)", ok: flags.marketing, who: "Sharyn, Marie, Viktoriia, Jon" },
-    { label: "Alerts, PIPs, Analytics", ok: flags.manager, who: "Jon + Marie" },
-    { label: "Admin settings", ok: flags.manager, who: "Jon + Marie" },
-    { label: "Owner-only (Roster, Closed deals, AI updates, Issues)", ok: flags.admin, who: "Owner-level" },
+    { label: "C-Suite (War Room Health, P&L, Payroll, Roadmap, Roster)", ok: flags.csuite },
+    { label: "Pay amounts ($ rates, gross, totals)", ok: flags.payroll },
+    { label: "Markets & Buyers (buy boxes)", ok: flags.marketing },
+    { label: "Alerts, PIPs, Analytics", ok: flags.manager },
+    { label: "Admin settings", ok: flags.manager },
+    { label: "Owner-only (AI updates, Issues)", ok: flags.admin },
   ];
+  const firstName = selected.name.split(" ")[0];
 
   return (
     <div className="space-y-5">
@@ -122,6 +126,23 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
             ))}
           </div>
         </div>
+
+        {/* Editable access toggles — owner only */}
+        {editable && (
+          <form action={saveUserAccess} className="mt-4 border-t border-slate-100 pt-4">
+            <input type="hidden" name="userId" value={selected.id} />
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Edit {firstName}&apos;s access {sp.saved && <span className="ml-2 text-emerald-600">✓ saved</span>}</div>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessCsuite" defaultChecked={selected.accessCsuite} className="h-4 w-4 accent-brand-navy" /> C-Suite (financials · roadmap · roster)</label>
+              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessPayroll" defaultChecked={selected.accessPayroll} className="h-4 w-4 accent-brand-navy" /> See pay $ amounts</label>
+              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessMarketing" defaultChecked={selected.accessMarketing} className="h-4 w-4 accent-brand-navy" /> Markets &amp; Buyers</label>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save access</button>
+              <span className="text-[11px] text-slate-400">Manager / Admin level is set by their <strong>Role</strong> on the Admin page.</span>
+            </div>
+          </form>
+        )}
       </Card>
 
       {/* Their menu */}

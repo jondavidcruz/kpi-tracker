@@ -96,6 +96,24 @@ export async function setMyPassword(formData: FormData) {
   redirect(`${to}?pwok=you${anchor}`);
 }
 
+/** Admin: set a person's editable access toggles (C-Suite, pay, marketing). */
+export async function saveUserAccess(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) return;
+  await db.user.update({
+    where: { id: userId },
+    data: {
+      accessCsuite: formData.get("accessCsuite") === "on",
+      accessPayroll: formData.get("accessPayroll") === "on",
+      accessMarketing: formData.get("accessMarketing") === "on",
+    },
+  });
+  revalidatePath("/admin/access-preview");
+  redirect(`/admin/access-preview?as=${userId}&saved=1`);
+}
+
 /** Save (or clear) the rep's own Gemini API key for call transcription (BYOK), so
  *  their uploads run on their quota instead of the shared key. */
 export async function saveGeminiKey(formData: FormData) {
