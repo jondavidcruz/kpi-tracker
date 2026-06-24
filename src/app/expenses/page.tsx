@@ -119,6 +119,10 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         {months.map((m) => (
           <Link key={m} href={`/expenses?month=${m}`} className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${m === month ? "bg-brand-navy text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>{fmtMonth(m)}</Link>
         ))}
+        {/* Following month is always shown as pending — accounting closes the prior month first. */}
+        <span className="rounded-full border border-dashed border-amber-300 bg-amber-50 px-3.5 py-1.5 text-sm font-medium text-amber-700" title={`The books for ${fmtMonth(nextNewMonth)} finalize in early ${fmtMonth(addMonth(nextNewMonth, 1))} — that's normal accounting (prior month closes first).`}>
+          🕓 {fmtMonth(nextNewMonth)} · pending (early {MONTH_NAMES[Number(addMonth(nextNewMonth, 1).slice(5, 7))]})
+        </span>
         {!months.includes(nextNewMonth) && (
           <form action={startExpenseMonth}>
             <input type="hidden" name="month" value={nextNewMonth} />
