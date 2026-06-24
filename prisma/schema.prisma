@@ -36,6 +36,7 @@ model User {
   timezone  String   @default("America/New_York")
   lastSeenAt DateTime? // heartbeat — last time the app pinged; used to detect drops/outages
   dropAlertedAt DateTime? // set when we've sent a "disconnected (unknown)" Chat alert; cleared on return
+  breakNudgedAt DateTime? // set when we've nudged them to take a break this stretch; cleared when they break
   createdAt DateTime @default(now())
 
   entries Entry[]

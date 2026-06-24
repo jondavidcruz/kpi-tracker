@@ -1887,14 +1887,20 @@ export async function punch(formData: FormData) {
   if (!PUNCH_KINDS.includes(kind)) return;
   const settings = await getSettings();
   const date = todayStr(settings.orgTimezone);
+  // Idempotency: ignore an accidental double-tap or a network retry of the SAME punch
+  // within ~45s (this is what was double-posting "back from break" for flaky connections).
+  const dup = await db.punch.findFirst({ where: { userId: me.id, date, kind, at: { gte: new Date(Date.now() - 45000) } }, select: { id: true } });
+  if (dup) { revalidatePath("/schedule"); revalidatePath("/timecard"); return; }
   await db.punch.create({ data: { userId: me.id, kind, date } });
-  // Logging back in auto-clears any live outage flagged for them.
+  // Logging back in auto-clears any live outage flagged for them. Atomic guard: only the
+  // call that actually flips ongoing→false posts the "BACK online" message, so the 5
+  // possible senders (punch / heartbeat / endOutage / presence) can't double-post.
   if (kind === "in") {
-    const ongoing = await db.outage.findMany({ where: { userId: me.id, date, ongoing: true } });
-    if (ongoing.length) {
-      await db.outage.updateMany({ where: { userId: me.id, date, ongoing: true }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
+    const first = await db.outage.findFirst({ where: { userId: me.id, date, ongoing: true }, select: { kind: true } });
+    const res = await db.outage.updateMany({ where: { userId: me.id, date, ongoing: true }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
+    if (res.count > 0 && first) {
       const t = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
-      sendTimecardChat(`🟢 ${me.name} is BACK online — ${ongoing[0].kind === "power" ? "⚡ power" : "📶 internet"} outage cleared · ${t}`).catch(() => {});
+      sendTimecardChat(`🟢 ${me.name} is BACK online — ${first.kind === "power" ? "⚡ power" : "📶 internet"} outage cleared · ${t}`).catch(() => {});
     }
   }
   // Mirror the status change to the team Google Chat room (replaces the manual
@@ -2164,8 +2170,10 @@ export async function endOutage(formData: FormData) {
   if (!id) return;
   const settings = await getSettings();
   const row = await db.outage.findUnique({ where: { id } });
-  await db.outage.update({ where: { id }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
-  if (row?.ongoing) {
+  // Only post if THIS call is the one that flips it off (count guard) — prevents the
+  // manager's "Back online" + the heartbeat auto-clear from both posting.
+  const res = await db.outage.updateMany({ where: { id, ongoing: true }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
+  if (res.count > 0 && row) {
     const u = await db.user.findUnique({ where: { id: row.userId }, select: { name: true } });
     const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
     sendTimecardChat(`🟢 ${u?.name ?? "Team member"} is BACK online — ${row.kind === "power" ? "⚡ power" : "📶 internet"} outage cleared · ${time}`).catch(() => {});

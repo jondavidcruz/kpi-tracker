@@ -42,12 +42,13 @@ export async function POST() {
 
   // A real reconnect clears any live (manager-flagged) outage + tells Chat.
   if (reconnected) {
-    const ongoing = await db.outage.findMany({ where: { userId: me.id, date, ongoing: true } });
-    if (ongoing.length) {
-      await db.outage.updateMany({ where: { userId: me.id, date, ongoing: true }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
+    const first = await db.outage.findFirst({ where: { userId: me.id, date, ongoing: true }, select: { kind: true } });
+    // Atomic count guard: only the call that actually clears it posts to Chat, so the
+    // heartbeat + manager "Back online" + clock-in can't all double-post.
+    const res = await db.outage.updateMany({ where: { userId: me.id, date, ongoing: true }, data: { ongoing: false, endMin: nowLocalMin(settings.orgTimezone) } });
+    if (res.count > 0 && first) {
       const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
-      const kind = ongoing[0].kind;
-      sendTimecardChat(`🟢 ${me.name} is BACK online — ${kind === "power" ? "⚡ power" : "📶 internet"} outage cleared · ${time}`).catch(() => {});
+      sendTimecardChat(`🟢 ${me.name} is BACK online — ${first.kind === "power" ? "⚡ power" : "📶 internet"} outage cleared · ${time}`).catch(() => {});
     }
   }
 

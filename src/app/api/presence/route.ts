@@ -23,7 +23,7 @@ export async function GET() {
   const settings = await getSettings();
   const date = todayStr(settings.orgTimezone);
   const [users, punches, outages] = await Promise.all([
-    db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true, lastSeenAt: true, dropAlertedAt: true } }),
+    db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true, lastSeenAt: true, dropAlertedAt: true, breakNudgedAt: true } }),
     db.punch.findMany({ where: { date }, orderBy: { at: "asc" }, select: { userId: true, kind: true, at: true } }),
     db.outage.findMany({ where: { date, ongoing: true }, select: { userId: true, kind: true, startMin: true } }),
   ]);
@@ -69,6 +69,23 @@ export async function GET() {
           await sendTimecardChat(`🟢 *${u.name} is back online* after a disconnect. ${MARIE_MENTION} — confirm if it was a power or internet outage and log it on their record.`).catch(() => {});
         }
       }
+    }
+  }
+
+  // Break nudge: anyone online 120+ min straight (no break) gets a one-time Chat ping to
+  // step away. Atomic guard via breakNudgedAt; reset the moment they're not "online".
+  const BREAK_NUDGE_MIN = 120;
+  const sinceById = new Map(people.map((p) => [p.id, p.sinceMs]));
+  for (const u of users) {
+    if (isOwner(u)) continue;
+    const st = stateById.get(u.id);
+    const sinceMs = sinceById.get(u.id);
+    const contMin = st === "online" && sinceMs ? Math.floor((now.getTime() - sinceMs) / 60000) : 0;
+    if (st === "online" && contMin >= BREAK_NUDGE_MIN && !u.breakNudgedAt) {
+      const won = await db.user.updateMany({ where: { id: u.id, breakNudgedAt: null }, data: { breakNudgedAt: now } });
+      if (won.count === 1) await sendTimecardChat(`☕ *${u.name} has been heads-down ${Math.floor(contMin / 60)}h ${contMin % 60}m straight* — time for a quick break to reset.`).catch(() => {});
+    } else if (st !== "online" && u.breakNudgedAt) {
+      await db.user.updateMany({ where: { id: u.id, breakNudgedAt: { not: null } }, data: { breakNudgedAt: null } });
     }
   }
 
