@@ -5,7 +5,8 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
 import { buildBackup } from "@/lib/backup";
-import { sendEmailWithAttachment } from "@/lib/notify";
+import { sendEmailWithAttachment, sendGoogleChat } from "@/lib/notify";
+import { upcomingCulture, prettyMMDD, whenLabel, ordinal } from "@/lib/culture";
 import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
@@ -85,6 +86,28 @@ export async function GET(request: Request) {
     }
     const sent = await sendPayrollEmail(today);
     return NextResponse.json({ ok: true, payday: true, sent });
+  }
+
+  // Culture reminders — birthdays + work anniversaries. Posts to the team Google Chat
+  // when there's a celebration TODAY, and (on Mondays) a preview of the week ahead.
+  if (url.searchParams.get("culture") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const people = await db.user.findMany({ where: { active: true }, select: { name: true, birthday: true, hireDate: true } });
+    const up = upcomingCulture(people, today, 7);
+    const todays = up.filter((u) => u.daysUntil === 0);
+    const isMonday = laNow().dow === 1;
+    let text = "";
+    if (todays.length) {
+      const lines = todays.map((u) => u.kind === "birthday" ? `🎂 Happy Birthday, *${u.name}*!` : `🎉 *${u.name}* — ${ordinal(u.years ?? 0)} work anniversary today!`);
+      text = `*🎉 Culture — today*\n${lines.join("\n")}`;
+    } else if (isMonday && up.length) {
+      const wk = up.map((u) => `• ${prettyMMDD(u.mmdd)} — ${u.name} ${u.kind === "birthday" ? "🎂 birthday" : `🎖️ ${ordinal(u.years ?? 0)} anniversary`} (${whenLabel(u.daysUntil)})`).join("\n");
+      text = `*📅 Culture this week*\n${wk}`;
+    }
+    if (!text) return NextResponse.json({ ok: true, posted: false });
+    const sent = await sendGoogleChat(text);
+    return NextResponse.json({ ok: true, posted: sent, todays: todays.length });
   }
 
   // Manual speed-test reminder trigger (no dedicated cron — piggybacks on the

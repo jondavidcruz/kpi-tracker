@@ -2665,3 +2665,41 @@ export async function deleteAvailability(formData: FormData) {
   await db.availability.delete({ where: { id } });
   revalidatePath("/schedule");
 }
+
+// ===== Culture: birthdays, work anniversaries, team-building events =====
+
+/** Manager sets a person's birthday (MM-DD) + hire date (YYYY-MM-DD). */
+export async function saveCultureDates(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const bRaw = String(formData.get("birthday") ?? "").trim();
+  // Accept "YYYY-MM-DD" or "MM-DD"; store as MM-DD (year doesn't matter for birthdays).
+  const birthday = bRaw ? (bRaw.length >= 10 ? bRaw.slice(5, 10) : bRaw.slice(0, 5)) : null;
+  const hireRaw = String(formData.get("hireDate") ?? "").trim();
+  const hireDate = /^\d{4}-\d{2}-\d{2}$/.test(hireRaw) ? hireRaw : null;
+  await db.user.update({ where: { id }, data: { birthday, hireDate } });
+  revalidatePath("/culture");
+}
+
+/** Add a team-building event / celebration. */
+export async function addTeamEvent(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const title = String(formData.get("title") ?? "").trim().slice(0, 200);
+  const date = String(formData.get("date") ?? "").trim();
+  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const kind = String(formData.get("kind") ?? "team_building");
+  const notes = String(formData.get("notes") ?? "").trim().slice(0, 1000);
+  await db.teamEvent.create({ data: { title, date, kind, notes, createdById: me!.id } });
+  revalidatePath("/culture");
+}
+
+export async function deleteTeamEvent(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.teamEvent.delete({ where: { id } });
+  revalidatePath("/culture");
+}

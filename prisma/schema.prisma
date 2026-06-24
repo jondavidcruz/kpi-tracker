@@ -22,6 +22,8 @@ model User {
   role      String   @default("rep") // rep | manager | admin  (permission level)
   position  String   @default("") // acquisitions | cc_lm | dispositions  (which scorecard)
   note      String   @default("") // free-text context, e.g. "part-time, CA listings"
+  birthday  String?  // "MM-DD" — birthday (year optional); drives Culture reminders
+  hireDate  String?  // "YYYY-MM-DD" — start date for work-anniversary reminders
   irregularSchedule Boolean @default(false) // exempt from missing-entry alerts (no set schedule)
   tracksInternet    Boolean @default(true) // logs daily internet speed + gets low-speed nags (whole team)
   active    Boolean  @default(true)
@@ -1083,4 +1085,18 @@ model StandupItem {
   standup     Standup @relation(fields: [standupId], references: [id], onDelete: Cascade)
 
   @@index([standupId])
+}
+
+// Team-building events / celebrations for the Culture page (birthdays & anniversaries
+// derive from User.birthday / User.hireDate; this model is for planned activities).
+model TeamEvent {
+  id          String   @id @default(cuid())
+  title       String
+  date        String   // "YYYY-MM-DD"
+  kind        String   @default("team_building") // team_building | celebration | other
+  notes       String   @default("")
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([date])
 }
