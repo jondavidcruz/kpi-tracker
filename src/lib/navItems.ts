@@ -21,7 +21,6 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/entry", label: "Enter KPIs", gate: "all" },
     { href: "/report", label: "KPI Reports", gate: "all" },
     { href: "/kpi-sources", label: "KPI Sources", gate: "all" },
-    { href: "/monthly", label: "Monthly Financials", gate: "manager" },
     { href: "/analytics", label: "Analytics", gate: "manager" },
     { href: "/internet", label: "Internet Speed", gate: "manager" },
   ] },

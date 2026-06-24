@@ -10,7 +10,10 @@ import { sendTimecardChat } from "@/lib/notify";
 export const dynamic = "force-dynamic";
 
 // Tag Marie in the Timecard Google Chat space so she's pinged to review disconnects.
-const MARIE_MENTION = "<users/rosemae08@gmail.com>";
+// Google Chat webhooks only resolve an @mention by NUMERIC user id — an email renders
+// as plain text. Set MARIE_CHAT_MENTION in Vercel to "<users/123456789>" (her numeric id)
+// to make it actually ping her; until then we post a readable "@Marie" tag.
+const MARIE_MENTION = process.env.MARIE_CHAT_MENTION || "*@Marie (rosemae08@gmail.com)*";
 
 /** Live availability board data — polled by the Schedule page's PresenceBoard. */
 export async function GET() {

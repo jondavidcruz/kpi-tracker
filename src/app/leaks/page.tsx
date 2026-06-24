@@ -5,6 +5,7 @@ import { todayStr } from "@/lib/date";
 import { buildLeaks, buildLeaksNarrative } from "@/lib/diagnostics";
 import { Card, SectionTitle } from "@/components/ui";
 import LeaksExplain from "@/components/LeaksExplain";
+import MonthlyMoney from "@/components/MonthlyMoney";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +123,9 @@ export default async function LeaksPage({ searchParams }: { searchParams: Promis
 
       {/* AI deep-dive — the full strategic breakdown on demand */}
       <LeaksExplain data={JSON.stringify({ rangeLabel: d.rangeLabel, stages: d.stages, worstLeak: d.worstLeak, econ: d.econ, leads: d.leads, refundRequested: d.refundRequested, refunded: d.refunded })} />
+
+      {/* Monthly company money (moved here from the old Monthly Financials page) */}
+      <MonthlyMoney />
     </div>
   );
 }
