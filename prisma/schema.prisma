@@ -34,6 +34,7 @@ model User {
   active    Boolean  @default(true)
   timezone  String   @default("America/New_York")
   lastSeenAt DateTime? // heartbeat — last time the app pinged; used to detect drops/outages
+  dropAlertedAt DateTime? // set when we've sent a "disconnected (unknown)" Chat alert; cleared on return
   createdAt DateTime @default(now())
 
   entries Entry[]
