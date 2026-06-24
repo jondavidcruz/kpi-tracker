@@ -9,7 +9,7 @@ import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, delet
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
-import BreakHistory from "@/components/BreakHistory";
+import BreakHistory, { type OutageView } from "@/components/BreakHistory";
 
 export const dynamic = "force-dynamic";
 
@@ -198,6 +198,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const cap = workCapAt(today, settings.orgTimezone);
   const capMs = cap ? cap.getTime() : null;
   const STALE = 5 * 60 * 1000;
+  // All of today's outages (incl. ended) for the break/lunch history — so the timeline
+  // shows when someone lost power/internet and when they came back.
+  const nowMinTz = (() => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); })();
+  const allOutagesToday = await db.outage.findMany({ where: { date: today }, orderBy: { startMin: "asc" } });
+  const outagesByUser = new Map<string, OutageView[]>();
+  for (const o of allOutagesToday) {
+    const arr = outagesByUser.get(o.userId) ?? [];
+    arr.push({ kind: o.kind, startLabel: outHHMM(o.startMin), endLabel: o.ongoing ? null : outHHMM(o.endMin), min: o.ongoing ? Math.max(0, nowMinTz - o.startMin) : Math.max(0, o.endMin - o.startMin), ongoing: o.ongoing });
+    outagesByUser.set(o.userId, arr);
+  }
   const people = users
     .filter((u) => !isOwner(u)) // owner isn't a tracked employee
     .map((u) => {
@@ -303,7 +313,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       {!isOwner(me) && (
         <section className="space-y-2">
           <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} showLunch={me.name.trim().split(/\s+/)[0]?.toLowerCase() !== "marie"} />
-          <BreakHistory timeline={daySegments(myPs, now)} tz={settings.orgTimezone} />
+          <BreakHistory timeline={daySegments(myPs, now)} tz={settings.orgTimezone} outages={outagesByUser.get(me.id) ?? []} />
         </section>
       )}
 
@@ -314,7 +324,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <Card className="divide-y divide-slate-100">
             {users.map((u) => {
               const tl = daySegments(byUser.get(u.id) ?? [], now);
-              if (!tl.clockInMs && tl.segments.length === 0) return null;
+              const uOut = outagesByUser.get(u.id) ?? [];
+              if (!tl.clockInMs && tl.segments.length === 0 && uOut.length === 0) return null;
               const onLong = tl.continuousMin >= 100;
               return (
                 <div key={u.id} className="flex flex-col gap-1.5 p-3 sm:flex-row sm:items-center">
@@ -322,7 +333,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                     <span className="font-semibold text-slate-800">{u.name.split(" ")[0]}</span>
                     {onLong && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" title={`On ${Math.floor(tl.continuousMin / 60)}h ${tl.continuousMin % 60}m without a break`}>needs a break</span>}
                   </div>
-                  <div className="min-w-0 flex-1"><BreakHistory timeline={tl} tz={settings.orgTimezone} compact /></div>
+                  <div className="min-w-0 flex-1"><BreakHistory timeline={tl} tz={settings.orgTimezone} outages={uOut} compact /></div>
                 </div>
               );
             })}
