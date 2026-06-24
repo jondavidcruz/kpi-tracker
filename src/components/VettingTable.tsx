@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { setBuyerStatus, logBuyerOutreach, saveProspectField, saveProspect, saveBuyerBox, deleteProspect } from "@/app/actions";
 import MultiSelect from "@/components/MultiSelect";
 
@@ -66,30 +66,61 @@ function Cell({ id, field, value, placeholder, mono }: { id: string; field: stri
 }
 // Bigger multi-line Notes cell — autosaves ~1s after you stop typing AND on blur, so
 // notes never get lost (e.g. if you click "Log touch" right after typing).
+// Turn URLs (and www. / bare emails) in free text into clickable links for view mode.
+function linkify(text: string) {
+  const parts = text.split(/(https?:\/\/[^\s]+|www\.[^\s]+|[^\s@]+@[^\s@]+\.[^\s@]+)/g);
+  return parts.map((p, i) => {
+    if (/^https?:\/\//.test(p) || /^www\./.test(p)) {
+      const href = p.startsWith("http") ? p : `https://${p}`;
+      return <a key={i} href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="break-all text-sky-600 underline hover:text-sky-700">{p}</a>;
+    }
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p)) {
+      return <a key={i} href={`mailto:${p}`} onClick={(e) => e.stopPropagation()} className="break-all text-sky-600 underline hover:text-sky-700">{p}</a>;
+    }
+    return <span key={i}>{p}</span>;
+  });
+}
+
+// Notes/details cell: VIEW mode shows the full text with clickable links (auto-height,
+// no scroll); click to edit. EDIT mode autosaves ~1s after typing + on blur.
 function NotesCell({ id, value }: { id: string; value: string }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value);
   const [status, setStatus] = useState<"idle" | "dirty" | "saved">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const taRef = useRef<HTMLTextAreaElement>(null);
-  // Auto-grow to fit all the text (developer/buyer notes are long) so nothing is hidden
-  // behind a scrollbar — capped so one giant note can't take over the screen.
   const grow = (ta: HTMLTextAreaElement) => { ta.style.height = "auto"; ta.style.height = `${Math.min(ta.scrollHeight, 520)}px`; };
-  useEffect(() => { if (taRef.current) grow(taRef.current); }, []);
-  const save = (ta: HTMLTextAreaElement) => { if (ta.value !== value) { ta.form?.requestSubmit(); setStatus("saved"); } };
+  const save = (ta: HTMLTextAreaElement) => { if (ta.value !== val) { setVal(ta.value); ta.form?.requestSubmit(); setStatus("saved"); } };
+
+  if (!editing) {
+    return (
+      <div className="min-w-[420px] py-1">
+        <div
+          onClick={() => setEditing(true)}
+          title="Click to edit"
+          className="cursor-text whitespace-pre-wrap break-words rounded px-2 py-1.5 text-[13px] leading-relaxed text-slate-700 hover:bg-slate-50 hover:ring-1 hover:ring-slate-200"
+        >
+          {val ? linkify(val) : <span className="text-slate-300">notes — touches, replies, who to ask for, next step…</span>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form action={saveProspectField} className="contents">
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="field" value="outreachLog" />
       <div className="min-w-[420px]">
         <textarea
-          ref={taRef}
-          name="value" defaultValue={value} placeholder="notes — touches, replies, who to ask for, next step…" rows={4}
+          ref={(el) => { if (el) grow(el); }}
+          autoFocus
+          name="value" defaultValue={val} placeholder="notes — touches, replies, who to ask for, next step…" rows={5}
           onChange={(e) => { const ta = e.currentTarget; grow(ta); setStatus("dirty"); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => save(ta), 1000); }}
-          onBlur={(e) => { if (timer.current) clearTimeout(timer.current); save(e.currentTarget); }}
-          className="block w-full resize-y overflow-hidden whitespace-pre-wrap break-words rounded border border-transparent bg-transparent px-2 py-1.5 text-[13px] leading-relaxed hover:border-slate-200 focus:border-sky-400 focus:bg-white focus:outline-none"
+          onBlur={(e) => { if (timer.current) clearTimeout(timer.current); save(e.currentTarget); setEditing(false); }}
+          className="block w-full resize-y overflow-hidden whitespace-pre-wrap break-words rounded border border-sky-300 bg-white px-2 py-1.5 text-[13px] leading-relaxed focus:border-sky-400 focus:outline-none"
         />
         <div className="h-3 px-1 text-[9px] font-semibold">
           {status === "dirty" && <span className="text-amber-600">● typing… autosaves</span>}
-          {status === "saved" && <span className="text-emerald-600">✓ saved</span>}
+          {status === "saved" && <span className="text-emerald-600">✓ saved · click away to view links</span>}
         </div>
       </div>
     </form>

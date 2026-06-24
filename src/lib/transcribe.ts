@@ -31,7 +31,7 @@ export async function transcribeAudio(buf: Buffer, mimeType: string): Promise<Tr
       cleanupName = up.name; // delete after, to keep the Gemini file store tidy
     }
 
-    const res = await fetch(
+    const callGen = () => fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
       {
         method: "POST",
@@ -42,10 +42,14 @@ export async function transcribeAudio(buf: Buffer, mimeType: string): Promise<Tr
         }),
       },
     );
+    // 429 is often a transient per-minute rate limit — wait and try once more.
+    let res = await callGen();
+    if (res.status === 429) { await new Promise((r) => setTimeout(r, 5000)); res = await callGen(); }
     if (cleanupName) fetch(`https://generativelanguage.googleapis.com/v1beta/${cleanupName}?key=${key}`, { method: "DELETE" }).catch(() => {});
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      if (res.status === 429) return { configured: true, error: "Gemini transcription quota reached — the API key hit its limit. An admin can enable billing on the GEMINI_API_KEY (Google AI Studio → Billing) for much higher limits (pennies per call). Until then, paste the transcript below." };
       return { configured: true, error: `Transcription failed (${res.status}). ${body.slice(0, 160)}` };
     }
     const data = await res.json();
