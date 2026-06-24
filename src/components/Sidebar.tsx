@@ -10,16 +10,17 @@ import {
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
 
-type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; trainingOnly?: boolean; badge?: number };
+type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
 
 export default function Sidebar({
-  name, manager, admin, marketing, timecard, training, allowedPaths, newTickets, newSuggestions,
+  name, manager, admin, marketing, timecard, csuite, training, allowedPaths, newTickets, newSuggestions,
 }: {
   name: string;
   manager: boolean;
   admin: boolean;
   marketing: boolean;
   timecard: boolean;
+  csuite: boolean;
   training: boolean;
   allowedPaths?: string[] | null;
   newTickets: number;
@@ -64,11 +65,11 @@ export default function Sidebar({
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
     ] },
     { label: "C-Suite", items: [
-      { href: "/leaks", label: "War Room Health", Icon: Activity, timecardOnly: true },
-      { href: "/expenses", label: "Profit & Loss Report", Icon: Receipt, timecardOnly: true },
-      { href: "/timecard", label: "Payroll", Icon: Wallet, timecardOnly: true },
-      { href: "/roadmap", label: "Roadmap", Icon: Map, adminOnly: true },
-      { href: "/team-roster", label: "Team Roster", Icon: Users, adminOnly: true },
+      { href: "/leaks", label: "War Room Health", Icon: Activity, csuiteOnly: true },
+      { href: "/expenses", label: "Profit & Loss Report", Icon: Receipt, csuiteOnly: true },
+      { href: "/timecard", label: "Payroll", Icon: Wallet, csuiteOnly: true },
+      { href: "/roadmap", label: "Roadmap", Icon: Map, csuiteOnly: true },
+      { href: "/team-roster", label: "Team Roster", Icon: Users, csuiteOnly: true },
     ] },
     { label: "Requests & Support", items: [
       { href: "/tickets", label: "Requests", Icon: Ticket, badge: newTickets },
@@ -80,7 +81,7 @@ export default function Sidebar({
   ];
 
   const visible = (it: Item) =>
-    (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard) && (!it.trainingOnly || training) &&
+    (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard) && (!it.csuiteOnly || csuite) && (!it.trainingOnly || training) &&
     (!allowedPaths || allowedPaths.some((p) => it.href === p || it.href.startsWith(p + "/")));
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 

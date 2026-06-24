@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, canAccessPayroll } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { buildLeaks, buildLeaksNarrative } from "@/lib/diagnostics";
@@ -13,7 +13,7 @@ const usd0 = (n: number) => n.toLocaleString("en-US", { style: "currency", curre
 
 export default async function LeaksPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
   const me = await getCurrentUser();
-  if (!me || !canAccessPayroll(me)) {
+  if (!me || !canAccessCSuite(me)) {
     return <Card className="mx-auto max-w-md p-8 text-center text-slate-500">🔒 War-room diagnostics are restricted to the C-suite (Jon, Viktoriia, Enrico).</Card>;
   }
   const sp = await searchParams;

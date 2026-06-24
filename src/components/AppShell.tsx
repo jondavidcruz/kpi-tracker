@@ -4,11 +4,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { getSessionEmail, getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, navAllowlist, isPathAllowed } from "@/lib/auth";
+import { getSessionEmail, getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canAccessCSuite, navAllowlist, isPathAllowed } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import Sidebar from "./Sidebar";
+import ContentWrap from "./ContentWrap";
 import CortanaBot from "./CortanaBot";
 import PageHelp from "./PageHelp";
 import HeartbeatPing from "./HeartbeatPing";
@@ -36,6 +37,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
   const marketing = canAccessMarketing(me);
   const payroll = canAccessPayroll(me);
   const timecard = payroll; // Payroll is leadership-only (Jon, Viktoriia, Enrico)
+  const csuite = canAccessCSuite(me); // C-Suite group — Jon, Enrico, Viktoriia only
   const trainFirst = me.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   const training = manager || ["michelle", "marie", "sharyn"].includes(trainFirst); // can view the Training Portal
   const [newTickets, newSuggestions, openOffboarding] = await Promise.all([
@@ -62,9 +64,9 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   return (
     <div className="md:flex md:min-h-screen">
-      <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} training={training} allowedPaths={allow} newTickets={newTickets} newSuggestions={newSuggestions} />
+      <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} newTickets={newTickets} newSuggestions={newSuggestions} />
       <main className="min-w-0 flex-1">
-        <div className="mx-auto w-full max-w-[1320px] px-4 py-6 md:px-8 md:py-8">
+        <ContentWrap>
           {openOffboarding && (
             <Link href="/admin#offboarding" className="mb-5 flex items-center gap-3 rounded-xl bg-red-50 px-4 py-3 ring-1 ring-red-300 transition hover:bg-red-100">
               <span className="text-xl">🚪</span>
@@ -89,7 +91,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
             </Link>
           )}
           {children}
-        </div>
+        </ContentWrap>
       </main>
       <CortanaBot />
       <PageHelp />

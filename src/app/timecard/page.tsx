@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, canAccessPayroll } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getAllUsers, getSettings } from "@/lib/data";
 import { todayStr, payPeriod, datesInRange } from "@/lib/date";
 import { workedMinutes } from "@/lib/presence";
@@ -23,7 +23,7 @@ const mdShort = (d: string) => { const [, m, dd] = d.split("-").map(Number); ret
 
 export default async function TimecardPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = await getCurrentUser();
-  if (!canAccessPayroll(me)) {
+  if (!canAccessCSuite(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>

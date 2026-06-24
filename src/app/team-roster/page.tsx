@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { saveTeamProfile, uploadTeamDoc, deleteTeamDoc } from "@/app/actions";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
 import { db } from "@/lib/db";
@@ -33,7 +33,7 @@ function ageFrom(birthday: string, today: string): string {
 
 export default async function TeamRosterPage({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string }> }) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) {
+  if (!canAccessCSuite(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>

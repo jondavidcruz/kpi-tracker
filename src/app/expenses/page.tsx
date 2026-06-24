@@ -1,4 +1,4 @@
-import { getCurrentUser, canAccessPayroll } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { saveExpensesBulk, addExpenseLine, deleteExpenseLine, startExpenseMonth } from "@/app/actions";
 import { EXPENSE_CATEGORIES, LEAD_KPI_KEYS } from "@/lib/expenses";
@@ -41,7 +41,7 @@ function Money({ name, value, big, placeholder = "0" }: { name: string; value: n
 
 export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const me = await getCurrentUser();
-  if (!me || !canAccessPayroll(me)) {
+  if (!me || !canAccessCSuite(me)) {
     return <Card className="mx-auto max-w-md p-8 text-center text-slate-500">🔒 This page is restricted to the C-suite (Jon, Viktoriia, Enrico).</Card>;
   }
   const sp = await searchParams;

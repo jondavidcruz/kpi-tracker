@@ -70,6 +70,17 @@ export function canTrackTime(user: User | null): boolean {
   return isManager(user) || canAccessPayroll(user);
 }
 
+// C-Suite — leadership only, by name, so it's excluded even from other admins/managers
+// (e.g. Marie). Covers War Room Health, P&L, Payroll, Roadmap, Team Roster.
+const CSUITE_ACCESS = ["jon", "enrico", "viktoriia"];
+
+/** Can see the C-Suite section (financials, roadmap, roster). Leadership trio only. */
+export function canAccessCSuite(user: User | null): boolean {
+  if (!user) return false;
+  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return CSUITE_ACCESS.includes(first);
+}
+
 // Restricted users see ONLY these page prefixes (first = their home page).
 // Ethan is part-time, listings-only — no acquisitions scorecard, just his pipeline.
 const RESTRICTED_NAV: Record<string, string[]> = {

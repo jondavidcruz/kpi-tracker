@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { saveRoadmapItem, cycleRoadmapStatus, deleteRoadmapItem } from "@/app/actions";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 
@@ -18,7 +18,7 @@ const STATUS: Record<string, { label: string; pill: string; dot: string }> = {
 
 export default async function RoadmapPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const me = await getCurrentUser();
-  if (!isAdmin(me)) {
+  if (!canAccessCSuite(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
