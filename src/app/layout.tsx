@@ -33,6 +33,15 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${playfair.variable} h-full antialiased`}>
+      <head>
+        {/* Kill any leftover service worker + caches from the old PWA build so new
+            deploys always show up (no more "I don't see the changes"). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister()})}).catch(function(){})}if(window.caches&&caches.keys){caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k)})}).catch(function(){})}}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="min-h-full text-slate-900">
         <AppShell>{children}</AppShell>
       </body>
