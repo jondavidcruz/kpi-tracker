@@ -4,39 +4,13 @@ import { getAllUsers } from "@/lib/data";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
 import { saveUserAccess } from "@/app/actions";
+import { NAV_GROUPS, parseNavHidden, type NavGate } from "@/lib/navItems";
 
 export const dynamic = "force-dynamic";
 
-// Mirrors the sidebar groups + their gating, so this preview shows exactly what
-// menu a given person sees. Keep in sync with src/components/Sidebar.tsx.
-type Gate = "all" | "manager" | "admin" | "marketing" | "timecard" | "csuite";
-const NAV: { group: string; items: { label: string; gate: Gate }[] }[] = [
-  { group: "Overview", items: [
-    { label: "Dashboard", gate: "all" }, { label: "Daily Huddle", gate: "all" }, { label: "Process Map", gate: "all" }, { label: "Deals", gate: "all" },
-    { label: "Underwriting", gate: "all" }, { label: "Schedule & Time", gate: "all" }, { label: "Training Portal", gate: "manager" }, { label: "Rewards", gate: "all" }, { label: "Resources & SOPs", gate: "admin" },
-  ] },
-  { group: "Performance", items: [
-    { label: "Enter KPIs", gate: "all" }, { label: "Weekly report", gate: "all" }, { label: "Monthly report", gate: "all" },
-    { label: "Internet Speed", gate: "manager" }, { label: "Analytics", gate: "manager" }, { label: "Trends", gate: "manager" }, { label: "Benchmarks", gate: "manager" },
-  ] },
-  { group: "Coaching", items: [
-    { label: "Alerts", gate: "manager" }, { label: "PIPs", gate: "manager" }, { label: "Call scoring", gate: "all" }, { label: "Scripts", gate: "all" },
-  ] },
-  { group: "Support", items: [
-    { label: "Software & Logins", gate: "all" }, { label: "Change Portal", gate: "all" }, { label: "AI Champion", gate: "all" },
-    { label: "Tickets", gate: "all" }, { label: "AI updates", gate: "admin" }, { label: "Admin", gate: "manager" },
-  ] },
-  { group: "Marketing", items: [{ label: "Markets & Buyers", gate: "marketing" }] },
-  { group: "C-Suite", items: [
-    { label: "War Room Health", gate: "csuite" }, { label: "Profit & Loss Report", gate: "csuite" }, { label: "Payroll", gate: "csuite" }, { label: "Roadmap", gate: "csuite" }, { label: "Team Roster", gate: "csuite" },
-  ] },
-  { group: "EOS", items: [
-    { label: "Vision (V/TO)", gate: "all" }, { label: "Rocks", gate: "all" }, { label: "Issues", gate: "admin" },
-    { label: "Monday Meeting", gate: "manager" }, { label: "Leadership Meeting", gate: "manager" },
-  ] },
-];
-
-const GATE_LABEL: Record<Gate, string> = { all: "Everyone", manager: "Managers (you + Marie)", admin: "Owner-level", marketing: "Marketing crew", timecard: "Time/pay staff", csuite: "C-Suite (leadership)" };
+// Uses the shared NAV_GROUPS (same list the sidebar renders) so the preview + editor
+// match a person's real menu exactly.
+const GATE_LABEL: Record<NavGate, string> = { all: "Everyone", manager: "Managers", admin: "Owner-level", marketing: "Marketing crew", csuite: "C-Suite (leadership)", training: "Coaching staff" };
 
 export default async function AccessPreviewPage({ searchParams }: { searchParams: Promise<{ as?: string; saved?: string }> }) {
   const me = await getCurrentUser();
@@ -64,13 +38,20 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
     csuite: canAccessCSuite(selected),
     owner: isOwner(selected),
   };
-  const can = (gate: Gate) =>
+  const trainFirst = selected.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const trains = flags.manager || ["michelle", "marie", "sharyn"].includes(trainFirst);
+  // Does this person's ROLE allow the item (before the per-section hide override)?
+  const roleAllows = (gate: NavGate) =>
     gate === "all" ? true :
     gate === "manager" ? flags.manager :
     gate === "admin" ? flags.admin :
     gate === "marketing" ? flags.marketing :
-    gate === "timecard" ? flags.timecard :
-    gate === "csuite" ? flags.csuite : false;
+    gate === "csuite" ? flags.csuite :
+    gate === "training" ? trains : false;
+  const hiddenSet = new Set(parseNavHidden(selected.navHidden));
+  // Items the person could see (role-allowed) — the toggleable list for the editor.
+  const availableHrefs = NAV_GROUPS.flatMap((g) => g.items.filter((it) => roleAllows(it.gate)).map((it) => it.href));
+  const can = (it: { href: string; gate: NavGate }) => roleAllows(it.gate) && !hiddenSet.has(it.href);
   const editable = isAdmin(me); // only the owner edits access
 
   // Sensitive-data confirmations — the things you most want to verify.
@@ -127,17 +108,41 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
           </div>
         </div>
 
-        {/* Editable access toggles — owner only */}
+        {/* Editable access — owner only */}
         {editable && (
           <form action={saveUserAccess} className="mt-4 border-t border-slate-100 pt-4">
             <input type="hidden" name="userId" value={selected.id} />
+            <input type="hidden" name="navAvailable" value={JSON.stringify(availableHrefs)} />
             <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Edit {firstName}&apos;s access {sp.saved && <span className="ml-2 text-emerald-600">✓ saved</span>}</div>
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
+
+            <div className="mb-1 text-[11px] font-semibold text-slate-500">Sensitive data</div>
+            <div className="mb-3 flex flex-wrap gap-x-6 gap-y-2">
               <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessCsuite" defaultChecked={selected.accessCsuite} className="h-4 w-4 accent-brand-navy" /> C-Suite (financials · roadmap · roster)</label>
               <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessPayroll" defaultChecked={selected.accessPayroll} className="h-4 w-4 accent-brand-navy" /> See pay $ amounts</label>
               <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessMarketing" defaultChecked={selected.accessMarketing} className="h-4 w-4 accent-brand-navy" /> Markets &amp; Buyers</label>
             </div>
-            <div className="mt-3 flex items-center gap-3">
+
+            <div className="mb-1 text-[11px] font-semibold text-slate-500">Menu sections — uncheck to remove (hidden from their sidebar entirely)</div>
+            <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+              {NAV_GROUPS.map((g) => {
+                const items = g.items.filter((it) => roleAllows(it.gate));
+                if (items.length === 0) return null;
+                return (
+                  <div key={g.group}>
+                    <div className="mb-1 text-[11px] font-bold text-slate-600">{g.group}</div>
+                    <div className="space-y-1">
+                      {items.map((it) => (
+                        <label key={it.href} className="flex items-center gap-2 text-[13px] text-slate-700">
+                          <input type="checkbox" name="navShow" value={it.href} defaultChecked={!hiddenSet.has(it.href)} className="h-3.5 w-3.5 accent-brand-navy" /> {it.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex items-center gap-3">
               <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save access</button>
               <span className="text-[11px] text-slate-400">Manager / Admin level is set by their <strong>Role</strong> on the Admin page.</span>
             </div>
@@ -149,19 +154,18 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
       <Card className="p-5">
         <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Menu {selected.name.split(" ")[0]} sees</div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {NAV.map((g) => {
-            const visible = g.items.filter((it) => can(it.gate));
-            const hidden = g.items.filter((it) => !can(it.gate));
-            if (visible.length === 0 && hidden.length === 0) return null;
+          {NAV_GROUPS.map((g) => {
+            const vis = g.items.filter((it) => can(it));
+            const hid = g.items.filter((it) => !can(it));
             return (
               <div key={g.group}>
                 <div className="mb-1 text-xs font-bold text-slate-600">{g.group}</div>
                 <ul className="space-y-0.5 text-sm">
-                  {visible.map((it) => (
-                    <li key={it.label} className="flex items-center gap-1.5 text-slate-700"><span className="text-emerald-500">✓</span> {it.label}</li>
+                  {vis.map((it) => (
+                    <li key={it.href} className="flex items-center gap-1.5 text-slate-700"><span className="text-emerald-500">✓</span> {it.label}</li>
                   ))}
-                  {hidden.map((it) => (
-                    <li key={it.label} className="flex items-center gap-1.5 text-slate-300 line-through" title={`Restricted to: ${GATE_LABEL[it.gate]}`}><span>✗</span> {it.label}</li>
+                  {hid.map((it) => (
+                    <li key={it.href} className="flex items-center gap-1.5 text-slate-300 line-through" title={hiddenSet.has(it.href) ? "Hidden by you" : `Restricted to: ${GATE_LABEL[it.gate]}`}><span>✗</span> {it.label}</li>
                   ))}
                 </ul>
               </div>

@@ -10,6 +10,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import Sidebar from "./Sidebar";
 import ContentWrap from "./ContentWrap";
+import { parseNavHidden, isPathHidden } from "@/lib/navItems";
 import CortanaBot from "./CortanaBot";
 import PageHelp from "./PageHelp";
 import HeartbeatPing from "./HeartbeatPing";
@@ -28,10 +29,11 @@ export default async function AppShell({ children }: { children: React.ReactNode
   // Restricted users (e.g. Ethan — listings only) can only reach their allowed
   // pages; bounce them to their home page if they land anywhere else.
   const allow = navAllowlist(me);
-  if (allow) {
-    const path = (await headers()).get("x-pathname") ?? "/";
-    if (!isPathAllowed(path, allow)) redirect(allow[0]);
-  }
+  const hiddenNav = parseNavHidden(me.navHidden);
+  const reqPath = (await headers()).get("x-pathname") ?? "/";
+  if (allow && !isPathAllowed(reqPath, allow)) redirect(allow[0]);
+  // Per-user hidden sections are blocked by URL too — not just removed from the menu.
+  if (isPathHidden(reqPath, hiddenNav)) redirect("/dashboard");
 
   const manager = isManager(me);
   const admin = isAdmin(me);
@@ -65,7 +67,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   return (
     <div className="md:flex md:min-h-screen">
-      <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} newTickets={newTickets} newSuggestions={newSuggestions} />
+      <Sidebar name={me.name} manager={manager} admin={admin} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} />
       <main className="min-w-0 flex-1">
         <ContentWrap>
           {openOffboarding && (

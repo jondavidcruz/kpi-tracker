@@ -102,12 +102,20 @@ export async function saveUserAccess(formData: FormData) {
   if (!isAdmin(me)) return;
   const userId = String(formData.get("userId") ?? "");
   if (!userId) return;
+  // Per-section menu access: anything offered but not checked becomes hidden for them.
+  let navHidden = "";
+  try {
+    const available: string[] = JSON.parse(String(formData.get("navAvailable") ?? "[]")) || [];
+    const shown = new Set(formData.getAll("navShow").map(String));
+    navHidden = JSON.stringify(available.filter((h) => !shown.has(h)));
+  } catch { navHidden = ""; }
   await db.user.update({
     where: { id: userId },
     data: {
       accessCsuite: formData.get("accessCsuite") === "on",
       accessPayroll: formData.get("accessPayroll") === "on",
       accessMarketing: formData.get("accessMarketing") === "on",
+      navHidden,
     },
   });
   revalidatePath("/admin/access-preview");

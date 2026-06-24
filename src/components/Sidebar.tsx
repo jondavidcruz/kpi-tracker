@@ -13,7 +13,7 @@ import Logo from "./Logo";
 type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
 
 export default function Sidebar({
-  name, manager, admin, marketing, timecard, csuite, training, allowedPaths, newTickets, newSuggestions,
+  name, manager, admin, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions,
 }: {
   name: string;
   manager: boolean;
@@ -23,6 +23,7 @@ export default function Sidebar({
   csuite: boolean;
   training: boolean;
   allowedPaths?: string[] | null;
+  hiddenNav?: string[];
   newTickets: number;
   newSuggestions: number;
 }) {
@@ -80,8 +81,10 @@ export default function Sidebar({
     ] },
   ];
 
+  const hidden = hiddenNav ?? [];
   const visible = (it: Item) =>
     (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard) && (!it.csuiteOnly || csuite) && (!it.trainingOnly || training) &&
+    !hidden.some((h) => it.href === h || it.href.startsWith(h + "/")) &&
     (!allowedPaths || allowedPaths.some((p) => it.href === p || it.href.startsWith(p + "/")));
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
