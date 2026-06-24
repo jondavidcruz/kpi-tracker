@@ -5,7 +5,7 @@ import { setBuyerStatus, logBuyerOutreach, saveProspectField, saveProspect, save
 import MultiSelect from "@/components/MultiSelect";
 
 export type Prospect = {
-  id: string; name: string; website: string; email: string; phone: string; phone2: string;
+  id: string; name: string; website: string; links: string; email: string; phone: string; phone2: string;
   buyBoxAreas: string; outreachLog: string; lastContacted: string; nextFollowUp: string;
   vetStage: string; vetStatus: string; igHandle: string; touchOn?: string;
   // CRM buy-box detail
@@ -81,9 +81,10 @@ function linkify(text: string) {
   });
 }
 
-// Notes/details cell: VIEW mode shows the full text with clickable links (auto-height,
-// no scroll); click to edit. EDIT mode autosaves ~1s after typing + on blur.
-function NotesCell({ id, value }: { id: string; value: string }) {
+// Reusable cell: VIEW mode shows the full text with clickable links (auto-height,
+// no scroll); click to edit. EDIT mode autosaves ~1s after typing + on blur. Used for
+// the Notes column and the multi-Links column.
+function NotesCell({ id, field, value, placeholder, minW = "min-w-[420px]", rows = 5 }: { id: string; field: string; value: string; placeholder: string; minW?: string; rows?: number }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value);
   const [status, setStatus] = useState<"idle" | "dirty" | "saved">("idle");
@@ -93,13 +94,13 @@ function NotesCell({ id, value }: { id: string; value: string }) {
 
   if (!editing) {
     return (
-      <div className="min-w-[420px] py-1">
+      <div className={`${minW} py-1`}>
         <div
           onClick={() => setEditing(true)}
           title="Click to edit"
           className="cursor-text whitespace-pre-wrap break-words rounded px-2 py-1.5 text-[13px] leading-relaxed text-slate-700 hover:bg-slate-50 hover:ring-1 hover:ring-slate-200"
         >
-          {val ? linkify(val) : <span className="text-slate-300">notes — touches, replies, who to ask for, next step…</span>}
+          {val ? linkify(val) : <span className="text-slate-300">{placeholder}</span>}
         </div>
       </div>
     );
@@ -108,12 +109,12 @@ function NotesCell({ id, value }: { id: string; value: string }) {
   return (
     <form action={saveProspectField} className="contents">
       <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="field" value="outreachLog" />
-      <div className="min-w-[420px]">
+      <input type="hidden" name="field" value={field} />
+      <div className={minW}>
         <textarea
           ref={(el) => { if (el) grow(el); }}
           autoFocus
-          name="value" defaultValue={val} placeholder="notes — touches, replies, who to ask for, next step…" rows={5}
+          name="value" defaultValue={val} placeholder={placeholder} rows={rows}
           onChange={(e) => { const ta = e.currentTarget; grow(ta); setStatus("dirty"); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => save(ta), 1000); }}
           onBlur={(e) => { if (timer.current) clearTimeout(timer.current); save(e.currentTarget); setEditing(false); }}
           className="block w-full resize-y overflow-hidden whitespace-pre-wrap break-words rounded border border-sky-300 bg-white px-2 py-1.5 text-[13px] leading-relaxed focus:border-sky-400 focus:outline-none"
@@ -212,7 +213,7 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
 
   const shown = useMemo(() => areas.map(({ area, prospects }) => {
     let rows = prospects;
-    if (needle) rows = rows.filter((p) => [p.name, p.phone, p.phone2, p.email, p.buyBoxAreas, p.outreachLog, p.company, hostOf(p.website)].join(" ").toLowerCase().includes(needle));
+    if (needle) rows = rows.filter((p) => [p.name, p.phone, p.phone2, p.email, p.buyBoxAreas, p.outreachLog, p.company, p.links, hostOf(p.website)].join(" ").toLowerCase().includes(needle));
     if (statusFilter) rows = rows.filter((p) => statusOf(p) === statusFilter);
     if (typeFilter) rows = rows.filter((p) => typeFilter === "dev" ? isDev(p) : !isDev(p));
     rows = [...rows].sort((a, b) => sortKeyVal(a).localeCompare(sortKeyVal(b)) * sort.dir);
@@ -253,7 +254,7 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
             <table className="w-full min-w-[1240px] border-collapse text-xs">
               <thead>
                 <tr className="border-y border-slate-200 bg-white text-[10px] uppercase tracking-wide text-slate-500 [&>th]:border-r [&>th]:border-slate-100 [&>th]:px-2 [&>th]:py-2 [&>th]:text-left">
-                  <th className="w-24">Website</th>
+                  <th className="w-56">Links</th>
                   <th className="w-48">Name</th>
                   <th className="w-32">Number</th>
                   <th className="w-32">Number</th>
@@ -273,11 +274,11 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                   return (
                     <Fragment key={p.id}>
                       <tr className={`border-b border-slate-100 align-top hover:bg-sky-50/40 ${overdue ? "bg-rose-50/40" : ""}`}>
-                        {/* Website */}
+                        {/* Links — website, LinkedIn, IG, etc. (one per line, clickable) */}
                         <td className="px-1 py-1">
-                          {canEdit ? <Cell id={p.id} field="website" value={p.website} placeholder="website" />
-                            : p.website && <a href={siteOf(p.website)} target="_blank" rel="noopener noreferrer" className="px-1.5 text-brand-navy hover:underline">{hostOf(p.website)}</a>}
-                          {p.website && <a href={siteOf(p.website)} target="_blank" rel="noopener noreferrer" className="ml-1 text-[10px] text-slate-400 hover:text-brand-navy" title="open">↗</a>}
+                          {canEdit
+                            ? <NotesCell id={p.id} field="links" value={p.links || p.website} placeholder="links — website, LinkedIn, IG… one per line" minW="min-w-[220px]" rows={3} />
+                            : <div className="min-w-[200px] whitespace-pre-wrap break-words px-1.5 text-[13px] leading-relaxed">{(p.links || p.website) ? linkify(p.links || p.website) : null}</div>}
                         </td>
                         {/* Name + type badge + expand */}
                         <td className="px-1 py-1">
@@ -293,7 +294,7 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                         {/* Email */}
                         <td className="px-1 py-1">{canEdit ? <Cell id={p.id} field="email" value={p.email} placeholder="email" /> : p.email && <a href={`mailto:${p.email}`} className="px-1.5 text-brand-navy hover:underline">{p.email}</a>}</td>
                         {/* Notes — bigger */}
-                        <td className="px-1 py-1 text-slate-600">{canEdit ? <NotesCell id={p.id} value={p.outreachLog} /> : <span className="whitespace-pre-wrap px-1.5">{p.outreachLog}</span>}</td>
+                        <td className="px-1 py-1 text-slate-600">{canEdit ? <NotesCell id={p.id} field="outreachLog" value={p.outreachLog} placeholder="notes — touches, replies, who to ask for, next step…" /> : <span className="whitespace-pre-wrap px-1.5">{p.outreachLog}</span>}</td>
                         {/* Buying area */}
                         <td className="px-1 py-1 text-emerald-700">{canEdit ? <Cell id={p.id} field="buyBoxAreas" value={p.buyBoxAreas} placeholder="areas they buy" /> : <span className="px-1.5">{p.buyBoxAreas}</span>}</td>
                         {/* Buy box summary (edit via ⊕) */}

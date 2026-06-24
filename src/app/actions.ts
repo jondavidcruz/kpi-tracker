@@ -1528,7 +1528,7 @@ export async function setBuyerStage(formData: FormData) {
   await db.marketContact.update({ where: { id }, data });
   await rollupResearchKpis(me!.id, today);
   revalidatePath("/vetting");
-  redirect("/vetting");
+  revalidatePath("/marketing");
 }
 
 /** Single Status dropdown on the vetting spreadsheet. Working statuses keep them
@@ -1552,7 +1552,7 @@ export async function setBuyerStatus(formData: FormData) {
   } else return;
   await rollupResearchKpis(me!.id, today);
   revalidatePath("/vetting");
-  redirect("/vetting");
+  revalidatePath("/marketing");
 }
 
 /** Permanently delete a buyer/prospect from Buyer Research. */
@@ -1564,7 +1564,6 @@ export async function deleteProspect(formData: FormData) {
   await db.marketContact.delete({ where: { id } });
   revalidatePath("/vetting");
   revalidatePath("/marketing");
-  redirect("/vetting");
 }
 
 /** Inline single-cell autosave from the spreadsheet view. Revalidates without a
@@ -1575,11 +1574,12 @@ export async function saveProspectField(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const field = String(formData.get("field") ?? "");
   const value = String(formData.get("value") ?? "").slice(0, 4000);
-  const ALLOWED = ["name", "phone", "phone2", "email", "website", "buyBoxAreas", "outreachLog"];
+  const ALLOWED = ["name", "phone", "phone2", "email", "website", "links", "buyBoxAreas", "outreachLog"];
   if (!id || !ALLOWED.includes(field)) return;
   if (field === "name" && !value.trim()) return;
   await db.marketContact.update({ where: { id }, data: { [field]: value } });
   revalidatePath("/vetting");
+  revalidatePath("/marketing");
 }
 
 /** Save the CRM buy-box detail for a Buyer Research row (the expandable panel):
@@ -1638,7 +1638,7 @@ export async function saveProspect(formData: FormData) {
     await rollupResearchKpis(me!.id, today);
   }
   revalidatePath("/vetting");
-  redirect("/vetting");
+  revalidatePath("/marketing");
 }
 
 /** Log an outreach touch on a prospect: stamps last-contacted = today, appends the
@@ -1657,13 +1657,13 @@ export async function logBuyerOutreach(formData: FormData) {
   const existing = await db.marketContact.findUnique({ where: { id }, select: { outreachLog: true, touchOn: true } });
   // One touch per lead per day — pressing 📇 again on the same lead doesn't re-count or
   // re-log. Notes still autosave separately; this just protects Developers Contacted.
-  if (existing?.touchOn === today) { revalidatePath("/vetting"); redirect("/vetting"); }
+  if (existing?.touchOn === today) { revalidatePath("/vetting"); revalidatePath("/marketing"); return; }
   const stamped = note ? `${today}: ${note}` : `${today}: reached out`;
   const log = existing?.outreachLog ? `${stamped}\n${existing.outreachLog}` : stamped;
   await db.marketContact.update({ where: { id }, data: { lastContacted: today, nextFollowUp: nextStr, outreachLog: log.slice(0, 4000), vetStatus: "contacted", touchById: me!.id, touchOn: today } });
   await rollupResearchKpis(me!.id, today); // → Developers Contacted
   revalidatePath("/vetting");
-  redirect("/vetting");
+  revalidatePath("/marketing");
 }
 
 export async function saveMarketingNotes(formData: FormData) {

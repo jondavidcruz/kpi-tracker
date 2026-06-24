@@ -16,7 +16,7 @@ const labelCls = "mb-0.5 block text-[11px] font-semibold text-slate-500";
 function toProspect(r: Record<string, unknown>): Prospect {
   const s = (k: string) => String(r[k] ?? "");
   return {
-    id: s("id"), name: s("name"), website: s("website"), email: s("email"), phone: s("phone"), phone2: s("phone2"),
+    id: s("id"), name: s("name"), website: s("website"), links: s("links"), email: s("email"), phone: s("phone"), phone2: s("phone2"),
     buyBoxAreas: s("buyBoxAreas"), outreachLog: s("outreachLog"), lastContacted: s("lastContacted"), nextFollowUp: s("nextFollowUp"),
     vetStage: s("vetStage"), vetStatus: s("vetStatus"), igHandle: s("igHandle"),
     category: s("category"), type: s("type"), title: s("title"), company: s("company"), preferredContact: s("preferredContact"),
