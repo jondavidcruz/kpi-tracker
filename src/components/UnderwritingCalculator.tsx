@@ -201,7 +201,11 @@ export default function UnderwritingCalculator() {
   const novCompPrices = [n("nComp1p"), n("nComp2p"), n("nComp3p")].filter((x) => x > 0);
   const suggestedList = novCompPrices.length ? Math.min(...novCompPrices) : 0; // conservative → sells fastest
   const nList = n("nList"), nComm = num(v("nComm") || "5"), nRepairCredit = n("nRepairCredit");
-  const nMinFee = f.nMinFee != null && f.nMinFee !== "" ? n("nMinFee") : suggestedFee; // same ARV tier
+  // Novation is valued on SIMILAR-CONDITION value (or EMV for land), NOT after-repair value,
+  // so the fee tier keys off the list price (fallback to ARV if that's all that's entered).
+  const novFeeBasis = nList > 0 ? nList : arv;
+  const novSuggestedFee = feeForArv(novFeeBasis);
+  const nMinFee = f.nMinFee != null && f.nMinFee !== "" ? n("nMinFee") : novSuggestedFee;
   const nSellerClosePct = num(v("nSellerClosePct") || "1.5"); // seller's closing only — we cover it
   const nSellerClose = nList * (nSellerClosePct / 100);
   const nHoldMonths = n("nHoldMonths") || 2;        // months on market before it sells
@@ -379,23 +383,26 @@ export default function UnderwritingCalculator() {
   // band, with the band matching the current ARV highlighted. Same fee applies to both
   // exits. Keeps reps from under-charging on a pricey house or over-charging (and
   // lowballing the seller) on a cheap one.
-  const feeTiers = (
-    <div className="sm:col-span-2 rounded-lg bg-amber-50/60 px-3 py-2 ring-1 ring-amber-200">
-      <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">📐 Minimum fee to aim for, by ARV{arv > 0 ? ` — yours: ${tierLabel(arv)} → ${money(suggestedFee)}` : ""}</div>
-      <div className="grid grid-cols-3 gap-1 text-[11px] sm:grid-cols-6">
-        {FEE_TIER_ROWS.map(([band, fee]) => {
-          const active = arv > 0 && suggestedFee === fee;
-          return (
-            <div key={band} className={`flex flex-col rounded px-1.5 py-1 text-center ${active ? "bg-emerald-600 font-bold text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
-              <span className="text-[10px]">{band}</span>
-              <span className="font-bold">{money(fee)}</span>
-            </div>
-          );
-        })}
+  const feeTierTable = (basis: number, basisLabel: string) => {
+    const fee = feeForArv(basis);
+    return (
+      <div className="sm:col-span-2 rounded-lg bg-amber-50/60 px-3 py-2 ring-1 ring-amber-200">
+        <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">📐 Minimum fee to aim for, by {basisLabel}{basis > 0 ? ` — yours: ${tierLabel(basis)} → ${money(fee)}` : ""}</div>
+        <div className="grid grid-cols-3 gap-1 text-[11px] sm:grid-cols-6">
+          {FEE_TIER_ROWS.map(([band, f]) => {
+            const active = basis > 0 && fee === f;
+            return (
+              <div key={band} className={`flex flex-col rounded px-1.5 py-1 text-center ${active ? "bg-emerald-600 font-bold text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+                <span className="text-[10px]">{band}</span>
+                <span className="font-bold">{money(f)}</span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-1 text-[10px] italic text-amber-700/80">The floor scales with the property value — don&apos;t leave money on a high-value deal, and don&apos;t force a lowball offer chasing an oversized fee on a cheap one.</p>
       </div>
-      <p className="mt-1 text-[10px] italic text-amber-700/80">The floor scales with ARV — don&apos;t leave money on a high-value house, and don&apos;t force a lowball offer chasing an oversized fee on a cheap one. Enter ARV on the Assignment tab to light up your band.</p>
-    </div>
-  );
+    );
+  };
 
   // Big-ticket repair checklist — check what's needed; the cost folds into rehab.
   const majorRepairs = () => (
@@ -489,7 +496,7 @@ export default function UnderwritingCalculator() {
                 <div className="flex-1"><Field k="aFee" label="Assignment fee" prefix="$" placeholder={suggestedFee ? suggestedFee.toLocaleString() : "15,000"} req="need" /></div>
                 {suggestedFee > 0 && <button type="button" onClick={() => setV("aFee", String(suggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(arv)} ARV`}>Use {money(suggestedFee)}</button>}
               </div>
-              {feeTiers}
+              {feeTierTable(arv, "ARV")}
               <div className={reqDiv}>Repairs (required) — type a figure, or estimate from sqft</div>
               <Field k="repairs" label="Override repair estimate ($)" prefix="$" span={2} req="need" />
               <Field k="sqft" label="Square feet" req="need" />
@@ -524,16 +531,16 @@ export default function UnderwritingCalculator() {
             <>
               {legend}
               <div className="sm:col-span-2 flex items-end gap-2">
-                <div className="flex-1"><Field k="nList" label="List price (current similar-condition value)" prefix="$" placeholder="420,000" req="need" /></div>
+                <div className="flex-1"><Field k="nList" label="List price (similar-condition value · EMV for land)" prefix="$" placeholder="420,000" req="need" /></div>
                 {suggestedList > 0 && (
                   <button type="button" onClick={() => setV("nList", String(suggestedList))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-200" title="Lowest comp — most conservative to sell under 90 days">Use {money(suggestedList)}</button>
                 )}
               </div>
               <div className="sm:col-span-2 flex items-end gap-2">
-                <div className="flex-1"><Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder={suggestedFee ? suggestedFee.toLocaleString() : "15,000"} req="need" /></div>
-                {suggestedFee > 0 && <button type="button" onClick={() => setV("nMinFee", String(suggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(arv)} ARV`}>Use {money(suggestedFee)}</button>}
+                <div className="flex-1"><Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder={novSuggestedFee ? novSuggestedFee.toLocaleString() : "15,000"} req="need" /></div>
+                {novSuggestedFee > 0 && <button type="button" onClick={() => setV("nMinFee", String(novSuggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(novFeeBasis)} value`}>Use {money(novSuggestedFee)}</button>}
               </div>
-              {feeTiers}
+              {feeTierTable(novFeeBasis, "similar-condition value (EMV for land)")}
               <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" req="opt" />
               <Field k="nSellerClosePct" label="Seller closing % (we cover)" suffix="%" placeholder="1.5" req="opt" />
               <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" req="opt" />
