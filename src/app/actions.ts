@@ -332,42 +332,43 @@ export async function scoreCall(formData: FormData) {
   if (!me) return;
   const transcript = String(formData.get("transcript") ?? "").trim();
   const repName = String(formData.get("repName") ?? "").trim();
-  const callType = String(formData.get("callType") ?? "").trim();
+  // One recording can hold several calls — score against each selected type.
+  const callTypes = Array.from(new Set(formData.getAll("callType").map((v) => String(v).trim()).filter(Boolean)));
+  if (callTypes.length === 0) callTypes.push(""); // no type chosen → generic score
   if (transcript.length < 40) redirect("/call-scoring?err=short");
 
-  const script = callType ? await db.callScript.findUnique({ where: { callType } }) : null;
-  const result = await scoreTranscript(transcript, {
-    label: callType ? callTypeLabel(callType) : undefined,
-    script: script?.script || undefined,
-  });
-  if (!result.configured) redirect("/call-scoring?setup=1");
-  if (result.error) redirect(`/call-scoring?err=${encodeURIComponent(result.error)}`);
-
   const audioUrl = String(formData.get("audioUrl") ?? "").trim().slice(0, 500);
-  const created = await db.callScore.create({
-    data: {
-      repName: repName || "(unspecified)",
-      callType,
-      address: String(formData.get("address") ?? "").trim().slice(0, 200),
-      sellerName: String(formData.get("sellerName") ?? "").trim().slice(0, 120),
-      sellerPhone: String(formData.get("sellerPhone") ?? "").trim().slice(0, 40),
-      scoredBy: me.name,
-      overall: result.overall,
-      breakdown: JSON.stringify(result.breakdown),
-      summary: result.summary,
-      transcript: transcript.slice(0, 20000),
-      audioUrl,
-    },
-  });
-  // Post the score (and a link to the recording, if one was uploaded) to the
-  // Call Audit Google Chat space (not the KPI space).
-  if (audioUrl) {
-    const label = callType ? callTypeLabel(callType) : "Call";
-    await sendCallAuditChat(`🎧 *Call scored — ${repName || "rep"}* · ${label} · *${result.overall}/100*\n▶️ Listen: ${audioUrl}`).catch(() => {});
+  const address = String(formData.get("address") ?? "").trim().slice(0, 200);
+  const sellerName = String(formData.get("sellerName") ?? "").trim().slice(0, 120);
+  const sellerPhone = String(formData.get("sellerPhone") ?? "").trim().slice(0, 40);
+
+  for (const callType of callTypes) {
+    const script = callType ? await db.callScript.findUnique({ where: { callType } }) : null;
+    const result = await scoreTranscript(transcript, {
+      label: callType ? callTypeLabel(callType) : undefined,
+      script: script?.script || undefined,
+    });
+    if (!result.configured) redirect("/call-scoring?setup=1");
+    if (result.error) redirect(`/call-scoring?err=${encodeURIComponent(result.error)}`);
+
+    const created = await db.callScore.create({
+      data: {
+        repName: repName || "(unspecified)", callType, address, sellerName, sellerPhone,
+        scoredBy: me.name,
+        overall: result.overall,
+        breakdown: JSON.stringify(result.breakdown),
+        summary: result.summary,
+        transcript: transcript.slice(0, 20000),
+        audioUrl,
+      },
+    });
+    // Post each score (+ a link to the recording) to the Call Audit Google Chat space.
+    if (audioUrl) {
+      const label = callType ? callTypeLabel(callType) : "Call";
+      await sendCallAuditChat(`🎧 *Call scored — ${repName || "rep"}* · ${label} · *${result.overall}/100*\n▶️ Listen: ${audioUrl}`).catch(() => {});
+      after(() => migrateScoreById(created.id).catch(() => {}));
+    }
   }
-  // Move the recording to Google Drive right away (runs after the response, so the
-  // user isn't kept waiting). Nightly sweep is the fallback if this misses.
-  if (audioUrl) after(() => migrateScoreById(created.id).catch(() => {}));
   revalidatePath("/call-scoring");
   redirect("/call-scoring?scored=1");
 }
