@@ -15,7 +15,7 @@ import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
 import { rollupResearchKpis, orgToday } from "@/lib/research-kpis";
 import { migrateScoreById } from "@/lib/recording-migrate";
-import { writeDay as crmWriteDay, writeOpps as crmWriteOpps } from "@/lib/crm-sync";
+import { writeDay as crmWriteDay, writeOpps as crmWriteOpps, writeActivity as crmWriteActivity } from "@/lib/crm-sync";
 import { after } from "next/server";
 
 /** Pull today's CRM numbers (calls + offers/contracts) on demand so the scorecard
@@ -26,8 +26,9 @@ export async function refreshCrmToday() {
   const settings = await getSettings();
   const tz = settings.orgTimezone;
   const today = todayStr(tz);
-  await crmWriteDay(today, tz);
-  await crmWriteOpps(today, tz);
+  const calls = await crmWriteDay(today, tz);
+  const opps = await crmWriteOpps(today, tz);
+  await crmWriteActivity(today, calls.wrote, opps);
   revalidatePath("/report");
   revalidatePath("/dashboard");
   // No redirect — refresh in place so it works from either page.
