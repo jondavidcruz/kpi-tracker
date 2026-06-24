@@ -96,6 +96,16 @@ export async function setMyPassword(formData: FormData) {
   redirect(`${to}?pwok=you${anchor}`);
 }
 
+/** Save (or clear) the rep's own Gemini API key for call transcription (BYOK), so
+ *  their uploads run on their quota instead of the shared key. */
+export async function saveGeminiKey(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const key = String(formData.get("geminiKey") ?? "").trim().slice(0, 200);
+  await db.user.update({ where: { id: me.id }, data: { geminiKey: key } });
+  redirect("/account?gemini=" + (key ? "saved" : "cleared"));
+}
+
 /** Sign the current user out and return to the login screen. */
 export async function signOut() {
   const supabase = await createClient();

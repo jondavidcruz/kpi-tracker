@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { setMyPassword } from "@/app/actions";
+import { setMyPassword, saveGeminiKey } from "@/app/actions";
 import { getCurrentUser } from "@/lib/auth";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const labelCls = "mb-1 block text-xs font-semibold text-slate-500";
 
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ pwok?: string; pwerr?: string }> }) {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ pwok?: string; pwerr?: string; gemini?: string }> }) {
   const me = await getCurrentUser();
   if (!me) return null;
   const sp = await searchParams;
@@ -44,6 +44,28 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <input type="password" name="password" autoComplete="new-password" minLength={8} required placeholder="••••••••" className={inputCls} />
           </label>
           <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Update password</button>
+        </form>
+      </Card>
+
+      <Card className="p-5">
+        <h3 className="mb-1 text-sm font-bold text-slate-700">🎙️ My Gemini key (call transcription)</h3>
+        <p className="mb-3 text-xs text-slate-500">
+          Paste your own free Gemini API key so your call uploads transcribe on <strong>your</strong> quota — that way the team doesn&apos;t burn through one shared limit. Get a free key at{" "}
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-navy underline">aistudio.google.com/apikey</a>. We store it securely and never show it back.
+        </p>
+
+        {sp.gemini === "saved" && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Your Gemini key is saved — your uploads now use it.</div>}
+        {sp.gemini === "cleared" && <div className="mb-3 rounded-xl bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">Key cleared — uploads fall back to the shared key.</div>}
+        {me.geminiKey && sp.gemini !== "saved" && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ A personal key is set (ending …{me.geminiKey.slice(-4)}).</div>}
+
+        <form action={saveGeminiKey} className="space-y-3">
+          <label><span className={labelCls}>Gemini API key</span>
+            <input type="password" name="geminiKey" autoComplete="off" placeholder={me.geminiKey ? "•••••••• (replace to update)" : "AIza…"} className={inputCls} />
+          </label>
+          <div className="flex items-center gap-2">
+            <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save key</button>
+            {me.geminiKey && <button name="geminiKey" value="" className="rounded-lg bg-slate-100 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200">Remove</button>}
+          </div>
         </form>
       </Card>
 

@@ -47,8 +47,8 @@ export async function POST(request: Request) {
     mime = file.type || "audio/mpeg";
   }
 
-  const result = await transcribeAudio(buf, mime);
-  if (!result.configured) return NextResponse.json({ error: "Transcription isn't set up yet — an admin needs to add GEMINI_API_KEY in Vercel." });
+  const result = await transcribeAudio(buf, mime, me.geminiKey || undefined);
+  if (!result.configured) return NextResponse.json({ error: "Transcription isn't set up — add your own Gemini key in My Account, or have an admin set GEMINI_API_KEY in Vercel." });
   if (result.error) return NextResponse.json({ error: result.error });
   return NextResponse.json({ transcript: result.text });
 }

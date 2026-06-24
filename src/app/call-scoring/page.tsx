@@ -32,7 +32,8 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
   ]);
   const scripts = new Map(scriptRows.map((r) => [r.callType, r.script]));
   const configured = !!process.env.ANTHROPIC_API_KEY;
-  const geminiConfigured = !!process.env.GEMINI_API_KEY;
+  // Configured if the shared key exists OR this rep saved their own (BYOK in My Account).
+  const geminiConfigured = !!process.env.GEMINI_API_KEY || !!me?.geminiKey;
 
   return (
     <div className="space-y-7">
@@ -45,12 +46,8 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
       {!geminiConfigured && (
         <div className="rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-900 ring-1 ring-sky-200">
           <div className="font-bold">🎙️ Turn on “upload a recording → auto-transcribe” (free)</div>
-          <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-[13px] text-sky-800">
-            <li>Get a free Gemini key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold underline">aistudio.google.com/apikey</a> (Create API key).</li>
-            <li>In Vercel → your project → <b>Settings → Environment Variables</b>, add <code className="rounded bg-white px-1">GEMINI_API_KEY</code> = your key (Production).</li>
-            <li><b>Redeploy</b> (Deployments → ⋯ → Redeploy). The upload button appears here automatically.</li>
-          </ol>
-          <p className="mt-1 text-[11px] text-sky-700">Until then, paste the transcript below. Recordings are transcribed on the fly and never stored. (Don&apos;t paste the key in chat — it goes only in Vercel.)</p>
+          <p className="mt-1 text-[13px] text-sky-800"><b>Easiest:</b> get a free Gemini key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold underline">aistudio.google.com/apikey</a>, then paste it in <a href="/account" className="font-semibold underline">My Account → My Gemini key</a>. Your uploads transcribe on <b>your</b> quota, so the team never shares one limit.</p>
+          <p className="mt-1 text-[11px] text-sky-700">(Admins can instead set a shared <code className="rounded bg-white px-1">GEMINI_API_KEY</code> in Vercel for everyone.) Until then, paste the transcript below.</p>
         </div>
       )}
 

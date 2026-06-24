@@ -14,8 +14,9 @@ const PROMPT =
 
 type AudioPart = { inlineData: { mimeType: string; data: string } } | { fileData: { fileUri: string; mimeType: string } };
 
-export async function transcribeAudio(buf: Buffer, mimeType: string): Promise<TranscribeResult> {
-  const key = process.env.GEMINI_API_KEY;
+export async function transcribeAudio(buf: Buffer, mimeType: string, keyOverride?: string): Promise<TranscribeResult> {
+  // Prefer the rep's own key (BYOK) so uploads run on their quota, not a shared one.
+  const key = (keyOverride && keyOverride.trim()) || process.env.GEMINI_API_KEY;
   if (!key) return { configured: false };
   const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
