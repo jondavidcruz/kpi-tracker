@@ -106,6 +106,30 @@ function Res({ label, value, tone = "navy", big }: { label: string; value: strin
   );
 }
 
+// Minimum fee we plan for, tiered by ARV — bigger deals carry a bigger spread, so we
+// shouldn't leave money on the table on a $700k house by defaulting to a $15k fee.
+const FEE_TIERS: [number, number][] = [
+  [200000, 10000],   // under $200k → $10k
+  [350000, 15000],   // $200k–350k → $15k
+  [500000, 20000],   // $350k–500k → $20k
+  [750000, 25000],   // $500k–750k → $25k
+  [1000000, 30000],  // $750k–1M → $30k
+];
+function feeForArv(arv: number): number {
+  if (arv <= 0) return 0;
+  for (const [cap, fee] of FEE_TIERS) if (arv < cap) return fee;
+  return 40000; // $1M+ → $40k
+}
+function tierLabel(arv: number): string {
+  if (arv <= 0) return "";
+  if (arv < 200000) return "under $200k";
+  if (arv < 350000) return "$200k–350k";
+  if (arv < 500000) return "$350k–500k";
+  if (arv < 750000) return "$500k–750k";
+  if (arv < 1000000) return "$750k–1M";
+  return "$1M+";
+}
+
 export default function UnderwritingCalculator() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("assignment");
   const [f, setF] = useState<Record<string, string>>({});
@@ -145,27 +169,43 @@ export default function UnderwritingCalculator() {
 
   // ---- Assignment ----
   const marketPct = v("marketPct") || "70";
-  const arv = n("arv"), aFee = n("aFee");
+  const arv = n("arv");
+  const suggestedFee = feeForArv(arv); // tiered minimum we plan for, by ARV
+  const aFee = f.aFee != null && f.aFee !== "" ? n("aFee") : suggestedFee;
   const sqft = n("sqft"), rehabSf = num(v("rehabSf"));
   const repairsCalc = sqft * rehabSf;
   const repairs = (n("repairs") || repairsCalc) + majorTotal;
-  const holding = n("aHoldMonths") * n("aMonthlyCarry");
+  const aHoldMonths = n("aHoldMonths");
+  // Monthly carry auto-suggests from ARV (taxes ~1.1% + insurance ~0.4% per year ≈
+  // 1.5%/yr, plus ~$150/mo utilities) so reps don't have to guess.
+  const suggestedCarry = arv > 0 ? Math.round((arv * 0.015 / 12 + 150) / 50) * 50 : 0;
+  const aMonthlyCarry = f.aMonthlyCarry != null && f.aMonthlyCarry !== "" ? n("aMonthlyCarry") : suggestedCarry;
+  const holding = aHoldMonths * aMonthlyCarry;
+  const aHoaCost = n("aHoa") * aHoldMonths;        // HOA dues while the flipper holds
+  const aExtra = n("aExtra");                       // manual override: cash-for-keys, eviction, etc.
   const flipperTarget = arv * (num(marketPct) / 100);
-  const cashMao = flipperTarget - repairs - holding - aFee;
+  const cashMao = flipperTarget - repairs - holding - aHoaCost - aExtra - aFee;
   const aAnchorPct = v("aAnchorPct") || "10";
   const aAnchor = cashMao * (1 - num(aAnchorPct) / 100);
 
   // ---- Novation ----
   const novCompPrices = [n("nComp1p"), n("nComp2p"), n("nComp3p")].filter((x) => x > 0);
   const suggestedList = novCompPrices.length ? Math.min(...novCompPrices) : 0; // conservative → sells fastest
-  const nList = n("nList"), nComm = num(v("nComm") || "5"), nMinFee = n("nMinFee"), nRepairCredit = n("nRepairCredit");
+  const nList = n("nList"), nComm = num(v("nComm") || "5"), nRepairCredit = n("nRepairCredit");
+  const nMinFee = f.nMinFee != null && f.nMinFee !== "" ? n("nMinFee") : suggestedFee; // same ARV tier
   const nSellerClosePct = num(v("nSellerClosePct") || "1.5"); // seller's closing only — we cover it
   const nSellerClose = nList * (nSellerClosePct / 100);
-  const nNet = nList - nRepairCredit - nList * (nComm / 100) - nSellerClose;
+  const nHoldMonths = n("nHoldMonths") || 2;        // months on market before it sells
+  const nHoaCost = n("nHoa") * nHoldMonths;          // HOA dues while listed
+  const nExtra = n("nExtra");                        // manual override: cash-for-keys, eviction, etc.
+  const nNet = nList - nRepairCredit - nList * (nComm / 100) - nSellerClose - nHoaCost - nExtra;
   const novMao = nNet - nMinFee;
   const nAnchorPct = v("nAnchorPct") || "7";
   const novAnchor = novMao * (1 - num(nAnchorPct) / 100);
   const feeAtAnchor = nNet - novAnchor;
+  // Sanity check: novation should usually let us offer the seller MORE than cash (no
+  // flipper margin / holding baked in). If cash MAO ends up higher, something's off.
+  const maoConflict = cashMao > 0 && novMao > 0 && cashMao > novMao;
 
   // ---- Creative / Listing ----
   // We don't buy on these terms — we ASSIGN them to an end buyer and make money two
@@ -216,7 +256,7 @@ export default function UnderwritingCalculator() {
       const comps = [1, 2, 3].map((i) => { const a = v(`comp${i}`); const p = v(`comp${i}p`); const d = v(`comp${i}d`); return a ? `${esc(a)}${p ? ` — $${esc(p)}` : ""}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ["Flipper holding cost", money(holding)], ["Assignment fee", money(aFee)], ["Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
+        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ["Flipper holding cost", money(holding)], ...(aHoaCost > 0 ? ([["HOA dues", money(aHoaCost)]] as [string, string][]) : []), ...(aExtra > 0 ? ([[v("aExtraNote") || "Additional costs", money(aExtra)]] as [string, string][]) : []), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
         note: "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. On assignment the end buyer covers BOTH the seller's and the buyer's closing costs, so no closing is deducted here. If the seller won't meet MAO, pivot to Novation.",
       };
     }
@@ -224,7 +264,7 @@ export default function UnderwritingCalculator() {
       const comps = [1, 2, 3].map((i) => { const a = v(`nComp${i}`); const p = v(`nComp${i}p`); const d = v(`nComp${i}d`); return a ? `${esc(a)} — ${p ? "$" + esc(p) : "?"}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Novation Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>As-is comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["List price (current similar-condition)", money(nList)], ["Buyer repair credit", money(nRepairCredit)], [`Agent commission (${nComm}%)`, money(nList * (nComm / 100))], [`Seller closing ${nSellerClosePct}% (we cover seller side only)`, money(nSellerClose)], ["Net after costs", money(nNet)], ["Our minimum fee", money(nMinFee)], ["Novation MAO (max seller payout)", money(novMao)], [`Anchor / opening payout (${nAnchorPct}% below MAO)`, money(novAnchor)], ["Negotiation range (seller payout)", `${money(novAnchor)} → ${money(novMao)}`], ["Our fee at anchor", money(feeAtAnchor)]],
+        rows: [["List price (current similar-condition)", money(nList)], ["Buyer repair credit", money(nRepairCredit)], [`Agent commission (${nComm}%)`, money(nList * (nComm / 100))], [`Seller closing ${nSellerClosePct}% (we cover seller side only)`, money(nSellerClose)], ...(nHoaCost > 0 ? ([[`HOA dues (${nHoldMonths} mo)`, money(nHoaCost)]] as [string, string][]) : []), ...(nExtra > 0 ? ([[v("nExtraNote") || "Additional costs", money(nExtra)]] as [string, string][]) : []), ["Net after costs", money(nNet)], ["Our minimum fee", money(nMinFee)], ["🎯 Novation MAO (max seller payout)", money(novMao)], [`Anchor / opening payout (${nAnchorPct}% below MAO)`, money(novAnchor)], ["Negotiation range (seller payout)", `${money(novAnchor)} → ${money(novMao)}`], ["Our fee at anchor", money(feeAtAnchor)]],
         note: "No holding costs (retail buyer). On novation we cover the SELLER's closing only (% of list) — the buyer pays their own. List conservatively to sell under 90 days; disclose we market higher to make it work.",
       };
     }
@@ -258,15 +298,54 @@ export default function UnderwritingCalculator() {
     if (accepted > 0) { r.rows.push(["Accepted price", money(accepted)], [`${marginLabel} (actual)`, money(profitAtAccepted)]); }
     const w = window.open("", "_blank", "width=820,height=920");
     if (!w) return;
-    const rows = r.rows.map(([l, val], i) => `<tr style="background:${i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:7px 12px;color:#475569">${esc(l)}</td><td style="padding:7px 12px;font-weight:700;text-align:right">${esc(val)}</td></tr>`).join("");
+
+    // Color-code each row so the offer call is easy to read at a glance.
+    const toneFor = (label: string): { c: string; bg: string } => {
+      const L = label.toLowerCase();
+      if (label.startsWith("🎯") || L.includes("max offer") || (L.includes("margin") && !L.includes("markup")) || L.includes("your fee") || L.includes("marketing fee")) return { c: "#047857", bg: "#ecfdf5" }; // green = the money number
+      if (L.includes("anchor")) return { c: "#b45309", bg: "#fffbeb" };       // amber = open here
+      if (L.includes("over max") || L.includes("over by") || L.includes("overpriced") || (L.includes("over max by"))) return { c: "#b91c1c", bg: "#fef2f2" }; // red = problem
+      if (L.startsWith("−") || L.includes("repair") || L.includes("cost") || L.includes("holding") || L.includes("commission") || L.includes("closing") || L.includes("hoa") || L.includes("dues") || L.includes("credit")) return { c: "#b91c1c", bg: "#fff" }; // red text = a deduction
+      if (L.includes("negotiat")) return { c: "#1e3a8a", bg: "#eff6ff" };
+      return { c: "#0f172a", bg: "#fff" };
+    };
+    const heroIdx = r.rows.findIndex(([l]) => l.startsWith("🎯"));
+    const hero = heroIdx >= 0 ? r.rows[heroIdx] : null;
+    const rows = r.rows.map(([l, val], i) => {
+      const t = toneFor(l);
+      const strong = l.startsWith("🎯");
+      return `<tr style="background:${strong ? t.bg : i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:8px 12px;color:#475569;${strong ? "font-weight:700" : ""}">${esc(l)}</td><td style="padding:8px 12px;font-weight:800;text-align:right;color:${t.c};font-size:${strong ? "16px" : "14px"}">${esc(val)}</td></tr>`;
+    }).join("");
+
+    // Negotiation-range bar (anchor → MAO) for the buy exits.
+    const rangeLo = tab === "assignment" ? aAnchor : tab === "novation" ? novAnchor : 0;
+    const rangeHi = tab === "assignment" ? cashMao : tab === "novation" ? novMao : 0;
+    const rangeBar = (buyExit && rangeHi > 0 && rangeLo > 0) ? `
+      <div style="margin:6px 0 18px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:4px">
+          <span style="color:#b45309">⚓ Open ${esc(money(rangeLo))}</span>
+          <span style="color:#047857">🎯 Max ${esc(money(rangeHi))}</span>
+        </div>
+        <div style="height:14px;border-radius:8px;background:linear-gradient(90deg,#fcd34d,#34d399)"></div>
+        <div style="font-size:10px;color:#94a3b8;text-align:center;margin-top:3px">Open at the anchor, negotiate up to the max — never past it.</div>
+      </div>` : "";
+
+    const conflict = maoConflict ? `<div style="margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;font-weight:600">⚠️ Cash MAO (${esc(money(cashMao))}) is higher than the Novation MAO (${esc(money(novMao))}) — novation should usually allow a higher offer. Re-check the novation inputs.</div>` : "";
+
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(r.title)}</title></head>
       <body style="font-family:system-ui,Arial,sans-serif;color:#0f172a;max-width:720px;margin:28px auto;padding:0 18px">
         <div style="border-bottom:3px solid #0b1f3a;padding-bottom:8px;margin-bottom:14px">
           <div style="font-weight:800;font-size:18px;color:#0b1f3a">Freedom Offers — War Room</div>
           <div style="color:#64748b;font-size:13px">${esc(r.title)} · ${new Date().toLocaleDateString()}</div>
         </div>
-        ${r.comps ? `<div style="margin-bottom:14px;color:#334155;line-height:1.5">${r.comps}</div>` : ""}
-        <table style="width:100%;border-collapse:collapse;font-size:14px">${rows}</table>
+        ${hero ? `<div style="background:#0b1f3a;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;color:#cbd5e1;font-weight:600">${esc(hero[0].replace("🎯 ", ""))}</span>
+          <span style="font-size:26px;font-weight:800;color:#fcd34d">${esc(hero[1])}</span>
+        </div>` : ""}
+        ${conflict}
+        ${rangeBar}
+        ${r.comps ? `<div style="margin-bottom:14px;color:#334155;line-height:1.5;font-size:13px">${r.comps}</div>` : ""}
+        <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${rows}</table>
         ${r.note ? `<p style="margin-top:16px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
       </body></html>`);
     w.document.close();
@@ -371,7 +450,11 @@ export default function UnderwritingCalculator() {
                 </div>
               </details>
               <Field k="arv" label="ARV" prefix="$" placeholder="350,000" req="need" />
-              <Field k="aFee" label="Assignment fee" prefix="$" placeholder="15,000" req="need" />
+              <div className="flex items-end gap-2">
+                <div className="flex-1"><Field k="aFee" label="Assignment fee" prefix="$" placeholder={suggestedFee ? suggestedFee.toLocaleString() : "15,000"} req="need" /></div>
+                {suggestedFee > 0 && <button type="button" onClick={() => setV("aFee", String(suggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(arv)} ARV`}>Use {money(suggestedFee)}</button>}
+              </div>
+              {suggestedFee > 0 && <p className="sm:col-span-2 -mt-1.5 text-[10px] text-slate-400">📐 Suggested minimum fee for <span className="font-semibold text-slate-500">{tierLabel(arv)}</span> ARV: <span className="font-semibold text-slate-500">{money(suggestedFee)}</span> — used automatically if left blank.</p>}
               <div className={reqDiv}>Repairs (required) — type a figure, or estimate from sqft</div>
               <Field k="repairs" label="Override repair estimate ($)" prefix="$" span={2} req="need" />
               <Field k="sqft" label="Square feet" req="need" />
@@ -381,8 +464,16 @@ export default function UnderwritingCalculator() {
               {majorRepairs()}
               <div className={optDiv}>Flipper holding (optional — their money cost)</div>
               <Field k="aHoldMonths" label="Months held" placeholder="6" req="opt" />
-              <Field k="aMonthlyCarry" label="Monthly carry (taxes, ins, loan…)" prefix="$" placeholder="1,000" req="opt" />
+              <div className="flex items-end gap-2">
+                <div className="flex-1"><Field k="aMonthlyCarry" label="Monthly carry (taxes, ins, utils)" prefix="$" placeholder={suggestedCarry ? suggestedCarry.toLocaleString() : "1,000"} req="opt" /></div>
+                {suggestedCarry > 0 && <button type="button" onClick={() => setV("aMonthlyCarry", String(suggestedCarry))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title="Auto-estimated from ARV (taxes + insurance + utilities)">Use {money(suggestedCarry)}</button>}
+              </div>
+              {suggestedCarry > 0 && <p className="sm:col-span-2 -mt-1.5 text-[10px] text-slate-400">🔁 Auto-estimated carry from ARV: <span className="font-semibold text-slate-500">{money(suggestedCarry)}/mo</span> — used automatically if left blank.</p>}
+              <Field k="aHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
+              <div className={optDiv}>Additional costs (manual override — cash-for-keys, eviction, liens…)</div>
+              <Field k="aExtra" label="Extra cost ($)" prefix="$" placeholder="0" req="opt" />
+              <Field k="aExtraNote" label="What is it?" placeholder="e.g. cash for keys" req="opt" />
               <div className={reqDiv}>ARV comps (required · addr · sold $ · days on market)</div>
               <p className="sm:col-span-2 -mt-1 text-[11px] text-red-500">Pull comps AND do your own manual check — verify each on the MLS / county records, then record all 3 here. Never send an offer without comps backing the ARV.</p>
               {[1, 2, 3].map((i) => (
@@ -403,11 +494,20 @@ export default function UnderwritingCalculator() {
                   <button type="button" onClick={() => setV("nList", String(suggestedList))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-200" title="Lowest comp — most conservative to sell under 90 days">Use {money(suggestedList)}</button>
                 )}
               </div>
-              <Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder="15,000" req="need" />
+              <div className="sm:col-span-2 flex items-end gap-2">
+                <div className="flex-1"><Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder={suggestedFee ? suggestedFee.toLocaleString() : "15,000"} req="need" /></div>
+                {suggestedFee > 0 && <button type="button" onClick={() => setV("nMinFee", String(suggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(arv)} ARV`}>Use {money(suggestedFee)}</button>}
+              </div>
+              {suggestedFee > 0 && <p className="sm:col-span-2 -mt-1.5 text-[10px] text-slate-400">📐 Suggested minimum fee for <span className="font-semibold text-slate-500">{tierLabel(arv)}</span> ARV: <span className="font-semibold text-slate-500">{money(suggestedFee)}</span> — used automatically if left blank. (Set ARV on the Assignment tab to tier this.)</p>}
               <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" req="opt" />
               <Field k="nSellerClosePct" label="Seller closing % (we cover)" suffix="%" placeholder="1.5" req="opt" />
               <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" req="opt" />
+              <Field k="nHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
+              <Field k="nHoldMonths" label="Months on market" placeholder="2" req="opt" />
               <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="7" req="opt" />
+              <div className={optDiv}>Additional costs (manual override — cash-for-keys, eviction, liens…)</div>
+              <Field k="nExtra" label="Extra cost ($)" prefix="$" placeholder="0" req="opt" />
+              <Field k="nExtraNote" label="What is it?" placeholder="e.g. eviction" req="opt" />
               <div className={reqDiv}>As-is comparables (required · addr · sold $ · days on market)</div>
               <p className="sm:col-span-2 -mt-1 text-[11px] text-red-500">Pull comps AND do your own manual check — verify each on the MLS / county records, then record all 3 here. The list price has to be backed by real as-is comps.</p>
               {[1, 2, 3].map((i) => (
@@ -497,11 +597,18 @@ export default function UnderwritingCalculator() {
 
         {/* Results */}
         <div className="rounded-2xl bg-gradient-to-b from-slate-50 to-white p-4 ring-1 ring-slate-200">
+          {(tab === "assignment" || tab === "novation") && maoConflict && (
+            <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300">
+              ⚠️ Cash MAO ({money(cashMao)}) is HIGHER than your Novation MAO ({money(novMao)}). Novation should usually let you offer the seller <em>more</em> than cash (no flipper margin or holding). Re-check the novation list price, commission, or fees — something&apos;s off.
+            </div>
+          )}
           {tab === "assignment" && (
             <>
               <Res label={`Flipper resale target (${marketPct}% of ARV)`} value={money(flipperTarget)} tone="muted" />
               <Res label="− Repairs" value={money(repairs)} tone="muted" />
               {holding > 0 && <Res label="− Flipper holding" value={money(holding)} tone="muted" />}
+              {aHoaCost > 0 && <Res label={`− HOA dues (${aHoldMonths || 0} mo)`} value={money(aHoaCost)} tone="muted" />}
+              {aExtra > 0 && <Res label={`− ${v("aExtraNote") || "Additional costs"}`} value={money(aExtra)} tone="muted" />}
               <Res label="− Assignment fee" value={money(aFee)} tone="muted" />
               <Res label="🎯 Cash MAO (max offer to seller)" value={money(cashMao)} tone={cashMao > 0 ? "navy" : "bad"} big />
               <Res label="⚓ Anchor (open here)" value={money(aAnchor)} tone="good" />
@@ -510,7 +617,9 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "novation" && (
             <>
-              <Res label="Net after credit + commission + seller closing" value={money(nNet)} tone="muted" />
+              {nHoaCost > 0 && <Res label={`− HOA dues (${nHoldMonths} mo)`} value={money(nHoaCost)} tone="muted" />}
+              {nExtra > 0 && <Res label={`− ${v("nExtraNote") || "Additional costs"}`} value={money(nExtra)} tone="muted" />}
+              <Res label="Net after credit, commission, closing, HOA + extras" value={money(nNet)} tone="muted" />
               <Res label="🎯 Novation MAO (max seller payout)" value={money(novMao)} tone={novMao > 0 ? "navy" : "bad"} big />
               <Res label="⚓ Anchor payout (open here)" value={money(novAnchor)} tone="good" />
               <Res label="Our fee at anchor" value={money(feeAtAnchor)} tone="good" />
