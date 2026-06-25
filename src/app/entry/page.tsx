@@ -37,9 +37,13 @@ export default async function EntryPage({
   const date = sp.date ?? todayStr(settings.orgTimezone);
   const month = monthOf(date);
 
-  const reps = await getActiveReps();
-  const selectedId = sp.user ?? reps[0]?.id;
-  const rep = reps.find((r) => r.id === selectedId);
+  // Reps only see + enter their OWN KPIs (so nobody accidentally logs onto someone else).
+  // Managers/admins keep the full picker since they may correct anyone's numbers.
+  const allReps = await getActiveReps();
+  const canPickAnyone = isManager(me);
+  const reps = canPickAnyone ? allReps : allReps.filter((r) => r.id === me?.id);
+  const selectedId = canPickAnyone ? (sp.user ?? reps[0]?.id) : (me?.id ?? reps[0]?.id);
+  const rep = reps.find((r) => r.id === selectedId) ?? reps[0];
 
   const [roleKpis, internetKpis, teamDaily, values, targets] = await Promise.all([
     rep
