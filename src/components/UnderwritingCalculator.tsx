@@ -8,6 +8,7 @@ const TABS = [
   { key: "creative", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
   { key: "listing", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
   { key: "flip", label: "Flip / Wholetail", emoji: "🔨", blurb: "Full buyer's-lens analysis: Max Offer = ARV + purchase credit − min profit − (property costs + money costs)." },
+  { key: "rental", label: "Buy & Hold", emoji: "🏘️", blurb: "Landlord / BRRRR buyer's lens: gross yield, cap rate, the 1% rule, and the max offer that still hits their target cap rate." },
 ] as const;
 
 // Wholesale (Assignment) vs Novation — quick decision guide (from the team's sheet).
@@ -43,17 +44,21 @@ const MARKET_GUIDE: [string, string, string][] = [
   ["Rural Markets (65%)", "Limited buyer pool, longer dispo times — more conservative offers required.", "Outlying / small towns"],
   ["Extremely Rural (60% or lower)", "Low velocity, few cash buyers, very limited retail exit — large discount required.", "Remote areas"],
 ];
-const REHAB_LEVELS: [string, string][] = [
-  ["", "— pick condition —"],
-  ["17", "Cleanup (~$17/sf)"],
-  ["22", "Lipstick (~$22/sf)"],
-  ["30", "Interior (~$30/sf)"],
-  ["35", "Full (~$35/sf)"],
-  ["45", "Full + 2 big items (~$45/sf)"],
-  ["55", "Full + 4 big items (~$55/sf)"],
-  ["65", "Full + 6 big items (~$65/sf)"],
-  ["75", "Full gut (~$75/sf)"],
+// [$/sf, label, what this scope typically covers]
+const REHAB_LEVELS: [string, string, string][] = [
+  ["", "— pick condition —", ""],
+  ["17", "Cleanup (~$17/sf)", "Trash-out, deep clean, paint touch-ups, minor fixes. Essentially rent-ready cosmetic."],
+  ["22", "Lipstick (~$22/sf)", "Paint, flooring, light fixtures, landscaping. No kitchen/bath gut."],
+  ["30", "Interior (~$30/sf)", "Full interior refresh — kitchen/bath refresh, flooring, paint throughout."],
+  ["35", "Full (~$35/sf)", "Kitchen + baths redone, flooring, paint, plus some systems (a typical flip)."],
+  ["45", "Full + 2 big items (~$45/sf)", "Full interior plus 2 majors (e.g. roof, HVAC, or windows)."],
+  ["55", "Full + 4 big items (~$55/sf)", "Full interior plus ~4 majors. Heavy rehab."],
+  ["65", "Full + 6 big items (~$65/sf)", "Full interior plus most systems replaced. Near-gut."],
+  ["75", "Full gut (~$75/sf)", "Down to the studs — everything new."],
 ];
+function rehabDesc(sf: string): string {
+  return REHAB_LEVELS.find(([val]) => val === sf)?.[2] ?? "";
+}
 
 // Big-ticket repair items → [field key, label, typical cost]. Checking one adds
 // its cost to the rehab estimate (cost is editable).
@@ -102,6 +107,25 @@ function Res({ label, value, tone = "navy", big }: { label: string; value: strin
     <div className="flex items-baseline justify-between gap-3 py-1.5">
       <span className="text-sm text-slate-600">{label}</span>
       <span className={`font-extrabold tabular-nums ${big ? "text-2xl" : "text-base"} ${cls}`}>{value}</span>
+    </div>
+  );
+}
+
+// 3-rung offer ladder (course-style 95/85/65% of max) — gives the rep an opening,
+// a target, and a floor instead of a single number.
+function OfferLadder({ rungs }: { rungs: { label: string; v: number }[] }) {
+  if (!rungs.length) return null;
+  return (
+    <div className="mt-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
+      <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">📊 Offer ladder</div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {rungs.map((r) => (
+          <div key={r.label} className="rounded bg-white px-2 py-1 text-center ring-1 ring-slate-200">
+            <div className="text-[10px] text-slate-400">{r.label}</div>
+            <div className="text-sm font-bold text-brand-navy tabular-nums">{money(r.v)}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -164,7 +188,11 @@ export default function UnderwritingCalculator() {
   const aFee = f.aFee != null && f.aFee !== "" ? n("aFee") : suggestedFee;
   const sqft = n("sqft"), rehabSf = num(v("rehabSf"));
   const repairsCalc = sqft * rehabSf;
-  const repairs = (n("repairs") || repairsCalc) + majorTotal;
+  // Rehab contingency — a cushion on the repair estimate for surprises (default 10%,
+  // the BuyBox/course standard). Applies to the sqft/override base + big-ticket items.
+  const contingencyPct = num(v("contingencyPct") || "10");
+  const repairsBase = (n("repairs") || repairsCalc) + majorTotal;
+  const repairs = repairsBase * (1 + contingencyPct / 100);
   // The market tier % ALREADY builds in the flipper's profit AND their carry / money
   // costs — so we don't make the team estimate the flipper's holding (they rarely know
   // it). We only subtract KNOWN, deal-specific costs: HOA/special dues + extras
@@ -185,12 +213,18 @@ export default function UnderwritingCalculator() {
   const novFeeBasis = nList > 0 ? nList : arv;
   const novSuggestedFee = feeForArv(novFeeBasis);
   const nMinFee = f.nMinFee != null && f.nMinFee !== "" ? n("nMinFee") : novSuggestedFee;
+  // Realistic-sale factor: a listing rarely nets the full list (price drops + buyer
+  // concessions), so we model the EXPECTED SALE at this % of list (default 95%) and base
+  // the % costs on that — a more honest MAO than assuming we net the whole list.
+  const nRealismPct = num(v("nRealismPct") || "95");
+  const nExpectedSale = nList * (nRealismPct / 100);
   const nSellerClosePct = num(v("nSellerClosePct") || "1.5"); // seller's closing only — we cover it
-  const nSellerClose = nList * (nSellerClosePct / 100);
+  const nSellerClose = nExpectedSale * (nSellerClosePct / 100);
   const nHoldMonths = n("nHoldMonths") || 2;        // months on market before it sells
   const nHoaCost = n("nHoa") * nHoldMonths;          // HOA dues while listed
   const nExtra = extraSum("nExtra", nExtraN);        // manual override: cash-for-keys, eviction, etc.
-  const nNet = nList - nRepairCredit - nList * (nComm / 100) - nSellerClose - nHoaCost - nExtra;
+  const nReserve = n("nReserve");                    // reserve: misc out-of-pocket + lender-required repairs
+  const nNet = nExpectedSale - nRepairCredit - nExpectedSale * (nComm / 100) - nSellerClose - nHoaCost - nExtra - nReserve;
   const novMao = nNet - nMinFee;
   const nAnchorPct = v("nAnchorPct") || "7";
   const novAnchor = novMao * (1 - num(nAnchorPct) / 100);
@@ -214,7 +248,7 @@ export default function UnderwritingCalculator() {
   // ---- Flip / Wholetail (from MAO.xlsx) ----
   const fMinProfit = f.fMinProfit != null && f.fMinProfit !== "" ? n("fMinProfit") : 30000;
   const fHold = n("fHold") || 6;
-  const fRehab = (n("fRehab") || n("sqft") * num(v("rehabSf"))) + majorTotal;
+  const fRehab = ((n("fRehab") || n("sqft") * num(v("rehabSf"))) + majorTotal) * (1 + contingencyPct / 100);
   const fComm = arv * (num(v("fComm") || "3") / 100);
   const fClosing = arv * (num(v("fClosing") || "2") / 100);
   const fCarry = arv * (num(v("fCarry") || "1") / 100); // utilities, taxes, insurance
@@ -229,6 +263,26 @@ export default function UnderwritingCalculator() {
   const fMao = arv + n("fPurchCredit") - fMinProfit - fTotalCosts;
   const fProfit = arv - fTotalCosts - n("fPurchase");
 
+  // ---- Buy & Hold / Rental (landlord + BRRRR lens) ----
+  const rPrice = n("rPrice") || arv;                 // purchase price (defaults to ARV)
+  const rRent = n("rRent");                           // monthly rent
+  const rTax = n("rTax"), rIns = n("rIns"), rHoaMo = n("rHoa");
+  const rVacPct = num(v("rVac") || "5"), rMgmtPct = num(v("rMgmt") || "8"), rMaintPct = num(v("rMaint") || "8");
+  const rTargetCap = num(v("rTargetCap") || "7");     // target cap rate %
+  const rGrossYr = rRent * 12;
+  const rOpEx = rTax + rIns + rHoaMo * 12 + rGrossYr * ((rVacPct + rMgmtPct + rMaintPct) / 100);
+  const rNoi = rGrossYr - rOpEx;
+  const rCapRate = rPrice > 0 ? (rNoi / rPrice) * 100 : 0;
+  const rGrossYield = rPrice > 0 ? (rGrossYr / rPrice) * 100 : 0;
+  const rOnePct = rPrice > 0 ? (rRent / rPrice) * 100 : 0;             // the "1% rule"
+  const rMaxOffer = rTargetCap > 0 ? rNoi / (rTargetCap / 100) : 0;    // price that hits the target cap
+
+  // 3-rung offer ladder from a max (course-style 95 / 85 / 65%).
+  const ladder = (max: number): { label: string; v: number }[] =>
+    max > 0 ? [{ label: "Strong · 95%", v: max * 0.95 }, { label: "Opening · 85%", v: max * 0.85 }, { label: "Floor · 65%", v: max * 0.65 }] : [];
+  // The headline offer's size relative to ARV — a quick sanity gut-check.
+  const pctOfArv = (x: number) => (arv > 0 ? `${Math.round((x / arv) * 100)}% of ARV` : "");
+
   // ---- Deal outcome (shared across every exit): the seller's asking price and
   // the price they actually accepted, so we can see the TRUE margin at the end. ----
   const asking = n("askPrice");
@@ -238,6 +292,7 @@ export default function UnderwritingCalculator() {
   else if (tab === "novation") { dealMax = novMao; profitAtAccepted = nNet - accepted; marginLabel = "Your fee"; }
   else if (tab === "flip") { dealMax = fMao; profitAtAccepted = arv - fTotalCosts - accepted; marginLabel = "Your profit"; }
   else if (tab === "creative") { dealMax = n("cPrice"); profitAtAccepted = cMargin; marginLabel = "Your total margin"; showAsking = false; }
+  else if (tab === "rental") { dealMax = rMaxOffer; profitAtAccepted = rNoi; marginLabel = "Annual NOI"; showAsking = true; }
   else { dealMax = lList; profitAtAccepted = lFlat > 0 ? lFlat : accepted * (lComm / 100) * (lRef / 100); marginLabel = "Your marketing fee"; showAsking = false; }
   // ROI on the deal: (list/sale price − the price we get it under contract for) ÷ contract.
   // Sale price defaults to ARV (cash/flip) or the list price (novation/listing); editable.
@@ -281,6 +336,13 @@ export default function UnderwritingCalculator() {
         note: "Standard agent-to-agent referral is 25% of the listing-side commission. A flat $2,500–$5,000 is also common — set whichever you use.",
       };
     }
+    if (tab === "rental") {
+      return {
+        title: "Buy & Hold / Rental Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`,
+        rows: [["Purchase price", money(rPrice)], ["Monthly rent", money(rRent)], ["Gross annual rent", money(rGrossYr)], ["Operating expenses", money(rOpEx)], ["Net operating income (NOI)", money(rNoi)], ["Cap rate", `${rCapRate.toFixed(1)}%`], ["Gross yield", `${rGrossYield.toFixed(1)}%`], ["1% rule (rent ÷ price)", `${rOnePct.toFixed(2)}%`], [`🎯 Max offer at ${rTargetCap}% cap`, money(rMaxOffer)]],
+        note: "Landlord / BRRRR lens. Cap rate = NOI ÷ price. The 1% rule (monthly rent ≥ 1% of price) is a quick screen. Max offer = NOI ÷ target cap rate.",
+      };
+    }
     {
       const comps = [1, 2, 3].map((i) => { const a = v(`comp${i}`); const p = v(`comp${i}p`); const d = v(`comp${i}d`); return a ? `${esc(a)}${p ? ` — $${esc(p)}` : ""}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
@@ -296,10 +358,10 @@ export default function UnderwritingCalculator() {
     const w = window.open("", "_blank", "width=860,height=940");
     if (!w) return;
 
-    const isAssign = tab === "assignment", isNov = tab === "novation", isFlip = tab === "flip", isCreative = tab === "creative";
+    const isAssign = tab === "assignment", isNov = tab === "novation", isFlip = tab === "flip", isCreative = tab === "creative", isRental = tab === "rental";
     // The single headline number (MAO / max offer) — biggest thing on the page.
-    const heroVal = isAssign ? cashMao : isNov ? novMao : isFlip ? fMao : isCreative ? cMargin : mktFee;
-    const heroLabel = isAssign ? "Cash MAO · the most we offer the seller" : isNov ? "Novation MAO · max seller payout" : isFlip ? "Max Offer · flip MAO" : isCreative ? "Total margin to us" : "Our marketing fee";
+    const heroVal = isAssign ? cashMao : isNov ? novMao : isFlip ? fMao : isCreative ? cMargin : isRental ? rMaxOffer : mktFee;
+    const heroLabel = isAssign ? "Cash MAO · the most we offer the seller" : isNov ? "Novation MAO · max seller payout" : isFlip ? "Max Offer · flip MAO" : isCreative ? "Total margin to us" : isRental ? `Max offer at ${rTargetCap}% cap rate` : "Our marketing fee";
     const rLo = isAssign ? aAnchor : isNov ? novAnchor : 0;
     const rHi = isAssign ? cashMao : isNov ? novMao : 0;
     const feeAnchor = isAssign ? (flipperTarget - repairs - aHoa - aExtra - aAnchor) : isNov ? feeAtAnchor : 0;
@@ -537,6 +599,8 @@ export default function UnderwritingCalculator() {
               <label><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Condition ($/sf)</span>
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
+              {rehabDesc(v("rehabSf")) && <p className="sm:col-span-2 -mt-1 text-[11px] italic text-slate-500">📋 {rehabDesc(v("rehabSf"))}</p>}
+              <Field k="contingencyPct" label="Rehab contingency %" suffix="%" span={2} placeholder="10" req="opt" />
               {majorRepairs()}
               <div className={optDiv}>Optional — refine the offer</div>
               <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
@@ -563,6 +627,13 @@ export default function UnderwritingCalculator() {
                   <button type="button" onClick={() => setV("nList", String(suggestedList))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-200" title="Lowest comp — most conservative to sell under 90 days">Use {money(suggestedList)}</button>
                 )}
               </div>
+              {suggestedList > 0 && (
+                <div className="sm:col-span-2 rounded-lg bg-emerald-50 px-3 py-2 ring-1 ring-emerald-200">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">🏷️ Recommended MLS list price</div>
+                  <div className="text-lg font-extrabold text-emerald-700">{money(suggestedList)}</div>
+                  <div className="text-[11px] text-emerald-600">Your lowest as-is comp — list here to sell in under 90 days. Enter it as the list price above (or adjust).</div>
+                </div>
+              )}
               <div className="sm:col-span-2 flex items-end gap-2">
                 <div className="flex-1"><Field k="nMinFee" label="Our minimum fee" prefix="$" placeholder={novSuggestedFee ? novSuggestedFee.toLocaleString() : "15,000"} req="need" /></div>
                 {novSuggestedFee > 0 && <button type="button" onClick={() => setV("nMinFee", String(novSuggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(novFeeBasis)} value`}>Use {money(novSuggestedFee)}</button>}
@@ -570,6 +641,8 @@ export default function UnderwritingCalculator() {
               {feeTierTable(novFeeBasis, "similar-condition value (EMV for land)")}
               <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" req="opt" />
               <Field k="nSellerClosePct" label="Seller closing % (we cover)" suffix="%" placeholder="1.5" req="opt" />
+              <Field k="nRealismPct" label="Realistic sale (% of list)" suffix="%" placeholder="95" req="opt" />
+              <Field k="nReserve" label="Reserve — misc + lender repairs ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" req="opt" />
               <Field k="nHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="nHoldMonths" label="Months on market" placeholder="2" req="opt" />
@@ -643,6 +716,8 @@ export default function UnderwritingCalculator() {
               <label><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Condition ($/sf)</span>
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
+              {rehabDesc(v("rehabSf")) && <p className="sm:col-span-2 -mt-1 text-[11px] italic text-slate-500">📋 {rehabDesc(v("rehabSf"))}</p>}
+              <Field k="contingencyPct" label="Rehab contingency %" suffix="%" span={2} placeholder="10" req="opt" />
               {majorRepairs()}
               <div className={optDiv}>Property costs (optional · % of ARV)</div>
               <Field k="fComm" label="Realtor commission" suffix="%" placeholder="3" req="opt" />
@@ -669,6 +744,23 @@ export default function UnderwritingCalculator() {
               <Field k="fPurchase" label="Your purchase price ($)" prefix="$" span={2} req="opt" />
             </>
           )}
+          {tab === "rental" && (
+            <>
+              {legend}
+              <Field k="rPrice" label="Purchase price (defaults to ARV)" prefix="$" placeholder={arv ? arv.toLocaleString() : "350,000"} req="need" />
+              <Field k="rRent" label="Expected monthly rent" prefix="$" placeholder="2,400" req="need" />
+              <div className={optDiv}>Operating expenses (optional)</div>
+              <Field k="rTax" label="Annual property tax ($)" prefix="$" req="opt" />
+              <Field k="rIns" label="Annual insurance ($)" prefix="$" req="opt" />
+              <Field k="rHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
+              <Field k="rVac" label="Vacancy" suffix="%" placeholder="5" req="opt" />
+              <Field k="rMgmt" label="Property management" suffix="%" placeholder="8" req="opt" />
+              <Field k="rMaint" label="Maintenance / capex" suffix="%" placeholder="8" req="opt" />
+              <div className={optDiv}>Buyer&apos;s target</div>
+              <Field k="rTargetCap" label="Target cap rate" suffix="%" placeholder="7" req="opt" />
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 Speaks to your landlord / BRRRR buyers. The max offer is the price at which the deal still hits their target cap rate.</p>
+            </>
+          )}
         </div>
 
         {/* Results */}
@@ -686,19 +778,26 @@ export default function UnderwritingCalculator() {
               {extraItems("aExtra", aExtraN).map((x, i) => <Res key={i} label={`− ${x.note || "Additional cost"}`} value={money(x.amt)} tone="muted" />)}
               <Res label="− Assignment fee" value={money(aFee)} tone="muted" />
               <Res label="🎯 Cash MAO (max offer to seller)" value={money(cashMao)} tone={cashMao > 0 ? "navy" : "bad"} big />
+              {cashMao > 0 && <Res label="Sanity check" value={pctOfArv(cashMao)} tone="muted" />}
               <Res label="⚓ Anchor (open here)" value={money(aAnchor)} tone="good" />
               <Res label="Negotiate" value={`${money(aAnchor)} → ${money(cashMao)}`} tone="muted" />
+              {cashMao > 0 && <OfferLadder rungs={ladder(cashMao)} />}
             </>
           )}
           {tab === "novation" && (
             <>
+              {suggestedList > 0 && <Res label="🏷️ Recommended list price" value={money(suggestedList)} tone="good" />}
+              {nList > 0 && <Res label={`Expected sale at ${nRealismPct}% of list`} value={money(nExpectedSale)} tone="muted" />}
+              {nReserve > 0 && <Res label="− Reserve (misc + lender repairs)" value={money(nReserve)} tone="muted" />}
               {nHoaCost > 0 && <Res label={`− HOA dues (${nHoldMonths} mo)`} value={money(nHoaCost)} tone="muted" />}
               {extraItems("nExtra", nExtraN).map((x, i) => <Res key={i} label={`− ${x.note || "Additional cost"}`} value={money(x.amt)} tone="muted" />)}
               <Res label="Net after credit, commission, closing, HOA + extras" value={money(nNet)} tone="muted" />
               <Res label="🎯 Novation MAO (max seller payout)" value={money(novMao)} tone={novMao > 0 ? "navy" : "bad"} big />
+              {novMao > 0 && nList > 0 && <Res label="Sanity check" value={`${Math.round((novMao / nList) * 100)}% of list`} tone="muted" />}
               <Res label="⚓ Anchor payout (open here)" value={money(novAnchor)} tone="good" />
               <Res label="Our fee at anchor" value={money(feeAtAnchor)} tone="good" />
               <Res label="Negotiate (seller payout)" value={`${money(novAnchor)} → ${money(novMao)}`} tone="muted" />
+              {novMao > 0 && <OfferLadder rungs={ladder(novMao)} />}
             </>
           )}
           {tab === "creative" && (
@@ -725,6 +824,18 @@ export default function UnderwritingCalculator() {
               <Res label="− Minimum profit" value={money(fMinProfit)} tone="muted" />
               <Res label="🎯 Max Offer (flip MAO)" value={money(fMao)} tone={fMao > 0 ? "navy" : "bad"} big />
               {n("fPurchase") > 0 && <Res label="Profit at your purchase price" value={money(fProfit)} tone={fProfit > 0 ? "good" : "bad"} />}
+            </>
+          )}
+          {tab === "rental" && (
+            <>
+              <Res label="Gross annual rent" value={money(rGrossYr)} tone="muted" />
+              <Res label="− Operating expenses" value={money(rOpEx)} tone="muted" />
+              <Res label="Net operating income (NOI)" value={money(rNoi)} tone="muted" />
+              <Res label="Cap rate" value={rPrice > 0 ? `${rCapRate.toFixed(1)}%` : "—"} tone={rCapRate >= rTargetCap && rCapRate > 0 ? "good" : "bad"} />
+              <Res label="Gross yield" value={rPrice > 0 ? `${rGrossYield.toFixed(1)}%` : "—"} tone="muted" />
+              <Res label="1% rule (rent ÷ price)" value={rPrice > 0 ? `${rOnePct.toFixed(2)}%` : "—"} tone={rOnePct >= 1 ? "good" : "bad"} />
+              <Res label={`🎯 Max offer at ${rTargetCap}% cap`} value={money(rMaxOffer)} tone={rMaxOffer > 0 ? "navy" : "bad"} big />
+              <p className="mt-2 text-[11px] text-slate-400">Cap rate = NOI ÷ price. The 1% rule (monthly rent ≥ 1% of price) is a quick screen. Max offer = NOI ÷ the buyer&apos;s target cap rate.</p>
             </>
           )}
         </div>
