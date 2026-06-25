@@ -101,7 +101,41 @@ export async function GET(request: Request) {
     const msg = `📊 Month-end reminder: please prepare the *${monthName}* expenses in the Profit & Loss Report — the month just closed and the books are due.`;
     await sendGoogleChat(msg).catch(() => {});
     if (emails.length) await sendEmailTo(emails, `Prepare ${monthName} expenses — P&L`, `<p>📊 ${monthName} just closed.</p><p>Please open the <b>Profit &amp; Loss Report</b> in the War Room and enter ${monthName}'s expenses.</p>`).catch(() => {});
-    return NextResponse.json({ ok: true, month: prevMonth, emailed: emails });
+
+    // Auto cost-cut analysis → drop the top ideas into the AI Updates feed.
+    let cuts = 0;
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (key) {
+      try {
+        const lineRows = await db.expenseLine.findMany({ where: { month: prevMonth }, select: { category: true, label: true, actual: true } });
+        if (lineRows.length) {
+          const pnl = JSON.stringify({ month: monthName, lines: lineRows.map((l) => ({ label: l.label, category: l.category, actual: Math.round(l.actual) })) });
+          const r = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-opus-4-8", max_tokens: 900,
+              system: "You are a frugal fractional CFO for a small, currently-unprofitable real-estate wholesaling business. From the month's P&L line items, identify the 2-3 highest-impact cost cuts (cancel, downgrade, consolidate, or renegotiate). Reply with ONLY a JSON array, no prose: [{\"title\":\"short action\",\"rationale\":\"why + est. $/mo saved\"}].",
+              messages: [{ role: "user", content: `P&L for ${monthName}:\n${pnl}` }],
+            }),
+          });
+          const j = await r.json();
+          const txt = String(j?.content?.[0]?.text ?? "");
+          const arr = JSON.parse(txt.slice(txt.indexOf("["), txt.lastIndexOf("]") + 1)) as { title: string; rationale: string }[];
+          for (let i = 0; i < Math.min(3, arr.length); i++) {
+            const s = arr[i];
+            if (!s?.title) continue;
+            await db.suggestion.upsert({
+              where: { id: `cut-${prevMonth}-${i}` },
+              update: {},
+              create: { id: `cut-${prevMonth}-${i}`, title: `💸 ${s.title}`, rationale: `${s.rationale} (from the ${monthName} P&L)`, category: "Cost-cut", impact: "high", effort: "S", status: "proposed" },
+            });
+            cuts++;
+          }
+        }
+      } catch { /* AI advisory is best-effort */ }
+    }
+    return NextResponse.json({ ok: true, month: prevMonth, emailed: emails, cuts });
   }
 
   // Culture reminders — birthdays + work anniversaries. Posts to the team Google Chat
