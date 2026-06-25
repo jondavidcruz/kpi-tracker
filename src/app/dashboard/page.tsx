@@ -132,6 +132,20 @@ export default async function DashboardPage({
   ];
   const funnelHasData = funnelStages.some((s) => s.count > 0);
 
+  // Wire the money pace rows to REAL data — these team-monthly KPIs (deals closed,
+  // revenue, spend) aren't entered by hand, so they sat at $0. Pull them live from
+  // the closed-deal ledger + the P&L (ExpenseLine) instead.
+  const monthExp = await db.expenseLine.findMany({ where: { month }, select: { category: true, actual: true } });
+  const marketingMonth = monthExp.filter((e) => e.category === "marketing").reduce((s, e) => s + e.actual, 0);
+  const opexMonth = monthExp.reduce((s, e) => s + e.actual, 0);
+  const grossRevMonth = closedDeals.filter((c) => c.month === moNum).reduce((s, c) => s + c.profit, 0);
+  const monthlyIdByKey = new Map(teamMonthly.map((k) => [k.key, k.id]));
+  const setMtd = (key: string, val: number) => { const id = monthlyIdByKey.get(key); if (id != null) mtdSums.set(id, val); };
+  setMtd("deals_closed", closedThisMonth);
+  setMtd("gross_revenue", grossRevMonth);
+  setMtd("marketing_spend", marketingMonth);
+  setMtd("operating_expenses", opexMonth);
+
   // --- Internet speed: today's recorded reading per rep + a 14-day history/trend ---
   const internetSpeedKpi = perRepKpis.find((k) => k.roleKey === "internet") ?? null;
   const [sy, sm, sd] = date.split("-").map(Number);

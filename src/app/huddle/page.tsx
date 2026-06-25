@@ -21,8 +21,8 @@ export default async function HuddlePage({ searchParams }: { searchParams: Promi
   const h = await buildHuddleData(date, { carry: date === todayStr(settings.orgTimezone) });
 
   // Group front-line reps by when their shift STARTS, not by role — Michelle (Acq)
-  // and Sharyn (Dispo) both start at 9 AM, so they sit together; Marie starts 2 PM.
-  const START_HOUR: Record<string, number> = { michelle: 9, sharyn: 9, jon: 9, ethan: 9, marie: 14 };
+  // and Sharyn (Dispo) both start at 9 AM, so they sit together; Marie starts 1 PM.
+  const START_HOUR: Record<string, number> = { michelle: 9, sharyn: 9, jon: 9, ethan: 9, marie: 13 };
   const fn = (n: string) => n.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   const ROLE_RANK: Record<string, number> = { Acquisitions: 0, Dispositions: 1, Team: 2 };
   const startHour = (r: { name: string }) => START_HOUR[fn(r.name)] ?? 9;
