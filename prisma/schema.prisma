@@ -352,6 +352,7 @@ model Deal {
   nextSteps String   @default("") // current plan / where the deal stands
   notes     String   @default("")
   active    Boolean  @default(true) // false = archived, hidden from board
+  alertedLevel String @default("") // aging level last sent to Chat — only re-alert on change
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
