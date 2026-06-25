@@ -566,29 +566,19 @@ export async function sendDealAgingAlerts(today: string, opts?: { chat?: boolean
   const sendChat = opts?.chat ?? true;
   const deals = await db.deal.findMany({ where: { active: true } });
   const flagged = dealsNeedingAttention(deals, today);
-
-  // Only Chat deals that are NEWLY flagged or escalated to a worse level since last time —
-  // not the same list every day (that's the noise the team tunes out). Then remember each
-  // deal's current level, and reset deals that recovered so they can re-alert later.
-  const flaggedIds = new Set(flagged.map((x) => x.deal.id));
-  const fresh = flagged.filter((x) => x.deal.alertedLevel !== x.aging.level);
-  await Promise.all([
-    ...flagged.map((x) => db.deal.update({ where: { id: x.deal.id }, data: { alertedLevel: x.aging.level } })),
-    db.deal.updateMany({ where: { active: true, alertedLevel: { not: "" }, id: { notIn: [...flaggedIds] } }, data: { alertedLevel: "" } }),
-  ]);
-  if (fresh.length === 0) return false;
+  if (flagged.length === 0) return false;
 
   const cfg = await getChannelConfig();
 
-  const chatLines = fresh.map((x) => {
+  const chatLines = flagged.map((x) => {
     const icon = x.aging.level === "stale" ? "🔴" : x.aging.level === "reduce" ? "🟠" : "🟡";
     const who = x.deal.assignedTo ? ` (${x.deal.assignedTo})` : "";
     return `${icon} *${x.deal.address}*${who}\n   ${x.aging.recommendation}${x.deal.nextSteps ? `\n   _Next:_ ${x.deal.nextSteps}` : ""}`;
   });
-  const chatText = `🏠 *Dispo Deal Watch* — ${fresh.length} deal${fresh.length === 1 ? "" : "s"} newly need attention:\n\n` + chatLines.join("\n\n");
+  const chatText = `🏠 *Dispo Deal Watch*: ${flagged.length} deal${flagged.length === 1 ? "" : "s"} need attention:\n\n` + chatLines.join("\n\n");
   const chatOk = sendChat ? await sendGoogleChat(chatText, cfg) : false;
 
-  const cards = fresh
+  const cards = flagged
     .map((x) => {
       const tone = x.aging.level === "stale" ? "#b91c1c" : x.aging.level === "reduce" ? "#b45309" : "#0369a1";
       return `<div style="margin:0 0 12px;padding:12px 14px;background:#fafafa;border-left:4px solid ${tone};border-radius:8px;">
@@ -603,7 +593,7 @@ export async function sendDealAgingAlerts(today: string, opts?: { chat?: boolean
     <p style="color:#64748b;">Deals on market too long or nearing expiration. Act to keep them moving.</p>
     ${cards}
   </div>`;
-  const emailOk = await sendEmail(`🏠 Dispo Deal Watch: ${fresh.length} newly need attention`, html, cfg);
+  const emailOk = await sendEmail(`🏠 Dispo Deal Watch: ${flagged.length} need attention`, html, cfg);
   return chatOk || emailOk;
 }
 
