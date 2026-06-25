@@ -50,14 +50,20 @@ function buyBoxChips(p: Prospect): string[] {
 type SortKey = "name" | "status";
 
 // Inline-editable spreadsheet cell — autosaves on blur if changed.
+// CONTROLLED on purpose: the cell owns its typed value in local state so a background
+// re-render (e.g. another cell's autosave) can't reset the input and make a just-typed
+// value "disappear". Each cell is keyed to its row, so state stays with the right buyer.
 function Cell({ id, field, value, placeholder, mono }: { id: string; field: string; value: string; placeholder?: string; mono?: boolean }) {
+  const [val, setVal] = useState(value);
+  const lastSaved = useRef(value);
   return (
     <form action={saveProspectField} className="contents">
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="field" value={field} />
       <input
-        name="value" defaultValue={value} placeholder={placeholder}
-        onBlur={(e) => { if (e.currentTarget.value !== value) e.currentTarget.form?.requestSubmit(); }}
+        name="value" value={val} placeholder={placeholder}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={(e) => { if (e.currentTarget.value !== lastSaved.current) { lastSaved.current = e.currentTarget.value; e.currentTarget.form?.requestSubmit(); } }}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
         className={`w-full min-w-[80px] rounded border border-transparent bg-transparent px-1.5 py-1 hover:border-slate-200 focus:border-sky-400 focus:bg-white focus:outline-none ${mono ? "tabular-nums" : ""}`}
       />
