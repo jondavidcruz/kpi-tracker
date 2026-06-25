@@ -30,13 +30,21 @@ export default async function CrmActivityStrip() {
         <div className="text-sm font-bold text-slate-700">📋 CRM activity today</div>
         <div className="text-[11px] text-slate-400">dials · texts · emails · pipeline moves</div>
       </div>
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         {ranked.map((r) => (
-          <div key={r.userId} className="flex items-center gap-3">
-            <div className="w-28 shrink-0 truncate text-sm font-medium text-slate-700">{r.name.split(" ")[0]}</div>
+          <div key={r.userId} className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+            <div className="flex w-28 shrink-0 items-baseline gap-1.5">
+              <span className="text-sm font-semibold text-slate-800">{r.name.split(" ")[0]}</span>
+              <span className="text-xs font-bold tabular-nums text-brand-navy">{r.total}</span>
+            </div>
             <div className="flex flex-1 items-center gap-2">
-              <div className="flex h-7 min-w-10 items-center rounded-md bg-brand-navy px-2.5 text-sm font-bold text-white" style={{ width: `${Math.max(10, (r.total / top) * 100)}%` }}>{r.total}</div>
-              <div className="text-[11px] text-slate-400">{r.calls}📞 · {r.texts}💬 · {r.emails}✉️ · {r.stageMoves}↗</div>
+              <div className="h-6 rounded-md bg-brand-navy" style={{ width: `${Math.max(4, (r.total / top) * 100)}%` }} />
+              <div className="flex flex-wrap gap-1.5">
+                <span className="rounded-md bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-sky-100">📞 {r.calls} calls</span>
+                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">💬 {r.texts} texts</span>
+                <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-100">✉️ {r.emails} emails</span>
+                <span className="rounded-md bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">↗ {r.stageMoves} moves</span>
+              </div>
             </div>
           </div>
         ))}
