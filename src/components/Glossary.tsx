@@ -116,6 +116,83 @@ const CATS: { key: Tag | "all"; label: string }[] = [
   { key: "process", label: "Process" },
 ];
 
+// A quick emoji visual for every term (visual learners anchor faster than reading).
+// Anything not listed falls back to a per-category default below.
+const ICONS: Record<string, string> = {
+  ARV: "🏠", EMV: "🏞️", "Similar-condition value": "🏚️", Comps: "📊", DOM: "📅", MAO: "🎯",
+  Assignment: "🤝", Novation: "📋", Wholetail: "🧹", "Double close": "🔁", "Subject-to": "🔑", "Seller finance": "🏦",
+  "Assignment fee": "💵", Spread: "📏", "Earnest money": "🤲", "Proof of funds": "🧾", "Hard money": "⚡", "Private money": "💸",
+  "Gap funding": "🌉", "Holding / carrying costs": "⏳", "Closing costs": "🧾", PITI: "🏦", HOA: "🏘️", "Cash for keys": "🔑",
+  Escrow: "🤝", Title: "📜", Lien: "⚠️", Contingency: "🚪", "Due diligence": "🔍", "Purchase agreement": "✍️", EMD: "🤲",
+  Disposition: "📤", Acquisition: "📥", "Buyer's list": "📇", "Cash buyer": "💰", "Fix & flipper": "🔨", Developer: "🏗️",
+  Gatekeeper: "🚧", "Decision maker": "👔", "Motivated seller": "🏃", "Buy box": "📦", "Off-market": "🤫", "On-market / MLS": "🏷️",
+  Anchor: "⚓", "Distressed property": "🏚️", "Pre-foreclosure": "⏰", Probate: "⚖️", Equity: "📈",
+  "Letter of Intent": "✉️", "Off-Market (Luxury)": "🤫", "Assignment (Luxury)": "🤝", Addendum: "📝", "Effective Date": "📆",
+  "Double Close": "🔁", "Close of Escrow": "🔑", "Title Commitment": "📜", "Title Insurance": "🛡️", "Earnest Money Deposit (Luxury)": "🤲",
+  Zoning: "🗺️", Entitlements: "✅", Variance: "📐", Setbacks: "📏", Easement: "🔌", "Spec Home": "🏠", "Custom Home": "🏡",
+  "Horizontal Development": "🚜", "Vertical Development": "🏗️", "Hard Costs": "🧱", "Soft Costs": "📐", "Capital Stack": "🥞",
+  "Construction Loan": "🏦", "Draw Schedule": "📅", "Interest Carry": "⏳", IRR: "📈", "Exit Strategy": "🚪",
+  "Entitlement Risk": "⚠️", "Market Risk": "📉", "Absorption Rate": "🌊", Stabilized: "⚖️",
+};
+const TAG_ICON: Record<Tag, string> = { value: "📊", exit: "🔄", money: "💵", deal: "🤝", people: "👤", process: "⚙️", lux: "✨" };
+function iconFor(t: Term): string { return ICONS[t.term] ?? TAG_ICON[t.tag]; }
+
+// Small inline SVG diagrams for the concepts that are hard to picture from text.
+// Cards are white, so these are designed for a light background.
+const A = { sellerFill: "#fee2e2", youFill: "#e0e7ff", buyerFill: "#dcfce7", moneyFill: "#fef3c7", neutFill: "#f1f5f9", txt: "#334155", line: "#94a3b8" };
+function Box({ x, y, w, h, fill, label, sub }: { x: number; y: number; w: number; h: number; fill: string; label: string; sub?: string }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={6} fill={fill} />
+      <text x={x + w / 2} y={sub ? y + h / 2 - 2 : y + h / 2 + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={A.txt}>{label}</text>
+      {sub && <text x={x + w / 2} y={y + h / 2 + 11} textAnchor="middle" fontSize="8" fill="#64748b">{sub}</text>}
+    </g>
+  );
+}
+function Arrow({ x1, x2, y, label }: { x1: number; x2: number; y: number; label?: string }) {
+  return (
+    <g>
+      <line x1={x1} y1={y} x2={x2 - 6} y2={y} stroke={A.line} strokeWidth="2" />
+      <polygon points={`${x2},${y} ${x2 - 7},${y - 4} ${x2 - 7},${y + 4}`} fill={A.line} />
+      {label && <text x={(x1 + x2) / 2} y={y - 6} textAnchor="middle" fontSize="8" fontWeight="700" fill="#16a34a">{label}</text>}
+    </g>
+  );
+}
+const SVG = ({ children }: { children: React.ReactNode }) => <svg viewBox="0 0 280 64" className="mt-2 w-full max-w-[300px]" role="img">{children}</svg>;
+
+function diagramFor(term: string): React.ReactNode {
+  switch (term) {
+    case "Assignment":
+    case "Assignment (Luxury)":
+      return <SVG><Box x={2} y={20} w={62} h={26} fill={A.sellerFill} label="Seller" /><Arrow x1={66} x2={96} y={33} /><Box x={98} y={14} w={70} h={38} fill={A.youFill} label="You" sub="contract" /><Arrow x1={170} x2={200} y={33} label="+ fee" /><Box x={202} y={20} w={74} h={26} fill={A.buyerFill} label="End buyer" /></SVG>;
+    case "Novation":
+      return <SVG><Box x={2} y={20} w={56} h={26} fill={A.sellerFill} label="Seller" /><Arrow x1={60} x2={88} y={33} /><Box x={90} y={14} w={74} h={38} fill={A.youFill} label="You list" sub="on MLS" /><Arrow x1={166} x2={194} y={33} /><Box x={196} y={20} w={80} h={26} fill={A.buyerFill} label="Retail buyer" /><text x={140} y={62} textAnchor="middle" fontSize="8" fontWeight="700" fill="#16a34a">you keep the spread</text></SVG>;
+    case "Double close":
+    case "Double Close":
+      return <SVG><Box x={2} y={18} w={54} h={26} fill={A.sellerFill} label="Seller" /><Arrow x1={58} x2={86} y={31} label="A→B" /><Box x={88} y={18} w={56} h={26} fill={A.youFill} label="You" /><Arrow x1={146} x2={174} y={31} label="B→C" /><Box x={176} y={18} w={56} h={26} fill={A.buyerFill} label="Buyer" /><text x={117} y={60} textAnchor="middle" fontSize="8" fontWeight="700" fill="#b45309">2 closings · your fee stays private</text></SVG>;
+    case "Wholetail":
+      return <SVG><Box x={2} y={20} w={70} h={26} fill={A.sellerFill} label="Buy as-is" /><Arrow x1={74} x2={102} y={33} /><Box x={104} y={20} w={72} h={26} fill={A.moneyFill} label="Light fix" /><Arrow x1={178} x2={206} y={33} /><Box x={208} y={20} w={68} h={26} fill={A.buyerFill} label="Resell" /></SVG>;
+    case "Subject-to":
+      return <SVG><Box x={2} y={18} w={92} h={30} fill={A.sellerFill} label="Seller's loan" sub="stays in their name" /><Arrow x1={96} x2={126} y={33} label="payments" /><Box x={128} y={18} w={96} h={30} fill={A.youFill} label="Buyer takes over" sub="the monthly PITI" /></SVG>;
+    case "Seller finance":
+      return <SVG><Box x={2} y={18} w={90} h={30} fill={A.sellerFill} label="Seller = bank" sub="holds the note" /><Arrow x1={94} x2={150} y={33} label="$ / month" /><Box x={152} y={18} w={72} h={30} fill={A.buyerFill} label="Buyer pays" sub="over time" /></SVG>;
+    case "ARV":
+      return <SVG><Box x={2} y={18} w={74} h={30} fill={A.sellerFill} label="Distressed" sub="as-is" /><Arrow x1={78} x2={108} y={33} label="+ repairs" /><Box x={110} y={18} w={72} h={30} fill={A.buyerFill} label="Renovated" /><Arrow x1={184} x2={210} y={33} /><Box x={212} y={18} w={64} h={30} fill={A.moneyFill} label="ARV $" /></SVG>;
+    case "Spread":
+      return <SVG><rect x={2} y={24} width={120} height={18} rx={3} fill={A.youFill} /><text x={62} y={37} textAnchor="middle" fontSize="9" fontWeight="700" fill={A.txt}>You contract</text><rect x={2} y={24} width={250} height={18} rx={3} fill="none" stroke={A.line} strokeDasharray="3 2" /><text x={186} y={37} textAnchor="middle" fontSize="9" fontWeight="700" fill="#16a34a">you sell</text><text x={186} y={16} textAnchor="middle" fontSize="8" fontWeight="700" fill="#16a34a">↤ spread = your money ↦</text></SVG>;
+    case "MAO":
+      return <SVG><line x1={10} y1={40} x2={270} y2={40} stroke={A.line} strokeWidth="2" /><Box x={6} y={16} w={70} h={22} fill={A.buyerFill} label="Anchor" /><text x={41} y={56} textAnchor="middle" fontSize="8" fill="#64748b">open here</text><Box x={204} y={16} w={70} h={22} fill={A.moneyFill} label="MAO" /><text x={239} y={56} textAnchor="middle" fontSize="8" fill="#64748b">never past</text><Arrow x1={80} x2={200} y={27} label="negotiate up" /></SVG>;
+    case "Comps":
+      return <SVG><Box x={2} y={8} w={58} h={20} fill={A.neutFill} label="Comp 1" /><Box x={2} y={32} w={58} h={20} fill={A.neutFill} label="Comp 2" /><Box x={64} y={20} w={58} h={20} fill={A.neutFill} label="Comp 3" /><Arrow x1={124} x2={158} y={30} /><Box x={160} y={18} w={116} h={26} fill={A.moneyFill} label="Subject value" /></SVG>;
+    case "Equity":
+      return <SVG><rect x={2} y={22} width={274} height={22} rx={4} fill={A.neutFill} /><rect x={2} y={22} width={160} height={22} rx={4} fill="#fecaca" /><text x={82} y={37} textAnchor="middle" fontSize="9" fontWeight="700" fill={A.txt}>Owed</text><text x={219} y={37} textAnchor="middle" fontSize="9" fontWeight="700" fill="#16a34a">Equity</text><text x={140} y={14} textAnchor="middle" fontSize="8" fill="#64748b">Value = Owed + Equity</text></SVG>;
+    case "Buy box":
+      return <SVG><rect x={70} y={8} width={140} height={48} rx={8} fill="none" stroke={A.line} strokeWidth="2" strokeDasharray="4 3" /><text x={140} y={20} textAnchor="middle" fontSize="8" fontWeight="700" fill="#64748b">BUY BOX</text><text x={140} y={34} textAnchor="middle" fontSize="9" fill={A.txt}>area · price</text><text x={140} y={47} textAnchor="middle" fontSize="9" fill={A.txt}>type · condition</text></SVG>;
+    default:
+      return null;
+  }
+}
+
 export default function Glossary() {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<Tag | "all">("all");
@@ -154,12 +231,14 @@ export default function Glossary() {
           return (
             <div key={`${t.tag}-${t.term}`} className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
               <div className="mb-0.5 flex items-baseline gap-2">
+                <span className="text-base leading-none" aria-hidden>{iconFor(t)}</span>
                 <span className="font-bold text-slate-800">{t.term}</span>
                 {t.abbr && <span className="text-[11px] italic text-slate-400">{t.abbr}</span>}
                 <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${tg.cls}`}>{tg.label}</span>
               </div>
               <p className="text-[13px] leading-snug text-slate-600">{t.def}</p>
               {t.eg && <p className="mt-1 text-[12px] italic leading-snug text-slate-400">e.g. {t.eg}</p>}
+              {diagramFor(t.term)}
             </div>
           );
         })}
