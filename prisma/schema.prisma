@@ -1127,3 +1127,26 @@ model CrmActivity {
   @@unique([userId, date])
   @@index([date])
 }
+
+// A queued outreach message (intro email or LinkedIn note) drafted by the Developer
+// Engine for a developer/builder in Buyer Research. Sharyn reviews + approves each
+// morning; approving an email sends it via Resend, LinkedIn is copy-to-send by hand.
+model OutreachDraft {
+  id           String    @id @default(cuid())
+  contactId    String // MarketContact id this draft is for
+  contactName  String    @default("")
+  company      String    @default("")
+  channel      String    @default("email") // email | linkedin
+  toAddress    String    @default("") // email address or LinkedIn URL
+  subject      String    @default("")
+  body         String    @default("")
+  status       String    @default("draft") // draft | approved | sent | skipped
+  createdOn    String    @default("") // YYYY-MM-DD (org tz)
+  approvedById String    @default("")
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status])
+  @@index([contactId])
+}

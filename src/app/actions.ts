@@ -8,7 +8,8 @@ import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat, sendTimecardChat, sendCallAuditChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, isManager, isAdmin, isOwner, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, isOwner, canCurateSoftware, canAccessMarketing, canApproveOutreach, canAccessPayroll, canTrackTime } from "@/lib/auth";
+import { generateOutreachDrafts } from "@/lib/outreach";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
@@ -2781,4 +2782,74 @@ export async function deleteTeamEvent(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (id) await db.teamEvent.delete({ where: { id } });
   revalidatePath("/culture");
+}
+
+// ===== Developer Engine: daily outreach queue =====
+
+export async function generateDraftsNow() {
+  const me = await getCurrentUser();
+  if (!canApproveOutreach(me)) return;
+  await generateOutreachDrafts(25);
+  revalidatePath("/outreach");
+}
+
+export async function editOutreachDraft(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canApproveOutreach(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const subject = String(formData.get("subject") ?? "").slice(0, 300);
+  const body = String(formData.get("body") ?? "").slice(0, 8000);
+  await db.outreachDraft.update({ where: { id }, data: { subject, body } });
+  revalidatePath("/outreach");
+}
+
+export async function skipOutreachDraft(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canApproveOutreach(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.outreachDraft.update({ where: { id }, data: { status: "skipped" } });
+  revalidatePath("/outreach");
+}
+
+export async function approveOutreachDraft(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canApproveOutreach(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const subject = String(formData.get("subject") ?? "").slice(0, 300);
+  const body = String(formData.get("body") ?? "").slice(0, 8000);
+  const draft = await db.outreachDraft.findUnique({ where: { id } });
+  if (!draft || draft.status === "sent") return;
+  // Save any edits before sending.
+  await db.outreachDraft.update({ where: { id }, data: { subject, body, approvedById: me!.id } });
+
+  if (draft.channel === "email" && draft.toAddress) {
+    const safe = body.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;white-space:pre-wrap">${safe}</div>`;
+    const ok = await sendEmailTo([draft.toAddress], subject, html);
+    if (!ok) return; // email not configured / failed — leave as draft to retry
+    await db.outreachDraft.update({ where: { id }, data: { status: "sent", sentAt: new Date() } });
+  } else {
+    // LinkedIn (or no email): mark approved → copy-and-send by hand.
+    await db.outreachDraft.update({ where: { id }, data: { status: "approved" } });
+  }
+
+  // Log the touch on the buyer → counts toward Developers Contacted + 3-day follow-up.
+  const settings = await getSettings();
+  const today = orgToday(settings.orgTimezone);
+  const next = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  const c = await db.marketContact.findUnique({ where: { id: draft.contactId }, select: { outreachLog: true } });
+  if (c) {
+    const stamp = `${today}: ${draft.channel} outreach ${draft.channel === "email" ? "sent" : "approved"} (Developer Engine)`;
+    const log = c.outreachLog ? `${stamp}\n${c.outreachLog}` : stamp;
+    await db.marketContact.update({
+      where: { id: draft.contactId },
+      data: { lastContacted: today, nextFollowUp: next, vetStatus: "contacted", touchById: me!.id, touchOn: today, outreachLog: log.slice(0, 4000) },
+    });
+    await rollupResearchKpis(me!.id, today);
+  }
+  revalidatePath("/outreach");
+  revalidatePath("/vetting");
 }

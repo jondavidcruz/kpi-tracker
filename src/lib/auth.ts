@@ -49,6 +49,15 @@ export function canAccessMarketing(user: User | null): boolean {
   return !!user?.accessMarketing;
 }
 
+/** Can approve + send the Developer Engine's daily outreach queue. Sharyn is the
+ *  designated approver (Jon's call), plus managers/owner. */
+export function canApproveOutreach(user: User | null): boolean {
+  if (!user) return false;
+  if (isManager(user)) return true; // managers + admin + owner
+  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return first === "sharyn";
+}
+
 /** Can see PAY ($ rates, gross, bonuses, totals). Editable per-user. */
 export function canAccessPayroll(user: User | null): boolean {
   return !!user?.accessPayroll;

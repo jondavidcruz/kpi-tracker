@@ -5,22 +5,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, Send,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
 import StatusDot from "./StatusDot";
 
-type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
+type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; outreachOnly?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
 
 export default function Sidebar({
-  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions,
+  name, manager, admin, owner, marketing, outreach, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions,
 }: {
   name: string;
   manager: boolean;
   admin: boolean;
   owner: boolean;
   marketing: boolean;
+  outreach: boolean;
   timecard: boolean;
   csuite: boolean;
   training: boolean;
@@ -42,6 +43,7 @@ export default function Sidebar({
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
       { href: "/vetting", label: "Buyer Research", Icon: Search, marketingOnly: true },
+      { href: "/outreach", label: "Outreach Queue", Icon: Send, outreachOnly: true },
       { href: "/rewards", label: "Rewards", Icon: Gift },
       { href: "/culture", label: "Culture", Icon: PartyPopper },
     ] },
@@ -84,7 +86,7 @@ export default function Sidebar({
 
   const hidden = hiddenNav ?? [];
   const visible = (it: Item) =>
-    (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard) && (!it.csuiteOnly || csuite) && (!it.trainingOnly || training) &&
+    (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.outreachOnly || outreach) && (!it.timecardOnly || timecard) && (!it.csuiteOnly || csuite) && (!it.trainingOnly || training) &&
     !hidden.some((h) => it.href === h || it.href.startsWith(h + "/")) &&
     (!allowedPaths || allowedPaths.some((p) => it.href === p || it.href.startsWith(p + "/")));
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
