@@ -37,16 +37,9 @@ export default async function EntryPage({
   const date = sp.date ?? todayStr(settings.orgTimezone);
   const month = monthOf(date);
 
-  // Reps only see + enter their OWN KPIs (so nobody accidentally logs onto someone else).
-  // Managers/admins keep the full picker since they may correct anyone's numbers.
-  const allReps = await getActiveReps();
-  const canPickAnyone = isManager(me);
-  const reps = canPickAnyone ? allReps : allReps.filter((r) => r.id === me?.id);
-  const selectedId = canPickAnyone ? (sp.user ?? reps[0]?.id) : (me?.id ?? reps[0]?.id);
-  const rep = reps.find((r) => r.id === selectedId) ?? reps[0];
-  // Lead-source KPIs (PPL, direct-mail, refunds) are Marie's responsibility — they only
-  // show on her card, not every rep's. Text Responses is auto-synced, never hand-entered.
-  const marieId = allReps.find((r) => r.name.trim().split(/\s+/)[0].toLowerCase() === "marie")?.id;
+  const reps = await getActiveReps();
+  const selectedId = sp.user ?? reps[0]?.id;
+  const rep = reps.find((r) => r.id === selectedId);
 
   const [roleKpis, internetKpis, teamDaily, values, targets] = await Promise.all([
     rep
@@ -128,13 +121,11 @@ export default async function EntryPage({
     if (moneyKpis.length > 0) groups.push({ title: "💰 Money — results", hint: "The outcomes that move revenue.", items: moneyKpis.map(toItem) });
     if (activityKpis.length > 0) groups.push({ title: focus === "developer" ? "📊 Activity — developer outreach" : "📊 Activity", hint: "Your daily effort.", items: activityKpis.map(toItem) });
   }
-  // Lead sources only appear on Marie's card; Text Responses is removed (auto-synced).
-  const leadSourceItems = selectedId === marieId ? teamDaily.filter((k) => k.key !== "text_responses") : [];
-  if (leadSourceItems.length > 0) {
+  if (teamDaily.length > 0) {
     groups.push({
-      title: "Lead sources",
-      hint: "PPL / direct-mail leads + lead refunds — Marie owns these. (Text Responses auto-syncs.)",
-      items: leadSourceItems.map((k) => ({
+      title: "Lead sources (shared)",
+      hint: "PPL / text / direct-mail leads, entered once for the whole team.",
+      items: teamDaily.map((k) => ({
         kpiId: k.id,
         kpiKey: k.key,
         name: k.name,
