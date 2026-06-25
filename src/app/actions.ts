@@ -161,6 +161,9 @@ export async function saveDay(formData: FormData) {
 
   const kpis = await db.kpi.findMany({ where: { active: true } });
   const unitById = new Map(kpis.map((k) => [k.id, k.unit as Unit]));
+  const keyById = new Map(kpis.map((k) => [k.id, k.key]));
+  const SIGNED_KEYS = new Set(["acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"]);
+  const wins: { key: string; n: number; userId: string | null }[] = []; // newly-signed contracts to celebrate
 
   const touchedKpiIds = new Set<string>();
 
@@ -189,6 +192,17 @@ export async function saveDay(formData: FormData) {
       });
     }
     touchedKpiIds.add(kpiId);
+    // A signed-contract count that went UP = a fresh win worth celebrating.
+    const k = keyById.get(kpiId);
+    if (k && SIGNED_KEYS.has(k) && value > (existing?.value ?? 0)) wins.push({ key: k, n: value - (existing?.value ?? 0), userId });
+  }
+
+  // 🎉 Positive ping: celebrate newly-signed contracts in the team Google Chat.
+  for (const w of wins) {
+    const u = w.userId ? await db.user.findUnique({ where: { id: w.userId }, select: { name: true } }) : null;
+    const who = u?.name?.split(" ")[0] ?? "The team";
+    const type = w.key.replace("acq_signed_", "");
+    await sendGoogleChat(`🎉 *Contract signed!* ${who} just locked up ${w.n > 1 ? `${w.n} ${type} contracts` : `a ${type} contract`} — let's go! 🔥`).catch(() => {});
   }
 
   // Instant alerting on save:
