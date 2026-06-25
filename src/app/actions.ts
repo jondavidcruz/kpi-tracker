@@ -2318,10 +2318,11 @@ export async function saveExpensesBulk(formData: FormData) {
   const month = String(formData.get("month") ?? "");
   if (!/^\d{4}-\d{2}$/.test(month)) return;
 
+  const monthNote = String(formData.get("note") ?? "").slice(0, 4000);
   await db.expenseMonth.upsert({
     where: { month },
-    update: { netSales: num(formData, "netSales") },
-    create: { month, netSales: num(formData, "netSales") },
+    update: { netSales: num(formData, "netSales"), note: monthNote },
+    create: { month, netSales: num(formData, "netSales"), note: monthNote },
   });
 
   const lines = await db.expenseLine.findMany({ where: { month }, select: { id: true } });

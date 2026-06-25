@@ -4,6 +4,7 @@ import { saveExpensesBulk, addExpenseLine, deleteExpenseLine, startExpenseMonth 
 import { EXPENSE_CATEGORIES, LEAD_KPI_KEYS } from "@/lib/expenses";
 import { Card, SectionTitle } from "@/components/ui";
 import ExpenseAdvisor from "@/components/ExpenseAdvisor";
+import PnlCharts from "@/components/PnlCharts";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -93,6 +94,16 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   const ytdExpenses = ytdLineRows.reduce((s, l) => s + l.actual, 0);
   const ytdIncome = ytdMonthRows.reduce((s, m) => s + m.netSales, 0);
   const ytdNet = ytdIncome - ytdExpenses;
+
+  // Income vs expense across every recorded month (for the trend chart).
+  const [trendRows, allMonthRows] = await Promise.all([
+    db.expenseLine.groupBy({ by: ["month"], _sum: { actual: true } }),
+    db.expenseMonth.findMany({ select: { month: true, netSales: true } }),
+  ]);
+  const nsByMonth = new Map(allMonthRows.map((m) => [m.month, m.netSales]));
+  const trend = trendRows
+    .map((r) => ({ month: r.month, expense: r._sum.actual ?? 0, income: nsByMonth.get(r.month) ?? 0 }))
+    .sort((a, b) => a.month.localeCompare(b.month));
 
   const advisorData = JSON.stringify({
     business: "San Diego real-estate wholesaling, small team, currently unprofitable",
@@ -194,6 +205,16 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
             </div>
           </div>
           {ytdNet < 0 && <p className="mt-2 text-[11px] font-semibold text-red-500">⚠️ Net negative for the year — a profitable single month doesn&apos;t mean a profitable year. See the cut-the-fat ideas below.</p>}
+        </Card>
+
+        {/* ── Visual breakdown ── */}
+        <div className="mt-4"><PnlCharts categories={catTotals} trend={trend} /></div>
+
+        {/* ── Month notes — record what happened (staffing, cancelled tools, one-offs) ── */}
+        <Card className="mt-4 p-4">
+          <div className="mb-1 text-sm font-bold text-slate-700">📝 Notes for {fmtMonth(month)}</div>
+          <p className="mb-2 text-[11px] text-slate-400">Why the numbers moved — so the history explains itself later. Saved with the report.</p>
+          <textarea name="note" defaultValue={monthMeta?.note ?? ""} rows={3} placeholder="e.g. Fired Irish — payroll drops next month. Cancelled PropStream + BatchDialer." className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-brand-navy focus:outline-none" />
         </Card>
 
         {/* ── Where the money goes (breakdown) ── */}

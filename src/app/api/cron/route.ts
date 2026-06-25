@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
 import { buildBackup } from "@/lib/backup";
-import { sendEmailWithAttachment, sendGoogleChat } from "@/lib/notify";
+import { sendEmailWithAttachment, sendGoogleChat, sendEmailTo } from "@/lib/notify";
 import { upcomingCulture, prettyMMDD, whenLabel, ordinal } from "@/lib/culture";
 import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
@@ -86,6 +86,22 @@ export async function GET(request: Request) {
     }
     const sent = await sendPayrollEmail(today);
     return NextResponse.json({ ok: true, payday: true, sent });
+  }
+
+  // Month-end P&L reminder — on the 1st, nudge Viktoriia + Enrico to prepare the expenses
+  // for the month that just finished.
+  if (url.searchParams.get("monthend") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const d = new Date(today + "T12:00:00Z"); d.setUTCDate(0); // last day of the previous month
+    const prevMonth = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const monthName = new Date(prevMonth + "-01T12:00:00Z").toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+    const users = await db.user.findMany({ where: { active: true }, select: { name: true, email: true } });
+    const emails = users.filter((u) => ["viktoriia", "enrico"].includes(u.name.trim().split(/\s+/)[0].toLowerCase())).map((u) => u.email).filter(Boolean);
+    const msg = `📊 Month-end reminder: please prepare the *${monthName}* expenses in the Profit & Loss Report — the month just closed and the books are due.`;
+    await sendGoogleChat(msg).catch(() => {});
+    if (emails.length) await sendEmailTo(emails, `Prepare ${monthName} expenses — P&L`, `<p>📊 ${monthName} just closed.</p><p>Please open the <b>Profit &amp; Loss Report</b> in the War Room and enter ${monthName}'s expenses.</p>`).catch(() => {});
+    return NextResponse.json({ ok: true, month: prevMonth, emailed: emails });
   }
 
   // Culture reminders — birthdays + work anniversaries. Posts to the team Google Chat
