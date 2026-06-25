@@ -6,7 +6,6 @@ import { db } from "@/lib/db";
 import { positionLabel } from "@/lib/roles";
 import { addTrainingFocus, updateTrainingFocus, deleteTrainingFocus, addTrainingSchedule, deleteTrainingSchedule, logCoachingSession, deleteCoachingSession } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
-import Glossary from "@/components/Glossary";
 import AICoach from "@/components/AICoach";
 
 export const dynamic = "force-dynamic";
@@ -288,13 +287,6 @@ export default async function TrainingPage() {
           </Card>
         );
       })}
-
-      <section>
-        <SectionTitle title="📖 Real-estate glossary" subtitle="Every term the team should know — the language we use in the scripts and on the underwriting calculator." accent="bg-brand-navy" />
-        <Card className="bg-slate-50 p-4">
-          <Glossary />
-        </Card>
-      </section>
     </div>
   );
 }

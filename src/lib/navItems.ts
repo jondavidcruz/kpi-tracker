@@ -30,6 +30,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/pip", label: "PIPs", gate: "manager" },
     { href: "/call-scoring", label: "Call scoring", gate: "all" },
     { href: "/scripts", label: "Scripts", gate: "all" },
+    { href: "/glossary", label: "Glossary", gate: "all" },
   ] },
   { group: "EOS", items: [
     { href: "/meeting", label: "Monday Meeting", gate: "manager" },
