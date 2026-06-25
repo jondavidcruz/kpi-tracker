@@ -1,0 +1,7 @@
+-- Seed concrete "make the War Room faster" recommendations into the AI updates feed.
+INSERT INTO "Suggestion" ("id","title","rationale","category","impact","effort","status","updatedAt") VALUES
+ ('perf-db-pooling','⚡ Use the Supabase pooled DB connection (port 6543)','Serverless functions open a brand-new database connection on every request when DATABASE_URL points at the direct port (5432). The transaction pooler (6543) reuses connections and noticeably cuts page latency — the single biggest speed win, and it''s a one-line env change.','Efficiency','high','S','proposed',now()),
+ ('perf-parallel-queries','Run each page''s database queries in parallel','A few heavy pages (dashboard, payroll, reports) fire DB queries one after another. Batching them with Promise.all makes the slowest pages load in the time of their single slowest query instead of the sum.','Efficiency','med','M','proposed',now()),
+ ('perf-cache-static','Cache rarely-changing lookups (KPI list, settings, roster)','These are re-fetched on every single page load even though they change a few times a month. Caching them trims repeated work on every navigation.','Efficiency','med','M','proposed',now()),
+ ('perf-lazy-widgets','Lazy-load heavy widgets (Cortana, charts)','Defer non-critical client components until after first paint so pages feel instant, especially on phones.','Efficiency','low','S','proposed',now())
+ON CONFLICT ("id") DO NOTHING;
