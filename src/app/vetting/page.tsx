@@ -4,11 +4,13 @@ import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import VettingTable, { type Prospect } from "@/components/VettingTable";
+import CsvMapImport from "@/components/CsvMapImport";
 import { saveProspect } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function VettingPage() {
+export default async function VettingPage({ searchParams }: { searchParams: Promise<{ imp?: string }> }) {
+  const sp = await searchParams;
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) {
     return (
@@ -71,6 +73,17 @@ export default async function VettingPage() {
         <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-sky-700">{stats.contacted7}</div><div className="text-[11px] font-semibold text-slate-500">Contacted (7d) → 📇 Buyers Contacted</div></Card>
         <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-emerald-700">{stats.vetted}</div><div className="text-[11px] font-semibold text-slate-500">Vetted → ➕ New Buyers Added</div></Card>
       </div>
+
+      {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} buyer{sp.imp === "1" ? "" : "s"} into the research pool.</div>}
+      {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
+      {sp.imp === "noname" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Map the Name column before importing.</div>}
+
+      {/* CSV import with column mapping */}
+      <details className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+        <summary className="cursor-pointer text-sm font-bold text-slate-700">📥 Import buyers/developers from a CSV <span className="font-normal text-slate-400">— map your columns, no fixed template</span></summary>
+        <p className="mt-2 mb-3 text-xs text-slate-500">Upload or paste any CSV. We&apos;ll auto-guess the columns; you pick which heading maps to each field, preview it, then import. New buyers land in the research pool as &quot;to contact.&quot;</p>
+        <CsvMapImport />
+      </details>
 
       {/* Follow-ups due — the daily driver, moved here from Markets */}
       {dueRows.length > 0 && (

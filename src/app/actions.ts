@@ -2782,3 +2782,50 @@ export async function deleteTeamEvent(formData: FormData) {
   if (id) await db.teamEvent.delete({ where: { id } });
   revalidatePath("/culture");
 }
+
+/** Bulk-import buyers/developers using an EXPLICIT column map the user chose in the UI
+ *  (CSV column index per field), so messy/varied CSVs map cleanly. */
+export async function importMarketContactsMapped(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const text = String(formData.get("csv") ?? "");
+  let map: Record<string, number> = {};
+  try { map = JSON.parse(String(formData.get("map") ?? "{}")); } catch { map = {}; }
+  if (!text.trim()) redirect("/vetting?imp=empty");
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) redirect("/vetting?imp=empty");
+  if (map.name == null || map.name < 0) redirect("/vetting?imp=noname");
+
+  const settings = await getSettings();
+  const today = orgToday(settings.orgTimezone);
+  const g = (row: string[], k: string) => { const i = map[k]; return i != null && i >= 0 && i < row.length ? String(row[i] ?? "").trim() : ""; };
+
+  let n = 0;
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const name = g(row, "name");
+    if (!name) continue;
+    await db.marketContact.create({ data: {
+      name,
+      company: g(row, "company"),
+      category: g(row, "category").toLowerCase() === "luxury" ? "luxury" : "distressed",
+      type: g(row, "type"),
+      region: g(row, "region"), market: g(row, "market"),
+      status: g(row, "status"),
+      email: g(row, "email"), phone: g(row, "phone"), phone2: g(row, "phone2"),
+      website: g(row, "website"), links: g(row, "links"),
+      buyBox: g(row, "buyBox"), buyBoxAreas: g(row, "buyBoxAreas"),
+      priceRange: g(row, "priceRange"), dealType: g(row, "dealType"), buildType: g(row, "buildType"), minLotSize: g(row, "minLotSize"),
+      propertyType: g(row, "propertyType"), igHandle: g(row, "igHandle"), bestContact: g(row, "bestContact"),
+      title: g(row, "title"), decisionMaker: g(row, "decisionMaker"), buyingFrequency: g(row, "buyingFrequency"), closingSpeed: g(row, "closingSpeed"),
+      notes: g(row, "notes"), vetArea: g(row, "vetArea"),
+      vetStage: "to_vet", vetStatus: "to_contact",
+      addedById: me!.id, addedOn: today,
+    } });
+    n++;
+  }
+  await rollupResearchKpis(me!.id, today); // credits New Buyers Added for dispo reps
+  revalidatePath("/vetting");
+  revalidatePath("/marketing");
+  redirect(`/vetting?imp=${n}`);
+}
