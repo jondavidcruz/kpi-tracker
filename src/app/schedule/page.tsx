@@ -178,17 +178,19 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     db.timeOff.findMany({ include: { user: { select: { name: true } } }, orderBy: { startDate: "asc" } }),
   ]);
 
-  // Part-timer availability (Ethan) — managers see when they can work.
-  const partAvail = manager ? await db.availability.findMany({ where: { date: { gte: today } }, orderBy: { date: "asc" } }) : [];
-  const partNames = new Map(manager ? (await db.user.findMany({ where: { active: true }, select: { id: true, name: true } })).map((u) => [u.id, u.name]) : []);
-
-  // My self-reported outages (last 10 days) — for the report card below.
+  // Part-timer availability + my/today's outage queries — batched into ONE parallel
+  // round-trip instead of five sequential awaits (faster initial render on the
+  // heaviest page; each query is independent so behavior is identical).
   const tenDaysAgo = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
-  const myOutages = isOwner(me) ? [] : await db.outage.findMany({ where: { userId: me.id, date: { gte: tenDaysAgo } }, orderBy: [{ date: "desc" }, { startMin: "asc" }] });
+  const [partAvail, partUsersRaw, myOutages, liveOutages, allOutagesToday] = await Promise.all([
+    manager ? db.availability.findMany({ where: { date: { gte: today } }, orderBy: { date: "asc" } }) : Promise.resolve([]),
+    manager ? db.user.findMany({ where: { active: true }, select: { id: true, name: true } }) : Promise.resolve([]),
+    isOwner(me) ? Promise.resolve([]) : db.outage.findMany({ where: { userId: me.id, date: { gte: tenDaysAgo } }, orderBy: [{ date: "desc" }, { startMin: "asc" }] }),
+    db.outage.findMany({ where: { date: today, ongoing: true } }),
+    db.outage.findMany({ where: { date: today }, orderBy: { startMin: "asc" } }),
+  ]);
+  const partNames = new Map(partUsersRaw.map((u) => [u.id, u.name]));
   const outHHMM = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
-
-  // Live outages today (drives both the manager report board and the presence board).
-  const liveOutages = await db.outage.findMany({ where: { date: today, ongoing: true } });
   const liveByUser = new Map<string, (typeof liveOutages)[number]>();
   for (const o of liveOutages) if (!liveByUser.has(o.userId)) liveByUser.set(o.userId, o);
 
@@ -202,7 +204,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   // All of today's outages (incl. ended) for the break/lunch history — so the timeline
   // shows when someone lost power/internet and when they came back.
   const nowMinTz = (() => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); })();
-  const allOutagesToday = await db.outage.findMany({ where: { date: today }, orderBy: { startMin: "asc" } });
+  // allOutagesToday fetched in the batch above.
   const outagesByUser = new Map<string, OutageView[]>();
   const rawOutagesByUser = new Map<string, { startMin: number; endMin: number; ongoing: boolean }[]>();
   for (const o of allOutagesToday) {
