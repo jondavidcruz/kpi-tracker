@@ -11,9 +11,7 @@ import { todayStr } from "@/lib/date";
 import Sidebar from "./Sidebar";
 import ContentWrap from "./ContentWrap";
 import { parseNavHidden, isPathHidden } from "@/lib/navItems";
-import CortanaBot from "./CortanaBot";
-import HeartbeatPing from "./HeartbeatPing";
-import PresenceWidget from "./PresenceWidget";
+import ClientWidgets from "./ClientWidgets";
 
 export default async function AppShell({ children }: { children: React.ReactNode }) {
   const email = await getSessionEmail();
@@ -95,11 +93,9 @@ export default async function AppShell({ children }: { children: React.ReactNode
           {children}
         </ContentWrap>
       </main>
-      <CortanaBot />
-      {/* Team availability window — everyone sees it so the whole team knows if
-          someone dropped (power/internet outage), not just managers. */}
-      <PresenceWidget />
-      <HeartbeatPing />
+      {/* Non-critical client widgets (Cortana, team availability, heartbeat) — lazy-loaded
+          after first paint. Everyone sees the availability window. */}
+      <ClientWidgets showPresence />
     </div>
   );
 }
