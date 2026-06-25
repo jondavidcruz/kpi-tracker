@@ -3,13 +3,14 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
-import { stateFromPunches, workedMinutes, groupByUser, daySegments } from "@/lib/presence";
+import { stateFromPunches, workedMinutes, groupByUser, daySegments, dayBar } from "@/lib/presence";
 import { workCapAt, shiftEndLabel } from "@/lib/shift";
 import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
 import BreakHistory, { type OutageView } from "@/components/BreakHistory";
+import ShiftBar, { ShiftBarLegend } from "@/components/ShiftBar";
 
 export const dynamic = "force-dynamic";
 
@@ -203,11 +204,17 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const nowMinTz = (() => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); })();
   const allOutagesToday = await db.outage.findMany({ where: { date: today }, orderBy: { startMin: "asc" } });
   const outagesByUser = new Map<string, OutageView[]>();
+  const rawOutagesByUser = new Map<string, { startMin: number; endMin: number; ongoing: boolean }[]>();
   for (const o of allOutagesToday) {
     const arr = outagesByUser.get(o.userId) ?? [];
     arr.push({ kind: o.kind, startLabel: outHHMM(o.startMin), endLabel: o.ongoing ? null : outHHMM(o.endMin), min: o.ongoing ? Math.max(0, nowMinTz - o.startMin) : Math.max(0, o.endMin - o.startMin), ongoing: o.ongoing });
     outagesByUser.set(o.userId, arr);
+    const raw = rawOutagesByUser.get(o.userId) ?? [];
+    raw.push({ startMin: o.startMin, endMin: o.endMin, ongoing: o.ongoing });
+    rawOutagesByUser.set(o.userId, raw);
   }
+  // Scheduled shift end (minutes from midnight) for the timeline bar's right edge.
+  const capMin = cap ? (() => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(cap); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); })() : null;
   const people = users
     .filter((u) => !isOwner(u)) // owner isn't a tracked employee
     .map((u) => {
@@ -313,32 +320,42 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       {!isOwner(me) && (
         <section className="space-y-2">
           <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} showLunch={me.name.trim().split(/\s+/)[0]?.toLowerCase() !== "marie"} />
+          {(() => { const myBar = dayBar(myPs, rawOutagesByUser.get(me.id) ?? [], settings.orgTimezone, now, capMin); return myBar ? (
+            <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+              <div className="mb-1.5 flex items-center justify-between"><span className="text-xs font-bold text-slate-600">My day</span><ShiftBarLegend /></div>
+              <ShiftBar bar={myBar} />
+            </div>
+          ) : null; })()}
           <BreakHistory timeline={daySegments(myPs, now)} tz={settings.orgTimezone} outages={outagesByUser.get(me.id) ?? []} />
         </section>
       )}
 
-      {/* TEAM BREAKS TODAY (managers) — when each person took breaks/lunch + how long */}
+      {/* TEAM TIMELINE (managers) — color-coded status bar from clock-in → shift end */}
       {manager && (
         <section>
-          <h3 className="mb-2 text-sm font-bold text-slate-700">☕ Breaks &amp; lunch today</h3>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-slate-700">🕓 Today&apos;s shift timeline</h3>
+            <ShiftBarLegend />
+          </div>
           <Card className="divide-y divide-slate-100">
             {users.map((u) => {
-              const tl = daySegments(byUser.get(u.id) ?? [], now);
+              const ps = byUser.get(u.id) ?? [];
+              const tl = daySegments(ps, now);
               const uOut = outagesByUser.get(u.id) ?? [];
-              if (!tl.clockInMs && tl.segments.length === 0 && uOut.length === 0) return null;
-              const onLong = tl.continuousMin >= 100;
+              const bar = dayBar(ps, rawOutagesByUser.get(u.id) ?? [], settings.orgTimezone, now, capMin);
+              if (!bar && uOut.length === 0) return null;
               return (
-                <div key={u.id} className="flex flex-col gap-1.5 p-3 sm:flex-row sm:items-center">
-                  <div className="flex w-32 shrink-0 items-center gap-2">
-                    <span className="font-semibold text-slate-800">{u.name.split(" ")[0]}</span>
-                    {onLong && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" title={`On ${Math.floor(tl.continuousMin / 60)}h ${tl.continuousMin % 60}m without a break`}>needs a break</span>}
+                <div key={u.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
+                  <span className="w-24 shrink-0 font-semibold text-slate-800">{u.name.split(" ")[0]}</span>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    {bar && <ShiftBar bar={bar} />}
+                    <BreakHistory timeline={tl} tz={settings.orgTimezone} outages={uOut} compact />
                   </div>
-                  <div className="min-w-0 flex-1"><BreakHistory timeline={tl} tz={settings.orgTimezone} outages={uOut} compact /></div>
                 </div>
               );
             })}
           </Card>
-          <p className="mt-1.5 text-[11px] text-slate-400">Sharyn lunches 12–1, Michelle 1–2; Marie takes one 15-min break. “Needs a break” flags anyone on 100+ min straight.</p>
+          <p className="mt-1.5 text-[11px] text-slate-400">Green = working · amber = break · orange = lunch · red = power/internet outage · grey = not yet / done. The dark line marks now. Sharyn lunches 12–1, Michelle 1–2; Marie takes one 15-min break.</p>
         </section>
       )}
 

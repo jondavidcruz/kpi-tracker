@@ -88,6 +88,61 @@ export function daySegments(punches: { kind: string; at: Date }[], now: Date): D
   return { clockInMs, segments, lastBreakEndMs, lastLunchEndMs, continuousMin };
 }
 
+export type BarState = "work" | "break" | "lunch" | "outage" | "off";
+export type BarSeg = { state: BarState; startMin: number; endMin: number };
+export type DayBar = { startMin: number; endMin: number; nowMin: number; segments: BarSeg[] };
+
+/** Build a minute-accurate, color-codeable timeline of one person's day: work / break /
+ *  lunch / outage / not-yet, from clock-in to shift end (or now). */
+export function dayBar(
+  punches: { kind: string; at: Date }[],
+  outages: { startMin: number; endMin: number; ongoing: boolean }[],
+  tz: string,
+  now: Date,
+  shiftEndMin: number | null,
+): DayBar | null {
+  const toMin = (d: Date) => { const s = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d); const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+  const nowMin = toMin(now);
+  if (punches.length === 0) return null;
+
+  const events: { from: number; state: BarState }[] = [];
+  let clockIn: number | null = null;
+  for (const p of punches) {
+    const m = toMin(p.at);
+    if (p.kind === "in") { clockIn = clockIn ?? m; events.push({ from: m, state: "work" }); }
+    else if (p.kind === "break_end" || p.kind === "lunch_end") events.push({ from: m, state: "work" });
+    else if (p.kind === "break_start") events.push({ from: m, state: "break" });
+    else if (p.kind === "lunch_start") events.push({ from: m, state: "lunch" });
+    else if (p.kind === "out") events.push({ from: m, state: "off" });
+  }
+  if (clockIn == null) return null;
+  const lastEv = events[events.length - 1];
+  const liveEnd = lastEv.state === "off" ? lastEv.from : nowMin; // clocked out vs still on
+  const barStart = clockIn;
+  const barEnd = Math.max(liveEnd, shiftEndMin ?? liveEnd, nowMin);
+  const N = Math.max(1, barEnd - barStart);
+  const arr: BarState[] = new Array(N).fill("off");
+
+  for (let i = 0; i < events.length; i++) {
+    if (events[i].state === "off") continue;
+    const from = events[i].from;
+    const to = i + 1 < events.length ? events[i + 1].from : liveEnd;
+    for (let mm = Math.max(from, barStart); mm < Math.min(to, barEnd); mm++) arr[mm - barStart] = events[i].state;
+  }
+  for (const o of outages) {
+    const oEnd = o.ongoing ? nowMin : o.endMin;
+    for (let mm = Math.max(o.startMin, barStart); mm < Math.min(oEnd, barEnd); mm++) arr[mm - barStart] = "outage";
+  }
+
+  const segments: BarSeg[] = [];
+  for (let i = 0; i < N; i++) {
+    const last = segments[segments.length - 1];
+    if (last && last.state === arr[i]) last.endMin = barStart + i + 1;
+    else segments.push({ state: arr[i], startMin: barStart + i, endMin: barStart + i + 1 });
+  }
+  return { startMin: barStart, endMin: barEnd, nowMin, segments };
+}
+
 /** True if the last punch leaves the person clocked in (online/break/lunch). */
 export function isOpenSession(punches: { kind: string; at: Date }[]): boolean {
   const { state } = stateFromPunches(punches);
