@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui";
 
 const usd0 = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-const CAT_BAR: Record<string, string> = { indigo: "bg-indigo-500", sky: "bg-sky-500", amber: "bg-amber-500", emerald: "bg-emerald-500", rose: "bg-rose-500", slate: "bg-slate-400" };
+const CAT_BAR: Record<string, string> = { indigo: "bg-indigo-500", sky: "bg-sky-500", amber: "bg-amber-500", emerald: "bg-emerald-500", rose: "bg-rose-500", violet: "bg-violet-500", slate: "bg-slate-400" };
 const fmtMon = (m: string) => ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(m.slice(5, 7))];
 
 export type CatTotal = { key: string; label: string; emoji: string; color: string; total: number };

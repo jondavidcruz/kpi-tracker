@@ -6,6 +6,7 @@ export const EXPENSE_CATEGORIES = [
   { key: "dues", label: "Dues & Licenses", emoji: "📜", color: "amber", hint: "Memberships, domains, AI tools, fees" },
   { key: "realestate", label: "Real Estate", emoji: "🏠", color: "emerald", hint: "Deal costs — escrow, repairs, closing" },
   { key: "controllable", label: "Controllable", emoji: "🎛️", color: "rose", hint: "Car, travel, meals, supplies, training" },
+  { key: "marketing", label: "Marketing & Leads", emoji: "📣", color: "violet", hint: "PPL credits, SMS, direct mail, lead-gen spend — feeds cost-per-lead + ROI" },
 ] as const;
 
 export type ExpenseCategoryKey = (typeof EXPENSE_CATEGORIES)[number]["key"];

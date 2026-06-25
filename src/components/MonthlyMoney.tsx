@@ -33,11 +33,12 @@ export default async function MonthlyMoney() {
   // Deals closed + gross revenue from ClosedDeal; contracts from the synced KPI
   // entries; operating expenses from the P&L expense lines.
   const y = +month.slice(0, 4), mo = +month.slice(5, 7);
-  const [closed, contractKpis, expCount, expSum] = await Promise.all([
+  const [closed, contractKpis, expCount, expSum, mktgSum] = await Promise.all([
     db.closedDeal.aggregate({ where: { year: y, month: mo }, _count: { _all: true }, _sum: { profit: true } }),
     db.kpi.findMany({ where: { key: { in: ["acq_contracts_sent", "contracts_signed"] } }, select: { id: true, key: true } }),
     db.expenseLine.count({ where: { month } }),
     db.expenseLine.aggregate({ where: { month }, _sum: { actual: true } }),
+    db.expenseLine.aggregate({ where: { month, category: "marketing" }, _sum: { actual: true } }),
   ]);
   const cEntries = contractKpis.length
     ? await db.entry.findMany({ where: { kpiId: { in: contractKpis.map((k) => k.id) }, date: { gte: monthStart, lte: monthEnd } }, select: { kpiId: true, value: true } })
@@ -53,6 +54,7 @@ export default async function MonthlyMoney() {
     acq_contracts_sent: contractSums.acq_contracts_sent ?? 0,
     contracts_signed: contractSums.contracts_signed ?? 0,
     ...(expCount > 0 ? { operating_expenses: expSum._sum.actual ?? 0 } : {}),
+    ...((mktgSum._sum.actual ?? 0) > 0 ? { marketing_spend: mktgSum._sum.actual ?? 0 } : {}),
   };
 
   const byKey = new Map(enteredKpis.map((k) => [k.key, k]));

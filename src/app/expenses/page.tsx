@@ -22,6 +22,7 @@ const CAT_COLOR: Record<string, { bar: string; text: string; soft: string; dot: 
   dues: { bar: "bg-amber-500", text: "text-amber-700", soft: "bg-amber-50", dot: "bg-amber-500", ring: "ring-amber-100" },
   realestate: { bar: "bg-emerald-500", text: "text-emerald-700", soft: "bg-emerald-50", dot: "bg-emerald-500", ring: "ring-emerald-100" },
   controllable: { bar: "bg-rose-500", text: "text-rose-700", soft: "bg-rose-50", dot: "bg-rose-500", ring: "ring-rose-100" },
+  marketing: { bar: "bg-violet-500", text: "text-violet-700", soft: "bg-violet-50", dot: "bg-violet-500", ring: "ring-violet-100" },
 };
 
 // A friendly money input with a $ prefix.
