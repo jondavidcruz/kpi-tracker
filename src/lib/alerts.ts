@@ -56,6 +56,15 @@ function exemptForFocus(kpiKey: string, focus: string | undefined): boolean {
   return (focus === "developer" ? DIALER_KEYS : DEV_KEYS).has(kpiKey);
 }
 
+// KPIs that should NOT raise daily miss-alerts — they're milestone/activity metrics, not
+// daily mandatory targets, so nagging about them every day just trains the team to tune out.
+// Deals comped = tracked activity, not mandatory. Signed-contract types = celebrated when
+// they happen (positive), never alerted for "didn't sign one today."
+const ALERT_EXCLUDE = new Set([
+  "deals_comped",
+  "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative",
+]);
+
 /**
  * Evaluate the given KPIs for `date`. Records new alerts for misses and
  * resolves open alerts that have recovered. Returns the alerts newly created
@@ -83,6 +92,7 @@ export async function evaluateAndRecordAlerts(
   for (const kpi of kpis) {
     const severity = alertSeverity(kpi);
     if (!severity) continue; // yellow / red never alert
+    if (ALERT_EXCLUDE.has(kpi.key)) continue; // milestone/activity KPIs — not daily-alerted
 
     const subjects: { userId: string | null; userName: string | null }[] =
       kpi.scope === "per_rep"
@@ -117,6 +127,13 @@ export async function evaluateAndRecordAlerts(
           userName: subj.userName,
         };
         if (!existing) {
+          // Is this newly starting, or the same miss continuing from earlier days? Only
+          // dispatch (Chat) NEW misses — a continuing miss already alerted; re-pinging it
+          // daily is the noise we're killing. (Still recorded in-app for the scorecard.)
+          const priorOpen = await db.alert.findFirst({
+            where: { kpiId: kpi.id, userId: subj.userId, date: { lt: date }, status: { in: ["open", "ack"] } },
+            select: { id: true },
+          });
           await db.alert.create({
             data: {
               ...key,
@@ -126,7 +143,7 @@ export async function evaluateAndRecordAlerts(
               status: "open",
             },
           });
-          created.push(enriched);
+          if (!priorOpen) created.push(enriched);
         } else if (existing.status === "resolved") {
           // Only AUTO-recovered alerts reopen when the number slips again. A
           // manually justified/resolved miss stays resolved — the number is still
