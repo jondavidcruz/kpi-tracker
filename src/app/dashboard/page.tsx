@@ -59,7 +59,9 @@ export default async function DashboardPage({
   const month = monthOf(date);
   const fraction = paceFraction(date);
 
-  const [reps, perRepKpis, teamDaily, teamMonthly, dailyValues, mtdSums, targets, openAlerts, openDeals, pipCandidates] =
+  // One parallel batch — everything here is independent of each other's results, so
+  // they run concurrently instead of in a chain of sequential round-trips.
+  const [reps, perRepKpis, teamDaily, teamMonthly, dailyValues, mtdSums, targets, openAlerts, openDeals, pipCandidates, trends, awardBoard, aiChampions, me] =
     await Promise.all([
       getActiveReps(),
       getKpis({ scope: "per_rep", computed: false }),
@@ -71,14 +73,15 @@ export default async function DashboardPage({
       db.alert.count({ where: { status: "open" } }),
       getOpenDeals(),
       findPipCandidates(date),
+      getDailyTrends(date, 14),
+      getAwardBoard(),
+      getAiChampions(),
+      getCurrentUser(),
     ]);
   const agingDeals = dealsNeedingAttention(openDeals, date);
-  const trends = await getDailyTrends(date, 14);
-  const [awardBoard, aiChampions] = await Promise.all([getAwardBoard(), getAiChampions()]);
 
   // --- Company scoreboard: auto-tallied from the real sources (acquisitions
   // entries + the Escrow & Closing tracker), so nothing needs double-entry. ---
-  const me = await getCurrentUser();
   const showMoney = isManager(me);
   const cSuite = canAccessPayroll(me); // Jon / Viktoriia / Enrico — see expense-derived figures
   const monthStart = `${month}-01`;

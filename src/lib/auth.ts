@@ -1,23 +1,26 @@
 // Bridges Supabase Auth (who is logged in) to the app's User table (their role).
+import { cache } from "react";
 import { createClient } from "./supabase/server";
 import { db } from "./db";
 import type { User } from "@prisma/client";
 
-/** The signed-in email, or null. */
-export async function getSessionEmail(): Promise<string | null> {
+/** The signed-in email, or null. Cached per request — called many times per page. */
+export const getSessionEmail = cache(async (): Promise<string | null> => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   return user?.email?.toLowerCase() ?? null;
-}
+});
 
-/** The app User row matching the signed-in email, or null if not provisioned. */
-export async function getCurrentUser(): Promise<User | null> {
+/** The app User row matching the signed-in email, or null if not provisioned.
+ *  Cached per request: the shell + page + many helpers all call this, so without the
+ *  cache it was hitting the DB a dozen+ times on a single page load. */
+export const getCurrentUser = cache(async (): Promise<User | null> => {
   const email = await getSessionEmail();
   if (!email) return null;
   return db.user.findUnique({ where: { email } });
-}
+});
 
 export function isManager(user: User | null): boolean {
   return !!user && (user.role === "manager" || user.role === "admin");

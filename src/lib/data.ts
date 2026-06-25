@@ -1,9 +1,12 @@
 // Data access for the dashboard and entry screens.
+import { cache } from "react";
 import { db } from "./db";
 import { monthBounds, monthOf } from "./date";
 import type { Kpi, Target, User } from "@prisma/client";
 
-export async function getSettings() {
+// Cached per request — settings are read on essentially every page (shell + page + helpers);
+// the cache collapses those to a single query per page load.
+export const getSettings = cache(async () => {
   return (
     (await db.settings.findUnique({ where: { id: 1 } })) ?? {
       id: 1,
@@ -40,7 +43,7 @@ export async function getSettings() {
       payrollEmails: "",
     }
   );
-}
+});
 
 /** The single-row EOS Vision/Traction Organizer, with an all-blank fallback. */
 export async function getVto() {
@@ -68,10 +71,10 @@ function repRank(name: string): number {
   return i === -1 ? 999 : i;
 }
 
-export async function getActiveReps(): Promise<User[]> {
+export const getActiveReps = cache(async (): Promise<User[]> => {
   const reps = await db.user.findMany({ where: { active: true, position: { not: "" } } });
   return reps.sort((a, b) => repRank(a.name) - repRank(b.name) || a.name.localeCompare(b.name));
-}
+});
 
 export async function getAllUsers(): Promise<User[]> {
   return db.user.findMany({ orderBy: [{ role: "asc" }, { name: "asc" }] });
