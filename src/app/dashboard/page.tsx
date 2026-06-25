@@ -87,9 +87,11 @@ export default async function DashboardPage({
   const monthStart = `${month}-01`;
   const year = date.slice(0, 4);
   const yearStart = `${year}-01-01`;
-  const [acqKpis, closings] = await Promise.all([
+  const [acqKpis, closings, closedDeals, ytdOpExAgg] = await Promise.all([
     db.kpi.findMany({ where: { key: { in: ["acq_contracts_sent", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"] } }, select: { id: true, key: true } }),
-    db.closing.findMany({ where: { status: "closed" }, include: { expenses: true } }),
+    db.closing.findMany({ where: { status: "fell_through" }, select: { status: true, closeDate: true } }),
+    db.closedDeal.findMany({ where: { year: Number(year) }, select: { profit: true, month: true } }), // HUD-backed ledger
+    db.expenseLine.aggregate({ where: { month: { startsWith: year } }, _sum: { actual: true } }), // YTD operating expenses (P&L)
   ]);
   const sentId = acqKpis.find((k) => k.key === "acq_contracts_sent")?.id;
   const signedIds = acqKpis.filter((k) => k.key.startsWith("acq_signed_")).map((k) => k.id);
@@ -102,11 +104,12 @@ export default async function DashboardPage({
     sumEntries(sentId ? [sentId] : []),
     sumEntries(signedIds),
   ]);
-  // Closed deals this year (use closeDate when set; an undated "closed" counts as current year).
-  const closedYTD = closings.filter((c) => (c.closeDate ? c.closeDate >= yearStart && c.closeDate <= `${year}-12-31` : true));
-  const closedCount = closedYTD.length;
-  const grossRevenue = closedYTD.reduce((s, c) => s + c.revenue, 0);
-  const netProfit = closedYTD.reduce((s, c) => s + (c.revenue - c.expenses.reduce((e, x) => e + x.amount, 0)), 0);
+  // Closed deals + revenue come from the HUD-backed ClosedDeal ledger; company net =
+  // that revenue minus year-to-date operating expenses from the P&L.
+  const closedCount = closedDeals.length;
+  const grossRevenue = closedDeals.reduce((s, c) => s + c.profit, 0);
+  const ytdOpEx = ytdOpExAgg._sum.actual ?? 0;
+  const netProfit = grossRevenue - ytdOpEx;
   const falloutYTD = closings.filter((c) => c.status === "fell_through" && (c.closeDate ? c.closeDate >= yearStart : true)).length;
   const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
@@ -118,7 +121,8 @@ export default async function DashboardPage({
   const byKey: Record<string, number> = {};
   for (const e of fEntries) { const key = fIdToKey.get(e.kpiId); if (key) byKey[key] = (byKey[key] ?? 0) + e.value; }
   const kv = (key: string) => byKey[key] ?? 0;
-  const closedThisMonth = closings.filter((c) => c.status === "closed" && c.closeDate && c.closeDate >= monthStart && c.closeDate <= date).length;
+  const moNum = Number(month.slice(5, 7));
+  const closedThisMonth = closedDeals.filter((c) => c.month === moNum).length;
   const funnelStages = [
     { label: "Leads", count: kv("ppl_leads") + kv("text_responses") + kv("direct_mail_responses"), source: "PPL + SMS + mail" },
     { label: "Opportunities", count: kv("quality_convos"), source: "quality conversations" },
@@ -250,6 +254,7 @@ export default async function DashboardPage({
         <MetricCard label="Open alerts" value={openAlerts} icon={<Bell size={18} />} spark={alertSeries} hint={openAlerts ? "needs review" : "all clear"} hintTone={openAlerts ? "bad" : "good"} />
         <MetricCard label="Logged today" value={repsLoggedToday} icon={<Users size={18} />} spark={loggedSeries} delta={wkDelta(loggedSeries)} deltaTone={wkDelta(loggedSeries) >= 0 ? "good" : "neutral"} />
       </div>
+      <p className="-mt-2 text-[11px] text-slate-400">Today&apos;s snapshot: <b>On goal</b> = KPIs hitting target · <b>Behind</b> = KPIs below target · <b>Open alerts</b> = misses needing review · <b>Logged today</b> = reps who entered KPIs. The mini graph on each card is that metric&apos;s last 14 days; ▲/▼ compares to last week.</p>
 
       {/* CRM activity — managers only: who's actually working the CRM today */}
       {isManager(me) && <CrmActivityStrip />}
