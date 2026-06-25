@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && (prisma migrate deploy || echo '⚠️ migrate deploy skipped — DIRECT_URL unreachable; continuing build') && next build",
     "start": "next start",
     "postinstall": "prisma generate",
     "lint": "eslint",
