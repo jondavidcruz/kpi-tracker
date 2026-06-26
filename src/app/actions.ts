@@ -2831,3 +2831,21 @@ export async function importMarketContactsMapped(formData: FormData) {
   revalidatePath("/marketing");
   redirect(`/vetting?imp=${n}`);
 }
+
+/** Mark a scored call as reviewed for training: a 1–5 star rating and/or a
+ *  "used for training" flag. Managers + the person who scored it can set these. */
+export async function reviewCallScore(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const score = await db.callScore.findUnique({ where: { id }, select: { scoredBy: true, usedForTraining: true } });
+  if (!score) return;
+  if (!isManager(me) && me.name !== score.scoredBy) return;
+  const data: { reviewStars?: number; usedForTraining?: boolean } = {};
+  const starsRaw = formData.get("stars");
+  if (starsRaw != null) data.reviewStars = Math.max(0, Math.min(5, Number(starsRaw) || 0));
+  if (formData.get("training") != null) data.usedForTraining = !score.usedForTraining;
+  await db.callScore.update({ where: { id }, data });
+  revalidatePath("/call-scoring");
+}

@@ -249,6 +249,8 @@ model CallScore {
   repName    String   @default("")
   callType   String   @default("") // which call type was scored (see lib/call-types)
   direction  String   @default("") // inbound | outbound
+  reviewStars Int     @default(0)  // 1–5 manual training-review rating (0 = not reviewed yet)
+  usedForTraining Boolean @default(false) // flagged as reviewed + used for training
   address    String   @default("") // which lead/property the call was about
   sellerName String   @default("")
   sellerPhone String  @default("") // callback number for quick feedback
