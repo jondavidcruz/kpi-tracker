@@ -3,31 +3,28 @@
 import { useMemo, useState } from "react";
 import { importMarketContactsMapped } from "@/app/actions";
 
-// Our importable Buyer Research fields + header aliases used to auto-guess the mapping.
+// Import fields — the first 9 mirror the Buyer Research table columns EXACTLY
+// (Links · Name · Number · Number · Email · Notes · Buying area · Buy box · Status),
+// then a few extra optional fields. `key` matches the import action + the DB field.
 const FIELDS: { key: string; label: string; aliases: string[] }[] = [
-  { key: "name", label: "Name / Builder *", aliases: ["name", "builder", "contact", "full name", "owner"] },
+  { key: "name", label: "Name *", aliases: ["name", "builder", "contact", "full name", "owner", "company", "business", "dba"] },
+  { key: "links", label: "Links (website / LinkedIn / IG)", aliases: ["links", "link", "website", "web", "url", "site", "linkedin", "social", "instagram", "ig", "facebook"] },
+  { key: "phone", label: "Number (phone)", aliases: ["phone", "number", "phone1", "phone 1", "cell", "mobile", "primary phone", "number 1", "tel"] },
+  { key: "phone2", label: "Number (2nd phone)", aliases: ["phone2", "number2", "number 2", "second number", "alt phone", "office", "secondary phone", "phone 2"] },
+  { key: "email", label: "Email", aliases: ["email", "e-mail", "mail"] },
+  { key: "outreachLog", label: "Notes", aliases: ["notes", "note", "comments", "log", "remarks"] },
+  { key: "buyBoxAreas", label: "Buying area", aliases: ["buying area", "buyingarea", "areas", "target areas", "buyboxareas", "neighborhoods", "preferred markets", "target geography", "market", "city", "location"] },
+  { key: "buyBox", label: "Buy box", aliases: ["buybox", "buy box", "buy-box", "criteria"] },
+  { key: "status", label: "Status", aliases: ["status", "stage", "rating"] },
+  // ── extra optional fields ──
   { key: "company", label: "Company / Firm", aliases: ["company", "firm", "dev firm", "business", "llc"] },
   { key: "type", label: "Type (developer/flipper)", aliases: ["type", "tier", "buyer type"] },
   { key: "category", label: "Category (luxury/distressed)", aliases: ["category"] },
-  { key: "email", label: "Email", aliases: ["email", "e-mail", "mail"] },
-  { key: "phone", label: "Phone", aliases: ["phone", "number", "phone1", "cell", "mobile", "primary phone"] },
-  { key: "phone2", label: "Phone 2", aliases: ["phone2", "number2", "second number", "alt phone", "office", "secondary phone"] },
-  { key: "market", label: "City / Market", aliases: ["market", "city", "primary city"] },
-  { key: "region", label: "Region / State", aliases: ["region", "state"] },
-  { key: "buyBoxAreas", label: "Target areas", aliases: ["buyboxareas", "areas", "target areas", "target geography", "neighborhoods", "preferred markets", "buying area"] },
-  { key: "buyBox", label: "Buy box / criteria", aliases: ["buybox", "buy box", "criteria"] },
   { key: "priceRange", label: "Price range", aliases: ["pricerange", "price range", "budget"] },
   { key: "dealType", label: "Deal type", aliases: ["dealtype", "deal type"] },
   { key: "buildType", label: "Build type", aliases: ["buildtype", "build type"] },
-  { key: "propertyType", label: "Property type", aliases: ["propertytype", "property type"] },
-  { key: "website", label: "Website", aliases: ["website", "web", "url", "site"] },
-  { key: "links", label: "Links (LinkedIn/IG/FB)", aliases: ["links", "linkedin", "social"] },
-  { key: "igHandle", label: "Instagram", aliases: ["ig", "instagram", "ighandle", "handle"] },
-  { key: "bestContact", label: "Best way to reach", aliases: ["bestcontact", "best contact", "best way"] },
-  { key: "title", label: "Title / role", aliases: ["title", "role"] },
-  { key: "status", label: "Status tag", aliases: ["status"] },
+  { key: "region", label: "Region / State", aliases: ["region", "state"] },
   { key: "vetArea", label: "Deal / area (tab)", aliases: ["vetarea", "deal", "tab", "sourcing area"] },
-  { key: "notes", label: "Notes", aliases: ["notes", "note", "comments"] },
 ];
 
 function parseCsv(text: string): string[][] {
@@ -137,17 +134,18 @@ export default function CsvMapImport() {
             <div className="overflow-x-auto rounded-xl ring-1 ring-slate-200">
               <table className="w-full text-left text-[11px]">
                 <thead className="bg-slate-50 text-slate-400">
-                  <tr><th className="px-2 py-1.5">Name</th><th className="px-2 py-1.5">Company</th><th className="px-2 py-1.5">Phone</th><th className="px-2 py-1.5">Email</th><th className="px-2 py-1.5">Type</th><th className="px-2 py-1.5">Areas</th></tr>
+                  <tr><th className="px-2 py-1.5">Links</th><th className="px-2 py-1.5">Name</th><th className="px-2 py-1.5">Number</th><th className="px-2 py-1.5">Email</th><th className="px-2 py-1.5">Notes</th><th className="px-2 py-1.5">Buying area</th><th className="px-2 py-1.5">Buy box</th></tr>
                 </thead>
                 <tbody>
                   {dataRows.slice(0, 3).map((_, r) => (
                     <tr key={r} className="border-t border-slate-100">
+                      <td className="max-w-[120px] truncate px-2 py-1.5 text-sky-600">{cell(r, "links")}</td>
                       <td className="px-2 py-1.5 font-semibold text-slate-700">{cell(r, "name") || <span className="text-slate-300">—</span>}</td>
-                      <td className="px-2 py-1.5 text-slate-500">{cell(r, "company")}</td>
                       <td className="px-2 py-1.5 text-slate-500">{cell(r, "phone")}</td>
                       <td className="px-2 py-1.5 text-slate-500">{cell(r, "email")}</td>
-                      <td className="px-2 py-1.5 text-slate-500">{cell(r, "type")}</td>
+                      <td className="max-w-[120px] truncate px-2 py-1.5 text-slate-500">{cell(r, "outreachLog")}</td>
                       <td className="px-2 py-1.5 text-slate-500">{cell(r, "buyBoxAreas")}</td>
+                      <td className="max-w-[120px] truncate px-2 py-1.5 text-slate-500">{cell(r, "buyBox")}</td>
                     </tr>
                   ))}
                 </tbody>

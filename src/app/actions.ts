@@ -2818,7 +2818,7 @@ export async function importMarketContactsMapped(formData: FormData) {
       priceRange: g(row, "priceRange"), dealType: g(row, "dealType"), buildType: g(row, "buildType"), minLotSize: g(row, "minLotSize"),
       propertyType: g(row, "propertyType"), igHandle: g(row, "igHandle"), bestContact: g(row, "bestContact"),
       title: g(row, "title"), decisionMaker: g(row, "decisionMaker"), buyingFrequency: g(row, "buyingFrequency"), closingSpeed: g(row, "closingSpeed"),
-      notes: g(row, "notes"), vetArea: g(row, "vetArea"),
+      notes: g(row, "notes"), outreachLog: g(row, "outreachLog"), vetArea: g(row, "vetArea"),
       vetStage: "to_vet", vetStatus: "to_contact",
       addedById: me!.id, addedOn: today,
     } });
