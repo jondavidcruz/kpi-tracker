@@ -12,7 +12,7 @@ export type Prospect = {
   category: string; type: string; title: string; company: string; preferredContact: string;
   dealType: string; buildType: string; closingSpeed: string; priceRange: string; minLotSize: string;
   propertyType: string; minBeds: string; maxBaths: string; conditionTolerance: string; needsView: string;
-  marketDetails: string; decisionMaker: string; buyingFrequency: string; bestContact: string;
+  marketDetails: string; decisionMaker: string; buyingFrequency: string; bestContact: string; companySize: string;
 };
 
 const STATUS: { key: string; label: string; cls: string }[] = [
@@ -35,6 +35,7 @@ const BUILD_TYPE = [
 const SPEED = ["Cash, < 14 days", "15–30 days", "30–45 days", "Financed"];
 const DECISION_MAKER = ["Direct / principal", "Acquisitions manager", "Agent / broker", "Not direct (B-rated)"];
 const BUYING_FREQ = ["1+ / week", "1–3 / month", "A few / quarter", "Opportunistic"];
+const COMPANY_SIZE = ["Mom & Pop (1–2 / yr)", "Small / local builder", "Regional builder", "National (e.g. DR Horton, Lennar)", "Private investor / fund", "REIT / institutional"];
 const PROPERTY_TYPE = ["SFR", "Condo / Townhome", "Small multi (2–4)", "Mobile / Manufactured", "Any"];
 const CONDITION = ["Any / teardown OK", "Heavy rehab", "Light–moderate", "Turnkey only"];
 const NEEDS_VIEW = ["No — offers sight-unseen", "Yes — needs walkthrough", "Sometimes"];
@@ -197,6 +198,7 @@ function BuyBoxPanel({ p }: { p: Prospect }) {
       )}
 
       <Sel name="decisionMaker" label="Decision maker?" def={p.decisionMaker} options={DECISION_MAKER} />
+      <Sel name="companySize" label="Company size" def={p.companySize} options={COMPANY_SIZE} />
       <Sel name="buyingFrequency" label="Buying frequency" def={p.buyingFrequency} options={BUYING_FREQ} />
       <Inp name="bestContact" label="Best way to reach (sequence)" def={p.bestContact} placeholder="IG DM → email → call" />
       <div className="col-span-2 flex items-end sm:col-span-1">

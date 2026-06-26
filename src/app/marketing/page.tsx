@@ -22,7 +22,7 @@ function toProspect(r: Record<string, unknown>): Prospect {
     category: s("category"), type: s("type"), title: s("title"), company: s("company"), preferredContact: s("preferredContact"),
     dealType: s("dealType"), buildType: s("buildType"), closingSpeed: s("closingSpeed"), priceRange: s("priceRange"), minLotSize: s("minLotSize"),
     propertyType: s("propertyType"), minBeds: s("minBeds"), maxBaths: s("maxBaths"), conditionTolerance: s("conditionTolerance"), needsView: s("needsView"),
-    marketDetails: s("marketDetails"), decisionMaker: s("decisionMaker"), buyingFrequency: s("buyingFrequency"), bestContact: s("bestContact"),
+    marketDetails: s("marketDetails"), decisionMaker: s("decisionMaker"), buyingFrequency: s("buyingFrequency"), bestContact: s("bestContact"), companySize: s("companySize"),
   };
 }
 

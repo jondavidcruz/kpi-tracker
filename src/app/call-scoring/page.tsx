@@ -111,6 +111,7 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
                 <Card key={s.id} className="p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
+                      {s.direction && <span className="mr-1.5 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">{s.direction === "inbound" ? "📥 Inbound" : "📤 Outbound"}</span>}
                       {s.callType && <span className="mr-2 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-800">{callTypeLabel(s.callType)}</span>}
                       <span className="font-bold text-slate-800">{s.repName}</span>
                       <span className="font-normal text-slate-400"> · scored by {s.scoredBy} · {friendlyDate(s.createdAt.toISOString().slice(0, 10))}</span>

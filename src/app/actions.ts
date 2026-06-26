@@ -402,6 +402,7 @@ export async function scoreCall(formData: FormData) {
   const address = String(formData.get("address") ?? "").trim().slice(0, 200);
   const sellerName = String(formData.get("sellerName") ?? "").trim().slice(0, 120);
   const sellerPhone = String(formData.get("sellerPhone") ?? "").trim().slice(0, 40);
+  const direction = String(formData.get("direction") ?? "").trim(); // inbound | outbound
 
   for (const callType of callTypes) {
     const script = callType ? await db.callScript.findUnique({ where: { callType } }) : null;
@@ -414,7 +415,7 @@ export async function scoreCall(formData: FormData) {
 
     const created = await db.callScore.create({
       data: {
-        repName: repName || "(unspecified)", callType, address, sellerName, sellerPhone,
+        repName: repName || "(unspecified)", callType, direction, address, sellerName, sellerPhone,
         scoredBy: me.name,
         overall: result.overall,
         breakdown: JSON.stringify(result.breakdown),
@@ -1669,6 +1670,7 @@ export async function saveBuyerBox(formData: FormData) {
       propertyType: g("propertyType"), minBeds: g("minBeds"), maxBaths: g("maxBaths"),
       conditionTolerance: g("conditionTolerance"), needsView: g("needsView"), marketDetails: g("marketDetails"),
       decisionMaker: g("decisionMaker"), buyingFrequency: g("buyingFrequency"), bestContact: g("bestContact"),
+      companySize: g("companySize"),
       ...(hasBox && !prev?.boxOn ? { boxById: me!.id, boxOn: today } : {}),
     },
   });
