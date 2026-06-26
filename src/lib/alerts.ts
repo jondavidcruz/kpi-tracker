@@ -63,6 +63,8 @@ function exemptForFocus(kpiKey: string, focus: string | undefined): boolean {
 const ALERT_EXCLUDE = new Set([
   "deals_comped",
   "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative",
+  // Contracts sent + signed are lumpy outcome KPIs — don't nag them daily.
+  "acq_contracts_sent", "contracts_sent", "contracts_signed",
 ]);
 
 /**
