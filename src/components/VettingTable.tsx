@@ -26,7 +26,12 @@ const STATUS: { key: string; label: string; cls: string }[] = [
 // CRM dropdown options (mirrors the Vetted-Buyers form).
 const PREFERRED_CONTACT = ["Phone call", "Text / SMS", "Email", "Instagram DM", "WhatsApp"];
 const DEAL_TYPE = ["Land / lots", "Teardown", "Entitled lots", "Off-market", "JV / partnership", "Build-to-rent"];
-const BUILD_TYPE = ["SFR", "Townhomes", "Multifamily", "Mixed-use", "Custom luxury", "Spec homes"];
+const BUILD_TYPE = [
+  "Custom / luxury homes", "Production / community builder (tract)", "Spec homes",
+  "Single-family (SFR)", "Townhomes", "Multifamily / apartments", "Build-to-rent (BTR)",
+  "Senior / assisted living", "Industrial / warehouse", "Retail / commercial (malls, strip)",
+  "Office", "Hospitality (hotels)", "Mixed-use", "Self-storage", "Land developer / subdivider",
+];
 const SPEED = ["Cash, < 14 days", "15–30 days", "30–45 days", "Financed"];
 const DECISION_MAKER = ["Direct / principal", "Acquisitions manager", "Agent / broker", "Not direct (B-rated)"];
 const BUYING_FREQ = ["1+ / week", "1–3 / month", "A few / quarter", "Opportunistic"];
@@ -163,7 +168,7 @@ function BuyBoxPanel({ p }: { p: Prospect }) {
       {dev ? (
         <>
           <MultiSelect name="dealType" label="Deal type (pick all)" defaultValue={p.dealType} options={DEAL_TYPE} />
-          <MultiSelect name="buildType" label="Build type (pick all)" defaultValue={p.buildType} options={BUILD_TYPE} />
+          <MultiSelect name="buildType" label="Developer type — what they build (pick all)" defaultValue={p.buildType} options={BUILD_TYPE} />
           <Sel name="closingSpeed" label="Move speed" def={p.closingSpeed} options={SPEED} />
           <Inp name="priceRange" label="Price range per lot" def={p.priceRange} placeholder="$400k–$700k" />
           <Inp name="minLotSize" label="Minimum lot size" def={p.minLotSize} placeholder="7,000 sf" />
