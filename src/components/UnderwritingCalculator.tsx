@@ -117,7 +117,7 @@ function OfferLadder({ rungs }: { rungs: { label: string; v: number }[] }) {
   if (!rungs.length) return null;
   return (
     <div className="mt-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
-      <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">📊 Offer ladder</div>
+      <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">📊 Offer ladder — open low, work up</div>
       <div className="grid grid-cols-3 gap-1.5">
         {rungs.map((r) => (
           <div key={r.label} className="rounded bg-white px-2 py-1 text-center ring-1 ring-slate-200">
@@ -188,9 +188,10 @@ export default function UnderwritingCalculator() {
   const aFee = f.aFee != null && f.aFee !== "" ? n("aFee") : suggestedFee;
   const sqft = n("sqft"), rehabSf = num(v("rehabSf"));
   const repairsCalc = sqft * rehabSf;
-  // Rehab contingency — a cushion on the repair estimate for surprises (default 10%,
-  // the BuyBox/course standard). Applies to the sqft/override base + big-ticket items.
-  const contingencyPct = num(v("contingencyPct") || "10");
+  // Rehab contingency — an OPTIONAL cushion on the repair estimate for surprises.
+  // Off by default (0%) so it doesn't silently lower every offer on top of the anchor;
+  // reps add it only when the repair scope is uncertain.
+  const contingencyPct = num(v("contingencyPct") || "0");
   const repairsBase = (n("repairs") || repairsCalc) + majorTotal;
   const repairs = repairsBase * (1 + contingencyPct / 100);
   // The market tier % ALREADY builds in the flipper's profit AND their carry / money
@@ -277,9 +278,10 @@ export default function UnderwritingCalculator() {
   const rOnePct = rPrice > 0 ? (rRent / rPrice) * 100 : 0;             // the "1% rule"
   const rMaxOffer = rTargetCap > 0 ? rNoi / (rTargetCap / 100) : 0;    // price that hits the target cap
 
-  // 3-rung offer ladder from a max (course-style 95 / 85 / 65%).
-  const ladder = (max: number): { label: string; v: number }[] =>
-    max > 0 ? [{ label: "Strong · 95%", v: max * 0.95 }, { label: "Opening · 85%", v: max * 0.85 }, { label: "Floor · 65%", v: max * 0.65 }] : [];
+  // 3-rung offer ladder consistent with our open-low-work-up model: Open (the anchor) →
+  // Target (midpoint) → Max (the MAO). All ascending, never above the MAO.
+  const ladder = (lo: number, hi: number): { label: string; v: number }[] =>
+    hi > 0 ? [{ label: "Open", v: lo }, { label: "Target", v: (lo + hi) / 2 }, { label: "Max", v: hi }] : [];
   // The headline offer's size relative to ARV — a quick sanity gut-check.
   const pctOfArv = (x: number) => (arv > 0 ? `${Math.round((x / arv) * 100)}% of ARV` : "");
 
@@ -600,7 +602,7 @@ export default function UnderwritingCalculator() {
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
               {rehabDesc(v("rehabSf")) && <p className="sm:col-span-2 -mt-1 text-[11px] italic text-slate-500">📋 {rehabDesc(v("rehabSf"))}</p>}
-              <Field k="contingencyPct" label="Rehab contingency %" suffix="%" span={2} placeholder="10" req="opt" />
+              <Field k="contingencyPct" label="Rehab contingency % (optional cushion)" suffix="%" span={2} placeholder="0" req="opt" />
               {majorRepairs()}
               <div className={optDiv}>Optional — refine the offer</div>
               <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
@@ -717,7 +719,7 @@ export default function UnderwritingCalculator() {
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
               {rehabDesc(v("rehabSf")) && <p className="sm:col-span-2 -mt-1 text-[11px] italic text-slate-500">📋 {rehabDesc(v("rehabSf"))}</p>}
-              <Field k="contingencyPct" label="Rehab contingency %" suffix="%" span={2} placeholder="10" req="opt" />
+              <Field k="contingencyPct" label="Rehab contingency % (optional cushion)" suffix="%" span={2} placeholder="0" req="opt" />
               {majorRepairs()}
               <div className={optDiv}>Property costs (optional · % of ARV)</div>
               <Field k="fComm" label="Realtor commission" suffix="%" placeholder="3" req="opt" />
@@ -781,7 +783,7 @@ export default function UnderwritingCalculator() {
               {cashMao > 0 && <Res label="Sanity check" value={pctOfArv(cashMao)} tone="muted" />}
               <Res label="⚓ Anchor (open here)" value={money(aAnchor)} tone="good" />
               <Res label="Negotiate" value={`${money(aAnchor)} → ${money(cashMao)}`} tone="muted" />
-              {cashMao > 0 && <OfferLadder rungs={ladder(cashMao)} />}
+              {cashMao > 0 && <OfferLadder rungs={ladder(aAnchor, cashMao)} />}
             </>
           )}
           {tab === "novation" && (
@@ -797,7 +799,7 @@ export default function UnderwritingCalculator() {
               <Res label="⚓ Anchor payout (open here)" value={money(novAnchor)} tone="good" />
               <Res label="Our fee at anchor" value={money(feeAtAnchor)} tone="good" />
               <Res label="Negotiate (seller payout)" value={`${money(novAnchor)} → ${money(novMao)}`} tone="muted" />
-              {novMao > 0 && <OfferLadder rungs={ladder(novMao)} />}
+              {novMao > 0 && <OfferLadder rungs={ladder(novAnchor, novMao)} />}
             </>
           )}
           {tab === "creative" && (
