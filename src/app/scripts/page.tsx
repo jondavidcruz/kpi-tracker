@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
@@ -22,6 +22,23 @@ function Line({ text }: { text: string }) {
   if (t.startsWith("→"))
     return <p className="ml-3 py-0.5 text-[13px] leading-relaxed text-slate-500">{t}</p>;
   return <p className="py-0.5 text-sm leading-relaxed text-slate-700">{t}</p>;
+}
+
+// One script step as a card. Cold/Warm openers get color + a badge so they read as a choice.
+function StepCard({ st }: { st: { heading: string; body: string[] } }) {
+  const isCold = /cold opener/i.test(st.heading);
+  const isWarm = /warm opener/i.test(st.heading);
+  const opener = isCold || isWarm;
+  return (
+    <div className={`h-full rounded-xl p-4 ring-1 ${opener ? (isCold ? "bg-sky-50 ring-sky-200" : "bg-orange-50 ring-orange-200") : "bg-slate-50 ring-slate-200"}`}>
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        {isCold && <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">🥶 USE IF COLD</span>}
+        {isWarm && <span className="rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-800">🔥 USE IF WARM — already contacted</span>}
+        <h3 className="text-sm font-bold text-brand-navy">{st.heading}</h3>
+      </div>
+      <div>{st.body.map((b, bi) => <Line key={bi} text={b} />)}</div>
+    </div>
+  );
 }
 
 export default async function ScriptsPage({ searchParams }: { searchParams: Promise<{ s?: string }> }) {
@@ -78,28 +95,30 @@ export default async function ScriptsPage({ searchParams }: { searchParams: Prom
           <p className="mb-4 text-sm text-slate-500">{cur.summary}</p>
 
           <div className="space-y-3">
-            {cur.steps.map((st, si) => {
-              const isCold = /cold opener/i.test(st.heading);
-              const isWarm = /warm opener/i.test(st.heading);
-              const prevCold = /cold opener/i.test(cur.steps[si - 1]?.heading || "");
-              const opener = isCold || isWarm;
-              return (
-                <Fragment key={si}>
-                  {isCold && <div className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">👇 Use ONE opener — Cold OR Warm, not both</div>}
-                  {isWarm && prevCold && (
-                    <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400"><span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" /></div>
-                  )}
-                  <div className={`rounded-xl p-4 ring-1 ${opener ? (isCold ? "bg-sky-50 ring-sky-200" : "bg-orange-50 ring-orange-200") : "bg-slate-50 ring-slate-200"}`}>
-                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                      {isCold && <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">🥶 USE IF COLD</span>}
-                      {isWarm && <span className="rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-800">🔥 USE IF WARM — already contacted</span>}
-                      <h3 className="text-sm font-bold text-brand-navy">{st.heading}</h3>
+            {(() => {
+              const out: ReactNode[] = [];
+              for (let i = 0; i < cur.steps.length; i++) {
+                const st = cur.steps[i];
+                const next = cur.steps[i + 1];
+                // A Cold opener immediately followed by a Warm opener → render them SIDE BY SIDE
+                // so the rep picks one column instead of reading down and using both.
+                if (/cold opener/i.test(st.heading) && next && /warm opener/i.test(next.heading)) {
+                  out.push(
+                    <div key={i}>
+                      <div className="mb-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-slate-400">👉 Pick ONE opener — Cold or Warm, not both</div>
+                      <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2">
+                        <StepCard st={st} />
+                        <StepCard st={next} />
+                      </div>
                     </div>
-                    <div>{st.body.map((b, bi) => <Line key={bi} text={b} />)}</div>
-                  </div>
-                </Fragment>
-              );
-            })}
+                  );
+                  i++; // skip the warm step — already rendered in the pair
+                } else {
+                  out.push(<StepCard key={i} st={st} />);
+                }
+              }
+              return out;
+            })()}
           </div>
 
           {cur.objections.length > 0 && (
