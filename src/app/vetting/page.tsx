@@ -42,7 +42,7 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
     category: r.category, type: r.type, title: r.title, company: r.company, preferredContact: r.preferredContact,
     dealType: r.dealType, buildType: r.buildType, closingSpeed: r.closingSpeed, priceRange: r.priceRange, minLotSize: r.minLotSize,
     propertyType: r.propertyType, minBeds: r.minBeds, maxBaths: r.maxBaths, conditionTolerance: r.conditionTolerance, needsView: r.needsView,
-    marketDetails: r.marketDetails, decisionMaker: r.decisionMaker, buyingFrequency: r.buyingFrequency, bestContact: r.bestContact,
+    marketDetails: r.marketDetails, decisionMaker: r.decisionMaker, buyingFrequency: r.buyingFrequency, bestContact: r.bestContact, companySize: r.companySize,
   });
   const areaMap = new Map<string, Prospect[]>();
   for (const r of rows) { const k = r.vetArea || UNASSIGNED; const a = areaMap.get(k) ?? []; a.push(toProspect(r)); areaMap.set(k, a); }

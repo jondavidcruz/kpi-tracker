@@ -248,6 +248,9 @@ model CallScore {
   id         String   @id @default(cuid())
   repName    String   @default("")
   callType   String   @default("") // which call type was scored (see lib/call-types)
+  direction  String   @default("") // inbound | outbound
+  reviewStars Int     @default(0)  // 1–5 manual training-review rating (0 = not reviewed yet)
+  usedForTraining Boolean @default(false) // flagged as reviewed + used for training
   address    String   @default("") // which lead/property the call was about
   sellerName String   @default("")
   sellerPhone String  @default("") // callback number for quick feedback
@@ -526,6 +529,7 @@ model MarketContact {
   title          String @default("") // contact's role / title
   preferredContact String @default("") // Phone | Text | Email | IG DM | WhatsApp
   decisionMaker  String @default("") // Direct/principal | Acq mgr | Agent | Not direct (B-rated)
+  companySize    String @default("") // Mom & Pop | Regional | National (DR Horton) | fund / REIT
   buyingFrequency String @default("")
   priceRange     String @default("") // price range per lot / buy box
   closingSpeed   String @default("") // move speed / closing speed

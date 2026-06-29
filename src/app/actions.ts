@@ -402,6 +402,7 @@ export async function scoreCall(formData: FormData) {
   const address = String(formData.get("address") ?? "").trim().slice(0, 200);
   const sellerName = String(formData.get("sellerName") ?? "").trim().slice(0, 120);
   const sellerPhone = String(formData.get("sellerPhone") ?? "").trim().slice(0, 40);
+  const direction = String(formData.get("direction") ?? "").trim(); // inbound | outbound
 
   for (const callType of callTypes) {
     const script = callType ? await db.callScript.findUnique({ where: { callType } }) : null;
@@ -414,7 +415,7 @@ export async function scoreCall(formData: FormData) {
 
     const created = await db.callScore.create({
       data: {
-        repName: repName || "(unspecified)", callType, address, sellerName, sellerPhone,
+        repName: repName || "(unspecified)", callType, direction, address, sellerName, sellerPhone,
         scoredBy: me.name,
         overall: result.overall,
         breakdown: JSON.stringify(result.breakdown),
@@ -1669,6 +1670,7 @@ export async function saveBuyerBox(formData: FormData) {
       propertyType: g("propertyType"), minBeds: g("minBeds"), maxBaths: g("maxBaths"),
       conditionTolerance: g("conditionTolerance"), needsView: g("needsView"), marketDetails: g("marketDetails"),
       decisionMaker: g("decisionMaker"), buyingFrequency: g("buyingFrequency"), bestContact: g("bestContact"),
+      companySize: g("companySize"),
       ...(hasBox && !prev?.boxOn ? { boxById: me!.id, boxOn: today } : {}),
     },
   });
@@ -2828,4 +2830,22 @@ export async function importMarketContactsMapped(formData: FormData) {
   revalidatePath("/vetting");
   revalidatePath("/marketing");
   redirect(`/vetting?imp=${n}`);
+}
+
+/** Mark a scored call as reviewed for training: a 1–5 star rating and/or a
+ *  "used for training" flag. Managers + the person who scored it can set these. */
+export async function reviewCallScore(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const score = await db.callScore.findUnique({ where: { id }, select: { scoredBy: true, usedForTraining: true } });
+  if (!score) return;
+  if (!isManager(me) && me.name !== score.scoredBy) return;
+  const data: { reviewStars?: number; usedForTraining?: boolean } = {};
+  const starsRaw = formData.get("stars");
+  if (starsRaw != null) data.reviewStars = Math.max(0, Math.min(5, Number(starsRaw) || 0));
+  if (formData.get("training") != null) data.usedForTraining = !score.usedForTraining;
+  await db.callScore.update({ where: { id }, data });
+  revalidatePath("/call-scoring");
 }

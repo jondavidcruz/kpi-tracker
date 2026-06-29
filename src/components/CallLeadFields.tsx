@@ -9,6 +9,7 @@ type CallType = { key: string; label: string; group: string; hasScript: boolean 
 export default function CallLeadFields({ inputCls, reps, types, groups }: { inputCls: string; reps: string[]; types: CallType[]; groups: string[] }) {
   // Multiple types can be picked — one recording sometimes contains several calls.
   const [callTypes, setCallTypes] = useState<string[]>([]);
+  const [direction, setDirection] = useState<"outbound" | "inbound">("outbound");
   const dispo = callTypes.some((k) => types.find((t) => t.key === k)?.group === "Dispositions");
   const L = dispo
     ? { addr: "Property / deal", addrP: "123 Main St or deal name…", name: "Buyer / developer name", nameP: "Acme Capital · John Buyer", phone: "Phone / company (callback)", phoneP: "(555) 123-4567" }
@@ -16,6 +17,15 @@ export default function CallLeadFields({ inputCls, reps, types, groups }: { inpu
 
   return (
     <>
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-semibold text-slate-500">Direction:</span>
+        {(["outbound", "inbound"] as const).map((d) => (
+          <button key={d} type="button" onClick={() => setDirection(d)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${direction === d ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+            {d === "outbound" ? "📤 Outbound" : "📥 Inbound"}
+          </button>
+        ))}
+        <input type="hidden" name="direction" value={direction} />
+      </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="sm:col-span-1">
           <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Whose call?</span>

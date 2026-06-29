@@ -6,6 +6,7 @@ import { friendlyDate } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import type { ScoreArea } from "@/lib/score";
 import { CALL_TYPES, callTypeLabel } from "@/lib/call-types";
+import CallReview from "@/components/CallReview";
 import TranscriptField from "@/components/TranscriptField";
 import CallLeadFields from "@/components/CallLeadFields";
 
@@ -111,6 +112,7 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
                 <Card key={s.id} className="p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
+                      {s.direction && <span className="mr-1.5 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">{s.direction === "inbound" ? "📥 Inbound" : "📤 Outbound"}</span>}
                       {s.callType && <span className="mr-2 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-800">{callTypeLabel(s.callType)}</span>}
                       <span className="font-bold text-slate-800">{s.repName}</span>
                       <span className="font-normal text-slate-400"> · scored by {s.scoredBy} · {friendlyDate(s.createdAt.toISOString().slice(0, 10))}</span>
@@ -133,6 +135,7 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
                     </div>
                   )}
                   {s.summary && <p className="mt-1 text-sm text-slate-600">{s.summary}</p>}
+                  <CallReview id={s.id} stars={s.reviewStars} training={s.usedForTraining} canEdit={leader || me.name === s.scoredBy} />
                   {s.audioUrl && <audio controls src={s.audioUrl} className="mt-2 h-9 w-full max-w-md" />}
                   {breakdown.length > 0 && (
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
