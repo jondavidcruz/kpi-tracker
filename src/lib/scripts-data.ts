@@ -22,21 +22,21 @@ export const SCRIPTS: Script[] = [
       {
         heading: "1️⃣ Cold Opener — Build Credibility",
         body: [
-          "🎤 Hey, [Name]? This is [Your Name] calling from Freedom Offers. We're a veteran-owned acquisition company based out of San Diego — we work directly with developers and buyers looking for off-market properties in your area. So here's the deal — we specialize in higher-end homes, completely private, no public listings, no open houses. And I'm not gonna waste your time with lowball offers, I promise. You got a quick minute?",
-          "💡 If they ask \"what company?\" → Say: \"Freedom Offers — you can check us out at freedom-offers.com. We work with developers to find off-market properties before they ever hit the market. You can also call us at (877) 652-8991 if you want to verify.\"",
+          "🎤 Hey, [Name]? This is [Your Name] calling from Freedom Offers. We're a veteran-owned acquisitions company based out of San Diego. We buy properties directly, as-is, so there's no agents, no listings, and no open houses. And I'm not gonna waste your time with a lowball, I promise. You got a quick minute?",
+          "💡 If they ask \"what company?\" → Say: \"Freedom Offers. You can check us out at freedom-offers.com or call (877) 652-8991 to verify. We buy off-market properties directly from owners.\"",
         ],
       },
       {
         heading: "1️⃣ Warm Opener — Follow-Up from Previous Contact",
         body: [
           "🎤 Hey, [Name]? This is [Your Name] with Freedom Offers. So my team talked to you previously about [address] and mentioned you might possibly be looking to sell. Do you have about 5 mins?",
-          "💡 Use this when your team has already made contact or they've engaged with you before. Skips the credibility setup — they know who you are. Go straight to property.",
+          "💡 Use this when your team has already made contact or they've engaged with you before. Skips the credibility setup, they know who you are. Go straight to property.",
         ],
       },
       {
         heading: "2️⃣ Why You're Calling",
         body: [
-          "🎤 So the reason I'm reaching out — we've got a group of developers and buyers right now actively looking for properties in your area. Yours came up as a potential fit. I'm not here to pressure you into anything — I just wanted to see if a private, off-market option is something you'd ever consider.",
+          "🎤 So the reason I'm reaching out, we look at properties in your area and run the numbers to see what we could pay. Yours came up as one we'd be interested in. I'm not here to pressure you into anything, I just wanted to see if a private, as-is sale is something you'd ever consider.",
         ],
       },
       {
@@ -50,11 +50,17 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "4️⃣ Property Condition & Details (confirm, don't interrogate)",
+        heading: "4️⃣ Property Condition & Details (for underwriting)",
         body: [
-          "🎤 So I'm actually pulling your property up right now — I'm showing a [#] bed / [#] bath, about [###] sq ft on a [###] sq ft lot, built in [year]. Just confirming I've got the right place — does that all line up?",
-          "🎤 And since it was built in [year], I'd assume the big-ticket items — roof, HVAC, water heater — are probably original or getting up there. Have any of those been updated, or are we mostly looking at original systems?",
-          "→ Beds, baths, sq ft, lot size and year are already on your comping software — CONFIRM them, don't ask. It signals you did your homework and we're not fishing. The only thing you're really learning here is the condition of the Major Six systems (roof, HVAC, water heater, foundation, electrical, sewage).",
+          "🎤 So I'm actually pulling your property up right now. I'm showing a [#] bed / [#] bath, about [###] sq ft on a [###] sq ft lot, built in [year]. Just confirming I've got the right place. Does that all line up?",
+          "→ Beds, baths, sq ft, lot size and year are already on your comping software, so CONFIRM them, don't ask. It signals you did your homework.",
+          "🎤 Perfect. I just need a feel for the condition so I can run it past our underwriters and see what it qualifies for. Mind walking me through the big-ticket items real quick?",
+          "❓ Roof, about how old is it, or when was it last replaced?",
+          "❓ HVAC / furnace, what's the age on that?",
+          "❓ Water heater, original or has it been swapped out?",
+          "❓ Foundation, any known issues, cracks, or settling?",
+          "❓ Windows, original single-pane or have they been updated?",
+          "→ GET THE AGE / YEAR on each: roof, HVAC, water heater, foundation, windows. That's exactly what underwriting needs to price the offer, so jot the year next to each one.",
           "🎤 Anything else major going on that I wouldn't see on paper?",
         ],
       },
@@ -67,11 +73,12 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "6️⃣ Soft Close",
+        heading: "6️⃣ Soft Close — run it by underwriting + get their email",
         body: [
-          "🎤 Would it make sense for me to take a deeper look at your property and come back with a couple of options? Just information — nothing pushy.",
-          "— OR —",
-          "🎤 Would you rather I reach back out if things change down the road? Keep our number handy — (877) 652-8991 — so you can reach us if something comes up.",
+          "🎤 Here's what I'd like to do. Let me take everything you gave me, run it past our underwriters, and come back to you with what the property would qualify for. No obligation at all, just real numbers.",
+          "🎤 What's the best email to send that over to? I'll get you the numbers along with a quick breakdown.",
+          "→ Always get the email. It lets you send the offer in writing AND follow up later. If they hesitate, frame it as \"just so I can send you the numbers in writing.\"",
+          "→ 🤝 Rapport: thank them for their time and reference something they shared earlier (the move, the timeline). Leaving them feeling heard is what gets the callback.",
         ],
       },
     ],

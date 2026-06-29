@@ -131,17 +131,17 @@ export default async function ScriptsPage({ searchParams }: { searchParams: Prom
           </div>
 
           {cur.objections.length > 0 && (
-            <div className="mt-5">
-              <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-red-600">🛡️ Common objections</h3>
-              <div className="space-y-2">
+            <details className="mt-6 rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/40 p-4">
+              <summary className="cursor-pointer text-sm font-bold text-indigo-800">🛡️ Objection handling <span className="font-normal text-indigo-500">— reference only · don&apos;t read these top-to-bottom; pull the matching one ONLY if it comes up</span></summary>
+              <div className="mt-3 space-y-2">
                 {cur.objections.map((o, oi) => (
-                  <div key={oi} className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                  <div key={oi} className="rounded-lg bg-white p-3 ring-1 ring-indigo-100">
                     <div className="text-sm font-semibold text-slate-800">“{o.objection}”</div>
-                    <div className="mt-1 rounded-lg bg-emerald-50 px-3 py-2 text-sm leading-relaxed text-emerald-900 ring-1 ring-emerald-200"><span className="mr-1 font-bold text-emerald-600">Say:</span>{o.response}</div>
+                    <div className="mt-1 rounded-lg bg-indigo-100/70 px-3 py-2 text-sm leading-relaxed text-indigo-900 ring-1 ring-indigo-200"><span className="mr-1 font-bold text-indigo-600">Reply:</span>{o.response}</div>
                   </div>
                 ))}
               </div>
-            </div>
+            </details>
           )}
 
           {/* Prev / Next nav */}
