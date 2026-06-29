@@ -62,6 +62,45 @@ function pushKpiSlides(s: Slide[], title: string, section: MeetingDeck["lastWeek
   }
 }
 
+// Slide 2 — "A small team. By design." Mirrors the public site's team section
+// (freedom-offers.com), rebuilt natively so it stays crisp at any size. Headshots
+// live in public/meeting/team/, pulled straight from the site.
+const TEAM = [
+  { slug: "jon", name: "Jon Cruz", title: "Founder & President" },
+  { slug: "enrico", name: "Enrico C.", title: "Vice President" },
+  { slug: "viktoriia", name: "Viktoriia C.", title: "Marketing Director" },
+  { slug: "cortana", name: "Cortana C.", title: "Technology Director" },
+  { slug: "marie", name: "Marie M.", title: "Operations Director" },
+  { slug: "sharyn", name: "Sharyn M.", title: "Dispositions Director" },
+  { slug: "ethan", name: "Ethan D.", title: "Licensed Real Estate Agent" },
+  { slug: "michelle", name: "Michelle L.", title: "Acquisitions Officer" },
+];
+const SERIF = "Georgia, 'Times New Roman', serif";
+function TeamSlide() {
+  return (
+    <div className="flex h-full w-full flex-col items-center bg-[#f5ede4] px-[5cqw] py-[4.5cqw] text-center">
+      <h2 style={{ fontFamily: SERIF, fontSize: "clamp(20px,5.2cqw,62px)", color: "#22404f" }}>
+        A small team. <span className="italic" style={{ color: "#5f7a63" }}>By design.</span>
+      </h2>
+      <p className="mt-[1cqw] text-slate-600" style={{ fontSize: "clamp(10px,1.7cqw,22px)" }}>
+        Eight people, working directly with you. No middlemen, no call centers, no scripts.
+      </p>
+      <div className="mt-[3cqw] grid w-full flex-1 grid-cols-4 gap-x-[2.5cqw] gap-y-[2cqw]">
+        {TEAM.map((p) => (
+          <div key={p.slug} className="flex flex-col">
+            <div
+              className="w-full bg-slate-200 bg-cover bg-top"
+              style={{ aspectRatio: "1 / 1", backgroundImage: `url(/meeting/team/${p.slug}.webp)` }}
+            />
+            <div className="mt-[1cqw] font-semibold" style={{ fontFamily: SERIF, fontSize: "clamp(10px,1.7cqw,22px)", color: "#22404f" }}>{p.name}</div>
+            <div className="mt-[0.3cqw] font-semibold uppercase tracking-wider" style={{ fontSize: "clamp(7px,1cqw,13px)", color: "#5f7a63" }}>{p.title}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function buildSlides(d: MeetingDeck): Slide[] {
   const s: Slide[] = [];
 
@@ -78,10 +117,8 @@ function buildSlides(d: MeetingDeck): Slide[] {
     </div>
   )});
 
-  // 2. Meet the team — the Canva team slide image (public/meeting/team.png)
-  s.push({ name: "Team", node: (
-    <div className="h-full w-full bg-[#f5ede4] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: "url(/meeting/team.png)" }} />
-  )});
+  // 2. Meet the team — native rebuild of the site's "A small team. By design." section
+  s.push({ name: "Team", node: <TeamSlide /> });
 
   // 3. Announcements
   s.push({ name: "Announcements", node: (
