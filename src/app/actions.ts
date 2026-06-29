@@ -542,12 +542,10 @@ export async function saveSettings(formData: FormData) {
 export async function saveMeetingSettings(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
+  // Annual goal is intentionally NOT editable here — it stays fixed all year. Only the
+  // editorial slides + meet links are saved, so the goal values in Settings are never
+  // touched (frozen at their current values).
   const data = {
-    annualRevenueGoal: numOrNull(formData.get("annualRevenueGoal")) ?? 0,
-    homeownersGoal: Math.round(numOrNull(formData.get("homeownersGoal")) ?? 24),
-    revenueStretchGoal: numOrNull(formData.get("revenueStretchGoal")) ?? 0,
-    goalReward: String(formData.get("goalReward") ?? "").trim(),
-    stretchReward: String(formData.get("stretchReward") ?? "").trim(),
     mtgAnnouncements: String(formData.get("mtgAnnouncements") ?? "").trim(),
     mtgComingSoon: String(formData.get("mtgComingSoon") ?? "").trim(),
     teamMeetLink: String(formData.get("teamMeetLink") ?? "").trim(),

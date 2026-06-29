@@ -145,7 +145,7 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
 
       {/* Edit content — lives on the same page; the team only sees the fullscreen Present view. */}
       <div id="edit" className="scroll-mt-4 border-t border-slate-200 pt-6">
-        <SectionTitle title="✏️ Edit deck content" subtitle="Annual goal, editorial slides, and the training-tip backlog" accent="bg-slate-300" />
+        <SectionTitle title="✏️ Edit deck content" subtitle="Editorial slides + the training-tip backlog" accent="bg-slate-300" />
 
         {sp.saved && (
           <div className="mb-4 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
@@ -155,26 +155,9 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
 
         <Card className="p-6">
           <form action={saveMeetingSettings} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <label>
-              <span className={labelCls}>Annual revenue goal ($)</span>
-              <input name="annualRevenueGoal" defaultValue={settings.annualRevenueGoal || ""} placeholder="500000" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Homeowners to help (mission)</span>
-              <input name="homeownersGoal" defaultValue={settings.homeownersGoal || ""} placeholder="24" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Goal reward / incentive</span>
-              <input name="goalReward" defaultValue={settings.goalReward} placeholder="Boracay / Cebu trip + $250 VA bonus" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Stretch revenue goal ($)</span>
-              <input name="revenueStretchGoal" defaultValue={settings.revenueStretchGoal || ""} placeholder="600000" className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Stretch reward / incentive</span>
-              <input name="stretchReward" defaultValue={settings.stretchReward} placeholder="+$250 additional VA bonus" className={inputCls} />
-            </label>
+            <div className="sm:col-span-2 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500 ring-1 ring-slate-200">
+              🎯 The annual goal is fixed for the year and shown on the Annual Goal slide — it&apos;s set once and not editable here on purpose. The progress bar still updates live from closed deals.
+            </div>
             <label className="sm:col-span-2">
               <span className={labelCls}>Team Announcements (one per line)</span>
               <textarea name="mtgAnnouncements" defaultValue={settings.mtgAnnouncements} rows={4} placeholder={"New script live\nUpdated underwriting process\n…"} className={inputCls} />
