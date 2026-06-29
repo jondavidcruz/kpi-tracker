@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
@@ -77,12 +78,28 @@ export default async function ScriptsPage({ searchParams }: { searchParams: Prom
           <p className="mb-4 text-sm text-slate-500">{cur.summary}</p>
 
           <div className="space-y-3">
-            {cur.steps.map((st, si) => (
-              <div key={si} className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                <h3 className="mb-1.5 text-sm font-bold text-brand-navy">{st.heading}</h3>
-                <div>{st.body.map((b, bi) => <Line key={bi} text={b} />)}</div>
-              </div>
-            ))}
+            {cur.steps.map((st, si) => {
+              const isCold = /cold opener/i.test(st.heading);
+              const isWarm = /warm opener/i.test(st.heading);
+              const prevCold = /cold opener/i.test(cur.steps[si - 1]?.heading || "");
+              const opener = isCold || isWarm;
+              return (
+                <Fragment key={si}>
+                  {isCold && <div className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">👇 Use ONE opener — Cold OR Warm, not both</div>}
+                  {isWarm && prevCold && (
+                    <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400"><span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" /></div>
+                  )}
+                  <div className={`rounded-xl p-4 ring-1 ${opener ? (isCold ? "bg-sky-50 ring-sky-200" : "bg-orange-50 ring-orange-200") : "bg-slate-50 ring-slate-200"}`}>
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                      {isCold && <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">🥶 USE IF COLD</span>}
+                      {isWarm && <span className="rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-800">🔥 USE IF WARM — already contacted</span>}
+                      <h3 className="text-sm font-bold text-brand-navy">{st.heading}</h3>
+                    </div>
+                    <div>{st.body.map((b, bi) => <Line key={bi} text={b} />)}</div>
+                  </div>
+                </Fragment>
+              );
+            })}
           </div>
 
           {cur.objections.length > 0 && (
