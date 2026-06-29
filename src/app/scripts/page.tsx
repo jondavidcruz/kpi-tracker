@@ -24,16 +24,22 @@ function Line({ text }: { text: string }) {
   return <p className="py-0.5 text-sm leading-relaxed text-slate-700">{t}</p>;
 }
 
-// One script step as a card. Cold/Warm openers get color + a badge so they read as a choice.
+// "Choose one" steps (openers, soft closes) get a color + badge so they read as a choice.
+function stepVariant(h: string): { badge: string; badgeCls: string; cardCls: string } | null {
+  if (/cold opener/i.test(h)) return { badge: "🥶 USE IF COLD", badgeCls: "bg-sky-200 text-sky-800", cardCls: "bg-sky-50 ring-sky-200" };
+  if (/warm opener/i.test(h)) return { badge: "🔥 USE IF WARM — already contacted", badgeCls: "bg-orange-200 text-orange-800", cardCls: "bg-orange-50 ring-orange-200" };
+  if (/soft close/i.test(h)) {
+    if (/not urgent|roadblock|no rush|stall/i.test(h)) return { badge: "🤔 USE IF NOT URGENT / HAS ROADBLOCKS", badgeCls: "bg-amber-200 text-amber-900", cardCls: "bg-amber-50 ring-amber-200" };
+    if (/motivated|ready|urgent/i.test(h)) return { badge: "✅ USE IF MOTIVATED", badgeCls: "bg-emerald-200 text-emerald-800", cardCls: "bg-emerald-50 ring-emerald-200" };
+  }
+  return null;
+}
 function StepCard({ st }: { st: { heading: string; body: string[] } }) {
-  const isCold = /cold opener/i.test(st.heading);
-  const isWarm = /warm opener/i.test(st.heading);
-  const opener = isCold || isWarm;
+  const v = stepVariant(st.heading);
   return (
-    <div className={`h-full rounded-xl p-4 ring-1 ${opener ? (isCold ? "bg-sky-50 ring-sky-200" : "bg-orange-50 ring-orange-200") : "bg-slate-50 ring-slate-200"}`}>
+    <div className={`h-full rounded-xl p-4 ring-1 ${v ? v.cardCls : "bg-slate-50 ring-slate-200"}`}>
       <div className="mb-1.5 flex flex-wrap items-center gap-2">
-        {isCold && <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">🥶 USE IF COLD</span>}
-        {isWarm && <span className="rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-800">🔥 USE IF WARM — already contacted</span>}
+        {v && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${v.badgeCls}`}>{v.badge}</span>}
         <h3 className="text-sm font-bold text-brand-navy">{st.heading}</h3>
       </div>
       <div>{st.body.map((b, bi) => <Line key={bi} text={b} />)}</div>
@@ -100,19 +106,22 @@ export default async function ScriptsPage({ searchParams }: { searchParams: Prom
               for (let i = 0; i < cur.steps.length; i++) {
                 const st = cur.steps[i];
                 const next = cur.steps[i + 1];
-                // A Cold opener immediately followed by a Warm opener → render them SIDE BY SIDE
-                // so the rep picks one column instead of reading down and using both.
-                if (/cold opener/i.test(st.heading) && next && /warm opener/i.test(next.heading)) {
+                // Two "choose one" steps in a row (Cold+Warm openers, or two Soft Closes) →
+                // render SIDE BY SIDE so the rep picks one column instead of reading down + using both.
+                const bothOpeners = /opener/i.test(st.heading) && !!next && /opener/i.test(next.heading);
+                const bothCloses = /soft close/i.test(st.heading) && !!next && /soft close/i.test(next.heading);
+                if (bothOpeners || bothCloses) {
+                  const hdr = bothOpeners ? "👉 Pick ONE opener — Cold or Warm, not both" : "👉 Pick ONE close — based on how motivated they are";
                   out.push(
                     <div key={i}>
-                      <div className="mb-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-slate-400">👉 Pick ONE opener — Cold or Warm, not both</div>
+                      <div className="mb-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-slate-400">{hdr}</div>
                       <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2">
                         <StepCard st={st} />
-                        <StepCard st={next} />
+                        <StepCard st={next!} />
                       </div>
                     </div>
                   );
-                  i++; // skip the warm step — already rendered in the pair
+                  i++; // skip the paired step — already rendered
                 } else {
                   out.push(<StepCard key={i} st={st} />);
                 }

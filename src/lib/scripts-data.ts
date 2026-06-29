@@ -144,11 +144,17 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "6️⃣ Soft Close",
+        heading: "6️⃣ Soft Close — if they're motivated",
         body: [
           "🎤 Would it make sense for me to take a deeper look at your property and come back with a couple of options? Just information — nothing pushy.",
-          "— OR —",
+          "→ Use this when there's real motivation or urgency — they want to move. Go for the next step (a deeper look + options).",
+        ],
+      },
+      {
+        heading: "6️⃣ Soft Close — if not urgent or has roadblocks",
+        body: [
           "🎤 Would you rather I reach back out if things change down the road? Keep our number handy — (877) 652-8991 — so you can reach us if something comes up.",
+          "→ Use this when they're not in a rush to sell or hit you with roadblocks (taxes, tenants, timing, family). Don't push — plant the seed, stay top-of-mind, and follow up later.",
         ],
       },
     ],
