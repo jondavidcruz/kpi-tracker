@@ -72,16 +72,19 @@ export async function GET() {
     }
   }
 
-  // Break nudge: anyone online 120+ min straight (no break) gets a one-time Chat ping to
-  // step away. Atomic guard via breakNudgedAt; reset the moment they're not "online".
-  const BREAK_NUDGE_MIN = 120;
+  // Break nudge: anyone online ~2h45m straight (no break) gets a one-time Chat ping to step
+  // away — but NOT in the morning (before noon). The team starts at 9am fresh and breaks at
+  // lunch (~12–1pm), so morning nudges are just noise. Atomic guard via breakNudgedAt;
+  // reset the moment they're not "online".
+  const BREAK_NUDGE_MIN = 165;     // ~2h45m — between the 2.5h and 3h Jon wants (2h was too short)
+  const NUDGE_AFTER_MIN = 12 * 60; // don't recommend a break before noon (org-local)
   const sinceById = new Map(people.map((p) => [p.id, p.sinceMs]));
   for (const u of users) {
     if (isOwner(u)) continue;
     const st = stateById.get(u.id);
     const sinceMs = sinceById.get(u.id);
     const contMin = st === "online" && sinceMs ? Math.floor((now.getTime() - sinceMs) / 60000) : 0;
-    if (st === "online" && contMin >= BREAK_NUDGE_MIN && !u.breakNudgedAt) {
+    if (st === "online" && nowMin >= NUDGE_AFTER_MIN && contMin >= BREAK_NUDGE_MIN && !u.breakNudgedAt) {
       const won = await db.user.updateMany({ where: { id: u.id, breakNudgedAt: null }, data: { breakNudgedAt: now } });
       if (won.count === 1) await sendTimecardChat(`☕ *${u.name} has been heads-down ${Math.floor(contMin / 60)}h ${contMin % 60}m straight* — time for a quick break to reset.`).catch(() => {});
     } else if (st !== "online" && u.breakNudgedAt) {
