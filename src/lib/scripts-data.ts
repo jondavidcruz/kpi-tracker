@@ -50,11 +50,12 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "4️⃣ Property Condition & Details",
+        heading: "4️⃣ Property Condition & Details (confirm, don't interrogate)",
         body: [
-          "🎤 Can you walk me through the condition? HVAC, roof, water heater, foundation, electrical, sewage — what's the situation?",
-          "→ Listen for major systems. Ask directly about the \"Major Six Elements\" if they don't mention them.",
-          "❓ Any other major issues I should know about?",
+          "🎤 So I'm actually pulling your property up right now — I'm showing a [#] bed / [#] bath, about [###] sq ft on a [###] sq ft lot, built in [year]. Just confirming I've got the right place — does that all line up?",
+          "🎤 And since it was built in [year], I'd assume the big-ticket items — roof, HVAC, water heater — are probably original or getting up there. Have any of those been updated, or are we mostly looking at original systems?",
+          "→ Beds, baths, sq ft, lot size and year are already on your comping software — CONFIRM them, don't ask. It signals you did your homework and we're not fishing. The only thing you're really learning here is the condition of the Major Six systems (roof, HVAC, water heater, foundation, electrical, sewage).",
+          "🎤 Anything else major going on that I wouldn't see on paper?",
         ],
       },
       {
@@ -117,14 +118,13 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "3️⃣ Lot & Development Questions",
+        heading: "3️⃣ Lot & Development Details (confirm, don't interrogate)",
         body: [
-          "❓ Do you know the lot size roughly?",
-          "❓ Is it pretty rectangular or does it have some weird angles?",
-          "❓ Any easements on it? Like utilities or drainage?",
-          "❓ Any setback issues when you tried to do improvements?",
-          "❓ How is it zoned?",
-          "❓ You on sewer or septic?",
+          "🎤 I'm pulling the lot up now — I'm showing roughly [###] sq ft, zoned [zoning], and it looks pretty [rectangular / irregular]. Confirming I've got that right?",
+          "🎤 From the parcel map it looks like there [are / aren't] any easements — utilities or drainage — running through it. Is that accurate?",
+          "🎤 And it looks like the property's on [sewer / septic]. Does that match?",
+          "→ Lot size, zoning, shape, easements and utilities are all visible in your comping / parcel software — LEAD by confirming them so it's clear you've done your homework, not fishing. Only go open-ended where the data genuinely isn't available.",
+          "❓ One thing I can't see on my end — did you ever run into any setback issues when you tried to improve the property?",
         ],
       },
       {
