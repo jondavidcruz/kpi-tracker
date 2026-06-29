@@ -1,13 +1,15 @@
 // Derive live availability + worked time from a user's time-card punches.
 
-export type PresenceState = "online" | "break" | "lunch" | "offline";
+export type PresenceState = "online" | "break" | "lunch" | "meeting" | "offline";
 
 const STATE_BY_KIND: Record<string, PresenceState> = {
   in: "online",
   break_end: "online",
   lunch_end: "online",
+  meeting_end: "online",
   break_start: "break",
   lunch_start: "lunch",
+  meeting_start: "meeting",
   out: "offline",
 };
 
@@ -34,9 +36,9 @@ export function workedMinutes(
   let total = 0;
   let inAt: Date | null = null;
   for (const p of punches) {
-    if (p.kind === "in" || p.kind === "break_end" || p.kind === "lunch_end") {
+    if (p.kind === "in" || p.kind === "break_end" || p.kind === "lunch_end" || p.kind === "meeting_end") {
       if (inAt === null) inAt = p.at;
-    } else if (p.kind === "out" || p.kind === "break_start" || p.kind === "lunch_start") {
+    } else if (p.kind === "out" || p.kind === "break_start" || p.kind === "lunch_start" || p.kind === "meeting_start") {
       if (inAt !== null) {
         total += p.at.getTime() - inAt.getTime();
         inAt = null;
@@ -47,7 +49,7 @@ export function workedMinutes(
   return Math.max(0, Math.round(total / 60000));
 }
 
-export type DaySegment = { type: "break" | "lunch"; startMs: number; endMs: number | null; min: number };
+export type DaySegment = { type: "break" | "lunch" | "meeting"; startMs: number; endMs: number | null; min: number };
 export type DayTimeline = {
   clockInMs: number | null;
   segments: DaySegment[]; // breaks + lunches, in order
@@ -64,7 +66,7 @@ export function daySegments(punches: { kind: string; at: Date }[], now: Date): D
   let lastBreakEndMs: number | null = null;
   let lastLunchEndMs: number | null = null;
   let openStartMs: number | null = null; // start of a current break/lunch
-  let openType: "break" | "lunch" | null = null;
+  let openType: "break" | "lunch" | "meeting" | null = null;
   let onlineSinceMs: number | null = null; // start of the current continuous-online stretch
 
   for (const p of punches) {
@@ -72,7 +74,8 @@ export function daySegments(punches: { kind: string; at: Date }[], now: Date): D
     if (p.kind === "in") { clockInMs = clockInMs ?? t; onlineSinceMs = t; }
     else if (p.kind === "break_start") { openStartMs = t; openType = "break"; onlineSinceMs = null; }
     else if (p.kind === "lunch_start") { openStartMs = t; openType = "lunch"; onlineSinceMs = null; }
-    else if (p.kind === "break_end" || p.kind === "lunch_end") {
+    else if (p.kind === "meeting_start") { openStartMs = t; openType = "meeting"; onlineSinceMs = null; }
+    else if (p.kind === "break_end" || p.kind === "lunch_end" || p.kind === "meeting_end") {
       if (openStartMs != null && openType) {
         segments.push({ type: openType, startMs: openStartMs, endMs: t, min: Math.round((t - openStartMs) / 60000) });
         if (openType === "break") lastBreakEndMs = t; else lastLunchEndMs = t;
@@ -88,7 +91,7 @@ export function daySegments(punches: { kind: string; at: Date }[], now: Date): D
   return { clockInMs, segments, lastBreakEndMs, lastLunchEndMs, continuousMin };
 }
 
-export type BarState = "work" | "break" | "lunch" | "outage" | "off";
+export type BarState = "work" | "break" | "lunch" | "meeting" | "outage" | "off";
 export type BarSeg = { state: BarState; startMin: number; endMin: number };
 export type DayBar = { startMin: number; endMin: number; nowMin: number; segments: BarSeg[] };
 
@@ -110,9 +113,10 @@ export function dayBar(
   for (const p of punches) {
     const m = toMin(p.at);
     if (p.kind === "in") { clockIn = clockIn ?? m; events.push({ from: m, state: "work" }); }
-    else if (p.kind === "break_end" || p.kind === "lunch_end") events.push({ from: m, state: "work" });
+    else if (p.kind === "break_end" || p.kind === "lunch_end" || p.kind === "meeting_end") events.push({ from: m, state: "work" });
     else if (p.kind === "break_start") events.push({ from: m, state: "break" });
     else if (p.kind === "lunch_start") events.push({ from: m, state: "lunch" });
+    else if (p.kind === "meeting_start") events.push({ from: m, state: "meeting" });
     else if (p.kind === "out") events.push({ from: m, state: "off" });
   }
   if (clockIn == null) return null;

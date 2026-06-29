@@ -222,12 +222,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     .map((u) => {
       const ps = byUser.get(u.id) ?? [];
       const { state, since } = stateFromPunches(ps);
-      const working = state === "online" || state === "break" || state === "lunch";
+      const working = state === "online" || state === "break" || state === "lunch" || state === "meeting";
       const o = liveByUser.get(u.id);
       let st: string = state;
       if (o) st = "outage";
       else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
-      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
+      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
     });
 
   // My time card today.

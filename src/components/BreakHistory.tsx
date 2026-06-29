@@ -13,6 +13,7 @@ export default function BreakHistory({ timeline, tz, outages = [], compact = fal
   if (!clockInMs && segments.length === 0 && outages.length === 0) return null;
   const breaks = segments.filter((s) => s.type === "break");
   const lunches = segments.filter((s) => s.type === "lunch");
+  const meetings = segments.filter((s) => s.type === "meeting");
   const lastBack = Math.max(lastBreakEndMs ?? 0, lastLunchEndMs ?? 0) || null;
 
   return (
@@ -20,8 +21,8 @@ export default function BreakHistory({ timeline, tz, outages = [], compact = fal
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         {clockInMs && <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">▶︎ In {fmt(clockInMs, tz)}</span>}
         {segments.map((s, i) => (
-          <span key={i} className={`rounded-full px-2 py-0.5 font-medium ${s.type === "lunch" ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"}`}>
-            {s.type === "lunch" ? "🍽️" : "☕"} {fmt(s.startMs, tz)}{s.endMs ? `–${fmt(s.endMs, tz)}` : "…"} · {hm(s.min)}{s.endMs ? "" : " (ongoing)"}
+          <span key={i} className={`rounded-full px-2 py-0.5 font-medium ${s.type === "lunch" ? "bg-orange-100 text-orange-700" : s.type === "meeting" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>
+            {s.type === "lunch" ? "🍽️" : s.type === "meeting" ? "📅" : "☕"} {fmt(s.startMs, tz)}{s.endMs ? `–${fmt(s.endMs, tz)}` : "…"} · {hm(s.min)}{s.endMs ? "" : " (ongoing)"}
           </span>
         ))}
         {outages.map((o, i) => (
@@ -33,7 +34,7 @@ export default function BreakHistory({ timeline, tz, outages = [], compact = fal
       </div>
       {!compact && (
         <div className="mt-1.5 text-[11px] text-slate-400">
-          {breaks.length} break{breaks.length === 1 ? "" : "s"}{lunches.length ? ` · ${lunches.length} lunch` : ""}
+          {breaks.length} break{breaks.length === 1 ? "" : "s"}{lunches.length ? ` · ${lunches.length} lunch` : ""}{meetings.length ? ` · ${meetings.length} meeting${meetings.length === 1 ? "" : "s"}` : ""}
           {lastBack ? ` · last back at ${fmt(lastBack, tz)}` : ""}
         </div>
       )}

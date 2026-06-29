@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { punch } from "@/app/actions";
 
-type State = "online" | "break" | "lunch" | "offline";
+type State = "online" | "break" | "lunch" | "meeting" | "offline";
 
 const STATUS: Record<State, { label: string; cls: string }> = {
   online: { label: "🟢 Clocked in", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
   break: { label: "🟡 On break", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
   lunch: { label: "🟡 At lunch", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
+  meeting: { label: "🟣 In a meeting", cls: "bg-violet-50 text-violet-700 ring-violet-200" },
   offline: { label: "⚪️ Day ended", cls: "bg-slate-100 text-slate-600 ring-slate-200" },
 };
 
@@ -130,6 +131,7 @@ export default function TimeClock({
           <>
             <PunchButton kind="break_start" label="☕ Start break" cls="bg-amber-400 text-amber-950 hover:bg-amber-500" />
             {showLunch && <PunchButton kind="lunch_start" label="🍽️ Start lunch" cls="bg-amber-400 text-amber-950 hover:bg-amber-500" />}
+            <PunchButton kind="meeting_start" label="📅 In a meeting" cls="bg-violet-500 text-white hover:bg-violet-600" />
             <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
           </>
         )}
@@ -142,6 +144,12 @@ export default function TimeClock({
         {state === "lunch" && (
           <>
             <PunchButton kind="lunch_end" label="↩︎ End lunch — back to work" cls="bg-emerald-600 text-white hover:bg-emerald-700" />
+            <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
+          </>
+        )}
+        {state === "meeting" && (
+          <>
+            <PunchButton kind="meeting_end" label="↩︎ End meeting — back to work" cls="bg-emerald-600 text-white hover:bg-emerald-700" />
             <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
           </>
         )}
