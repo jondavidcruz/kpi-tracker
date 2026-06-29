@@ -136,11 +136,13 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "5️⃣ What Makes Freedom Offers Different",
+        heading: "5️⃣ What Makes Freedom Offers Different (pause between each — let them react)",
         body: [
-          "🎤 Here's what's different about us — we typically pay at retail value. So you get what you'd get on the open market, but without dealing with agents, inspections, appraisals, or any of that. And we cover all the closing costs. You actually come out ahead because you're saving 6% in commissions alone.",
-          "🎤 Everything stays private — no public listings, no neighbors knowing your business, no open houses. You stay in control the whole time. And if you need time after closing, we can work with that too.",
-          "🎤 You can also check us out at freedom-offers.com — see the kind of work we do and the developers we partner with. We're not a fly-by-night operation. We're a veteran-owned company and we take that seriously. If you have any questions, you can also reach us at (877) 652-8991 or email info@freedom-offers.com.",
+          "🎤 Here's what's different about us. We typically pay at retail value, so you get what you'd get on the open market, but without dealing with agents, inspections, or appraisals. And we cover all the closing costs.",
+          "🎤 So you actually come out ahead, because you're saving the 6% in commissions alone. How does that sound so far?",
+          "🎤 Everything also stays completely private. No public listings, no neighbors knowing your business, no open houses. You stay in control the whole time.",
+          "🎤 And if you need a little time in the home after closing, we can usually work with that too. Would that help you out?",
+          "🎤 You can also check us out at freedom-offers.com to see the work we do and the developers we partner with. We're a veteran-owned company, not a fly-by-night operation. Anytime, you can reach us at (877) 652-8991 or info@freedom-offers.com.",
         ],
       },
       {
