@@ -9,6 +9,7 @@ import { sendEmailWithAttachment, sendGoogleChat, sendEmailTo } from "@/lib/noti
 import { upcomingCulture, prettyMMDD, whenLabel, ordinal } from "@/lib/culture";
 import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
+import { sendCallCoverageChat } from "@/lib/call-coverage";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
 import { sendHuddleBrief, sendHuddleNudge } from "@/lib/huddle-brief";
 import { writeDay, writeOpps, writeActivity } from "@/lib/crm-sync";
@@ -184,6 +185,15 @@ export async function GET(request: Request) {
     const today = date ?? todayStr(settings.orgTimezone);
     const sent = await sendLeaksReport(today);
     return NextResponse.json({ ok: true, leaks: sent });
+  }
+
+  // End-of-day: post the "money calls vs recordings uploaded" check to the team so
+  // anyone short on recordings uploads before logging off. Runs after the EOD CRM sync.
+  if (url.searchParams.get("callcheck") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const res = await sendCallCoverageChat(today, settings.orgTimezone);
+    return NextResponse.json({ ok: true, callcheck: res });
   }
 
   // Nightly: move call recordings off Supabase Storage into Google Drive (free).
