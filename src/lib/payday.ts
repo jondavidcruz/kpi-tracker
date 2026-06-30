@@ -2,7 +2,7 @@ import { db } from "./db";
 import { getSettings } from "./data";
 import { sendEmailTo } from "./notify";
 import { workedMinutes } from "./presence";
-import { parseHourly, fmtHours } from "./payroll";
+import { parseHourly, parseFlatDailyHours, fmtHours } from "./payroll";
 import { datesInRange, payPeriod } from "./date";
 import { workCapAt } from "./shift";
 
@@ -38,9 +38,13 @@ export async function sendPayrollEmail(payday: string): Promise<boolean> {
   const now = new Date();
 
   let totalPay = 0;
+  const hoursWatch: string[] = []; // salaried mgmt who came up short on actual hours
   const rows = active.map((u) => {
-    const rate = parseHourly(profByUser.get(u.id)?.payScale);
+    const payScale = profByUser.get(u.id)?.payScale;
+    const rate = parseHourly(payScale);
+    const flatH = parseFlatDailyHours(payScale); // salaried mgmt: paid Nh flat M–F
     let autoH = 0;
+    let weekdays = 0;
     for (const d of days) {
       const ps = punchByDay.get(`${u.id}|${d}`) ?? [];
       // Cap each day at its scheduled shift end so a forgotten clock-out can't
@@ -49,15 +53,23 @@ export async function sendPayrollEmail(payday: string): Promise<boolean> {
       dayH -= (adjByDay.get(`${u.id}|${d}`)?.deductHours ?? 0);
       dayH -= (outageMinByDay.get(`${u.id}|${d}`) ?? 0) / 60; // self-reported outages, unpaid
       autoH += Math.max(0, dayH);
+      const dow = new Date(d + "T12:00:00Z").getUTCDay();
+      if (dow >= 1 && dow <= 5) weekdays++;
     }
     const pe = payEntryByUser.get(u.id);
-    const paidH = pe?.manualHours != null ? pe.manualHours : autoH; // Marie's entry wins
+    // Flat-hours people are paid Nh per weekday regardless of clock; everyone else
+    // is paid manual-entered hours (if any) else clock-tracked.
+    const flatExpected = flatH != null ? flatH * weekdays : null;
+    const paidH = flatExpected != null ? flatExpected : (pe?.manualHours != null ? pe.manualHours : autoH);
+    if (flatExpected != null && autoH + 0.05 < flatExpected) {
+      hoursWatch.push(`${u.name} actually worked ${fmtHours(autoH)} of ${fmtHours(flatExpected)} expected (paid the flat ${fmtHours(flatExpected)} — short ${fmtHours(flatExpected - autoH)} on the clock).`);
+    }
     const bonus = bonusByUser.get(u.id) ?? 0;
     const adjustAmt = pe?.adjustAmount ?? 0;
     const gross = rate != null ? paidH * rate : null;
     const total = (gross ?? 0) + bonus + adjustAmt;
     totalPay += total;
-    return { name: u.name, paidH, rate, gross, bonus, total };
+    return { name: u.name + (flatH != null ? " (flat M–F)" : ""), paidH, rate, gross, bonus, total };
   });
 
   const tr = rows
@@ -81,6 +93,10 @@ export async function sendPayrollEmail(payday: string): Promise<boolean> {
       <tbody>${tr}</tbody>
       <tfoot><tr style="border-top:2px solid #0b1f3a;font-weight:800"><td style="padding:8px 10px" colspan="5">Total payroll</td><td style="padding:8px 10px;text-align:right">${money(totalPay)}</td></tr></tfoot>
     </table>
+    ${hoursWatch.length ? `<div style="margin-top:14px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:13px;color:#92400e">
+      <strong>⏱️ Hours watch (paid flat regardless):</strong>
+      <ul style="margin:6px 0 0;padding-left:18px">${hoursWatch.map((n) => `<li>${n}</li>`).join("")}</ul>
+    </div>` : ""}
     <p style="color:#94a3b8;font-size:12px;margin-top:14px">Open the Time Card in the War Room for the day-by-day breakdown.</p>
   </div>`;
   return sendEmailTo(to, `💵 Payday summary — ${period.label} (${money(totalPay)})`, html);

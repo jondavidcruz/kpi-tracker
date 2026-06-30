@@ -5,7 +5,7 @@ import { getAllUsers, getSettings } from "@/lib/data";
 import { todayStr, payPeriod, datesInRange } from "@/lib/date";
 import { workedMinutes } from "@/lib/presence";
 import { workCapAt } from "@/lib/shift";
-import { parseHourly, fmtHours } from "@/lib/payroll";
+import { parseHourly, parseFlatDailyHours, fmtHours } from "@/lib/payroll";
 import { positionLabel } from "@/lib/roles";
 import { saveTimeAdjustment, saveBonus, deleteBonus, savePayHours, savePayDiscrepancy, deleteOutage } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
@@ -78,7 +78,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             <Link href={`/timecard?p=${off + 1}`} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-200">→</Link>
           </div>
         } />
-      {showPay && <p className="text-xs text-slate-400">Semi-monthly: paid on the <strong>15th</strong> and the <strong>last day</strong> of each month (periods 1–15 & 16–end). Pay = paid hours × hourly rate + bonuses − discrepancies. Marie&apos;s entered hours are what pay; the clock-tracked hours are shown beside them as a check.</p>}
+      {showPay && <p className="text-xs text-slate-400">Semi-monthly: paid on the <strong>15th</strong> and the <strong>last day</strong> of each month (periods 1–15 & 16–end). Pay = paid hours × hourly rate + bonuses − discrepancies. Salaried management (Marie) is paid a flat daily rate Mon–Fri regardless of the clock; her actual hours are tracked beside as a check, and days/weeks under her flat hours are flagged.</p>}
 
       {/* Minute → decimal conversion reference (for exact per-minute pay) */}
       <details className="rounded-xl border border-slate-200 bg-white p-3">
@@ -97,6 +97,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
       {active.map((u) => {
         const prof = profByUser.get(u.id);
         const rate = parseHourly(prof?.payScale);
+        const flatH = parseFlatDailyHours(prof?.payScale); // salaried mgmt: paid Nh flat M–F
         const bonusRows = bonusByUser.get(u.id) ?? [];
         const bonusSum = bonusRows.reduce((s, b) => s + b.amount, 0);
         const pe = payEntryByUser.get(u.id);
@@ -112,18 +113,27 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
           const paidH = Math.max(0, workedH - deduct);
           const inAt = ps.find((p) => p.kind === "in")?.at ?? null;
           const outAt = [...ps].reverse().find((p) => p.kind === "out")?.at ?? null;
+          // Flat-hours people (management) are paid Nh every weekday up to today, regardless
+          // of the clock. We still track actual hours and flag weekdays worked under Nh.
+          const weekday = dow >= 1 && dow <= 5;
+          const flatDay = flatH != null && weekday && d <= today;
+          const payH = flatH != null ? (weekday ? flatH : 0) : paidH;
+          const short = flatDay && flatH != null && !leave && adj?.status !== "day_off" && workedH + 0.001 < flatH;
           let status = "—";
           if (workedH > 0) status = "Working";
           else if (leave) status = LEAVE[leave.type] ?? "Time off";
           else if (adj?.status === "day_off") status = "Day off";
-          return { d, dow, workedH, deduct, outH, paidH, inAt, outAt, status, note: adj?.note ?? "", hasData: ps.length > 0 || !!leave || !!adj || outH > 0 };
-        }).filter((r) => r.hasData);
+          else if (flatDay) status = "No clock-in";
+          return { d, dow, workedH, deduct, outH, paidH, payH, short, flatDay, inAt, outAt, status, note: adj?.note ?? "", hasData: ps.length > 0 || !!leave || !!adj || outH > 0 };
+        }).filter((r) => r.hasData || r.flatDay);
 
-        const autoPaidH = rows.reduce((s, r) => s + r.paidH, 0);
+        const autoPaidH = rows.reduce((s, r) => s + r.paidH, 0); // actual clock total
+        const flatPayH = rows.reduce((s, r) => s + r.payH, 0);   // flat pay basis (Nh × weekdays so far)
         const deductH = rows.reduce((s, r) => s + r.deduct, 0);
-        const manualH = pe?.manualHours ?? null;
-        const paidH = manualH != null ? manualH : autoPaidH; // Marie's entry is source of truth
+        const manualH = flatH != null ? null : (pe?.manualHours ?? null); // flat overrides manual entry
+        const paidH = flatH != null ? flatPayH : (manualH != null ? manualH : autoPaidH);
         const variance = manualH != null ? manualH - autoPaidH : 0;
+        const shortDays = rows.filter((r) => r.short).length;
         const adjustAmt = pe?.adjustAmount ?? 0;
         const gross = rate != null ? paidH * rate : null;
         const total = (gross ?? 0) + bonusSum + adjustAmt;
@@ -135,6 +145,12 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
               <span className="text-xs text-slate-400">{positionLabel(u.position)}</span>
               {showPay && <span className="ml-auto text-xs font-semibold text-slate-500">{rate != null ? `${money(rate)}/hr` : (prof?.payScale || "rate: see pay card")}</span>}
             </div>
+
+            {flatH != null && (
+              <div className="mt-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800 ring-1 ring-indigo-200">
+                💼 <strong>Salaried management — paid {fmtHours(flatH)} flat every weekday (Mon–Fri)</strong>, regardless of the clock. Actual hours are still tracked below; any weekday worked under {fmtHours(flatH)} is highlighted{shortDays > 0 ? <>, and there {shortDays === 1 ? "is" : "are"} <strong>{shortDays} short {shortDays === 1 ? "day" : "days"}</strong> this period</> : ""}.
+              </div>
+            )}
 
             {/* Daily rows */}
             <div className="mt-3 overflow-x-auto">
@@ -148,24 +164,55 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                 </thead>
                 <tbody>
                   {rows.length === 0 && <tr><td colSpan={8} className="py-3 text-center text-slate-400">No activity this period.</td></tr>}
-                  {rows.map((r) => (
-                    <tr key={r.d} className="border-b border-slate-50">
+                  {rows.map((r) => {
+                    const shownPaid = flatH != null ? r.payH : r.paidH;
+                    return (
+                    <tr key={r.d} className={`border-b border-slate-50 ${r.short ? "bg-amber-50" : ""}`}>
                       <td className="py-1.5 pr-3 font-medium text-slate-600">{WD[r.dow]} {r.d.slice(5)}</td>
                       <td className="px-2 text-slate-500">{clock(r.inAt)}</td>
                       <td className="px-2 text-slate-500">{clock(r.outAt)}</td>
-                      <td className="px-2 text-right tabular-nums">{r.workedH > 0 ? fmtHours(r.workedH) : "—"}</td>
+                      <td className={`px-2 text-right tabular-nums ${r.short ? "font-semibold text-amber-700" : ""}`}>{r.workedH > 0 ? fmtHours(r.workedH) : "—"}</td>
                       <td className="px-2 text-right tabular-nums text-red-600">{r.deduct > 0 ? `-${fmtHours(r.deduct)}` : ""}</td>
-                      <td className="px-2 text-right font-semibold tabular-nums">{r.paidH > 0 ? fmtHours(r.paidH) : "—"}</td>
-                      <td className="px-2"><span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${r.status === "Working" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{r.status}</span></td>
+                      <td className="px-2 text-right font-semibold tabular-nums">{shownPaid > 0 ? fmtHours(shownPaid) : "—"}</td>
+                      <td className="px-2">{r.short
+                        ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">▼ under {flatH != null ? fmtHours(flatH) : ""}</span>
+                        : <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${r.status === "Working" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{r.status}</span>}</td>
                       <td className="px-2 text-xs text-slate-500">{r.note}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Weekly subtotals — read the period week by week */}
             {(() => {
+              // Flat-hours people: show ACTUAL worked vs EXPECTED (flat × weekdays elapsed) per
+              // week, and flag any week she came up short on her hours.
+              if (flatH != null) {
+                const wk = new Map<string, { actual: number; expected: number }>();
+                for (const r of rows) {
+                  const k = weekStartOf(r.d);
+                  const e = wk.get(k) ?? { actual: 0, expected: 0 };
+                  e.actual += r.workedH;
+                  if (r.flatDay) e.expected += flatH;
+                  wk.set(k, e);
+                }
+                const weeks = [...wk.entries()].filter(([, e]) => e.expected > 0).sort((a, b) => a[0].localeCompare(b[0]));
+                if (weeks.length === 0) return null;
+                return (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {weeks.map(([k, e]) => {
+                      const short = e.actual + 0.05 < e.expected;
+                      return (
+                        <span key={k} className={`rounded-md px-2 py-1 text-[11px] font-semibold ${short ? "bg-amber-100 text-amber-800 ring-1 ring-amber-200" : "bg-slate-100 text-slate-600"}`}>
+                          Week of {mdShort(k)}: <span className="tabular-nums">{fmtHours(e.actual)}</span> / {fmtHours(e.expected)} {short ? <span>▼ short {fmtHours(e.expected - e.actual)}</span> : <span className="text-emerald-600">✓</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                );
+              }
               const weekly = new Map<string, number>();
               for (const r of rows) weekly.set(weekStartOf(r.d), (weekly.get(weekStartOf(r.d)) ?? 0) + r.paidH);
               const weeks = [...weekly.entries()].sort((a, b) => a[0].localeCompare(b[0]));
@@ -182,7 +229,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             {/* Summary — Auto (clock) vs Marie's entered hours, then $ for leadership */}
             <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm">
               <span className="text-slate-500">Clock-tracked <strong className="tabular-nums text-slate-700">{fmtHours(autoPaidH)}</strong></span>
-              <span>Paid hours <strong className="tabular-nums">{fmtHours(paidH)}</strong> <span className="text-[11px] font-semibold text-slate-400">= {paidH.toFixed(2)} hrs</span>{manualH != null ? <span className="ml-1 text-[11px] text-slate-400">(entered)</span> : <span className="ml-1 text-[11px] text-slate-400">(auto)</span>}</span>
+              <span>Paid hours <strong className="tabular-nums">{fmtHours(paidH)}</strong> <span className="text-[11px] font-semibold text-slate-400">= {paidH.toFixed(2)} hrs</span><span className="ml-1 text-[11px] text-slate-400">{flatH != null ? "(flat M–F)" : manualH != null ? "(entered)" : "(auto)"}</span></span>
               {showPay && rate != null && <span className="text-[11px] text-slate-400">{paidH.toFixed(2)} × {money(rate)}/hr</span>}
               {manualH != null && Math.abs(variance) >= 0.25 && (
                 <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${variance > 0 ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>
@@ -215,6 +262,12 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
 
             {/* Marie's entered hours (source of truth for pay) */}
             <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {flatH != null ? (
+                <div className="rounded-lg ring-1 ring-slate-200 p-2.5">
+                  <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Paid hours for this period</div>
+                  <div className="text-sm text-slate-600">Automatic — <strong>{fmtHours(flatH)} flat × weekdays</strong> = <strong className="tabular-nums">{fmtHours(paidH)}</strong>. No manual entry needed; clock-tracked actual is <span className="tabular-nums">{fmtHours(autoPaidH)}</span>.</div>
+                </div>
+              ) : (
               <form action={savePayHours} className="rounded-lg ring-1 ring-slate-200 p-2.5">
                 <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Paid hours for this period (Marie)</div>
                 <input type="hidden" name="userId" value={u.id} />
@@ -225,6 +278,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                   <span className="text-[11px] text-slate-400">Leave blank to use clock-tracked ({fmtHours(autoPaidH)}).</span>
                 </div>
               </form>
+              )}
 
               <form action={saveTimeAdjustment} className="rounded-lg ring-1 ring-slate-200 p-2.5">
                 <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Adjust a day (owed / note)</div>

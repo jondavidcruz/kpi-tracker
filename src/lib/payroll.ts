@@ -7,6 +7,19 @@ export function parseHourly(payScale: string | null | undefined): number | null 
   return m ? Number(m[1]) : null;
 }
 
+// Flat guaranteed hours per WEEKDAY for salaried management (e.g. Marie): she's
+// paid this many hours every Mon–Fri regardless of what the clock says, but we
+// still track her actual hours and flag days/weeks she comes up short. Encode it
+// in the roster pay scale, e.g. "$5.00/hr · 6h flat M–F". Returns null for normal
+// hourly staff (paid on actual clock time).
+export function parseFlatDailyHours(payScale: string | null | undefined): number | null {
+  if (!payScale || !/\bflat\b/i.test(payScale)) return null;
+  // First "<n>h" token in the string (skips the "$5.00/hr" rate, which has no space+h).
+  const m = payScale.match(/(\d+(?:\.\d+)?)\s*h\b/i);
+  const v = m ? Number(m[1]) : null;
+  return v != null && Number.isFinite(v) && v > 0 ? v : null;
+}
+
 export function fmtHours(h: number): string {
   const hh = Math.floor(h);
   const mm = Math.round((h - hh) * 60);
