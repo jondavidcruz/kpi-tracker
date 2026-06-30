@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { formatValue, fromInput, inputSuffix, type Unit } from "@/lib/format";
-import { statusClasses, statusVsGoal, type Status } from "@/lib/kpi";
+import { statusClasses, statusVsGoal, EVENT_BASED_KPIS, type Status } from "@/lib/kpi";
 import { measureDownloadMbps } from "@/lib/speedtest-client";
 import { KpiLabel } from "@/lib/kpiIcons";
 
@@ -71,8 +71,13 @@ function Field({ item }: { item: EntryItem }) {
   const cls = statusClasses(status);
   const suffix = inputSuffix(item.unit);
   const isSpeed = item.kpiKey === "internet_speed";
-  // Empty = no number entered yet → flag it RED so it's obvious it still needs a value.
-  const empty = raw.trim() === "";
+  // Event-based KPIs (contracts sent/signed by type, offers rejected) only get
+  // filled when the event actually happens — they should NOT be red-flagged or
+  // expected to be 0 every day. Just a calm "as needed" hint when blank.
+  const eventBased = EVENT_BASED_KPIS.has(item.kpiKey);
+  const blank = raw.trim() === "";
+  // Empty = needs a value today → flag it RED. Event-based KPIs are never "empty".
+  const empty = blank && !eventBased;
   const boxCls = empty ? "border-red-300 bg-red-50 focus-within:ring-red-300" : `${cls.border} ${cls.bg} focus-within:ring-slate-400`;
   const dotCls = empty ? "bg-red-400" : cls.dot;
   const textCls = empty ? "text-red-600" : cls.text;
@@ -108,6 +113,7 @@ function Field({ item }: { item: EntryItem }) {
             <KpiLabel kpiKey={item.kpiKey} name={item.name} />
             {autoFilled && <span className="shrink-0 rounded bg-emerald-100 px-1.5 text-[9px] font-bold uppercase text-emerald-700" title="Auto-filled from data we already track — edit to override">auto</span>}
             {empty && <span className="shrink-0 rounded bg-red-100 px-1.5 text-[9px] font-bold uppercase text-red-600">needs entry</span>}
+            {eventBased && blank && <span className="shrink-0 rounded bg-slate-100 px-1.5 text-[9px] font-bold uppercase text-slate-500" title="Only enter this when it actually happens — no need to log 0 each day. Fill it in when you send/sign a contract and pick the type.">as needed</span>}
           </div>
           {item.goalValue !== null && (
             <div className="text-xs text-slate-400">goal {formatValue(item.unit, item.goalValue)}</div>

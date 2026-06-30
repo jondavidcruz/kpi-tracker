@@ -5,6 +5,21 @@ import type { Kpi } from "@prisma/client";
 
 export type Status = "hit" | "close" | "miss" | "none";
 
+// Event-based outcome KPIs: lumpy results that only happen when a contract is
+// actually sent/signed (or an offer is rejected) — NOT daily activities. The
+// entry screen must not red-flag these as "needs entry" when blank, and they
+// must never count toward the daily missing-entry nags. Reps fill them in only
+// when the event occurs (and pick which contract type). Keep in sync with
+// ALERT_EXCLUDE in alerts.ts.
+export const EVENT_BASED_KPIS = new Set<string>([
+  "acq_contracts_sent",
+  "acq_signed_assignment",
+  "acq_signed_novation",
+  "acq_signed_listing",
+  "acq_signed_creative",
+  "offers_rejected",
+]);
+
 // A value is "close" if it's within this fraction of the goal but not at it.
 const CLOSE_THRESHOLD = 0.8;
 
