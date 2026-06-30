@@ -49,6 +49,46 @@ export function workedMinutes(
   return Math.max(0, Math.round(total / 60000));
 }
 
+/**
+ * PAID minutes for payroll — applies the team pay policy on top of raw worked time:
+ *  • not paid before the scheduled shift start (`floorMs`) — early clock-in is unpaid,
+ *  • not paid past the shift end (`cap`) — staying late is unpaid,
+ *  • lunch and meetings are unpaid,
+ *  • breaks are unpaid EXCEPT one paid break up to `paidBreakMin` minutes/day.
+ * Raw `workedMinutes` is unchanged (still used for the live presence board + the
+ * "actually worked" column); this is the number pay is computed from.
+ */
+export function paidMinutes(
+  punches: { kind: string; at: Date }[],
+  now: Date,
+  cap?: Date | null,
+  floorMs?: number | null,
+  paidBreakMin: number = 0,
+): number {
+  const ceilMs = (cap && cap.getTime() < now.getTime() ? cap : now).getTime();
+  const lo = floorMs ?? null;
+  // Overlap of [aMs, bMs] with the paid window [floor, ceil].
+  const span = (aMs: number, bMs: number) => Math.max(0, Math.min(bMs, ceilMs) - (lo != null ? Math.max(aMs, lo) : aMs));
+
+  let worked = 0;   // on-the-clock time (excludes break/lunch/meeting)
+  let breakMs = 0;  // break-only time, for the one-paid-break credit
+  let inAt: Date | null = null;
+  let breakAt: Date | null = null;
+  for (const p of punches) {
+    if (p.kind === "in" || p.kind === "break_end" || p.kind === "lunch_end" || p.kind === "meeting_end") {
+      if (p.kind === "break_end" && breakAt) { breakMs += span(breakAt.getTime(), p.at.getTime()); breakAt = null; }
+      if (inAt === null) inAt = p.at;
+    } else if (p.kind === "out" || p.kind === "break_start" || p.kind === "lunch_start" || p.kind === "meeting_start") {
+      if (inAt !== null) { worked += span(inAt.getTime(), p.at.getTime()); inAt = null; }
+      if (p.kind === "break_start") breakAt = p.at;
+    }
+  }
+  if (inAt !== null) worked += span(inAt.getTime(), ceilMs);
+  if (breakAt !== null) breakMs += span(breakAt.getTime(), ceilMs); // still on break now
+  const paidBreak = Math.min(paidBreakMin * 60000, breakMs); // one paid break, capped
+  return Math.max(0, Math.round((worked + paidBreak) / 60000));
+}
+
 export type DaySegment = { type: "break" | "lunch" | "meeting"; startMs: number; endMs: number | null; min: number };
 export type DayTimeline = {
   clockInMs: number | null;

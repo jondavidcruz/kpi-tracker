@@ -72,6 +72,24 @@ export function shiftEndAt(dateStr: string, tz: string = DEFAULT_TZ, who?: strin
   return e ? zonedTime(dateStr, e.hour, e.min, tz) : null;
 }
 
+/**
+ * Scheduled shift START (hour/min) for a date, or null on no-shift days. Used as
+ * a pay floor: clocking in early (before shift start) is not paid. Team default
+ * is 9:00 AM Mon–Fri; Marie starts at 1:00 PM.
+ */
+export function shiftStartHour(dateStr: string, who?: string | null): { hour: number; min: number } | null {
+  const dow = dowOf(dateStr);
+  if (dow < 1 || dow > 5) return null; // Sat/Sun → off
+  if (firstName(who) === "marie") return { hour: 13, min: 0 }; // 1:00 PM
+  return { hour: 9, min: 0 }; //                                 9:00 AM default
+}
+
+/** The scheduled shift-start instant for `dateStr` (pay floor), or null on weekends. */
+export function shiftStartAt(dateStr: string, tz: string = DEFAULT_TZ, who?: string | null): Date | null {
+  const s = shiftStartHour(dateStr, who);
+  return s ? zonedTime(dateStr, s.hour, s.min, tz) : null;
+}
+
 /** Grace minutes past shift end counted as real work before the hard cap. */
 export const SHIFT_GRACE_MIN = 30;
 

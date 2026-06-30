@@ -1,10 +1,12 @@
 import { db } from "./db";
 import { getSettings } from "./data";
 import { sendEmailTo } from "./notify";
-import { workedMinutes } from "./presence";
+import { workedMinutes, paidMinutes } from "./presence";
 import { parseHourly, parseFlatDailyHours, fmtHours } from "./payroll";
 import { datesInRange, payPeriod } from "./date";
-import { workCapAt } from "./shift";
+import { workCapAt, shiftStartAt } from "./shift";
+
+const PAID_BREAK_MIN = 15; // team policy: one paid break up to 15 min/day
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -43,26 +45,30 @@ export async function sendPayrollEmail(payday: string): Promise<boolean> {
     const payScale = profByUser.get(u.id)?.payScale;
     const rate = parseHourly(payScale);
     const flatH = parseFlatDailyHours(payScale); // salaried mgmt: paid Nh flat M–F
-    let autoH = 0;
+    let rawH = 0;    // actual on-the-clock (for the flat-hours shortfall watch)
+    let policyH = 0; // policy pay hours: no early/late, lunch unpaid, one paid 15-min break
     let weekdays = 0;
     for (const d of days) {
       const ps = punchByDay.get(`${u.id}|${d}`) ?? [];
       // Cap each day at its scheduled shift end so a forgotten clock-out can't
       // inflate pay — never counts past the shift, even if never closed.
-      let dayH = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone, u.name)) / 60 : 0;
-      dayH -= (adjByDay.get(`${u.id}|${d}`)?.deductHours ?? 0);
-      dayH -= (outageMinByDay.get(`${u.id}|${d}`) ?? 0) / 60; // self-reported outages, unpaid
-      autoH += Math.max(0, dayH);
+      const cap = workCapAt(d, settings.orgTimezone, u.name);
+      const floorMs = shiftStartAt(d, settings.orgTimezone, u.name)?.getTime() ?? null;
+      const ded = (adjByDay.get(`${u.id}|${d}`)?.deductHours ?? 0) + (outageMinByDay.get(`${u.id}|${d}`) ?? 0) / 60; // adjustments + outages, unpaid
+      if (ps.length) {
+        rawH += Math.max(0, workedMinutes(ps, now, cap) / 60 - ded);
+        policyH += Math.max(0, paidMinutes(ps, now, cap, floorMs, PAID_BREAK_MIN) / 60 - ded);
+      }
       const dow = new Date(d + "T12:00:00Z").getUTCDay();
       if (dow >= 1 && dow <= 5) weekdays++;
     }
     const pe = payEntryByUser.get(u.id);
     // Flat-hours people are paid Nh per weekday regardless of clock; everyone else
-    // is paid manual-entered hours (if any) else clock-tracked.
+    // is paid manual-entered hours (if any) else policy-adjusted clock hours.
     const flatExpected = flatH != null ? flatH * weekdays : null;
-    const paidH = flatExpected != null ? flatExpected : (pe?.manualHours != null ? pe.manualHours : autoH);
-    if (flatExpected != null && autoH + 0.05 < flatExpected) {
-      hoursWatch.push(`${u.name} actually worked ${fmtHours(autoH)} of ${fmtHours(flatExpected)} expected (paid the flat ${fmtHours(flatExpected)} — short ${fmtHours(flatExpected - autoH)} on the clock).`);
+    const paidH = flatExpected != null ? flatExpected : (pe?.manualHours != null ? pe.manualHours : policyH);
+    if (flatExpected != null && rawH + 0.05 < flatExpected) {
+      hoursWatch.push(`${u.name} actually worked ${fmtHours(rawH)} of ${fmtHours(flatExpected)} expected (paid the flat ${fmtHours(flatExpected)} — short ${fmtHours(flatExpected - rawH)} on the clock).`);
     }
     const bonus = bonusByUser.get(u.id) ?? 0;
     const adjustAmt = pe?.adjustAmount ?? 0;

@@ -3,8 +3,8 @@ import { db } from "@/lib/db";
 import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getAllUsers, getSettings } from "@/lib/data";
 import { todayStr, payPeriod, datesInRange } from "@/lib/date";
-import { workedMinutes } from "@/lib/presence";
-import { workCapAt } from "@/lib/shift";
+import { workedMinutes, paidMinutes } from "@/lib/presence";
+import { workCapAt, shiftStartAt } from "@/lib/shift";
 import { parseHourly, parseFlatDailyHours, fmtHours } from "@/lib/payroll";
 import { positionLabel } from "@/lib/roles";
 import { saveTimeAdjustment, saveBonus, deleteBonus, savePayHours, savePayDiscrepancy, deleteOutage } from "@/app/actions";
@@ -20,6 +20,9 @@ const clock = (d: Date | null) => (d ? new Date(d).toLocaleTimeString([], { hour
 const MON_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const weekStartOf = (d: string) => { const dt = new Date(d + "T12:00:00Z"); dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7)); return dt.toISOString().slice(0, 10); };
 const mdShort = (d: string) => { const [, m, dd] = d.split("-").map(Number); return `${MON_SHORT[m - 1]} ${dd}`; };
+// Minutes-from-midnight → "9:30 AM" (for outage windows in the day notes).
+const hhmmAP = (m: number) => { const h = Math.floor(m / 60), mm = m % 60; const ap = h >= 12 ? "PM" : "AM"; return `${h % 12 || 12}:${String(mm).padStart(2, "0")} ${ap}`; };
+const PAID_BREAK_MIN = 15; // team policy: one paid break up to 15 min/day; the rest is unpaid
 
 export default async function TimecardPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = await getCurrentUser();
@@ -80,6 +83,17 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
         } />
       {showPay && <p className="text-xs text-slate-400">Semi-monthly: paid on the <strong>15th</strong> and the <strong>last day</strong> of each month (periods 1–15 & 16–end). Pay = paid hours × hourly rate + bonuses − discrepancies. Salaried management (Marie) is paid a flat daily rate Mon–Fri regardless of the clock; her actual hours are tracked beside as a check, and days/weeks under her flat hours are flagged.</p>}
 
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="mb-1.5 font-bold">📋 Pay policy (whole team)</div>
+        <ul className="space-y-1 text-[13px]">
+          <li>🍽️ <strong>Lunch is unpaid.</strong></li>
+          <li>☕ <strong>One paid break, up to 15 minutes a day.</strong> Anything past 15 minutes — or any extra break — is unpaid.</li>
+          <li>🌅 <strong>Clocking in early is unpaid.</strong> Pay starts at the scheduled shift start (9:00 AM; Marie 1:00 PM) — time before that doesn&apos;t count.</li>
+          <li>🌙 <strong>Staying past end of shift is unpaid.</strong> Pay stops at the scheduled shift end — extra time after isn&apos;t counted.</li>
+        </ul>
+        <div className="mt-1.5 text-[11px] text-amber-700">These rules are applied automatically to the Paid column below. &ldquo;Worked&rdquo; shows raw clock time; &ldquo;Paid&rdquo; is what we pay after the policy.</div>
+      </div>
+
       {/* Minute → decimal conversion reference (for exact per-minute pay) */}
       <details className="rounded-xl border border-slate-200 bg-white p-3">
         <summary className="cursor-pointer text-sm font-semibold text-slate-600">🕐 Minute → decimal conversion chart</summary>
@@ -107,12 +121,22 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
           const adj = adjByDay.get(punchKey(u.id, d));
           const leave = offCovers(u.id, d);
           const dow = new Date(d + "T12:00:00Z").getUTCDay();
-          const workedH = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone, u.name)) / 60 : 0;
+          const cap = workCapAt(d, settings.orgTimezone, u.name);
+          const floorMs = shiftStartAt(d, settings.orgTimezone, u.name)?.getTime() ?? null;
+          const workedH = ps.length ? workedMinutes(ps, now, cap) / 60 : 0; // raw actual on-the-clock
+          // Policy pay: no pay before shift start / past shift end, lunch unpaid, one paid 15-min break.
+          const policyH = ps.length ? paidMinutes(ps, now, cap, floorMs, PAID_BREAK_MIN) / 60 : 0;
           const outH = outageMin(u.id, d) / 60;
           const deduct = (adj?.deductHours ?? 0) + outH;
-          const paidH = Math.max(0, workedH - deduct);
+          const paidH = Math.max(0, policyH - deduct);
           const inAt = ps.find((p) => p.kind === "in")?.at ?? null;
           const outAt = [...ps].reverse().find((p) => p.kind === "out")?.at ?? null;
+          // Auto day-note: outage windows, time off, day off, then any manual note.
+          const dayOutages = outageByDay.get(`${u.id}|${d}`) ?? [];
+          const noteParts: string[] = dayOutages.map((o) => `⚡ ${o.kind} outage ${hhmmAP(o.startMin)}–${hhmmAP(o.endMin)}`);
+          if (leave) noteParts.push(LEAVE[leave.type] ?? "Time off");
+          if (adj?.status === "day_off") noteParts.push("Day off");
+          if (adj?.note) noteParts.push(adj.note);
           // Flat-hours people (management) are paid Nh every weekday up to today, regardless
           // of the clock. We still track actual hours and flag weekdays worked under Nh.
           const weekday = dow >= 1 && dow <= 5;
@@ -124,7 +148,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
           else if (leave) status = LEAVE[leave.type] ?? "Time off";
           else if (adj?.status === "day_off") status = "Day off";
           else if (flatDay) status = "No clock-in";
-          return { d, dow, workedH, deduct, outH, paidH, payH, short, flatDay, inAt, outAt, status, note: adj?.note ?? "", hasData: ps.length > 0 || !!leave || !!adj || outH > 0 };
+          return { d, dow, workedH, deduct, outH, paidH, payH, short, flatDay, inAt, outAt, status, note: noteParts.join(" · "), hasData: ps.length > 0 || !!leave || !!adj || outH > 0 };
         }).filter((r) => r.hasData || r.flatDay);
 
         const autoPaidH = rows.reduce((s, r) => s + r.paidH, 0); // actual clock total
@@ -158,12 +182,12 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-400">
                     <th className="py-1.5 pr-3">Day</th><th className="px-2">In</th><th className="px-2">Out</th>
-                    <th className="px-2 text-right">Worked</th><th className="px-2 text-right">Deduct</th><th className="px-2 text-right">Paid</th>
+                    <th className="px-2 text-right">Worked</th><th className="px-2 text-right">Deduct</th><th className="px-2 text-right">Paid</th><th className="px-2 text-right">Dec</th>
                     <th className="px-2">Status</th><th className="px-2">Note</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.length === 0 && <tr><td colSpan={8} className="py-3 text-center text-slate-400">No activity this period.</td></tr>}
+                  {rows.length === 0 && <tr><td colSpan={9} className="py-3 text-center text-slate-400">No activity this period.</td></tr>}
                   {rows.map((r) => {
                     const shownPaid = flatH != null ? r.payH : r.paidH;
                     return (
@@ -174,6 +198,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                       <td className={`px-2 text-right tabular-nums ${r.short ? "font-semibold text-amber-700" : ""}`}>{r.workedH > 0 ? fmtHours(r.workedH) : "—"}</td>
                       <td className="px-2 text-right tabular-nums text-red-600">{r.deduct > 0 ? `-${fmtHours(r.deduct)}` : ""}</td>
                       <td className="px-2 text-right font-semibold tabular-nums">{shownPaid > 0 ? fmtHours(shownPaid) : "—"}</td>
+                      <td className="px-2 text-right tabular-nums text-slate-500">{shownPaid > 0 ? shownPaid.toFixed(2) : "—"}</td>
                       <td className="px-2">{r.short
                         ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">▼ under {flatH != null ? fmtHours(flatH) : ""}</span>
                         : <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${r.status === "Working" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{r.status}</span>}</td>
