@@ -322,9 +322,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       {/* MY TIME CARD — not for the owner (Jon doesn't punch a clock) */}
       {!isOwner(me) && (
         <section className="space-y-2">
-          <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today, me.name)} showLunch={me.name.trim().split(/\s+/)[0]?.toLowerCase() !== "marie"} />
+          <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today, me.name)} showLunch={me.name.trim().split(/\s+/)[0]?.toLowerCase() !== "marie" && new Date(today + "T12:00:00Z").getUTCDay() !== 5} />
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500 ring-1 ring-slate-200">
-            <span className="font-semibold text-slate-600">Pay policy:</span> lunch is unpaid · one paid break up to 15 min/day (longer is unpaid) · clocking in before shift start or staying past shift end isn&apos;t paid.
+            <span className="font-semibold text-slate-600">Pay policy:</span> lunch is unpaid (no lunch on Fridays — short day) · one paid break up to 15 min/day (longer is unpaid) · clocking in before shift start or staying past shift end isn&apos;t paid.
           </div>
           {(() => { const myBar = dayBar(myPs, rawOutagesByUser.get(me.id) ?? [], settings.orgTimezone, now, capMin); return myBar ? (
             <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">

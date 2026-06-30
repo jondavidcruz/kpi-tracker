@@ -86,7 +86,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         <div className="mb-1.5 font-bold">📋 Pay policy (whole team)</div>
         <ul className="space-y-1 text-[13px]">
-          <li>🍽️ <strong>Lunch is unpaid.</strong></li>
+          <li>🍽️ <strong>Lunch is unpaid</strong> — and there&apos;s <strong>no lunch break on Fridays</strong> (short day).</li>
           <li>☕ <strong>One paid break, up to 15 minutes a day.</strong> Anything past 15 minutes — or any extra break — is unpaid.</li>
           <li>🌅 <strong>Clocking in early is unpaid.</strong> Pay starts at the scheduled shift start (9:00 AM; Marie 1:00 PM) — time before that doesn&apos;t count.</li>
           <li>🌙 <strong>Staying past end of shift is unpaid.</strong> Pay stops at the scheduled shift end — extra time after isn&apos;t counted.</li>

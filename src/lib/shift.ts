@@ -11,8 +11,9 @@
 // the END bounds the tracking — that's what this module supplies. When the
 // calendar feed lands, swap shiftEndHour() for a per-person calendar lookup.
 //
-// Per-person exception: Marie works a 6-hour shift, 1:00–7:00 PM Mon–Fri, so her
-// END is 7:00 PM every weekday (incl. Friday) — pass her name as `who`.
+// Per-person exception: Marie works a 6-hour shift — 1:00–7:00 PM Mon–Thu, and
+// 9:00 AM–3:00 PM on Fridays (she starts earlier on the short Friday). Pass her
+// name as `who`.
 
 const DEFAULT_TZ = "America/New_York";
 
@@ -60,7 +61,10 @@ function firstName(who?: string | null): string {
  */
 export function shiftEndHour(dateStr: string, who?: string | null): { hour: number; min: number } | null {
   const dow = dowOf(dateStr);
-  if (firstName(who) === "marie") return dow >= 1 && dow <= 5 ? { hour: 19, min: 0 } : null; // 6h shift, ends 7:00 PM Mon–Fri
+  if (firstName(who) === "marie") { // 6h shift: Mon–Thu 1–7pm (end 7pm), Fri 9am–3pm (end 3pm)
+    if (dow === 5) return { hour: 15, min: 0 };
+    return dow >= 1 && dow <= 4 ? { hour: 19, min: 0 } : null;
+  }
   if (dow >= 1 && dow <= 4) return { hour: 18, min: 0 }; // Mon–Thu → 6:00 PM
   if (dow === 5) return { hour: 14, min: 0 }; //            Fri    → 2:00 PM
   return null; //                                          Sat/Sun → off
@@ -80,7 +84,7 @@ export function shiftEndAt(dateStr: string, tz: string = DEFAULT_TZ, who?: strin
 export function shiftStartHour(dateStr: string, who?: string | null): { hour: number; min: number } | null {
   const dow = dowOf(dateStr);
   if (dow < 1 || dow > 5) return null; // Sat/Sun → off
-  if (firstName(who) === "marie") return { hour: 13, min: 0 }; // 1:00 PM
+  if (firstName(who) === "marie") return dow === 5 ? { hour: 9, min: 0 } : { hour: 13, min: 0 }; // Fri 9am, else 1pm
   return { hour: 9, min: 0 }; //                                 9:00 AM default
 }
 
