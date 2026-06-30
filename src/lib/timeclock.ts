@@ -27,6 +27,8 @@ export async function autoCloseAbandonedSessions(now: Date = new Date()): Promis
     orderBy: { at: "asc" },
     select: { userId: true, date: true, kind: true, at: true },
   });
+  // userId → name, so per-person shift ends (e.g. Marie's 7pm) apply to the cap.
+  const nameById = new Map((await db.user.findMany({ select: { id: true, name: true } })).map((u) => [u.id, u.name]));
 
   // Group by user|date.
   const byKey = new Map<string, { kind: string; at: Date }[]>();
@@ -41,10 +43,11 @@ export async function autoCloseAbandonedSessions(now: Date = new Date()): Promis
   for (const [key, ps] of byKey) {
     if (!isOpenSession(ps)) continue;
     const [userId, date] = key.split("|");
+    const who = nameById.get(userId);
 
     // Cap = scheduled shift end + grace; weekends fall back to a flat ceiling
     // from the first clock-in of that day.
-    let capAt = workCapAt(date, tz);
+    let capAt = workCapAt(date, tz, who);
     if (!capAt) {
       const firstIn = ps[0]?.at;
       if (firstIn) capAt = new Date(firstIn.getTime() + MAX_OPEN_SESSION_MIN * 60000);
@@ -53,7 +56,7 @@ export async function autoCloseAbandonedSessions(now: Date = new Date()): Promis
 
     // Stamp the auto clock-out at the scheduled shift end (not now), so payroll
     // reflects the shift, not the moment the cron happened to run.
-    const stampAt = shiftEndAt(date, tz) ?? new Date(capAt.getTime() - SHIFT_GRACE_MIN * 60000);
+    const stampAt = shiftEndAt(date, tz, who) ?? new Date(capAt.getTime() - SHIFT_GRACE_MIN * 60000);
     await db.punch.create({ data: { userId, date, kind: "out", at: stampAt } });
     closed++;
   }

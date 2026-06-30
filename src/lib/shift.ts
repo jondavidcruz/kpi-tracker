@@ -10,6 +10,9 @@
 // Start times differ per person (Michelle/Sharyn 9:00, Marie 1:00 PM), but only
 // the END bounds the tracking — that's what this module supplies. When the
 // calendar feed lands, swap shiftEndHour() for a per-person calendar lookup.
+//
+// Per-person exception: Marie works a 6-hour shift, 1:00–7:00 PM Mon–Fri, so her
+// END is 7:00 PM every weekday (incl. Friday) — pass her name as `who`.
 
 const DEFAULT_TZ = "America/New_York";
 
@@ -45,17 +48,27 @@ function dowOf(dateStr: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-/** Scheduled shift end (hour/min) for a date, or null on days with no shift. */
-export function shiftEndHour(dateStr: string): { hour: number; min: number } | null {
+/** First name (lowercased) used to look up per-person shift exceptions. */
+function firstName(who?: string | null): string {
+  return (who ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+}
+
+/**
+ * Scheduled shift end (hour/min) for a date, or null on days with no shift.
+ * Pass `who` (the person's name) to apply per-person shift exceptions — Marie
+ * works 1:00–7:00 PM Mon–Fri, so her end is 7:00 PM every weekday.
+ */
+export function shiftEndHour(dateStr: string, who?: string | null): { hour: number; min: number } | null {
   const dow = dowOf(dateStr);
+  if (firstName(who) === "marie") return dow >= 1 && dow <= 5 ? { hour: 19, min: 0 } : null; // 6h shift, ends 7:00 PM Mon–Fri
   if (dow >= 1 && dow <= 4) return { hour: 18, min: 0 }; // Mon–Thu → 6:00 PM
   if (dow === 5) return { hour: 14, min: 0 }; //            Fri    → 2:00 PM
   return null; //                                          Sat/Sun → off
 }
 
 /** The scheduled shift-end instant for `dateStr`, or null on weekends. */
-export function shiftEndAt(dateStr: string, tz: string = DEFAULT_TZ): Date | null {
-  const e = shiftEndHour(dateStr);
+export function shiftEndAt(dateStr: string, tz: string = DEFAULT_TZ, who?: string | null): Date | null {
+  const e = shiftEndHour(dateStr, who);
   return e ? zonedTime(dateStr, e.hour, e.min, tz) : null;
 }
 
@@ -68,8 +81,8 @@ export const SHIFT_GRACE_MIN = 30;
  * a forgotten clock-out maxes out at the shift (not days of phantom hours).
  * Null on weekends → caller falls back to a flat max session length.
  */
-export function workCapAt(dateStr: string, tz: string = DEFAULT_TZ): Date | null {
-  const end = shiftEndAt(dateStr, tz);
+export function workCapAt(dateStr: string, tz: string = DEFAULT_TZ, who?: string | null): Date | null {
+  const end = shiftEndAt(dateStr, tz, who);
   return end ? new Date(end.getTime() + SHIFT_GRACE_MIN * 60000) : null;
 }
 
@@ -77,8 +90,8 @@ export function workCapAt(dateStr: string, tz: string = DEFAULT_TZ): Date | null
 export const MAX_OPEN_SESSION_MIN = 10 * 60;
 
 /** "6:00 PM" style label for the scheduled shift end, or null if no shift. */
-export function shiftEndLabel(dateStr: string): string | null {
-  const e = shiftEndHour(dateStr);
+export function shiftEndLabel(dateStr: string, who?: string | null): string | null {
+  const e = shiftEndHour(dateStr, who);
   if (!e) return null;
   const ap = e.hour >= 12 ? "PM" : "AM";
   const h = e.hour % 12 || 12;

@@ -59,7 +59,7 @@ async function payrollContext(me: User): Promise<string> {
     let autoH = 0;
     for (const d of days) {
       const ps = punchByDay.get(`${u.id}|${d}`) ?? [];
-      let dh = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone)) / 60 : 0;
+      let dh = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone, u.name)) / 60 : 0;
       dh -= adjByDay.get(`${u.id}|${d}`)?.deductHours ?? 0;
       dh -= (outMin.get(`${u.id}|${d}`) ?? 0) / 60;
       autoH += Math.max(0, dh);

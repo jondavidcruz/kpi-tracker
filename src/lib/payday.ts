@@ -49,7 +49,7 @@ export async function sendPayrollEmail(payday: string): Promise<boolean> {
       const ps = punchByDay.get(`${u.id}|${d}`) ?? [];
       // Cap each day at its scheduled shift end so a forgotten clock-out can't
       // inflate pay — never counts past the shift, even if never closed.
-      let dayH = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone)) / 60 : 0;
+      let dayH = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone, u.name)) / 60 : 0;
       dayH -= (adjByDay.get(`${u.id}|${d}`)?.deductHours ?? 0);
       dayH -= (outageMinByDay.get(`${u.id}|${d}`) ?? 0) / 60; // self-reported outages, unpaid
       autoH += Math.max(0, dayH);

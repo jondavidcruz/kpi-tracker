@@ -31,7 +31,6 @@ export async function GET() {
   const outByUser = new Map(outages.map((o) => [o.userId, o]));
   const now = new Date();
   const STALE = 5 * 60 * 1000; // working but no heartbeat for 5 min = likely dropped
-  const cap = workCapAt(date, settings.orgTimezone);
   // Current minutes-from-midnight in the org timezone, for outage duration.
   const np = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
   const nowMin = (+(np.find((p) => p.type === "hour")?.value ?? 0) % 24) * 60 + +(np.find((p) => p.type === "minute")?.value ?? 0);
@@ -46,7 +45,7 @@ export async function GET() {
       if (out) st = "outage";
       else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
       const outageMin = out ? Math.max(0, nowMin - out.startMin) : null;
-      return { id: u.id, name: u.name, state: st, outageKind: out?.kind ?? null, outageMin, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
+      return { id: u.id, name: u.name, state: st, outageKind: out?.kind ?? null, outageMin, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, workCapAt(date, settings.orgTimezone, u.name)) };
     });
 
   // Disconnect alerts: a rep who dropped mid-shift with NO logged power/internet outage

@@ -107,7 +107,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
           const adj = adjByDay.get(punchKey(u.id, d));
           const leave = offCovers(u.id, d);
           const dow = new Date(d + "T12:00:00Z").getUTCDay();
-          const workedH = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone)) / 60 : 0;
+          const workedH = ps.length ? workedMinutes(ps, now, workCapAt(d, settings.orgTimezone, u.name)) / 60 : 0;
           const outH = outageMin(u.id, d) / 60;
           const deduct = (adj?.deductHours ?? 0) + outH;
           const paidH = Math.max(0, workedH - deduct);

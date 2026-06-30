@@ -198,8 +198,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   // capped at the scheduled shift end so a forgotten clock-out can't inflate it.
   const byUser = groupByUser(punchesToday);
   const now = new Date();
-  const cap = workCapAt(today, settings.orgTimezone);
-  const capMs = cap ? cap.getTime() : null;
+  const cap = workCapAt(today, settings.orgTimezone); // team default — timeline axis right edge
+  const myCap = workCapAt(today, settings.orgTimezone, me.name); // the viewer's own shift end
+  const capMs = myCap ? myCap.getTime() : null;
   const STALE = 5 * 60 * 1000;
   // All of today's outages (incl. ended) for the break/lunch history — so the timeline
   // shows when someone lost power/internet and when they came back.
@@ -227,13 +228,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       let st: string = state;
       if (o) st = "outage";
       else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
-      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, cap) };
+      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, workCapAt(today, settings.orgTimezone, u.name)) };
     });
 
   // My time card today.
   const myPs = byUser.get(me.id) ?? [];
   const myState = stateFromPunches(myPs);
-  const myWorked = workedMinutes(myPs, now, cap);
+  const myWorked = workedMinutes(myPs, now, myCap);
 
   // Time off: this month's grid, pending approvals, upcoming list.
   const monthOff = timeOff.filter((t) => t.status !== "denied" && t.startDate <= mb.end && t.endDate >= mb.start);
@@ -321,7 +322,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       {/* MY TIME CARD — not for the owner (Jon doesn't punch a clock) */}
       {!isOwner(me) && (
         <section className="space-y-2">
-          <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today)} showLunch={me.name.trim().split(/\s+/)[0]?.toLowerCase() !== "marie"} />
+          <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today, me.name)} showLunch={me.name.trim().split(/\s+/)[0]?.toLowerCase() !== "marie"} />
           {(() => { const myBar = dayBar(myPs, rawOutagesByUser.get(me.id) ?? [], settings.orgTimezone, now, capMin); return myBar ? (
             <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
               <div className="mb-1.5 flex items-center justify-between"><span className="text-xs font-bold text-slate-600">My day</span><ShiftBarLegend /></div>
