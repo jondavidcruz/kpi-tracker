@@ -425,6 +425,26 @@ export default function UnderwritingCalculator() {
     const detail = r.rows.filter(([l]) => !/🎯|anchor|negotiat/i.test(l));
     const rowsHtml = detail.map(([l, val], i) => `<tr style="background:${i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:7px 12px;color:#475569">${esc(l)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;color:#0f172a">${esc(val)}</td></tr>`).join("");
 
+    // Repairs & condition — itemized justification for the offer, from what the underwriter
+    // inputted. Heavy/major systems (roof, HVAC, water heater, foundation, windows) are
+    // flagged so the seller sees exactly why the price is where it is.
+    const majorItems = MAJOR.filter(([key]) => n(`maj_${key}`) > 0).map(([key, label]) => ({ label, cost: n(`maj_${key}`) }));
+    const rehabBaseOnly = n("repairs") || repairsCalc;
+    const repairLine = (label: string, val: string, major = false) =>
+      `<tr style="background:${major ? "#fff7ed" : "#fff"}"><td style="padding:7px 12px;color:${major ? "#9a3412" : "#475569"};font-weight:${major ? 700 : 400}">${major ? "🔨 " : ""}${esc(label)}${major ? ' <span style="font-size:9px;background:#fed7aa;color:#9a3412;padding:1px 5px;border-radius:6px;font-weight:700;text-transform:uppercase">major</span>' : ""}</td><td style="padding:7px 12px;text-align:right;font-weight:700;color:#0f172a">${esc(val)}</td></tr>`;
+    const repairRows: string[] = [];
+    for (const m of majorItems) repairRows.push(repairLine(m.label, money(m.cost), true));
+    if (rehabBaseOnly > 0) repairRows.push(repairLine(`General / interior rehab${rehabDesc(v("rehabSf")) ? ` — ${rehabDesc(v("rehabSf"))}` : ""}`, money(rehabBaseOnly)));
+    if (contingencyPct > 0) repairRows.push(repairLine(`Contingency (+${contingencyPct}% for surprises)`, money(repairsBase * (contingencyPct / 100))));
+    const repairsHtml = repairRows.length
+      ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9a3412;margin:16px 0 4px">🔧 Repairs &amp; condition — justification for the price (per underwriter)</div>
+         <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #fed7aa;border-radius:8px;overflow:hidden">
+           ${repairRows.join("")}
+           <tr style="background:#fff7ed;border-top:2px solid #fdba74"><td style="padding:8px 12px;font-weight:800;color:#9a3412">Total estimated repairs</td><td style="padding:8px 12px;text-align:right;font-weight:800;color:#9a3412">${esc(money(repairs))}</td></tr>
+         </table>
+         ${majorItems.length ? `<div style="font-size:11px;color:#9a3412;margin-top:5px">⚠️ Heavy/major systems needing work: <b>${majorItems.map((m) => esc(m.label)).join(", ")}</b>.</div>` : ""}`
+      : "";
+
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(r.title)}</title></head>
       <body style="font-family:system-ui,Arial,sans-serif;color:#0f172a;max-width:760px;margin:24px auto;padding:0 18px">
         <div style="border-bottom:3px solid #0b1f3a;padding-bottom:8px;margin-bottom:6px">
@@ -444,6 +464,7 @@ export default function UnderwritingCalculator() {
         ${roiHtml}
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin:4px 0 4px">How the number breaks down</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${rowsHtml}</table>
+        ${repairsHtml}
         ${r.note ? `<p style="margin-top:14px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
       </body></html>`);
     w.document.close();
