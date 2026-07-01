@@ -201,7 +201,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const cap = workCapAt(today, settings.orgTimezone); // team default — timeline axis right edge
   const myCap = workCapAt(today, settings.orgTimezone, me.name); // the viewer's own shift end
   const capMs = myCap ? myCap.getTime() : null;
-  const STALE = 5 * 60 * 1000;
+  const STALE = 2 * 60 * 1000; // 2 min without a heartbeat = dropped (fast detection)
   // All of today's outages (incl. ended) for the break/lunch history — so the timeline
   // shows when someone lost power/internet and when they came back.
   const nowMinTz = (() => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); })();

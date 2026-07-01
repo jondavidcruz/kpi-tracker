@@ -56,7 +56,7 @@ export default function PresenceBoard({ initial }: { initial: Person[] }) {
         /* keep last good state */
       }
     };
-    const id = setInterval(load, 20000);
+    const id = setInterval(load, 12000); // refresh ~every 12s so a drop shows near-instantly
     load();
     return () => {
       alive = false;

@@ -43,7 +43,7 @@ export default function PresenceWidget() {
       } catch { /* keep last good state */ }
     };
     load();
-    const id = setInterval(load, 25000);
+    const id = setInterval(load, 15000);
     return () => { alive = false; clearInterval(id); };
   }, []);
 

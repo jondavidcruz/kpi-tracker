@@ -30,7 +30,7 @@ export async function GET() {
   const byUser = groupByUser(punches);
   const outByUser = new Map(outages.map((o) => [o.userId, o]));
   const now = new Date();
-  const STALE = 5 * 60 * 1000; // working but no heartbeat for 5 min = likely dropped
+  const STALE = 2 * 60 * 1000; // working but no heartbeat for 2 min = dropped (flag fast, confirm with admin)
   // Current minutes-from-midnight in the org timezone, for outage duration.
   const np = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
   const nowMin = (+(np.find((p) => p.type === "hour")?.value ?? 0) % 24) * 60 + +(np.find((p) => p.type === "minute")?.value ?? 0);

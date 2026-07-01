@@ -21,10 +21,14 @@ export default function HeartbeatPing() {
       } catch { /* offline — we'll catch up on reconnect */ }
     };
     ping();
-    const id = setInterval(ping, 60000);
+    // Ping every 30s so a real drop is caught fast (the server flags "dropped" after
+    // 2 min with no heartbeat). Also ping the instant the tab is refocused or the
+    // network returns, so a reconnect clears immediately instead of on the next tick.
+    const id = setInterval(ping, 30000);
     const onVis = () => { if (document.visibilityState === "visible") ping(); };
     document.addEventListener("visibilitychange", onVis);
-    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+    window.addEventListener("online", ping);
+    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("online", ping); };
   }, []);
 
   if (!drop) return null;
