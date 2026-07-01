@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
 import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
-import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendGoogleChat, sendTimecardChat, sendCallAuditChat } from "@/lib/notify";
+import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendTeamChat, sendTimecardChat, sendCallAuditChat } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin, isOwner, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
@@ -202,7 +202,7 @@ export async function saveDay(formData: FormData) {
     const u = w.userId ? await db.user.findUnique({ where: { id: w.userId }, select: { name: true } }) : null;
     const who = u?.name?.split(" ")[0] ?? "The team";
     const type = w.key.replace("acq_signed_", "");
-    await sendGoogleChat(`🎉 *Contract signed!* ${who} just locked up ${w.n > 1 ? `${w.n} ${type} contracts` : `a ${type} contract`} — let's go! 🔥`).catch(() => {});
+    await sendTeamChat(`🎉 *Contract signed!* ${who} just locked up ${w.n > 1 ? `${w.n} ${type} contracts` : `a ${type} contract`} — let's go! 🔥`).catch(() => {});
   }
 
   // Instant alerting on save:
@@ -610,7 +610,7 @@ export async function addRecording(formData: FormData) {
   const post = formData.get("postToChat") === "on";
   let posted = false;
   if (post) {
-    posted = await sendGoogleChat(`🎥 *${meeting === "leadership" ? "Leadership" : "Team"} meeting recording* — ${title}\n${url}`);
+    posted = await sendTeamChat(`🎥 *${meeting === "leadership" ? "Leadership" : "Team"} meeting recording* — ${title}\n${url}`);
   }
   await db.meetingRecording.create({ data: { meeting, title, url, meetingDate, postedToChat: posted } });
   const path = meeting === "leadership" ? "/leadership" : "/meeting";

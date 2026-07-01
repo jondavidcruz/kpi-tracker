@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { sendGoogleChat } from "@/lib/notify";
+import { sendTeamChat } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ async function handle(request: Request) {
   const meetingDate = get("date", "meetingDate");
   if (!link) return NextResponse.json({ error: "missing recording url" }, { status: 400 });
 
-  const posted = await sendGoogleChat(
+  const posted = await sendTeamChat(
     `🎥 *${meeting === "leadership" ? "Leadership" : "Team"} meeting recording* — ${title}\n${link}`,
   );
   await db.meetingRecording.create({ data: { meeting, title, url: link, meetingDate, postedToChat: posted } });

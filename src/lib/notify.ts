@@ -8,6 +8,7 @@ export interface ChannelConfig {
   timecardChatWebhook: string; // separate space for clock-in/break/lunch status posts
   callAuditChatWebhook: string; // separate space for scored-call audit posts
   huddleChatWebhook: string; // separate space for the daily huddle brief + nudges
+  teamChatWebhook: string; // general team space: wins, culture, recordings, digests (NOT KPI alerts)
   emailRecipients: string[];
   emailFrom: string;
   resendKey: string;
@@ -20,6 +21,7 @@ export async function getChannelConfig(): Promise<ChannelConfig> {
     timecardChatWebhook: s.timecardChatWebhook || process.env.TIMECARD_CHAT_WEBHOOK || "",
     callAuditChatWebhook: s.callAuditChatWebhook || process.env.CALL_AUDIT_CHAT_WEBHOOK || "",
     huddleChatWebhook: process.env.HUDDLE_CHAT_WEBHOOK || "",
+    teamChatWebhook: process.env.TEAM_CHAT_WEBHOOK || "",
     emailRecipients: splitList(s.alertEmailRecipients || process.env.ALERT_EMAIL_TO || ""),
     emailFrom: s.emailFromAddress || process.env.ALERT_EMAIL_FROM || "",
     resendKey: process.env.RESEND_API_KEY || "",
@@ -63,10 +65,18 @@ export async function sendGoogleChat(text: string, cfg?: ChannelConfig): Promise
 }
 
 /** Post a scored-call audit to the dedicated Call Audit space if its webhook is
- *  set, otherwise fall back to the main space. */
+ *  set, else the general team space — never the KPI-alerts space. */
 export async function sendCallAuditChat(text: string, cfg?: ChannelConfig): Promise<boolean> {
   const c = cfg ?? (await getChannelConfig());
-  return postChatWebhook(c.callAuditChatWebhook || c.chatWebhook, text);
+  return postChatWebhook(c.callAuditChatWebhook || c.teamChatWebhook, text);
+}
+
+/** Post a general team message (wins, culture, digests, recordings check) to the
+ *  team space — never the KPI-alerts space, so that channel stays alerts-only.
+ *  Set TEAM_CHAT_WEBHOOK to route these; unset = they don't post to chat. */
+export async function sendTeamChat(text: string, cfg?: ChannelConfig): Promise<boolean> {
+  const c = cfg ?? (await getChannelConfig());
+  return postChatWebhook(c.teamChatWebhook, text);
 }
 
 /** Post a time-card status update (clock-in / break / lunch) to the Timecard

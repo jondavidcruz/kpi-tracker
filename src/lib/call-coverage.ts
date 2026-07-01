@@ -4,7 +4,7 @@
 // Chat summary flagging anyone who's short on recordings so they upload before EOD.
 
 import { db } from "./db";
-import { sendGoogleChat } from "./notify";
+import { sendTeamChat } from "./notify";
 import { zonedTime } from "./shift";
 
 // KPIs that each represent a real, recordable conversation. (High-volume dial KPIs
@@ -78,6 +78,6 @@ export async function sendCallCoverageChat(date: string, tz: string): Promise<{ 
   const header = gaps > 0
     ? `🎧 *End-of-day call recordings — ${date}*\nEvery money call should have a recording. ${gaps === 1 ? "1 person is" : `${gaps} people are`} short — please upload before you log off:`
     : `🎧 *End-of-day call recordings — ${date}*\n✅ Every money call has a matching recording. Nice work team:`;
-  const posted = await sendGoogleChat([header, ...lines].join("\n")).catch(() => false);
+  const posted = await sendTeamChat([header, ...lines].join("\n")).catch(() => false);
   return { posted: !!posted, gaps, rows: rows.length };
 }

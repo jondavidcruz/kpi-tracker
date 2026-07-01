@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
 import { buildBackup } from "@/lib/backup";
-import { sendEmailWithAttachment, sendGoogleChat, sendEmailTo } from "@/lib/notify";
+import { sendEmailWithAttachment, sendTeamChat, sendEmailTo } from "@/lib/notify";
 import { upcomingCulture, prettyMMDD, whenLabel, ordinal } from "@/lib/culture";
 import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
@@ -100,7 +100,7 @@ export async function GET(request: Request) {
     const users = await db.user.findMany({ where: { active: true }, select: { name: true, email: true } });
     const emails = users.filter((u) => ["viktoriia", "enrico"].includes(u.name.trim().split(/\s+/)[0].toLowerCase())).map((u) => u.email).filter(Boolean);
     const msg = `📊 Month-end reminder: please prepare the *${monthName}* expenses in the Profit & Loss Report — the month just closed and the books are due.`;
-    await sendGoogleChat(msg).catch(() => {});
+    await sendTeamChat(msg).catch(() => {});
     if (emails.length) await sendEmailTo(emails, `Prepare ${monthName} expenses — P&L`, `<p>📊 ${monthName} just closed.</p><p>Please open the <b>Profit &amp; Loss Report</b> in the War Room and enter ${monthName}'s expenses.</p>`).catch(() => {});
 
     // Auto cost-cut analysis → drop the top ideas into the AI Updates feed.
@@ -165,7 +165,7 @@ export async function GET(request: Request) {
       text = `*📅 Culture this week*\n${wk}`;
     }
     if (!text) return NextResponse.json({ ok: true, posted: false });
-    const sent = await sendGoogleChat(text);
+    const sent = await sendTeamChat(text);
     return NextResponse.json({ ok: true, posted: sent, todays: todays.length });
   }
 
