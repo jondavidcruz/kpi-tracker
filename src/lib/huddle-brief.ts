@@ -1,6 +1,6 @@
 import { getSettings } from "./data";
 import { buildHuddleData } from "./huddle";
-import { sendGoogleChat, sendEmailTo } from "./notify";
+import { sendHuddleChat, sendEmailTo } from "./notify";
 import { friendlyDate } from "./date";
 
 /** Compile the day's huddle into a brief and push it to Google Chat + email so the
@@ -50,7 +50,7 @@ export async function sendHuddleBrief(date: string): Promise<{ chat: boolean; em
 
   const to = (settings.weeklyEmailRecipients || settings.alertEmailRecipients || "").split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
   const [chat, email] = await Promise.all([
-    sendGoogleChat(chatText),
+    sendHuddleChat(chatText),
     to.length ? sendEmailTo(to, `🗣️ Daily Huddle — ${friendlyDate(date)}`, html) : Promise.resolve(false),
   ]);
   return { chat, email };
@@ -66,13 +66,13 @@ export async function sendHuddleNudge(date: string, slot: "am" | "pm"): Promise<
     : h.reps.filter((r) => !r.updatedToday || r.openCount > 0);
   if (targets.length === 0) {
     // Everyone's current — celebrate it so the channel sees the streak.
-    if (slot === "am") await sendGoogleChat(`✅ *Huddle's in* — everyone set today's goals. Let's go. 🚀`);
+    if (slot === "am") await sendHuddleChat(`✅ *Huddle's in* — everyone set today's goals. Let's go. 🚀`);
     return { chat: false, nudged: [] };
   }
   const names = targets.map((r) => r.name.split(/\s+/)[0]).join(", ");
   const msg = slot === "am"
     ? `⏰ *Huddle reminder* — haven't set today's goals yet: *${names}*. 30 seconds in the War Room → Daily Huddle. 🎯`
     : `🌙 *End-of-day check* — before you log off, mark what you finished and roll the rest: *${names}*. War Room → Daily Huddle.`;
-  const chat = await sendGoogleChat(msg);
+  const chat = await sendHuddleChat(msg);
   return { chat, nudged: targets.map((r) => r.name) };
 }

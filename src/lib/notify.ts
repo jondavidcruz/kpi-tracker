@@ -7,6 +7,7 @@ export interface ChannelConfig {
   chatWebhook: string;
   timecardChatWebhook: string; // separate space for clock-in/break/lunch status posts
   callAuditChatWebhook: string; // separate space for scored-call audit posts
+  huddleChatWebhook: string; // separate space for the daily huddle brief + nudges
   emailRecipients: string[];
   emailFrom: string;
   resendKey: string;
@@ -18,6 +19,7 @@ export async function getChannelConfig(): Promise<ChannelConfig> {
     chatWebhook: s.googleChatWebhook || process.env.GOOGLE_CHAT_WEBHOOK_URL || "",
     timecardChatWebhook: s.timecardChatWebhook || process.env.TIMECARD_CHAT_WEBHOOK || "",
     callAuditChatWebhook: s.callAuditChatWebhook || process.env.CALL_AUDIT_CHAT_WEBHOOK || "",
+    huddleChatWebhook: process.env.HUDDLE_CHAT_WEBHOOK || "",
     emailRecipients: splitList(s.alertEmailRecipients || process.env.ALERT_EMAIL_TO || ""),
     emailFrom: s.emailFromAddress || process.env.ALERT_EMAIL_FROM || "",
     resendKey: process.env.RESEND_API_KEY || "",
@@ -74,6 +76,15 @@ export async function sendTimecardChat(text: string, cfg?: ChannelConfig): Promi
   // Only the dedicated Timecard space — never fall back to the main KPI Tracker
   // space, so clock/break/lunch status posts can't land there.
   return postChatWebhook(c.timecardChatWebhook, text);
+}
+
+/** Post the daily huddle (brief + goal nudges) to the dedicated Huddle space only.
+ *  Never falls back to the main KPI-alerts space, so the huddle can't clutter it.
+ *  Set HUDDLE_CHAT_WEBHOOK to a Google Chat space to route it there; leave it unset
+ *  to keep the huddle out of chat entirely (it still goes out by email). */
+export async function sendHuddleChat(text: string, cfg?: ChannelConfig): Promise<boolean> {
+  const c = cfg ?? (await getChannelConfig());
+  return postChatWebhook(c.huddleChatWebhook, text);
 }
 
 /** Send an email via Resend. Returns true if delivered. */
