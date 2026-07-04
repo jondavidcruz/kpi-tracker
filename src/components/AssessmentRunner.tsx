@@ -29,8 +29,8 @@ export default function AssessmentRunner({ token, name, doneWork, doneWord }: { 
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Card title="1 · Work Styles" desc="Check the words that describe you. Quick and intuitive." done={doneWork} onStart={() => setView("work")} />
-          <Card title="2 · Word Survey" desc="For each group, pick what's most and least like you." done={doneWord} onStart={() => setView("word")} />
+          <Card title="1 · How You Work Best" desc="Check the words that describe you. Quick and intuitive." done={doneWork} onStart={() => setView("work")} />
+          <Card title="2 · Quick Word Pick" desc="For each group, pick what's most and least like you." done={doneWord} onStart={() => setView("word")} />
         </div>
       )}
     </div>
@@ -67,7 +67,7 @@ function WorkStyles({ token, onBack }: { token: string; onBack: () => void }) {
     <div className="space-y-4">
       <button onClick={onBack} className="text-sm text-slate-400 hover:text-slate-600">← Back</button>
       <div className="rounded-xl bg-slate-50 p-4">
-        <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Work Styles · Step {step} of 2</div>
+        <div className="text-xs font-bold uppercase tracking-wide text-slate-400">How You Work Best · Step {step} of 2</div>
         <h2 className="mt-1 font-bold text-slate-800">{step === 1 ? "Check the words that describe how you feel you're EXPECTED to act at work." : "Now check the words that describe the REAL you — how you actually are."}</h2>
         <p className="mt-1 text-xs text-slate-500">Pick as many or as few as fit. Go with your first instinct.</p>
       </div>
@@ -84,7 +84,7 @@ function WorkStyles({ token, onBack }: { token: string; onBack: () => void }) {
           <input type="hidden" name="instrument" value="work_styles" />
           <input type="hidden" name="expected" value={JSON.stringify(expected)} />
           <input type="hidden" name="natural" value={JSON.stringify(natural)} />
-          <button className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Submit Work Styles ✓</button>
+          <button className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Submit ✓</button>
         </form>
       )}
     </div>
@@ -104,7 +104,7 @@ function WordSurvey({ token, onBack }: { token: string; onBack: () => void }) {
     <div className="space-y-4">
       <button onClick={onBack} className="text-sm text-slate-400 hover:text-slate-600">← Back</button>
       <div className="rounded-xl bg-slate-50 p-4">
-        <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Word Survey</div>
+        <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Quick Word Pick</div>
         <h2 className="mt-1 font-bold text-slate-800">In each group, tap the word that&apos;s <span className="text-emerald-700">MOST</span> like you and the one that&apos;s <span className="text-red-600">LEAST</span> like you.</h2>
       </div>
       <div className="space-y-3">
@@ -129,7 +129,7 @@ function WordSurvey({ token, onBack }: { token: string; onBack: () => void }) {
         <input type="hidden" name="instrument" value="word_survey" />
         <input type="hidden" name="most" value={JSON.stringify(most)} />
         <input type="hidden" name="least" value={JSON.stringify(least)} />
-        <button disabled={!complete} className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">{complete ? "Submit Word Survey ✓" : `Pick most + least in all ${WORD_SURVEY_GROUPS.length} groups`}</button>
+        <button disabled={!complete} className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">{complete ? "Submit ✓" : `Pick most + least in all ${WORD_SURVEY_GROUPS.length} groups`}</button>
       </form>
     </div>
   );

@@ -133,7 +133,7 @@ export default async function OnboardingPage() {
                     <span className="font-bold text-slate-800">{a.name}</span>
                     {profile ? <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700">{profile.emoji} {profile.name}</span>
                       : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">⏳ pending</span>}
-                    <span className="text-[11px] text-slate-400">{a.workStylesResult ? "Work Styles ✓" : "Work Styles –"} · {a.wordSurveyResult ? "Word Survey ✓" : "Word Survey –"}</span>
+                    <span className="text-[11px] text-slate-400">{a.workStylesResult ? "How You Work Best ✓" : "How You Work Best –"} · {a.wordSurveyResult ? "Quick Word Pick ✓" : "Quick Word Pick –"}</span>
                     <span className="ml-auto flex items-center gap-1.5">
                       <CopyLink path={`/assess/${a.token}`} />
                       <form action={deleteAssessment}><input type="hidden" name="id" value={a.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">remove</button></form>
