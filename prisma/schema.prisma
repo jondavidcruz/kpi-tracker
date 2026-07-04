@@ -265,6 +265,25 @@ model CallScore {
   @@index([createdAt])
 }
 
+// In-house behavioral assessment (DISC-based). One row per invited person; each can
+// complete two instruments (Work Styles + Word Survey). Shared via `token` (no login).
+// Results are OWNER-ONLY in the app.
+model Assessment {
+  id               String    @id @default(cuid())
+  token            String    @unique // no-login shareable link
+  name             String
+  email            String    @default("")
+  userId           String? // linked team member, if mapping existing staff
+  createdBy        String    @default("")
+  workStylesResult String    @default("") // JSON { disc, self, profile }
+  wordSurveyResult String    @default("") // JSON { disc, profile }
+  profileKey       String    @default("") // headline profile key
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime?
+
+  @@index([createdAt])
+}
+
 // Private HR / payment record per team member. OWNER-ONLY (Jon). Holds PII +
 // payment destinations (Wise) + tenure/promotion/pay — never exposed to the team.
 model TeamProfile {

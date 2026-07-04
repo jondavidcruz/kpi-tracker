@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
 import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
@@ -2848,4 +2849,64 @@ export async function reviewCallScore(formData: FormData) {
   if (formData.get("training") != null) data.usedForTraining = !score.usedForTraining;
   await db.callScore.update({ where: { id }, data });
   revalidatePath("/call-scoring");
+}
+
+// ===== Behavioral assessment (Onboarding) — owner-only results =====
+
+/** Create an assessment invite + shareable no-login link. Owner only. */
+export async function createAssessmentInvite(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const email = String(formData.get("email") ?? "").trim();
+  const userId = String(formData.get("userId") ?? "").trim() || null;
+  await db.assessment.create({
+    data: { token: randomUUID().replace(/-/g, "").slice(0, 20), name, email, userId, createdBy: me?.name ?? "" },
+  });
+  revalidatePath("/onboarding");
+  redirect("/onboarding#assessments");
+}
+
+/** Delete an assessment invite/result. Owner only. */
+export async function deleteAssessment(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.assessment.delete({ where: { id } }).catch(() => {});
+  revalidatePath("/onboarding");
+}
+
+/** Submit a completed instrument. PUBLIC — the unguessable token is the key (no login),
+ *  so a candidate can complete it before they're in the system. Scored server-side. */
+export async function submitAssessment(formData: FormData) {
+  const token = String(formData.get("token") ?? "");
+  const instrument = String(formData.get("instrument") ?? ""); // "work_styles" | "word_survey"
+  if (!token || !instrument) return;
+  const row = await db.assessment.findUnique({ where: { token } });
+  if (!row) return;
+
+  const parse = (k: string): string[] => { try { const v = JSON.parse(String(formData.get(k) ?? "[]")); return Array.isArray(v) ? v.map(String) : []; } catch { return []; } };
+  const data: Record<string, unknown> = {};
+  let profileKey = row.profileKey;
+
+  if (instrument === "work_styles") {
+    const { scoreWorkStyles, profileFor } = await import("@/lib/assessment");
+    const { disc, self } = scoreWorkStyles(parse("natural"), parse("expected"));
+    const profile = profileFor(disc);
+    data.workStylesResult = JSON.stringify({ disc, self, profile: profile.key });
+    profileKey = profile.key;
+  } else if (instrument === "word_survey") {
+    const { scoreWordSurvey, profileFor } = await import("@/lib/assessment");
+    const disc = scoreWordSurvey(parse("most"), parse("least"));
+    const profile = profileFor(disc);
+    data.wordSurveyResult = JSON.stringify({ disc, profile: profile.key });
+    if (!profileKey) profileKey = profile.key; // Work Styles headline wins if both done
+  } else return;
+
+  data.profileKey = profileKey;
+  data.completedAt = new Date();
+  await db.assessment.update({ where: { token }, data });
+  revalidatePath(`/assess/${token}`);
+  redirect(`/assess/${token}?done=${instrument}`);
 }

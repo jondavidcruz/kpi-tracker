@@ -1,6 +1,10 @@
 import Link from "next/link";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
+import { PROFILES, FACTORS, type DiscScore } from "@/lib/assessment";
+import CopyLink from "@/components/CopyLink";
+import { createAssessmentInvite, deleteAssessment } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +53,22 @@ const MECHANICS = [
   ["The gates are pass/fail", "Commission-only means a non-performer self-selects out fast, protecting your time."],
 ];
 
+function DiscBars({ disc }: { disc: DiscScore }) {
+  return (
+    <div className="mt-2 space-y-1">
+      {FACTORS.map((f) => (
+        <div key={f.key} className="flex items-center gap-2">
+          <span className="w-24 shrink-0 text-[11px] font-semibold text-slate-500">{f.name}</span>
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full" style={{ width: `${disc[f.key]}%`, background: f.color }} />
+          </div>
+          <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{disc[f.key]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default async function OnboardingPage() {
   const me = await getCurrentUser();
   if (!isManager(me)) {
@@ -61,6 +81,12 @@ export default async function OnboardingPage() {
     );
   }
 
+  const owner = isOwner(me);
+  const assessments = owner ? await db.assessment.findMany({ orderBy: { createdAt: "desc" } }) : [];
+  const team = owner ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : [];
+  const mapped = new Set(assessments.map((a) => a.name.trim().toLowerCase()));
+  const unmapped = team.filter((u) => !mapped.has(u.name.trim().toLowerCase()));
+
   return (
     <div className="space-y-6">
       <SectionTitle title="🎓 Onboarding — New Talent" subtitle="How we ramp a new commission-only hire: front-load the learning, gate hard, let the 30/60/90 plan prove them out." accent="bg-brand-gold" />
@@ -68,6 +94,65 @@ export default async function OnboardingPage() {
       <Card className="border-l-4 border-brand-gold bg-amber-50/50 p-4 text-sm text-slate-700">
         <b>The philosophy:</b> commission-only means we can&apos;t afford a slow ramp — but we also shouldn&apos;t spend our time training someone who won&apos;t make it. So we <b>front-load the learning, gate hard before they go live, and let the 30/60/90 self-select.</b> The faster they master the material, the faster they earn — that&apos;s the pitch.
       </Card>
+
+      {owner && (
+        <Card id="assessments" className="p-5">
+          <SectionTitle title="🧭 Behavioral Assessments" subtitle="Our in-house DISC profile. Send a link, they take two short tests, you get their strengths + best-fit seat. Results are owner-only." accent="bg-violet-500" />
+
+          <form action={createAssessmentInvite} className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3">
+            <label className="text-xs"><span className="mb-0.5 block font-semibold text-slate-500">Name</span><input name="name" required placeholder="Candidate / team member" className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" /></label>
+            <label className="text-xs"><span className="mb-0.5 block font-semibold text-slate-500">Email (optional)</span><input name="email" type="email" placeholder="name@email.com" className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" /></label>
+            <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">+ Create link</button>
+          </form>
+
+          {unmapped.length > 0 && (
+            <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/60 p-3">
+              <div className="mb-1.5 text-[12px] font-semibold text-violet-800">Map the current team — one click each generates their link:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {unmapped.map((u) => (
+                  <form key={u.id} action={createAssessmentInvite}>
+                    <input type="hidden" name="name" value={u.name} />
+                    <input type="hidden" name="userId" value={u.id} />
+                    <button className="rounded-lg bg-white px-2.5 py-1 text-[12px] font-semibold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">+ {u.name.split(" ")[0]}</button>
+                  </form>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 space-y-3">
+            {assessments.length === 0 && <p className="text-sm text-slate-400">No assessments yet. Create a link above and send it to a candidate or teammate.</p>}
+            {assessments.map((a) => {
+              const work = a.workStylesResult ? JSON.parse(a.workStylesResult) : null;
+              const word = a.wordSurveyResult ? JSON.parse(a.wordSurveyResult) : null;
+              const profile = PROFILES[a.profileKey] ?? null;
+              const disc: DiscScore | null = work?.disc ?? word?.disc ?? null;
+              return (
+                <div key={a.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-slate-800">{a.name}</span>
+                    {profile ? <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700">{profile.emoji} {profile.name}</span>
+                      : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">⏳ pending</span>}
+                    <span className="text-[11px] text-slate-400">{a.workStylesResult ? "Work Styles ✓" : "Work Styles –"} · {a.wordSurveyResult ? "Word Survey ✓" : "Word Survey –"}</span>
+                    <span className="ml-auto flex items-center gap-1.5">
+                      <CopyLink path={`/assess/${a.token}`} />
+                      <form action={deleteAssessment}><input type="hidden" name="id" value={a.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">remove</button></form>
+                    </span>
+                  </div>
+                  {disc && <DiscBars disc={disc} />}
+                  {profile && (
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <div className="text-[13px] text-slate-600"><b>{profile.blurb}</b><div className="mt-1"><span className="font-semibold text-slate-500">Strengths:</span> {profile.strengths.join(" · ")}</div><div className="mt-0.5"><span className="font-semibold text-slate-500">Watch-outs:</span> {profile.watchouts.join(" · ")}</div></div>
+                      <div className="text-[13px] text-slate-600"><div><span className="font-semibold text-slate-500">💬 Communicate:</span> {profile.comms}</div><div className="mt-0.5"><span className="font-semibold text-slate-500">🔥 Motivate:</span> {profile.motivate}</div><div className="mt-0.5"><span className="font-semibold text-slate-500">🎯 Best seat:</span> {profile.seat}</div></div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-[11px] text-slate-400">Our own DISC-based instrument — inspired by the Predictive Index &amp; McQuaig approach, built in-house so it&apos;s ours to use freely. Not affiliated with either company.</p>
+        </Card>
+      )}
 
       {/* Roles */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
