@@ -9,7 +9,6 @@ import { createAssessmentInvite, deleteAssessment } from "@/app/actions";
 export const dynamic = "force-dynamic";
 
 const ROLES = [
-  { icon: "📞", name: "Lead Qualifier / Appointment Setter", blurb: "Front of the funnel — works leads, qualifies motivation + timeline, and books appointments for acquisitions. The feeder role.", comp: "Commission-only (per qualified appt set / per deal closed from their appointments)." },
   { icon: "🎯", name: "Junior Acquisitions", blurb: "Takes the appointments, runs discovery → offer → negotiation, and gets contracts signed. The closer-in-training.", comp: "Commission-only (% of the assignment fee on deals they sign)." },
 ];
 
@@ -28,14 +27,6 @@ const GATES = [
 ];
 
 const PLAN: { role: string; rows: [string, string, string][] }[] = [
-  {
-    role: "📞 Lead Qualifier / Appointment Setter",
-    rows: [
-      ["Day 30", "Scripts cold, ramped on dials, first qualified appointments set.", "Hitting ~70% of dial + conversation targets."],
-      ["Day 60", "Consistent appointment volume; appointments show + are qualified.", "A set # of qualified appts / week."],
-      ["Day 90", "Predictable appt flow feeding AQ; first deals close from their appts.", "Sustained quota → keep the seat / promotion track."],
-    ],
-  },
   {
     role: "🎯 Junior Acquisitions",
     rows: [
@@ -190,8 +181,7 @@ export default async function OnboardingPage() {
         <SectionTitle title="Phase 1 — Shadow + Ramp" subtitle="First ~2 weeks live." accent="bg-emerald-400" />
         <ul className="space-y-1 text-[13px] text-slate-700">
           <li>• Listen to recorded calls in <Link href="/call-scoring" className="underline">Call Scoring</Link>; sit in on live calls.</li>
-          <li>• Lead Qualifier: start dialing aged / warm leads (low stakes) → graduate to fresh.</li>
-          <li>• Junior AQ: shadow acquisitions calls, handle follow-ups first, then run discovery solo.</li>
+          <li>• Junior AQ: start on aged / warm follow-ups (low stakes), shadow live acquisitions calls, then run discovery solo.</li>
           <li>• Manager scores 2–3 of their calls/day and sets weekly focus skills in the <Link href="/training" className="underline">Training Portal</Link>.</li>
         </ul>
       </Card>
@@ -235,7 +225,7 @@ export default async function OnboardingPage() {
       {/* Legal flag */}
       <Card className="border-l-4 border-red-400 bg-red-50/50 p-4 text-[13px] text-slate-700">
         <div className="font-bold text-red-800">⚠️ Verify before hiring (not legal advice)</div>
-        <p className="mt-1">Commission-only + California is a worker-classification minefield (AB5 / ABC test). A 1099 commission-only appointment-setter / cold-caller role can be risky in CA, and the real-estate-licensee carve-out may or may not apply. <b>Confirm W-2-vs-1099 and the comp structure with an employment attorney before hiring</b> — especially in CA. Also train every dialer on <b>TCPA / Do-Not-Call</b> rules for outbound.</p>
+        <p className="mt-1">Commission-only + California is a worker-classification minefield (AB5 / ABC test). A 1099 commission-only acquisitions / sales role can be risky in CA, and the real-estate-licensee carve-out may or may not apply. <b>Confirm W-2-vs-1099 and the comp structure with an employment attorney before hiring</b> — especially in CA. Also train every dialer on <b>TCPA / Do-Not-Call</b> rules for outbound.</p>
       </Card>
 
       <p className="text-center text-[11px] text-slate-400">Reference playbook. Next up (on request): a per-hire interactive tracker — assign a new hire and check off their Bootcamp + 30/60/90 progress.</p>
