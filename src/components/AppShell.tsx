@@ -20,6 +20,12 @@ export default async function AppShell({ children }: { children: React.ReactNode
   // Removed/deactivated account with a lingering session → sign out.
   if (email && (!me || !me.active)) redirect("/auth/signout");
 
+  const reqPath = (await headers()).get("x-pathname") ?? "/";
+  // The candidate assessment is a standalone, no-login experience — never wrap it in
+  // the War Room shell, even for a signed-in owner. Candidates (who aren't in the
+  // business) see ONLY the assessment, none of our sections.
+  if (reqPath.startsWith("/assess")) return <>{children}</>;
+
   // Not signed in (login page) → no chrome.
   if (!me) return <>{children}</>;
 
@@ -27,7 +33,6 @@ export default async function AppShell({ children }: { children: React.ReactNode
   // pages; bounce them to their home page if they land anywhere else.
   const allow = navAllowlist(me);
   const hiddenNav = parseNavHidden(me.navHidden);
-  const reqPath = (await headers()).get("x-pathname") ?? "/";
   if (allow && !isPathAllowed(reqPath, allow)) redirect(allow[0]);
   // Per-user hidden sections are blocked by URL too — not just removed from the menu.
   if (isPathHidden(reqPath, hiddenNav)) redirect("/dashboard");
