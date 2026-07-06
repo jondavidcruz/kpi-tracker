@@ -254,6 +254,54 @@ export const SCRIPTS: Script[] = [
     objections: [],
   },
   {
+    key: "linkedin-developer-outreach",
+    name: "LinkedIn — Developer / Builder Outreach",
+    group: "Buyer Scripts",
+    icon: "💼",
+    summary: "Find and warm up developers/builders on LinkedIn. Templates for connect → intro → deal. All sends are manual + Jon-approved — never automate.",
+    steps: [
+      {
+        heading: "⚠️ Rules before you touch LinkedIn",
+        body: [
+          "⚠️ NEVER auto-send. No bots, no browser-extension blasters, no cloud automation tools. LinkedIn bans those and it kills Jon's real account + network permanently.",
+          "⚠️ Get Jon's OK before any outreach goes out. Draft here, send after approval.",
+          "⚠️ Stay human-paced: max ~15–20 connection requests/day, ~30–40 messages/day, from a real logged-in session. Personalize every one.",
+          "💡 Use LinkedIn search / Sales Navigator to FIND builders — search by title ('Owner', 'Principal', 'Land Acquisition') + '<city> custom homes / development' + recent activity. Note the principal's name, add them to Buyer Research.",
+        ],
+      },
+      {
+        heading: "1️⃣ Connection request (no pitch — keep it under 300 chars)",
+        body: [
+          "🎤 Hi [First name] — I work with builders in [area] on off-market tear-down / value-add lots. Love what your team is doing in [neighborhood/project]. Would be glad to connect.",
+          "→ Reference something real (a project, a neighborhood, a recent build). Generic = ignored or flagged spam.",
+          "💡 If you have a live deal in their area, you can name-drop it lightly: '…have a lot in [area] that might be your profile.'",
+        ],
+      },
+      {
+        heading: "2️⃣ First message after they accept",
+        body: [
+          "🎤 Thanks for connecting, [First name]. Quick one — we source off-market lots and tear-downs in [areas]. What's your buy box right now? Target areas, max price per lot, and how fast you can close cash — so I only bring you stuff that actually fits.",
+          "→ Goal of this message = get their buy box, not sell. Capture every answer in Buyer Research.",
+          "❓ If no reply in 3–4 days, one soft follow-up:",
+          "🎤 No worries if now's not the time — should I keep you posted when something in [area] comes up, or is there a better person on your team for acquisitions?",
+        ],
+      },
+      {
+        heading: "3️⃣ When you have a matching deal",
+        body: [
+          "🎤 [First name] — got one that fits your box: [address/area], [lot size / beds-baths], asking [price]. [One line on why it pencils for them]. Want the full details?",
+          "→ 30 seconds, their criteria, one reason it fits. Then send details / set a call.",
+          "💡 Log the touch in Buyer Research so it credits Developers Contacted and keeps the follow-up alive.",
+        ],
+      },
+    ],
+    objections: [
+      { objection: "\"How'd you get my info?\"", response: "Straight answer: \"LinkedIn — I focus on builders active in [area] and your projects came up. Figured it was worth connecting directly.\"" },
+      { objection: "\"I only work with agents I know.\"", response: "\"Totally fair. I'm not asking to replace anyone — just to be the person who brings you off-market lots before they hit the MLS. No cost to you to see them.\"" },
+      { objection: "\"Send me everything you get.\"", response: "\"I'd rather only send what fits — saves us both time. Give me your target areas and max per lot and I'll filter to just those.\" (→ get the buy box)" },
+    ],
+  },
+  {
     key: "agent-disposition-luxury",
     name: "Agent Deal Disposition — Luxury (Developers)",
     group: "Agent Scripts",

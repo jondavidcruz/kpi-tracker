@@ -68,6 +68,19 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
   const markets = settings.marketingMarkets.split("\n").map((m) => m.trim()).filter(Boolean);
 
+  // "Going cold" — vetted/active buyers we haven't touched in 30+ days, so relationships
+  // don't rot. Days computed from lastContacted (blank = never contacted since vetting).
+  const daysSince = (d: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+    const ms = Date.parse(today) - Date.parse(d);
+    return Number.isFinite(ms) ? Math.floor(ms / 86_400_000) : null;
+  };
+  const cold = vettedRows
+    .map((r) => ({ id: r.id, name: r.name, days: daysSince(r.lastContacted), last: r.lastContacted, next: r.nextFollowUp }))
+    .filter((r) => r.days === null || r.days >= 30)
+    .sort((a, b) => (b.days ?? 9999) - (a.days ?? 9999))
+    .slice(0, 24);
+
   return (
     <div className="space-y-6">
       <SectionTitle title="🏛 Vetted Buyers" subtitle="Our vetted buyers & developers and their buy boxes — search a market to see exactly who'd want the deal. Sourcing new buyers? Start in Buyer Research." accent="bg-brand-gold"
@@ -148,6 +161,27 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           </details>
         </Card>
       </div>
+
+      {/* Buyers going cold — vetted buyers not touched in 30+ days */}
+      {cold.length > 0 && (
+        <Card className="p-4">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-slate-700">🧊 Buyers going cold</span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">{cold.length} need a touch</span>
+          </div>
+          <p className="mb-2 text-xs text-slate-500">Vetted buyers we haven&apos;t contacted in 30+ days. Reach out to keep the relationship warm — log the touch in <Link href="/vetting" className="underline">Buyer Research</Link>.</p>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+            {cold.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-xs ring-1 ring-slate-200">
+                <span className="flex-1 truncate font-semibold text-slate-700">{c.name}</span>
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${c.days === null ? "bg-slate-200 text-slate-600" : c.days >= 60 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                  {c.days === null ? "never" : `${c.days}d`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Markets + research */}
       <Card className="p-5">
