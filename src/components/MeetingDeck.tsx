@@ -154,49 +154,57 @@ function buildSlides(d: MeetingDeck): Slide[] {
   // 6. This month KPIs — same split, month-to-date
   pushKpiSlides(s, `This Month (${d.monthly.label})`, d.monthly);
 
-  // 7. Pipeline — richer, more visual
-  s.push({ name: "Active Pipeline", node: (
-    <Light title="Active Deal Pipeline">
-      <div className="mb-[2%] grid grid-cols-3 gap-[2%]">
-        {[
-          { l: "Active deals", v: String(d.pipeline.length) },
-          { l: "Total est. profit", v: money(d.pipeline.reduce((s2, p) => s2 + (p.profit ?? 0), 0)) },
-          { l: "Aging (30d+)", v: String(d.pipeline.filter((p) => p.days != null && p.days >= 30).length) },
-        ].map((c) => (
-          <div key={c.l} className="rounded-lg bg-slate-50 p-[2.5%] text-center ring-1 ring-slate-200">
-            <div className="text-slate-500" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{c.l}</div>
-            <div className="font-extrabold tabular-nums text-slate-900" style={{ fontSize: "clamp(14px,2.3cqw,30px)" }}>{c.v}</div>
+  // 7. Pipeline — paginated so ALL deals show (a fixed slide only fits ~6 rows).
+  const PIPE_PAGE = 6;
+  const pipePages = Math.max(1, Math.ceil(d.pipeline.length / PIPE_PAGE));
+  for (let pi = 0; pi < pipePages; pi++) {
+    const rows = d.pipeline.slice(pi * PIPE_PAGE, pi * PIPE_PAGE + PIPE_PAGE);
+    const first = pi === 0;
+    s.push({ key: first ? "pipeline" : `pipeline-${pi + 1}`, name: first ? "Active Pipeline" : "Active Pipeline (cont.)", node: (
+      <Light title={first ? "Active Deal Pipeline" : `Active Deal Pipeline (cont. ${pi + 1}/${pipePages})`}>
+        {first && (
+          <div className="mb-[2%] grid grid-cols-3 gap-[2%]">
+            {[
+              { l: "Active deals", v: String(d.pipeline.length) },
+              { l: "Total est. profit", v: money(d.pipeline.reduce((s2, p) => s2 + (p.profit ?? 0), 0)) },
+              { l: "Aging (30d+)", v: String(d.pipeline.filter((p) => p.days != null && p.days >= 30).length) },
+            ].map((c) => (
+              <div key={c.l} className="rounded-lg bg-slate-50 p-[2.5%] text-center ring-1 ring-slate-200">
+                <div className="text-slate-500" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{c.l}</div>
+                <div className="font-extrabold tabular-nums text-slate-900" style={{ fontSize: "clamp(14px,2.3cqw,30px)" }}>{c.v}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="overflow-hidden rounded-lg ring-1 ring-slate-200">
-        <table className="w-full" style={{ fontSize: "clamp(7px,1.05cqw,14px)" }}>
-          <thead><tr className="bg-slate-50 text-left text-slate-500">
-            <th className="px-2.5 py-1">Property</th><th className="px-1.5 py-1">Status</th><th className="px-1.5 py-1">Rep</th>
-            <th className="px-1.5 py-1 text-center">Days</th><th className="px-1.5 py-1 text-right">Contract</th><th className="px-1.5 py-1 text-right">Marketing $</th><th className="px-1.5 py-1 text-right">Profit</th><th className="px-1.5 py-1">Next step</th>
-          </tr></thead>
-          <tbody>
-            {d.pipeline.map((p, i) => {
-              const ageCls = p.level === "stale" ? "bg-red-100 text-red-700" : p.level === "reduce" ? "bg-orange-100 text-orange-700" : p.level === "watch" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700";
-              return (
-                <tr key={i} className="border-t border-slate-100 align-top">
-                  <td className="px-2.5 py-1 font-semibold text-slate-800">{p.address}</td>
-                  <td className="px-1.5 py-1"><span className="rounded-full bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800" style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>{p.status.replace(/_/g, " ")}</span></td>
-                  <td className="px-1.5 py-1 text-slate-600">{p.rep}</td>
-                  <td className="px-1.5 py-1 text-center">{p.days == null ? <span className="text-slate-400">—</span> : <span className={`rounded-full px-1.5 py-0.5 font-bold ${ageCls}`} style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>{p.days}d</span>}</td>
-                  <td className="px-1.5 py-1 text-right tabular-nums text-slate-600">{p.contractPrice != null ? money(p.contractPrice) : "—"}</td>
-                  <td className="px-1.5 py-1 text-right font-semibold tabular-nums text-sky-700">{p.askingPrice != null ? money(p.askingPrice) : "—"}</td>
-                  <td className="px-1.5 py-1 text-right font-bold tabular-nums text-emerald-700">{p.profit != null ? money(p.profit) : "—"}</td>
-                  <td className="px-1.5 py-1 text-slate-500">{p.nextSteps || "—"}</td>
-                </tr>
-              );
-            })}
-            {!d.pipeline.length && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">No active deals.</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </Light>
-  )});
+        )}
+        <div className="overflow-hidden rounded-lg ring-1 ring-slate-200">
+          <table className="w-full" style={{ fontSize: "clamp(7px,1.05cqw,14px)" }}>
+            <thead><tr className="bg-slate-50 text-left text-slate-500">
+              <th className="px-2.5 py-1">Property</th><th className="px-1.5 py-1">Status</th><th className="px-1.5 py-1">Rep</th>
+              <th className="px-1.5 py-1 text-center">Days</th><th className="px-1.5 py-1 text-right">Contract</th><th className="px-1.5 py-1 text-right">Marketing $</th><th className="px-1.5 py-1 text-right">Profit</th><th className="px-1.5 py-1">Next step</th>
+            </tr></thead>
+            <tbody>
+              {rows.map((p, i) => {
+                const ageCls = p.level === "stale" ? "bg-red-100 text-red-700" : p.level === "reduce" ? "bg-orange-100 text-orange-700" : p.level === "watch" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700";
+                return (
+                  <tr key={i} className="border-t border-slate-100 align-top">
+                    <td className="px-2.5 py-1 font-semibold text-slate-800">{p.address}</td>
+                    <td className="px-1.5 py-1"><span className="rounded-full bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800" style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>{p.status.replace(/_/g, " ")}</span></td>
+                    <td className="px-1.5 py-1 text-slate-600">{p.rep}</td>
+                    <td className="px-1.5 py-1 text-center">{p.days == null ? <span className="text-slate-400">—</span> : <span className={`rounded-full px-1.5 py-0.5 font-bold ${ageCls}`} style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>{p.days}d</span>}</td>
+                    <td className="px-1.5 py-1 text-right tabular-nums text-slate-600">{p.contractPrice != null ? money(p.contractPrice) : "—"}</td>
+                    <td className="px-1.5 py-1 text-right font-semibold tabular-nums text-sky-700">{p.askingPrice != null ? money(p.askingPrice) : "—"}</td>
+                    <td className="px-1.5 py-1 text-right font-bold tabular-nums text-emerald-700">{p.profit != null ? money(p.profit) : "—"}</td>
+                    <td className="px-1.5 py-1 text-slate-500">{p.nextSteps || "—"}</td>
+                  </tr>
+                );
+              })}
+              {!d.pipeline.length && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">No active deals.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Light>
+    )});
+  }
 
   // 8. Annual goal
   s.push({ name: "Annual Goal", node: (

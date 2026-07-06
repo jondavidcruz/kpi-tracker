@@ -66,6 +66,14 @@ const ROLLUP_KEYS = ["offers_made", "acq_contracts_sent", "deals_sold", "new_buy
 const SIGNED_KEYS = ["acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"];
 // KPIs hidden from the meeting deck for now (per Jon).
 const EXCLUDE_KPIS = new Set(["text_responses", "appts_set", "appts_taken"]);
+// The Monday deck shows only the CORE MONEY KPIs per role (the full scorecard is too
+// much to read on a slide). Order = display order. Roles not listed show everything.
+const CORE_DECK_KPIS: Record<string, string[]> = {
+  acquisitions: ["offers_made", "acq_contracts_sent", "acq_signed_assignment", "acq_signed_novation", "acq_signed_creative"],
+  dispositions: ["new_buyers", "buyer_offers_received", "contracts_assigned", "deals_sold"],
+};
+// The month's core money KPIs (entered monthly, so not in the daily-summed glance).
+const CORE_MONTHLY_KPIS = ["ppl_leads", "gross_revenue", "marketing_spend", "deals_closed"];
 
 // Per-position KPI tables for a given sums map (last week or month-to-date).
 function buildRoleTables(
@@ -76,7 +84,12 @@ function buildRoleTables(
   const tables: RoleTable[] = [];
   for (const pos of POSITIONS) {
     const roleReps = reps.filter((r) => r.position === pos.key);
-    const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key && !EXCLUDE_KPIS.has(k.key));
+    const available = perRepKpis.filter((k) => k.roleKey === pos.key && !EXCLUDE_KPIS.has(k.key));
+    const core = CORE_DECK_KPIS[pos.key];
+    // Only the core money KPIs (in the given order); fall back to all for unlisted roles.
+    const roleKpis = core
+      ? core.map((key) => available.find((k) => k.key === key)).filter((k): k is (typeof available)[number] => !!k)
+      : available;
     if (!roleReps.length || !roleKpis.length) continue;
     tables.push({
       label: pos.label, emoji: pos.emoji,
@@ -259,6 +272,10 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const monthSums = await getRangeSums(mb.start, today);
   const monthGlance = glanceFrom(teamKpis, perRepKpis, reps, monthSums);
   const monthRoleTables = buildRoleTables(reps, perRepKpis, monthSums);
+  // Lead with the month's core money KPIs (PPL leads, revenue, spend, closes) — these are
+  // entered monthly so they weren't in the daily-summed glance; that's why they showed blank.
+  const coreMonthly = CORE_MONTHLY_KPIS.map((key) => financials.find((f) => f.key === key)).filter((f): f is Glance => !!f);
+  const monthDeckGlance = [...coreMonthly, ...monthGlance];
 
   // ---- Annual goal — synced from the Closed Deals ledger (this year). Every
   // closed deal = one homeowner helped; revenue = sum of verified profit. ----
@@ -324,7 +341,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     lastWeek: { glance: lastGlance, roleTables },
     monthly: {
       label: friendlyDate(mb.start).replace(/,.*/, "") + " – today",
-      financials, glance: monthGlance, roleTables: monthRoleTables,
+      financials, glance: monthDeckGlance, roleTables: monthRoleTables,
       revenueClosed: closedRevenueYTD,
       revenuePending: dealMetrics.revenuePendingEscrow,
       inEscrow: dealMetrics.inEscrowCount,
