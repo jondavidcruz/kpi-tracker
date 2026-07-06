@@ -34,13 +34,15 @@ const TEAM_VERSES: { text: string; ref: string }[] = [
   { text: "I can do all things through Christ who strengthens me.", ref: "Philippians 4:13" },
 ];
 
-export interface CustomSlide { kind: string; title: string; body: string; imageUrl: string }
+export interface CustomSlide { id: string; kind: string; title: string; body: string; imageUrl: string }
 export interface MeetingDeck {
   weekLabel: string;
   thisWeekLabel: string;
   titleSlideUrl: string; // owner override for the hero slide (else built-in title.png)
   teamSlideUrl: string;  // owner override image for the team slide (else the native grid)
   customSlides: CustomSlide[]; // owner-added slides, inserted after the team slide
+  deckOrder: string[];   // custom slide order (keys); slides not listed keep default position
+  deckHidden: string[];  // slide keys hidden from the deck
   verse: { text: string; ref: string };
   generatedOn: string;
   team: { name: string; role: string }[];
@@ -227,6 +229,11 @@ export async function getL10(today: string): Promise<L10> {
   };
 }
 
+/** Parse a JSON array of slide keys from a Settings string; [] on anything invalid. */
+function parseKeyList(s: string | null | undefined): string[] {
+  try { const v = JSON.parse(s || "[]"); return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+}
+
 export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const wk = lastWeekRange(today);
   const mb = monthBounds(today);
@@ -314,7 +321,9 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     thisWeekLabel: thisWeek.label,
     titleSlideUrl: settings.titleSlideUrl ?? "",
     teamSlideUrl: settings.teamSlideUrl ?? "",
-    customSlides: customSlideRows.map((s) => ({ kind: s.kind, title: s.title, body: s.body, imageUrl: s.imageUrl })),
+    customSlides: customSlideRows.map((s) => ({ id: s.id, kind: s.kind, title: s.title, body: s.body, imageUrl: s.imageUrl })),
+    deckOrder: parseKeyList(settings.deckOrder),
+    deckHidden: parseKeyList(settings.deckHidden),
     verse: TEAM_VERSES[hashWeek(thisWeek.start) % TEAM_VERSES.length],
     generatedOn: friendlyDate(today),
     team: reps.map((r) => ({ name: r.name, role: positionLabel(r.position) })),

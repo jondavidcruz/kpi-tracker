@@ -572,6 +572,16 @@ export async function saveDeckImages(formData: FormData) {
   redirect("/meeting?saved=Slide+images#slides");
 }
 
+/** Save the whole-deck order + hidden set (slide keys). Called from the reorder editor. Managers only. */
+export async function saveDeckLayout(order: string[], hidden: string[]) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const clean = (a: unknown) => (Array.isArray(a) ? a.map(String).slice(0, 300) : []);
+  const data = { deckOrder: JSON.stringify(clean(order)), deckHidden: JSON.stringify(clean(hidden)) };
+  await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
+  revalidatePath("/meeting");
+}
+
 /** Add a custom slide (uploaded image, or a title + text). Managers only. */
 export async function addDeckSlide(formData: FormData) {
   const me = await getCurrentUser();

@@ -1,10 +1,73 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Deck, { Navy, Light, Bullets, money, type Slide } from "@/components/Deck";
 import type { MeetingDeck } from "@/lib/meeting";
+import { saveDeckLayout } from "@/app/actions";
 
 export default function MeetingDeckView({ deck }: { deck: MeetingDeck }) {
-  return <Deck slides={buildSlides(deck)} />;
+  return <Deck slides={orderedSlides(buildSlides(deck), deck.deckOrder, deck.deckHidden)} />;
+}
+
+// Apply the saved order + hidden set. Ordered keys come first (in saved order); any
+// slide not listed keeps its default position after them; hidden keys are dropped.
+function orderedSlides(all: Slide[], order: string[], hidden: string[]): Slide[] {
+  const hide = new Set(hidden);
+  const byKey = new Map(all.map((s) => [s.key ?? "", s] as const));
+  const out: Slide[] = [];
+  const used = new Set<string>();
+  for (const k of order) { const s = byKey.get(k); if (s && !hide.has(k) && !used.has(k)) { out.push(s); used.add(k); } }
+  for (const s of all) { const k = s.key ?? ""; if (!used.has(k) && !hide.has(k)) { out.push(s); used.add(k); } }
+  return out;
+}
+
+// The full slide sequence (keys + names), in the current effective order, INCLUDING
+// hidden ones — used by the reorder editor.
+function editorSequence(all: Slide[], order: string[]): { key: string; name: string }[] {
+  const names = new Map(all.map((s) => [s.key ?? "", s.name] as const));
+  const seq: { key: string; name: string }[] = [];
+  const used = new Set<string>();
+  for (const k of order) { if (names.has(k) && !used.has(k)) { seq.push({ key: k, name: names.get(k)! }); used.add(k); } }
+  for (const s of all) { const k = s.key ?? ""; if (!used.has(k)) { seq.push({ key: k, name: s.name }); used.add(k); } }
+  return seq;
+}
+
+/** Owner reorder / hide UI for the whole deck (built-in + custom slides). */
+export function DeckManager({ deck }: { deck: MeetingDeck }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [seq, setSeq] = useState(() => editorSequence(buildSlides(deck), deck.deckOrder));
+  const [hidden, setHidden] = useState<string[]>(deck.deckHidden);
+  const hideSet = new Set(hidden);
+
+  const save = (order: string[], hid: string[]) => start(async () => { await saveDeckLayout(order, hid); router.refresh(); });
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir; if (j < 0 || j >= seq.length) return;
+    const next = [...seq]; [next[i], next[j]] = [next[j], next[i]];
+    setSeq(next); save(next.map((x) => x.key), hidden);
+  };
+  const toggle = (key: string) => {
+    const next = hideSet.has(key) ? hidden.filter((k) => k !== key) : [...hidden, key];
+    setHidden(next); save(seq.map((x) => x.key), next);
+  };
+
+  return (
+    <div className={`space-y-1.5 ${pending ? "opacity-60" : ""}`}>
+      {seq.map((s, i) => {
+        const hiddenNow = hideSet.has(s.key);
+        return (
+          <div key={s.key} className={`flex items-center gap-2 rounded-lg border p-2 ${hiddenNow ? "border-slate-100 bg-slate-50 opacity-60" : "border-slate-200"}`}>
+            <span className="w-6 text-center text-[11px] font-bold text-slate-400">{i + 1}</span>
+            <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{s.name}{hiddenNow && <span className="ml-1 text-[11px] text-slate-400">(hidden)</span>}</span>
+            <button disabled={i === 0 || pending} onClick={() => move(i, -1)} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30">↑</button>
+            <button disabled={i === seq.length - 1 || pending} onClick={() => move(i, 1)} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30">↓</button>
+            <button disabled={pending} onClick={() => toggle(s.key)} className="rounded px-2 py-0.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-100">{hiddenNow ? "Show" : "Hide"}</button>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // One position's KPI table, full width — positions stack top-to-bottom.
@@ -54,11 +117,11 @@ function KpiSlide({ title, glance, roleTables }: { title: string; glance: Meetin
 // Split a KPI section across slides so no position's table gets clipped: the first
 // slide carries the glance tiles + the first position; remaining positions (incl.
 // Dispositions) get their own roomy slide.
-function pushKpiSlides(s: Slide[], title: string, section: MeetingDeck["lastWeek"]) {
+function pushKpiSlides(s: Slide[], title: string, section: MeetingDeck["lastWeek"], keyBase: string) {
   const tables = section.roleTables;
-  s.push({ name: `${title} KPIs`, node: <KpiSlide title={`${title} — Team KPIs`} glance={section.glance} roleTables={tables.slice(0, 1)} /> });
+  s.push({ key: `kpi-${keyBase}`, name: `${title} KPIs`, node: <KpiSlide title={`${title} — Team KPIs`} glance={section.glance} roleTables={tables.slice(0, 1)} /> });
   if (tables.length > 1) {
-    s.push({ name: `${title} KPIs (cont.)`, node: <KpiSlide title={`${title} — Team KPIs (cont.)`} glance={[]} roleTables={tables.slice(1)} /> });
+    s.push({ key: `kpi-${keyBase}-2`, name: `${title} KPIs (cont.)`, node: <KpiSlide title={`${title} — Team KPIs (cont.)`} glance={[]} roleTables={tables.slice(1)} /> });
   }
 }
 
@@ -107,7 +170,7 @@ function buildSlides(d: MeetingDeck): Slide[] {
   const s: Slide[] = [];
 
   // 1. Title — owner-uploaded hero if set, else the built-in Canva hero, with the live week overlaid
-  s.push({ name: "Title", node: (
+  s.push({ key: "title", name: "Title", node: (
     <div className="relative h-full w-full bg-brand-navy bg-cover bg-center" style={{ backgroundImage: `url(${d.titleSlideUrl || "/meeting/title.png"})` }}>
       <div className="absolute inset-x-0 bottom-0 flex justify-center pb-[4%]">
         <div className="rounded-full bg-brand-navy/85 px-6 py-2 text-center text-white shadow-lg backdrop-blur-sm">
@@ -120,16 +183,16 @@ function buildSlides(d: MeetingDeck): Slide[] {
   )});
 
   // 2. Meet the team — owner-uploaded image if set, else the native "A small team" grid
-  s.push({ name: "Team", node: d.teamSlideUrl
+  s.push({ key: "team", name: "Team", node: d.teamSlideUrl
     ? <div className="h-full w-full bg-[#f5ede4] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${d.teamSlideUrl})` }} />
     : <TeamSlide /> });
 
   // 2b. Owner-added custom slides (uploaded photos / text), inserted right after the team.
   for (const cs of d.customSlides) {
     if (cs.kind === "image" && cs.imageUrl) {
-      s.push({ name: cs.title || "Slide", node: <div className="h-full w-full bg-brand-navy bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${cs.imageUrl})` }} /> });
+      s.push({ key: `custom:${cs.id}`, name: cs.title || "Photo slide", node: <div className="h-full w-full bg-brand-navy bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${cs.imageUrl})` }} /> });
     } else if (cs.kind === "text") {
-      s.push({ name: cs.title || "Slide", node: (
+      s.push({ key: `custom:${cs.id}`, name: cs.title || "Text slide", node: (
         <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy px-[8%] text-center text-white">
           {cs.title && <div className="font-extrabold" style={{ fontSize: "clamp(22px,4cqw,52px)" }}>{cs.title}</div>}
           {cs.body && <div className="mt-[2cqw] whitespace-pre-line text-white/85" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>{cs.body}</div>}
@@ -139,23 +202,23 @@ function buildSlides(d: MeetingDeck): Slide[] {
   }
 
   // 3. Announcements
-  s.push({ name: "Announcements", node: (
+  s.push({ key: "announcements", name: "Announcements", node: (
     <Navy title="Team Announcements"><Bullets items={d.announcements} empty="Add this week's announcements below in Edit deck content." /></Navy>
   )});
 
   // 4. Coming soon
-  s.push({ name: "Coming Soon", node: (
+  s.push({ key: "coming-soon", name: "Coming Soon", node: (
     <Navy title="Change / Coming Soon"><Bullets items={d.comingSoon} empty="Add upcoming changes below in Edit deck content." /></Navy>
   )});
 
   // 5. Last week KPIs — split so each position (incl. Dispositions) is fully visible
-  pushKpiSlides(s, "Last Week", d.lastWeek);
+  pushKpiSlides(s, "Last Week", d.lastWeek, "last-week");
 
   // 6. This month KPIs — same split, month-to-date
-  pushKpiSlides(s, `This Month (${d.monthly.label})`, d.monthly);
+  pushKpiSlides(s, `This Month (${d.monthly.label})`, d.monthly, "this-month");
 
   // 7. Pipeline — richer, more visual
-  s.push({ name: "Active Pipeline", node: (
+  s.push({ key: "pipeline", name: "Active Pipeline", node: (
     <Light title="Active Deal Pipeline">
       <div className="mb-[2%] grid grid-cols-3 gap-[2%]">
         {[
@@ -199,7 +262,7 @@ function buildSlides(d: MeetingDeck): Slide[] {
   )});
 
   // 8. Annual goal
-  s.push({ name: "Annual Goal", node: (
+  s.push({ key: "annual-goal", name: "Annual Goal", node: (
     <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-amber-900 via-brand-navy to-brand-navy-950 px-[8%] text-center text-white">
       <div className="font-extrabold text-brand-gold" style={{ fontSize: "clamp(20px,3.4cqw,46px)" }}>{new Date().getFullYear()} Sales Goal</div>
       <div className="mt-2 font-bold" style={{ fontSize: "clamp(16px,2.6cqw,34px)" }}>Help {d.goal.homeownersGoal} homeowners in need</div>
@@ -216,7 +279,7 @@ function buildSlides(d: MeetingDeck): Slide[] {
   )});
 
   // 9. Recognition
-  s.push({ name: "Recognition", node: (
+  s.push({ key: "recognition", name: "Recognition", node: (
     <Light title="🏆 Last Week's Standouts">
       {d.recognition.length ? (
         <div className="flex h-full items-center justify-center gap-[4%]">
@@ -234,7 +297,7 @@ function buildSlides(d: MeetingDeck): Slide[] {
   )});
 
   // 10. Training tip
-  s.push({ name: "Training Tip", node: (
+  s.push({ key: "training-tip", name: "Training Tip", node: (
     <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy px-[10%] text-center text-white">
       <div className="text-brand-gold" style={{ fontSize: "clamp(11px,1.6cqw,20px)", letterSpacing: "0.2em" }}>TRAINING TIP OF THE WEEK</div>
       {d.trainingTip?.targetKpi && <div className="mt-1 text-white/60" style={{ fontSize: "clamp(10px,1.3cqw,16px)" }}>Focus: {d.trainingTip.targetKpi}</div>}
@@ -245,7 +308,7 @@ function buildSlides(d: MeetingDeck): Slide[] {
   )});
 
   // Closing — the all-call ends here. Leadership content is its own deck now.
-  s.push({ name: "That's the all-call", node: (
+  s.push({ key: "outro", name: "That's the all-call", node: (
     <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy text-center text-white">
       <div className="font-extrabold" style={{ fontSize: "clamp(22px,4cqw,56px)" }}>That&apos;s the all-call 🙌</div>
       <div className="mt-2 text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>Let&apos;s have a great week.</div>
@@ -253,7 +316,7 @@ function buildSlides(d: MeetingDeck): Slide[] {
   )});
 
   // Verse of the week — always close on this.
-  s.push({ name: "Verse of the week", node: (
+  s.push({ key: "verse", name: "Verse of the week", node: (
     <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-brand-navy-950 via-brand-navy to-amber-900 px-[10%] text-center text-white">
       <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>VERSE OF THE WEEK</div>
       <div className="mt-[4%] max-w-[85%] font-bold italic leading-snug" style={{ fontSize: "clamp(16px,3cqw,42px)" }}>&ldquo;{d.verse.text}&rdquo;</div>

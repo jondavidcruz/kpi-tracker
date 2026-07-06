@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording, addMeetingHighlight, deleteMeetingHighlight, saveDeckImages, addDeckSlide, updateDeckSlide, deleteDeckSlide } from "@/app/actions";
+import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording, addMeetingHighlight, deleteMeetingHighlight, saveDeckImages, addDeckSlide, deleteDeckSlide } from "@/app/actions";
 import ImageUpload from "@/components/ImageUpload";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings, getKpis } from "@/lib/data";
@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { getMeetingDeck, buildMeetingSummary } from "@/lib/meeting";
 import { todayStr } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
-import MeetingDeckView from "@/components/MeetingDeck";
+import MeetingDeckView, { DeckManager } from "@/components/MeetingDeck";
 import RecordingsCard from "@/components/RecordingsCard";
 
 export const dynamic = "force-dynamic";
@@ -180,17 +180,20 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
           </form>
         </Card>
 
+        <Card className="mt-3 p-5">
+          <div className="mb-1 text-sm font-bold text-slate-700">🔀 Slide order</div>
+          <p className="mb-3 text-[11px] text-slate-400">Reorder or hide ANY slide — the generated ones (Title, Team, KPIs, Goal…) and the slides you added. Saves + updates the deck instantly.</p>
+          <DeckManager deck={deck} />
+        </Card>
+
         {deckSlides.length > 0 && (
           <Card className="mt-3 p-5">
-            <div className="mb-2 text-sm font-bold text-slate-700">Your slides <span className="font-normal text-slate-400">(shown right after the team slide, in this order)</span></div>
-            <div className="space-y-2">
-              {deckSlides.map((slide, i) => (
-                <div key={slide.id} className={`flex items-center gap-2 rounded-lg border p-2 ${slide.active ? "border-slate-200" : "border-slate-100 bg-slate-50 opacity-60"}`}>
-                  {slide.imageUrl ? <img src={slide.imageUrl} alt="" className="h-10 w-16 rounded object-cover" /> : <span className="grid h-10 w-16 place-items-center rounded bg-brand-navy text-xs font-bold text-white">Aa</span>}
-                  <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{slide.kind === "text" ? "📝" : "🖼️"} {slide.title || (slide.kind === "text" ? "Text slide" : "Image slide")}{!slide.active && <span className="ml-1 text-[11px] text-slate-400">(hidden)</span>}</span>
-                  <form action={updateDeckSlide}><input type="hidden" name="id" value={slide.id} /><input type="hidden" name="op" value="up" /><button disabled={i === 0} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30">↑</button></form>
-                  <form action={updateDeckSlide}><input type="hidden" name="id" value={slide.id} /><input type="hidden" name="op" value="down" /><button disabled={i === deckSlides.length - 1} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30">↓</button></form>
-                  <form action={updateDeckSlide}><input type="hidden" name="id" value={slide.id} /><input type="hidden" name="op" value="toggle" /><button className="rounded px-2 py-0.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-100">{slide.active ? "Hide" : "Show"}</button></form>
+            <div className="mb-2 text-sm font-bold text-slate-700">Delete a custom slide</div>
+            <div className="space-y-1.5">
+              {deckSlides.map((slide) => (
+                <div key={slide.id} className="flex items-center gap-2 rounded-lg border border-slate-200 p-2">
+                  {slide.imageUrl ? <img src={slide.imageUrl} alt="" className="h-8 w-14 rounded object-cover" /> : <span className="grid h-8 w-14 place-items-center rounded bg-brand-navy text-[10px] font-bold text-white">Aa</span>}
+                  <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{slide.kind === "text" ? "📝" : "🖼️"} {slide.title || (slide.kind === "text" ? "Text slide" : "Photo slide")}</span>
                   <form action={deleteDeckSlide}><input type="hidden" name="id" value={slide.id} /><button className="rounded px-2 py-0.5 text-[11px] font-semibold text-red-400 hover:text-red-600">Delete</button></form>
                 </div>
               ))}

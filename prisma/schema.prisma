@@ -425,6 +425,8 @@ model Settings {
   huddleMeetLink     String @default("") // Google Meet link for the daily 9am huddle
   titleSlideUrl      String @default("") // owner-uploaded override for the Monday deck title/hero slide
   teamSlideUrl       String @default("") // owner-uploaded override image for the team slide
+  deckOrder          String @default("") // JSON array of slide keys — custom order for the Monday deck
+  deckHidden         String @default("") // JSON array of slide keys hidden from the Monday deck
 
   // ---- Marketing research ----
   marketingMarkets  String @default("") // markets we're in (newline list)

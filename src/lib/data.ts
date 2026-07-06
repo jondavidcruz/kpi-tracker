@@ -34,6 +34,8 @@ export const getSettings = cache(async () => {
       huddleMeetLink: "",
       titleSlideUrl: "",
       teamSlideUrl: "",
+      deckOrder: "",
+      deckHidden: "",
       marketingMarkets: "",
       marketingResearch: "",
       outreachTemplates: "",
