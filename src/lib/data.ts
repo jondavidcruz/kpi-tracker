@@ -32,6 +32,8 @@ export const getSettings = cache(async () => {
       teamMeetLink: "",
       leadershipMeetLink: "",
       huddleMeetLink: "",
+      titleSlideUrl: "",
+      teamSlideUrl: "",
       marketingMarkets: "",
       marketingResearch: "",
       outreachTemplates: "",

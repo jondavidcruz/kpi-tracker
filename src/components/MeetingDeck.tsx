@@ -106,9 +106,9 @@ function TeamSlide() {
 function buildSlides(d: MeetingDeck): Slide[] {
   const s: Slide[] = [];
 
-  // 1. Title — the real Canva hero (team photo), with the live week overlaid
+  // 1. Title — owner-uploaded hero if set, else the built-in Canva hero, with the live week overlaid
   s.push({ name: "Title", node: (
-    <div className="relative h-full w-full bg-brand-navy bg-cover bg-center" style={{ backgroundImage: "url(/meeting/title.png)" }}>
+    <div className="relative h-full w-full bg-brand-navy bg-cover bg-center" style={{ backgroundImage: `url(${d.titleSlideUrl || "/meeting/title.png"})` }}>
       <div className="absolute inset-x-0 bottom-0 flex justify-center pb-[4%]">
         <div className="rounded-full bg-brand-navy/85 px-6 py-2 text-center text-white shadow-lg backdrop-blur-sm">
           <span className="font-bold" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>Monday All-Call</span>
@@ -119,8 +119,24 @@ function buildSlides(d: MeetingDeck): Slide[] {
     </div>
   )});
 
-  // 2. Meet the team — native rebuild of the site's "A small team. By design." section
-  s.push({ name: "Team", node: <TeamSlide /> });
+  // 2. Meet the team — owner-uploaded image if set, else the native "A small team" grid
+  s.push({ name: "Team", node: d.teamSlideUrl
+    ? <div className="h-full w-full bg-[#f5ede4] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${d.teamSlideUrl})` }} />
+    : <TeamSlide /> });
+
+  // 2b. Owner-added custom slides (uploaded photos / text), inserted right after the team.
+  for (const cs of d.customSlides) {
+    if (cs.kind === "image" && cs.imageUrl) {
+      s.push({ name: cs.title || "Slide", node: <div className="h-full w-full bg-brand-navy bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${cs.imageUrl})` }} /> });
+    } else if (cs.kind === "text") {
+      s.push({ name: cs.title || "Slide", node: (
+        <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy px-[8%] text-center text-white">
+          {cs.title && <div className="font-extrabold" style={{ fontSize: "clamp(22px,4cqw,52px)" }}>{cs.title}</div>}
+          {cs.body && <div className="mt-[2cqw] whitespace-pre-line text-white/85" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>{cs.body}</div>}
+        </div>
+      ) });
+    }
+  }
 
   // 3. Announcements
   s.push({ name: "Announcements", node: (

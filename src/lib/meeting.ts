@@ -34,9 +34,13 @@ const TEAM_VERSES: { text: string; ref: string }[] = [
   { text: "I can do all things through Christ who strengthens me.", ref: "Philippians 4:13" },
 ];
 
+export interface CustomSlide { kind: string; title: string; body: string; imageUrl: string }
 export interface MeetingDeck {
   weekLabel: string;
   thisWeekLabel: string;
+  titleSlideUrl: string; // owner override for the hero slide (else built-in title.png)
+  teamSlideUrl: string;  // owner override image for the team slide (else the native grid)
+  customSlides: CustomSlide[]; // owner-added slides, inserted after the team slide
   verse: { text: string; ref: string };
   generatedOn: string;
   team: { name: string; role: string }[];
@@ -228,7 +232,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const mb = monthBounds(today);
   const year = today.slice(0, 4);
 
-  const [settings, reps, perRepKpis, teamKpis, teamMonthlyKpis, wkSums, monthlyVals, deals, dealMetrics] = await Promise.all([
+  const [settings, reps, perRepKpis, teamKpis, teamMonthlyKpis, wkSums, monthlyVals, deals, dealMetrics, customSlideRows] = await Promise.all([
     getSettings(),
     getActiveReps(),
     getKpis({ scope: "per_rep", computed: false }),
@@ -238,6 +242,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     getMonthlyValues(today),
     getOpenDeals(),
     getDealMetrics(year),
+    db.deckSlide.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
   // Month-to-date financial dashboard from the team's MONTHLY KPIs (contracts
@@ -307,6 +312,9 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   return {
     weekLabel: wk.label,
     thisWeekLabel: thisWeek.label,
+    titleSlideUrl: settings.titleSlideUrl ?? "",
+    teamSlideUrl: settings.teamSlideUrl ?? "",
+    customSlides: customSlideRows.map((s) => ({ kind: s.kind, title: s.title, body: s.body, imageUrl: s.imageUrl })),
     verse: TEAM_VERSES[hashWeek(thisWeek.start) % TEAM_VERSES.length],
     generatedOn: friendlyDate(today),
     team: reps.map((r) => ({ name: r.name, role: positionLabel(r.position) })),

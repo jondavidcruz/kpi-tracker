@@ -285,6 +285,21 @@ model Assessment {
   @@index([createdAt])
 }
 
+// Owner-added custom slides for the Monday deck (inserted after the team slide).
+// kind = "image" (full-bleed uploaded photo) | "text" (title + body on navy).
+model DeckSlide {
+  id        String   @id @default(cuid())
+  kind      String   @default("image")
+  title     String   @default("")
+  body      String   @default("")
+  imageUrl  String   @default("")
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([sortOrder])
+}
+
 // Private HR / payment record per team member. OWNER-ONLY (Jon). Holds PII +
 // payment destinations (Wise) + tenure/promotion/pay — never exposed to the team.
 model TeamProfile {
@@ -408,6 +423,8 @@ model Settings {
   teamMeetLink       String @default("") // Google Meet link for the Monday all-call
   leadershipMeetLink String @default("") // Google Meet link for the leadership meeting
   huddleMeetLink     String @default("") // Google Meet link for the daily 9am huddle
+  titleSlideUrl      String @default("") // owner-uploaded override for the Monday deck title/hero slide
+  teamSlideUrl       String @default("") // owner-uploaded override image for the team slide
 
   // ---- Marketing research ----
   marketingMarkets  String @default("") // markets we're in (newline list)

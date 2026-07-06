@@ -557,6 +557,68 @@ export async function saveMeetingSettings(formData: FormData) {
   redirect("/meeting?saved=Deck+content#edit");
 }
 
+// ===== Monday deck editor (owner-editable slides) =====
+
+/** Save the uploaded Title + Team slide images (blank = revert to built-in). Managers only. */
+export async function saveDeckImages(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const data = {
+    titleSlideUrl: String(formData.get("titleSlideUrl") ?? "").trim().slice(0, 600),
+    teamSlideUrl: String(formData.get("teamSlideUrl") ?? "").trim().slice(0, 600),
+  };
+  await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
+  revalidatePath("/meeting");
+  redirect("/meeting?saved=Slide+images#slides");
+}
+
+/** Add a custom slide (uploaded image, or a title + text). Managers only. */
+export async function addDeckSlide(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const kind = String(formData.get("kind") ?? "image") === "text" ? "text" : "image";
+  const title = String(formData.get("title") ?? "").trim().slice(0, 120);
+  const body = String(formData.get("body") ?? "").trim().slice(0, 1200);
+  const imageUrl = String(formData.get("imageUrl") ?? "").trim().slice(0, 600);
+  if (kind === "image" && !imageUrl) redirect("/meeting?err=noimage#slides");
+  if (kind === "text" && !title && !body) redirect("/meeting?err=notext#slides");
+  const max = await db.deckSlide.aggregate({ _max: { sortOrder: true } });
+  await db.deckSlide.create({ data: { kind, title, body, imageUrl, sortOrder: (max._max.sortOrder ?? 0) + 1 } });
+  revalidatePath("/meeting");
+  redirect("/meeting?saved=Slide+added#slides");
+}
+
+/** Reorder (up/down) or show/hide a custom slide. Managers only. */
+export async function updateDeckSlide(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const op = String(formData.get("op") ?? "");
+  const row = id ? await db.deckSlide.findUnique({ where: { id } }) : null;
+  if (!row) return;
+  if (op === "toggle") {
+    await db.deckSlide.update({ where: { id }, data: { active: !row.active } });
+  } else if (op === "up" || op === "down") {
+    const all = await db.deckSlide.findMany({ orderBy: { sortOrder: "asc" } });
+    const i = all.findIndex((s) => s.id === id);
+    const j = op === "up" ? i - 1 : i + 1;
+    if (j >= 0 && j < all.length) {
+      await db.deckSlide.update({ where: { id: all[i].id }, data: { sortOrder: all[j].sortOrder } });
+      await db.deckSlide.update({ where: { id: all[j].id }, data: { sortOrder: all[i].sortOrder } });
+    }
+  }
+  revalidatePath("/meeting");
+}
+
+/** Delete a custom slide. Managers only. */
+export async function deleteDeckSlide(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.deckSlide.delete({ where: { id } }).catch(() => {});
+  revalidatePath("/meeting");
+}
+
 /** Save the Leadership-meeting deck content (agenda, talking points, action items). Managers only. */
 export async function saveLeadershipSettings(formData: FormData) {
   const me = await getCurrentUser();
