@@ -71,10 +71,20 @@ const RESTRICTED_NAV: Record<string, string[]> = {
   ethan: ["/deals", "/process", "/underwriting", "/schedule", "/rewards", "/call-scoring", "/scripts", "/account"],
 };
 
+// A person still in the onboarding ramp only sees learning + day-to-day basics — none
+// of the rest of the War Room — until the owner certifies them (clears `onboarding`).
+// First entry is their landing page when they hit anything disallowed.
+export const ONBOARDING_NAV: string[] = [
+  "/dashboard", "/schedule", "/entry", "/huddle",
+  "/training", "/glossary", "/scripts", "/process", "/underwriting",
+  "/call-scoring", "/account",
+];
+
 /** Allowed page prefixes for a restricted user, or null if they see everything. */
-export function navAllowlist(user: { name: string } | null): string[] | null {
+export function navAllowlist(user: { name: string; onboarding?: boolean } | null): string[] | null {
   if (!user) return null;
   if (isManager(user as User)) return null; // managers/admin are never restricted
+  if (user.onboarding) return ONBOARDING_NAV; // onboarding ramp → learning + basics only
   const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   return RESTRICTED_NAV[first] ?? null;
 }

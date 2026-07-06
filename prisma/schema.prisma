@@ -30,6 +30,7 @@ model User {
   accessPayroll   Boolean @default(false) // can see $ pay amounts (rates, gross, totals)
   accessMarketing Boolean @default(false) // Markets & Buyers / Buyer Research
   navHidden       String  @default("") // JSON array of nav hrefs explicitly hidden for this user
+  onboarding      Boolean @default(false) // in the onboarding ramp → restricted to learning + basics until certified
   irregularSchedule Boolean @default(false) // exempt from missing-entry alerts (no set schedule)
   tracksInternet    Boolean @default(true) // logs daily internet speed + gets low-speed nags (whole team)
   active    Boolean  @default(true)

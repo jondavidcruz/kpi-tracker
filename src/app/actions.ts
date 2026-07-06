@@ -2877,6 +2877,17 @@ export async function deleteAssessment(formData: FormData) {
   revalidatePath("/onboarding");
 }
 
+/** Move a user into or out of the onboarding ramp (restricted nav). Owner only.
+ *  onboarding=true → they see only learning + basics; false = certified, full access. */
+export async function setUserOnboarding(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const on = String(formData.get("onboarding") ?? "") === "1";
+  if (userId) await db.user.update({ where: { id: userId }, data: { onboarding: on } }).catch(() => {});
+  revalidatePath("/onboarding");
+}
+
 /** Submit a completed instrument. PUBLIC — the unguessable token is the key (no login),
  *  so a candidate can complete it before they're in the system. Scored server-side. */
 export async function submitAssessment(formData: FormData) {

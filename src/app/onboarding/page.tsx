@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import { PROFILES, FACTORS, type DiscScore } from "@/lib/assessment";
 import CopyLink from "@/components/CopyLink";
-import { createAssessmentInvite, deleteAssessment } from "@/app/actions";
+import { createAssessmentInvite, deleteAssessment, setUserOnboarding } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -74,9 +74,11 @@ export default async function OnboardingPage() {
 
   const owner = isOwner(me);
   const assessments = owner ? await db.assessment.findMany({ orderBy: { createdAt: "desc" } }) : [];
-  const team = owner ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : [];
+  const team = owner ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, role: true, onboarding: true } }) : [];
   const mapped = new Set(assessments.map((a) => a.name.trim().toLowerCase()));
   const unmapped = team.filter((u) => !mapped.has(u.name.trim().toLowerCase()));
+  // Only non-manager, non-owner staff can be put in the restricted onboarding ramp.
+  const restrictable = team.filter((u) => u.role !== "manager" && u.role !== "admin" && u.name.trim().split(/\s+/)[0].toLowerCase() !== "jon");
 
   return (
     <div className="space-y-6">
@@ -142,6 +144,30 @@ export default async function OnboardingPage() {
             })}
           </div>
           <p className="mt-3 text-[11px] text-slate-400">Our own DISC-based instrument — inspired by the Predictive Index &amp; McQuaig approach, built in-house so it&apos;s ours to use freely. Not affiliated with either company.</p>
+        </Card>
+      )}
+
+      {owner && restrictable.length > 0 && (
+        <Card className="p-5">
+          <SectionTitle title="🚦 Access & Certification" subtitle="New hires stay restricted to learning + the daily basics until you certify them. Certifying grants full role-based access to the rest of the War Room." accent="bg-emerald-500" />
+          <div className="mt-3 space-y-2">
+            {restrictable.map((u) => (
+              <div key={u.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-3">
+                <span className="font-semibold text-slate-800">{u.name}</span>
+                {u.onboarding
+                  ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">🔒 Onboarding — restricted</span>
+                  : <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">✅ Certified — full access</span>}
+                <form action={setUserOnboarding} className="ml-auto">
+                  <input type="hidden" name="userId" value={u.id} />
+                  <input type="hidden" name="onboarding" value={u.onboarding ? "0" : "1"} />
+                  {u.onboarding
+                    ? <button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✅ Certify — grant full access</button>
+                    : <button className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200">🔒 Move to onboarding</button>}
+                </form>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">While in onboarding, they only see: Dashboard, Schedule &amp; Time, Enter KPIs, Daily Huddle, Training Portal, Glossary, Scripts, Process Map, Underwriting, Call Scoring. Everything else is hidden until you certify them.</div>
         </Card>
       )}
 
