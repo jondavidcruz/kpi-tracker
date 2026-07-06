@@ -43,6 +43,34 @@ export default async function PlaybooksPage() {
                         {s.tip && <p className="mt-1 rounded-lg bg-amber-50 px-3 py-1.5 text-[12px] text-amber-800 ring-1 ring-amber-100">★ {s.tip}</p>}
                       </div>
                     ))}
+
+                    {pb.callouts && pb.callouts.length > 0 && (
+                      <div className="space-y-1.5">
+                        {pb.callouts.map((c, i) => (
+                          <div key={i} className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-3 py-2">
+                            <div className="text-[13px] font-bold text-amber-900">🔎 {c.label}</div>
+                            <div className="text-[12px] text-amber-800">{c.note}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {pb.images && pb.images.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">The real document</div>
+                        {pb.images.map((img, i) => (
+                          <figure key={i} className="overflow-hidden rounded-lg border border-slate-200">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={img.src} alt={img.caption || pb.title} className="w-full" />
+                            {img.caption && <figcaption className="bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">{img.caption}</figcaption>}
+                          </figure>
+                        ))}
+                      </div>
+                    )}
+
+                    {pb.pdfUrl && (
+                      <a href={pb.pdfUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-navy px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-brand-navy-700">📄 Open {pb.pdfLabel || "the document"} (PDF)</a>
+                    )}
                   </div>
                 </details>
               </Card>

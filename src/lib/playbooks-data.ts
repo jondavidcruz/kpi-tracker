@@ -5,14 +5,19 @@
 export interface PBSection { heading: string; body?: string; bullets?: string[]; tip?: string; }
 export interface Playbook {
   key: string; title: string; emoji: string; category: string; summary: string; sections: PBSection[];
+  pdfUrl?: string;               // the real document, viewable inline + downloadable
+  pdfLabel?: string;             // link text for the PDF
+  images?: { src: string; caption?: string }[]; // real page images (e.g. a HUD statement)
+  callouts?: { label: string; note: string }[]; // "what to look for" highlights
 }
 
-export const PLAYBOOK_CATEGORIES = ["Our Contracts", "Contracts & Terms", "Escrow & Closing"] as const;
+export const PLAYBOOK_CATEGORIES = ["Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing"] as const;
 
 export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_cash", title: "Cash Purchase Agreement (CRPA)", emoji: "💵", category: "Our Contracts",
     summary: "Our standard cash offer — the simplest agreement, for a straight cash purchase with no financing.",
+    pdfUrl: "/playbooks/contracts/cash-crpa.pdf", pdfLabel: "the actual Cash Agreement",
     sections: [
       { heading: "When to use it", body: "A clean cash deal: we pay the seller a net amount and close through escrow, AS-IS. This is the default agreement for most distressed / motivated-seller deals." },
       { heading: "AS-IS + what's included", body: "The property is sold AS-IS with no warranties. It includes all fixtures and permanently-attached items, and anything the seller leaves behind becomes ours." },
@@ -26,6 +31,7 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_finance", title: "Financing / Creative Agreement (CRPA)", emoji: "🏦", category: "Our Contracts",
     summary: "For creative deals — subject-to existing loans and/or seller financing, not a straight cash close.",
+    pdfUrl: "/playbooks/contracts/financing-crpa.pdf", pdfLabel: "the actual Financing Agreement",
     sections: [
       { heading: "When to use it", body: "Seller-finance, subject-to, or hybrid deals where the price is paid with a mix of cash, taking over existing loans, and/or a note the seller carries." },
       { heading: "How the price is built", body: "The Total Purchase Price = cash consideration (earnest money + cash down at closing) + any subject-to existing financing + any seller financing. Check the pieces that apply.", bullets: ["Seller acknowledges the agreed price may not equal current fair market value"] },
@@ -36,6 +42,7 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_novation", title: "Novation Agreement (NRPA)", emoji: "🔁", category: "Our Contracts",
     summary: "For novation exits — we lock it up, market/list it, then substitute the end buyer so title conveys directly to them.",
+    pdfUrl: "/playbooks/contracts/novation-nrpa.pdf", pdfLabel: "the actual Novation Agreement",
     sections: [
       { heading: "When to use it", body: "Novation deals — especially retail/MLS resale where we improve and market the listing and the end buyer ultimately closes directly with the seller. It carries the same AS-IS / net / due-diligence / title / possession backbone as the cash agreement, plus the novation disclosures below." },
       { heading: "Marketing + listing rights", body: "The seller authorizes us to market and list the property for resale — including on the MLS — during the term of the agreement. This is what lets us take it retail." },
@@ -46,6 +53,7 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_lux", title: "Purchase Contract & Escrow Instructions (LRPA)", emoji: "🏛️", category: "Our Contracts",
     summary: "Our formal, detailed contract that doubles as escrow instructions — for higher-end / luxury deals.",
+    pdfUrl: "/playbooks/contracts/luxury-lrpa.pdf", pdfLabel: "the actual Purchase Contract & Escrow Instructions",
     sections: [
       { heading: "When to use it", body: "Larger or luxury transactions where a more formal, section-numbered contract that also serves as the escrow instructions is expected." },
       { heading: "Basic Terms (Section 1)", body: "Spells out property + APN, purchase price, earnest money (“Deposit”), Close of Escrow date, the escrow office + agent, and the parties, all up front." },
@@ -58,6 +66,7 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_amend", title: "Amendment to Agreement", emoji: "✍️", category: "Our Contracts",
     summary: "A short form to change any term of an already-signed agreement — use it instead of redoing the whole contract.",
+    pdfUrl: "/playbooks/contracts/amendment.pdf", pdfLabel: "the actual Amendment form",
     sections: [
       { heading: "When to use it", body: "Any time a signed agreement needs a change — price, dates, terms, parties. Amend it; don't rewrite the whole thing." },
       { heading: "How it works", bullets: ["“Amendment(s)” — write exactly what's changing", "“Other Terms” — everything else in the original agreement stays the same", "Effective on signing; can be signed electronically and in counterparts"] },
@@ -70,6 +79,39 @@ export const PLAYBOOKS: Playbook[] = [
       { heading: "Assignment of Contract Agreement", body: "The document that transfers our purchase contract to the end buyer for our assignment fee. Send Jon the file and it'll be explained here." },
       { heading: "Seller-in-Possession Agreement", body: "Covers a seller who stays in the property after closing (a lease-back / post-closing occupancy). Send the file and it'll be added with its terms." },
     ],
+  },
+  {
+    key: "hud_assignment", title: "Assignment HUD — 1251 Leighton Ave (LA)", emoji: "🧾", category: "Real Closings (HUDs)",
+    summary: "A real assignment closing statement. Dispositions: this is exactly what to look for on the HUD when you request it from escrow — find our assignment fee and confirm it.",
+    sections: [
+      { heading: "What this deal was", body: "A straight assignment. Total consideration (sale price) $430,000. We never took title — we assigned our contract to the end buyer and collected our fee at closing." },
+      { heading: "🎯 Dispositions — what to look for", body: "When escrow sends the HUD / settlement statement, scan the debits (disbursements) for OUR line. On this deal, page 2 under ADDITIONAL DISBURSEMENTS reads: “Assignment Fee: Freedom-Offers.com — $90,000.00.” That line is our money. Always confirm it's there and the amount matches what we agreed BEFORE you approve the statement." },
+      { heading: "The numbers that should tie out", bullets: ["Total consideration (sale price): $430,000", "Our assignment fee → Freedom-Offers.com: $90,000", "Subtotals and Totals must balance ($555,580.37 = $555,580.37)"] },
+      { heading: "Why it matters", body: "Escrow sometimes sends a draft with our fee missing, mislabeled, or wrong. Catching it before signing is how we protect the fee. If our line isn't there or the number is off, kick it back to escrow before approving anything." },
+    ],
+    callouts: [{ label: "Assignment Fee: Freedom-Offers.com — $90,000", note: "Page 2, under Additional Disbursements. THE line to verify on every assignment HUD." }],
+    images: [
+      { src: "/playbooks/hud/leighton-2.png", caption: "Page 2 — the assignment fee: $90,000 to Freedom-Offers.com" },
+      { src: "/playbooks/hud/leighton-1.png", caption: "Page 1 — total consideration $430,000 + all charges" },
+    ],
+    pdfUrl: "/playbooks/hud/hud-leighton.pdf", pdfLabel: "the full Leighton HUD",
+  },
+  {
+    key: "hud_double_close", title: "Double Close / Wholetail — 1528 W. Virginia St (San Bernardino)", emoji: "🏆", category: "Real Closings (HUDs)",
+    summary: "Our highest-profit deal. We bought it with our own funds, cleaned it up, and resold it — a wholetail via a double close. Two closings = two HUDs = two sets of closing costs.",
+    sections: [
+      { heading: "What a double close / wholetail is", body: "Instead of assigning, we actually BUY the property (closing #1), then SELL it (closing #2). On a wholetail we fix/clean it up in between and put it back on the market for full retail. Because there are two separate closings, there are two HUDs — and you pay title + escrow fees TWICE." },
+      { heading: "Closing #1 — we BUY (HUD #1)", bullets: ["Total consideration (our purchase): $198,181.92", "Earnest money: $10,000 (with a matching $10,000 return-of-EMD line)", "We financed the buy — lender / underwriting / origination fees (Emet Mortgage · Simplified Home Loans)", "Title + escrow charges (First American Title + Granite Escrow) — closing-cost set #1"] },
+      { heading: "Closing #2 — we SELL (HUD #2)", bullets: ["Seller: Freedom Offers, LLC · total consideration (our sale): $360,000", "Title + escrow charges AGAIN — closing-cost set #2", "Loan Payoff → CMG Financial: $190,085.90 — paying off the loan we used to buy", "Totals balance at $360,000"] },
+      { heading: "🎯 What the team should see", bullets: ["Bought ~$198K, sold $360K — the spread is the gross profit before costs", "Closing costs appear TWICE (once per HUD) — always factor both when underwriting a double close", "The purchase loan is paid off on the sale side ($190K payoff) — the sale has to cover it", "A double close costs more than an assignment, but it lets us capture a big spread privately (buyer + seller never see each other's number) and wholetail for full value"] },
+      { heading: "Why we double-closed instead of assigning", body: "A $160K+ spread is too big to show as an assignment fee on one settlement statement — it can spook the parties and blow up the deal. Buying and reselling keeps our profit private and let us fix + wholetail the property for full retail." },
+    ],
+    images: [
+      { src: "/playbooks/hud/sb-buy-1.png", caption: "HUD #1 (we buy) — $198,181.92, financing + closing-cost set #1" },
+      { src: "/playbooks/hud/sb-buy-2.png", caption: "HUD #1 p2 — charges + $10K return of EMD" },
+      { src: "/playbooks/hud/sb-sell-1.png", caption: "HUD #2 (we sell) — $360,000, closing-cost set #2 + $190K loan payoff" },
+    ],
+    pdfUrl: "/playbooks/hud/hud-sb-buy.pdf", pdfLabel: "HUD #1 (the buy side)",
   },
   {
     key: "contract_must_haves", title: "Purchase Contract Must-Haves", emoji: "📄", category: "Contracts & Terms",
