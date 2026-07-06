@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { SectionTitle, Card } from "@/components/ui";
 import { PLAYBOOKS, PLAYBOOK_CATEGORIES } from "@/lib/playbooks-data";
+import PlaybookDiagram from "@/components/PlaybookDiagram";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function PlaybooksPage() {
                     <span className="text-slate-300 transition group-open:rotate-90">▶</span>
                   </summary>
                   <div className="space-y-3 border-t border-slate-100 p-4">
+                    {pb.diagram && <PlaybookDiagram kind={pb.diagram} />}
                     {pb.sections.map((s, i) => (
                       <div key={i}>
                         <div className="text-sm font-bold text-slate-700">{s.heading}</div>

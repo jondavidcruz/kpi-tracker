@@ -9,6 +9,7 @@ export interface Playbook {
   pdfLabel?: string;             // link text for the PDF
   images?: { src: string; caption?: string }[]; // real page images (e.g. a HUD statement)
   callouts?: { label: string; note: string }[]; // "what to look for" highlights
+  diagram?: string;              // key of an inline how-it-works diagram (assignment | double_close | subject_to | novation)
 }
 
 export const PLAYBOOK_CATEGORIES = ["Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing"] as const;
@@ -18,6 +19,8 @@ export const PLAYBOOKS: Playbook[] = [
     key: "k_cash", title: "Cash Purchase Agreement (CRPA)", emoji: "💵", category: "Our Contracts",
     summary: "Our standard cash offer — the simplest agreement, for a straight cash purchase with no financing.",
     pdfUrl: "/playbooks/contracts/cash-crpa.pdf", pdfLabel: "the actual Cash Agreement",
+    diagram: "assignment",
+    images: [{ src: "/playbooks/contracts/cash-crpa-1.png", caption: "Our real Cash Purchase Agreement" }],
     sections: [
       { heading: "When to use it", body: "A clean cash deal: we pay the seller a net amount and close through escrow, AS-IS. This is the default agreement for most distressed / motivated-seller deals." },
       { heading: "AS-IS + what's included", body: "The property is sold AS-IS with no warranties. It includes all fixtures and permanently-attached items, and anything the seller leaves behind becomes ours." },
@@ -32,6 +35,13 @@ export const PLAYBOOKS: Playbook[] = [
     key: "k_finance", title: "Financing / Creative Agreement (CRPA)", emoji: "🏦", category: "Our Contracts",
     summary: "For creative deals — subject-to existing loans and/or seller financing, not a straight cash close.",
     pdfUrl: "/playbooks/contracts/financing-crpa.pdf", pdfLabel: "the actual Financing Agreement",
+    diagram: "subject_to",
+    images: [
+      { src: "/playbooks/contracts/financing-crpa-1.png", caption: "Financing / Creative Agreement — page 1" },
+      { src: "/playbooks/contracts/financing-crpa-2.png", caption: "Page 2 — subject-to + seller-financing terms" },
+      { src: "/playbooks/contracts/financing-crpa-3.png", caption: "Page 3" },
+      { src: "/playbooks/contracts/financing-crpa-4.png", caption: "Page 4" },
+    ],
     sections: [
       { heading: "When to use it", body: "Seller-finance, subject-to, or hybrid deals where the price is paid with a mix of cash, taking over existing loans, and/or a note the seller carries." },
       { heading: "How the price is built", body: "The Total Purchase Price = cash consideration (earnest money + cash down at closing) + any subject-to existing financing + any seller financing. Check the pieces that apply.", bullets: ["Seller acknowledges the agreed price may not equal current fair market value"] },
@@ -43,6 +53,11 @@ export const PLAYBOOKS: Playbook[] = [
     key: "k_novation", title: "Novation Agreement (NRPA)", emoji: "🔁", category: "Our Contracts",
     summary: "For novation exits — we lock it up, market/list it, then substitute the end buyer so title conveys directly to them.",
     pdfUrl: "/playbooks/contracts/novation-nrpa.pdf", pdfLabel: "the actual Novation Agreement",
+    diagram: "novation",
+    images: [
+      { src: "/playbooks/contracts/novation-nrpa-1.png", caption: "Novation Agreement — page 1" },
+      { src: "/playbooks/contracts/novation-nrpa-2.png", caption: "Page 2 — novation, marketing & fee disclosures" },
+    ],
     sections: [
       { heading: "When to use it", body: "Novation deals — especially retail/MLS resale where we improve and market the listing and the end buyer ultimately closes directly with the seller. It carries the same AS-IS / net / due-diligence / title / possession backbone as the cash agreement, plus the novation disclosures below." },
       { heading: "Marketing + listing rights", body: "The seller authorizes us to market and list the property for resale — including on the MLS — during the term of the agreement. This is what lets us take it retail." },
@@ -54,6 +69,11 @@ export const PLAYBOOKS: Playbook[] = [
     key: "k_lux", title: "Purchase Contract & Escrow Instructions (LRPA)", emoji: "🏛️", category: "Our Contracts",
     summary: "Our formal, detailed contract that doubles as escrow instructions — for higher-end / luxury deals.",
     pdfUrl: "/playbooks/contracts/luxury-lrpa.pdf", pdfLabel: "the actual Purchase Contract & Escrow Instructions",
+    images: [
+      { src: "/playbooks/contracts/luxury-lrpa-1.png", caption: "Purchase Contract & Escrow Instructions — page 1 (Basic Terms)" },
+      { src: "/playbooks/contracts/luxury-lrpa-2.png", caption: "Page 2" },
+      { src: "/playbooks/contracts/luxury-lrpa-3.png", caption: "Page 3" },
+    ],
     sections: [
       { heading: "When to use it", body: "Larger or luxury transactions where a more formal, section-numbered contract that also serves as the escrow instructions is expected." },
       { heading: "Basic Terms (Section 1)", body: "Spells out property + APN, purchase price, earnest money (“Deposit”), Close of Escrow date, the escrow office + agent, and the parties, all up front." },
@@ -67,6 +87,7 @@ export const PLAYBOOKS: Playbook[] = [
     key: "k_amend", title: "Amendment to Agreement", emoji: "✍️", category: "Our Contracts",
     summary: "A short form to change any term of an already-signed agreement — use it instead of redoing the whole contract.",
     pdfUrl: "/playbooks/contracts/amendment.pdf", pdfLabel: "the actual Amendment form",
+    images: [{ src: "/playbooks/contracts/amendment-1.png", caption: "The real Amendment to Agreement form" }],
     sections: [
       { heading: "When to use it", body: "Any time a signed agreement needs a change — price, dates, terms, parties. Amend it; don't rewrite the whole thing." },
       { heading: "How it works", bullets: ["“Amendment(s)” — write exactly what's changing", "“Other Terms” — everything else in the original agreement stays the same", "Effective on signing; can be signed electronically and in counterparts"] },
@@ -89,6 +110,7 @@ export const PLAYBOOKS: Playbook[] = [
       { heading: "The numbers that should tie out", bullets: ["Total consideration (sale price): $430,000", "Our assignment fee → Freedom-Offers.com: $90,000", "Subtotals and Totals must balance ($555,580.37 = $555,580.37)"] },
       { heading: "Why it matters", body: "Escrow sometimes sends a draft with our fee missing, mislabeled, or wrong. Catching it before signing is how we protect the fee. If our line isn't there or the number is off, kick it back to escrow before approving anything." },
     ],
+    diagram: "assignment",
     callouts: [{ label: "Assignment Fee: Freedom-Offers.com — $90,000", note: "Page 2, under Additional Disbursements. THE line to verify on every assignment HUD." }],
     images: [
       { src: "/playbooks/hud/leighton-2.png", caption: "Page 2 — the assignment fee: $90,000 to Freedom-Offers.com" },
@@ -99,6 +121,7 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "hud_double_close", title: "Double Close / Wholetail — 1528 W. Virginia St (San Bernardino)", emoji: "🏆", category: "Real Closings (HUDs)",
     summary: "Our highest-profit deal. We bought it with our own funds, cleaned it up, and resold it — a wholetail via a double close. Two closings = two HUDs = two sets of closing costs.",
+    diagram: "double_close",
     sections: [
       { heading: "What a double close / wholetail is", body: "Instead of assigning, we actually BUY the property (closing #1), then SELL it (closing #2). On a wholetail we fix/clean it up in between and put it back on the market for full retail. Because there are two separate closings, there are two HUDs — and you pay title + escrow fees TWICE." },
       { heading: "Closing #1 — we BUY (HUD #1)", bullets: ["Total consideration (our purchase): $198,181.92", "Earnest money: $10,000 (with a matching $10,000 return-of-EMD line)", "We financed the buy — lender / underwriting / origination fees (Emet Mortgage · Simplified Home Loans)", "Title + escrow charges (First American Title + Granite Escrow) — closing-cost set #1"] },
@@ -143,6 +166,7 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "double_vs_assign", title: "Double Close vs. Assignment", emoji: "🔀", category: "Escrow & Closing",
     summary: "The two ways to close a wholesale deal — and when to use each to protect your spread.",
+    diagram: "double_close",
     sections: [
       { heading: "Assignment of contract", body: "You assign your purchase contract to the end buyer.", bullets: ["Only ONE closing happens", "Your assignment fee shows on the settlement statement", "Simpler and cheaper — you never take title", "Best when your fee is reasonable relative to the deal size"] },
       { heading: "Double close (simultaneous)", body: "Two separate closings happen back-to-back — you buy from the seller (A→B), then immediately sell to your buyer (B→C).", bullets: ["Your profit is NOT disclosed to either side", "You briefly take title to the property", "You pay title + escrow fees on both transactions", "Best for large spreads where privacy matters"] },

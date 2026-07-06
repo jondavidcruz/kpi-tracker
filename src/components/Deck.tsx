@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Maximize2, Presentation } from "lucide-react";
 
-export type Slide = { name: string; node: React.ReactNode };
+export type Slide = { name: string; node: React.ReactNode; key?: string };
 
 /** Reusable full-screen present-mode shell (keyboard nav, dots, fullscreen). */
 export default function Deck({ slides }: { slides: Slide[] }) {
