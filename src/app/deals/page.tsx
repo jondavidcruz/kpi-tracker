@@ -6,6 +6,7 @@ import { todayStr } from "@/lib/date";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { Card, SectionTitle } from "@/components/ui";
 import HubTabs from "@/components/HubTabs";
+import { matchBuyersForDeal, type BuyerMatch } from "@/lib/buyer-match";
 import type { Deal } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -22,35 +23,6 @@ const STATUSES = [
 const inputCls =
   "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lblCls = "block text-[11px] font-semibold text-slate-500 mb-0.5";
-
-type BuyerMatch = {
-  id: string;
-  name: string;
-  category: string;
-  bestContact: string;
-  phone: string;
-  email: string;
-  igHandle: string;
-};
-
-// Match a deal address against each buyer's target areas (buy-box areas + market).
-// Tokens are comma/newline-split, lowercased, length ≥ 3 to avoid noise like state codes.
-function matchBuyers(
-  address: string,
-  buyers: { id: string; name: string; category: string; bestContact: string; phone: string; email: string; igHandle: string; buyBoxAreas: string; market: string }[],
-): BuyerMatch[] {
-  const a = (address || "").toLowerCase();
-  if (!a) return [];
-  return buyers
-    .filter((b) => {
-      const tokens = `${b.buyBoxAreas || ""},${b.market || ""}`
-        .split(/[,\n]/)
-        .map((t) => t.trim().toLowerCase())
-        .filter((t) => t.length >= 3);
-      return tokens.some((t) => a.includes(t));
-    })
-    .map((b) => ({ id: b.id, name: b.name, category: b.category, bestContact: b.bestContact, phone: b.phone, email: b.email, igHandle: b.igHandle }));
-}
 
 export default async function DealsPage({
   searchParams,
@@ -153,7 +125,7 @@ export default async function DealsPage({
             today={today}
             repNames={repNames}
             canClose={canClose}
-            matches={mktAccess ? matchBuyers(d.address, buyers) : []}
+            matches={mktAccess ? matchBuyersForDeal(d.address, d.contractPrice ?? d.askingPrice, buyers) : []}
           />
         ))}
       </div>
@@ -196,12 +168,15 @@ function DealCard({ deal, today, repNames, canClose, matches }: { deal: Deal; to
           <div className="mt-2 space-y-1.5">
             {matches.map((m) => {
               const reach = [m.phone, m.email, m.igHandle].filter(Boolean).join("  ·  ");
+              const kind = /develop|custom|remodel|build/i.test(m.type) ? "Developer" : m.category === "luxury" ? "Developer" : "Flipper";
               return (
                 <div key={m.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                   <span className="font-semibold text-slate-800">{m.name}</span>
-                  <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
-                    {m.category === "luxury" ? "Developer" : "Flipper"}
-                  </span>
+                  <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{kind}</span>
+                  {m.vetStage === "active" && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">active buyer</span>}
+                  {m.reasons.map((r, i) => (
+                    <span key={i} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200">{r}</span>
+                  ))}
                   {m.bestContact && <span className="text-violet-700">📣 {m.bestContact}</span>}
                   {reach && <span className="text-brand-navy">{reach}</span>}
                 </div>
@@ -209,7 +184,7 @@ function DealCard({ deal, today, repNames, canClose, matches }: { deal: Deal; to
             })}
           </div>
           <p className="mt-2 text-[11px] text-slate-400">
-            Matched on the buyer&apos;s target areas vs this address. Manage the list in Markets &amp; Buyers.
+            Ranked by area + price fit vs this deal. Dead/on-hold buyers are hidden. Manage the list in Markets &amp; Buyers.
           </p>
         </details>
       )}

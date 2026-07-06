@@ -1621,9 +1621,24 @@ export async function saveMarketContact(formData: FormData) {
     propertyType: str("propertyType"), conditionTolerance: str("conditionTolerance"), needsView: str("needsView"),
     sortOrder: Number(formData.get("sortOrder")) || 0,
   };
-  if (id) await db.marketContact.update({ where: { id }, data });
-  else await db.marketContact.create({ data });
+  if (id) {
+    await db.marketContact.update({ where: { id }, data });
+  } else {
+    // New buyer added via the full form — credit the rep so "New Buyers Added"
+    // (and "Buy Boxes Captured" if a box was filled) auto-tracks like the other paths.
+    const today = orgToday((await getSettings()).orgTimezone);
+    const hasBox = !!(data.buyBox || data.buyBoxAreas || data.priceRange || data.minLotSize);
+    await db.marketContact.create({
+      data: {
+        ...data,
+        addedById: me!.id, addedOn: today,
+        ...(hasBox ? { boxById: me!.id, boxOn: today } : {}),
+      },
+    });
+    await rollupResearchKpis(me!.id, today);
+  }
   revalidatePath("/marketing");
+  revalidatePath("/vetting");
   redirect("/marketing?saved=1");
 }
 
@@ -1789,6 +1804,40 @@ export async function logBuyerOutreach(formData: FormData) {
   await rollupResearchKpis(me!.id, today); // → Developers Contacted
   revalidatePath("/vetting");
   revalidatePath("/marketing");
+}
+
+/** Create or edit a Target Market (neighborhood/farm). Managers/marketing only. */
+export async function saveTargetMarket(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim().slice(0, 160);
+  if (!name) return;
+  const num = (k: string) => { const v = parseFloat(String(formData.get(k) ?? "")); return Number.isFinite(v) ? v : null; };
+  const data = {
+    name,
+    region: String(formData.get("region") ?? "").trim().slice(0, 40),
+    tier: String(formData.get("tier") ?? "").trim().slice(0, 4),
+    score: Math.round(num("score") ?? 0),
+    summary: String(formData.get("summary") ?? "").trim().slice(0, 2000),
+    neighborhoods: String(formData.get("neighborhoods") ?? "").trim().slice(0, 4000),
+    developers: String(formData.get("developers") ?? "").trim().slice(0, 4000),
+    lat: num("lat"), lng: num("lng"),
+    sortOrder: Math.round(num("sortOrder") ?? 0),
+  };
+  if (id) await db.targetMarket.update({ where: { id }, data });
+  else await db.targetMarket.create({ data });
+  revalidatePath("/marketing");
+  redirect("/marketing?saved=1");
+}
+
+export async function deleteTargetMarket(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.targetMarket.delete({ where: { id } });
+  revalidatePath("/marketing");
+  redirect("/marketing?saved=1");
 }
 
 export async function saveMarketingNotes(formData: FormData) {

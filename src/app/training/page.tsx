@@ -7,6 +7,7 @@ import { positionLabel } from "@/lib/roles";
 import { addTrainingFocus, updateTrainingFocus, deleteTrainingFocus, addTrainingSchedule, deleteTrainingSchedule, logCoachingSession, deleteCoachingSession } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import AICoach from "@/components/AICoach";
+import DevSourcingTrack from "@/components/DevSourcingTrack";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,9 @@ export default async function TrainingPage() {
 
       {/* AI coaching assistant — managers run it */}
       {manager && <AICoach reps={team.map((r) => ({ name: r.name, role: r.position, skills: focusBy(r.id).map((f) => f.skill) }))} />}
+
+      {/* Developer Sourcing Track — the dispo team's #1 skill: sign developers + capture buy boxes */}
+      <DevSourcingTrack />
 
       {/* Set weekly training rhythm — what we run each day */}
       <Card className="p-4">

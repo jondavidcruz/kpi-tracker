@@ -10,20 +10,42 @@ export const dynamic = "force-dynamic";
 
 const ROLES = [
   { icon: "🎯", name: "Junior Acquisitions", blurb: "Takes the appointments, runs discovery → offer → negotiation, and gets contracts signed. The closer-in-training.", comp: "Commission-only (% of the assignment fee on deals they sign)." },
+  { icon: "🤝", name: "Junior Dispositions", blurb: "Sources developer/builder cash buyers, captures their buy boxes, and moves deals to the right buyer fast. The dispo-rep-in-training.", comp: "Commission-only (% of the assignment fee on deals they help move)." },
 ];
 
-const BOOTCAMP: { task: string; href?: string; label?: string }[] = [
-  { task: "Watch all training videos", href: "/training", label: "Training Portal" },
-  { task: "Learn the language — every key term", href: "/glossary", label: "Glossary" },
-  { task: "Memorize the call scripts (word-for-word)", href: "/scripts", label: "Scripts" },
-  { task: "Understand the deal flow start to finish", href: "/process", label: "Process Map" },
-  { task: "Learn the basic deal math (ARV, MAO, novation)", href: "/underwriting", label: "Underwriting" },
-];
-
-const GATES = [
-  "Glossary check — can define ARV, MAO, novation, assignment, motivated seller, etc.",
-  "Script certification — records themselves role-playing each script; manager scores + ⭐-rates it in Call Scoring.",
-  "Process walkthrough — can explain the full deal lifecycle out loud.",
+// Phase-0 bootcamp + go-live gates, per hire track. Acquisitions talk to SELLERS;
+// Dispositions source BUYERS (developers/builders) and run the buy-box play.
+const TRACKS: { role: string; bootcamp: { task: string; href?: string; label?: string }[]; gates: string[] }[] = [
+  {
+    role: "🎯 Junior Acquisitions",
+    bootcamp: [
+      { task: "Watch all training videos", href: "/training", label: "Training Portal" },
+      { task: "Learn the language — every key term", href: "/glossary", label: "Glossary" },
+      { task: "Memorize the seller call scripts (word-for-word)", href: "/scripts", label: "Scripts" },
+      { task: "Understand the deal flow start to finish", href: "/process", label: "Process Map" },
+      { task: "Learn the basic deal math (ARV, MAO, novation)", href: "/underwriting", label: "Underwriting" },
+    ],
+    gates: [
+      "Glossary check — can define ARV, MAO, novation, assignment, motivated seller, etc.",
+      "Script certification — records themselves role-playing each seller script; manager scores + ⭐-rates it in Call Scoring.",
+      "Process walkthrough — can explain the full deal lifecycle out loud.",
+    ],
+  },
+  {
+    role: "🤝 Junior Dispositions",
+    bootcamp: [
+      { task: "Work the Developer Sourcing Track — all 5 modules", href: "/training", label: "Training Portal" },
+      { task: "Learn the language — key terms + the Lux Blueprint", href: "/glossary", label: "Glossary" },
+      { task: "Memorize the buyer / developer + agent-sourcing scripts", href: "/scripts", label: "Scripts" },
+      { task: "Learn the Buyer Research tool — every buy-box field", href: "/vetting", label: "Buyer Research" },
+      { task: "Understand the dispositions deal flow start to finish", href: "/process", label: "Process Map" },
+    ],
+    gates: [
+      "Buy-box check — can name every field of a complete developer buy box and why each matters.",
+      "Gatekeeper + buy-box certification — records a role-play reaching a decision-maker and capturing a full buy box; manager ⭐-rates it in Call Scoring.",
+      "Tool proof — captured one real, complete buy box in Buyer Research (zero blank fields) with a follow-up date set.",
+    ],
+  },
 ];
 
 const PLAN: { role: string; rows: [string, string, string][] }[] = [
@@ -33,6 +55,14 @@ const PLAN: { role: string; rows: [string, string, string][] }[] = [
       ["Day 30", "Certified on all AQ scripts; handling discovery calls; first offers made.", "Call scores above threshold; offers going out."],
       ["Day 60", "Running offer + negotiation calls solo; first contract signed.", "≥ 1 signed contract + call quality holding."],
       ["Day 90", "Owns a pipeline; consistent contract flow.", "Deals signed/closed → graduate to Acquisitions."],
+    ],
+  },
+  {
+    role: "🤝 Junior Dispositions",
+    rows: [
+      ["Day 30", "Certified on the buyer/developer scripts; sourcing + adding new developers daily; first buy boxes captured.", "New Buyers Added + Buy Boxes Captured trending up; gatekeeper cert passed."],
+      ["Day 60", "Capturing complete buy boxes solo; pitching live deals to matched buyers.", "≥ 1 deal sent to a matched buyer; buy boxes complete (no blank fields)."],
+      ["Day 90", "Owns a buyer book; consistently matches + moves deals.", "Assisted on a closed assignment → graduate to Dispositions."],
     ],
   },
 ];
@@ -182,23 +212,30 @@ export default async function OnboardingPage() {
         ))}
       </div>
 
-      {/* Phase 0 — Bootcamp */}
+      {/* Phase 0 — Bootcamp (per track) */}
       <Card className="p-5">
-        <SectionTitle title="Phase 0 — Pre-Start Bootcamp" subtitle="A 1–2 week self-study block before they touch a live lead (~2–3 hrs/day)." accent="bg-sky-400" />
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {BOOTCAMP.map((b) => (
-            <div key={b.task} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
-              <span className="text-slate-300">☐</span>
-              <span className="flex-1 text-slate-700">{b.task}</span>
-              {b.href && <Link href={b.href} className="shrink-0 rounded-md bg-white px-2 py-0.5 text-[11px] font-semibold text-brand-navy ring-1 ring-slate-200 hover:ring-brand-gold/50">{b.label} →</Link>}
+        <SectionTitle title="Phase 0 — Pre-Start Bootcamp" subtitle="A 1–2 week self-study block before they touch a live lead (~2–3 hrs/day). Pick the hire's track." accent="bg-sky-400" />
+        <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {TRACKS.map((t) => (
+            <div key={t.role} className="rounded-xl ring-1 ring-slate-200">
+              <div className="rounded-t-xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">{t.role}</div>
+              <div className="space-y-2 p-3">
+                {t.bootcamp.map((b) => (
+                  <div key={b.task} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
+                    <span className="text-slate-300">☐</span>
+                    <span className="flex-1 text-slate-700">{b.task}</span>
+                    {b.href && <Link href={b.href} className="shrink-0 rounded-md bg-white px-2 py-0.5 text-[11px] font-semibold text-brand-navy ring-1 ring-slate-200 hover:ring-brand-gold/50">{b.label} →</Link>}
+                  </div>
+                ))}
+                <div className="rounded-lg bg-red-50 p-3 ring-1 ring-red-200">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-red-700">🚧 Gates to go live</div>
+                  <ul className="mt-1 space-y-1">
+                    {t.gates.map((g, i) => <li key={i} className="text-[13px] text-slate-700">✅ {g}</li>)}
+                  </ul>
+                </div>
+              </div>
             </div>
           ))}
-        </div>
-        <div className="mt-3 rounded-lg bg-red-50 p-3 ring-1 ring-red-200">
-          <div className="text-[11px] font-bold uppercase tracking-wide text-red-700">🚧 Gates to go live — don&apos;t skip these</div>
-          <ul className="mt-1 space-y-1">
-            {GATES.map((g, i) => <li key={i} className="text-[13px] text-slate-700">✅ {g}</li>)}
-          </ul>
         </div>
       </Card>
 

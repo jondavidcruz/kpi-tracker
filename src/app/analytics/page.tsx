@@ -39,9 +39,11 @@ export default async function AnalyticsPage({
     getKpis({ scope: "per_rep", computed: false }),
   ]);
 
-  // All entries for the year.
+  // All entries for the year — only the four fields the page actually reads
+  // (keeps this unbounded-by-time query from hauling full rows as history grows).
   const entries = await db.entry.findMany({
     where: { date: { gte: `${year}-01-01`, lte: `${year}-12-31` }, userId: { not: null } },
+    select: { kpiId: true, userId: true, value: true, date: true },
   });
 
   // index: `${kpiId}|${userId}` -> { ytd, byMonth[12] }

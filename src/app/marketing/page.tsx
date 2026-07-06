@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveMarketingNotes } from "@/app/actions";
+import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket } from "@/app/actions";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -82,32 +82,72 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         <MarketsMap buyers={buyers} markets={marketsForMap} />
       </Card>
 
-      {/* Target markets — detail by county + neighborhoods */}
-      {targets.length > 0 && (
-        <div>
-          <SectionTitle title="🎯 Target Markets" subtitle="Heat-tiered by sold $2M+ volume — top zips, neighborhoods, and the developers who buy there." accent="bg-red-400" />
+      {/* Target markets — detail by county + neighborhoods (editable) */}
+      <div>
+        <SectionTitle title="🎯 Target Markets & Neighborhoods" subtitle="The areas we're farming — top zips, neighborhoods, and the developers who buy there. Add the neighborhoods you're pulling leads in." accent="bg-red-400" />
+        {targets.length > 0 && (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {targets.map((t) => (
               <Card key={t.id} className="p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-base font-bold text-slate-800">{t.name}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${TIER_PILL[t.tier] ?? "bg-slate-100 text-slate-600"}`}>Tier {t.tier}</span>
-                  <span className="ml-auto text-sm font-bold tabular-nums text-slate-700">{t.score.toLocaleString()} <span className="text-xs font-normal text-slate-400">sold</span></span>
+                  {t.tier && <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${TIER_PILL[t.tier] ?? "bg-slate-100 text-slate-600"}`}>Tier {t.tier}</span>}
+                  {t.score > 0 && <span className="ml-auto text-sm font-bold tabular-nums text-slate-700">{t.score.toLocaleString()} <span className="text-xs font-normal text-slate-400">sold</span></span>}
                 </div>
                 {t.summary && <p className="mt-1 text-xs text-slate-500">{t.summary}</p>}
+                {t.neighborhoods && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-[11px] font-semibold text-brand-navy">Top zips &amp; neighborhoods</summary>
+                    <ul className="mt-1 space-y-0.5">{t.neighborhoods.split("\n").filter(Boolean).map((n, i) => <li key={i} className="text-xs text-slate-600">📍 {n}</li>)}</ul>
+                  </details>
+                )}
+                {t.developers && (
+                  <details className="mt-1.5">
+                    <summary className="cursor-pointer text-[11px] font-semibold text-brand-navy">Developers &amp; buy boxes</summary>
+                    <ul className="mt-1 space-y-0.5">{t.developers.split("\n").filter(Boolean).map((d, i) => <li key={i} className="text-xs text-slate-600">🏗 {d}</li>)}</ul>
+                  </details>
+                )}
                 <details className="mt-2">
-                  <summary className="cursor-pointer text-[11px] font-semibold text-brand-navy">Top zips &amp; neighborhoods</summary>
-                  <ul className="mt-1 space-y-0.5">{t.neighborhoods.split("\n").filter(Boolean).map((n, i) => <li key={i} className="text-xs text-slate-600">📍 {n}</li>)}</ul>
-                </details>
-                <details className="mt-1.5">
-                  <summary className="cursor-pointer text-[11px] font-semibold text-brand-navy">Developers &amp; buy boxes</summary>
-                  <ul className="mt-1 space-y-0.5">{t.developers.split("\n").filter(Boolean).map((d, i) => <li key={i} className="text-xs text-slate-600">🏗 {d}</li>)}</ul>
+                  <summary className="cursor-pointer text-[11px] font-semibold text-slate-400 hover:text-brand-navy">✎ Edit</summary>
+                  <form action={saveTargetMarket} className="mt-2 space-y-1.5">
+                    <input type="hidden" name="id" value={t.id} />
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                      <input name="name" defaultValue={t.name} placeholder="Name" className={inputCls} required />
+                      <input name="region" defaultValue={t.region} placeholder="Region" className={inputCls} />
+                      <input name="tier" defaultValue={t.tier} placeholder="Tier (S/1/2/3)" className={inputCls} />
+                      <input name="score" type="number" defaultValue={t.score || ""} placeholder="Heat score" className={inputCls} />
+                    </div>
+                    <input name="summary" defaultValue={t.summary} placeholder="Summary" className={inputCls} />
+                    <textarea name="neighborhoods" defaultValue={t.neighborhoods} rows={3} placeholder="Zips & neighborhoods — one per line" className={inputCls} />
+                    <textarea name="developers" defaultValue={t.developers} rows={2} placeholder="Developers & buy boxes — one per line" className={inputCls} />
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">Save</button>
+                      <button formAction={deleteTargetMarket} className="text-xs font-medium text-slate-400 hover:text-red-600">Delete</button>
+                    </div>
+                  </form>
                 </details>
               </Card>
             ))}
           </div>
-        </div>
-      )}
+        )}
+        <Card className="mt-3 p-4">
+          <details>
+            <summary className="cursor-pointer text-sm font-bold text-slate-700">+ Add a target market / neighborhood</summary>
+            <form action={saveTargetMarket} className="mt-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <label><span className={labelCls}>Name *</span><input name="name" placeholder="Bird Rock – La Jolla" className={inputCls} required /></label>
+                <label><span className={labelCls}>Region</span><input name="region" placeholder="SD / OC / LA" className={inputCls} /></label>
+                <label><span className={labelCls}>Tier</span><input name="tier" placeholder="S / 1 / 2 / 3" className={inputCls} /></label>
+                <label><span className={labelCls}>Heat score</span><input name="score" type="number" placeholder="sold $ volume" className={inputCls} /></label>
+              </div>
+              <label className="block"><span className={labelCls}>Summary</span><input name="summary" placeholder="Why we're targeting it / list criteria (SFR, built <1990, 40%+ equity…)" className={inputCls} /></label>
+              <label className="block"><span className={labelCls}>Zips &amp; neighborhoods (one per line)</span><textarea name="neighborhoods" rows={3} placeholder={"92037 – La Jolla\n92109 – Pacific Beach"} className={inputCls} /></label>
+              <label className="block"><span className={labelCls}>Developers &amp; buy boxes (one per line)</span><textarea name="developers" rows={2} placeholder="Builder name — buy box notes" className={inputCls} /></label>
+              <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Add target market</button>
+            </form>
+          </details>
+        </Card>
+      </div>
 
       {/* Markets + research */}
       <Card className="p-5">

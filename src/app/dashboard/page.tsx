@@ -55,7 +55,9 @@ export default async function DashboardPage({
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
-  const date = sp.date ?? todayStr(settings.orgTimezone);
+  // Validate the ?date= param — a malformed value (e.g. ?date=garbage) would flow
+  // into date math and blank/crash sections. Fall back to today when it's not YYYY-MM-DD.
+  const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayStr(settings.orgTimezone);
   const month = monthOf(date);
   const fraction = paceFraction(date);
 
@@ -507,7 +509,7 @@ function InternetSpeedSection({
           const goal = goalFor(rep.id) ?? 50;
           const series = days.map((d) => ({ date: d, v: valueAt(rep.id, d) }));
           const recorded = series.filter((s): s is { date: string; v: number } => s.v !== null);
-          const today = series[series.length - 1].v;
+          const today = series.at(-1)?.v ?? null;
           const avg = recorded.length ? Math.round(recorded.reduce((a, b) => a + b.v, 0) / recorded.length) : null;
           const min = recorded.length ? Math.min(...recorded.map((s) => s.v)) : null;
           const lowDays = recorded.filter((s) => s.v < goal).length;
