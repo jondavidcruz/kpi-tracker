@@ -135,8 +135,9 @@ export default async function DashboardPage({
   // Wire the money pace rows to REAL data — these team-monthly KPIs (deals closed,
   // revenue, spend) aren't entered by hand, so they sat at $0. Pull them live from
   // the closed-deal ledger + the P&L (ExpenseLine) instead.
-  const monthExp = await db.expenseLine.findMany({ where: { month }, select: { category: true, actual: true } });
-  const marketingMonth = monthExp.filter((e) => e.category === "marketing").reduce((s, e) => s + e.actual, 0);
+  const monthExp = await db.expenseLine.findMany({ where: { month }, select: { category: true, actual: true, label: true } });
+  const marketingLines = monthExp.filter((e) => e.category === "marketing");
+  const marketingMonth = marketingLines.reduce((s, e) => s + e.actual, 0);
   const opexMonth = monthExp.reduce((s, e) => s + e.actual, 0);
   const grossRevMonth = closedDeals.filter((c) => c.month === moNum).reduce((s, c) => s + c.profit, 0);
   const monthlyIdByKey = new Map(teamMonthly.map((k) => [k.key, k.id]));
@@ -145,6 +146,16 @@ export default async function DashboardPage({
   setMtd("gross_revenue", grossRevMonth);
   setMtd("marketing_spend", marketingMonth);
   setMtd("operating_expenses", opexMonth);
+  // Per-channel spend — split the marketing P&L lines by label keyword (PPL / SMS / mail).
+  const chSpend = (re: RegExp) => marketingLines.filter((e) => re.test(e.label)).reduce((s, e) => s + e.actual, 0);
+  setMtd("spend_ppl", chSpend(/ppl|pay.?per.?lead|inbound/i));
+  setMtd("spend_sms", chSpend(/sms|text/i));
+  setMtd("spend_mail", chSpend(/mail|postcard|letter/i));
+  // Contracts sent + signed roll up the per-rep acquisitions KPIs for the month (already in mtdSums).
+  const perRepIdByKey = new Map(perRepKpis.map((k) => [k.key, k.id]));
+  const perRepMtd = (key: string) => { const id = perRepIdByKey.get(key); return id ? (mtdSums.get(id) ?? 0) : 0; };
+  setMtd("contracts_sent", perRepMtd("acq_contracts_sent"));
+  setMtd("contracts_signed", ["acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"].reduce((s, k) => s + perRepMtd(k), 0));
 
   // --- Internet speed: today's recorded reading per rep + a 14-day history/trend ---
   const internetSpeedKpi = perRepKpis.find((k) => k.roleKey === "internet") ?? null;
