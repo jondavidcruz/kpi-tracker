@@ -60,6 +60,7 @@ export default function Sidebar({
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
       { href: "/glossary", label: "Glossary", Icon: BookOpen },
+      { href: "/playbooks", label: "Playbooks", Icon: Lightbulb },
     ] },
     { label: "EOS", items: [
       { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },

@@ -75,9 +75,8 @@ const RESTRICTED_NAV: Record<string, string[]> = {
 // of the rest of the War Room — until the owner certifies them (clears `onboarding`).
 // First entry is their landing page when they hit anything disallowed.
 export const ONBOARDING_NAV: string[] = [
-  "/dashboard", "/schedule", "/entry", "/huddle",
-  "/training", "/glossary", "/scripts", "/process", "/underwriting",
-  "/call-scoring", "/account",
+  "/training", "/glossary", "/scripts", "/playbooks",
+  "/process", "/entry", "/call-scoring", "/account",
 ];
 
 /** Allowed page prefixes for a restricted user, or null if they see everything. */

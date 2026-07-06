@@ -53,9 +53,8 @@ function methodFor(skill: string): string {
 
 export default async function TrainingPage() {
   const me = await getCurrentUser();
-  const firstName = me?.name?.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   const manager = isManager(me); // Jon + Marie — can edit
-  const canView = manager || ["michelle", "marie", "sharyn"].includes(firstName); // reps can view their own
+  const canView = !!me; // any signed-in team member (incl. onboarding hires) can view; managers edit
   if (!me || !canView) {
     return <Card className="mx-auto max-w-md p-8 text-center"><div className="mb-2 text-3xl">🔒</div><h1 className="text-xl font-bold">Not available</h1><Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link></Card>;
   }

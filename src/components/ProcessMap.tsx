@@ -203,11 +203,16 @@ const PROCESSES: Process[] = [
 
 const STORE_KEY = "fo_process_checks";
 
-export default function ProcessMap() {
+// `allowedDepts` scopes the whole map to a subset of departments — onboarding hires
+// only see the steps for their own lane (e.g. Acquisitions), never the full pipeline.
+export default function ProcessMap({ allowedDepts = null }: { allowedDepts?: string[] | null } = {}) {
   const [procKey, setProcKey] = useState("standard");
   const [sel, setSel] = useState(1);
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [checks, setChecks] = useState<Record<string, boolean>>({});
+  const PROC_LIST = allowedDepts
+    ? PROCESSES.map((p) => ({ ...p, phases: p.phases.filter((ph) => allowedDepts.includes(ph.dept)) })).filter((p) => p.phases.length > 0)
+    : PROCESSES;
 
   useEffect(() => {
     try { setChecks(JSON.parse(localStorage.getItem(STORE_KEY) || "{}")); } catch { /* ignore */ }
@@ -218,7 +223,8 @@ export default function ProcessMap() {
     return next;
   });
 
-  const proc = PROCESSES.find((p) => p.key === procKey)!;
+  const proc = PROC_LIST.find((p) => p.key === procKey) ?? PROC_LIST[0];
+  if (!proc) return <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">No process steps for your role yet.</div>;
   const PHASES = proc.phases;
   const DEPTS = Array.from(new Set(PHASES.map((p) => p.dept)));
   const ck = (n: number, i: number) => `${procKey}:${n}:${i}`;
@@ -235,7 +241,7 @@ export default function ProcessMap() {
       <div>
         <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">Choose a process</div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          {PROCESSES.map((p) => {
+          {PROC_LIST.map((p) => {
             const on = p.key === procKey;
             return (
               <button key={p.key} type="button" onClick={() => pickProcess(p.key)}
