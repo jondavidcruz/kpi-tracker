@@ -7,9 +7,70 @@ export interface Playbook {
   key: string; title: string; emoji: string; category: string; summary: string; sections: PBSection[];
 }
 
-export const PLAYBOOK_CATEGORIES = ["Contracts & Terms", "Escrow & Closing"] as const;
+export const PLAYBOOK_CATEGORIES = ["Our Contracts", "Contracts & Terms", "Escrow & Closing"] as const;
 
 export const PLAYBOOKS: Playbook[] = [
+  {
+    key: "k_cash", title: "Cash Purchase Agreement (CRPA)", emoji: "💵", category: "Our Contracts",
+    summary: "Our standard cash offer — the simplest agreement, for a straight cash purchase with no financing.",
+    sections: [
+      { heading: "When to use it", body: "A clean cash deal: we pay the seller a net amount and close through escrow, AS-IS. This is the default agreement for most distressed / motivated-seller deals." },
+      { heading: "AS-IS + what's included", body: "The property is sold AS-IS with no warranties. It includes all fixtures and permanently-attached items, and anything the seller leaves behind becomes ours." },
+      { heading: "Net amount", body: "The seller receives a stated NET sum at closing — we're quoting them the number they walk away with, not a gross price they then pay costs out of." },
+      { heading: "Due-diligence period", body: "We get a set number of BUSINESS days from signing to inspect and do due diligence, and we can cancel during that window for a full refund of the earnest money. This is our built-in exit while we line up the buyer.", tip: "Business days (not calendar) quietly buys a few extra days each week." },
+      { heading: "Title contingency", body: "Contingent on the seller delivering clear, insurable title. We can extend closing to clear title; if it can't be made insurable, the deal ends and the EMD is refunded." },
+      { heading: "Possession options", bullets: ["Vacant — delivered empty, confirmed by final walkthrough", "Tenant(s) in place — subject to existing leases; seller provides leases + estoppels", "Seller lease-back — seller stays after closing under a separate Post-Closing Occupancy Agreement"] },
+      { heading: "The clauses that protect us", bullets: ["No-shop: seller can't list/sell/lease/encumber to anyone else while under contract", "“and/or assigns”: we can close through an affiliate, partner, or assignee with no change to the seller's number", "Liquidated damages: if we don't close, the seller keeps the EMD as full compensation — our max risk is the deposit", "Material damage: if the property is damaged before closing, we can terminate + full refund", "72-hour expiration: the offer expires 72 hours after it's sent"] },
+    ],
+  },
+  {
+    key: "k_finance", title: "Financing / Creative Agreement (CRPA)", emoji: "🏦", category: "Our Contracts",
+    summary: "For creative deals — subject-to existing loans and/or seller financing, not a straight cash close.",
+    sections: [
+      { heading: "When to use it", body: "Seller-finance, subject-to, or hybrid deals where the price is paid with a mix of cash, taking over existing loans, and/or a note the seller carries." },
+      { heading: "How the price is built", body: "The Total Purchase Price = cash consideration (earnest money + cash down at closing) + any subject-to existing financing + any seller financing. Check the pieces that apply.", bullets: ["Seller acknowledges the agreed price may not equal current fair market value"] },
+      { heading: "Subject-to existing financing", bullets: ["We take title SUBJECT TO the seller's existing loan(s) — we don't formally assume them, but we make the payments to keep them current", "Payment responsibility from a start date: principal, interest, escrow items, taxes, HOA, insurance", "Loan-balance adjustments: if the real balance differs from what's stated, the price or our cash adjusts", "Seller waives any leftover lender escrow/impound funds", "Due-on-sale disclosure: transferring title without lender consent can trigger a due-on-sale clause — we accept that risk and indemnify the seller"] },
+      { heading: "Seller financing", body: "Any remaining balance is a Promissory Note we sign in the seller's favor at an agreed interest rate, secured by a mortgage/deed of trust. The note's detailed terms live in Section II." },
+    ],
+  },
+  {
+    key: "k_novation", title: "Novation Agreement (NRPA)", emoji: "🔁", category: "Our Contracts",
+    summary: "For novation exits — we lock it up, market/list it, then substitute the end buyer so title conveys directly to them.",
+    sections: [
+      { heading: "When to use it", body: "Novation deals — especially retail/MLS resale where we improve and market the listing and the end buyer ultimately closes directly with the seller. It carries the same AS-IS / net / due-diligence / title / possession backbone as the cash agreement, plus the novation disclosures below." },
+      { heading: "Marketing + listing rights", body: "The seller authorizes us to market and list the property for resale — including on the MLS — during the term of the agreement. This is what lets us take it retail." },
+      { heading: "Assignment + novation", body: "We may assign the agreement OR novate it — substitute a brand-new agreement between the seller and the end buyer. The seller agrees to cooperate and sign the novation/replacement documents so title conveys directly to the end buyer." },
+      { heading: "Our compensation", body: "Our fee is the difference between the price the end buyer pays and the seller's agreed net proceeds — the spread. Because it's a novation, that's structured as our assignment/novation fee." },
+    ],
+  },
+  {
+    key: "k_lux", title: "Purchase Contract & Escrow Instructions (LRPA)", emoji: "🏛️", category: "Our Contracts",
+    summary: "Our formal, detailed contract that doubles as escrow instructions — for higher-end / luxury deals.",
+    sections: [
+      { heading: "When to use it", body: "Larger or luxury transactions where a more formal, section-numbered contract that also serves as the escrow instructions is expected." },
+      { heading: "Basic Terms (Section 1)", body: "Spells out property + APN, purchase price, earnest money (“Deposit”), Close of Escrow date, the escrow office + agent, and the parties, all up front." },
+      { heading: "Inspection period", body: "20 business days if left blank, and it auto-extends to the next business day if it lands on a weekend or holiday. We can cancel in our sole discretion during this window and get the Deposit back." },
+      { heading: "Title (ALTA)", body: "Escrow orders an ALTA Owner's Title Policy commitment. The seller must clear all liens/clouds/encumbrances by closing — and we can extend the Close of Escrow up to a full year if needed to clear title." },
+      { heading: "Deposit release", body: "The seller irrevocably instructs escrow to return our Deposit if we cancel during the inspection period — no extra sign-off required from the seller." },
+      { heading: "Closing cost allocations", body: "Checkboxes assign who pays escrow fees, the title policy, HOA fees, and transfer taxes (50/50 or 100% Buyer) — negotiate these per deal." },
+    ],
+  },
+  {
+    key: "k_amend", title: "Amendment to Agreement", emoji: "✍️", category: "Our Contracts",
+    summary: "A short form to change any term of an already-signed agreement — use it instead of redoing the whole contract.",
+    sections: [
+      { heading: "When to use it", body: "Any time a signed agreement needs a change — price, dates, terms, parties. Amend it; don't rewrite the whole thing." },
+      { heading: "How it works", bullets: ["“Amendment(s)” — write exactly what's changing", "“Other Terms” — everything else in the original agreement stays the same", "Effective on signing; can be signed electronically and in counterparts"] },
+    ],
+  },
+  {
+    key: "k_coming", title: "Coming soon: Assignment + Seller-in-Possession", emoji: "⏳", category: "Our Contracts",
+    summary: "Two more contracts to be added — the Assignment of Contract Agreement and the Seller-in-Possession Agreement.",
+    sections: [
+      { heading: "Assignment of Contract Agreement", body: "The document that transfers our purchase contract to the end buyer for our assignment fee. Send Jon the file and it'll be explained here." },
+      { heading: "Seller-in-Possession Agreement", body: "Covers a seller who stays in the property after closing (a lease-back / post-closing occupancy). Send the file and it'll be added with its terms." },
+    ],
+  },
   {
     key: "contract_must_haves", title: "Purchase Contract Must-Haves", emoji: "📄", category: "Contracts & Terms",
     summary: "The clauses that have to be in every purchase contract so you can wholesale the deal and stay protected.",

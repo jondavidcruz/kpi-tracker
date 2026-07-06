@@ -78,22 +78,24 @@ const TEAM = [
 const SERIF = "Georgia, 'Times New Roman', serif";
 function TeamSlide() {
   return (
-    <div className="flex h-full w-full flex-col items-center bg-[#f5ede4] px-[5cqw] py-[4.5cqw] text-center">
-      <h2 style={{ fontFamily: SERIF, fontSize: "clamp(20px,5.2cqw,62px)", color: "#22404f" }}>
+    <div className="flex h-full w-full flex-col items-center overflow-hidden bg-[#f5ede4] px-[5cqw] py-[3.2cqw] text-center">
+      <h2 style={{ fontFamily: SERIF, fontSize: "clamp(18px,4.4cqw,52px)", color: "#22404f" }}>
         A small team. <span className="italic" style={{ color: "#5f7a63" }}>By design.</span>
       </h2>
-      <p className="mt-[1cqw] text-slate-600" style={{ fontSize: "clamp(10px,1.7cqw,22px)" }}>
+      <p className="mt-[0.6cqw] text-slate-600" style={{ fontSize: "clamp(9px,1.5cqw,20px)" }}>
         Eight people, working directly with you. No middlemen, no call centers, no scripts.
       </p>
-      <div className="mt-[3cqw] grid w-full flex-1 grid-cols-4 gap-x-[2.5cqw] gap-y-[2cqw]">
+      {/* Photos are height-driven (flex-1) inside a fixed 2-row grid so all 8 always
+          fit the slide — never cut off, whatever the screen size. */}
+      <div className="mt-[2cqw] grid min-h-0 w-full flex-1 grid-cols-4 grid-rows-2 gap-x-[2.5cqw] gap-y-[1.2cqw]">
         {TEAM.map((p) => (
-          <div key={p.slug} className="flex flex-col">
+          <div key={p.slug} className="flex min-h-0 flex-col">
             <div
-              className="w-full bg-slate-200 bg-cover bg-top"
-              style={{ aspectRatio: "1 / 1", backgroundImage: `url(/meeting/team/${p.slug}.webp)` }}
+              className="min-h-0 w-full flex-1 bg-slate-200 bg-cover bg-top"
+              style={{ backgroundImage: `url(/meeting/team/${p.slug}.webp)` }}
             />
-            <div className="mt-[1cqw] font-semibold" style={{ fontFamily: SERIF, fontSize: "clamp(10px,1.7cqw,22px)", color: "#22404f" }}>{p.name}</div>
-            <div className="mt-[0.3cqw] font-semibold uppercase tracking-wider" style={{ fontSize: "clamp(7px,1cqw,13px)", color: "#5f7a63" }}>{p.title}</div>
+            <div className="mt-[0.5cqw] font-semibold leading-tight" style={{ fontFamily: SERIF, fontSize: "clamp(9px,1.5cqw,20px)", color: "#22404f" }}>{p.name}</div>
+            <div className="font-semibold uppercase tracking-wider leading-tight" style={{ fontSize: "clamp(6px,0.9cqw,12px)", color: "#5f7a63" }}>{p.title}</div>
           </div>
         ))}
       </div>
