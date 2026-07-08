@@ -6,13 +6,13 @@
 // through nights, weekends, or a vacation — worked minutes are always capped at
 // the scheduled shift end (+ a short grace window for legitimate wrap-up).
 //
-// Fixed shift ENDS (org-local): Mon–Thu 6:00 PM, Fri 2:00 PM, Sat/Sun off.
-// Start times differ per person (Michelle/Sharyn 9:00, Marie 1:00 PM), but only
-// the END bounds the tracking — that's what this module supplies. When the
-// calendar feed lands, swap shiftEndHour() for a per-person calendar lookup.
+// Team shift (org-local): Mon–Thu 8:00 AM–5:00 PM, Fri 8:00 AM–1:00 PM, Sat/Sun off.
+// Both start and end matter — the START is the pay floor (early clock-in is unpaid)
+// and the END bounds the tracking (a forgotten clock-out can't run past shift).
+// When the calendar feed lands, swap these for a per-person calendar lookup.
 //
-// Per-person exception: Marie works a 6-hour shift — 1:00–7:00 PM Mon–Thu, and
-// 9:00 AM–3:00 PM on Fridays (she starts earlier on the short Friday). Pass her
+// Per-person exception: Marie works a 6-hour shift — 12:00–6:00 PM Mon–Thu, and
+// 8:00 AM–1:00 PM on Fridays (the whole team is on the short 8–1 Friday). Pass her
 // name as `who`.
 
 const DEFAULT_TZ = "America/New_York";
@@ -56,18 +56,15 @@ function firstName(who?: string | null): string {
 
 /**
  * Scheduled shift end (hour/min) for a date, or null on days with no shift.
- * Pass `who` (the person's name) to apply per-person shift exceptions — Marie
- * works 1:00–7:00 PM Mon–Fri, so her end is 7:00 PM every weekday.
+ * Pass `who` (the person's name) to apply per-person exceptions — Marie ends at
+ * 6:00 PM Mon–Thu. Everyone (incl. Marie) ends at 1:00 PM on the short Friday.
  */
 export function shiftEndHour(dateStr: string, who?: string | null): { hour: number; min: number } | null {
   const dow = dowOf(dateStr);
-  if (firstName(who) === "marie") { // 6h shift: Mon–Thu 1–7pm (end 7pm), Fri 9am–3pm (end 3pm)
-    if (dow === 5) return { hour: 15, min: 0 };
-    return dow >= 1 && dow <= 4 ? { hour: 19, min: 0 } : null;
-  }
-  if (dow >= 1 && dow <= 4) return { hour: 18, min: 0 }; // Mon–Thu → 6:00 PM
-  if (dow === 5) return { hour: 14, min: 0 }; //            Fri    → 2:00 PM
-  return null; //                                          Sat/Sun → off
+  if (dow < 1 || dow > 5) return null; //                  Sat/Sun → off
+  if (dow === 5) return { hour: 13, min: 0 }; //            Fri     → 1:00 PM (whole team)
+  if (firstName(who) === "marie") return { hour: 18, min: 0 }; // Marie Mon–Thu → 6:00 PM
+  return { hour: 17, min: 0 }; //                           Mon–Thu → 5:00 PM
 }
 
 /** The scheduled shift-end instant for `dateStr`, or null on weekends. */
@@ -79,13 +76,14 @@ export function shiftEndAt(dateStr: string, tz: string = DEFAULT_TZ, who?: strin
 /**
  * Scheduled shift START (hour/min) for a date, or null on no-shift days. Used as
  * a pay floor: clocking in early (before shift start) is not paid. Team default
- * is 9:00 AM Mon–Fri; Marie starts at 1:00 PM.
+ * is 8:00 AM Mon–Fri; Marie starts at 12:00 PM Mon–Thu (8:00 AM on Fridays).
  */
 export function shiftStartHour(dateStr: string, who?: string | null): { hour: number; min: number } | null {
   const dow = dowOf(dateStr);
   if (dow < 1 || dow > 5) return null; // Sat/Sun → off
-  if (firstName(who) === "marie") return dow === 5 ? { hour: 9, min: 0 } : { hour: 13, min: 0 }; // Fri 9am, else 1pm
-  return { hour: 9, min: 0 }; //                                 9:00 AM default
+  if (dow === 5) return { hour: 8, min: 0 }; // Fri → 8:00 AM (whole team)
+  if (firstName(who) === "marie") return { hour: 12, min: 0 }; // Marie Mon–Thu → 12:00 PM
+  return { hour: 8, min: 0 }; //                                 8:00 AM default
 }
 
 /** The scheduled shift-start instant for `dateStr` (pay floor), or null on weekends. */

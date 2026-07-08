@@ -424,9 +424,9 @@ export async function sendMissingKpiEmail(date: string): Promise<boolean> {
 // Edit here if hours change. Ethan is intentionally absent (supervised in person).
 //   dow: 0=Sun … 6=Sat. Returns the local start hour for that weekday, or null (off).
 export const SHIFT_START_HOURS: { match: string; startHour: (dow: number) => number | null }[] = [
-  { match: "michelle", startHour: (d) => (d >= 1 && d <= 5 ? 9 : null) },  // Mon–Fri 9am
-  { match: "sharyn", startHour: (d) => (d >= 1 && d <= 5 ? 9 : null) },     // Mon–Fri 9am
-  { match: "marie", startHour: (d) => (d >= 1 && d <= 4 ? 13 : d === 5 ? 9 : null) }, // Mon–Thu 1pm, Fri 9am
+  { match: "michelle", startHour: (d) => (d >= 1 && d <= 5 ? 8 : null) },  // Mon–Fri 8am
+  { match: "sharyn", startHour: (d) => (d >= 1 && d <= 5 ? 8 : null) },     // Mon–Fri 8am
+  { match: "marie", startHour: (d) => (d >= 1 && d <= 4 ? 12 : d === 5 ? 8 : null) }, // Mon–Thu 12pm, Fri 8am
 ];
 
 /** Start-of-shift nudge: email scheduled reps whose shift starts in this `slot`

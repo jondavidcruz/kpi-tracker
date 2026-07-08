@@ -72,8 +72,8 @@ export async function GET() {
   }
 
   // Break nudge: anyone online ~2h45m straight (no break) gets a one-time Chat ping to step
-  // away — but NOT in the morning (before noon). The team starts at 9am fresh and breaks at
-  // lunch (~12–1pm), so morning nudges are just noise. Atomic guard via breakNudgedAt;
+  // away — but NOT in the morning (before noon). The team starts at 8am fresh and takes lunch
+  // together at noon, so morning nudges are just noise. Atomic guard via breakNudgedAt;
   // reset the moment they're not "online".
   const BREAK_NUDGE_MIN = 165;     // ~2h45m — between the 2.5h and 3h Jon wants (2h was too short)
   const NUDGE_AFTER_MIN = 12 * 60; // don't recommend a break before noon (org-local)
