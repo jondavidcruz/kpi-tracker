@@ -34,24 +34,38 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "2️⃣ Why You're Calling",
+        heading: "2️⃣ 🤝 BUILD RAPPORT FIRST — before ANY talk about the house (do not skip)",
+        body: [
+          "⚠️ STOP. Do not go to the property yet. People sell to people they like and trust. Win the first 2–3 minutes on THEM, not the house — this is where the deal is actually made or lost. Jumping straight to condition feels like a survey and kills the offer.",
+          "🎤 Slow down and match their energy — relaxed if they're relaxed, quick but warm if they're busy. Smile; they can hear it.",
+          "❓ So how long have you been in the home? … Oh nice — how'd you end up in that area? / Raise the family there? (then be quiet and let them talk)",
+          "🎤 Find ONE real thing to connect on — the neighborhood, their years there, something they mention — and react like a human, not a robot: \"That's awesome.\" \"Man, I hear you.\" \"That must've been a lot to manage.\"",
+          "💡 THE RULE: they should be talking MORE than you here. Ask one question, then shut up and listen. Don't rush to the next line.",
+          "🎤 Only move on once it feels like two people having a real conversation. If it still feels stiff or transactional, stay here longer — ask one more thing about them.",
+          "✅ You've earned rapport when: they've shared something personal, you reacted genuinely, and the tone is a chat — not an interrogation. THEN, and only then, go to condition.",
+        ],
+      },
+      {
+        heading: "3️⃣ Why You're Calling",
         body: [
           "🎤 So the reason I'm reaching out, we look at properties in your area and run the numbers to see what we could pay. Yours came up as one we'd be interested in. I'm not here to pressure you into anything, I just wanted to see if a private, as-is sale is something you'd ever consider.",
         ],
       },
       {
-        heading: "3️⃣ Quick Interest Check",
+        heading: "4️⃣ Their Situation (keep the rapport going)",
         body: [
           "❓ How long have you owned the place?",
           "→ Tenure tells you how attached they are and potential equity",
           "❓ Do you have a plan for where you'd go next?",
-          "→ Uncovers timeline and flexibility",
+          "→ Uncovers timeline and flexibility — and keeps it about THEM, not the walls",
           "🎤 The reason I ask — we're super flexible on timing. We can even let sellers stay after closing if that takes the stress off the move.",
+          "→ 🤝 Still listening more than talking. Every answer is a chance to connect before you get technical.",
         ],
       },
       {
-        heading: "4️⃣ Property Condition & Details (for underwriting)",
+        heading: "5️⃣ Property Condition & Details (for underwriting — ONLY after rapport)",
         body: [
+          "⚠️ Gut check first: did you actually build rapport and hear their story? If you jumped straight here, back up — this step lands completely differently once they like you.",
           "🎤 So I'm actually pulling your property up right now. I'm showing a [#] bed / [#] bath, about [###] sq ft on a [###] sq ft lot, built in [year]. Just confirming I've got the right place. Does that all line up?",
           "→ Beds, baths, sq ft, lot size and year are already on your comping software, so CONFIRM them, don't ask. It signals you did your homework.",
           "🎤 Perfect. I just need a feel for the condition so I can run it past our underwriters and see what it qualifies for. Mind walking me through the big-ticket items real quick?",
@@ -65,7 +79,7 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "5️⃣ Motivation & Timeline",
+        heading: "6️⃣ Motivation & Timeline",
         body: [
           "❓ If you did sell, what would that next chapter look like for you?",
           "❓ Is there a timeframe that matters — soon, or more like someday?",
@@ -73,7 +87,7 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "6️⃣ Soft Close — run it by underwriting + get their email",
+        heading: "7️⃣ Soft Close — run it by underwriting + get their email",
         body: [
           "🎤 Here's what I'd like to do. Let me take everything you gave me, run it past our underwriters, and come back to you with what the property would qualify for. No obligation at all, just real numbers.",
           "🎤 What's the best email to send that over to? I'll get you the numbers along with a quick breakdown.",
@@ -119,13 +133,24 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "2️⃣ Why You're Calling",
+        heading: "2️⃣ 🤝 BUILD RAPPORT FIRST — before ANY talk about the lot (do not skip)",
+        body: [
+          "⚠️ STOP. Luxury/land sellers have equity and options — they will not deal with someone who feels transactional. Earn the first few minutes on THEM before a single question about the property.",
+          "🎤 Slow down, match their tone. These are longer, higher-trust conversations — treat it like meeting a peer, not running a checklist.",
+          "❓ How long have you owned the lot / property? … What drew you to that area originally?",
+          "🎤 Connect on something real — the neighborhood, the view, how the area's changed, their plans. React like a person: \"That area's incredible.\" \"I don't blame you.\"",
+          "💡 THE RULE: let them talk more than you. One question, then listen. Curiosity beats a pitch every time here.",
+          "✅ Move on only when it feels like a genuine conversation. Then go to the lot details — you'll get far more (easements, other builders, their number) once they trust you.",
+        ],
+      },
+      {
+        heading: "3️⃣ Why You're Calling",
         body: [
           "🎤 So the reason I'm reaching out — we've got a group of developers and buyers right now actively looking for properties in your area. Yours came up as a potential fit. I'm not here to pressure you into anything — I just wanted to see if a private, off-market option is something you'd ever consider.",
         ],
       },
       {
-        heading: "3️⃣ Lot & Development Details (confirm what you see, ask what you can't)",
+        heading: "4️⃣ Lot & Development Details (confirm what you see — ONLY after rapport)",
         body: [
           "🎤 So I'm pulling the lot up right now. I'm showing roughly [###] sq ft, zoned [zoning], and it looks pretty [rectangular / irregular]. Just confirming I've got that right?",
           "→ Lead by CONFIRMING the data you can see (size, zoning, shape, utilities) so it's clear you did your homework. Save the open questions for what the software can't show.",
@@ -138,7 +163,7 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "4️⃣ Motivation & Timeline",
+        heading: "5️⃣ Motivation & Timeline",
         body: [
           "→ 🤝 Rapport: this is the moment that matters most. Slow down, listen, and react to what they share. Their 'why' is where the deal and the trust live, so don't rush to the next question.",
           "❓ If you did sell, what would that next chapter look like for you?",
@@ -147,7 +172,7 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "5️⃣ What Makes Freedom Offers Different (pause between each — let them react)",
+        heading: "6️⃣ What Makes Freedom Offers Different (pause between each — let them react)",
         body: [
           "🎤 Here's what's different about us. We typically pay at retail value, so you get what you'd get on the open market, but without dealing with agents, inspections, or appraisals. And we cover all the closing costs.",
           "🎤 So you actually come out ahead, because you're saving the 6% in commissions alone. How does that sound so far?",
@@ -157,14 +182,14 @@ export const SCRIPTS: Script[] = [
         ],
       },
       {
-        heading: "6️⃣ Soft Close — if they're motivated",
+        heading: "7️⃣ Soft Close — if they're motivated",
         body: [
           "🎤 Would it make sense for me to take a deeper look at your property and come back with a couple of options? Just information — nothing pushy.",
           "→ Use this when there's real motivation or urgency — they want to move. Go for the next step (a deeper look + options).",
         ],
       },
       {
-        heading: "6️⃣ Soft Close — if not urgent or has roadblocks",
+        heading: "7️⃣ Soft Close — if not urgent or has roadblocks",
         body: [
           "🎤 Would you rather I reach back out if things change down the road? Keep our number handy — (877) 652-8991 — so you can reach us if something comes up.",
           "→ Use this when they're not in a rush to sell or hit you with roadblocks (taxes, tenants, timing, family). Don't push — plant the seed, stay top-of-mind, and follow up later.",
