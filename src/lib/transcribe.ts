@@ -43,15 +43,27 @@ export async function transcribeAudio(buf: Buffer, mimeType: string, keyOverride
         }),
       },
     );
-    // 429 is often a transient per-minute rate limit — wait and try once more.
+    // 429 is often a transient per-minute rate limit — wait and try a couple more times.
     let res = await callGen();
-    if (res.status === 429) { await new Promise((r) => setTimeout(r, 5000)); res = await callGen(); }
+    for (let attempt = 0; res.status === 429 && attempt < 2; attempt++) {
+      await new Promise((r) => setTimeout(r, 6000 * (attempt + 1)));
+      res = await callGen();
+    }
     if (cleanupName) fetch(`https://generativelanguage.googleapis.com/v1beta/${cleanupName}?key=${key}`, { method: "DELETE" }).catch(() => {});
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      if (res.status === 429) return { configured: true, error: "Gemini transcription quota reached — the API key hit its limit. An admin can enable billing on the GEMINI_API_KEY (Google AI Studio → Billing) for much higher limits (pennies per call). Until then, paste the transcript below." };
-      return { configured: true, error: `Transcription failed (${res.status}). ${body.slice(0, 160)}` };
+      const usingOwn = !!(keyOverride && keyOverride.trim());
+      let detail = "";
+      try { detail = JSON.parse(body)?.error?.message ?? body.slice(0, 220); } catch { detail = body.slice(0, 220); }
+      if (res.status === 429) {
+        // Surface Google's ACTUAL reason + which key was used. "limit: 0" / "free tier" = billing
+        // needed; "per minute" = just a transient rate limit, retry works.
+        const who = usingOwn ? "your personal Gemini key" : "the shared team key (GEMINI_API_KEY)";
+        return { configured: true, error: `Gemini hit a rate/quota limit on ${who}.${detail ? ` Google says: “${detail.slice(0, 260)}”` : ""} → If that mentions “per minute”, wait a minute and re-upload. If it mentions the free tier or “limit: 0”, that key needs billing enabled on its Google Cloud project. Meanwhile you can paste the transcript below.` };
+      }
+      // Non-quota errors (invalid/blocked key = 400/403) — show Google's message so it's fixable.
+      return { configured: true, error: `Transcription failed (${res.status}) on ${usingOwn ? "your personal key" : "the shared key"}.${detail ? ` ${detail.slice(0, 240)}` : ""}` };
     }
     const data = await res.json();
     const text: string =
