@@ -101,8 +101,8 @@ function Field({ k, label, prefix, suffix, placeholder, span, req }: { k: string
   );
 }
 
-function Res({ label, value, tone = "navy", big }: { label: string; value: string; tone?: "navy" | "good" | "bad" | "muted"; big?: boolean }) {
-  const cls = tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : tone === "muted" ? "text-slate-500" : "text-brand-navy";
+function Res({ label, value, tone = "navy", big }: { label: string; value: string; tone?: "navy" | "good" | "warn" | "bad" | "muted"; big?: boolean }) {
+  const cls = tone === "good" ? "text-emerald-600" : tone === "warn" ? "text-amber-500" : tone === "bad" ? "text-red-600" : tone === "muted" ? "text-slate-500" : "text-brand-navy";
   return (
     <div className="flex items-baseline justify-between gap-3 py-1.5">
       <span className="text-sm text-slate-600">{label}</span>
@@ -233,6 +233,17 @@ export default function UnderwritingCalculator() {
   // Sanity check: novation should usually let us offer the seller MORE than cash (no
   // flipper margin / holding baked in). If cash MAO ends up higher, something's off.
   const maoConflict = cashMao > 0 && novMao > 0 && cashMao > novMao;
+
+  // Deal-sanity traffic light — a quick green/yellow/red gut-check on the headline MAO,
+  // by how much margin the deal leaves. Thresholds are tunable (say the word to adjust).
+  //  Assignment: cash MAO as a share of ARV — the LOWER the better (more spread for us).
+  const aSanePct = arv > 0 ? cashMao / arv : 0;
+  const aSaneTone: "good" | "warn" | "bad" = cashMao <= 0 || aSanePct > 0.8 ? "bad" : aSanePct > 0.72 ? "warn" : "good";
+  const aSaneWord = cashMao <= 0 ? "🚫 no room" : aSanePct > 0.8 ? "🚫 too thin — likely doesn't pencil" : aSanePct > 0.72 ? "⚠️ tight" : "✅ makes sense";
+  //  Novation: seller payout as a share of list — lower is better; cash beating it = off.
+  const nSanePct = nList > 0 ? novMao / nList : 0;
+  const nSaneTone: "good" | "warn" | "bad" = novMao <= 0 || maoConflict || nSanePct > 0.95 ? "bad" : nSanePct > 0.9 ? "warn" : "good";
+  const nSaneWord = novMao <= 0 ? "🚫 no room" : maoConflict ? "🚫 cash beats it — do cash instead" : nSanePct > 0.95 ? "🚫 too thin" : nSanePct > 0.9 ? "⚠️ tight" : "✅ makes sense";
 
   // ---- Creative / Listing ----
   // We don't buy on these terms — we ASSIGN them to an end buyer and make money two
@@ -807,7 +818,7 @@ export default function UnderwritingCalculator() {
               {extraItems("aExtra", aExtraN).map((x, i) => <Res key={i} label={`− ${x.note || "Additional cost"}`} value={money(x.amt)} tone="muted" />)}
               <Res label="− Assignment fee" value={money(aFee)} tone="muted" />
               <Res label="🎯 Cash MAO (max offer to seller)" value={money(cashMao)} tone={cashMao > 0 ? "navy" : "bad"} big />
-              {cashMao > 0 && <Res label="Sanity check" value={pctOfArv(cashMao)} tone="muted" />}
+              {cashMao > 0 && <Res label="Sanity check" value={`${pctOfArv(cashMao)} · ${aSaneWord}`} tone={aSaneTone} />}
               <Res label="⚓ Anchor (open here)" value={money(aAnchor)} tone="good" />
               <Res label="Negotiate" value={`${money(aAnchor)} → ${money(cashMao)}`} tone="muted" />
               {cashMao > 0 && <OfferLadder rungs={ladder(aAnchor, cashMao)} />}
@@ -822,7 +833,7 @@ export default function UnderwritingCalculator() {
               {extraItems("nExtra", nExtraN).map((x, i) => <Res key={i} label={`− ${x.note || "Additional cost"}`} value={money(x.amt)} tone="muted" />)}
               <Res label="Net after credit, commission, closing, HOA + extras" value={money(nNet)} tone="muted" />
               <Res label="🎯 Novation MAO (max seller payout)" value={money(novMao)} tone={novMao > 0 ? "navy" : "bad"} big />
-              {novMao > 0 && nList > 0 && <Res label="Sanity check" value={`${Math.round((novMao / nList) * 100)}% of list`} tone="muted" />}
+              {novMao > 0 && nList > 0 && <Res label="Sanity check" value={`${Math.round((novMao / nList) * 100)}% of list · ${nSaneWord}`} tone={nSaneTone} />}
               <Res label="⚓ Anchor payout (open here)" value={money(novAnchor)} tone="good" />
               <Res label="Our fee at anchor" value={money(feeAtAnchor)} tone="good" />
               <Res label="Negotiate (seller payout)" value={`${money(novAnchor)} → ${money(novMao)}`} tone="muted" />
