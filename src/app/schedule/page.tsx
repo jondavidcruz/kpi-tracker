@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser, daySegments, dayBar } from "@/lib/presence";
 import { workCapAt, shiftEndLabel } from "@/lib/shift";
-import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage } from "@/app/actions";
+import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage, startBreakFor, endBreakFor } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
@@ -251,6 +251,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   const offOnDay = (date: string) => monthOff.filter((t) => t.startDate <= date && t.endDate >= date);
 
+  // Current break/lunch state per person (for the manager "mark on break/lunch" controls).
+  const stateByUser = new Map(users.filter((u) => !isOwner(u)).map((u) => [u.id, stateFromPunches(byUser.get(u.id) ?? []).state]));
+
   return (
     <div className="space-y-6">
       <SectionTitle
@@ -299,6 +302,40 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             })}
           </Card>
           <p className="mt-1.5 text-[11px] text-slate-400">Start time is logged automatically. Clears on its own when they punch back in, or hit “Back online.” Excused from KPI alerts while out.</p>
+        </section>
+      )}
+
+      {/* MANAGER: mark someone on break / lunch they forgot to log */}
+      {manager && (
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-slate-700">☕ Mark on break / lunch <span className="font-normal text-slate-400">— if someone forgot to log it</span></h3>
+          <Card className="divide-y divide-slate-100 p-0">
+            {users.filter((u) => !isOwner(u)).map((u) => {
+              const st = stateByUser.get(u.id);
+              return (
+                <div key={u.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+                  <span className="w-32 shrink-0 font-semibold text-slate-800">{u.name.split(" ")[0]}</span>
+                  {st === "break" ? (
+                    <>
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">☕ On break</span>
+                      <form action={endBreakFor} className="ml-auto"><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="break" /><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back from break</button></form>
+                    </>
+                  ) : st === "lunch" ? (
+                    <>
+                      <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-800">🍔 On lunch</span>
+                      <form action={endBreakFor} className="ml-auto"><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="lunch" /><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back from lunch</button></form>
+                    </>
+                  ) : (
+                    <div className="ml-auto flex gap-2">
+                      <form action={startBreakFor}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="break" /><button className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200">☕ Break</button></form>
+                      <form action={startBreakFor}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="lunch" /><button className="rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-800 hover:bg-orange-200">🍔 Lunch</button></form>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </Card>
+          <p className="mt-1.5 text-[11px] text-slate-400">Records the punch live on their time card — remember to end it when they&apos;re back. Break/lunch is unpaid (the first 15-min break is paid). They can still start/stop it themselves on their own time card.</p>
         </section>
       )}
 
