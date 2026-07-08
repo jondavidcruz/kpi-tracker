@@ -4,6 +4,7 @@ import { useState, createContext, useContext } from "react";
 
 const TABS = [
   { key: "assignment", label: "Assignment", emoji: "🤝", blurb: "Cash offer. MAO = (ARV × market %) − repairs − your fee. The market % already covers the flipper's carry + profit. Anchor opens below MAO." },
+  { key: "developer", label: "Developer / Land", emoji: "🏗️", blurb: "Land-for-luxury-builds cash offer (Lux Blueprint). Value the LOT from 3 comp methods → dispo price, then MAO = dispo − a $100–150k spread. No repairs — the developer tears down. Aim for a six-figure fee." },
   { key: "novation", label: "Novation", emoji: "📋", blurb: "List at current similar-condition value, cover the seller's closing + commission (no holding — retail buyer). Find the max seller payout." },
   { key: "creative", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
   { key: "listing", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
@@ -245,6 +246,25 @@ export default function UnderwritingCalculator() {
   const nSaneTone: "good" | "warn" | "bad" = novMao <= 0 || maoConflict || nSanePct > 0.95 ? "bad" : nSanePct > 0.9 ? "warn" : "good";
   const nSaneWord = novMao <= 0 ? "🚫 no room" : maoConflict ? "🚫 cash beats it — do cash instead" : nSanePct > 0.95 ? "🚫 too thin" : nSanePct > 0.9 ? "⚠️ tight" : "✅ makes sense";
 
+  // ---- Developer / Land (Lux Blueprint: land for luxury new builds) ----
+  // Value the LOT (dispo price) from land comps, then take a spread — that spread IS our
+  // fee. No repairs / ARV%: the developer tears down and builds. MAO = dispo − spread.
+  const devLux = (v("devLux") || "1") === "1"; // area has $2M+ luxury new builds? (default yes)
+  const devWater = v("devWater") === "1";   // waterfront lot (compare only to waterfront)?
+  const devMethods = [n("devM1"), n("devM2"), n("devM3")].filter((x) => x > 0);
+  const devDispo = devMethods.length ? Math.round(devMethods.reduce((s, x) => s + x, 0) / devMethods.length) : 0;
+  const devSpread = n("devSpread") || 100000; // Lux Blueprint target spread: $100k–$150k
+  const devMao = devDispo > 0 ? Math.max(0, devDispo - devSpread) : 0;
+  const devAnchorPct = v("devAnchorPct") || "8";
+  const devAnchor = devMao * (1 - num(devAnchorPct) / 100);
+  const devFeeAtMao = devDispo > 0 ? devDispo - devMao : 0;       // = the spread
+  const devFeeAtAnchor = devDispo > 0 ? devDispo - devAnchor : 0; // bigger if they take the open
+  const devAsk = n("devAsk");
+  const devOverAsk = devAsk > 0 && devMao > 0 ? devAsk - devMao : 0;
+  // Fee sanity — Lux Blueprint wants a six-figure fee. Green ≥100k, yellow 50–100k, red <50k.
+  const devSaneTone: "good" | "warn" | "bad" = devMao <= 0 || devFeeAtMao < 50000 ? "bad" : devFeeAtMao < 100000 ? "warn" : "good";
+  const devSaneWord = devMao <= 0 ? "🚫 no room" : devFeeAtMao < 50000 ? "🚫 fee too thin — aim $100k+" : devFeeAtMao < 100000 ? "⚠️ under the $100k target" : "✅ six-figure fee";
+
   // ---- Creative / Listing ----
   // We don't buy on these terms — we ASSIGN them to an end buyer and make money two
   // ways: our assignment fee + marking up the down payment (charge the end buyer a
@@ -302,6 +322,7 @@ export default function UnderwritingCalculator() {
   const accepted = n("acceptedPrice");
   let dealMax = 0, profitAtAccepted = 0, marginLabel = "Your profit", showAsking = true;
   if (tab === "assignment") { dealMax = cashMao; profitAtAccepted = (flipperTarget - repairs - aHoa - aExtra) - accepted; marginLabel = "Your assignment fee"; }
+  else if (tab === "developer") { dealMax = devMao; profitAtAccepted = devDispo - accepted; marginLabel = "Your assignment fee"; showAsking = true; }
   else if (tab === "novation") { dealMax = novMao; profitAtAccepted = nNet - accepted; marginLabel = "Your fee"; }
   else if (tab === "flip") { dealMax = fMao; profitAtAccepted = arv - fTotalCosts - accepted; marginLabel = "Your profit"; }
   else if (tab === "creative") { dealMax = n("cPrice"); profitAtAccepted = cMargin; marginLabel = "Your total margin"; showAsking = false; }
@@ -323,6 +344,24 @@ export default function UnderwritingCalculator() {
         title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
         rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...extraItems("aExtra", aExtraN).map((x) => [x.note || "Additional cost", money(x.amt)] as [string, string]), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
         note: "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. On assignment the end buyer covers BOTH the seller's and the buyer's closing costs, so no closing is deducted here. If the seller won't meet MAO, pivot to Novation.",
+      };
+    }
+    if (tab === "developer") {
+      return {
+        title: "Developer / Land Analysis",
+        comps: `<strong>Subject:</strong> ${esc(addr)}${v("devLot") ? `<br><strong>Lot:</strong> ${esc(v("devLot"))}${v("devBuild") ? ` · buildable ${esc(v("devBuild"))}` : ""}${devWater ? " · waterfront" : ""}` : ""}`,
+        rows: [
+          ["Method 1 — new builds for sale (land)", money(n("devM1"))],
+          ["Method 2 — new builds sold (land)", money(n("devM2"))],
+          ["Method 3 — teardowns sold (land)", money(n("devM3"))],
+          ["🎯 Dispo price (land value)", money(devDispo)],
+          ["− Spread (your fee target)", money(devSpread)],
+          ["🎯 Developer MAO (max offer to seller)", money(devMao)],
+          [`Anchor / opening (${devAnchorPct}% below MAO)`, money(devAnchor)],
+          ["Negotiation range", `${money(devAnchor)} → ${money(devMao)}`],
+          ["Your fee at the MAO", money(devFeeAtMao)],
+        ],
+        note: "Land for luxury new builds. Value the LOT from 3 comp methods (the developer's lot-purchase price, grown for market appreciation), average to the dispo price, then subtract a $100–150k spread — that spread is your fee. No repairs: the buyer tears down. Waterfront lots use waterfront comps only. Open at the anchor, negotiate up to the MAO — never past it.",
       };
     }
     if (tab === "novation") {
@@ -371,16 +410,16 @@ export default function UnderwritingCalculator() {
     const w = window.open("", "_blank", "width=860,height=940");
     if (!w) return;
 
-    const isAssign = tab === "assignment", isNov = tab === "novation", isFlip = tab === "flip", isCreative = tab === "creative", isRental = tab === "rental";
+    const isAssign = tab === "assignment", isDev = tab === "developer", isNov = tab === "novation", isFlip = tab === "flip", isCreative = tab === "creative", isRental = tab === "rental";
     // The single headline number (MAO / max offer) — biggest thing on the page.
-    const heroVal = isAssign ? cashMao : isNov ? novMao : isFlip ? fMao : isCreative ? cMargin : isRental ? rMaxOffer : mktFee;
-    const heroLabel = isAssign ? "Cash MAO · the most we offer the seller" : isNov ? "Novation MAO · max seller payout" : isFlip ? "Max Offer · flip MAO" : isCreative ? "Total margin to us" : isRental ? `Max offer at ${rTargetCap}% cap rate` : "Our marketing fee";
-    const rLo = isAssign ? aAnchor : isNov ? novAnchor : 0;
-    const rHi = isAssign ? cashMao : isNov ? novMao : 0;
-    const feeAnchor = isAssign ? (flipperTarget - repairs - aHoa - aExtra - aAnchor) : isNov ? feeAtAnchor : 0;
-    const feeMao = isAssign ? aFee : isNov ? nMinFee : 0;
-    const valLabel = (isAssign || isFlip) ? "ARV (after-repair value)" : isNov ? "List price (similar-condition · EMV)" : "";
-    const valVal = (isAssign || isFlip) ? arv : isNov ? nList : 0;
+    const heroVal = isAssign ? cashMao : isDev ? devMao : isNov ? novMao : isFlip ? fMao : isCreative ? cMargin : isRental ? rMaxOffer : mktFee;
+    const heroLabel = isAssign ? "Cash MAO · the most we offer the seller" : isDev ? "Developer MAO · max offer to seller" : isNov ? "Novation MAO · max seller payout" : isFlip ? "Max Offer · flip MAO" : isCreative ? "Total margin to us" : isRental ? `Max offer at ${rTargetCap}% cap rate` : "Our marketing fee";
+    const rLo = isAssign ? aAnchor : isDev ? devAnchor : isNov ? novAnchor : 0;
+    const rHi = isAssign ? cashMao : isDev ? devMao : isNov ? novMao : 0;
+    const feeAnchor = isAssign ? (flipperTarget - repairs - aHoa - aExtra - aAnchor) : isDev ? devFeeAtAnchor : isNov ? feeAtAnchor : 0;
+    const feeMao = isAssign ? aFee : isDev ? devFeeAtMao : isNov ? nMinFee : 0;
+    const valLabel = (isAssign || isFlip) ? "ARV (after-repair value)" : isDev ? "Dispo price (land value)" : isNov ? "List price (similar-condition · EMV)" : "";
+    const valVal = (isAssign || isFlip) ? arv : isDev ? devDispo : isNov ? nList : 0;
 
     // A colored decision box.
     type Tone = "navy" | "amber" | "green" | "slate" | "red";
@@ -401,11 +440,11 @@ export default function UnderwritingCalculator() {
     };
 
     let boxes: string[] = [];
-    if (isAssign || isNov) {
+    if (isAssign || isNov || isDev) {
       boxes = [
-        // Range now leads the hero above — cards show the fee at each end + the list price.
+        // Range now leads the hero above — cards show the fee at each end + the anchor value.
         card("Your fee at the opening (anchor)", money(feeAnchor), "amber", "if they take your first number"),
-        card("Your fee at the MAO", money(feeMao), "green", "your minimum at the top of the range"),
+        card("Your fee at the MAO", money(feeMao), "green", isDev ? "your spread at the top of the range" : "your minimum at the top of the range"),
         card(valLabel, money(valVal), "slate"),
       ];
     } else if (isFlip) {
@@ -661,6 +700,43 @@ export default function UnderwritingCalculator() {
               ))}
             </>
           )}
+          {tab === "developer" && (
+            <>
+              {legend}
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Area has luxury new builds selling $2M+?</span>
+                <select value={v("devLux") || "1"} onChange={set("devLux")} className={`${inputCls} border-red-300`}>
+                  <option value="1">Yes — developers are building here</option>
+                  <option value="">No — no developer demand (kill it)</option>
+                </select>
+              </label>
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Waterfront lot?</span>
+                <select value={v("devWater")} onChange={set("devWater")} className={inputCls}>
+                  <option value="">No</option>
+                  <option value="1">Yes — use ONLY waterfront comps</option>
+                </select>
+              </label>
+              <Field k="devAsk" label="Seller's asking price ($)" prefix="$" placeholder="1,250,000" req="opt" />
+              <Field k="devLot" label="Lot size (e.g. 0.42 ac)" req="opt" />
+              <Field k="devBuild" label="Buildable area (after setbacks / cul-de-sac)" span={2} req="opt" />
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 Value the <b>buildable</b> land, not the paper lot — a cul-de-sac curve or setback can cut usable area a lot. On a main road (3+ lanes or yellow center lines)? It&apos;s worth less.</p>
+
+              <div className={goodDiv}>🟢 Land value — the 3 comp methods (enter each method&apos;s average lot price, grown to today)</div>
+              <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">For each method: find the developer&apos;s LOT-purchase price (Zillow price history, before they built), average a few, and bump for market growth. The three should land close together.</p>
+              <Field k="devM1" label="① New builds FOR SALE — avg land $" prefix="$" span={2} req="good" />
+              <Field k="devM2" label="② New builds SOLD — avg land $" prefix="$" span={2} req="good" />
+              <Field k="devM3" label="③ Teardowns SOLD — avg land $" prefix="$" span={2} req="good" />
+
+              <div className={optDiv}>Set your fee spread + opening</div>
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Spread below dispo = your fee (Lux Blueprint target $100k–150k)</span>
+                <select value={v("devSpread") || "100000"} onChange={set("devSpread")} className={`${inputCls} border-amber-200`}>
+                  <option value="150000">$150,000 — safest, biggest fee</option>
+                  <option value="100000">$100,000 — target</option>
+                  <option value="50000">$50,000 — most aggressive (least we take)</option>
+                </select>
+              </label>
+              <Field k="devAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" req="opt" />
+            </>
+          )}
           {tab === "novation" && (
             <>
               {legend}
@@ -825,6 +901,24 @@ export default function UnderwritingCalculator() {
               <Res label="⚓ Anchor (open here)" value={money(aAnchor)} tone="good" />
               <Res label="Negotiate" value={`${money(aAnchor)} → ${money(cashMao)}`} tone="muted" />
               {cashMao > 0 && <OfferLadder rungs={ladder(aAnchor, cashMao)} />}
+            </>
+          )}
+          {tab === "developer" && (
+            <>
+              {!devLux && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-300">🚫 No $2M+ luxury new builds here → no developer demand. Mark this deal dead.</div>}
+              <Res label="① New builds for sale (land)" value={money(n("devM1"))} tone="muted" />
+              <Res label="② New builds sold (land)" value={money(n("devM2"))} tone="muted" />
+              <Res label="③ Teardowns sold (land)" value={money(n("devM3"))} tone="muted" />
+              <Res label="🎯 Dispo price (land value)" value={money(devDispo)} tone={devDispo > 0 ? "navy" : "bad"} big />
+              <Res label="− Spread (your fee)" value={money(devSpread)} tone="muted" />
+              <Res label="🎯 Developer MAO (max offer to seller)" value={money(devMao)} tone={devMao > 0 ? "navy" : "bad"} big />
+              {devDispo > 0 && <Res label="Sanity check" value={`fee ${money(devFeeAtMao)} · ${devSaneWord}`} tone={devSaneTone} />}
+              <Res label="⚓ Anchor (open here)" value={money(devAnchor)} tone="good" />
+              <Res label="Your fee at anchor" value={money(devFeeAtAnchor)} tone="good" />
+              <Res label="Negotiate (offer to seller)" value={`${money(devAnchor)} → ${money(devMao)}`} tone="muted" />
+              {devMao > 0 && <OfferLadder rungs={ladder(devAnchor, devMao)} />}
+              {devOverAsk > 0 && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-200">Seller asking {money(devAsk)} — {money(devOverAsk)} over your max. If they won&apos;t come down, it&apos;s likely dead.</div>}
+              {devWater && <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 text-[11px] text-sky-700 ring-1 ring-sky-200">🌊 Waterfront — make sure every comp above is also waterfront, or the number will be too high.</div>}
             </>
           )}
           {tab === "novation" && (
