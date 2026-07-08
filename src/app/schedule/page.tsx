@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser, daySegments, dayBar } from "@/lib/presence";
 import { workCapAt, shiftEndLabel } from "@/lib/shift";
-import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage, startBreakFor, endBreakFor } from "@/app/actions";
+import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage, startBreakFor, endBreakFor, punch } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
@@ -253,6 +253,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   // Current break/lunch state per person (for the manager "mark on break/lunch" controls).
   const stateByUser = new Map(users.filter((u) => !isOwner(u)).map((u) => [u.id, stateFromPunches(byUser.get(u.id) ?? []).state]));
+  // The owner (Jon) isn't on the pay clock, but can broadcast a status so the team knows.
+  const myState = isOwner(me) ? stateFromPunches(byUser.get(me.id) ?? []).state : null;
 
   return (
     <div className="space-y-6">
@@ -270,6 +272,31 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <PresenceBoard initial={people} />
         </Card>
       </section>
+
+      {/* OWNER: broadcast your own status (you're not on the pay clock) */}
+      {isOwner(me) && (
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-slate-700">📢 My status <span className="font-normal text-slate-400">— let the team know</span></h3>
+          <Card className="p-4">
+            {myState === "break" || myState === "lunch" || myState === "meeting" ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span className={`rounded-full px-3 py-1 text-sm font-bold ${myState === "meeting" ? "bg-violet-100 text-violet-800" : myState === "lunch" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"}`}>
+                  {myState === "meeting" ? "👥 In a meeting" : myState === "lunch" ? "🍔 On lunch" : "☕ On break"}
+                </span>
+                <form action={punch}><input type="hidden" name="kind" value={`${myState}_end`} /><button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">✅ I&apos;m back / available</button></form>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-1 text-sm text-slate-500">Set your status:</span>
+                <form action={punch}><input type="hidden" name="kind" value="break_start" /><button className="rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-200">☕ On break</button></form>
+                <form action={punch}><input type="hidden" name="kind" value="lunch_start" /><button className="rounded-lg bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-200">🍔 Lunch</button></form>
+                <form action={punch}><input type="hidden" name="kind" value="meeting_start" /><button className="rounded-lg bg-violet-100 px-4 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-200">👥 In a meeting</button></form>
+              </div>
+            )}
+            <p className="mt-2 text-[11px] text-slate-400">Posts to the team Chat so everyone knows when you&apos;re away — then tap &quot;I&apos;m back&quot; when you return. This is status only (you&apos;re not on the pay clock).</p>
+          </Card>
+        </section>
+      )}
 
       {/* MANAGER: quick-report a live outage per person (power/internet) */}
       {manager && (
