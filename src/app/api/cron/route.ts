@@ -4,7 +4,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
 import { buildBackup } from "@/lib/backup";
-import { sendEmailWithAttachment, sendTeamChat, sendEmailTo } from "@/lib/notify";
+import { sendEmailWithAttachment, sendTeamChat, sendEmailTo, sendTimecardChat } from "@/lib/notify";
 import { upcomingCulture, prettyMMDD, whenLabel, ordinal } from "@/lib/culture";
 import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
@@ -245,6 +245,20 @@ export async function GET(request: Request) {
     const slot = url.searchParams.get("huddlenudge") === "pm" ? "pm" : "am";
     const res = await sendHuddleNudge(today, slot);
     return NextResponse.json({ ok: true, huddlenudge: res });
+  }
+
+  // Gentle break-time reminders (org-local, weekdays): 10:30 break, 12:00 lunch, 3:00 break.
+  // Each is its own once-a-day cron in vercel.json. Posts to the Timecard Chat space.
+  if (url.searchParams.get("breaknudge")) {
+    const slot = url.searchParams.get("breaknudge");
+    const msg =
+      slot === "lunch"
+        ? "🍔 *Lunch — 12:00.* Whole team's on lunch now. Step away, eat, recharge — then log it on your time card."
+        : slot === "pm"
+          ? "☕ *Afternoon break — ~3:00.* Everyone grab a quick 15 minutes to reset before the final push. (Log it on your time card.)"
+          : "☕ *Break time — 10:30.* Michelle, Sharyn & Jon — take a quick 10–15 min to reset. You've earned it.";
+    const chat = await sendTimecardChat(msg);
+    return NextResponse.json({ ok: true, breaknudge: slot, chat });
   }
 
   // Midday run: the pm-shift crew's speed-test nudge (Marie). (Legacy ?ethan=1 param.)
