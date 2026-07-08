@@ -392,7 +392,7 @@ export default function UnderwritingCalculator() {
     let boxes: string[] = [];
     if (isAssign || isNov) {
       boxes = [
-        card("Negotiation range", `${money(rLo)} → ${money(rHi)}`, "navy", "open low, work up to the MAO"),
+        // Range now leads the hero above — cards show the fee at each end + the list price.
         card("Your fee at the opening (anchor)", money(feeAnchor), "amber", "if they take your first number"),
         card("Your fee at the MAO", money(feeMao), "green", "your minimum at the top of the range"),
         card(valLabel, money(valVal), "slate"),
@@ -453,9 +453,15 @@ export default function UnderwritingCalculator() {
         </div>
         ${r.comps ? `<div style="margin:10px 0 12px;color:#334155;line-height:1.5;font-size:13px">${r.comps}</div>` : ""}
         <div style="background:linear-gradient(135deg,#065f46,#059669);border-radius:14px;padding:18px 22px;margin:0 0 14px;text-align:center;color:#fff">
+          ${(rLo && rHi) ? `
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a7f3d0">🎯 Negotiation range — open low, work up</div>
+          <div style="font-size:40px;font-weight:800;line-height:1.1;margin-top:4px">${esc(money(rLo))} <span style="color:#a7f3d0">→</span> ${esc(money(rHi))}</div>
+          <div style="font-size:12px;color:#d1fae5;margin-top:5px">Open at ${esc(money(rLo))} · never go past ${esc(money(rHi))}</div>
+          <div style="margin-top:11px;padding-top:9px;border-top:1px solid rgba(255,255,255,.25);font-size:13px;color:#ecfdf5">${esc(heroLabel)}: <b style="font-size:17px">${esc(money(heroVal))}</b> <span style="color:#a7f3d0">— your ceiling, never past it</span></div>
+          ` : `
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a7f3d0">🎯 ${esc(heroLabel)}</div>
           <div style="font-size:42px;font-weight:800;line-height:1.1;margin-top:3px">${esc(money(heroVal))}</div>
-          ${(rLo && rHi) ? `<div style="font-size:12px;color:#d1fae5;margin-top:5px">Open at ${esc(money(rLo))} · negotiate up to ${esc(money(rHi))} — never past it</div>` : ""}
+          `}
         </div>
         ${conflict}
         ${boxesHtml}
