@@ -19,7 +19,7 @@ const TRACKS: { role: string; bootcamp: { task: string; href?: string; label?: s
   {
     role: "🎯 Junior Acquisitions",
     bootcamp: [
-      { task: "Watch all training videos", href: "/training", label: "Training Portal" },
+      { task: "Watch EVERY training video in the portal + take notes on each", href: "/training", label: "Video Library" },
       { task: "Learn the language — every key term", href: "/glossary", label: "Glossary" },
       { task: "Memorize the seller call scripts (word-for-word)", href: "/scripts", label: "Scripts" },
       { task: "Understand the deal flow start to finish", href: "/process", label: "Process Map" },

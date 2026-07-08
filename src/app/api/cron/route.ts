@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { runScheduledChecks, sendShiftStartSpeedReminders } from "@/lib/alerts";
-import { sendEthanReminder } from "@/lib/ethan-reminder";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
@@ -248,13 +247,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, huddlenudge: res });
   }
 
-  // Midday run (1:30pm PT): Ethan's shift-end reminder + Marie's 1pm speed-test nudge.
+  // Midday run: the pm-shift crew's speed-test nudge (Marie). (Legacy ?ethan=1 param.)
   if (url.searchParams.get("ethan") === "1") {
     const settings = await getSettings();
     const today = date ?? todayStr(settings.orgTimezone);
-    const ethanReminded = await sendEthanReminder(today);
     const speedTestReminded = await sendShiftStartSpeedReminders(today, "pm", laNow().dow);
-    return NextResponse.json({ ok: true, ethanReminded, speedTestReminded });
+    return NextResponse.json({ ok: true, speedTestReminded });
   }
 
   // Full scheduled pass. On the MORNING run (before noon PT) also send the am

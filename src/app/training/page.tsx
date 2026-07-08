@@ -80,6 +80,31 @@ export default async function TrainingPage() {
       <SectionTitle title="🎓 Training Portal" subtitle="Per-rep coaching plans, schedule, an AI coaching assistant, and a log of every session." accent="bg-brand-gold"
         right={<Link href="/call-scoring" className="text-sm font-semibold text-brand-navy hover:underline">🎧 Score a call →</Link>} />
 
+      {/* Video training library — external portal (acquisitions sales training). New
+          hires: watch every video, take notes. Shared team login shown below. */}
+      <div className="rounded-2xl bg-gradient-to-br from-brand-navy to-brand-navy-700 p-5 text-white ring-1 ring-brand-navy">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-lg font-extrabold text-brand-gold">🎬 Video Training Library</div>
+            <p className="mt-1 max-w-2xl text-sm text-white/75">
+              Your first job: <b className="text-white">watch every video</b> in the portal, understand it, and
+              <b className="text-white"> take notes</b> on each one. This is the acquisitions sales-training course — the
+              foundation for everything you&apos;ll do on the phones.
+            </p>
+          </div>
+          <a href="https://members.theericcline.com/" target="_blank" rel="noopener noreferrer"
+            className="shrink-0 rounded-lg bg-brand-gold px-4 py-2.5 text-sm font-bold text-brand-navy hover:brightness-105">
+            ▶ Open the Training Portal
+          </a>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl bg-white/10 px-4 py-3 text-sm ring-1 ring-white/15">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">Team login</span>
+          <span><span className="text-white/60">Email:</span> <span className="font-mono font-semibold">jon@freedom-offers.com</span></span>
+          <span><span className="text-white/60">Password:</span> <span className="font-mono font-semibold">Ericcline2025</span></span>
+        </div>
+        <p className="mt-2 text-[11px] text-white/45">Shared login for team training only — don&apos;t share outside Freedom Offers.</p>
+      </div>
+
       {/* AI coaching assistant — managers run it */}
       {manager && <AICoach reps={team.map((r) => ({ name: r.name, role: r.position, skills: focusBy(r.id).map((f) => f.skill) }))} />}
 

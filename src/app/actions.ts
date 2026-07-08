@@ -531,8 +531,6 @@ export async function saveSettings(formData: FormData) {
     orgTimezone: String(formData.get("orgTimezone") ?? "America/New_York").trim(),
     annualRevenueGoal: numOrNull(formData.get("annualRevenueGoal")) ?? 0,
     weeklyEmailRecipients: String(formData.get("weeklyEmailRecipients") ?? "").trim(),
-    ethanShiftIcsUrl: String(formData.get("ethanShiftIcsUrl") ?? "").trim(),
-    ethanReminderEmail: String(formData.get("ethanReminderEmail") ?? "").trim(),
   };
   await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
   revalidatePath("/admin");
