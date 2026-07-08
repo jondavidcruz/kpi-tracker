@@ -254,7 +254,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   // Current break/lunch state per person (for the manager "mark on break/lunch" controls).
   const stateByUser = new Map(users.filter((u) => !isOwner(u)).map((u) => [u.id, stateFromPunches(byUser.get(u.id) ?? []).state]));
   // The owner (Jon) isn't on the pay clock, but can broadcast a status so the team knows.
-  const myState = isOwner(me) ? stateFromPunches(byUser.get(me.id) ?? []).state : null;
+  const ownerState = isOwner(me) ? stateFromPunches(byUser.get(me.id) ?? []).state : null;
 
   return (
     <div className="space-y-6">
@@ -278,12 +278,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         <section>
           <h3 className="mb-2 text-sm font-bold text-slate-700">📢 My status <span className="font-normal text-slate-400">— let the team know</span></h3>
           <Card className="p-4">
-            {myState === "break" || myState === "lunch" || myState === "meeting" ? (
+            {ownerState === "break" || ownerState === "lunch" || ownerState === "meeting" ? (
               <div className="flex flex-wrap items-center gap-3">
-                <span className={`rounded-full px-3 py-1 text-sm font-bold ${myState === "meeting" ? "bg-violet-100 text-violet-800" : myState === "lunch" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"}`}>
-                  {myState === "meeting" ? "👥 In a meeting" : myState === "lunch" ? "🍔 On lunch" : "☕ On break"}
+                <span className={`rounded-full px-3 py-1 text-sm font-bold ${ownerState === "meeting" ? "bg-violet-100 text-violet-800" : ownerState === "lunch" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"}`}>
+                  {ownerState === "meeting" ? "👥 In a meeting" : ownerState === "lunch" ? "🍔 On lunch" : "☕ On break"}
                 </span>
-                <form action={punch}><input type="hidden" name="kind" value={`${myState}_end`} /><button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">✅ I&apos;m back / available</button></form>
+                <form action={punch}><input type="hidden" name="kind" value={`${ownerState}_end`} /><button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">✅ I&apos;m back / available</button></form>
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
