@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { todayStr, friendlyDate } from "@/lib/date";
 import { db } from "@/lib/db";
@@ -55,6 +55,8 @@ function methodFor(skill: string): string {
 export default async function TrainingPage() {
   const me = await getCurrentUser();
   const manager = isManager(me); // Jon + Marie — can edit
+  // Eric Cline video course is acquisitions-only — show to acquisitions reps/hires + the owner.
+  const showVideoLibrary = isOwner(me) || me?.position === "acquisitions";
   const canView = !!me; // any signed-in team member (incl. onboarding hires) can view; managers edit
   if (!me || !canView) {
     return <Card className="mx-auto max-w-md p-8 text-center"><div className="mb-2 text-3xl">🔒</div><h1 className="text-xl font-bold">Not available</h1><Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link></Card>;
@@ -81,7 +83,9 @@ export default async function TrainingPage() {
         right={<Link href="/call-scoring" className="text-sm font-semibold text-brand-navy hover:underline">🎧 Score a call →</Link>} />
 
       {/* Video training library — external portal (acquisitions sales training). New
-          hires: watch every video, take notes. Shared team login shown below. */}
+          hires: watch every video, take notes. Shared team login shown below.
+          Acquisitions-only — dispositions reps don't see it. */}
+      {showVideoLibrary && (
       <div className="rounded-2xl bg-gradient-to-br from-brand-navy to-brand-navy-700 p-5 text-white ring-1 ring-brand-navy">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -104,6 +108,7 @@ export default async function TrainingPage() {
         </div>
         <p className="mt-2 text-[11px] text-white/45">Shared login for team training only — don&apos;t share outside Freedom Offers.</p>
       </div>
+      )}
 
       {/* AI coaching assistant — managers run it */}
       {manager && <AICoach reps={team.map((r) => ({ name: r.name, role: r.position, skills: focusBy(r.id).map((f) => f.skill) }))} />}
