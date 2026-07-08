@@ -241,12 +241,6 @@ export default function UnderwritingCalculator() {
   const aSanePct = arv > 0 ? cashMao / arv : 0;
   const aSaneTone: "good" | "warn" | "bad" = cashMao <= 0 || aSanePct > 0.8 ? "bad" : aSanePct > 0.72 ? "warn" : "good";
   const aSaneWord = cashMao <= 0 ? "🚫 no room" : aSanePct > 0.8 ? "🚫 too thin — likely doesn't pencil" : aSanePct > 0.72 ? "⚠️ tight" : "✅ makes sense";
-  // "On-market equivalent" — a seller talking point. Our cash offer is a NET to the seller;
-  // to net the same selling on the open market they'd have to SELL for more, because they'd
-  // lose agent commission + closing (~8–10%). Equivalent sale price = offer ÷ (1 − cost%).
-  const onMktPct = num(v("onMktPct")) || 8; // agent + closing costs when selling on-market
-  const onMktEqLo = cashMao > 0 ? Math.round(cashMao / (1 - onMktPct / 100)) : 0;
-  const onMktEqHi = cashMao > 0 ? Math.round(cashMao / (1 - (onMktPct + 2) / 100)) : 0;
   //  Novation: seller payout as a share of list — lower is better; cash beating it = off.
   const nSanePct = nList > 0 ? novMao / nList : 0;
   const nSaneTone: "good" | "warn" | "bad" = novMao <= 0 || maoConflict || nSanePct > 0.95 ? "bad" : nSanePct > 0.9 ? "warn" : "good";
@@ -270,6 +264,13 @@ export default function UnderwritingCalculator() {
   // Fee sanity — Lux Blueprint wants a six-figure fee. Green ≥100k, yellow 50–100k, red <50k.
   const devSaneTone: "good" | "warn" | "bad" = devMao <= 0 || devFeeAtMao < 50000 ? "bad" : devFeeAtMao < 100000 ? "warn" : "good";
   const devSaneWord = devMao <= 0 ? "🚫 no room" : devFeeAtMao < 50000 ? "🚫 fee too thin — aim $100k+" : devFeeAtMao < 100000 ? "⚠️ under the $100k target" : "✅ six-figure fee";
+
+  // "On-market equivalent" — a seller talking point (NO input; fixed assumption). Our cash /
+  // land offer is a NET to the seller; to net the same on the open market they'd have to SELL
+  // for more, losing ~8–10% to agent commission + closing. Sale price = offer ÷ (1 − cost%).
+  const onMarketEquiv = (net: number): [number, number] => net > 0 ? [Math.round(net / 0.92), Math.round(net / 0.9)] : [0, 0];
+  const [onMktEqLo, onMktEqHi] = onMarketEquiv(cashMao); // cash (assignment) offer
+  const [devMktEqLo, devMktEqHi] = onMarketEquiv(devMao); // developer / land offer
 
   // ---- Creative / Listing ----
   // We don't buy on these terms — we ASSIGN them to an end buyer and make money two
@@ -475,7 +476,14 @@ export default function UnderwritingCalculator() {
     const onMktHtml = (isAssign && cashMao > 0)
       ? `<div style="margin:0 0 12px;padding:11px 14px;border-radius:10px;background:#f0f9ff;border:1px solid #bae6fd;color:#075985;font-size:12.5px;line-height:1.5">
            <div style="font-weight:800;font-size:13px">🏷️ Same net on the open market: ${esc(money(onMktEqLo))} – ${esc(money(onMktEqHi))}</div>
-           To actually walk away with this <b>${esc(money(cashMao))}</b> cash offer, you'd have to <b>sell for ${esc(money(onMktEqLo))}–${esc(money(onMktEqHi))}</b> on-market — the extra <b>${esc(money(onMktEqLo - cashMao))}–${esc(money(onMktEqHi - cashMao))}</b> goes to agent commission + closing (${onMktPct}–${onMktPct + 2}%), before months of showings, repairs, and no guarantee it sells. This cash offer nets the same — clean, fast, certain.
+           To actually walk away with this <b>${esc(money(cashMao))}</b> cash offer, you'd have to <b>sell for ${esc(money(onMktEqLo))}–${esc(money(onMktEqHi))}</b> on-market — the extra <b>${esc(money(onMktEqLo - cashMao))}–${esc(money(onMktEqHi - cashMao))}</b> goes to agent commission + closing (~8–10%), before months of showings, repairs, and no guarantee it sells. This cash offer nets the same — clean, fast, certain.
+         </div>`
+      : "";
+    // Same seller talking point for the Developer / Land cash offer.
+    const devMktHtml = (isDev && devMao > 0)
+      ? `<div style="margin:0 0 12px;padding:11px 14px;border-radius:10px;background:#f0f9ff;border:1px solid #bae6fd;color:#075985;font-size:12.5px;line-height:1.5">
+           <div style="font-weight:800;font-size:13px">🏷️ Same net on the open market: ${esc(money(devMktEqLo))} – ${esc(money(devMktEqHi))}</div>
+           To actually net this <b>${esc(money(devMao))}</b> cash offer for the lot, you'd have to <b>sell for ${esc(money(devMktEqLo))}–${esc(money(devMktEqHi))}</b> with an agent — the extra <b>${esc(money(devMktEqLo - devMao))}–${esc(money(devMktEqHi - devMao))}</b> goes to commission + closing (~8–10%), before months on market. This cash offer nets the same — clean, fast, certain.
          </div>`
       : "";
     const roiHtml = (roi != null)
@@ -530,6 +538,7 @@ export default function UnderwritingCalculator() {
         ${boxesHtml}
         ${askHtml}
         ${onMktHtml}
+        ${devMktHtml}
         ${acceptedHtml}
         ${roiHtml}
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin:4px 0 4px">How the number breaks down</div>
@@ -701,7 +710,6 @@ export default function UnderwritingCalculator() {
               <div className={optDiv}>Optional — refine the offer</div>
               <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
               <Field k="aHoa" label="HOA / special dues ($)" prefix="$" placeholder="0" req="opt" />
-              <Field k="onMktPct" label="On-market selling costs % (agent + closing)" suffix="%" placeholder="8" span={2} req="opt" />
               <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 No need to enter the flipper&apos;s holding or money costs — the market tier % already builds in their carry and profit. Detailed money-cost math lives on the Flip / Wholetail tab.</p>
               {additionalCosts("aExtra", aExtraN, setAExtraN)}
               <div className={goodDiv}>🟢 ARV comps (required · addr · sold $ · days on market)</div>
@@ -916,7 +924,7 @@ export default function UnderwritingCalculator() {
               {cashMao > 0 && (
                 <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 ring-1 ring-sky-200">
                   <div className="text-[12px] font-bold text-sky-800">🏷️ Same net on the open market: {money(onMktEqLo)} – {money(onMktEqHi)}</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-sky-700">To actually walk away with your <b>{money(cashMao)}</b> cash offer, they&apos;d have to <b>sell for {money(onMktEqLo)}–{money(onMktEqHi)}</b> on-market — the extra {money(onMktEqLo - cashMao)}–{money(onMktEqHi - cashMao)} is lost to agent commission + closing ({onMktPct}–{onMktPct + 2}%). And that&apos;s before months of showings, repairs, and no guarantee it sells. Your cash offer nets the same — clean, fast, certain.</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-sky-700">To actually walk away with your <b>{money(cashMao)}</b> cash offer, they&apos;d have to <b>sell for {money(onMktEqLo)}–{money(onMktEqHi)}</b> on-market — the extra {money(onMktEqLo - cashMao)}–{money(onMktEqHi - cashMao)} is lost to agent commission + closing (~8–10%). And that&apos;s before months of showings, repairs, and no guarantee it sells. Your cash offer nets the same — clean, fast, certain.</div>
                 </div>
               )}
               <Res label="⚓ Anchor (open here)" value={money(aAnchor)} tone="good" />
@@ -934,6 +942,12 @@ export default function UnderwritingCalculator() {
               <Res label="− Spread (your fee)" value={money(devSpread)} tone="muted" />
               <Res label="🎯 Developer MAO (max offer to seller)" value={money(devMao)} tone={devMao > 0 ? "navy" : "bad"} big />
               {devDispo > 0 && <Res label="Sanity check" value={`fee ${money(devFeeAtMao)} · ${devSaneWord}`} tone={devSaneTone} />}
+              {devMao > 0 && (
+                <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 ring-1 ring-sky-200">
+                  <div className="text-[12px] font-bold text-sky-800">🏷️ Same net on the open market: {money(devMktEqLo)} – {money(devMktEqHi)}</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-sky-700">To net your <b>{money(devMao)}</b> cash offer for the lot, they&apos;d have to <b>sell for {money(devMktEqLo)}–{money(devMktEqHi)}</b> with an agent — the extra {money(devMktEqLo - devMao)}–{money(devMktEqHi - devMao)} is lost to commission + closing (~8–10%), before months on market. Your cash offer nets the same — clean, fast, certain.</div>
+                </div>
+              )}
               <Res label="⚓ Anchor (open here)" value={money(devAnchor)} tone="good" />
               <Res label="Your fee at anchor" value={money(devFeeAtAnchor)} tone="good" />
               <Res label="Negotiate (offer to seller)" value={`${money(devAnchor)} → ${money(devMao)}`} tone="muted" />
