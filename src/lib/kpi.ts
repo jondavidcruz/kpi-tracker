@@ -20,6 +20,20 @@ export const EVENT_BASED_KPIS = new Set<string>([
   "offers_rejected",
 ]);
 
+// Per-rep KPI swaps: some reps track a different channel than the rest of their
+// role. Marie does Facebook outreach (not Instagram); Sharyn does Instagram (not
+// Facebook). Keyed by first name (lowercase) → KPI keys that rep should NOT see.
+const PER_REP_HIDDEN_KPIS: Record<string, string[]> = {
+  marie: ["dev_instagram"],
+  sharyn: ["dev_facebook"],
+};
+
+/** True if this KPI should be hidden for this person (per-rep channel swap). */
+export function isKpiHiddenForRep(name: string, kpiKey: string): boolean {
+  const fn = (name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return (PER_REP_HIDDEN_KPIS[fn] ?? []).includes(kpiKey);
+}
+
 // A value is "close" if it's within this fraction of the goal but not at it.
 const CLOSE_THRESHOLD = 0.8;
 

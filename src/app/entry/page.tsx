@@ -13,13 +13,13 @@ import {
   getSettings,
   resolveGoalWith,
 } from "@/lib/data";
-import { statusVsGoal } from "@/lib/kpi";
+import { statusVsGoal, isKpiHiddenForRep } from "@/lib/kpi";
 import { todayStr, friendlyDate, monthOf } from "@/lib/date";
 import { toInputNumber, type Unit } from "@/lib/format";
 import { positionLabel } from "@/lib/roles";
 
 // Developer/luxury outreach KPIs (shown only on a developer-focus day).
-const DEV_KEYS = new Set(["dev_instagram", "dev_linkedin", "dev_website", "dev_wordofmouth", "dev_conversations"]);
+const DEV_KEYS = new Set(["dev_instagram", "dev_facebook", "dev_linkedin", "dev_website", "dev_wordofmouth", "dev_conversations"]);
 // Dialer/buyer-calling KPIs — not counted on a developer-focus day.
 const DIALER_KEYS = new Set(["buyers_contacted", "ds_talk_time"]);
 
@@ -89,6 +89,12 @@ export default async function EntryPage({
   if (rep && isDispo && focus === "developer") {
     shown = roleKpis.filter((k) => !DIALER_KEYS.has(k.key)); // includes dev KPIs
     mutedKpis = roleKpis.filter((k) => DIALER_KEYS.has(k.key));
+  }
+
+  // Per-rep channel swap: Marie enters Facebook (not Instagram); Sharyn the reverse.
+  if (rep) {
+    shown = shown.filter((k) => !isKpiHiddenForRep(rep.name, k.key));
+    mutedKpis = mutedKpis.filter((k) => !isKpiHiddenForRep(rep.name, k.key));
   }
 
   const toItem = (k: (typeof roleKpis)[number]) => ({

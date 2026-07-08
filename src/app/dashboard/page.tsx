@@ -11,7 +11,7 @@ import {
 } from "@/lib/data";
 import { todayStr, friendlyDate, paceFraction, monthOf, datesInRange } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
-import { statusClasses, statusVsGoal, statusVsPace, alertSeverity, type Status } from "@/lib/kpi";
+import { statusClasses, statusVsGoal, statusVsPace, alertSeverity, isKpiHiddenForRep, type Status } from "@/lib/kpi";
 import { dailyGap, monthlyGap, monthlyCatchup, buildCoaching } from "@/lib/gap";
 import { dealsNeedingAttention } from "@/lib/deals";
 import { findPipCandidates } from "@/lib/pip";
@@ -577,35 +577,52 @@ function RoleScorecard({
         <Card className="p-6 text-slate-400">No one assigned to this role yet. Add them in Admin.</Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {reps.map((rep) => (
-            <Card key={rep.id} className="overflow-hidden p-0">
-              <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2 font-bold text-slate-800">{rep.name}</div>
-              <div className="divide-y divide-slate-100">
-                {kpis.map((k) => {
-                  const value = dailyValues.get(`${k.id}|${rep.id}`) ?? null;
-                  const goal = resolveGoalWith(targets, k, rep.id, month);
-                  const status: Status = value === null ? "none" : statusVsGoal(k.goalKind, value, goal);
-                  const cls = statusClasses(status);
-                  const bar = status === "hit" ? "bg-emerald-500" : status === "close" ? "bg-amber-500" : status === "miss" ? "bg-red-500" : "bg-slate-300";
-                  const pct = goal && goal > 0 && value !== null ? Math.min(100, (value / goal) * 100) : value !== null && value > 0 ? 100 : 0;
-                  return (
-                    <div key={k.id} className="px-4 py-2">
-                      <div className="flex items-center gap-3">
-                        <span className="min-w-0 flex-1 truncate text-sm text-slate-600"><KpiLabel kpiKey={k.key} name={k.name} /></span>
-                        <span className="shrink-0 text-right tabular-nums">
-                          <span className={`text-base font-extrabold ${cls.text}`}>{value === null ? "—" : formatValue(k.unit as Unit, value)}</span>
-                          {goal !== null && <span className="text-xs text-slate-400"> / {formatValue(k.unit as Unit, goal)}</span>}
-                        </span>
-                      </div>
-                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                        <div className={`h-full rounded-full ${bar}`} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          ))}
+          {reps.map((rep) => {
+            // Per-rep channel swap (Marie=Facebook, Sharyn=Instagram), then split into
+            // the Money (results) + Activity (effort) boxes so it's not one long blob.
+            const repKpis = kpis.filter((k) => !isKpiHiddenForRep(rep.name, k.key));
+            const money = repKpis.filter((k) => k.category === "green");
+            const activity = repKpis.filter((k) => k.category !== "green");
+            const Row = (k: Kpi) => {
+              const value = dailyValues.get(`${k.id}|${rep.id}`) ?? null;
+              const goal = resolveGoalWith(targets, k, rep.id, month);
+              const status: Status = value === null ? "none" : statusVsGoal(k.goalKind, value, goal);
+              const cls = statusClasses(status);
+              const bar = status === "hit" ? "bg-emerald-500" : status === "close" ? "bg-amber-500" : status === "miss" ? "bg-red-500" : "bg-slate-300";
+              const pct = goal && goal > 0 && value !== null ? Math.min(100, (value / goal) * 100) : value !== null && value > 0 ? 100 : 0;
+              return (
+                <div key={k.id} className="px-4 py-2">
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-600"><KpiLabel kpiKey={k.key} name={k.name} /></span>
+                    <span className="shrink-0 text-right tabular-nums">
+                      <span className={`text-base font-extrabold ${cls.text}`}>{value === null ? "—" : formatValue(k.unit as Unit, value)}</span>
+                      {goal !== null && <span className="text-xs text-slate-400"> / {formatValue(k.unit as Unit, goal)}</span>}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className={`h-full rounded-full ${bar}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            };
+            return (
+              <Card key={rep.id} className="overflow-hidden p-0">
+                <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-2 font-bold text-slate-800">{rep.name}</div>
+                {money.length > 0 && (
+                  <div>
+                    <div className="bg-emerald-50/70 px-4 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">💰 Money — results</div>
+                    <div className="divide-y divide-slate-100">{money.map(Row)}</div>
+                  </div>
+                )}
+                {activity.length > 0 && (
+                  <div>
+                    <div className="border-t border-slate-100 bg-sky-50/70 px-4 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-700">📊 Activity — effort</div>
+                    <div className="divide-y divide-slate-100">{activity.map(Row)}</div>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
     </section>

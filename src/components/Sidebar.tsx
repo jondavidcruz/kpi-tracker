@@ -95,9 +95,9 @@ export default function Sidebar({
   const Nav = (
     <div className="flex h-full flex-col">
       <div className="px-4 pt-5 pb-3">
-        <Link href="/dashboard" onClick={() => setOpen(false)} className="block">
+        <a href="https://freedom-offers.com" target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className="block" title="Visit freedom-offers.com">
           <Logo size="sm" tagline />
-        </Link>
+        </a>
         {owner && <div className="mt-2"><StatusDot /></div>}
       </div>
 
@@ -175,7 +175,7 @@ export default function Sidebar({
     <>
       {/* Mobile top bar */}
       <div className="flex items-center justify-between bg-brand-navy px-4 py-3 md:hidden">
-        <Link href="/dashboard"><Logo size="sm" /></Link>
+        <a href="https://freedom-offers.com" target="_blank" rel="noopener noreferrer" title="Visit freedom-offers.com"><Logo size="sm" /></a>
         <button aria-label="Open menu" onClick={() => setOpen(true)} className="grid h-9 w-9 place-items-center rounded-lg text-white hover:bg-white/10">
           <Menu size={22} />
         </button>
