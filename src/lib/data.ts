@@ -66,7 +66,7 @@ export async function getVto() {
  *  scorecard), so a manager/admin like Marie or Jon can still log their own KPIs. */
 // Display order for reps across all KPI views (by first name). Anyone not listed
 // falls to the end, alphabetically. Edit this list to reorder the team.
-const REP_ORDER = ["Michelle", "Jon", "Ethan", "Sharyn", "Marie"];
+const REP_ORDER = ["Michelle", "Jon", "Sharyn", "Marie"];
 function repRank(name: string): number {
   const first = name.split(" ")[0].toLowerCase();
   const i = REP_ORDER.findIndex((n) => n.toLowerCase() === first);

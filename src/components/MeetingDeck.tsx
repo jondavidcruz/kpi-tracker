@@ -72,7 +72,6 @@ const TEAM = [
   { slug: "cortana", name: "Cortana C.", title: "Technology Director" },
   { slug: "marie", name: "Marie M.", title: "Operations Director" },
   { slug: "sharyn", name: "Sharyn M.", title: "Dispositions Director" },
-  { slug: "ethan", name: "Ethan D.", title: "Licensed Real Estate Agent" },
   { slug: "michelle", name: "Michelle L.", title: "Acquisitions Officer" },
 ];
 const SERIF = "Georgia, 'Times New Roman', serif";

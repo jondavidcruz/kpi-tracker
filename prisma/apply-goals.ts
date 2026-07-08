@@ -35,9 +35,8 @@ async function main() {
   await setKpiGoal("appts_set", "at_least", 3); // was 20; Irish best month avg 2.3 -> 3 is stretch
   // cc_talk_time already 3600 (1:00) — leave
 
-  // Acquisitions — make offers_made a real goal; base small (Ethan irregular), Michelle target higher
+  // Acquisitions — make offers_made a real goal; Michelle target higher
   await setKpiGoal("offers_made", "at_least", 2);
-  await setKpiGoal("listing_appointments", "tracked", null); // Ethan listings — visibility only
   // appts_taken stays at_least 100
   // acq_talk_time currently 7200 (2:00) -> set base 1:30 = 5400; Michelle target same
   await setKpiGoal("acq_talk_time", "at_least", 5400);
@@ -54,8 +53,6 @@ async function main() {
   // Michelle (37h, hybrid acq+LM)
   await setTarget("offers_made", "Michelle", 2);
   await setTarget("acq_talk_time", "Michelle", 5400); // 1:30
-  // Ethan part-time, irregular: keep offers tracked-effectively by giving low/no pressure.
-  await setTarget("offers_made", "Ethan", 1); // gentle; irregular flag stops missing-entry nags
 
   // Sharyn (37h) — proven ~2x Marie
   await setTarget("buyers_contacted", "Sharyn", 140);
@@ -67,9 +64,6 @@ async function main() {
   console.log("== Team monthly goals ==");
   await setKpiGoal("contracts_sent", "at_least", 20); // was 30
   await setKpiGoal("contracts_signed", "at_least", 6); // was 10
-
-  console.log("== Ethan: irregular schedule flag (no missing-entry nags) ==");
-  await db.user.updateMany({ where: { name: "Ethan" }, data: { irregularSchedule: true } });
 
   console.log("Done.");
 }

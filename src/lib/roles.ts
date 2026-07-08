@@ -22,13 +22,6 @@ export const POSITIONS: Position[] = [
     emoji: "🤝",
     blurb: "Finds buyers and moves deals under contract, sold as fast as possible.",
   },
-  {
-    key: "listings",
-    label: "Listings",
-    short: "LST",
-    emoji: "🏷️",
-    blurb: "Closes listing deals already offered on — works his own pipeline of leads.",
-  },
 ];
 
 export const POSITION_KEYS = POSITIONS.map((p) => p.key);
@@ -38,6 +31,7 @@ export const POSITION_KEYS = POSITIONS.map((p) => p.key);
 // correctly. Cold Call / Lead Mgr was retired 2026-06-12.
 const ARCHIVED_POSITIONS: Record<string, string> = {
   cc_lm: "Cold Call / Lead Mgr",
+  listings: "Listings", // retired 2026-07-06 (Ethan deactivated; listings not actively worked)
 };
 
 export function positionLabel(key: string): string {

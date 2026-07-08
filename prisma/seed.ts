@@ -30,7 +30,7 @@ const KPIS = [
   { key: "acq_contracts_sent", name: "Contracts Sent", emoji: "📤", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts this rep sent today." },
   { key: "acq_signed_assignment", name: "Signed — Assignment", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as an Assignment." },
   { key: "acq_signed_novation", name: "Signed — Novation", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Novation." },
-  { key: "acq_signed_listing", name: "Signed — Listing", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Listing." },
+  { key: "acq_signed_listing", name: "Signed — Listing", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "listings", cadence: "daily", goalValue: null, goalKind: "tracked", active: false, definition: "Contracts signed as a Listing. Retired 2026-07-06 — listings no longer tracked." },
   { key: "acq_signed_creative", name: "Signed — Creative", emoji: "🖊️", category: "green", unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalValue: null, goalKind: "tracked", definition: "Contracts signed as a Creative deal." },
 
   // ===== Dispositions (Sharyn, Marie) =====
@@ -76,7 +76,7 @@ const KPIS = [
 // Reps with their positions. Emails are placeholders — edit in Admin.
 const USERS = [
   { name: "Michelle", email: "michelle@example.com", role: "rep", position: "acquisitions", note: "Lead Mgr + Dispositions Mgr + Acquisition closer. Goals halved (split across roles); higher commission, reduced base." },
-  { name: "Ethan", email: "ethan@example.com", role: "rep", position: "listings", irregularSchedule: true, note: "Part-time CA, listings-only (off acquisitions). Closes deals already offered on; leads sent to his pipeline. Restricted nav. ~3–9 hrs/week, exempt from KPI alerts." },
+  { name: "Ethan", email: "ethan@example.com", role: "rep", position: "listings", irregularSchedule: true, active: false, note: "DEACTIVATED 2026-07-06 — no longer uses the War Room; listings not actively worked. Kept (inactive) for history; reactivate in Admin if needed." },
   { name: "Irish", email: "irish@example.com", role: "rep", position: "cc_lm", note: "Hybrid cold caller + lead manager (25h/wk). Stretch goal: 3 appts/day." },
   { name: "Sharyn", email: "sharyn@example.com", role: "rep", position: "dispositions", note: "" },
   { name: "Marie", email: "marie@example.com", role: "manager", position: "dispositions", note: "Manager access + own Dispositions scorecard." },
