@@ -32,6 +32,22 @@ export default async function PlaybooksPage() {
                     <span className="text-slate-300 transition group-open:rotate-90">▶</span>
                   </summary>
                   <div className="space-y-3 border-t border-slate-100 p-4">
+                    {/* The REAL document first — the whole point is students see our actual contracts. */}
+                    {pb.images && pb.images.length > 0 && (
+                      <div className="space-y-2 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                        <div className="text-[13px] font-bold text-brand-navy">📄 Our actual document — this is the real thing</div>
+                        {pb.images.map((img, i) => (
+                          <figure key={i} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={img.src} alt={img.caption || pb.title} className="w-full" />
+                            {img.caption && <figcaption className="bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">{img.caption}</figcaption>}
+                          </figure>
+                        ))}
+                        {pb.pdfUrl && (
+                          <a href={pb.pdfUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-navy px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-brand-navy-700">📄 Open the full {pb.pdfLabel || "document"} (PDF)</a>
+                        )}
+                      </div>
+                    )}
                     {pb.diagram && <PlaybookDiagram kind={pb.diagram} />}
                     {pb.sections.map((s, i) => (
                       <div key={i}>
@@ -57,20 +73,8 @@ export default async function PlaybooksPage() {
                       </div>
                     )}
 
-                    {pb.images && pb.images.length > 0 && (
-                      <div className="space-y-3">
-                        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">The real document</div>
-                        {pb.images.map((img, i) => (
-                          <figure key={i} className="overflow-hidden rounded-lg border border-slate-200">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={img.src} alt={img.caption || pb.title} className="w-full" />
-                            {img.caption && <figcaption className="bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">{img.caption}</figcaption>}
-                          </figure>
-                        ))}
-                      </div>
-                    )}
-
-                    {pb.pdfUrl && (
+                    {/* For image-less guides, keep the PDF link at the bottom. */}
+                    {pb.pdfUrl && (!pb.images || pb.images.length === 0) && (
                       <a href={pb.pdfUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-navy px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-brand-navy-700">📄 Open {pb.pdfLabel || "the document"} (PDF)</a>
                     )}
                   </div>

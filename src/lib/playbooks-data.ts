@@ -12,9 +12,34 @@ export interface Playbook {
   diagram?: string;              // key of an inline how-it-works diagram (assignment | double_close | subject_to | novation)
 }
 
-export const PLAYBOOK_CATEGORIES = ["Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing"] as const;
+export const PLAYBOOK_CATEGORIES = ["Deal Analysis", "Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing"] as const;
 
 export const PLAYBOOKS: Playbook[] = [
+  {
+    key: "k_analyze_deal", title: "How To Analyze A Developer Deal (SOP)", emoji: "🏗️", category: "Deal Analysis",
+    summary: "The Lux Blueprint step-by-step: how to look at a lot and figure out the most we should offer (the MAO) for a land-for-luxury-builds deal.",
+    pdfUrl: "/playbooks/sop/how-to-analyze-a-deal.pdf", pdfLabel: "the full Student Guide (SOP)",
+    images: [
+      { src: "/playbooks/sop/analyze-deal-1.png", caption: "SOP p1 — the goal + Step 1 (what the seller wants)" },
+      { src: "/playbooks/sop/analyze-deal-2.png", caption: "p2 — Zillow check + confirm luxury new builds" },
+      { src: "/playbooks/sop/analyze-deal-3.png", caption: "p3 — study the LOT (buildable area, main road)" },
+      { src: "/playbooks/sop/analyze-deal-4.png", caption: "p4 — comps + the Water Rule" },
+      { src: "/playbooks/sop/analyze-deal-5.png", caption: "p5 — the 3 methods → your number" },
+      { src: "/playbooks/sop/analyze-deal-6.png", caption: "p6 — pick a conservative MAO + when to kill" },
+    ],
+    sections: [
+      { heading: "🎯 The whole game", body: "We buy land for luxury new builds. A developer wants a lot, tears down the old house, and builds something big and expensive. Your job: find lots they'd want and a price where the developer still makes good money — a number you can DEFEND with comps. Then you run it in the Underwriting calculator → Developer / Land tab." },
+      { heading: "Step 1 — Get the seller's number first", body: "Before any comps, ask the seller their asking price and how fast they want to close. Write it down — it's what you compare your final offer to. (e.g. they want $1.25M, 60–90 day close.)" },
+      { heading: "Step 2 — Pull it up on Zillow", bullets: ["FOR SALE = stop. We don't touch listed properties (already out in the open with an agent). Mark it dead.", "SOLD recently = scroll to price history for when + how much.", "Note anything odd (e.g. listed sold $960k but seller asking $950k) and keep digging."] },
+      { heading: "Step 3 — Confirm luxury new builds ($2M+)", body: "Make-or-break. Scroll the Zillow map. You want new builds selling over $2M nearby. No luxury new builds = no developer demand = kill the deal." },
+      { heading: "Step 5 — Study the LOT, not the house", bullets: ["Lot size — write it down; compare to similar-size lots.", "Main roads (3+ lanes, or yellow center lines) hurt the price — developers avoid busy roads. Compare to other main-road lots for a fair match.", "BUILDABLE area — the paper lot ≠ what you can build on. A cul-de-sac curve or setback can cut it a lot (one 0.42-ac lot was really ~0.28 ac buildable → MAO dropped to $1.1M). Always value the buildable land."] },
+      { heading: "Step 6 — Find your comps", bullets: ["New-build comps — recent luxury builds show the high-end finished value.", "Teardown / land comps (most important) — old, small, run-down houses on lots like yours, and what they sold for. A 1,400 sqft old house on a good lot that sold for $960k is a teardown buy.", "Trick: open a new build → price history → what the builder PAID for the raw lot before building. That's the real land value.", "Use MORE than one comp — one sale may include permits/plans and read high."] },
+      { heading: "🌊 The Water Rule", body: "Waterfront only compares to waterfront. If your lot is on the water, use only waterfront comps; if it's not, never use waterfront comps (they'll make your number way too high)." },
+      { heading: "Step 7 — Turn comps into your number (the 3 methods)", bullets: ["① New builds FOR SALE — average the developers' lot-purchase prices, bumped up for market growth (≈% per year × years).", "② New builds that SOLD — same: find the raw-lot buy, average, bump for growth.", "③ Teardowns that SOLD — old (30+ yrs) + small (house under ~25% of nearby new-build size) + looks run-down (eye test). Average, bump for growth.", "The three should land close. Drop any that's way off. Their average = your DISPO PRICE (land value)."], tip: "Plug ①②③ straight into the Developer / Land tab and it averages them to the dispo price for you." },
+      { heading: "🎯 Pick your MAO (stay conservative)", body: "MAO = dispo price − $100,000 to $150,000. That gap is your room to profit and keeps the assignment fee in six figures (the whole point). The least you should ever subtract is $50k — but Lux Blueprint pushes for the six-figure fee, so $100–150k is the goal. Always lean to the safe, lower MAO — the worst thing is pushing a high number and failing to move the deal." },
+      { heading: "🚫 When to kill a deal", bullets: ["No luxury new builds ($2M+) nearby — no developer demand.", "Already listed on the MLS or FSBO.", "Price too far off — seller wants so much your MAO is way below them, no room to meet.", "Incomplete — no real asking price (e.g. \"above market value\" isn't a number) → mark incomplete, not dead."] },
+    ],
+  },
   {
     key: "k_cash", title: "Cash Purchase Agreement (CRPA)", emoji: "💵", category: "Our Contracts",
     summary: "Our standard cash offer — the simplest agreement, for a straight cash purchase with no financing.",
