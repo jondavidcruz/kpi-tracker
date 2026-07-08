@@ -182,7 +182,7 @@ export default function UnderwritingCalculator() {
   const majorTotal = MAJOR.reduce((s, [key]) => s + n(`maj_${key}`), 0);
 
   // ---- Assignment ----
-  const marketPct = v("marketPct") || "70";
+  const marketPct = v("marketPct") || "75"; // default to SD/OC (75%), our home market — not the more conservative 70%
   const arv = n("arv");
   const suggestedFee = feeForArv(arv); // tiered minimum we plan for, by ARV
   const aFee = f.aFee != null && f.aFee !== "" ? n("aFee") : suggestedFee;
@@ -611,7 +611,7 @@ export default function UnderwritingCalculator() {
           {tab === "assignment" && (
             <>
               {legend}
-              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Market tier (% of ARV the flipper supports)</span>
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Market tier (% of ARV the end buyer supports)</span>
                 <select value={marketPct} onChange={set("marketPct")} className={`${inputCls} border-red-300`}>{MARKET_TIERS.map(([val, l]) => <option key={val} value={val}>{l}</option>)}</select>
               </label>
               <details className="sm:col-span-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
@@ -625,6 +625,9 @@ export default function UnderwritingCalculator() {
                     </div>
                   ))}
                   <p className="text-[10px] italic text-slate-400">Higher tier = more desirable market = offer a higher % of ARV (the flipper accepts a thinner margin because the resale is fast and certain).</p>
+                  <div className="rounded-lg bg-emerald-50 px-2.5 py-2 text-[11px] leading-snug text-emerald-800 ring-1 ring-emerald-200">
+                    <b>🏗️ Selling to a developer / tear-down buyer?</b> Go higher — <b>80–88%</b>. Developers pay MORE than flippers because they&apos;re buying the LOT (they&apos;re not backing out a rehab-and-resell margin). Using a flipper tier (70–75%) on a developer deal underprices the offer and gets a &quot;no&quot; from the seller. If the cash number still can&apos;t win the seller, pivot to <b>Novation</b> — it lets you offer them the most.
+                  </div>
                 </div>
               </details>
               <Field k="arv" label="ARV" prefix="$" placeholder="350,000" req="need" />
