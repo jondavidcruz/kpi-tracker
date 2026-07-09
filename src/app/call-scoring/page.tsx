@@ -33,24 +33,18 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
   ]);
   const scripts = new Map(scriptRows.map((r) => [r.callType, r.script]));
   const configured = !!process.env.ANTHROPIC_API_KEY;
-  // Configured if the shared key exists OR this rep saved their own (BYOK in My Account).
-  const geminiConfigured = !!process.env.GEMINI_API_KEY || !!me?.geminiKey;
-
   return (
     <div className="space-y-7">
       <SectionTitle
         title="🎧 Call Scoring"
-        subtitle="Upload a call recording (auto-transcribed) or paste a transcript for an instant coaching score. Diagnosis + feedback only."
+        subtitle="Upload the call recording (saved to Google Drive) and paste the transcript for an instant coaching score. Diagnosis + feedback only."
         accent="bg-emerald-400"
       />
 
-      {!geminiConfigured && (
-        <div className="rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-900 ring-1 ring-sky-200">
-          <div className="font-bold">🎙️ Turn on “upload a recording → auto-transcribe” (free)</div>
-          <p className="mt-1 text-[13px] text-sky-800"><b>Easiest:</b> get a free Gemini key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold underline">aistudio.google.com/apikey</a>, then paste it in <a href="/account" className="font-semibold underline">My Account → My Gemini key</a>. Your uploads transcribe on <b>your</b> quota, so the team never shares one limit.</p>
-          <p className="mt-1 text-[11px] text-sky-700">(Admins can instead set a shared <code className="rounded bg-white px-1">GEMINI_API_KEY</code> in Vercel for everyone.) Until then, paste the transcript below.</p>
-        </div>
-      )}
+      <div className="rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-900 ring-1 ring-sky-200">
+        <div className="font-bold">📝 How to add the transcript</div>
+        <p className="mt-1 text-[13px] text-sky-800">Upload the recording (it saves to Google Drive), then transcribe it in <a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Gemini</a> separately and <b>copy-paste the transcript</b> into the box below. Then hit Score this call.</p>
+      </div>
 
       {!configured && (
         <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">
@@ -58,24 +52,7 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
         </div>
       )}
 
-      {/* Nudge reps to add their own Gemini key so uploads don't share one quota. */}
-      {geminiConfigured && !me?.geminiKey && (
-        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200">
-          <div className="font-bold">🎙️ Add your own Gemini key (2 min) — so the team never shares one transcription limit</div>
-          <p className="mt-1 text-[13px] text-amber-800">Right now your uploads use a shared key that can hit its daily cap. Add your own free key and your uploads run on <b>your</b> quota — no more caps.</p>
-          <details className="mt-1.5">
-            <summary className="cursor-pointer text-[13px] font-semibold text-amber-900 hover:underline">How to get your key →</summary>
-            <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-[13px] text-amber-800">
-              <li>Open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold underline">aistudio.google.com/apikey</a> and sign in with Google.</li>
-              <li>Click <b>Create API key</b>, then <b>Copy</b> it (starts with <code className="rounded bg-white px-1">AIza…</code>).</li>
-              <li>Come back → <a href="/account" className="font-semibold underline">My Account → My Gemini key</a> → paste → <b>Save key</b>.</li>
-            </ol>
-            <p className="mt-1 text-[11px] text-amber-700">Free for our usage. Keep your key private — don&apos;t share it or post it in chat.</p>
-          </details>
-          <a href="/account" className="mt-2 inline-block rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700">Add my key →</a>
-        </div>
-      )}
-      {sp.scored && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Scored and saved below.</div>}
+      {sp.scored &&<div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Scored and saved below.</div>}
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved “{sp.saved}”.</div>}
       {sp.setup && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Scoring isn&apos;t configured yet — add the ANTHROPIC_API_KEY (see above).</div>}
       {sp.err === "short" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Please paste a longer transcript.</div>}
@@ -90,7 +67,7 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
             types={CALL_TYPES.map((c) => ({ key: c.key, label: c.label, group: c.group, hasScript: scripts.has(c.key) }))}
             groups={[...GROUPS]}
           />
-          <TranscriptField inputCls={inputCls} geminiConfigured={geminiConfigured} />
+          <TranscriptField inputCls={inputCls} />
           <div>
             <button disabled={!configured} className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
               Score this call
