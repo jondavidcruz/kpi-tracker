@@ -533,7 +533,25 @@ export async function sendDailyDigest(date: string, opts?: { chat?: boolean }): 
     (softSection ? `*Activity / missing:*\n${softSection}\n\n` : "") +
     (justifiedChat ? `*Justifications logged:*\n${justifiedChat}` : "");
 
-  const chatOk = sendChat ? await sendGoogleChat(chatText, cfg) : false;
+  // Only post to Google Chat when the CRUCIAL (money / hard) alert set actually CHANGED
+  // vs the previous weekday — otherwise the same digest spams the channel every day. If a
+  // rep has been behind on the same money KPI all week with no change, we stay quiet. Email
+  // still goes daily. (New miss appears → posts; everything clears → posts once; unchanged → silent.)
+  const alertSig = (rows: { userId: string | null; kpiId: string }[]) =>
+    rows.map((r) => `${r.userId ?? ""}:${r.kpiId}`).sort().join("|");
+  const prevWeekday = (d: string): string => {
+    const [y, m, dd] = d.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, dd));
+    const back = dt.getUTCDay() === 1 ? 3 : dt.getUTCDay() === 0 ? 2 : 1; // Mon→Fri, Sun→Fri, else prior day
+    dt.setUTCDate(dt.getUTCDate() - back);
+    return dt.toISOString().slice(0, 10);
+  };
+  const todayHardSig = alertSig(hard);
+  const priorHardSig = alertSig(
+    await db.alert.findMany({ where: { status: "open", severity: "hard", date: prevWeekday(date) }, select: { userId: true, kpiId: true } }),
+  );
+  const crucialChanged = todayHardSig !== priorHardSig;
+  const chatOk = sendChat && crucialChanged ? await sendGoogleChat(chatText, cfg) : false;
 
   // ---- Email (rich coaching cards for money, plain list for the rest) ----
   const emailHtml =
