@@ -253,6 +253,17 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   // Current break/lunch state per person (for the manager "mark on break/lunch" controls).
   const stateByUser = new Map<string, PresenceState>(users.filter((u) => !isOwner(u)).map((u) => [u.id, stateFromPunches(byUser.get(u.id) ?? []).state]));
+  // When each person's current break/lunch started (ms) — to flag anyone over their limit.
+  const sinceByUser = new Map<string, number | null>(users.filter((u) => !isOwner(u)).map((u) => { const r = stateFromPunches(byUser.get(u.id) ?? []); return [u.id, r.since ? r.since.getTime() : null]; }));
+  const BREAK_LIMIT = 15, LUNCH_LIMIT = 60; // 15-min break, 1-hr lunch
+  const breakMinFor = (id: string) => { const s = sinceByUser.get(id); return s ? Math.floor((now.getTime() - s) / 60000) : 0; };
+  const limitFor = (s: PresenceState | undefined) => (s === "break" ? BREAK_LIMIT : s === "lunch" ? LUNCH_LIMIT : Infinity);
+  const overList = users.filter((u) => !isOwner(u)).map((u) => {
+    const s = stateByUser.get(u.id);
+    if (s !== "break" && s !== "lunch") return null;
+    const min = breakMinFor(u.id), limit = limitFor(s);
+    return min > limit ? { name: u.name.split(" ")[0], min, limit, kind: s } : null;
+  }).filter((x): x is { name: string; min: number; limit: number; kind: "break" | "lunch" } => x !== null);
   // The owner (Jon) isn't on the pay clock, but can broadcast a status so the team knows.
   const ownerState = isOwner(me) ? stateFromPunches(byUser.get(me.id) ?? []).state : null;
 
@@ -338,10 +349,17 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       {manager && (
         <section>
           <h3 className="mb-2 text-sm font-bold text-slate-700">☕ Mark on break / lunch / off <span className="font-normal text-slate-400">— if someone forgot, or went home</span></h3>
+          {overList.length > 0 && (
+            <div className="mb-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">
+              ⚠️ Over the break limit: {overList.map((o) => `${o.name} — ${o.kind === "lunch" ? "lunch" : "break"} ${o.min} min (limit ${o.limit})`).join(" · ")}. If they&apos;re actually back or gone, mark them below.
+            </div>
+          )}
           <Card className="divide-y divide-slate-100 p-0">
             {users.filter((u) => !isOwner(u)).map((u) => {
               const st = stateByUser.get(u.id);
               const present = st === "online" || st === "break" || st === "lunch" || st === "meeting";
+              const stMin = breakMinFor(u.id);
+              const over = (st === "break" || st === "lunch") && stMin > limitFor(st);
               return (
                 <div key={u.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
                   <span className="w-32 shrink-0 font-semibold text-slate-800">{u.name.split(" ")[0]}</span>
@@ -352,12 +370,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                     )}
                     {st === "break" ? (
                       <>
-                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">☕ On break</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${over ? "bg-red-100 text-red-700 ring-1 ring-red-300" : "bg-amber-100 text-amber-800"}`}>{over ? "⚠️ " : ""}☕ On break{stMin ? ` · ${stMin}m` : ""}{over ? ` (over ${BREAK_LIMIT})` : ""}</span>
                         <button formAction={endBreakFor} name="kind" value="break" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back</button>
                       </>
                     ) : st === "lunch" ? (
                       <>
-                        <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-800">🍔 On lunch</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${over ? "bg-red-100 text-red-700 ring-1 ring-red-300" : "bg-orange-100 text-orange-800"}`}>{over ? "⚠️ " : ""}🍔 On lunch{stMin ? ` · ${stMin}m` : ""}{over ? ` (over ${LUNCH_LIMIT})` : ""}</span>
                         <button formAction={endBreakFor} name="kind" value="lunch" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back</button>
                       </>
                     ) : present ? (

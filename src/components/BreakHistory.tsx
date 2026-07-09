@@ -20,11 +20,16 @@ export default function BreakHistory({ timeline, tz, outages = [], compact = fal
     <div className={compact ? "" : "rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-200"}>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         {clockInMs && <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">▶︎ In {fmt(clockInMs, tz)}</span>}
-        {segments.map((s, i) => (
-          <span key={i} className={`rounded-full px-2 py-0.5 font-medium ${s.type === "lunch" ? "bg-orange-100 text-orange-700" : s.type === "meeting" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>
-            {s.type === "lunch" ? "🍽️" : s.type === "meeting" ? "📅" : "☕"} {fmt(s.startMs, tz)}{s.endMs ? `–${fmt(s.endMs, tz)}` : "…"} · {hm(s.min)}{s.endMs ? "" : " (ongoing)"}
-          </span>
-        ))}
+        {segments.map((s, i) => {
+          const limit = s.type === "break" ? 15 : s.type === "lunch" ? 60 : null; // 15-min break, 1-hr lunch; meetings uncapped
+          const over = !s.endMs && limit != null && s.min > limit; // still on it AND past the limit
+          const base = s.type === "lunch" ? "bg-orange-100 text-orange-700" : s.type === "meeting" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700";
+          return (
+            <span key={i} className={`rounded-full px-2 py-0.5 font-medium ${over ? "bg-red-100 font-bold text-red-700 ring-1 ring-red-300" : base}`}>
+              {over ? "⚠️ " : ""}{s.type === "lunch" ? "🍽️" : s.type === "meeting" ? "📅" : "☕"} {fmt(s.startMs, tz)}{s.endMs ? `–${fmt(s.endMs, tz)}` : "…"} · {hm(s.min)}{s.endMs ? "" : over ? ` (ongoing — over ${limit}m)` : " (ongoing)"}
+            </span>
+          );
+        })}
         {outages.map((o, i) => (
           <span key={`o${i}`} className={`rounded-full px-2 py-0.5 font-semibold ${o.ongoing ? "bg-red-100 text-red-700" : "bg-red-50 text-red-600 ring-1 ring-red-200"}`}>
             {outageIcon(o.kind)} {outageWord(o.kind)} out {o.startLabel}{o.endLabel ? `–${o.endLabel}` : "…"} · {hm(o.min)}{o.ongoing ? " (still out)" : " · back ✓"}

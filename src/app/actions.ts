@@ -2265,6 +2265,10 @@ export async function endShiftFor(formData: FormData) {
   const last = await db.punch.findFirst({ where: { userId, date }, orderBy: { at: "desc" }, select: { kind: true } });
   if (last?.kind === "out") return; // already ended for the day
   const at = punchAtFrom(String(formData.get("at") ?? ""), date, settings.orgTimezone); // optional time they left
+  // Backdating "off for the day": any break/lunch/meeting logged at or after that time
+  // no longer applies (they went home), so drop it — otherwise the later punch would keep
+  // them showing "on break" instead of flipping to off. Only touches at-or-after punches.
+  if (at) await db.punch.deleteMany({ where: { userId, date, at: { gte: at }, kind: { not: "in" } } });
   await db.punch.create({ data: { userId, kind: "out", date, ...(at ? { at } : {}) } });
   const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
   const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
