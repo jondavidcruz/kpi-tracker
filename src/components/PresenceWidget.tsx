@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type State = "online" | "break" | "lunch" | "meeting" | "offline" | "outage" | "dropped";
+type State = "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "offline" | "outage" | "dropped";
 type Person = { id: string; name: string; state: State; sinceMs: number | null; workedMin: number; outageMin?: number | null; outageKind?: string | null };
 
 const DOT: Record<State, string> = {
   online: "bg-emerald-500", break: "bg-amber-400", lunch: "bg-amber-400", meeting: "bg-violet-500",
+  appointment: "bg-indigo-500", errand: "bg-sky-500",
   offline: "bg-slate-300", outage: "bg-red-500", dropped: "bg-red-400",
 };
-const LABEL: Record<State, string> = { online: "Online", break: "Break", lunch: "Lunch", meeting: "In a meeting", offline: "Offline", outage: "Outage", dropped: "Disconnected" };
-const ORDER: Record<State, number> = { outage: 0, dropped: 1, online: 2, meeting: 3, break: 4, lunch: 5, offline: 6 };
+const LABEL: Record<State, string> = { online: "Online", break: "Break", lunch: "Lunch", meeting: "In a meeting", appointment: "Appointment", errand: "Errand", offline: "Offline", outage: "Outage", dropped: "Disconnected" };
+const ORDER: Record<State, number> = { outage: 0, dropped: 1, online: 2, meeting: 3, appointment: 4, errand: 5, break: 6, lunch: 7, offline: 8 };
 const outageKindLabel = (k?: string | null) => (k === "power" ? "⚡ power" : k === "internet" ? "📶 internet" : "");
 function hm(min: number) { const h = Math.floor(min / 60), m = min % 60; return h ? `${h}h ${m}m` : `${m}m`; }
 

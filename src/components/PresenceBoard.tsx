@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type State = "online" | "break" | "lunch" | "meeting" | "offline" | "outage" | "dropped";
+type State = "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "offline" | "outage" | "dropped";
 type Person = { id: string; name: string; state: State; outageKind?: string | null; outageMin?: number | null; sinceMs: number | null; workedMin: number };
 
 const DOT: Record<State, string> = {
@@ -10,6 +10,8 @@ const DOT: Record<State, string> = {
   break: "bg-amber-400",
   lunch: "bg-amber-400",
   meeting: "bg-violet-500",
+  appointment: "bg-indigo-500",
+  errand: "bg-sky-500",
   offline: "bg-slate-300",
   outage: "bg-red-500",
   dropped: "bg-red-400",
@@ -19,12 +21,14 @@ const RING: Record<State, string> = {
   break: "ring-amber-200 bg-amber-50",
   lunch: "ring-amber-200 bg-amber-50",
   meeting: "ring-violet-200 bg-violet-50",
+  appointment: "ring-indigo-200 bg-indigo-50",
+  errand: "ring-sky-200 bg-sky-50",
   offline: "ring-slate-200 bg-white",
   outage: "ring-red-300 bg-red-50",
   dropped: "ring-red-200 bg-red-50",
 };
-const LABEL: Record<State, string> = { online: "Online", break: "On break", lunch: "At lunch", meeting: "In a meeting", offline: "Offline", outage: "Outage", dropped: "Disconnected" };
-const ORDER: Record<State, number> = { outage: 0, dropped: 1, online: 2, meeting: 3, break: 4, lunch: 5, offline: 6 };
+const LABEL: Record<State, string> = { online: "Online", break: "On break", lunch: "At lunch", meeting: "In a meeting", appointment: "At an appointment", errand: "Running an errand", offline: "Offline", outage: "Outage", dropped: "Disconnected" };
+const ORDER: Record<State, number> = { outage: 0, dropped: 1, online: 2, meeting: 3, appointment: 4, errand: 5, break: 6, lunch: 7, offline: 8 };
 const outageLabel = (kind?: string | null) => (kind === "power" ? "⚡ Power outage" : kind === "internet" ? "📶 Internet outage" : "⚠️ Outage");
 
 function hm(min: number) {
