@@ -136,6 +136,9 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
           const noteParts: string[] = dayOutages.map((o) => `⚡ ${o.kind} outage ${hhmmAP(o.startMin)}–${hhmmAP(o.endMin)}`);
           if (leave) noteParts.push(LEAVE[leave.type] ?? "Time off");
           if (adj?.status === "day_off") noteParts.push("Day off");
+          // Ended the day early — self clock-out or a manager "Off for the day". Flag it so the
+          // short paid hours below are self-explanatory (payroll already reflects the earlier out).
+          if (outAt && cap && outAt.getTime() < cap.getTime() - 30 * 60000 && !leave && adj?.status !== "day_off") noteParts.push(`⏹ Off early — out ${clock(outAt)}`);
           if (adj?.note) noteParts.push(adj.note);
           // Flat-hours people (management) are paid Nh every weekday up to today, regardless
           // of the clock. We still track actual hours and flag weekdays worked under Nh.
