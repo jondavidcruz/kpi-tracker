@@ -2242,6 +2242,25 @@ export async function endBreakFor(formData: FormData) {
   revalidatePath("/schedule"); revalidatePath("/timecard");
 }
 
+/** Manager: end someone's shift for the day (clock them out) — e.g. they went home sick.
+ *  Flips them to offline on the board and stops their worked-time clock. */
+export async function endShiftFor(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canTrackTime(me)) return; // managers + pay staff
+  const userId = String(formData.get("userId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 40); // optional, e.g. "sick"
+  if (!userId) return;
+  const settings = await getSettings();
+  const date = todayStr(settings.orgTimezone);
+  const last = await db.punch.findFirst({ where: { userId, date }, orderBy: { at: "desc" }, select: { kind: true } });
+  if (last?.kind === "out") return; // already ended for the day
+  await db.punch.create({ data: { userId, kind: "out", date } });
+  const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
+  sendTimecardChat(`🔴 ${u?.name ?? "Team member"} is off for the rest of the day${reason ? ` (${reason})` : ""} — ended by ${me!.name.split(" ")[0]} · ${time}`).catch(() => {});
+  revalidatePath("/schedule"); revalidatePath("/timecard");
+}
+
 export async function reportOutage(formData: FormData) {
   const me = await getCurrentUser();
   if (!me) return;
