@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
-import { stateFromPunches, workedMinutes, groupByUser, daySegments, dayBar } from "@/lib/presence";
+import { stateFromPunches, workedMinutes, groupByUser, daySegments, dayBar, type PresenceState } from "@/lib/presence";
 import { workCapAt, shiftEndLabel } from "@/lib/shift";
 import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage, startBreakFor, endBreakFor, endShiftFor, punch } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
@@ -252,7 +252,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const offOnDay = (date: string) => monthOff.filter((t) => t.startDate <= date && t.endDate >= date);
 
   // Current break/lunch state per person (for the manager "mark on break/lunch" controls).
-  const stateByUser = new Map(users.filter((u) => !isOwner(u)).map((u) => [u.id, stateFromPunches(byUser.get(u.id) ?? []).state]));
+  const stateByUser = new Map<string, PresenceState>(users.filter((u) => !isOwner(u)).map((u) => [u.id, stateFromPunches(byUser.get(u.id) ?? []).state]));
   // The owner (Jon) isn't on the pay clock, but can broadcast a status so the team knows.
   const ownerState = isOwner(me) ? stateFromPunches(byUser.get(me.id) ?? []).state : null;
 
@@ -319,10 +319,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                       <form action={endOutage} className="ml-auto"><input type="hidden" name="id" value={live.id} /><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back online</button></form>
                     </>
                   ) : (
-                    <div className="ml-auto flex gap-2">
-                      <form action={startOutage}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="power" /><button className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200">⚡ Power outage</button></form>
-                      <form action={startOutage}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="internet" /><button className="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-200">📶 Internet outage</button></form>
-                    </div>
+                    <form action={startOutage} className="ml-auto flex flex-wrap items-center gap-2">
+                      <input type="hidden" name="userId" value={u.id} />
+                      <input type="time" name="at" title="Optional — when the outage started (leave blank = now)" className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs" />
+                      <button formAction={startOutage} name="kind" value="power" className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200">⚡ Power outage</button>
+                      <button formAction={startOutage} name="kind" value="internet" className="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-200">📶 Internet outage</button>
+                    </form>
                   )}
                 </div>
               );
@@ -343,34 +345,38 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
               return (
                 <div key={u.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
                   <span className="w-32 shrink-0 font-semibold text-slate-800">{u.name.split(" ")[0]}</span>
-                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <form action={startBreakFor} className="ml-auto flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="userId" value={u.id} />
+                    {present && (
+                      <input type="time" name="at" title="Optional — the time it happened (leave blank = now)" className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs" />
+                    )}
                     {st === "break" ? (
                       <>
                         <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">☕ On break</span>
-                        <form action={endBreakFor}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="break" /><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back</button></form>
+                        <button formAction={endBreakFor} name="kind" value="break" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back</button>
                       </>
                     ) : st === "lunch" ? (
                       <>
                         <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-800">🍔 On lunch</span>
-                        <form action={endBreakFor}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="lunch" /><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back</button></form>
+                        <button formAction={endBreakFor} name="kind" value="lunch" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back</button>
                       </>
                     ) : present ? (
                       <>
-                        <form action={startBreakFor}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="break" /><button className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200">☕ Break</button></form>
-                        <form action={startBreakFor}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="kind" value="lunch" /><button className="rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-800 hover:bg-orange-200">🍔 Lunch</button></form>
+                        <button formAction={startBreakFor} name="kind" value="break" className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200">☕ Break</button>
+                        <button formAction={startBreakFor} name="kind" value="lunch" className="rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-800 hover:bg-orange-200">🍔 Lunch</button>
                       </>
                     ) : (
                       <span className="text-xs text-slate-400">off / clocked out</span>
                     )}
                     {present && (
-                      <form action={endShiftFor}><input type="hidden" name="userId" value={u.id} /><button className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-200">🔴 Off for the day</button></form>
+                      <button formAction={endShiftFor} className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-200">🔴 Off for the day</button>
                     )}
-                  </div>
+                  </form>
                 </div>
               );
             })}
           </Card>
-          <p className="mt-1.5 text-[11px] text-slate-400">Break/lunch records the punch live (unpaid; first 15-min break is paid). <b>&quot;Off for the day&quot;</b> clocks them out — use it when someone leaves early or goes home sick, so they stop showing online. They can still start/stop their own on their time card.</p>
+          <p className="mt-1.5 text-[11px] text-slate-400">Set the <b>time</b> to log when it actually happened (e.g. they went on break at 10:00) — or leave it blank to use now. Break/lunch is unpaid (first 15-min break is paid). <b>&quot;Off for the day&quot;</b> clocks them out so they stop showing online. They can still start/stop their own on their time card.</p>
         </section>
       )}
 

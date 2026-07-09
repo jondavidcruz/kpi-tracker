@@ -16,6 +16,7 @@ import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
 import { rollupResearchKpis, orgToday } from "@/lib/research-kpis";
 import { migrateScoreById } from "@/lib/recording-migrate";
+import { zonedTime } from "@/lib/shift";
 import { writeDay as crmWriteDay, writeOpps as crmWriteOpps, writeActivity as crmWriteActivity } from "@/lib/crm-sync";
 import { after } from "next/server";
 
@@ -2197,6 +2198,13 @@ export async function savePayDiscrepancy(formData: FormData) {
 }
 
 const HHMM = /^(\d{1,2}):(\d{2})$/;
+/** Convert an "HH:MM" manager-entered time to a punch timestamp today (org tz), or undefined. */
+function punchAtFrom(atStr: string, date: string, tz: string): Date | undefined {
+  const mins = toMinutes(atStr);
+  if (mins === null) return undefined;
+  return zonedTime(date, Math.floor(mins / 60), mins % 60, tz);
+}
+
 function toMinutes(s: string): number | null {
   const m = HHMM.exec(s.trim());
   if (!m) return null;
@@ -2218,7 +2226,8 @@ export async function startBreakFor(formData: FormData) {
   const date = todayStr(settings.orgTimezone);
   const last = await db.punch.findFirst({ where: { userId, date }, orderBy: { at: "desc" }, select: { kind: true } });
   if (last && (last.kind === "break_start" || last.kind === "lunch_start" || last.kind === "meeting_start")) return; // already on a break/lunch
-  await db.punch.create({ data: { userId, kind: `${kind}_start`, date } });
+  const at = punchAtFrom(String(formData.get("at") ?? ""), date, settings.orgTimezone); // optional manager-entered start time
+  await db.punch.create({ data: { userId, kind: `${kind}_start`, date, ...(at ? { at } : {}) } });
   const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
   const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
   sendTimecardChat(`${kind === "lunch" ? "🍔" : "☕"} ${u?.name ?? "Team member"} is on ${kind} (logged by ${me!.name.split(" ")[0]}) · ${time}`).catch(() => {});
@@ -2235,7 +2244,8 @@ export async function endBreakFor(formData: FormData) {
   const date = todayStr(settings.orgTimezone);
   const last = await db.punch.findFirst({ where: { userId, date }, orderBy: { at: "desc" }, select: { kind: true } });
   if (!last || last.kind !== `${kind}_start`) return; // not currently on that break/lunch
-  await db.punch.create({ data: { userId, kind: `${kind}_end`, date } });
+  const at = punchAtFrom(String(formData.get("at") ?? ""), date, settings.orgTimezone); // optional time they got back
+  await db.punch.create({ data: { userId, kind: `${kind}_end`, date, ...(at ? { at } : {}) } });
   const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
   const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
   sendTimecardChat(`🟢 ${u?.name ?? "Team member"} back from ${kind} · ${time}`).catch(() => {});
@@ -2254,7 +2264,8 @@ export async function endShiftFor(formData: FormData) {
   const date = todayStr(settings.orgTimezone);
   const last = await db.punch.findFirst({ where: { userId, date }, orderBy: { at: "desc" }, select: { kind: true } });
   if (last?.kind === "out") return; // already ended for the day
-  await db.punch.create({ data: { userId, kind: "out", date } });
+  const at = punchAtFrom(String(formData.get("at") ?? ""), date, settings.orgTimezone); // optional time they left
+  await db.punch.create({ data: { userId, kind: "out", date, ...(at ? { at } : {}) } });
   const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
   const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
   sendTimecardChat(`🔴 ${u?.name ?? "Team member"} is off for the rest of the day${reason ? ` (${reason})` : ""} — ended by ${me!.name.split(" ")[0]} · ${time}`).catch(() => {});
@@ -2309,8 +2320,9 @@ export async function startOutage(formData: FormData) {
   // real drop time as the outage start (so the reported time matches the detected disconnect).
   const u0 = await db.user.findUnique({ where: { id: userId }, select: { name: true, lastSeenAt: true } });
   const detectedMin = u0?.lastSeenAt ? localMinOf(u0.lastSeenAt.getTime(), settings.orgTimezone) : null;
-  const startMin = detectedMin !== null && now - detectedMin >= 5 ? detectedMin : now;
-  await db.outage.create({ data: { userId, date, kind, startMin, endMin: now, detectedMin: detectedMin ?? undefined, ongoing: true, reportedBy: me!.name } });
+  const enteredMin = toMinutes(String(formData.get("at") ?? "")); // optional manager-entered start time
+  const startMin = enteredMin ?? (detectedMin !== null && now - detectedMin >= 5 ? detectedMin : now);
+  await db.outage.create({ data: { userId, date, kind, startMin, endMin: Math.max(startMin + 1, now), detectedMin: detectedMin ?? undefined, ongoing: true, reportedBy: me!.name } });
   const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
   const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
   sendTimecardChat(`🔴 ${u?.name ?? "Team member"} is OFFLINE — ${kind === "power" ? "⚡ power" : kind === "internet" ? "📶 internet"  : ""} outage · ${time}`).catch(() => {});
