@@ -517,21 +517,21 @@ export default function UnderwritingCalculator() {
       : "";
 
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(r.title)}</title></head>
-      <body style="font-family:system-ui,Arial,sans-serif;color:#0f172a;max-width:760px;margin:24px auto;padding:0 18px">
+      <body style="font-family:system-ui,Arial,sans-serif;color:#0f172a;max-width:760px;margin:24px auto;padding:0 18px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <div style="border-bottom:3px solid #0b1f3a;padding-bottom:8px;margin-bottom:6px">
           <div style="font-weight:800;font-size:18px;color:#0b1f3a">Freedom Offers — War Room</div>
           <div style="color:#64748b;font-size:13px">${esc(r.title)} · ${new Date().toLocaleDateString()}</div>
         </div>
         ${r.comps ? `<div style="margin:10px 0 12px;color:#334155;line-height:1.5;font-size:13px">${r.comps}</div>` : ""}
-        <div style="background:linear-gradient(135deg,#065f46,#059669);border-radius:14px;padding:18px 22px;margin:0 0 14px;text-align:center;color:#fff">
+        <div style="background:#fff5f5;border:2px solid #fecaca;border-radius:14px;padding:18px 22px;margin:0 0 14px;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">
           ${(rLo && rHi) ? `
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a7f3d0">🎯 Negotiation range — open low, work up</div>
-          <div style="font-size:40px;font-weight:800;line-height:1.1;margin-top:4px">${esc(money(rLo))} <span style="color:#a7f3d0">→</span> ${esc(money(rHi))}</div>
-          <div style="font-size:12px;color:#d1fae5;margin-top:5px">Open at ${esc(money(rLo))} · never go past ${esc(money(rHi))}</div>
-          <div style="margin-top:11px;padding-top:9px;border-top:1px solid rgba(255,255,255,.25);font-size:13px;color:#ecfdf5">${esc(heroLabel)}: <b style="font-size:17px">${esc(money(heroVal))}</b> <span style="color:#a7f3d0">— your ceiling, never past it</span></div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#b91c1c">🎯 Negotiation range — open low, work up</div>
+          <div style="font-size:40px;font-weight:800;line-height:1.1;margin-top:4px;color:#dc2626">${esc(money(rLo))} <span style="color:#f87171">→</span> ${esc(money(rHi))}</div>
+          <div style="font-size:12px;color:#991b1b;margin-top:5px">Open at ${esc(money(rLo))} · never go past ${esc(money(rHi))}</div>
+          <div style="margin-top:11px;padding-top:9px;border-top:1px solid #fecaca;font-size:13px;color:#334155">${esc(heroLabel)}: <b style="font-size:17px;color:#dc2626">${esc(money(heroVal))}</b> <span style="color:#b91c1c">— your ceiling, never past it</span></div>
           ` : `
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a7f3d0">🎯 ${esc(heroLabel)}</div>
-          <div style="font-size:42px;font-weight:800;line-height:1.1;margin-top:3px">${esc(money(heroVal))}</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#b91c1c">🎯 ${esc(heroLabel)}</div>
+          <div style="font-size:42px;font-weight:800;line-height:1.1;margin-top:3px;color:#dc2626">${esc(money(heroVal))}</div>
           `}
         </div>
         ${conflict}
