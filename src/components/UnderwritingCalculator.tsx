@@ -284,8 +284,24 @@ export default function UnderwritingCalculator() {
   // fee. No repairs / ARV%: the developer tears down and builds. MAO = dispo − spread.
   const devLux = (v("devLux") || "1") === "1"; // area has $2M+ luxury new builds? (default yes)
   const devWater = v("devWater") === "1";   // waterfront lot (compare only to waterfront)?
-  const devMethods = [n("devM1"), n("devM2"), n("devM3")].filter((x) => x > 0);
-  const devDispo = devMethods.length ? Math.round(devMethods.reduce((s, x) => s + x, 0) / devMethods.length) : 0;
+  // Lot-size → acres converter (1 acre = 43,560 sq ft), used for the subject + every comp.
+  const ACRE_SF = 43560;
+  const toAcres = (val: number, unit: string) => (unit === "sqft" ? val / ACRE_SF : val);
+  const acresLabel = (val: number, unit: string) => !(val > 0) ? "" : unit === "sqft"
+    ? `${val.toLocaleString()} sq ft  =  ${(val / ACRE_SF).toFixed(2)} acres`
+    : `${val} acres  =  ${Math.round(val * ACRE_SF).toLocaleString()} sq ft`;
+  const devSubjAcres = toAcres(n("devLotSize"), v("devLotUnit") || "acres");
+  // Comps: for each, what the DEVELOPER paid for the raw lot ÷ that lot's size = $/acre. We use
+  // the developer's PURCHASE price (from the lot's sale history), NOT the current/sold price.
+  const devComp = (i: number) => {
+    const price = n(`devC${i}Price`);
+    const acres = toAcres(n(`devC${i}Lot`), v(`devC${i}Unit`) || "acres");
+    return { price, acres, perAcre: acres > 0 && price > 0 ? Math.round(price / acres) : 0 };
+  };
+  const devCompRows = [devComp(1), devComp(2), devComp(3)];
+  const devPerAcres = devCompRows.map((c) => c.perAcre).filter((x) => x > 0);
+  const devAvgPerAcre = devPerAcres.length ? Math.round(devPerAcres.reduce((s, x) => s + x, 0) / devPerAcres.length) : 0;
+  const devDispo = devAvgPerAcre > 0 && devSubjAcres > 0 ? Math.round(devAvgPerAcre * devSubjAcres) : 0;
   const devSpread = n("devSpread") || 100000; // Lux Blueprint target spread: $100k–$150k
   const devMao = devDispo > 0 ? Math.max(0, devDispo - devSpread) : 0;
   const devAnchorPct = v("devAnchorPct") || "8";
@@ -405,19 +421,21 @@ export default function UnderwritingCalculator() {
     if (tab === "developer") {
       return {
         title: "Developer Analysis",
-        comps: `<strong>Subject:</strong> ${esc(addr)}${v("devLot") ? `<br><strong>Lot:</strong> ${esc(v("devLot"))}${v("devBuild") ? ` · buildable ${esc(v("devBuild"))}` : ""}${devWater ? " · waterfront" : ""}` : ""}`,
+        comps: `<strong>Subject:</strong> ${esc(addr)}${devSubjAcres > 0 ? `<br><strong>Lot:</strong> ${devSubjAcres.toFixed(2)} acres` : ""}${v("devBuild") ? ` · buildable ${esc(v("devBuild"))}` : ""}${devWater ? " · waterfront" : ""}`,
         rows: [
-          ["Method 1 — new builds for sale (land)", money(n("devM1"))],
-          ["Method 2 — new builds sold (land)", money(n("devM2"))],
-          ["Method 3 — teardowns sold (land)", money(n("devM3"))],
-          ["🎯 Dispo price (land value)", money(devDispo)],
+          ...devCompRows
+            .map((c, idx) => (c.perAcre > 0 ? ([`Comp ${idx + 1} — ${(v(`devC${idx + 1}Status`) || "sold") === "forsale" ? "for sale" : "sold"} · developer $/acre`, `${money(c.perAcre)}/acre`] as [string, string]) : null))
+            .filter((r): r is [string, string] => r !== null),
+          ["Avg developer $/acre", devAvgPerAcre > 0 ? `${money(devAvgPerAcre)}/acre` : "—"],
+          ["Subject lot", devSubjAcres > 0 ? `${devSubjAcres.toFixed(2)} acres` : "—"],
+          ["🎯 Dispo price (land value = $/acre × lot)", money(devDispo)],
           ["− Spread (your fee target)", money(devSpread)],
           ["🎯 Developer MAO (max offer to seller)", money(devMao)],
           [`Anchor / opening (${devAnchorPct}% below MAO)`, money(devAnchor)],
           ["Negotiation range", `${money(devAnchor)} → ${money(devMao)}`],
           ["Your fee at the MAO", money(devFeeAtMao)],
         ],
-        note: "Land for luxury new builds. Value the LOT from 3 comp methods (the developer's lot-purchase price, grown for market appreciation), average to the dispo price, then subtract a $100–150k spread — that spread is your fee. No repairs: the buyer tears down. Waterfront lots use waterfront comps only. Open at the anchor, negotiate up to the MAO — never past it.",
+        note: "Land for luxury new builds. Comp for-sale + sold lots nearby by LOT SIZE, using what the DEVELOPER paid for each raw lot (from its sale history — NOT the current sold price, which includes the build). Average $/acre × the subject's acreage = the land value; subtract a $100–150k spread for your fee. No repairs: the buyer tears down. Waterfront lots use waterfront comps only. Open at the anchor, negotiate up to the MAO — never past it.",
       };
     }
     if (tab === "novation") {
@@ -823,15 +841,41 @@ export default function UnderwritingCalculator() {
                 </select>
               </label>
               <Field k="devAsk" label="Seller's asking price ($)" prefix="$" placeholder="1,250,000" req="opt" />
-              <Field k="devLot" label="Lot size (e.g. 0.42 ac)" req="opt" />
-              <Field k="devBuild" label="Buildable area (after setbacks / cul-de-sac)" span={2} req="opt" />
-              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 Value the <b>buildable</b> land, not the paper lot — a cul-de-sac curve or setback can cut usable area a lot. On a main road (3+ lanes or yellow center lines)? It&apos;s worth less.</p>
+              {/* Subject lot size + auto acres ↔ sq ft converter */}
+              <div className="sm:col-span-2 grid grid-cols-3 gap-2">
+                <Field k="devLotSize" label="Subject lot size" placeholder="0.42" req="good" span={2} />
+                <label><span className="mb-0.5 block text-[11px] font-semibold text-emerald-600">Unit</span>
+                  <select value={v("devLotUnit") || "acres"} onChange={set("devLotUnit")} className={`${inputCls} border-emerald-300`}>
+                    <option value="acres">acres</option><option value="sqft">sq ft</option>
+                  </select>
+                </label>
+              </div>
+              {n("devLotSize") > 0 && <p className="sm:col-span-2 -mt-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-100">📐 {acresLabel(n("devLotSize"), v("devLotUnit") || "acres")}</p>}
+              <Field k="devBuild" label="Buildable area after setbacks / cul-de-sac — optional" span={2} req="opt" />
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 Value the <b>buildable</b> land, not the paper lot. On a main road (3+ lanes / yellow center lines)? It&apos;s worth less.</p>
 
-              <div className={goodDiv}>🟢 Land value — the 3 comp methods (enter each method&apos;s average lot price, grown to today)</div>
-              <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">For each method: find the developer&apos;s LOT-purchase price (Zillow price history, before they built), average a few, and bump for market growth. The three should land close together.</p>
-              <Field k="devM1" label="① New builds FOR SALE — avg land $" prefix="$" span={2} req="good" />
-              <Field k="devM2" label="② New builds SOLD — avg land $" prefix="$" span={2} req="good" />
-              <Field k="devM3" label="③ Teardowns SOLD — avg land $" prefix="$" span={2} req="good" />
+              <div className={goodDiv}>🟢 Comps — what the DEVELOPER bought each lot for, by lot size</div>
+              <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">Pull for-sale + sold comps near the subject. For each, open its <b>sale history</b> and use what the developer <b>PAID for the raw lot</b> before they built — <b>not</b> the current/sold price (that includes the build). Enter that price + the lot size; we turn it into $/acre and apply it to the subject lot. Year built isn&apos;t used in the math — it&apos;s just a double-check.</p>
+              {[1, 2, 3].map((i) => {
+                const c = devComp(i);
+                return (
+                  <div key={i} className="sm:col-span-2 rounded-lg border border-emerald-100 bg-emerald-50/30 p-2">
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-emerald-700">Comp {i}</span>
+                      <select value={v(`devC${i}Status`) || "sold"} onChange={set(`devC${i}Status`)} className="rounded border border-emerald-200 bg-white px-1.5 py-0.5 text-[11px]">
+                        <option value="sold">Sold</option><option value="forsale">For sale</option>
+                      </select>
+                      {c.perAcre > 0 && <span className="ml-auto rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{money(c.perAcre)}/acre</span>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                      <label className="col-span-2"><span className="mb-0.5 block text-[10px] font-semibold text-emerald-600">Developer bought lot for ($)</span><input inputMode="decimal" value={v(`devC${i}Price`)} onChange={set(`devC${i}Price`)} placeholder="raw-lot purchase $" className={inputCls} /></label>
+                      <label><span className="mb-0.5 block text-[10px] font-semibold text-emerald-600">Lot size</span><input inputMode="decimal" value={v(`devC${i}Lot`)} onChange={set(`devC${i}Lot`)} placeholder="0.40" className={inputCls} /></label>
+                      <label><span className="mb-0.5 block text-[10px] font-semibold text-emerald-600">Unit</span><select value={v(`devC${i}Unit`) || "acres"} onChange={set(`devC${i}Unit`)} className={inputCls}><option value="acres">acres</option><option value="sqft">sq ft</option></select></label>
+                      <label className="col-span-2"><span className="mb-0.5 block text-[10px] font-semibold text-slate-400">Year built (double-check only)</span><input value={v(`devC${i}Yr`)} onChange={set(`devC${i}Yr`)} placeholder="optional" className={inputCls} /></label>
+                    </div>
+                  </div>
+                );
+              })}
 
               <div className={optDiv}>Set your fee spread + opening</div>
               <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Spread below dispo = your fee (Lux Blueprint target $100k–150k)</span>
@@ -1037,10 +1081,10 @@ export default function UnderwritingCalculator() {
           {tab === "developer" && (
             <>
               {!devLux && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-300">🚫 No $2M+ luxury new builds here → no developer demand. Mark this deal dead.</div>}
-              <Res label="① New builds for sale (land)" value={money(n("devM1"))} tone="muted" />
-              <Res label="② New builds sold (land)" value={money(n("devM2"))} tone="muted" />
-              <Res label="③ Teardowns sold (land)" value={money(n("devM3"))} tone="muted" />
-              <Res label="🎯 Dispo price (land value)" value={money(devDispo)} tone={devDispo > 0 ? "navy" : "bad"} big />
+              <Res label="Subject lot" value={devSubjAcres > 0 ? `${devSubjAcres.toFixed(2)} acres` : "—"} tone="muted" />
+              {[1, 2, 3].map((i) => { const c = devComp(i); return c.perAcre > 0 ? <Res key={i} label={`Comp ${i} — ${(v(`devC${i}Status`) || "sold") === "forsale" ? "for sale" : "sold"} (developer $/acre)`} value={`${money(c.perAcre)}/acre`} tone="muted" /> : null; })}
+              <Res label="Avg developer $/acre" value={devAvgPerAcre > 0 ? `${money(devAvgPerAcre)}/acre` : "—"} tone={devAvgPerAcre > 0 ? "navy" : "bad"} />
+              <Res label="🎯 Dispo price (land value = $/acre × lot)" value={money(devDispo)} tone={devDispo > 0 ? "navy" : "bad"} big />
               <Res label="− Spread (your fee)" value={money(devSpread)} tone="muted" />
               <Res label="🎯 Developer MAO (max offer to seller)" value={money(devMao)} tone={devMao > 0 ? "navy" : "bad"} big />
               {devDispo > 0 && <Res label="Sanity check" value={`fee ${money(devFeeAtMao)} · ${devSaneWord}`} tone={devSaneTone} />}
