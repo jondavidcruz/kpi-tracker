@@ -284,6 +284,7 @@ export default function UnderwritingCalculator() {
   // fee. No repairs / ARV%: the developer tears down and builds. MAO = dispo − spread.
   const devLux = (v("devLux") || "1") === "1"; // area has $2M+ luxury new builds? (default yes)
   const devWater = v("devWater") === "1";   // waterfront lot (compare only to waterfront)?
+  const devView = v("devView") === "1";     // view lot — hilltop / ocean / city view (compare only to same-view lots)
   // Lot-size → acres converter (1 acre = 43,560 sq ft), used for the subject + every comp.
   const ACRE_SF = 43560;
   const toAcres = (val: number, unit: string) => (unit === "sqft" ? val / ACRE_SF : val);
@@ -421,7 +422,7 @@ export default function UnderwritingCalculator() {
     if (tab === "developer") {
       return {
         title: "Developer Analysis",
-        comps: `<strong>Subject:</strong> ${esc(addr)}${devSubjAcres > 0 ? `<br><strong>Lot:</strong> ${devSubjAcres.toFixed(2)} acres` : ""}${v("devBuild") ? ` · buildable ${esc(v("devBuild"))}` : ""}${devWater ? " · waterfront" : ""}`,
+        comps: `<strong>Subject:</strong> ${esc(addr)}${devSubjAcres > 0 ? `<br><strong>Lot:</strong> ${devSubjAcres.toFixed(2)} acres` : ""}${v("devBuild") ? ` · buildable ${esc(v("devBuild"))}` : ""}${devWater ? " · waterfront" : ""}${devView ? " · view/hilltop" : ""}`,
         rows: [
           ...devCompRows
             .map((c, idx) => (c.perAcre > 0 ? ([`Comp ${idx + 1} — ${(v(`devC${idx + 1}Status`) || "sold") === "forsale" ? "for sale" : "sold"} · developer $/acre`, `${money(c.perAcre)}/acre`] as [string, string]) : null))
@@ -840,6 +841,13 @@ export default function UnderwritingCalculator() {
                   <option value="1">Yes — use ONLY waterfront comps</option>
                 </select>
               </label>
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">View lot? (hilltop / ocean / city view)</span>
+                <select value={v("devView")} onChange={set("devView")} className={inputCls}>
+                  <option value="">No — standard lot</option>
+                  <option value="1">Yes — use ONLY comps with the same view / hilltop</option>
+                </select>
+              </label>
+              {devView && <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">👀 A view/hilltop drives a big price premium — every comp above must be the same style AND the same view (a flat lot won&apos;t compare).</p>}
               <Field k="devAsk" label="Seller's asking price ($)" prefix="$" placeholder="1,250,000" req="opt" />
               {/* Subject lot size + auto acres ↔ sq ft converter */}
               <div className="sm:col-span-2 grid grid-cols-3 gap-2">
@@ -1100,6 +1108,7 @@ export default function UnderwritingCalculator() {
               {devMao > 0 && <OfferLadder rungs={ladder(devAnchor, devMao)} />}
               {devOverAsk > 0 && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-200">Seller asking {money(devAsk)} — {money(devOverAsk)} over your max. If they won&apos;t come down, it&apos;s likely dead.</div>}
               {devWater && <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 text-[11px] text-sky-700 ring-1 ring-sky-200">🌊 Waterfront — make sure every comp above is also waterfront, or the number will be too high.</div>}
+              {devView && <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 text-[11px] text-sky-700 ring-1 ring-sky-200">👀 View / hilltop — make sure every comp is the same style AND the same view (hilltop/ocean/city). A flat or no-view lot will pull the number off.</div>}
             </>
           )}
           {tab === "cash_land" && (
