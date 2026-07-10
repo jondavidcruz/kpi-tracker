@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 
 const TABS = [
   { key: "assignment", label: "Assignment", emoji: "🤝", blurb: "Cash offer. MAO = (ARV × market %) − repairs − your fee. The market % already covers the flipper's carry + profit. Anchor opens below MAO." },
@@ -169,25 +169,28 @@ export default function UnderwritingCalculator() {
   const [f, setF] = useState<Record<string, string>>({});
   const v = (k: string) => f[k] ?? "";
   const n = (k: string) => num(v(k));
-  const setV = (k: string, val: string) => setF((p) => ({ ...p, [k]: val }));
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV(k, e.target.value);
-
-  // ── Comp timer (dispo): time how long an underwrite takes. Starts on tap; auto-stops on
-  // export or once the active tab's core fields are all in. ──
+  // ── Comp timer (dispo): every underwrite is timed. It auto-starts the moment she edits any
+  // field and only stops when she exports the offer — nobody can skip timing a comp. ──
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerStart, setTimerStart] = useState<number | null>(null);
   const [timerNow, setTimerNow] = useState(0);
-  const [timerFinal, setTimerFinal] = useState<number | null>(null); // frozen seconds when it stops
-  const armedRef = useRef(false); // field-based auto-stop only fires if the offer wasn't already ready at Start
+  const [timerFinal, setTimerFinal] = useState<number | null>(null); // frozen seconds after export
   useEffect(() => {
     if (!timerRunning) return;
     const id = setInterval(() => setTimerNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [timerRunning]);
+  const startTimer = () => { const t = Date.now(); setTimerStart(t); setTimerNow(t); setTimerFinal(null); setTimerRunning(true); };
+  // First edit of a fresh comp auto-starts the clock — nothing to press. Won't re-fire once a
+  // comp has been exported/finalized; "Time another" resets it for the next one.
+  const autoStartTimer = () => { if (!timerRunning && timerStart == null && timerFinal == null) startTimer(); };
   const stopTimer = () => setTimerRunning((run) => { if (run && timerStart != null) setTimerFinal(Math.max(0, Math.round((Date.now() - timerStart) / 1000))); return false; });
-  const resetTimer = () => { setTimerRunning(false); setTimerStart(null); setTimerFinal(null); armedRef.current = false; };
+  const resetTimer = () => { setTimerRunning(false); setTimerStart(null); setTimerFinal(null); };
   const timerElapsed = timerRunning && timerStart != null ? Math.max(0, Math.round((timerNow - timerStart) / 1000)) : (timerFinal ?? 0);
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  const setV = (k: string, val: string) => { setF((p) => ({ ...p, [k]: val })); autoStartTimer(); };
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV(k, e.target.value);
 
   // Additional-cost rows (cash-for-keys, eviction, liens…) — 1 by default, "+ add" for more.
   const [aExtraN, setAExtraN] = useState(1);
@@ -332,26 +335,6 @@ export default function UnderwritingCalculator() {
   const rGrossYield = rPrice > 0 ? (rGrossYr / rPrice) * 100 : 0;
   const rOnePct = rPrice > 0 ? (rRent / rPrice) * 100 : 0;             // the "1% rule"
   const rMaxOffer = rTargetCap > 0 ? rNoi / (rTargetCap / 100) : 0;    // price that hits the target cap
-
-  // Core fields for the active tab all in (a valid offer exists)? Drives the comp-timer auto-stop.
-  const offerReady = (
-    tab === "assignment" ? arv > 0 && repairs > 0 && cashMao > 0 :
-    tab === "developer" ? devMao > 0 :
-    tab === "novation" ? nList > 0 && novMao > 0 :
-    tab === "flip" ? arv > 0 && fMao > 0 :
-    tab === "creative" ? cMargin > 0 :
-    tab === "rental" ? rMaxOffer > 0 :
-    mktFee > 0
-  );
-  const startTimer = () => {
-    const t = Date.now();
-    setTimerStart(t); setTimerNow(t); setTimerFinal(null); setTimerRunning(true);
-    armedRef.current = !offerReady; // if the offer's already computed, only stop on export / manual
-  };
-  useEffect(() => {
-    if (timerRunning && offerReady && armedRef.current) stopTimer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offerReady, timerRunning]);
 
   // 3-rung offer ladder consistent with our open-low-work-up model: Open (the anchor) →
   // Target (midpoint) → Max (the MAO). All ascending, never above the MAO.
@@ -685,27 +668,23 @@ export default function UnderwritingCalculator() {
         <input value={v("subject")} onChange={set("subject")} placeholder="123 Main St, San Diego, CA 92101" className={`${inputCls} w-full`} />
       </div>
 
-      {/* Comp timer — time how long an underwrite takes; auto-stops on export or when the offer's ready */}
+      {/* Comp timer — auto-starts on the first field edit; only stops when the offer is exported */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-slate-900 p-4 text-white">
         <span className="text-sm font-semibold">⏱️ Comp timer</span>
-        <span className={`rounded-lg px-3 py-1 font-mono text-2xl font-bold tabular-nums ${timerRunning ? "bg-emerald-500/25 text-emerald-200" : timerFinal != null ? "bg-emerald-500/25 text-emerald-200" : "bg-white/10 text-white"}`}>{mmss(timerElapsed)}</span>
+        <span className={`rounded-lg px-3 py-1 font-mono text-2xl font-bold tabular-nums ${timerRunning || timerFinal != null ? "bg-emerald-500/25 text-emerald-200" : "bg-white/10 text-white"}`}>{mmss(timerElapsed)}</span>
         {!timerRunning && timerFinal == null && (
-          <button type="button" onClick={startTimer} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold hover:bg-emerald-600">▶ Start comping</button>
+          <span className="text-xs text-slate-300">Starts automatically the moment you enter your first field. It runs until you <b>Export to CRM</b>.</span>
         )}
         {timerRunning && (
-          <>
-            <span className="text-xs text-emerald-300">running… stops on export or when the offer&apos;s ready</span>
-            <button type="button" onClick={stopTimer} className="ml-auto rounded-lg bg-white/15 px-3 py-2 text-sm font-semibold hover:bg-white/25">⏹ Stop</button>
-          </>
+          <span className="text-xs font-semibold text-emerald-300">● Timing… stops when you Export to CRM</span>
         )}
         {!timerRunning && timerFinal != null && (
           <>
             <span className="text-sm font-semibold text-emerald-300">✓ Comped in {mmss(timerFinal)}</span>
-            <button type="button" onClick={startTimer} className="ml-auto rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold hover:bg-emerald-600">▶ Time another</button>
-            <button type="button" onClick={resetTimer} className="rounded-lg bg-white/15 px-3 py-2 text-sm font-semibold hover:bg-white/25">↻ Reset</button>
+            <button type="button" onClick={resetTimer} className="ml-auto rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold hover:bg-emerald-600">▶ Time another comp</button>
           </>
         )}
-        <span className="w-full text-[11px] text-slate-400">Press Start when you begin. It stops automatically when you export the offer — or once all the required fields are in — so you can see how long each underwrite takes.</span>
+        <span className="w-full text-[11px] text-slate-400">Every underwrite is timed automatically — it starts when you begin entering fields and stops when you export the offer. The time + comp date print at the bottom of the PDF.</span>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -1109,7 +1088,7 @@ export default function UnderwritingCalculator() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={exportPdf} className="rounded-lg bg-brand-gold px-5 py-2.5 text-sm font-bold text-brand-navy hover:opacity-90">📄 Export PDF (for the CRM)</button>
+        <button type="button" onClick={exportPdf} className="rounded-lg bg-brand-gold px-5 py-2.5 text-sm font-bold text-brand-navy hover:opacity-90">📄 Export to CRM (PDF) — stops the timer</button>
         <span className="text-[11px] text-slate-400">Opens a clean report — choose “Save as PDF”, then upload to REI Reply.</span>
       </div>
       <p className="text-[11px] text-slate-400">Estimates only — confirm comps, repair scope, and title before making an offer. Next up: Wholetail, Flip, and Luxury assignment tabs.</p>
