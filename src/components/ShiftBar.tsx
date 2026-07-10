@@ -7,10 +7,11 @@ const COLOR: Record<BarState, string> = {
   meeting: "bg-violet-500",
   appointment: "bg-indigo-500",
   errand: "bg-sky-500",
+  training: "bg-teal-500",
   outage: "bg-red-500",
   off: "bg-slate-200",
 };
-const LABEL: Record<BarState, string> = { work: "Working", break: "Break", lunch: "Lunch", meeting: "Meeting", appointment: "Appointment", errand: "Errand", outage: "Outage", off: "Off" };
+const LABEL: Record<BarState, string> = { work: "Working", break: "Break", lunch: "Lunch", meeting: "Meeting", appointment: "Appointment", errand: "Errand", training: "Training", outage: "Outage", off: "Off" };
 const fmtMin = (m: number) => { const h = Math.floor((m % 1440) / 60); const mm = m % 60; const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr}:${String(mm).padStart(2, "0")} ${am ? "AM" : "PM"}`; };
 
 // A techy, color-coded timeline of one person's day: clock-in → shift end, with each
@@ -44,7 +45,7 @@ export default function ShiftBar({ bar }: { bar: DayBar }) {
 export function ShiftBarLegend() {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
-      {(["work", "break", "lunch", "meeting", "appointment", "errand", "outage", "off"] as BarState[]).map((s) => (
+      {(["work", "break", "lunch", "meeting", "appointment", "errand", "training", "outage", "off"] as BarState[]).map((s) => (
         <span key={s} className="flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${COLOR[s]}`} /> {LABEL[s]}</span>
       ))}
     </div>

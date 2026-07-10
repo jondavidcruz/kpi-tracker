@@ -23,8 +23,8 @@ export default function BreakHistory({ timeline, tz, outages = [], compact = fal
         {segments.map((s, i) => {
           const limit = s.type === "break" ? 15 : s.type === "lunch" ? 60 : null; // 15-min break, 1-hr lunch; meetings/appts/errands uncapped
           const over = !s.endMs && limit != null && s.min > limit; // still on it AND past the limit
-          const base = s.type === "lunch" ? "bg-orange-100 text-orange-700" : s.type === "meeting" ? "bg-violet-100 text-violet-700" : s.type === "appointment" ? "bg-indigo-100 text-indigo-700" : s.type === "errand" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700";
-          const icon = s.type === "lunch" ? "🍽️" : s.type === "meeting" ? "📅" : s.type === "appointment" ? "🗓️" : s.type === "errand" ? "🚗" : "☕";
+          const base = s.type === "lunch" ? "bg-orange-100 text-orange-700" : s.type === "meeting" ? "bg-violet-100 text-violet-700" : s.type === "appointment" ? "bg-indigo-100 text-indigo-700" : s.type === "errand" ? "bg-sky-100 text-sky-700" : s.type === "training" ? "bg-teal-100 text-teal-700" : "bg-amber-100 text-amber-700";
+          const icon = s.type === "lunch" ? "🍽️" : s.type === "meeting" ? "📅" : s.type === "appointment" ? "🗓️" : s.type === "errand" ? "🚗" : s.type === "training" ? "🎓" : "☕";
           return (
             <span key={i} className={`rounded-full px-2 py-0.5 font-medium ${over ? "bg-red-100 font-bold text-red-700 ring-1 ring-red-300" : base}`}>
               {over ? "⚠️ " : ""}{icon} {fmt(s.startMs, tz)}{s.endMs ? `–${fmt(s.endMs, tz)}` : "…"} · {hm(s.min)}{s.endMs ? "" : over ? ` (ongoing — over ${limit}m)` : " (ongoing)"}

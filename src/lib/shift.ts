@@ -6,7 +6,7 @@
 // through nights, weekends, or a vacation — worked minutes are always capped at
 // the scheduled shift end (+ a short grace window for legitimate wrap-up).
 //
-// Team shift (org-local): Mon–Thu 8:00 AM–5:00 PM, Fri 8:00 AM–1:00 PM, Sat/Sun off.
+// Team shift (org-local): Mon–Thu 8:00 AM–5:00 PM, Fri 8:00 AM–2:00 PM (no lunch), Sat/Sun off.
 // Both start and end matter — the START is the pay floor (early clock-in is unpaid)
 // and the END bounds the tracking (a forgotten clock-out can't run past shift).
 // When the calendar feed lands, swap these for a per-person calendar lookup.
@@ -57,12 +57,12 @@ function firstName(who?: string | null): string {
 /**
  * Scheduled shift end (hour/min) for a date, or null on days with no shift.
  * Pass `who` (the person's name) to apply per-person exceptions — Marie ends at
- * 6:00 PM Mon–Thu. Everyone (incl. Marie) ends at 1:00 PM on the short Friday.
+ * 6:00 PM Mon–Thu. Everyone (incl. Marie) ends at 2:00 PM on the short Friday (no lunch).
  */
 export function shiftEndHour(dateStr: string, who?: string | null): { hour: number; min: number } | null {
   const dow = dowOf(dateStr);
   if (dow < 1 || dow > 5) return null; //                  Sat/Sun → off
-  if (dow === 5) return { hour: 13, min: 0 }; //            Fri     → 1:00 PM (whole team)
+  if (dow === 5) return { hour: 14, min: 0 }; //            Fri     → 2:00 PM (whole team, no lunch)
   if (firstName(who) === "marie") return { hour: 18, min: 0 }; // Marie Mon–Thu → 6:00 PM
   return { hour: 17, min: 0 }; //                           Mon–Thu → 5:00 PM
 }
