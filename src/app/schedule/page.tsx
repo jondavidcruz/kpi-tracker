@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser, daySegments, dayBar, type PresenceState } from "@/lib/presence";
 import { workCapAt, shiftEndLabel } from "@/lib/shift";
-import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage, startBreakFor, endBreakFor, endShiftFor, punch } from "@/app/actions";
+import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage, startBreakFor, endBreakFor, endShiftFor, logCompletedBreak, punch } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
@@ -393,11 +393,25 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                       <button formAction={endShiftFor} className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-200">🔴 Off for the day</button>
                     )}
                   </form>
+                  {present && st !== "break" && st !== "lunch" && (
+                    <details className="w-full">
+                      <summary className="cursor-pointer text-[11px] font-medium text-slate-400 hover:text-brand-navy">＋ Log a past break they forgot (with the time they came back)</summary>
+                      <form action={logCompletedBreak} className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <input type="hidden" name="userId" value={u.id} />
+                        <span className="text-[11px] text-slate-500">From</span>
+                        <input type="time" name="from" required className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs" />
+                        <span className="text-[11px] text-slate-500">back at</span>
+                        <input type="time" name="to" required className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs" />
+                        <button name="kind" value="break" className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200">Log break</button>
+                        <button name="kind" value="lunch" className="rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-800 hover:bg-orange-200">Log lunch</button>
+                      </form>
+                    </details>
+                  )}
                 </div>
               );
             })}
           </Card>
-          <p className="mt-1.5 text-[11px] text-slate-400">Set the <b>time</b> to log when it actually happened (e.g. they went on break at 10:00) — or leave it blank to use now. Break/lunch is unpaid (first 15-min break is paid). <b>&quot;Off for the day&quot;</b> clocks them out so they stop showing online. They can still start/stop their own on their time card.</p>
+          <p className="mt-1.5 text-[11px] text-slate-400">Set the <b>time</b> to log when it actually happened — on break now, type the time and hit <b>✓ Back</b> to record exactly when they returned; or leave it blank for now. Forgot a break entirely? Use <b>＋ Log a past break</b> to enter both when it started and when they came back. Break/lunch is unpaid (first 15-min break is paid). <b>&quot;Off for the day&quot;</b> clocks them out.</p>
         </section>
       )}
 

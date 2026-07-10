@@ -2319,6 +2319,28 @@ export async function endBreakFor(formData: FormData) {
   revalidatePath("/schedule"); revalidatePath("/timecard");
 }
 
+/** Manager: log a break/lunch that already happened AND ended — someone forgot to clock it.
+ *  Records both the start (from) and the came-back time (to) in one shot, so the whole
+ *  window is captured as unpaid time without them ever showing "on break" mid-fix. */
+export async function logCompletedBreak(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canTrackTime(me)) return; // managers + pay staff
+  const userId = String(formData.get("userId") ?? "");
+  const kind = String(formData.get("kind")) === "lunch" ? "lunch" : "break";
+  if (!userId) return;
+  const settings = await getSettings();
+  const date = todayStr(settings.orgTimezone);
+  const from = punchAtFrom(String(formData.get("from") ?? ""), date, settings.orgTimezone);
+  const to = punchAtFrom(String(formData.get("to") ?? ""), date, settings.orgTimezone);
+  if (!from || !to || to.getTime() <= from.getTime()) return; // need a valid window (came back after they left)
+  await db.punch.create({ data: { userId, kind: `${kind}_start`, date, at: from } });
+  await db.punch.create({ data: { userId, kind: `${kind}_end`, date, at: to } });
+  const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const fmt = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
+  sendTimecardChat(`${kind === "lunch" ? "🍔" : "☕"} ${u?.name ?? "Team member"} ${kind} ${fmt(from)}–${fmt(to)} (logged by ${me!.name.split(" ")[0]})`).catch(() => {});
+  revalidatePath("/schedule"); revalidatePath("/timecard");
+}
+
 /** Manager: end someone's shift for the day (clock them out) — e.g. they went home sick.
  *  Flips them to offline on the board and stops their worked-time clock. */
 export async function endShiftFor(formData: FormData) {
