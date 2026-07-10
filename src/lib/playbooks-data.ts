@@ -12,7 +12,7 @@ export interface Playbook {
   diagram?: string;              // key of an inline how-it-works diagram (assignment | double_close | subject_to | novation)
 }
 
-export const PLAYBOOK_CATEGORIES = ["Deal Analysis", "Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing"] as const;
+export const PLAYBOOK_CATEGORIES = ["Deal Analysis", "Scripts & Outreach", "Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing", "Training Library"] as const;
 
 export const PLAYBOOKS: Playbook[] = [
   {
@@ -205,6 +205,77 @@ export const PLAYBOOKS: Playbook[] = [
         "Both closings happen: A closes (you buy), B closes (they buy from you).",
       ] },
       { heading: "Rule of thumb", body: "Small or reasonable fee → assign it. Big spread or you want privacy → double close." },
+    ],
+  },
+  {
+    key: "k_pof_objection", title: "Objection Handler — “Can you show proof of funds?”", emoji: "💬", category: "Scripts & Outreach",
+    summary: "The exact way to answer a seller who asks for a proof of funds before signing — turn it into a trust-builder, not a red flag.",
+    pdfUrl: "/playbooks/resources/pof-objection-handler.pdf", pdfLabel: "one-page POF Objection Handler",
+    sections: [
+      { heading: "The situation", body: "A seller asks for a proof of funds before signing. Common with experienced sellers or anyone who's been burned before. It's a logical question with a logical answer — don't panic." },
+      { heading: "What to say", body: "“Absolutely — and great question. I'll have a proof of funds to you during the inspection period, and here's why. As soon as we go under contract, we start shopping lenders for the best rate. Lenders won't underwrite or issue quotes until there's a signed contract in place, so we need that first. Once we lock in the best option, we get the POF letter directly from that lender and send it right over. And to give you total peace of mind, we can write it right into the contract that a proof of funds will be provided during the inspection period — so it's not just my word, it's baked into the agreement and you're fully protected.”" },
+      { heading: "Why it works", bullets: [
+        "Positions you as a sophisticated buyer explaining a strategic financing process — not dodging.",
+        "Follows real lending logic: lenders genuinely require a signed contract before underwriting (true + verifiable).",
+        "Offering to write the POF commitment into the contract removes the risk from the seller's side.",
+        "Transparency about your process makes sellers more comfortable, not less.",
+      ] },
+      { heading: "Contract language to add", body: "“Buyer shall provide Seller with a Proof of Funds (POF) letter from an approved lender within the agreed-upon inspection period.”", tip: "Add that one clause to every contract and this objection disappears for good — it's handled before it's ever raised." },
+    ],
+  },
+  {
+    key: "k_seller_texting", title: "Seller Texting — the right way (SMS)", emoji: "📱", category: "Scripts & Outreach",
+    summary: "How to run a seller conversation over text like a pro — and how to present an offer over text so it reads as parity, not a discount.",
+    sections: [
+      { heading: "Mindset — texting is a channel, not a downgrade", body: "Some sellers only want to text, and that's fine — it's a fully viable path to a closed deal (30% of Lux Blueprint deals close without ever getting the seller on the phone). Many sophisticated, high-net-worth sellers actually prefer text: their time is limited and they screen calls. Don't assume a texter is unserious — in the luxury space it's often the opposite. Treat every text as a written record of your professionalism." },
+      { heading: "One clean message — never five one-liners", body: "Don't fire off five separate texts with one question each — it looks scattered and floods their phone, and many sellers stop responding. Group your questions into a single, well-formatted message." },
+      { heading: "The good example (copy this shape)", body: "“Hi [Seller First Name], I have a few quick questions so we can stay on the same page and make sure I cross all my T's and dot all my I's:\n1. Is the property on sewer or septic?\n2. Are there any easements or setbacks I should be aware of? (e.g. a utility or power easement.)\n3. On closing — how soon are you looking to close, and would you need any post-occupancy after close of escrow?\nAppreciate it. Happy to jump on a call any time as well if that's easier.” One message, numbered, easy to answer in one reply." },
+      { heading: "Rules of the road", bullets: [
+        "Always lead with their first name.",
+        "Group questions — never spam one-liners. Number or bullet them so they're easy to scan.",
+        "Proper grammar, capitalization, punctuation. No “u” or “r.”",
+        "Warm but professional — you're a buyer, not a friend.",
+        "Always leave the door open to a call without forcing one.",
+        "Reply during business hours when you can.",
+      ] },
+      { heading: "Presenting an offer over text — the template", body: "Use this every time; consistency builds credibility. The seller should understand it in five seconds:\n\nOur offer is outlined below:\nPURCHASE PRICE: $______\nEMD: $______ (Earnest Money Deposit)\nCOE: ______ (Close of Escrow)\nADDITIONAL TERMS: (if discussed)" },
+      { heading: "★ Drop this line every time", body: "“Please keep in mind these numbers are net to you. No commissions or closing costs on your end. This alone saves you 7–8%, so our offer is the same as if you had sold on-market for $X.”", tip: "This reframes your offer against what they'd actually walk away with on the open market — the difference between a seller seeing a discount and a seller seeing parity. (Real example: a $2,800,000 net offer was framed as the same as selling on-market for $3,024,000.)" },
+    ],
+  },
+  {
+    key: "k_dev_text_outreach", title: "Developer Text Outreach (cold SMS)", emoji: "🏗️", category: "Scripts & Outreach",
+    summary: "The first text to a developer whose build you admired — opens the relationship and gets their buy box, without sounding like an agent.",
+    sections: [
+      { heading: "The template", body: "“Hello,\n\nI recently came across a property your team built at (ADDRESS). Absolutely stunning work.\n\nI focus on acquiring off-market properties, and this is one of my key target markets. I wanted to see if you're currently open to new acquisition opportunities for your builds. If so, I'd love to learn more about your buy box so I can bring you deals that align with your criteria.\n\nI'm not an agent. I control the deals I put under contract. My goal is to build relationships with a select group of serious developers rather than publicly blasting opportunities. I value my partners' time and only share deals that truly fit their needs.\n\nIf this sounds like something you'd be interested in, I'd be happy to connect and learn more about what you're actively looking for.\n\nLooking forward to hearing from you.\n\nBest,\n[YOUR NAME] · [COMPANY NAME] · [PHONE NUMBER]”" },
+      { heading: "Why it works", bullets: [
+        "Leads with a specific, genuine compliment on a real project (ADDRESS) — not a mass blast.",
+        "“I'm not an agent. I control the deals I put under contract.” — the line that separates you from every wholesaler spamming them.",
+        "Exclusivity framing (“a select group of serious developers”) makes it feel like access, not a pitch.",
+        "The ask is small and easy: just learn their buy box → captures the criteria you need to match deals.",
+      ] },
+      { heading: "Make it real before you send", bullets: [
+        "Always drop in the actual ADDRESS of a build they did — no generic sends.",
+        "Fill in your real name, company, and phone. Never send with brackets left in.",
+        "Once they reply, get the buy box (areas, max per lot, build type) and log it in Vetted Buyers → Buyer Research.",
+      ], tip: "Their reply is the goal — the buy box. As soon as you have it, add them and their criteria so the deal-matcher can flag their deals automatically." },
+    ],
+  },
+  {
+    key: "k_flip_your_future", title: "Flip Your Future — Ryan Pineda (recommended reading)", emoji: "📘", category: "Training Library",
+    summary: "Our team study guide to Ryan Pineda's book on flipping houses — the mindset and the end-to-end process, summarized. (Read the full book for the detail.)",
+    sections: [
+      { heading: "What it is", body: "Flip Your Future by Ryan Pineda (© 2018) is a beginner-friendly walkthrough of building a house-flipping business from scratch — from mindset to finding, funding, fixing, and selling. This is a short in-house study guide to its framework; the full copyrighted book belongs to the author — read your own copy for the details and stories." },
+      { heading: "The arc of the book", bullets: [
+        "Journey & mindset (Ch 1–3) — why belief and the right mindset come before tactics; escaping the “normal job” trap.",
+        "Choosing a market (Ch 4) — pick where to operate deliberately, not by default.",
+        "The dream team (Ch 5) — the agent, contractor, lender, and title people you build around you.",
+        "Evaluating deals (Ch 6) — how to know a deal is a deal before you buy.",
+        "Free leads (Ch 7) & Paid leads (Ch 8) — where deals actually come from, low-cost first.",
+        "Making offers (Ch 9) — turning leads into contracts.",
+        "Construction (Ch 10) & The sale (Ch 11) — running the rehab and getting paid.",
+      ] },
+      { heading: "Why it's on our shelf", body: "It's the clearest plain-English version of the whole flip cycle — useful for anyone newer on the team to see how the pieces (leads → offers → rehab → sale) fit together, even though our lane is wholesaling/assignment, not flipping ourselves." },
+      { heading: "How we use it", body: "Read it as background on the buyer's side of a deal — it makes you sharper when you talk to the flippers and developers who buy from us, because you understand their math and their risks.", tip: "This is a study guide only, not the book. We don't host the full PDF here — grab the book from the team drive or your own copy." },
     ],
   },
 ];
