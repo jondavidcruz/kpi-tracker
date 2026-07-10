@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 /** Upload an image straight to Supabase Storage and expose its public URL via a
  *  hidden input named `name`, so a surrounding <form action={...}> can save it. */
-export default function ImageUpload({ name, current = "", label = "Upload image" }: { name: string; current?: string; label?: string }) {
+export default function ImageUpload({ name, current = "", label = "Upload image", endpoint = "/api/deck-image-upload", bucket = "deck-images" }: { name: string; current?: string; label?: string; endpoint?: string; bucket?: string }) {
   const [url, setUrl] = useState(current);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -18,11 +18,11 @@ export default function ImageUpload({ name, current = "", label = "Upload image"
     setBusy(true); setMsg("Uploading…");
     try {
       const ext = (f.name.split(".").pop() || "png").toLowerCase();
-      const signRes = await fetch("/api/deck-image-upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ext }) });
+      const signRes = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ext }) });
       const sign = await signRes.json();
       if (!sign.path || !sign.token) throw new Error(sign.error || "upload failed");
       const supabase = createClient();
-      const { error } = await supabase.storage.from("deck-images").uploadToSignedUrl(sign.path, sign.token, f);
+      const { error } = await supabase.storage.from(bucket).uploadToSignedUrl(sign.path, sign.token, f);
       if (error) throw error;
       setUrl(sign.publicUrl);
       setMsg("✓ Uploaded");

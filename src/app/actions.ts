@@ -1874,6 +1874,20 @@ export async function saveJvPartner(formData: FormData) {
   redirect("/marketing?saved=1");
 }
 
+/** Save (or clear) a vetted buyer's buy-box AREA MAP — the detailed map Sharyn makes showing
+ *  exactly where they buy. Stored in the dormant `contact` column (no schema change needed), so
+ *  it survives buyer edits (saveMarketContact never writes `contact`) and shows on the big map. */
+export async function saveBuyBoxMap(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const mapUrl = String(formData.get("mapUrl") ?? "").trim().slice(0, 1000);
+  if (!id) return;
+  await db.marketContact.update({ where: { id }, data: { contact: mapUrl } });
+  revalidatePath("/marketing");
+  redirect("/marketing?saved=1#buybox-maps");
+}
+
 export async function deleteJvPartner(formData: FormData) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) return;

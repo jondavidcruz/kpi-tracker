@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner } from "@/app/actions";
+import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap } from "@/app/actions";
+import ImageUpload from "@/components/ImageUpload";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -54,7 +55,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     .map((r) => ({
       id: r.id, name: r.name, category: r.category, type: r.type, region: r.region, market: r.market,
       status: r.status, email: r.email, phone: r.phone, website: r.website, buyBox: r.buyBox,
-      buyBoxAreas: r.buyBoxAreas, lat: r.lat, lng: r.lng, notes: r.notes,
+      buyBoxAreas: r.buyBoxAreas, lat: r.lat, lng: r.lng, notes: r.notes, buyBoxMapUrl: r.contact,
     }));
   // Vetted Buyers shows ONLY vetted/active buyers — same spreadsheet table as Buyer
   // Research, grouped by type so it reads consistently across both pages.
@@ -97,6 +98,38 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">
         <MarketsMap buyers={buyers} markets={marketsForMap} />
+      </Card>
+
+      {/* Buy-box area maps — upload Sharyn's detailed map per buyer; shows on the map above on click */}
+      <Card id="buybox-maps" className="p-4">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-slate-700">🗺️ Buy-box area maps</span>
+          <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-700">{vettedRows.filter((r) => r.contact).length}/{vettedRows.length} uploaded</span>
+        </div>
+        <p className="mb-3 text-xs text-slate-500">Upload the detailed area map (the one Sharyn makes — streets &amp; roads highlighted, not just a radius) for each vetted buyer. Once it&apos;s uploaded, click that buyer on the map above — or in the list beside it — and their exact buy-box area pops up full-screen.</p>
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+          {vettedRows.length === 0 && <p className="text-xs text-slate-400">No vetted buyers yet — vet buyers in Buyer Research first.</p>}
+          {vettedRows.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-slate-800">{r.name}{r.contact ? " 🗺️" : ""}</div>
+                <div className="truncate text-[11px] text-slate-500">{[r.market, r.region].filter(Boolean).join(" · ") || "—"}</div>
+              </div>
+              <form action={saveBuyBoxMap} className="flex items-center gap-2">
+                <input type="hidden" name="id" value={r.id} />
+                <ImageUpload name="mapUrl" current={r.contact} label="Upload area map" endpoint="/api/buybox-map-upload" bucket="buybox-maps" />
+                <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">Save</button>
+              </form>
+              {r.contact && (
+                <form action={saveBuyBoxMap}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <input type="hidden" name="mapUrl" value="" />
+                  <button className="text-[11px] font-medium text-slate-400 hover:text-red-600">Remove</button>
+                </form>
+              )}
+            </div>
+          ))}
+        </div>
       </Card>
 
       {/* Target markets — detail by county + neighborhoods (editable) */}

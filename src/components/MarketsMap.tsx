@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 export type Buyer = {
   id: string; name: string; category: string; type: string; region: string; market: string;
   status: string; email: string; phone: string; website: string; buyBox: string; buyBoxAreas: string;
-  lat: number | null; lng: number | null; notes: string;
+  lat: number | null; lng: number | null; notes: string; buyBoxMapUrl: string;
 };
 
 export type Market = { id: string; name: string; tier: string; score: number; lat: number | null; lng: number | null };
@@ -49,6 +49,7 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
   const [regions, setRegions] = useState<Set<string>>(new Set(["SD", "OC", "LA", "other"]));
   const [cats, setCats] = useState<Set<string>>(new Set(["luxury", "distressed"]));
   const [statuses, setStatuses] = useState<Set<string>>(new Set()); // empty = all
+  const [preview, setPreview] = useState<Buyer | null>(null); // buy-box area map lightbox
   const allStatuses = useMemo(() => Array.from(new Set(buyers.map((b) => b.status).filter(Boolean))).sort(), [buyers]);
   const mapEl = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -120,7 +121,9 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
         const ph = b.phone ? `<a href="tel:${b.phone.replace(/[^+\d]/g, "")}">${b.phone}</a>` : "";
         const em = b.email ? `<a href="mailto:${b.email}">${b.email}</a>` : "";
         const web = b.website ? `<a href="https://${b.website.replace(/^https?:\/\//, "")}" target="_blank" rel="noopener">site</a>` : "";
-        return `<div style="padding:5px 0;border-top:1px solid #eee;"><b>${b.name}</b> <span style="font-size:10px;color:#64748b;">${b.status}</span><br><span style="font-size:11px;color:#64748b;">${[ph, em, web].filter(Boolean).join(" · ")}</span>${b.notes ? `<br><span style="font-size:11px;color:#64748b;font-style:italic;">${b.notes}</span>` : ""}</div>`;
+        // Buy-box area map (Sharyn's detailed map) — thumbnail in the popup; click to open full.
+        const mapImg = b.buyBoxMapUrl ? `<a href="${b.buyBoxMapUrl}" target="_blank" rel="noopener" style="display:block;margin-top:6px;"><img src="${b.buyBoxMapUrl}" alt="buy-box map" style="width:100%;max-width:280px;border-radius:6px;border:1px solid #ddd;"/><span style="font-size:10px;color:#4338ca;font-weight:600;">🗺️ Buy-box area — click to enlarge</span></a>` : "";
+        return `<div style="padding:5px 0;border-top:1px solid #eee;"><b>${b.name}</b> <span style="font-size:10px;color:#64748b;">${b.status}</span><br><span style="font-size:11px;color:#64748b;">${[ph, em, web].filter(Boolean).join(" · ")}</span>${b.notes ? `<br><span style="font-size:11px;color:#64748b;font-style:italic;">${b.notes}</span>` : ""}${mapImg}</div>`;
       }).join("");
       m.bindPopup(`<div style="min-width:220px;"><div style="font-weight:700;">${g.items[0].market} (${g.items.length})</div>${pop}</div>`, { maxWidth: 320 });
       m.bindTooltip(`${g.items[0].market} (${g.items.length})`, { direction: "top" });
@@ -135,6 +138,7 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
 
   function flyTo(b: Buyer) {
     if (b.lat != null && b.lng != null && mapRef.current) mapRef.current.setView([b.lat, b.lng], 12, { animate: true });
+    if (b.buyBoxMapUrl) setPreview(b); // pop their detailed buy-box map
   }
 
   const byRegion = filtered.reduce((a, b) => { const r = b.region || "other"; a[r] = (a[r] || 0) + 1; return a; }, {} as Record<string, number>);
@@ -205,6 +209,7 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: REGION[b.region]?.color ?? "#64748b" }} />
                 <span className="flex-1 text-sm font-semibold text-slate-800">{b.name}</span>
+                {b.buyBoxMapUrl && <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700" title="Has a buy-box area map">🗺️ map</span>}
                 {b.status && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{b.status}</span>}
               </div>
               <div className="ml-4 text-[11px] text-slate-500">{b.market}{b.type ? ` · ${b.type}` : ""}{b.buyBoxAreas ? ` · 🎯 ${b.buyBoxAreas}` : ""}</div>
@@ -213,6 +218,26 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
           ))}
         </div>
       </div>
+
+      {/* Buy-box area map lightbox — Sharyn's detailed map of exactly where this buyer buys. */}
+      {preview && preview.buyBoxMapUrl && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 p-4" onClick={() => setPreview(null)}>
+          <div className="flex max-h-[92vh] max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
+              <div>
+                <div className="text-sm font-bold text-slate-800">🗺️ {preview.name} — buy-box area</div>
+                <div className="text-[11px] text-slate-500">{[preview.market, preview.buyBoxAreas].filter(Boolean).join(" · ")}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <a href={preview.buyBoxMapUrl} target="_blank" rel="noopener" className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200">Open full ↗</a>
+                <button onClick={() => setPreview(null)} className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-700">✕ Close</button>
+              </div>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preview.buyBoxMapUrl} alt={`${preview.name} buy-box area map`} className="max-h-[80vh] w-auto max-w-full object-contain" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
