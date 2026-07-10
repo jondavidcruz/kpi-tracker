@@ -450,6 +450,11 @@ export default function UnderwritingCalculator() {
   }
 
   function exportPdf() {
+    // Capture the comp time NOW (state from stopTimer won't have flushed yet this tick).
+    const compSeconds = timerRunning && timerStart != null ? Math.max(0, Math.round((Date.now() - timerStart) / 1000)) : timerFinal;
+    const stamp = new Date();
+    const compDate = stamp.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    const compTime = stamp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     stopTimer(); // exporting = done comping → freeze the timer
     const r = buildReport();
     const w = window.open("", "_blank", "width=860,height=940");
@@ -583,6 +588,10 @@ export default function UnderwritingCalculator() {
         <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${rowsHtml}</table>
         ${repairsHtml}
         ${r.note ? `<p style="margin-top:14px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
+        <div style="margin-top:22px;padding-top:8px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+          🗓️ Comped on <b style="color:#475569">${esc(compDate)}</b> at ${esc(compTime)}${compSeconds != null ? ` &nbsp;·&nbsp; ⏱ Underwrite time: <b style="color:#475569">${esc(mmss(compSeconds))}</b>` : ""}<br>
+          <span style="color:#cbd5e1">Re-comp every ~30 days — values move as new sales hit the market.</span>
+        </div>
       </body></html>`);
     w.document.close();
     w.focus();
