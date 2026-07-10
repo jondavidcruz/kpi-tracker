@@ -39,7 +39,8 @@ export default async function DealsPage({
   // Markets & Buyers: surface vetted buyers whose target areas match each deal's address.
   // Read-only — REI Reply stays the CRM; this is just a "who do we already know here?" hint.
   const mktAccess = canAccessMarketing(me);
-  const buyers = mktAccess ? await db.marketContact.findMany({ orderBy: { sortOrder: "asc" } }) : [];
+  // Vetted buyers only — JV partners (type "jv_partner") are managed separately on /marketing, not matched here.
+  const buyers = mktAccess ? (await db.marketContact.findMany({ orderBy: { sortOrder: "asc" } })).filter((b) => b.type !== "jv_partner") : [];
   const ERRORS = {
     hud: "A HUD statement is required to close a deal.",
     fields: "Add a valid close date and profit amount.",

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket } from "@/app/actions";
+import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner } from "@/app/actions";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -47,8 +47,10 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   ]);
   const marketsForMap: Market[] = targets.map((t) => ({ id: t.id, name: t.name, tier: t.tier, score: t.score, lat: t.lat, lng: t.lng }));
   const TIER_PILL: Record<string, string> = { S: "bg-red-100 text-red-700", "1": "bg-orange-100 text-orange-700", "2": "bg-amber-100 text-amber-700", "3": "bg-sky-100 text-sky-700" };
+  // JV partners are NOT our buyers — they're separate. Keep them out of every buyer view.
+  const isJv = (r: { type: string }) => r.type === "jv_partner";
   const buyers: Buyer[] = rows
-    .filter((r) => r.vetStage === "vetted" || r.vetStage === "active")
+    .filter((r) => (r.vetStage === "vetted" || r.vetStage === "active") && !isJv(r))
     .map((r) => ({
       id: r.id, name: r.name, category: r.category, type: r.type, region: r.region, market: r.market,
       status: r.status, email: r.email, phone: r.phone, website: r.website, buyBox: r.buyBox,
@@ -57,7 +59,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   // Vetted Buyers shows ONLY vetted/active buyers — same spreadsheet table as Buyer
   // Research, grouped by type so it reads consistently across both pages.
   const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
-  const vettedRows = rows.filter(VETTED);
+  const vettedRows = rows.filter((r) => VETTED(r) && !isJv(r));
+  // JV partners — kept completely separate from our vetted buyers/developers.
+  const jvPartners = rows.filter(isJv).sort((a, b) => a.name.localeCompare(b.name));
   const isDevRow = (r: { category: string; type: string }) => r.category === "luxury" || r.type === "developer";
   const devs = vettedRows.filter(isDevRow).map(toProspect);
   const flips = vettedRows.filter((r) => !isDevRow(r)).map(toProspect);
@@ -207,6 +211,80 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       {buyerGroups.length === 0
         ? <Card className="p-6 text-center text-sm text-slate-400">No vetted buyers yet — vet developers in Buyer Research and they&apos;ll show here.</Card>
         : <VettingTable areas={buyerGroups} canEdit={canAccessMarketing(me)} today={today} allowAdd={false} />}
+
+      {/* ───────── JV PARTNERS — deliberately separate from our vetted buyers ───────── */}
+      <div className="mt-8 border-t-4 border-dashed border-indigo-200 pt-6">
+        <SectionTitle title="🤝 JV Partners" subtitle="NOT our buyers or developers — partners who hold buy boxes we don't have. We send them a deal, they take it to their buyers, and we split 50/50." accent="bg-indigo-500" />
+        <Card className="border-l-4 border-indigo-400 bg-indigo-50/50 p-4">
+          <p className="text-sm text-indigo-900">
+            <b>These are JV partners, not vetted end buyers.</b> Use them when a deal fits a developer buy box we can&apos;t reach directly.
+            Send them the deal, they route it to their buyer, and we JV for a <b>50/50 split</b>. Keep them separate from the vetted-buyer list above —
+            the deal is not going to a buyer we&apos;ve vetted, it&apos;s going through a partner.
+          </p>
+        </Card>
+
+        {jvPartners.length > 0 && (
+          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {jvPartners.map((p) => (
+              <Card key={p.id} className="border-l-4 border-indigo-300 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-base font-bold text-slate-800">{p.name}</span>
+                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700">JV Partner · 50/50</span>
+                  {p.company && <span className="text-xs text-slate-500">{p.company}</span>}
+                  {(p.region || p.market) && <span className="ml-auto text-xs font-semibold text-slate-500">{[p.region, p.market].filter(Boolean).join(" · ")}</span>}
+                </div>
+                {(p.email || p.phone) && <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-slate-600">{p.email && <span>✉️ {p.email}</span>}{p.phone && <span>📞 {p.phone}</span>}</div>}
+                {p.buyBox && (
+                  <div className="mt-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Buy boxes they can move</div>
+                    <p className="whitespace-pre-wrap text-xs text-slate-700">{p.buyBox}</p>
+                  </div>
+                )}
+                {p.notes && <p className="mt-2 whitespace-pre-wrap text-xs text-slate-500">📝 {p.notes}</p>}
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[11px] font-semibold text-slate-400 hover:text-indigo-700">✎ Edit</summary>
+                  <form action={saveJvPartner} className="mt-2 space-y-1.5">
+                    <input type="hidden" name="id" value={p.id} />
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <input name="name" defaultValue={p.name} placeholder="Partner name *" className={inputCls} required />
+                      <input name="company" defaultValue={p.company} placeholder="Company" className={inputCls} />
+                      <input name="email" defaultValue={p.email} placeholder="Email" className={inputCls} />
+                      <input name="phone" defaultValue={p.phone} placeholder="Phone" className={inputCls} />
+                      <input name="region" defaultValue={p.region} placeholder="Region (SD/OC/LA)" className={inputCls} />
+                      <input name="market" defaultValue={p.market} placeholder="Markets they cover" className={inputCls} />
+                    </div>
+                    <textarea name="buyBox" defaultValue={p.buyBox} rows={2} placeholder="Which developer buy boxes they can move — one per line" className={inputCls} />
+                    <textarea name="notes" defaultValue={p.notes} rows={2} placeholder="JV terms, who they represent, notes" className={inputCls} />
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">Save</button>
+                      <button formAction={deleteJvPartner} className="text-xs font-medium text-slate-400 hover:text-red-600">Delete</button>
+                    </div>
+                  </form>
+                </details>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        <Card className="mt-3 p-4">
+          <details>
+            <summary className="cursor-pointer text-sm font-bold text-indigo-700">+ Add a JV partner</summary>
+            <form action={saveJvPartner} className="mt-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <label><span className={labelCls}>Partner name *</span><input name="name" placeholder="Contact / company rep" className={inputCls} required /></label>
+                <label><span className={labelCls}>Company</span><input name="company" placeholder="Their wholesaling co." className={inputCls} /></label>
+                <label><span className={labelCls}>Region</span><input name="region" placeholder="SD / OC / LA" className={inputCls} /></label>
+                <label><span className={labelCls}>Email</span><input name="email" placeholder="name@co.com" className={inputCls} /></label>
+                <label><span className={labelCls}>Phone</span><input name="phone" placeholder="(xxx) xxx-xxxx" className={inputCls} /></label>
+                <label><span className={labelCls}>Markets they cover</span><input name="market" placeholder="Cities / areas" className={inputCls} /></label>
+              </div>
+              <label className="block"><span className={labelCls}>Which developer buy boxes they can move (one per line)</span><textarea name="buyBox" rows={2} placeholder="e.g. Tear-down lots 92109 · luxury new-build to $3M · 5k+ sqft lots La Jolla" className={inputCls} /></label>
+              <label className="block"><span className={labelCls}>JV terms / notes</span><textarea name="notes" rows={2} placeholder="50/50 split · who they represent · how fast they move" className={inputCls} /></label>
+              <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Add JV partner</button>
+            </form>
+          </details>
+        </Card>
+      </div>
 
     </div>
   );

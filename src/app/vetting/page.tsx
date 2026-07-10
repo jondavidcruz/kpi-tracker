@@ -32,7 +32,7 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
       where: { vetStage: { notIn: ["vetted", "active"] } },
       orderBy: [{ vetArea: "asc" }, { name: "asc" }],
     }),
-    db.marketContact.count({ where: { vetStage: { in: ["vetted", "active"] } } }),
+    db.marketContact.count({ where: { vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } } }),
   ]);
   const UNASSIGNED = "Unassigned / general buyers";
   const toProspect = (r: typeof rows[number]): Prospect => ({

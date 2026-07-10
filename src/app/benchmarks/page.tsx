@@ -54,7 +54,7 @@ export default async function BenchmarksPage() {
     db.entry.findMany({ where: { kpiId: { in: ids }, date: { gte: monthStart, lte: today } }, select: { kpiId: true, value: true } }),
     db.entry.findMany({ where: { kpiId: { in: ids }, date: { gte: yearStart, lte: today } }, select: { kpiId: true, value: true } }),
     db.closing.findMany({ include: { expenses: true } }),
-    db.marketContact.findMany({ select: { vetStage: true } }),
+    db.marketContact.findMany({ where: { type: { not: "jv_partner" } }, select: { vetStage: true } }),
     db.deal.findMany({ select: { contractDate: true, soldDate: true } }),
     db.closedDeal.findMany({ select: { profit: true, leadSource: true } }),
   ]);

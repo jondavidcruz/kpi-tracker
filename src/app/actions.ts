@@ -1839,6 +1839,53 @@ export async function deleteTargetMarket(formData: FormData) {
   redirect("/marketing?saved=1");
 }
 
+/** JV partners — OTHER wholesalers/partners who hold buy boxes of developers we don't have
+ *  direct access to. We send them deals, they route to their buyers, and we JV 50/50. Stored
+ *  as MarketContact rows with type "jv_partner" so they stay completely separate from our
+ *  vetted buyers/developers (never counted as developer outreach, never shown as a real buyer). */
+export async function saveJvPartner(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const t = (k: string, n = 300) => String(formData.get(k) ?? "").trim().slice(0, n);
+  const name = t("name", 160);
+  if (!name) return;
+  const data = {
+    name,
+    company: t("company", 160),
+    email: t("email", 160),
+    phone: t("phone", 60),
+    region: t("region", 60),
+    market: t("market", 160),
+    buyBox: t("buyBox", 4000),   // which developer buy boxes they can move
+    notes: t("notes", 4000),     // JV terms, who they represent, etc.
+    type: "jv_partner",
+    category: "jv",
+    vetStage: "active",
+  };
+  if (id) {
+    const row = await db.marketContact.findUnique({ where: { id }, select: { type: true } });
+    if (row?.type !== "jv_partner") return; // guard: only edit JV partners here
+    await db.marketContact.update({ where: { id }, data });
+  } else {
+    await db.marketContact.create({ data });
+  }
+  revalidatePath("/marketing");
+  redirect("/marketing?saved=1");
+}
+
+export async function deleteJvPartner(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const row = await db.marketContact.findUnique({ where: { id }, select: { type: true } });
+  if (row?.type !== "jv_partner") return; // safety: this action only removes JV partners
+  await db.marketContact.delete({ where: { id } });
+  revalidatePath("/marketing");
+  redirect("/marketing?saved=1");
+}
+
 export async function saveMarketingNotes(formData: FormData) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) return;
