@@ -1168,3 +1168,26 @@ model CrmActivity {
   @@unique([userId, date])
   @@index([date])
 }
+
+// Team 360 — peer strengths/weaknesses. One row per (quarter, rater → subject); a row where
+// raterId == subjectId is that person's self-assessment. Hybrid visibility is applied in the
+// UI (strengths/superpowers attributed; growth areas pooled anonymously).
+model PeerAssessment {
+  id         String   @id @default(cuid())
+  quarter    String   // e.g. "2026-Q3"
+  raterId    String   // who's giving the read
+  subjectId  String   // who it's about (== raterId for a self-assessment)
+  superpower String   @default("") // their #1 strength, one line
+  strengths  String   @default("") // what they're great at
+  growth     String   @default("") // growth area / blind spot
+  rComm      Int      @default(0)  // 1–5 ratings (0 = not rated)
+  rFollow    Int      @default(0)
+  rSkill     Int      @default(0)
+  rCoach     Int      @default(0)
+  rCulture   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([quarter, raterId, subjectId])
+  @@index([quarter, subjectId])
+}

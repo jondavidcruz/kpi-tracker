@@ -1839,6 +1839,30 @@ export async function deleteTargetMarket(formData: FormData) {
   redirect("/marketing?saved=1");
 }
 
+/** Team 360 — save one person's read on a teammate (or themselves) for the current quarter.
+ *  Any signed-in teammate can submit; upserts so editing just updates their row. */
+export async function savePeerAssessment(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const subjectId = String(formData.get("subjectId") ?? "");
+  if (!subjectId) return;
+  const settings = await getSettings();
+  const quarter = quarterOf(todayStr(settings.orgTimezone));
+  const t = (k: string, n = 600) => String(formData.get(k) ?? "").trim().slice(0, n);
+  const rate = (k: string) => { const x = Math.round(Number(formData.get(k) ?? 0)); return x >= 1 && x <= 5 ? x : 0; };
+  const data = {
+    superpower: t("superpower", 200), strengths: t("strengths"), growth: t("growth"),
+    rComm: rate("rComm"), rFollow: rate("rFollow"), rSkill: rate("rSkill"), rCoach: rate("rCoach"), rCulture: rate("rCulture"),
+  };
+  await db.peerAssessment.upsert({
+    where: { quarter_raterId_subjectId: { quarter, raterId: me.id, subjectId } },
+    update: data,
+    create: { quarter, raterId: me.id, subjectId, ...data },
+  });
+  revalidatePath("/team-360");
+  redirect(`/team-360?saved=${subjectId}#rate`);
+}
+
 /** JV partners — OTHER wholesalers/partners who hold buy boxes of developers we don't have
  *  direct access to. We send them deals, they route to their buyers, and we JV 50/50. Stored
  *  as MarketContact rows with type "jv_partner" so they stay completely separate from our
