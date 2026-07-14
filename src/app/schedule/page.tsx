@@ -218,6 +218,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   }
   // Scheduled shift end (minutes from midnight) for the timeline bar's right edge.
   const capMin = cap ? (() => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(cap); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); })() : null;
+  // Power/internet outages are unpaid, not-working time — subtract today's outage minutes from
+  // worked time so the board matches the payroll timecard (which already deducts them).
+  const outageMinFor = (id: string) => (rawOutagesByUser.get(id) ?? []).reduce((s, o) => s + Math.max(0, (o.ongoing ? nowMinTz : o.endMin) - o.startMin), 0);
   const people = users
     .filter((u) => !isOwner(u)) // owner isn't a tracked employee
     .map((u) => {
@@ -228,13 +231,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       let st: string = state;
       if (o) st = "outage";
       else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
-      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, workCapAt(today, settings.orgTimezone, u.name)) };
+      const worked = Math.max(0, workedMinutes(ps, now, workCapAt(today, settings.orgTimezone, u.name)) - outageMinFor(u.id));
+      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: worked };
     });
 
   // My time card today.
   const myPs = byUser.get(me.id) ?? [];
   const myState = stateFromPunches(myPs);
-  const myWorked = workedMinutes(myPs, now, myCap);
+  const myWorked = Math.max(0, workedMinutes(myPs, now, myCap) - outageMinFor(me.id));
 
   // Time off: this month's grid, pending approvals, upcoming list.
   const monthOff = timeOff.filter((t) => t.status !== "denied" && t.startDate <= mb.end && t.endDate >= mb.start);

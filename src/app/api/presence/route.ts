@@ -25,15 +25,18 @@ export async function GET() {
   const [users, punches, outages] = await Promise.all([
     db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true, lastSeenAt: true, dropAlertedAt: true, breakNudgedAt: true } }),
     db.punch.findMany({ where: { date }, orderBy: { at: "asc" }, select: { userId: true, kind: true, at: true } }),
-    db.outage.findMany({ where: { date, ongoing: true }, select: { userId: true, kind: true, startMin: true } }),
+    db.outage.findMany({ where: { date }, select: { userId: true, kind: true, startMin: true, endMin: true, ongoing: true } }),
   ]);
   const byUser = groupByUser(punches);
-  const outByUser = new Map(outages.map((o) => [o.userId, o]));
+  const outByUser = new Map(outages.filter((o) => o.ongoing).map((o) => [o.userId, o])); // live outage → "outage" state
   const now = new Date();
   const STALE = 2 * 60 * 1000; // working but no heartbeat for 2 min = dropped (flag fast, confirm with admin)
   // Current minutes-from-midnight in the org timezone, for outage duration.
   const np = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
   const nowMin = (+(np.find((p) => p.type === "hour")?.value ?? 0) % 24) * 60 + +(np.find((p) => p.type === "minute")?.value ?? 0);
+  // Total outage minutes today per person (incl. ended) — unpaid, subtracted from worked time.
+  const outageMinByUser = new Map<string, number>();
+  for (const o of outages) outageMinByUser.set(o.userId, (outageMinByUser.get(o.userId) ?? 0) + Math.max(0, (o.ongoing ? nowMin : o.endMin) - o.startMin));
   const people = users
     .filter((u) => !isOwner(u))
     .map((u) => {
@@ -45,7 +48,8 @@ export async function GET() {
       if (out) st = "outage";
       else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
       const outageMin = out ? Math.max(0, nowMin - out.startMin) : null;
-      return { id: u.id, name: u.name, state: st, outageKind: out?.kind ?? null, outageMin, sinceMs: since ? since.getTime() : null, workedMin: workedMinutes(ps, now, workCapAt(date, settings.orgTimezone, u.name)) };
+      const worked = Math.max(0, workedMinutes(ps, now, workCapAt(date, settings.orgTimezone, u.name)) - (outageMinByUser.get(u.id) ?? 0));
+      return { id: u.id, name: u.name, state: st, outageKind: out?.kind ?? null, outageMin, sinceMs: since ? since.getTime() : null, workedMin: worked };
     });
 
   // Disconnect alerts: a rep who dropped mid-shift with NO logged power/internet outage
