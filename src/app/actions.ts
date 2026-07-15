@@ -223,6 +223,30 @@ export async function saveDay(formData: FormData) {
   revalidatePath("/monthly");
 }
 
+/** Auto-save ONE KPI value as the user types (no click needed). Persists to the DB so the
+ *  number survives leaving the screen — but skips the wins-chat + alert dispatch, which only
+ *  fire on the explicit "Save day" finalize so they don't spam on every keystroke. */
+export async function autoSaveEntry(formData: FormData) {
+  const date = String(formData.get("date") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const enteredBy = String(formData.get("enteredBy") ?? "");
+  const kpiId = String(formData.get("kpiId") ?? "");
+  const userId = String(formData.get("userId") ?? "") || null;
+  if (!kpiId) return;
+  const kpi = await db.kpi.findUnique({ where: { id: kpiId }, select: { unit: true } });
+  if (!kpi) return;
+  const value = fromInput(kpi.unit as Unit, String(formData.get("value") ?? ""));
+  const existing = await db.entry.findFirst({ where: { kpiId, userId, date } });
+  if (value === null) {
+    if (existing) await db.entry.delete({ where: { id: existing.id } }); // blank clears it
+  } else if (existing) {
+    await db.entry.update({ where: { id: existing.id }, data: { value, enteredBy, enteredAt: new Date() } });
+  } else {
+    await db.entry.create({ data: { kpiId, userId, date, value, enteredBy } });
+  }
+  revalidatePath("/entry");
+}
+
 function revalidateAlerts() {
   revalidatePath("/alerts");
   revalidatePath("/dashboard");
