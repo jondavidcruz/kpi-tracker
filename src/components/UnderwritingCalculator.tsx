@@ -165,6 +165,85 @@ function tierLabel(arv: number): string {
   return "$1M+";
 }
 
+// A plain manual calculator pinned to the right of the sheet, on every tab — for quick side
+// math while comping. Self-contained; does not touch the underwriting fields.
+function SideCalc() {
+  const [open, setOpen] = useState(true);
+  const [cur, setCur] = useState("0");
+  const [acc, setAcc] = useState<number | null>(null);
+  const [op, setOp] = useState<string | null>(null);
+  const [fresh, setFresh] = useState(true);   // next digit starts a new number
+  const [hist, setHist] = useState("");
+
+  const fmt = (n: number) => (!isFinite(n) ? "Error" : String(Math.round(n * 1e10) / 1e10));
+  const apply = (a: number, o: string, b: number) => (o === "+" ? a + b : o === "−" ? a - b : o === "×" ? a * b : o === "÷" ? a / b : b);
+  const digit = (d: string) => { setCur((c) => (fresh || c === "0" ? d : c.length < 14 ? c + d : c)); setFresh(false); };
+  const dot = () => { setCur((c) => (fresh ? "0." : c.includes(".") ? c : c + ".")); setFresh(false); };
+  const clearAll = () => { setCur("0"); setAcc(null); setOp(null); setFresh(true); setHist(""); };
+  const back = () => setCur((c) => (fresh ? c : c.length <= 1 || (c.length === 2 && c.startsWith("-")) ? "0" : c.slice(0, -1)));
+  const pct = () => { setCur((c) => fmt(Number(c) / 100)); setFresh(true); };
+  const neg = () => setCur((c) => (c === "0" ? c : c.startsWith("-") ? c.slice(1) : "-" + c));
+  const chooseOp = (o: string) => {
+    const b = Number(cur);
+    if (op != null && acc != null && !fresh) { const r = apply(acc, op, b); setAcc(r); setCur(fmt(r)); }
+    else setAcc(b);
+    setHist(`${fmt(op != null && acc != null && !fresh ? apply(acc, op, b) : b)} ${o}`);
+    setOp(o); setFresh(true);
+  };
+  const equals = () => {
+    if (op == null || acc == null) return;
+    const b = Number(cur), r = apply(acc, op, b);
+    setHist(`${fmt(acc)} ${op} ${fmt(b)} =`);
+    setCur(fmt(r)); setAcc(null); setOp(null); setFresh(true);
+  };
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} title="Open calculator"
+        className="fixed bottom-5 right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-brand-navy text-xl text-white shadow-lg hover:bg-brand-navy-700">🧮</button>
+    );
+  }
+
+  const Key = ({ label, onClick, cls = "" }: { label: string; onClick: () => void; cls?: string }) => (
+    <button type="button" onClick={onClick} className={`h-11 rounded-lg text-sm font-bold transition active:scale-95 ${cls || "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{label}</button>
+  );
+
+  return (
+    <div className="fixed right-2 top-20 z-40 w-52 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-200 sm:right-3 sm:top-24 sm:w-56">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">🧮 Calculator</span>
+        <button type="button" onClick={() => setOpen(false)} title="Hide" className="rounded px-1.5 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600">✕</button>
+      </div>
+      <div className="mb-2 rounded-lg bg-slate-900 px-3 py-2 text-right">
+        <div className="h-3 truncate text-[10px] text-slate-400">{hist}</div>
+        <div className="truncate font-mono text-2xl font-bold text-white">{cur}</div>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        <Key label="C" onClick={clearAll} cls="bg-red-100 text-red-700 hover:bg-red-200" />
+        <Key label="⌫" onClick={back} cls="bg-slate-200 text-slate-700 hover:bg-slate-300" />
+        <Key label="%" onClick={pct} cls="bg-slate-200 text-slate-700 hover:bg-slate-300" />
+        <Key label="÷" onClick={() => chooseOp("÷")} cls="bg-brand-navy/10 text-brand-navy hover:bg-brand-navy/20" />
+        <Key label="7" onClick={() => digit("7")} />
+        <Key label="8" onClick={() => digit("8")} />
+        <Key label="9" onClick={() => digit("9")} />
+        <Key label="×" onClick={() => chooseOp("×")} cls="bg-brand-navy/10 text-brand-navy hover:bg-brand-navy/20" />
+        <Key label="4" onClick={() => digit("4")} />
+        <Key label="5" onClick={() => digit("5")} />
+        <Key label="6" onClick={() => digit("6")} />
+        <Key label="−" onClick={() => chooseOp("−")} cls="bg-brand-navy/10 text-brand-navy hover:bg-brand-navy/20" />
+        <Key label="1" onClick={() => digit("1")} />
+        <Key label="2" onClick={() => digit("2")} />
+        <Key label="3" onClick={() => digit("3")} />
+        <Key label="+" onClick={() => chooseOp("+")} cls="bg-brand-navy/10 text-brand-navy hover:bg-brand-navy/20" />
+        <Key label="±" onClick={neg} />
+        <Key label="0" onClick={() => digit("0")} />
+        <Key label="." onClick={dot} />
+        <Key label="=" onClick={equals} cls="bg-brand-gold text-brand-navy hover:opacity-90" />
+      </div>
+    </div>
+  );
+}
+
 export default function UnderwritingCalculator() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("assignment");
   const [f, setF] = useState<Record<string, string>>({});
@@ -716,6 +795,7 @@ export default function UnderwritingCalculator() {
 
   return (
     <FieldCtx.Provider value={{ v, set }}>
+    <SideCalc />
     <div className="space-y-4">
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <span className="mb-0.5 block text-[11px] font-semibold text-slate-500">📍 Subject property address</span>
