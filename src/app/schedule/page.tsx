@@ -386,10 +386,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                         <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${over ? "bg-red-100 text-red-700 ring-1 ring-red-300" : "bg-orange-100 text-orange-800"}`}>{over ? "⚠️ " : ""}🍔 On lunch{stMin ? ` · ${stMin}m` : ""}{over ? ` (over ${LUNCH_LIMIT})` : ""}</span>
                         <button formAction={endBreakFor} name="kind" value="lunch" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back</button>
                       </>
+                    ) : st === "bathroom" ? (
+                      <>
+                        <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-bold text-stone-700">💩 Bathroom{stMin ? ` · ${stMin}m` : ""}</span>
+                        <button formAction={endBreakFor} name="kind" value="bathroom" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">✓ Back</button>
+                      </>
                     ) : present ? (
                       <>
                         <button formAction={startBreakFor} name="kind" value="break" className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200">☕ Break</button>
                         <button formAction={startBreakFor} name="kind" value="lunch" className="rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-800 hover:bg-orange-200">🍔 Lunch</button>
+                        <button formAction={startBreakFor} name="kind" value="bathroom" className="rounded-lg bg-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-300">💩 Bathroom</button>
                       </>
                     ) : (
                       <span className="text-xs text-slate-400">off / clocked out</span>

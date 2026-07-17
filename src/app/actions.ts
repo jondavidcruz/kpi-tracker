@@ -2337,17 +2337,18 @@ export async function startBreakFor(formData: FormData) {
   const me = await getCurrentUser();
   if (!canTrackTime(me)) return; // managers + pay staff
   const userId = String(formData.get("userId") ?? "");
-  const kind = String(formData.get("kind")) === "lunch" ? "lunch" : "break";
+  const kind = ["lunch", "bathroom"].includes(String(formData.get("kind"))) ? String(formData.get("kind")) : "break";
   if (!userId) return;
   const settings = await getSettings();
   const date = todayStr(settings.orgTimezone);
   const last = await db.punch.findFirst({ where: { userId, date }, orderBy: { at: "desc" }, select: { kind: true } });
-  if (last && (last.kind === "break_start" || last.kind === "lunch_start" || last.kind === "meeting_start")) return; // already on a break/lunch
+  if (last && (last.kind === "break_start" || last.kind === "lunch_start" || last.kind === "meeting_start" || last.kind === "bathroom_start")) return; // already away
   const at = punchAtFrom(String(formData.get("at") ?? ""), date, settings.orgTimezone); // optional manager-entered start time
   await db.punch.create({ data: { userId, kind: `${kind}_start`, date, ...(at ? { at } : {}) } });
   const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
   const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
-  sendTimecardChat(`${kind === "lunch" ? "🍔" : "☕"} ${u?.name ?? "Team member"} is on ${kind} (logged by ${me!.name.split(" ")[0]}) · ${time}`).catch(() => {});
+  const emoji = kind === "lunch" ? "🍔" : kind === "bathroom" ? "💩" : "☕";
+  sendTimecardChat(`${emoji} ${u?.name ?? "Team member"} is on ${kind} (logged by ${me!.name.split(" ")[0]}) · ${time}`).catch(() => {});
   revalidatePath("/schedule"); revalidatePath("/timecard");
 }
 
@@ -2355,7 +2356,7 @@ export async function endBreakFor(formData: FormData) {
   const me = await getCurrentUser();
   if (!canTrackTime(me)) return;
   const userId = String(formData.get("userId") ?? "");
-  const kind = String(formData.get("kind")) === "lunch" ? "lunch" : "break";
+  const kind = ["lunch", "bathroom"].includes(String(formData.get("kind"))) ? String(formData.get("kind")) : "break";
   if (!userId) return;
   const settings = await getSettings();
   const date = todayStr(settings.orgTimezone);
@@ -2376,7 +2377,7 @@ export async function logCompletedBreak(formData: FormData) {
   const me = await getCurrentUser();
   if (!canTrackTime(me)) return; // managers + pay staff
   const userId = String(formData.get("userId") ?? "");
-  const kind = String(formData.get("kind")) === "lunch" ? "lunch" : "break";
+  const kind = ["lunch", "bathroom"].includes(String(formData.get("kind"))) ? String(formData.get("kind")) : "break";
   if (!userId) return;
   const settings = await getSettings();
   const date = todayStr(settings.orgTimezone);
