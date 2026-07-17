@@ -318,6 +318,27 @@ export default function UnderwritingCalculator() {
   const clSaneTone: "good" | "warn" | "bad" = clMao <= 0 ? "bad" : clPct > 45 ? "warn" : "good";
   const clSaneWord = clMao <= 0 ? "🚫 enter land comps" : clPct > 45 ? `⚠️ ${clPct}% is high for land` : `✅ ${clPct}% of area land value`;
 
+  // ---- Double close (Cash tabs) ---- when the seller won't let us assign, we do TWO separate,
+  // simultaneous closings (A→B buy, B→C sell) — closing costs are paid twice (escrow usually
+  // gives a small simultaneous-close discount). This is our cost, so it eats the fee / MAO.
+  const dblCost = (on: boolean, pct: number, buy: number, sell: number, disc: number) => on ? Math.max(0, Math.round((buy + sell) * (pct / 100) * (1 - disc / 100))) : 0;
+  // Cash (Homes)
+  const aDblOn = v("aDblClose") === "1";
+  const aDblPct = num(v("aDblPct") || "1.5");
+  const aDblDisc = num(v("aDblDisc") || "0");
+  const aDblBuy = n("aDblBuy") || cashMao;                 // A→B: our purchase from the seller
+  const aDblSell = n("aDblSell") || (cashMao + aFee);      // B→C: our resale to the end buyer
+  const aDblCost = dblCost(aDblOn, aDblPct, aDblBuy, aDblSell, aDblDisc);
+  const aDblMao = Math.max(0, cashMao - aDblCost);
+  // Cash (Land)
+  const clDblOn = v("clDblClose") === "1";
+  const clDblPct = num(v("clDblPct") || "1.5");
+  const clDblDisc = num(v("clDblDisc") || "0");
+  const clDblBuy = n("clDblBuy") || clMao;
+  const clDblSell = n("clDblSell") || clMao;
+  const clDblCost = dblCost(clDblOn, clDblPct, clDblBuy, clDblSell, clDblDisc);
+  const clDblMao = Math.max(0, clMao - clDblCost);
+
   // ---- Novation ----
   const novCompPrices = [n("nComp1p"), n("nComp2p"), n("nComp3p")].filter((x) => x > 0);
   const suggestedList = novCompPrices.length ? Math.min(...novCompPrices) : 0; // conservative → sells fastest
@@ -479,8 +500,10 @@ export default function UnderwritingCalculator() {
       const comps = [1, 2, 3].map((i) => { const a = v(`comp${i}`); const p = v(`comp${i}p`); const d = v(`comp${i}d`); return a ? `${esc(a)}${p ? ` — $${esc(p)}` : ""}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...extraItems("aExtra", aExtraN).map((x) => [x.note || "Additional cost", money(x.amt)] as [string, string]), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`]],
-        note: "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. On assignment the end buyer covers BOTH the seller's and the buyer's closing costs, so no closing is deducted here. If the seller won't meet MAO, pivot to Novation.",
+        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...extraItems("aExtra", aExtraN).map((x) => [x.note || "Additional cost", money(x.amt)] as [string, string]), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`], ...(aDblOn ? ([[`🔁 Double-close closing cost (${aDblPct}% × 2${aDblDisc > 0 ? `, −${aDblDisc}%` : ""})`, money(aDblCost)], ["🎯 Double-close MAO (offer this instead)", money(aDblMao)]] as [string, string][]) : [])],
+        note: aDblOn
+          ? "DOUBLE CLOSE — the seller won't let us assign, so we do two separate simultaneous closings (A→B buy, B→C sell). Closing costs are paid on BOTH escrows (escrow usually gives a small simultaneous-close discount). That extra cost is ours, so offer the seller the Double-close MAO to keep the same fee — or hold the MAO and the fee shrinks by that amount."
+          : "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. On assignment the end buyer covers BOTH the seller's and the buyer's closing costs, so no closing is deducted here. If the seller won't meet MAO, pivot to Novation.",
       };
     }
     if (tab === "cash_land") {
@@ -494,8 +517,9 @@ export default function UnderwritingCalculator() {
           ["🎯 Cash (Land) MAO — max offer to seller", money(clMao)],
           [`Anchor / opening (${clAnchorPct}% below MAO)`, money(clAnchor)],
           ["Negotiation range", `${money(clAnchor)} → ${money(clMao)}`],
+          ...(clDblOn ? ([[`🔁 Double-close closing cost (${clDblPct}% × 2${clDblDisc > 0 ? `, −${clDblDisc}%` : ""})`, money(clDblCost)], ["🎯 Double-close MAO (offer this instead)", money(clDblMao)]] as [string, string][]) : []),
         ],
-        note: "Vacant land. Pull recent comparable LAND sales in the area, average them, and offer about 33% of that average — that discount is our room for a fee plus the buyer's margin. Open at the anchor and negotiate up to the MAO, never past it.",
+        note: (clDblOn ? "DOUBLE CLOSE — two separate simultaneous closings (seller won't assign), so closing costs are paid on BOTH escrows; offer the seller the Double-close MAO to keep the same margin. " : "") + "Vacant land. Pull recent comparable LAND sales in the area, average them, and offer about 33% of that average — that discount is our room for a fee plus the buyer's margin. Open at the anchor and negotiate up to the MAO, never past it.",
       };
     }
     if (tab === "developer") {
@@ -894,6 +918,21 @@ export default function UnderwritingCalculator() {
               <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
               <Field k="aHoa" label="HOA / special dues ($)" prefix="$" placeholder="0" req="opt" />
               <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 No need to enter the flipper&apos;s holding or money costs — the market tier % already builds in their carry and profit. Detailed money-cost math lives on the Flip / Wholetail tab.</p>
+
+              <div className={optDiv}>🔁 Double close? (only if the seller won&apos;t let us assign)</div>
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Exit</span>
+                <select value={v("aDblClose")} onChange={set("aDblClose")} className={`${inputCls} border-amber-200`}>
+                  <option value="">Assignment — the end buyer covers closing (default)</option>
+                  <option value="1">Double close — we pay closing on BOTH escrows</option>
+                </select>
+              </label>
+              {aDblOn && (<>
+                <Field k="aDblPct" label="Closing cost — each side" suffix="%" placeholder="1.5" req="opt" />
+                <Field k="aDblDisc" label="Escrow simultaneous discount" suffix="%" placeholder="0" req="opt" />
+                <Field k="aDblBuy" label="Buy price A→B (blank = MAO)" prefix="$" req="opt" />
+                <Field k="aDblSell" label="Resale B→C (to end buyer)" prefix="$" req="opt" />
+                <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🔁 Two separate simultaneous closings = closing costs paid twice. Enter the % each side and any escrow discount for doing both at once. Blank prices default to your MAO / MAO+fee.</p>
+              </>)}
               {additionalCosts("aExtra", aExtraN, setAExtraN)}
               <div className={goodDiv}>🟢 ARV comps (required · addr · sold $ · days on market)</div>
               <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">{compsNote}</p>
@@ -992,6 +1031,21 @@ export default function UnderwritingCalculator() {
               <Field k="clPct" label="Offer as % of avg land value" suffix="%" placeholder="33" req="opt" />
               <Field k="clAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" req="opt" />
               <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 We aim for ~33% of the average area land sale. That deep discount on raw land is our room for a fee plus the end buyer&apos;s margin.</p>
+
+              <div className={optDiv}>🔁 Double close? (only if the seller won&apos;t let us assign)</div>
+              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Exit</span>
+                <select value={v("clDblClose")} onChange={set("clDblClose")} className={`${inputCls} border-amber-200`}>
+                  <option value="">Assignment — the end buyer covers closing (default)</option>
+                  <option value="1">Double close — we pay closing on BOTH escrows</option>
+                </select>
+              </label>
+              {clDblOn && (<>
+                <Field k="clDblPct" label="Closing cost — each side" suffix="%" placeholder="1.5" req="opt" />
+                <Field k="clDblDisc" label="Escrow simultaneous discount" suffix="%" placeholder="0" req="opt" />
+                <Field k="clDblBuy" label="Buy price A→B (blank = MAO)" prefix="$" req="opt" />
+                <Field k="clDblSell" label="Resale B→C (to end buyer)" prefix="$" req="opt" />
+                <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🔁 Two separate simultaneous closings = closing costs paid twice. Blank prices default to your MAO.</p>
+              </>)}
             </>
           )}
           {tab === "novation" && (
@@ -1154,6 +1208,13 @@ export default function UnderwritingCalculator() {
               {extraItems("aExtra", aExtraN).map((x, i) => <Res key={i} label={`− ${x.note || "Additional cost"}`} value={money(x.amt)} tone="muted" />)}
               <Res label="− Assignment fee" value={money(aFee)} tone="muted" />
               <Res label="🎯 Cash MAO (max offer to seller)" value={money(cashMao)} tone={cashMao > 0 ? "navy" : "bad"} big />
+              {aDblOn && (
+                <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
+                  <div className="text-[12px] font-bold text-amber-800">🔁 Double close — closing paid on BOTH escrows</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">{money(aDblBuy)} + {money(aDblSell)} × {aDblPct}% each{aDblDisc > 0 ? `, less ${aDblDisc}% escrow discount` : ""} = <b>{money(aDblCost)}</b> in closing costs (vs $0 on an assignment). Offer the seller <b>{money(aDblMao)}</b> to keep the same fee — or hold the MAO and your fee drops by {money(aDblCost)}.</div>
+                </div>
+              )}
+              {aDblOn && <Res label="🎯 Double-close MAO (offer this instead)" value={money(aDblMao)} tone={aDblMao > 0 ? "navy" : "bad"} big />}
               {cashMao > 0 && <Res label="Sanity check" value={`${pctOfArv(cashMao)} · ${aSaneWord}`} tone={aSaneTone} />}
               {cashMao > 0 && (
                 <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 ring-1 ring-sky-200">
@@ -1199,6 +1260,13 @@ export default function UnderwritingCalculator() {
               <Res label="🎯 Avg area land value" value={money(clLandAvg)} tone={clLandAvg > 0 ? "navy" : "bad"} big />
               <Res label={`× Offer target (${clPct}%)`} value={`${clPct}%`} tone="muted" />
               <Res label="🎯 Cash (Land) MAO — max offer" value={money(clMao)} tone={clMao > 0 ? "navy" : "bad"} big />
+              {clDblOn && (
+                <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
+                  <div className="text-[12px] font-bold text-amber-800">🔁 Double close — closing paid on BOTH escrows</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">{money(clDblBuy)} + {money(clDblSell)} × {clDblPct}% each{clDblDisc > 0 ? `, less ${clDblDisc}% escrow discount` : ""} = <b>{money(clDblCost)}</b> in closing costs. Offer the seller <b>{money(clDblMao)}</b> to keep the same margin.</div>
+                </div>
+              )}
+              {clDblOn && <Res label="🎯 Double-close MAO (offer this instead)" value={money(clDblMao)} tone={clDblMao > 0 ? "navy" : "bad"} big />}
               {clLandAvg > 0 && <Res label="Sanity check" value={clSaneWord} tone={clSaneTone} />}
               <Res label="⚓ Anchor (open here)" value={money(clAnchor)} tone="good" />
               <Res label="Negotiate (offer to seller)" value={`${money(clAnchor)} → ${money(clMao)}`} tone="muted" />
