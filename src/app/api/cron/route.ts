@@ -14,6 +14,7 @@ import { sendHuddleBrief, sendHuddleNudge } from "@/lib/huddle-brief";
 import { writeDay, writeOpps, writeActivity } from "@/lib/crm-sync";
 import { migrateRecordingsToDrive } from "@/lib/recording-migrate";
 import { sendLeaksReport } from "@/lib/diagnostics";
+import { sendBuyerBoxReport } from "@/lib/buyer-report";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
 function laNow(): { hour: number; dow: number } {
@@ -74,6 +75,15 @@ export async function GET(request: Request) {
         )
       : false;
     return NextResponse.json({ ok: true, backedUp: backup.totalRows, emailed });
+  }
+
+  // Weekly vetted-buyer lead-sourcing report → Jon (Friday end-of-shift). Analyzes only the
+  // vetted buyers' buy boxes and tells him where to pull leads + which NEW markets to consider.
+  if (url.searchParams.get("buyerreport") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const res = await sendBuyerBoxReport(today);
+    return NextResponse.json({ ok: true, job: "buyerreport", ...res });
   }
 
   // Payday — checked daily; only sends on actual semi-monthly paydays (the 15th
