@@ -278,4 +278,31 @@ export const PLAYBOOKS: Playbook[] = [
       { heading: "How we use it", body: "Read it as background on the buyer's side of a deal — it makes you sharper when you talk to the flippers and developers who buy from us, because you understand their math and their risks.", tip: "This is a study guide only, not the book. We don't host the full PDF here — grab the book from the team drive or your own copy." },
     ],
   },
+  {
+    key: "exit_structure", title: "Which exit? Novation vs Assignment vs Double Close", emoji: "🧭", category: "Escrow & Closing",
+    summary: "Pick the right closing structure by BUYER TYPE — the single biggest mistake is bolting an assignment or double close onto a novation when you don't need to.",
+    sections: [
+      { heading: "🧠 The reframe — these are 3 different exits, not steps", body: "Novation, Assignment, and Double Close are separate ways to get paid — not a chain. The confusion (“novation → MLS → agent → assignment addendum → double close”) comes from mixing them. In a TRUE novation you do none of the assignment/double-close mechanics: the retail buyer contracts and closes DIRECTLY with the seller on a normal purchase agreement, and you're paid your fee at closing through your novation agreement with the seller. One escrow, one transfer." },
+      { heading: "✅ MLS / agent / retail buyer → do a TRUE NOVATION", body: "This is the whole reason novation exists. Because the buyer buys directly from the seller (you're not assigning), you can list on the MLS with an agent at RETAIL and sell to FINANCED buyers (FHA / conventional). You lock the seller's net; anything above it is your fee, paid at closing. No assignment addendum shown to the buyer, no double close.", tip: "Run these in the Underwriting calculator → Novation tab for the seller-payout MAO + your fee." },
+      { heading: "🚫 Do NOT double-close an MLS/financed deal — the seasoning trap", bullets: [
+        "A double close is TWO closings (A→B you buy, B→C you sell). On the B→C leg you're the seller of record having owned the property ~5 minutes.",
+        "FHA flatly prohibits funding when the seller has owned under 90 days — virtually no exceptions. Conventional lenders scrutinize same-day resales as “illegal flipping.”",
+        "Most MLS buyers are financed → a double close there gets flagged and DENIED by their lender.",
+        "So double close is a CASH / hard-money buyer tool, not an MLS-retail tool.",
+      ] },
+      { heading: "🚫 Don't force an assignment addendum on retail either", body: "Assigning your contract to the buyer works for cash/investor buyers, but on the MLS it (a) discloses your spread and (b) doesn't fit a retail buyer's head — they think they're buying a house, not taking over your contract. It also edges toward a restricted “net listing.” Keep the assignment addendum for off-market cash deals." },
+      { heading: "🎯 Pick the structure by buyer type", bullets: [
+        "MLS / agent / retail (financed) buyer → TRUE NOVATION · 1 escrow · spread hidden · financed OK. ← our default for listed deals.",
+        "Off-market, cash/investor, modest spread → ASSIGNMENT + assignment addendum · 1 escrow · spread disclosed.",
+        "Off-market, cash/hard-money, spread you want hidden → DOUBLE CLOSE · 2 escrows · closing paid twice (use the Double-close section on the Cash tabs). NOT for financed buyers.",
+      ] },
+      { heading: "🧾 Make the novation clean (California)", bullets: [
+        "Lock the seller FIRST — purchase agreement + novation addendum that fixes the seller's net, authorizes you to market/list, and defines your fee as the overage paid at closing.",
+        "Disclose your interest — in CA you must disclose you're marketing a property you don't own; that keeps you clear of unlicensed-activity and “net listing” trouble.",
+        "Use a listing agent/broker AND title/escrow that have actually done novations — most haven't, and that's where deals blow up. Have them confirm the exact forms + how your fee is disbursed.",
+        "Reserve double close for cash buyers where seasoning isn't a factor.",
+      ] },
+      { heading: "⚠️ Not legal advice", body: "Educational only. California is aggressive on wholesaling disclosure — run the final structure past your transaction coordinator, broker, and a CA real-estate attorney before it becomes the playbook." },
+    ],
+  },
 ];
