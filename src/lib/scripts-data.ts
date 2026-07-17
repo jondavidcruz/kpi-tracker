@@ -11,6 +11,25 @@ export type Script = {
   objections: ScriptObjection[]; // any "Common Objections" for this script: the objection text + the exact rebuttal. Empty array if none.
 };
 
+// Objection bank (from the "Luxury Objection Handling" guide). These are general cold-call
+// SELLER objections, so they're shared by both the Luxury and Traditional seller scripts.
+export const SELLER_OBJECTIONS: ScriptObjection[] = [
+  { objection: "Wrong number — \"This isn't Mr. Homeowner!\"", response: "Ahhhh gotcha. Well hey, I'm calling about the property over there on _____ Street. Were you guys still interested in selling that?" },
+  { objection: "\"I don't need any other options.\"", response: "Totally understand. I just want to make sure we're only creating win-win situations here — do you have about 5–10 minutes to talk about the property and your situation?" },
+  { objection: "\"I'll sell for the right price.\"", response: "That makes sense. When you say the right price, is there a specific number in mind? We always want to come to an agreement that makes sense for both parties." },
+  { objection: "\"Not interested!\"", response: "Gotcha. While I update your file here — you don't have any other properties you're looking to sell, do you?" },
+  { objection: "\"Not interested / I changed my mind.\"", response: "That's funny you say that… I've had several people tell me that lately. In fact, the last two people I spoke to said they changed their mind or weren't interested because the offers they'd gotten were too low. What has you not interested?" },
+  { objection: "\"Make me an offer.\"", response: "Mr. Homeowner, that's exactly why I'm calling today! I can tell this definitely isn't the first time someone's called you about the property, so let me tell you why this call will be a little different: at the end, after we talk about your property, one of two things will happen — either I come back with an approval and an offer, or a denial with a reason. I just need to ask you a few questions first. Sound fair?" },
+  { objection: "\"That's none of your business.\"", response: "I hear that a lot. The only reason I ask is because sometimes sellers have other needs we can help with — like letting them stay in the property for a while after we close to make the move easier, or hiring movers. So can you tell me a little about what your goals are with this property?" },
+  { objection: "\"What does that have to do with anything?\"", response: "I just want to make sure I understand your situation so I'm sure we're going to be a good fit for each other. Does that sound fair?" },
+  { objection: "\"I need to speak with my lawyer.\"", response: "Absolutely. What we've found works best is for you and I to go over the contract line by line together first, so when you send it to your lawyer you'll have all your questions prepared. Do you have 10 minutes to go over the agreement now? — If they still want their attorney to look it over: No problem, I can make it even easier and send it to them directly. What's their email?" },
+  { objection: "\"I need to think about it.\"", response: "(Early in the call) I totally get that this is a big decision. Normally when people tell me they need to think about it, it's one of two things — either they need more information, or they aren't interested and don't want to tell me no. Which one is the case here? — If they still say \"I just need to think about it\": I hear you. When will you be able to give me a concrete answer? (then handle \"I need more time.\")" },
+  { objection: "\"I want the price Zillow says my home is worth.\"", response: "I completely understand, and I actually hear this often! Let me explain what the Zestimate really means — it's a guesstimate of what they think your property could be worth. They take the average price per square foot in the area and multiply it by your home's size. That factors in new builds and remodels that sell for much higher, which can be why the Zestimate is off." },
+  { objection: "\"I got another offer.\"", response: "Oh, great! There must have been something about that offer you didn't like, otherwise you'd have signed their contract. Can you share what that offer would have needed for you to move forward with them?" },
+  { objection: "\"You called me — you give me a number.\"", response: "Right, I hear that a lot. Here's the thing: I don't come up with the numbers. My only job is to speak with you, gather all the information I can, then take it back to my underwriters and fight for a number that works for you. So what do you feel is a fair price I can take back to them?" },
+  { objection: "\"I have a higher offer.\"", response: "I hear that all the time. Can you explain the offer to me? (First thing out is the price.) Awesome, so they offered you X — what kind of terms did they propose? (If \"what do you mean?\" walk through the terms of the offer; if they say \"I don't have it in writing,\" note it's not a real offer yet and reset the conversation.)" },
+];
+
 export const SCRIPTS: Script[] = [
   {
     key: "traditional-seller",
@@ -109,6 +128,7 @@ export const SCRIPTS: Script[] = [
         objection: "\"How do I know you're legit?\"",
         response: "That's a totally fair question. We're Freedom Offers — a veteran-owned acquisitions company out of San Diego. You can look us up right now at freedom-offers.com or call us at (877) 652-8991. We work directly with developers and buyers — this isn't our first deal. We take our reputation seriously, especially coming from a military background. Everything's in writing, everything goes through title.",
       },
+      ...SELLER_OBJECTIONS,
     ],
   },
   {
@@ -196,7 +216,7 @@ export const SCRIPTS: Script[] = [
         ],
       },
     ],
-    objections: [],
+    objections: SELLER_OBJECTIONS,
   },
   {
     key: "fix-flip-investor-buyer",
