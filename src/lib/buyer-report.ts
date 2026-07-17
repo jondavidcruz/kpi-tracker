@@ -12,7 +12,12 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(
 const TYPE_LABEL: Record<string, string> = { developer: "Developer", custom: "Custom builder", remodeler: "Remodeler", flipper: "Fix & Flipper", cash_buyer: "Cash buyer", investor: "Investor", agent: "Agent", other: "Buyer" };
 const typeLabel = (t: string) => TYPE_LABEL[t] || (t ? t.replace(/_/g, " ") : "Buyer");
 
-type Buyer = { name: string; type: string; region: string; market: string; buyBox: string; buyBoxAreas: string; priceRange: string; dealType: string; buildType: string; propertyType: string; minLotSize: string };
+export type Buyer = { name: string; type: string; region: string; market: string; buyBox: string; buyBoxAreas: string; priceRange: string; dealType: string; buildType: string; propertyType: string; minLotSize: string };
+export type DemandRow = { label: string; count: number; covered: boolean; buyers: { name: string; type: string }[] };
+export type BuyerDemand = { buyers: Buyer[]; ranked: DemandRow[]; newMarkets: DemandRow[]; pullNow: DemandRow[]; typeMix: string };
+
+export const typeLabelOf = typeLabel;
+export const areasOfBuyer = areasOf;
 
 // Pull the distinct target-areas out of a buyer's buy box (areas list + their city/market).
 function areasOf(b: Buyer): string[] {
@@ -20,7 +25,8 @@ function areasOf(b: Buyer): string[] {
   return Array.from(new Set(raw.split(/[\n,;/|]+/).map((x) => x.trim()).filter((x) => x.length > 1)));
 }
 
-export async function buildBuyerBoxReport(today: string): Promise<{ subject: string; html: string; buyerCount: number }> {
+/** Vetted-buyer demand by area (shared by the weekly email + the in-app Lead Sourcing map). */
+export async function getBuyerDemand(): Promise<BuyerDemand> {
   const [rows, targets] = await Promise.all([
     db.marketContact.findMany({
       where: { vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } },
@@ -31,7 +37,6 @@ export async function buildBuyerBoxReport(today: string): Promise<{ subject: str
   ]);
   const buyers = rows as Buyer[];
 
-  // Demand map: normalized area → the vetted buyers who want deals there.
   const demand = new Map<string, { label: string; buyers: { name: string; type: string }[] }>();
   for (const b of buyers) {
     for (const a of areasOf(b)) {
@@ -44,17 +49,19 @@ export async function buildBuyerBoxReport(today: string): Promise<{ subject: str
   }
   const targetNorms = targets.map((t) => norm(t.name)).filter(Boolean);
   const covered = (key: string) => targetNorms.some((tn) => tn.includes(key) || key.includes(tn) || key.split(" ").some((w) => w.length > 3 && tn.includes(w)));
-  const ranked = [...demand.values()]
+  const ranked: DemandRow[] = [...demand.values()]
     .map((e) => ({ label: e.label, count: e.buyers.length, buyers: e.buyers, covered: covered(norm(e.label)) }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
-  const newMarkets = ranked.filter((r) => !r.covered);
-  const pullNow = ranked.filter((r) => r.covered);
-
-  // Buyer-type mix.
   const typeCount: Record<string, number> = {};
   for (const b of buyers) typeCount[b.type || "other"] = (typeCount[b.type || "other"] || 0) + 1;
   const typeMix = Object.entries(typeCount).sort((a, b) => b[1] - a[1]).map(([t, n]) => `${n} ${typeLabel(t)}${n === 1 ? "" : "s"}`).join(" · ");
+
+  return { buyers, ranked, newMarkets: ranked.filter((r) => !r.covered), pullNow: ranked.filter((r) => r.covered), typeMix };
+}
+
+export async function buildBuyerBoxReport(today: string): Promise<{ subject: string; html: string; buyerCount: number }> {
+  const { buyers, ranked, newMarkets, typeMix } = await getBuyerDemand();
 
   const maxCount = Math.max(1, ...ranked.map((r) => r.count));
   const topPicks = ranked.slice(0, 4);
