@@ -12,7 +12,7 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(
 const TYPE_LABEL: Record<string, string> = { developer: "Developer", custom: "Custom builder", remodeler: "Remodeler", flipper: "Fix & Flipper", cash_buyer: "Cash buyer", investor: "Investor", agent: "Agent", other: "Buyer" };
 const typeLabel = (t: string) => TYPE_LABEL[t] || (t ? t.replace(/_/g, " ") : "Buyer");
 
-type Buyer = { name: string; type: string; region: string; market: string; buyBox: string; buyBoxAreas: string; priceRange: string; dealType: string; buildType: string; propertyType: string };
+type Buyer = { name: string; type: string; region: string; market: string; buyBox: string; buyBoxAreas: string; priceRange: string; dealType: string; buildType: string; propertyType: string; minLotSize: string };
 
 // Pull the distinct target-areas out of a buyer's buy box (areas list + their city/market).
 function areasOf(b: Buyer): string[] {
@@ -25,7 +25,7 @@ export async function buildBuyerBoxReport(today: string): Promise<{ subject: str
     db.marketContact.findMany({
       where: { vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } },
       orderBy: [{ type: "asc" }, { name: "asc" }],
-      select: { name: true, type: true, region: true, market: true, buyBox: true, buyBoxAreas: true, priceRange: true, dealType: true, buildType: true, propertyType: true },
+      select: { name: true, type: true, region: true, market: true, buyBox: true, buyBoxAreas: true, priceRange: true, dealType: true, buildType: true, propertyType: true, minLotSize: true },
     }),
     db.targetMarket.findMany({ select: { name: true } }),
   ]);
