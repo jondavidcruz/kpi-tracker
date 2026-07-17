@@ -56,51 +56,78 @@ export async function buildBuyerBoxReport(today: string): Promise<{ subject: str
   for (const b of buyers) typeCount[b.type || "other"] = (typeCount[b.type || "other"] || 0) + 1;
   const typeMix = Object.entries(typeCount).sort((a, b) => b[1] - a[1]).map(([t, n]) => `${n} ${typeLabel(t)}${n === 1 ? "" : "s"}`).join(" · ");
 
-  const chip = (r: { label: string; count: number; buyers: { name: string; type: string }[] }, bg: string, bd: string, tc: string) =>
-    `<tr><td style="padding:6px 10px;border-bottom:1px solid #eef2f7"><b style="color:#0f172a">${esc(r.label)}</b></td>
-      <td style="padding:6px 10px;border-bottom:1px solid #eef2f7;text-align:center"><span style="display:inline-block;min-width:22px;background:${bg};border:1px solid ${bd};color:${tc};border-radius:999px;padding:1px 8px;font-weight:800">${r.count}</span></td>
-      <td style="padding:6px 10px;border-bottom:1px solid #eef2f7;color:#475569;font-size:12px">${r.buyers.map((x) => `${esc(x.name.split(" ")[0])} <span style="color:#94a3b8">(${esc(typeLabel(x.type))})</span>`).join(" · ")}</td></tr>`;
+  const maxCount = Math.max(1, ...ranked.map((r) => r.count));
+  const topPicks = ranked.slice(0, 4);
 
-  const rosterRows = buyers.map((b) => {
-    const areas = areasOf(b).join(", ") || (b.region || "—");
-    const box = [b.priceRange, b.buyBox, b.propertyType, b.dealType, b.buildType].map((x) => (x || "").trim()).filter(Boolean).join(" · ");
-    return `<tr><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9"><b>${esc(b.name)}</b><br><span style="font-size:11px;color:#64748b">${esc(typeLabel(b.type))}${b.region ? ` · ${esc(b.region)}` : ""}</span></td>
-      <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#334155">${esc(areas)}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#475569">${box ? esc(box) : "<span style='color:#94a3b8'>—</span>"}</td></tr>`;
+  // Big top-pick tiles — the exact areas to pull, at a glance.
+  const tile = (r: { label: string; count: number; covered: boolean }) => {
+    const on = r.covered;
+    return `<td width="25%" valign="top" style="padding:4px">
+      <div style="background:${on ? "#ecfdf5" : "#fffbeb"};border:1px solid ${on ? "#a7f3d0" : "#fcd34d"};border-radius:12px;padding:12px 8px;text-align:center">
+        <div style="font-size:30px;font-weight:800;line-height:1;color:${on ? "#047857" : "#b45309"}">${r.count}</div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-top:2px">buyers want</div>
+        <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:5px">${esc(r.label)}</div>
+        <div style="font-size:9px;font-weight:800;margin-top:3px;color:${on ? "#059669" : "#b45309"}">${on ? "✅ already farming" : "🆕 NEW — pull here"}</div>
+      </div></td>`;
+  };
+
+  // Horizontal heat bar per area — length = buyer demand, green = farming, amber = NEW.
+  const barRow = (r: { label: string; count: number; covered: boolean }) => {
+    const pct = Math.max(14, Math.round((r.count / maxCount) * 100));
+    const c = r.covered ? "#059669" : "#d97706";
+    return `<tr>
+      <td width="42%" style="padding:3px 8px 3px 0;font-size:13px;font-weight:700;color:#0f172a;vertical-align:middle">${esc(r.label)}${r.covered ? "" : ` <span style="font-size:9px;font-weight:800;color:#fff;background:#d97706;border-radius:4px;padding:1px 5px">NEW</span>`}</td>
+      <td style="vertical-align:middle"><div style="background:#eef2f7;border-radius:5px;height:20px"><div style="background:${c};border-radius:5px;height:20px;width:${pct}%"></div></div></td>
+      <td width="30" style="padding:3px 0 3px 8px;text-align:right;font-size:14px;font-weight:800;color:#0f172a;vertical-align:middle">${r.count}</td>
+    </tr>`;
+  };
+
+  // A clean "baseball card" per developer/buyer — areas as map-pin chips, price + specs as chips.
+  const cards = buyers.map((b) => {
+    const areas = areasOf(b);
+    const areaChips = areas.length
+      ? areas.map((a) => `<span style="display:inline-block;background:#0b1f3a;color:#fff;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;margin:3px 4px 0 0">📍 ${esc(a)}</span>`).join("")
+      : `<span style="font-size:12px;color:#b91c1c;background:#fef2f2;border-radius:6px;padding:2px 8px">⚠️ no target areas listed — add them so this buyer shows on the map above</span>`;
+    const specs = [b.priceRange && `💰 ${b.priceRange}`, b.propertyType, b.buildType, b.dealType, b.minLotSize && `lot ${b.minLotSize}`]
+      .map((x) => (x || "").trim()).filter(Boolean)
+      .map((x) => `<span style="display:inline-block;background:#f1f5f9;color:#334155;border-radius:6px;padding:2px 8px;font-size:11px;margin:3px 4px 0 0">${esc(x)}</span>`).join("");
+    const note = (b.buyBox || "").trim();
+    return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;margin:0 0 8px;background:#fff">
+      <div style="font-size:15px;font-weight:800;color:#0f172a">${esc(b.name)} <span style="font-size:11px;font-weight:700;color:#4338ca;background:#eef2ff;border-radius:6px;padding:1px 7px;vertical-align:middle">${esc(typeLabel(b.type))}</span>${b.region ? ` <span style="font-size:11px;color:#94a3b8">${esc(b.region)}</span>` : ""}</div>
+      <div style="margin-top:4px">${areaChips}</div>
+      ${specs ? `<div style="margin-top:4px">${specs}</div>` : ""}
+      ${note ? `<div style="margin-top:5px;font-size:11px;color:#94a3b8;font-style:italic">“${esc(note.length > 160 ? note.slice(0, 160) + "…" : note)}”</div>` : ""}
+    </div>`;
   }).join("");
 
   const html = `
   <div style="font-family:system-ui,Arial,sans-serif;color:#0f172a;max-width:720px;margin:0 auto;padding:4px 2px">
     <div style="border-bottom:3px solid #0b1f3a;padding-bottom:8px;margin-bottom:12px">
-      <div style="font-weight:800;font-size:18px;color:#0b1f3a">🎯 Vetted-Buyer Buy-Box & Lead-Sourcing Report</div>
-      <div style="color:#64748b;font-size:13px">${esc(today)} · Friday end-of-shift · pull leads over the weekend where the demand is</div>
+      <div style="font-weight:800;font-size:19px;color:#0b1f3a">🗺️ Where to pull leads this weekend</div>
+      <div style="color:#64748b;font-size:13px">${esc(today)} · from ${buyers.length} vetted buyers' buy boxes${typeMix ? ` (${esc(typeMix)})` : ""}</div>
     </div>
 
-    <p style="font-size:13px;color:#334155;margin:0 0 12px"><b>${buyers.length}</b> vetted buyers on the board${typeMix ? ` — ${esc(typeMix)}` : ""}. Ranked below by how many of them want deals in each market (buy boxes only).</p>
+    ${topPicks.length ? `<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#0b1f3a;margin:0 0 4px">🔥 Top areas by buyer demand</div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:14px"><tr>${topPicks.map(tile).join("")}</tr></table>` : ""}
 
-    <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#047857;margin:6px 0 4px">✅ Pull leads here — markets you already farm, by buyer demand</div>
-    ${pullNow.length ? `<table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-size:13px">
-      <tr style="background:#f8fafc"><th style="text-align:left;padding:6px 10px;color:#64748b;font-size:11px">Market</th><th style="padding:6px 10px;color:#64748b;font-size:11px"># buyers</th><th style="text-align:left;padding:6px 10px;color:#64748b;font-size:11px">Who wants it</th></tr>
-      ${pullNow.slice(0, 25).map((r) => chip(r, "#ecfdf5", "#a7f3d0", "#047857")).join("")}
-    </table>` : `<p style="font-size:12px;color:#94a3b8;margin:2px 0 10px">No buyer-demand areas match your current Target Markets yet.</p>`}
+    <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#0b1f3a;margin:0 0 6px">📊 Every market, ranked by how many buyers want it</div>
+    <div style="font-size:11px;color:#94a3b8;margin:0 0 8px"><span style="display:inline-block;width:10px;height:10px;background:#059669;border-radius:3px;vertical-align:middle"></span> already farming &nbsp;·&nbsp; <span style="display:inline-block;width:10px;height:10px;background:#d97706;border-radius:3px;vertical-align:middle"></span> NEW — buyer demand you're not pulling yet</div>
+    ${ranked.length ? `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${ranked.slice(0, 20).map(barRow).join("")}</table>` : `<p style="font-size:12px;color:#94a3b8">No target areas found in the buy boxes yet — add areas to each buyer on the Vetted Buyers page.</p>`}
 
-    <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#b45309;margin:16px 0 4px">🆕 NEW markets to consider this weekend — buyers want these, but they're NOT in your Target Markets</div>
-    ${newMarkets.length ? `<table style="width:100%;border-collapse:collapse;border:1px solid #fde68a;border-radius:8px;overflow:hidden;font-size:13px">
-      <tr style="background:#fffbeb"><th style="text-align:left;padding:6px 10px;color:#92400e;font-size:11px">Market</th><th style="padding:6px 10px;color:#92400e;font-size:11px"># buyers</th><th style="text-align:left;padding:6px 10px;color:#92400e;font-size:11px">Who wants it</th></tr>
-      ${newMarkets.slice(0, 25).map((r) => chip(r, "#fffbeb", "#fcd34d", "#b45309")).join("")}
-    </table>
-    <p style="font-size:12px;color:#92400e;margin:6px 0 0">👉 <b>Weekend call:</b> the top of this list is where you have buyer demand but aren't pulling leads. Adding ${esc(newMarkets[0].label)}${newMarkets[1] ? ` and ${esc(newMarkets[1].label)}` : ""} to your pull would give existing buyers more to look at.</p>` : `<p style="font-size:12px;color:#94a3b8;margin:2px 0 10px">🎉 Every market your buyers want is already in your Target Markets — no new markets needed this weekend.</p>`}
+    ${newMarkets.length ? `<div style="margin-top:14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:11px 13px">
+      <div style="font-size:13px;font-weight:800;color:#92400e">🆕 New markets to add this weekend</div>
+      <div style="font-size:12px;color:#92400e;margin-top:3px">You have buyers waiting in <b>${newMarkets.slice(0, 3).map((r) => esc(r.label)).join(", ")}</b>${newMarkets.length > 3 ? ` +${newMarkets.length - 3} more` : ""} but you're not pulling there yet. Start with <b>${esc(newMarkets[0].label)}</b> (${newMarkets[0].count} buyer${newMarkets[0].count === 1 ? "" : "s"} waiting).</div>
+    </div>` : `<div style="margin-top:14px;font-size:12px;color:#059669">🎉 Every market your buyers want is already in your Target Markets — no new markets needed this weekend.</div>`}
 
-    <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569;margin:18px 0 4px">👥 Buyer roster & buy boxes (vetted only)</div>
-    <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-size:12px">
-      <tr style="background:#f8fafc"><th style="text-align:left;padding:6px 10px;color:#64748b;font-size:11px">Buyer</th><th style="text-align:left;padding:6px 10px;color:#64748b;font-size:11px">Target areas</th><th style="text-align:left;padding:6px 10px;color:#64748b;font-size:11px">Buy box</th></tr>
-      ${rosterRows}
-    </table>
+    <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#0b1f3a;margin:20px 0 6px">🏗️ The exact buy boxes</div>
+    ${cards}
 
-    <p style="font-size:11px;color:#94a3b8;margin-top:14px">Auto-generated from vetted buyers' buy boxes only (JV partners excluded). Update buy boxes on the War Room → Vetted Buyers page to sharpen this report.</p>
+    <p style="font-size:11px;color:#94a3b8;margin-top:12px">Built from vetted buyers' buy boxes only (JV partners excluded). The areas above come straight from each buyer's target-areas field — if an area looks vague or a buyer shows “no target areas,” tighten it on War Room → Vetted Buyers and next week's map sharpens up.</p>
   </div>`;
 
-  const subject = `🎯 Weekend lead-sourcing — ${buyers.length} vetted buyers${newMarkets.length ? ` · ${newMarkets.length} new market${newMarkets.length === 1 ? "" : "s"} to consider` : ""} (${today})`;
+  const subject = topPicks.length
+    ? `🗺️ Pull leads in ${topPicks[0].label}${topPicks[1] ? ` & ${topPicks[1].label}` : ""}${newMarkets.length ? ` · ${newMarkets.length} new market${newMarkets.length === 1 ? "" : "s"}` : ""} (${today})`
+    : `🗺️ Weekend lead-sourcing report (${today})`;
   return { subject, html, buyerCount: buyers.length };
 }
 
