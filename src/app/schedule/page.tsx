@@ -226,13 +226,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     .map((u) => {
       const ps = byUser.get(u.id) ?? [];
       const { state, since } = stateFromPunches(ps);
-      const working = state === "online" || state === "break" || state === "lunch" || state === "meeting" || state === "appointment" || state === "errand" || state === "training";
+      const working = state === "online" || state === "break" || state === "lunch" || state === "meeting" || state === "appointment" || state === "errand" || state === "training" || state === "bathroom";
       const o = liveByUser.get(u.id);
       let st: string = state;
       if (o) st = "outage";
       else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
       const worked = Math.max(0, workedMinutes(ps, now, workCapAt(today, settings.orgTimezone, u.name)) - outageMinFor(u.id));
-      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: worked };
+      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "bathroom" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: worked };
     });
 
   // My time card today.
@@ -293,10 +293,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         <section>
           <h3 className="mb-2 text-sm font-bold text-slate-700">📢 My status <span className="font-normal text-slate-400">— let the team know</span></h3>
           <Card className="p-4">
-            {ownerState === "break" || ownerState === "lunch" || ownerState === "meeting" || ownerState === "appointment" || ownerState === "errand" || ownerState === "training" ? (
+            {ownerState === "break" || ownerState === "lunch" || ownerState === "meeting" || ownerState === "appointment" || ownerState === "errand" || ownerState === "training" || ownerState === "bathroom" ? (
               <div className="flex flex-wrap items-center gap-3">
-                <span className={`rounded-full px-3 py-1 text-sm font-bold ${ownerState === "meeting" ? "bg-violet-100 text-violet-800" : ownerState === "appointment" ? "bg-indigo-100 text-indigo-800" : ownerState === "errand" ? "bg-sky-100 text-sky-800" : ownerState === "training" ? "bg-teal-100 text-teal-800" : ownerState === "lunch" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"}`}>
-                  {ownerState === "meeting" ? "👥 In a meeting" : ownerState === "appointment" ? "🗓️ At an appointment" : ownerState === "errand" ? "🚗 Running an errand" : ownerState === "training" ? "🎓 In training" : ownerState === "lunch" ? "🍔 On lunch" : "☕ On break"}
+                <span className={`rounded-full px-3 py-1 text-sm font-bold ${ownerState === "meeting" ? "bg-violet-100 text-violet-800" : ownerState === "appointment" ? "bg-indigo-100 text-indigo-800" : ownerState === "errand" ? "bg-sky-100 text-sky-800" : ownerState === "training" ? "bg-teal-100 text-teal-800" : ownerState === "bathroom" ? "bg-stone-100 text-stone-700" : ownerState === "lunch" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"}`}>
+                  {ownerState === "meeting" ? "👥 In a meeting" : ownerState === "appointment" ? "🗓️ At an appointment" : ownerState === "errand" ? "🚗 Running an errand" : ownerState === "training" ? "🎓 In training" : ownerState === "bathroom" ? "💩 Bathroom break" : ownerState === "lunch" ? "🍔 On lunch" : "☕ On break"}
                 </span>
                 <form action={punch}><input type="hidden" name="kind" value={`${ownerState}_end`} /><button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">✅ I&apos;m back / available</button></form>
               </div>
@@ -309,6 +309,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                 <form action={punch}><input type="hidden" name="kind" value="appointment_start" /><button className="rounded-lg bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-200">🗓️ Appointment</button></form>
                 <form action={punch}><input type="hidden" name="kind" value="errand_start" /><button className="rounded-lg bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-200">🚗 Errand</button></form>
                 <form action={punch}><input type="hidden" name="kind" value="training_start" /><button className="rounded-lg bg-teal-100 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-200">🎓 Training</button></form>
+                <form action={punch}><input type="hidden" name="kind" value="bathroom_start" /><button className="rounded-lg bg-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-300">💩 Bathroom</button></form>
               </div>
             )}
             <p className="mt-2 text-[11px] text-slate-400">Posts to the team Chat so everyone knows when you&apos;re away — then tap &quot;I&apos;m back&quot; when you return. This is status only (you&apos;re not on the pay clock).</p>
@@ -364,7 +365,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <Card className="divide-y divide-slate-100 p-0">
             {users.filter((u) => !isOwner(u)).map((u) => {
               const st = stateByUser.get(u.id);
-              const present = st === "online" || st === "break" || st === "lunch" || st === "meeting" || st === "appointment" || st === "errand" || st === "training";
+              const present = st === "online" || st === "break" || st === "lunch" || st === "meeting" || st === "appointment" || st === "errand" || st === "training" || st === "bathroom";
               const stMin = breakMinFor(u.id);
               const over = (st === "break" || st === "lunch") && stMin > limitFor(st);
               return (

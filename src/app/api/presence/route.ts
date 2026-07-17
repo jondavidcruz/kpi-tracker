@@ -42,7 +42,7 @@ export async function GET() {
     .map((u) => {
       const ps = byUser.get(u.id) ?? [];
       const { state, since } = stateFromPunches(ps);
-      const working = state === "online" || state === "break" || state === "lunch" || state === "meeting" || state === "appointment" || state === "errand" || state === "training";
+      const working = state === "online" || state === "break" || state === "lunch" || state === "meeting" || state === "appointment" || state === "errand" || state === "training" || state === "bathroom";
       const out = outByUser.get(u.id);
       let st: string = state;
       if (out) st = "outage";
@@ -68,7 +68,7 @@ export async function GET() {
       const won = await db.user.updateMany({ where: { id: u.id, dropAlertedAt: { not: null } }, data: { dropAlertedAt: null } });
       if (won.count === 1) {
         const back = stateById.get(u.id);
-        if (back === "online" || back === "break" || back === "lunch" || back === "meeting" || back === "appointment" || back === "errand" || back === "training") {
+        if (back === "online" || back === "break" || back === "lunch" || back === "meeting" || back === "appointment" || back === "errand" || back === "training" || back === "bathroom") {
           await sendTimecardChat(`🟢 *${u.name} is back online* after a disconnect. ${MARIE_MENTION} — confirm if it was a power or internet outage and log it on their record.`).catch(() => {});
         }
       }

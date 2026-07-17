@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type State = "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "offline" | "outage" | "dropped";
+type State = "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "bathroom" | "offline" | "outage" | "dropped";
 type Person = { id: string; name: string; state: State; outageKind?: string | null; outageMin?: number | null; sinceMs: number | null; workedMin: number };
 
 const DOT: Record<State, string> = {
@@ -13,6 +13,7 @@ const DOT: Record<State, string> = {
   appointment: "bg-indigo-500",
   errand: "bg-sky-500",
   training: "bg-teal-500",
+  bathroom: "bg-stone-500",
   offline: "bg-slate-300",
   outage: "bg-red-500",
   dropped: "bg-red-400",
@@ -25,12 +26,13 @@ const RING: Record<State, string> = {
   appointment: "ring-indigo-200 bg-indigo-50",
   errand: "ring-sky-200 bg-sky-50",
   training: "ring-teal-200 bg-teal-50",
+  bathroom: "ring-stone-300 bg-stone-50",
   offline: "ring-slate-200 bg-white",
   outage: "ring-red-300 bg-red-50",
   dropped: "ring-red-200 bg-red-50",
 };
-const LABEL: Record<State, string> = { online: "Online", break: "On break", lunch: "At lunch", meeting: "In a meeting", appointment: "At an appointment", errand: "Running an errand", training: "In training", offline: "Offline", outage: "Outage", dropped: "Disconnected" };
-const ORDER: Record<State, number> = { outage: 0, dropped: 1, online: 2, meeting: 3, training: 4, appointment: 5, errand: 6, break: 7, lunch: 8, offline: 9 };
+const LABEL: Record<State, string> = { online: "Online", break: "On break", lunch: "At lunch", meeting: "In a meeting", appointment: "At an appointment", errand: "Running an errand", training: "In training", bathroom: "Bathroom 💩", offline: "Offline", outage: "Outage", dropped: "Disconnected" };
+const ORDER: Record<State, number> = { outage: 0, dropped: 1, online: 2, meeting: 3, training: 4, appointment: 5, errand: 6, bathroom: 7, break: 8, lunch: 9, offline: 10 };
 const outageLabel = (kind?: string | null) => (kind === "power" ? "⚡ Power outage" : kind === "internet" ? "📶 Internet outage" : "⚠️ Outage");
 
 function hm(min: number) {

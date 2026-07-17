@@ -2095,7 +2095,7 @@ export async function importMarketContacts(formData: FormData) {
 
 // --- Schedule + Time card ----------------------------------------------------
 
-const PUNCH_KINDS = ["in", "out", "break_start", "break_end", "lunch_start", "lunch_end", "meeting_start", "meeting_end", "appointment_start", "appointment_end", "errand_start", "errand_end", "training_start", "training_end"];
+const PUNCH_KINDS = ["in", "out", "break_start", "break_end", "lunch_start", "lunch_end", "meeting_start", "meeting_end", "appointment_start", "appointment_end", "errand_start", "errand_end", "training_start", "training_end", "bathroom_start", "bathroom_end"];
 
 /** Record a time-card punch (clock in/out, break/lunch/meeting) for the current user. */
 const PUNCH_CHAT: Record<string, string> = {
@@ -2113,6 +2113,8 @@ const PUNCH_CHAT: Record<string, string> = {
   errand_end: "🟢 {name} is back from their errand",
   training_start: "🎓 {name} is in training",
   training_end: "🟢 {name} is done with training",
+  bathroom_start: "💩 {name} is on a bathroom break",
+  bathroom_end: "🟢 {name} is back from the bathroom",
 };
 
 /** Current local time as minutes-from-midnight in the org timezone. */

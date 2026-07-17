@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { punch } from "@/app/actions";
 
-type State = "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "offline";
+type State = "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "bathroom" | "offline";
 
 const STATUS: Record<State, { label: string; cls: string }> = {
   online: { label: "🟢 Clocked in", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
@@ -13,6 +13,7 @@ const STATUS: Record<State, { label: string; cls: string }> = {
   appointment: { label: "🗓️ At an appointment", cls: "bg-indigo-50 text-indigo-700 ring-indigo-200" },
   errand: { label: "🚗 Running an errand", cls: "bg-sky-50 text-sky-700 ring-sky-200" },
   training: { label: "🎓 In training", cls: "bg-teal-50 text-teal-700 ring-teal-200" },
+  bathroom: { label: "💩 Bathroom break", cls: "bg-stone-100 text-stone-700 ring-stone-300" },
   offline: { label: "⚪️ Day ended", cls: "bg-slate-100 text-slate-600 ring-slate-200" },
 };
 
@@ -138,6 +139,7 @@ export default function TimeClock({
             <PunchButton kind="appointment_start" label="🗓️ Appointment" cls="bg-indigo-500 text-white hover:bg-indigo-600" />
             <PunchButton kind="errand_start" label="🚗 Errand" cls="bg-sky-500 text-white hover:bg-sky-600" />
             <PunchButton kind="training_start" label="🎓 Training" cls="bg-teal-500 text-white hover:bg-teal-600" />
+            <PunchButton kind="bathroom_start" label="💩 Bathroom" cls="bg-stone-500 text-white hover:bg-stone-600" />
             <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
           </>
         )}
@@ -174,6 +176,12 @@ export default function TimeClock({
         {state === "training" && (
           <>
             <PunchButton kind="training_end" label="↩︎ Done with training" cls="bg-emerald-600 text-white hover:bg-emerald-700" />
+            <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
+          </>
+        )}
+        {state === "bathroom" && (
+          <>
+            <PunchButton kind="bathroom_end" label="↩︎ Back (washed hands 🧼)" cls="bg-emerald-600 text-white hover:bg-emerald-700" />
             <PunchButton kind="out" label="■ End of day" cls="bg-slate-800 text-white hover:bg-slate-900" />
           </>
         )}
