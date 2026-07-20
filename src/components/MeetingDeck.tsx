@@ -261,20 +261,20 @@ function buildSlides(d: MeetingDeck): Slide[] {
     </div>
   )});
 
-  // Closing — the all-call ends here. Leadership content is its own deck now.
-  s.push({ name: "That's the all-call", node: (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy text-center text-white">
-      <div className="font-extrabold" style={{ fontSize: "clamp(22px,4cqw,56px)" }}>That&apos;s the all-call 🙌</div>
-      <div className="mt-2 text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>Let&apos;s have a great week.</div>
-    </div>
-  )});
-
-  // Verse of the week — always close on this.
+  // Verse of the week — sits just before the closing slide.
   s.push({ name: "Verse of the week", node: (
     <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-brand-navy-950 via-brand-navy to-amber-900 px-[10%] text-center text-white">
       <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>VERSE OF THE WEEK</div>
       <div className="mt-[4%] max-w-[85%] font-bold italic leading-snug" style={{ fontSize: "clamp(16px,3cqw,42px)" }}>&ldquo;{d.verse.text}&rdquo;</div>
       <div className="mt-[3%] font-semibold text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.8cqw,24px)" }}>— {d.verse.ref}</div>
+    </div>
+  )});
+
+  // Closing — the all-call ends here, so this is always the final slide.
+  s.push({ name: "That's the all-call", node: (
+    <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy text-center text-white">
+      <div className="font-extrabold" style={{ fontSize: "clamp(22px,4cqw,56px)" }}>That&apos;s the all-call 🙌</div>
+      <div className="mt-2 text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>Let&apos;s have a great week.</div>
     </div>
   )});
 
