@@ -73,6 +73,7 @@ const TEAM = [
   { slug: "marie", name: "Marie M.", title: "Operations Director" },
   { slug: "sharyn", name: "Sharyn M.", title: "Dispositions Director" },
   { slug: "michelle", name: "Michelle L.", title: "Acquisitions Officer" },
+  { slug: "ethan", name: "Ethan", title: "Listing Agent" },
 ];
 const SERIF = "Georgia, 'Times New Roman', serif";
 function TeamSlide() {
