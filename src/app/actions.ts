@@ -217,10 +217,15 @@ export async function saveDay(formData: FormData) {
   const created = await evaluateAndRecordAlerts(date, [...touchedKpiIds]);
   await dispatchHardAlerts(created);
 
-  revalidatePath("/dashboard");
-  revalidatePath("/entry");
+  revalidateKpiViews();
   revalidatePath("/alerts");
-  revalidatePath("/monthly");
+}
+
+/** Every route whose numbers derive from KPI entries — so a save/import shows up
+ *  everywhere (incl. the Monday meeting deck, KPI reports, and wall display) without
+ *  needing a hard reload to bust Next's router cache. */
+function revalidateKpiViews() {
+  for (const p of ["/dashboard", "/entry", "/monthly", "/report", "/meeting", "/leadership", "/tv"]) revalidatePath(p);
 }
 
 /** Auto-save ONE KPI value as the user types (no click needed). Persists to the DB so the
@@ -244,7 +249,7 @@ export async function autoSaveEntry(formData: FormData) {
   } else {
     await db.entry.create({ data: { kpiId, userId, date, value, enteredBy } });
   }
-  revalidatePath("/entry");
+  revalidateKpiViews();
 }
 
 /** Owner/manager bulk lead import — records a TEAM lead KPI (e.g. PPL Leads) for any date
@@ -270,8 +275,7 @@ export async function importTeamLeads(formData: FormData) {
   } else {
     await db.entry.create({ data: { kpiId: kpi.id, userId: null, date, value: newValue, enteredBy } });
   }
-  revalidatePath("/entry");
-  revalidatePath("/dashboard");
+  revalidateKpiViews();
   redirect(`/entry?saved=${encodeURIComponent(`${kpi.name} = ${newValue} on ${date}`)}`);
 }
 
