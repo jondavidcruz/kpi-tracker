@@ -127,7 +127,16 @@ function buildSlides(d: MeetingDeck): Slide[] {
   // 2b. Owner-added custom slides (uploaded photos / text), inserted right after the team.
   for (const cs of d.customSlides) {
     if (cs.kind === "image" && cs.imageUrl) {
-      s.push({ name: cs.title || "Slide", node: <div className="h-full w-full bg-brand-navy bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${cs.imageUrl})` }} /> });
+      s.push({ name: cs.title || "Slide", node: (
+        <div className="relative h-full w-full bg-brand-navy bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${cs.imageUrl})` }}>
+          {(cs.title || cs.body) && (
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent px-[6%] pb-[3cqw] pt-[9cqw] text-center text-white">
+              {cs.title && <div className="font-extrabold drop-shadow" style={{ fontSize: "clamp(20px,3.6cqw,48px)" }}>{cs.title}</div>}
+              {cs.body && <div className="mt-[1cqw] whitespace-pre-line text-white/90 drop-shadow" style={{ fontSize: "clamp(12px,1.9cqw,24px)" }}>{cs.body}</div>}
+            </div>
+          )}
+        </div>
+      ) });
     } else if (cs.kind === "text") {
       s.push({ name: cs.title || "Slide", node: (
         <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy px-[8%] text-center text-white">

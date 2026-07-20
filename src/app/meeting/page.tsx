@@ -173,8 +173,9 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
               <label className="flex items-center gap-1.5"><input type="radio" name="kind" value="image" defaultChecked /> 🖼️ Image slide</label>
               <label className="flex items-center gap-1.5"><input type="radio" name="kind" value="text" /> 📝 Text slide</label>
             </div>
-            <input name="title" placeholder="Slide title (optional)" className={inputCls} />
-            <textarea name="body" rows={3} placeholder="Text — for a text slide" className={inputCls} />
+            <input name="title" placeholder="Slide title / caption (shows on the slide)" className={inputCls} />
+            <textarea name="body" rows={3} placeholder="Body text (shows on the slide — under the title, or as a caption over your photo)" className={inputCls} />
+            <p className="text-[11px] text-slate-400">Title + body now show on <b>both</b> slide types — on a photo they appear as a caption across the bottom. Upload an image only for an Image slide.</p>
             <ImageUpload name="imageUrl" label="Upload slide image" />
             <button className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">+ Add slide</button>
           </form>
