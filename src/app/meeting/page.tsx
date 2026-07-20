@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording, addMeetingHighlight, deleteMeetingHighlight, saveDeckImages, addDeckSlide, updateDeckSlide, deleteDeckSlide } from "@/app/actions";
+import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording, addMeetingHighlight, deleteMeetingHighlight, saveDeckImages, addDeckSlide, updateDeckSlide, editDeckSlide, deleteDeckSlide } from "@/app/actions";
 import ImageUpload from "@/components/ImageUpload";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings, getKpis } from "@/lib/data";
@@ -186,14 +186,35 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
             <div className="mb-2 text-sm font-bold text-slate-700">Your slides <span className="font-normal text-slate-400">(shown right after the team slide, in this order)</span></div>
             <div className="space-y-2">
               {deckSlides.map((slide, i) => (
-                <div key={slide.id} className={`flex items-center gap-2 rounded-lg border p-2 ${slide.active ? "border-slate-200" : "border-slate-100 bg-slate-50 opacity-60"}`}>
-                  {slide.imageUrl ? <img src={slide.imageUrl} alt="" className="h-10 w-16 rounded object-cover" /> : <span className="grid h-10 w-16 place-items-center rounded bg-brand-navy text-xs font-bold text-white">Aa</span>}
-                  <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{slide.kind === "text" ? "📝" : "🖼️"} {slide.title || (slide.kind === "text" ? "Text slide" : "Image slide")}{!slide.active && <span className="ml-1 text-[11px] text-slate-400">(hidden)</span>}</span>
-                  <form action={updateDeckSlide}><input type="hidden" name="id" value={slide.id} /><input type="hidden" name="op" value="up" /><button disabled={i === 0} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30">↑</button></form>
-                  <form action={updateDeckSlide}><input type="hidden" name="id" value={slide.id} /><input type="hidden" name="op" value="down" /><button disabled={i === deckSlides.length - 1} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30">↓</button></form>
-                  <form action={updateDeckSlide}><input type="hidden" name="id" value={slide.id} /><input type="hidden" name="op" value="toggle" /><button className="rounded px-2 py-0.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-100">{slide.active ? "Hide" : "Show"}</button></form>
-                  <form action={deleteDeckSlide}><input type="hidden" name="id" value={slide.id} /><button className="rounded px-2 py-0.5 text-[11px] font-semibold text-red-400 hover:text-red-600">Delete</button></form>
-                </div>
+                <details key={slide.id} className={`group rounded-lg border ${slide.active ? "border-slate-200" : "border-slate-100 bg-slate-50 opacity-60"}`}>
+                  <summary className="flex cursor-pointer list-none items-center gap-2 p-2">
+                    {slide.imageUrl ? <img src={slide.imageUrl} alt="" className="h-10 w-16 rounded object-cover" /> : <span className="grid h-10 w-16 place-items-center rounded bg-brand-navy text-xs font-bold text-white">Aa</span>}
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{slide.kind === "text" ? "📝" : "🖼️"} {slide.title || (slide.kind === "text" ? "Text slide" : "Image slide")}{!slide.active && <span className="ml-1 text-[11px] text-slate-400">(hidden)</span>}</span>
+                    <span className="rounded px-2 py-0.5 text-[11px] font-semibold text-sky-600 group-open:hidden">Edit ✎</span>
+                    <span className="hidden rounded px-2 py-0.5 text-[11px] font-semibold text-slate-500 group-open:inline">Close ✕</span>
+                  </summary>
+                  <div className="flex items-center gap-2 px-2 pb-1">
+                    <form action={updateDeckSlide}><input type="hidden" name="id" value={slide.id} /><input type="hidden" name="op" value="up" /><button disabled={i === 0} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30">↑</button></form>
+                    <form action={updateDeckSlide}><input type="hidden" name="id" value={slide.id} /><input type="hidden" name="op" value="down" /><button disabled={i === deckSlides.length - 1} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30">↓</button></form>
+                    <form action={updateDeckSlide}><input type="hidden" name="id" value={slide.id} /><input type="hidden" name="op" value="toggle" /><button className="rounded px-2 py-0.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-100">{slide.active ? "Hide" : "Show"}</button></form>
+                    <div className="flex-1" />
+                    <form action={deleteDeckSlide}><input type="hidden" name="id" value={slide.id} /><button className="rounded px-2 py-0.5 text-[11px] font-semibold text-red-400 hover:text-red-600">Delete</button></form>
+                  </div>
+                  <form action={editDeckSlide} className="space-y-2 border-t border-slate-200 p-3">
+                    <input type="hidden" name="id" value={slide.id} />
+                    <div className="flex gap-4 text-sm text-slate-600">
+                      <label className="flex items-center gap-1.5"><input type="radio" name="kind" value="image" defaultChecked={slide.kind !== "text"} /> 🖼️ Image slide</label>
+                      <label className="flex items-center gap-1.5"><input type="radio" name="kind" value="text" defaultChecked={slide.kind === "text"} /> 📝 Text slide</label>
+                    </div>
+                    <input name="title" defaultValue={slide.title} placeholder="Slide title / caption (shows on the slide)" className={inputCls} />
+                    <textarea name="body" rows={3} defaultValue={slide.body} placeholder="Body text (shows on the slide)" className={inputCls} />
+                    <div className="flex items-center gap-3">
+                      <ImageUpload name="imageUrl" label={slide.imageUrl ? "Replace image" : "Upload image"} />
+                      {slide.imageUrl && <span className="text-[11px] text-slate-400">Leave blank to keep the current photo.</span>}
+                    </div>
+                    <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Save changes</button>
+                  </form>
+                </details>
               ))}
             </div>
           </Card>

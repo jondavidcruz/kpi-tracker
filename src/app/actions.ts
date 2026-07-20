@@ -642,6 +642,26 @@ export async function deleteDeckSlide(formData: FormData) {
   revalidatePath("/meeting");
 }
 
+/** Edit an existing custom slide in place (title / body / image). Managers only. */
+export async function editDeckSlide(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const row = id ? await db.deckSlide.findUnique({ where: { id } }) : null;
+  if (!row) return;
+  const kind = String(formData.get("kind") ?? row.kind) === "text" ? "text" : "image";
+  const title = String(formData.get("title") ?? "").trim().slice(0, 120);
+  const body = String(formData.get("body") ?? "").trim().slice(0, 1200);
+  // A blank upload keeps the current image; a new upload replaces it.
+  const newImage = String(formData.get("imageUrl") ?? "").trim().slice(0, 600);
+  const imageUrl = newImage || row.imageUrl;
+  if (kind === "image" && !imageUrl) redirect("/meeting?err=noimage#slides");
+  if (kind === "text" && !title && !body) redirect("/meeting?err=notext#slides");
+  await db.deckSlide.update({ where: { id }, data: { kind, title, body, imageUrl } });
+  revalidatePath("/meeting");
+  redirect("/meeting?saved=Slide+updated#slides");
+}
+
 /** Save the Leadership-meeting deck content (agenda, talking points, action items). Managers only. */
 export async function saveLeadershipSettings(formData: FormData) {
   const me = await getCurrentUser();
