@@ -68,6 +68,7 @@ export default function Sidebar({
       { href: "/rocks", label: "Rocks", Icon: Mountain },
       { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
+      { href: "/team-360", label: "Team 360", Icon: Sparkles },
     ] },
     { label: "C-Suite", items: [
       { href: "/leaks", label: "War Room Health", Icon: Activity, csuiteOnly: true },
