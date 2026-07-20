@@ -247,6 +247,34 @@ export async function autoSaveEntry(formData: FormData) {
   revalidatePath("/entry");
 }
 
+/** Owner/manager bulk lead import — records a TEAM lead KPI (e.g. PPL Leads) for any date
+ *  without opening a rep's card. For batches we uploaded ourselves instead of buying through
+ *  the provider (e.g. "we uploaded 215 PPL leads on Jul 10"). Writes the same team Entry the
+ *  Lead-sources card would, so dashboards/reports/monthly rollups all pick it up. */
+export async function importTeamLeads(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const date = String(formData.get("date") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) redirect("/entry?err=Pick+a+valid+date");
+  const kpiKey = String(formData.get("kpiKey") ?? "ppl_leads");
+  const mode = String(formData.get("mode") ?? "set"); // "set" (replace) | "add" (to existing)
+  const count = Number(String(formData.get("count") ?? "").trim());
+  if (!Number.isFinite(count) || count < 0) redirect("/entry?err=Enter+a+valid+number");
+  const kpi = await db.kpi.findFirst({ where: { key: kpiKey, scope: "team" }, select: { id: true, name: true } });
+  if (!kpi) redirect("/entry?err=Unknown+lead+type");
+  const existing = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: null, date } });
+  const newValue = mode === "add" && existing ? existing.value + count : count;
+  const enteredBy = `${me?.name ?? "import"} · bulk import`;
+  if (existing) {
+    await db.entry.update({ where: { id: existing.id }, data: { value: newValue, enteredBy, enteredAt: new Date() } });
+  } else {
+    await db.entry.create({ data: { kpiId: kpi.id, userId: null, date, value: newValue, enteredBy } });
+  }
+  revalidatePath("/entry");
+  revalidatePath("/dashboard");
+  redirect(`/entry?saved=${encodeURIComponent(`${kpi.name} = ${newValue} on ${date}`)}`);
+}
+
 function revalidateAlerts() {
   revalidatePath("/alerts");
   revalidatePath("/dashboard");

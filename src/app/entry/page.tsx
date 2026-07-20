@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { saveDay, addRepReason, setDayFocus, refreshCrmToday } from "@/app/actions";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { saveDay, addRepReason, setDayFocus, refreshCrmToday, importTeamLeads } from "@/app/actions";
+import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
 import SpeedTestCard from "@/components/SpeedTestCard";
@@ -29,7 +29,7 @@ export const maxDuration = 60;
 export default async function EntryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ user?: string; date?: string }>;
+  searchParams: Promise<{ user?: string; date?: string; saved?: string; err?: string }>;
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
@@ -200,6 +200,41 @@ export default async function EntryPage({
         />
         <button className="rounded-md bg-slate-200 px-3 py-1.5 font-medium hover:bg-slate-300">Go</button>
       </form>
+
+      {(sp.saved || sp.err) && (
+        <div className={`rounded-xl px-4 py-2.5 text-sm font-semibold ring-1 ${sp.err ? "bg-red-50 text-red-800 ring-red-200" : "bg-emerald-50 text-emerald-800 ring-emerald-200"}`}>
+          {sp.err ? `⚠️ ${sp.err}` : `✓ Recorded ${sp.saved}`}
+        </div>
+      )}
+
+      {/* Owner-only bulk lead import — record a batch we uploaded ourselves (e.g. a PPL list
+          we didn't buy through the provider) straight to the team KPI, any date, no rep card. */}
+      {isOwner(me) && (
+        <Card className="border-l-4 border-brand-gold p-4">
+          <div className="text-sm font-bold text-slate-800">📥 Bulk lead import <span className="font-normal text-slate-400">(owner)</span></div>
+          <p className="mt-0.5 text-xs text-slate-500">Uploaded a batch of leads yourself instead of buying through the provider? Record it here — writes straight to the team KPI for any date, no rep card needed.</p>
+          <form action={importTeamLeads} className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="text-xs font-semibold text-slate-500">Lead type
+              <select name="kpiKey" defaultValue="ppl_leads" className="mt-0.5 block rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+                {teamDaily.filter((k) => k.key !== "text_responses").map((k) => <option key={k.id} value={k.key}>{k.emoji} {k.name}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-500">Date
+              <input type="date" name="date" defaultValue={date} className="mt-0.5 block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            </label>
+            <label className="text-xs font-semibold text-slate-500"># of leads
+              <input type="number" name="count" min="0" step="1" placeholder="215" required className="mt-0.5 block w-28 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            </label>
+            <label className="text-xs font-semibold text-slate-500">How
+              <select name="mode" defaultValue="set" className="mt-0.5 block rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+                <option value="set">Set to</option>
+                <option value="add">Add to existing</option>
+              </select>
+            </label>
+            <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Record leads</button>
+          </form>
+        </Card>
+      )}
 
       {rep && isDispo && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
