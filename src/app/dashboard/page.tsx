@@ -10,6 +10,7 @@ import {
   resolveGoalWith,
 } from "@/lib/data";
 import { todayStr, friendlyDate, paceFraction, monthOf, datesInRange } from "@/lib/date";
+import { quarterOf } from "@/lib/eos";
 import { formatValue, type Unit } from "@/lib/format";
 import { statusClasses, statusVsGoal, statusVsPace, alertSeverity, isKpiHiddenForRep, type Status } from "@/lib/kpi";
 import { dailyGap, monthlyGap, monthlyCatchup, buildCoaching } from "@/lib/gap";
@@ -114,6 +115,22 @@ export default async function DashboardPage({
   const netProfit = grossRevenue - ytdOpEx;
   const falloutYTD = closings.filter((c) => c.status === "fell_through" && (c.closeDate ? c.closeDate >= yearStart : true)).length;
   const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
+
+  // --- Team 360 nudge: does THIS person still owe peer reviews this quarter? ---
+  // Everyone rates everyone (including themselves), so "left to rate" = active teammates
+  // minus the distinct people I've already submitted for this quarter. Banner self-clears
+  // once they finish, so it naturally disappears without any scheduled cleanup.
+  const t360Quarter = quarterOf(date);
+  let t360Remaining = 0;
+  if (me) {
+    try {
+      const [activeUserCount, myRated] = await Promise.all([
+        db.user.count({ where: { active: true } }),
+        db.peerAssessment.findMany({ where: { quarter: t360Quarter, raterId: me.id }, distinct: ["subjectId"], select: { subjectId: true } }),
+      ]);
+      t360Remaining = Math.max(0, activeUserCount - myRated.length);
+    } catch { t360Remaining = 0; }
+  }
 
   // --- Deal funnel (this month): leads → opportunities → offers → contracts → closed ---
   const FUNNEL_KEYS = ["ppl_leads", "text_responses", "direct_mail_responses", "quality_convos", "offers_made", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"];
@@ -273,6 +290,14 @@ export default async function DashboardPage({
           </Link>
         </div>
       </div>
+
+      {/* Team 360 nudge — shows until this person finishes their peer reviews for the quarter */}
+      {t360Remaining > 0 && (
+        <Link href="/team-360" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 transition hover:bg-indigo-100">
+          <span className="text-sm font-semibold text-indigo-900">🦸 Team 360 is open — rate your teammates&apos; superpowers &amp; growth areas. <span className="font-normal text-indigo-700">You have {t360Remaining} left to complete today.</span></span>
+          <span className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">Complete now →</span>
+        </Link>
+      )}
 
       {/* Headline metrics */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
