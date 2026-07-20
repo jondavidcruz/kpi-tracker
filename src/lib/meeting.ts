@@ -70,7 +70,10 @@ const EXCLUDE_KPIS = new Set(["text_responses", "appts_set", "appts_taken"]);
 // much to read on a slide). Order = display order. Roles not listed show everything.
 const CORE_DECK_KPIS: Record<string, string[]> = {
   acquisitions: ["offers_made", "acq_contracts_sent", "acq_signed_assignment", "acq_signed_novation", "acq_signed_creative"],
-  dispositions: ["new_buyers", "buyer_offers_received", "contracts_assigned", "deals_sold"],
+  // Lead with developer-sourcing output: Buyers Vetted + Buy Boxes Captured (auto-tracked
+  // from Buyer Research) — the developers they vetted/added — then the deal-flow money KPIs.
+  // (new_buyers was retired in the Jul '26 dispo rework, which is why the table looked short.)
+  dispositions: ["buyers_vetted", "buy_boxes_captured", "deals_sold", "buyer_offers_received", "contracts_assigned"],
 };
 // The month's core money KPIs (entered monthly, so not in the daily-summed glance).
 const CORE_MONTHLY_KPIS = ["ppl_leads", "gross_revenue", "marketing_spend", "deals_closed"];
