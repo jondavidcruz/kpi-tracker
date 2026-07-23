@@ -50,6 +50,16 @@ export default async function ReportPage({
   }
   const rangeNoun = range === "day" ? "day" : range === "month" ? "month" : "week";
 
+  // --- Calendar navigation: jump to any date, or step one range at a time. Everything
+  // anchors on ?date=, so Prev/Next just shift that anchor by a day / week / month. ---
+  const dateQ = sp.date ? `&date=${encodeURIComponent(sp.date)}` : "";
+  const shiftDays = (dateStr: string, n: number) => { const d = new Date(dateStr + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const shiftMonths = (dateStr: string, n: number) => { const [y, mm] = dateStr.split("-").map(Number); return new Date(Date.UTC(y, mm - 1 + n, 1)).toISOString().slice(0, 10); };
+  const stepDate = (dir: number) => range === "day" ? shiftDays(wk.start, dir) : range === "month" ? shiftMonths(wk.start, dir) : shiftDays(wk.start, dir * 7);
+  const todayAnchorS = todayStr(settings.orgTimezone);
+  const curAnchor = range === "day" ? todayAnchorS : range === "month" ? `${monthOf(todayAnchorS)}-01` : currentWeekRange(todayAnchorS).start;
+  const nextDisabled = stepDate(1) > curAnchor; // don't let Next walk into the future
+
   const [reps, perRepKpis, teamKpis, sums, targets] = await Promise.all([
     getActiveReps(),
     getKpis({ scope: "per_rep", computed: false }),
@@ -97,17 +107,25 @@ export default async function ReportPage({
           <p className="text-slate-500">{prev ? `Previous ${rangeNoun}` : `This ${rangeNoun}`} · {wk.label}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Day / Week / Month */}
+          {/* Day / Week / Month — keep whatever date is anchored so switching view stays put */}
           <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-200">
             {(["day", "week", "month"] as const).map((rg) => (
-              <a key={rg} href={`/report?range=${rg}`} className={`px-3 py-1.5 text-xs font-semibold capitalize ${range === rg ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>{rg}</a>
+              <a key={rg} href={`/report?range=${rg}${dateQ}`} className={`px-3 py-1.5 text-xs font-semibold capitalize ${range === rg ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>{rg}</a>
             ))}
           </div>
-          {/* This vs. previous */}
+          {/* Jump straight to any date on the calendar */}
+          <form action="/report" method="get" className="flex items-center gap-1.5">
+            <input type="hidden" name="range" value={range} />
+            <label className="text-xs font-semibold text-slate-500">Jump to</label>
+            <input type="date" name="date" defaultValue={wk.start} max={todayStr(settings.orgTimezone)} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs" />
+            <button className="rounded-lg bg-brand-navy px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-navy-700">Go</button>
+          </form>
+          {/* Prev / Next step through one range at a time */}
           <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-200">
-            <a href={`/report?range=${range}`} className={`px-3 py-1.5 text-xs font-semibold ${!prev ? "bg-brand-gold text-brand-navy" : "bg-white text-slate-600 hover:bg-slate-100"}`}>This {rangeNoun}</a>
-            <a href={`/report?range=${range}&prev=1`} className={`px-3 py-1.5 text-xs font-semibold ${prev ? "bg-brand-gold text-brand-navy" : "bg-white text-slate-600 hover:bg-slate-100"}`}>Previous</a>
+            <a href={`/report?range=${range}&date=${encodeURIComponent(stepDate(-1))}`} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" title={`Previous ${rangeNoun}`}>← Prev</a>
+            <a href={`/report?range=${range}${nextDisabled ? "" : `&date=${encodeURIComponent(stepDate(1))}`}`} aria-disabled={nextDisabled} className={`px-3 py-1.5 text-xs font-semibold ${nextDisabled ? "cursor-not-allowed text-slate-300" : "text-slate-600 hover:bg-slate-100"}`} title={`Next ${rangeNoun}`}>Next →</a>
           </div>
+          <a href="/report" className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100" title="Back to the current period">Today</a>
         </div>
       </div>
       {sp.synced && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Synced from REI Reply — KPIs are current.</div>}
