@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
   Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus,
@@ -12,6 +12,33 @@ import Logo from "./Logo";
 import StatusDot from "./StatusDot";
 
 type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
+
+// Extra search terms per page so a search matches what people actually call things
+// (e.g. "payroll" finds Schedule & Time, "P&L" finds the Profit & Loss report).
+const SEARCH_KEYWORDS: Record<string, string> = {
+  "/underwriting": "calculator offer mao comps deal analyzer novation assignment developer land cash double close",
+  "/marketing": "vetted buyers buy box developers cash buyers jv partners map",
+  "/lead-sourcing": "leads pull markets areas where to pull sourcing farm demand",
+  "/vetting": "buyer research vet developers unvetted",
+  "/schedule": "time card timecard punch clock breaks lunch bathroom pto time off availability hours",
+  "/timecard": "payroll pay hours wages",
+  "/expenses": "profit loss p&l pnl accounting costs revenue expenses",
+  "/closing": "escrow closing hud profit expenses",
+  "/scripts": "objections rebuttals seller luxury talk tracks",
+  "/playbooks": "sop process novation double close outreach",
+  "/glossary": "definitions terms meaning",
+  "/team-360": "peer review superpowers strengths growth feedback",
+  "/report": "kpi history reports past dates calendar",
+  "/entry": "enter kpis log numbers bulk lead import",
+  "/deals": "pipeline dispositions",
+  "/huddle": "standup morning brief",
+  "/call-scoring": "call recording transcript coaching score",
+  "/software": "logins passwords tools vendors",
+  "/tickets": "requests help support",
+  "/leaks": "war room health issues",
+  "/rocks": "eos quarterly goals",
+  "/vto": "vision traction organizer eos",
+};
 
 export default function Sidebar({
   name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions,
@@ -30,7 +57,9 @@ export default function Sidebar({
   newSuggestions: number;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   const groups: { label: string; items: Item[] }[] = [
     { label: "Overview", items: [
@@ -93,6 +122,17 @@ export default function Sidebar({
     (!allowedPaths || allowedPaths.some((p) => it.href === p || it.href.startsWith(p + "/")));
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
+  // Flat, searchable index of every page the user can actually see (+ the wall display).
+  const allItems: (Item & { group: string })[] = [
+    ...groups.flatMap((g) => g.items.filter(visible).map((it) => ({ ...it, group: g.label }))),
+    { href: "/tv", label: "Wall display", Icon: Tv, group: "Display" },
+  ];
+  const q = query.trim().toLowerCase();
+  const results = q
+    ? allItems.filter((it) => `${it.label} ${it.group} ${SEARCH_KEYWORDS[it.href] ?? ""}`.toLowerCase().includes(q))
+    : [];
+  const goResult = () => { if (results[0]) { router.push(results[0].href); setQuery(""); setOpen(false); } };
+
   const Nav = (
     <div className="flex h-full flex-col">
       <div className="px-4 pt-5 pb-3">
@@ -102,7 +142,47 @@ export default function Sidebar({
         {owner && <div className="mt-2"><StatusDot /></div>}
       </div>
 
+      {/* Search — jump to any page by name or by what people call it ("payroll", "leads", "P&L") */}
+      <div className="px-3 pb-2">
+        <form onSubmit={(e) => { e.preventDefault(); goResult(); }} className="relative">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-navy-300" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search the war room…"
+            aria-label="Search the war room"
+            className="w-full rounded-lg bg-white/5 py-2 pl-8 pr-7 text-sm text-white placeholder:text-brand-navy-300 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-brand-gold/40"
+          />
+          {query && (
+            <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 text-brand-navy-300 hover:text-white">
+              <X size={14} />
+            </button>
+          )}
+        </form>
+      </div>
+
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+        {q ? (
+          results.length === 0 ? (
+            <div className="px-3 py-6 text-center text-sm text-brand-navy-300">No pages match &ldquo;{query}&rdquo;.</div>
+          ) : (
+            <div className="space-y-0.5">
+              {results.map((it) => (
+                <Link
+                  key={it.href}
+                  href={it.href}
+                  onClick={() => { setQuery(""); setOpen(false); }}
+                  className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-brand-navy-100 transition hover:bg-white/5 hover:text-white"
+                >
+                  <it.Icon size={18} strokeWidth={1.75} className="text-brand-navy-300 group-hover:text-white" />
+                  <span className="flex-1">{it.label}</span>
+                  <span className="text-[10px] uppercase tracking-wide text-brand-navy-300">{it.group}</span>
+                </Link>
+              ))}
+            </div>
+          )
+        ) : (
+        <>
         {groups.map((g) => {
           const items = g.items.filter(visible);
           if (items.length === 0) return null;
@@ -148,6 +228,8 @@ export default function Sidebar({
             Wall display
           </Link>
         </div>
+        </>
+        )}
 
         {/* Lock-color key (visible only where locked items appear) */}
         {(manager || admin) && (
