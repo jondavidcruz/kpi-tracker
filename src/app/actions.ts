@@ -887,6 +887,22 @@ export async function deleteAiSubmission(formData: FormData) {
 
 // --- Team Roster (private HR) — OWNER ONLY ----------------------------------
 
+/** Any team member saves their OWN mailing address (for shipping reward gifts).
+ *  Writes to the same TeamProfile.address the owner sees on the roster — no new table. */
+export async function saveMyAddress(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const address = String(formData.get("address") ?? "").trim().slice(0, 300);
+  await db.teamProfile.upsert({
+    where: { userId: me.id },
+    update: { address },
+    create: { userId: me.id, name: me.name, address },
+  });
+  revalidatePath("/account");
+  revalidatePath("/team-roster");
+  redirect("/account?addr=1");
+}
+
 export async function saveTeamProfile(formData: FormData) {
   const me = await getCurrentUser();
   if (!me || !isAdmin(me)) return; // Jon only

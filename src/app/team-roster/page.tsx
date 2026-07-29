@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { saveTeamProfile, uploadTeamDoc, deleteTeamDoc } from "@/app/actions";
-import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite, isOwner } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
+import { getRevenueByUser, tierFor, REVENUE_LADDER } from "@/lib/roster-revenue";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
 import { db } from "@/lib/db";
 import { todayStr } from "@/lib/date";
@@ -44,8 +45,13 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
     );
   }
   const sp = await searchParams;
+  const owner = isOwner(me); // revenue + promotion ladder are Jon-only, even within C-suite
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
+  const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  const { byUserId: revByUser, unattributed } = owner
+    ? await getRevenueByUser(Number(today.slice(0, 4)))
+    : { byUserId: new Map(), unattributed: 0 };
   const [users, profiles, board, ai, seats, docs] = await Promise.all([
     getAllUsers(),
     db.teamProfile.findMany(),
@@ -73,6 +79,20 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
 
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
       {sp.err && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">{sp.err === "size" ? "That file is over 15MB — compress it and try again." : "Pick a file to upload."}</div>}
+
+      {owner && (
+        <details className="rounded-xl bg-violet-50/60 p-3 ring-1 ring-violet-200">
+          <summary className="cursor-pointer text-sm font-bold text-violet-800">💜 Promotion ladder &amp; revenue credit <span className="font-normal text-violet-600">— how these numbers work (owner-only)</span></summary>
+          <div className="mt-2 space-y-2 text-[13px] text-violet-800">
+            <div className="flex flex-wrap gap-2">
+              {REVENUE_LADDER.map((t) => (
+                <span key={t.tier} className="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-violet-800 ring-1 ring-violet-200">{t.tier} · {usd(t.min)}+</span>
+              ))}
+            </div>
+            <p className="text-[12px] text-violet-700">Revenue is credited to <b>both</b> sides of every closed deal — the acquisitions/LM person who signed it and the dispo person who closed it — so team totals exceed company revenue on purpose. Matching is by first name on the deal records. {unattributed > 0 && <>Right now <b>{usd(unattributed)}</b> of closed profit isn&apos;t credited to anyone (the deal&apos;s closed-by / LM-AQ names didn&apos;t match an active teammate) — tidy those fields on the deal to attribute it.</>} Tell me the tiers/thresholds you want and I&apos;ll adjust the ladder.</p>
+          </div>
+        </details>
+      )}
 
       {/* EOS Accountability Chart + GWC */}
       <details open={seats.length > 0} className="rounded-xl ring-1 ring-violet-200">
@@ -114,6 +134,40 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                 <Snap label="AI proven" value={String(aiProven)} />
               </div>
 
+              {/* Owner-only: revenue generated + ramp toward the next tier */}
+              {owner && (() => {
+                const rev = revByUser.get(u.id) ?? { revenue: 0, revenueYtd: 0, deals: 0 };
+                const { current, next, toGo, pct } = tierFor(rev.revenue);
+                return (
+                  <div className="mb-3 rounded-xl bg-violet-50/60 p-3 ring-1 ring-violet-200">
+                    <div className="flex flex-wrap items-end justify-between gap-2">
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Revenue generated for the company</div>
+                        <div className="text-2xl font-extrabold text-violet-900">{usd(rev.revenue)} <span className="text-xs font-semibold text-violet-500">lifetime · {usd(rev.revenueYtd)} this year · {rev.deals} deal{rev.deals === 1 ? "" : "s"}</span></div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Current level</div>
+                        <div className="text-sm font-extrabold text-violet-900">{current.tier}</div>
+                      </div>
+                    </div>
+                    {next ? (
+                      <div className="mt-2">
+                        <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-violet-700">
+                          <span>→ Next: <b>{next.tier}</b> at {usd(next.min)}</span>
+                          <span>{usd(toGo)} to go</span>
+                        </div>
+                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-violet-100">
+                          <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.round(pct * 100)}%` }} />
+                        </div>
+                        <div className="mt-1 text-[11px] text-violet-600">{next.tier}: {next.blurb}</div>
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-[11px] font-semibold text-violet-700">🏆 Top of the ladder — {current.tier}.</div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Editable HR record */}
               <form action={saveTeamProfile} className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <input type="hidden" name="userId" value={u.id} />
@@ -121,7 +175,7 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                 <label><span className={labelCls}>Birthday</span><input type="date" name="birthday" defaultValue={p?.birthday ?? ""} className={inputCls} /></label>
                 <label><span className={labelCls}>Phone</span><input name="phone" defaultValue={p?.phone ?? ""} className={inputCls} /></label>
                 <label><span className={labelCls}>Started with us</span><input type="date" name="startDate" defaultValue={p?.startDate ?? ""} className={inputCls} /></label>
-                <label className="sm:col-span-3"><span className={labelCls}>Address</span><input name="address" defaultValue={p?.address ?? ""} className={inputCls} /></label>
+                <label className="sm:col-span-3"><span className={labelCls}>Mailing address <span className="font-normal normal-case text-slate-400">(they can also set this on their own Account page)</span></span><input name="address" defaultValue={p?.address ?? ""} placeholder="For shipping reward gifts" className={inputCls} /></label>
                 {!isOwner && (
                   <>
                     <label><span className={labelCls}>Last promotion</span><input type="date" name="lastPromotion" defaultValue={p?.lastPromotion ?? ""} className={inputCls} /></label>
