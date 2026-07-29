@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// 529 = Anthropic overloaded, 429 = rate-limited, 5xx = transient server blip.
+// All are worth a quick retry — none are a key/billing problem.
+const TRANSIENT = new Set([429, 500, 502, 503, 504, 529]);
 
 const PLAYBOOK = `You are the Freedom Offers underwriting assistant inside the War Room. You help the dispositions and acquisitions team underwrite real-estate wholesale deals fast and accurately. Be concise, practical, and numbers-first. When you have the inputs, DO the math and show the result. If a key input is missing (ARV, repairs, market tier), ask for just that one thing.
 
@@ -53,22 +59,40 @@ export async function POST(request: Request) {
 
   const system = body.context ? `${PLAYBOOK}\n\nCURRENT DEAL CONTEXT (from the calculator on screen):\n${String(body.context).slice(0, 1500)}` : PLAYBOOK;
 
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-opus-4-8",
-        max_tokens: 1200,
-        system,
-        messages: msgs.map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })),
-      }),
-    });
-    if (!res.ok) return NextResponse.json({ reply: `AI error (${res.status}). Check the API key / billing.` });
-    const data = await res.json();
-    const reply: string = data?.content?.[0]?.text ?? "Sorry — no answer came back. Try rephrasing.";
-    return NextResponse.json({ reply });
-  } catch {
-    return NextResponse.json({ reply: "The assistant couldn't be reached (network)." });
+  const payload = JSON.stringify({
+    model: "claude-opus-4-8",
+    max_tokens: 1200,
+    system,
+    messages: msgs.map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })),
+  });
+
+  // Up to 3 tries; back off on transient overload/rate-limit before giving up.
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(attempt === 1 ? 700 : 1800);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: payload,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply: string = data?.content?.[0]?.text ?? "Sorry — no answer came back. Try rephrasing.";
+        return NextResponse.json({ reply });
+      }
+      lastStatus = res.status;
+      if (TRANSIENT.has(res.status)) continue; // overloaded/rate-limited → retry
+      // Non-transient: don't waste retries.
+      if (res.status === 401 || res.status === 403) return NextResponse.json({ reply: "⚠️ The AI assistant's access needs attention (auth). Let Jon know — the API key may need renewing." });
+      return NextResponse.json({ reply: `The assistant hit an error (${res.status}). Try again in a moment.` });
+    } catch {
+      lastStatus = -1; // network blip — worth another try
+    }
   }
+  // All retries exhausted.
+  const busy = lastStatus === 429 || lastStatus === 529 || (lastStatus >= 500 && lastStatus < 600);
+  return NextResponse.json({ reply: busy
+    ? "🤖 The AI is busy right now (high demand). Give it a few seconds and hit Send again — your numbers are still here."
+    : "The assistant couldn't be reached. Check your connection and try again." });
 }
