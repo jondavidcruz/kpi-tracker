@@ -56,13 +56,18 @@ export default async function RewardsPage() {
   const indByUser = new Map<string, typeof rewards>();
   for (const r of rewards.filter((r) => r.scope === "individual")) { const a = indByUser.get(r.userId) ?? []; a.push(r); indByUser.set(r.userId, a); }
 
-  const RewardCard = ({ r }: { r: (typeof rewards)[number] }) => (
+  const RewardCard = ({ r }: { r: (typeof rewards)[number] }) => {
+    // Paste a store link into the reward text and it becomes a clickable "Order" button.
+    const url = r.reward.match(/https?:\/\/[^\s]+/)?.[0];
+    const label = url ? r.reward.replace(url, "").replace(/[—\-·|:]\s*$/, "").trim() || "Reward" : r.reward;
+    return (
     <div className={`rounded-xl p-3 ring-1 ${r.achieved ? "bg-emerald-50 ring-emerald-200" : "bg-white ring-slate-200"}`}>
       <div className="flex items-start gap-2.5">
         <span className="text-2xl">{r.icon}</span>
         <div className="min-w-0 flex-1">
           {r.goal && <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Hit: {r.goal}</div>}
-          <div className="font-bold text-slate-800">{r.reward}</div>
+          <div className="font-bold text-slate-800">{label}</div>
+          {url && <a href={url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100">🔗 Order this →</a>}
         </div>
         {r.achieved && <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">✓ earned</span>}
       </div>
@@ -71,7 +76,8 @@ export default async function RewardsPage() {
         <form action={deleteReward} className="ml-auto"><input type="hidden" name="id" value={r.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">remove</button></form>
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -106,7 +112,7 @@ export default async function RewardsPage() {
             <select name="scope" defaultValue="team" className={`${inputCls} sm:col-span-2`}><option value="team">Whole team</option><option value="individual">One person</option></select>
             <select name="userId" defaultValue="" className={`${inputCls} sm:col-span-2`}><option value="">— person (if individual) —</option>{reps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
             <input name="goal" placeholder="Goal to hit (optional)" className={`${inputCls} sm:col-span-3`} />
-            <input name="reward" placeholder="Reward / benefit" required className={`${inputCls} sm:col-span-3`} />
+            <input name="reward" placeholder="Reward + paste store link (e.g. AirPods https://…)" required className={`${inputCls} sm:col-span-3`} />
             <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700 sm:col-span-1">Add</button>
           </form>
         </Card>
