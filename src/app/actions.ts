@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
 import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
-import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendTeamChat, sendTimecardChat, sendCallAuditChat } from "@/lib/notify";
+import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendTeamChat, sendTimecardChat, sendCallAuditChat, postChatWebhook } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin, isOwner, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
@@ -930,6 +930,16 @@ export async function savePhoneLine(formData: FormData) {
     const max = await db.resource.aggregate({ where: { category: PHONE_LINE_CAT }, _max: { sortOrder: true } });
     await db.resource.create({ data: { ...data, sortOrder: (max._max.sortOrder ?? 0) + 1 } });
   }
+  // Alert the moment a number is logged flagged or with a low answer rate.
+  const flagged = [meta.att, meta.verizon, meta.tmobile].includes("flagged");
+  const lowRate = meta.answerRate != null && meta.answerRate < 5;
+  if (flagged || lowRate) {
+    const url = await getPhoneAlertWebhook();
+    if (url) {
+      const why = flagged ? "🚩 flagged by a carrier" : `📉 answer rate ${meta.answerRate}% (under 5%)`;
+      await postChatWebhook(url, `📞 *Phone health alert* — ${number}${meta.label ? ` (${meta.label})` : ""} on ${meta.provider}: ${why}. Test it today and dispute if needed. → War Room → Phone Health`).catch(() => {});
+    }
+  }
   revalidatePath("/phone-health");
   redirect("/phone-health?saved=1#tracker");
 }
@@ -959,6 +969,33 @@ export async function savePhoneSetup(formData: FormData) {
   else await db.resource.create({ data: { title: "phone-setup", category: PHONE_SETUP_CAT, url: "", description: JSON.stringify(map) } });
   revalidatePath("/phone-health");
   redirect("/phone-health?saved=1#setup");
+}
+
+// Phone-health Google Chat alert channel — its OWN space (NOT the KPI webhook). The
+// secret webhook URL is stored in the DB (Supabase), never committed to the repo.
+const PHONE_CONFIG_CAT = "__phone_config__";
+export async function getPhoneAlertWebhook(): Promise<string> {
+  const row = await db.resource.findFirst({ where: { category: PHONE_CONFIG_CAT } }).catch(() => null);
+  return row?.url ?? "";
+}
+export async function savePhoneAlertConfig(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const webhook = String(formData.get("webhook") ?? "").trim().slice(0, 500);
+  if (webhook && !/^https:\/\/chat\.googleapis\.com\//i.test(webhook)) redirect("/phone-health?err=That+doesn%27t+look+like+a+Google+Chat+webhook#alerts");
+  const row = await db.resource.findFirst({ where: { category: PHONE_CONFIG_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { url: webhook } });
+  else await db.resource.create({ data: { title: "phone-alerts", category: PHONE_CONFIG_CAT, url: webhook, description: "" } });
+  revalidatePath("/phone-health");
+  redirect("/phone-health?saved=1#alerts");
+}
+export async function testPhoneAlert() {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const url = await getPhoneAlertWebhook();
+  if (!url) redirect("/phone-health?err=Add+the+webhook+first#alerts");
+  const ok = await postChatWebhook(url, "📞 *Phone Health test alert* — this channel is wired up. Flagged numbers and answer-rate drops will post here.");
+  redirect(`/phone-health?${ok ? "saved=1" : "err=Test+failed+%E2%80%94+check+the+webhook+URL"}#alerts`);
 }
 
 export async function saveTeamProfile(formData: FormData) {

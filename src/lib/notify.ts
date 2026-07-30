@@ -36,7 +36,7 @@ function splitList(s: string): string[] {
 }
 
 /** Low-level: POST text to a specific Google Chat incoming-webhook URL. */
-async function postChatWebhook(url: string, text: string): Promise<boolean> {
+export async function postChatWebhook(url: string, text: string): Promise<boolean> {
   if (!url) {
     console.log("[notify] Google Chat not configured — would send:\n" + text);
     return false;

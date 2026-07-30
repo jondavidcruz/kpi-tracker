@@ -4,7 +4,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
 import { buildBackup } from "@/lib/backup";
-import { sendEmailWithAttachment, sendTeamChat, sendEmailTo, sendTimecardChat } from "@/lib/notify";
+import { sendEmailWithAttachment, sendTeamChat, sendEmailTo, sendTimecardChat, postChatWebhook } from "@/lib/notify";
 import { upcomingCulture, prettyMMDD, whenLabel, ordinal } from "@/lib/culture";
 import { isSemiMonthlyPayday } from "@/lib/date";
 import { sendPayrollEmail } from "@/lib/payday";
@@ -84,6 +84,31 @@ export async function GET(request: Request) {
     const today = date ?? todayStr(settings.orgTimezone);
     const res = await sendBuyerBoxReport(today);
     return NextResponse.json({ ok: true, job: "buyerreport", ...res });
+  }
+
+  // Daily phone-health digest → posts unhealthy numbers to the phone-health Chat space.
+  if (url.searchParams.get("phonehealth") === "1") {
+    const [cfg, rows] = await Promise.all([
+      db.resource.findFirst({ where: { category: "__phone_config__" } }),
+      db.resource.findMany({ where: { category: "__phone_line__" }, orderBy: { sortOrder: "asc" } }),
+    ]);
+    const webhook = cfg?.url ?? "";
+    if (!webhook || rows.length === 0) return NextResponse.json({ ok: true, job: "phonehealth", sent: false, reason: !webhook ? "no webhook" : "no numbers" });
+    const bad: string[] = [];
+    for (const r of rows) {
+      let m: { provider?: string; label?: string; registered?: boolean; att?: string; verizon?: string; tmobile?: string; answerRate?: number | null } = {};
+      try { m = JSON.parse(r.description || "{}"); } catch {}
+      const flagged = [m.att, m.verizon, m.tmobile].includes("flagged");
+      const lowRate = m.answerRate != null && m.answerRate < 5;
+      const notReg = !m.registered;
+      if (flagged || lowRate || notReg) {
+        const why = [flagged && "🚩 flagged", lowRate && `📉 ${m.answerRate}%`, notReg && "unregistered"].filter(Boolean).join(" · ");
+        bad.push(`• ${r.title}${m.label ? ` (${m.label})` : ""} — ${why}`);
+      }
+    }
+    if (bad.length === 0) return NextResponse.json({ ok: true, job: "phonehealth", sent: false, reason: "all healthy" });
+    const ok = await postChatWebhook(webhook, `📞 *Phone Health — daily check*\n${bad.length} of ${rows.length} number(s) need attention:\n${bad.join("\n")}\n\nTest + dispute flagged ones; register the rest at freecallerregistry.com.`);
+    return NextResponse.json({ ok: true, job: "phonehealth", sent: ok, flagged: bad.length });
   }
 
   // Payday — checked daily; only sends on actual semi-monthly paydays (the 15th

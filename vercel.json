@@ -6,6 +6,7 @@
     { "path": "/api/cron", "schedule": "30 22 * * 5" },
     { "path": "/api/cron?buyerreport=1", "schedule": "30 22 * * 5" },
     { "path": "/api/cron?buyerreport=1", "schedule": "0 14 * * 1" },
+    { "path": "/api/cron?phonehealth=1", "schedule": "0 15 * * 1-5" },
     { "path": "/api/cron?ethan=1", "schedule": "30 20 * * 1-5" },
     { "path": "/api/cron?backup=1", "schedule": "0 9 * * *" },
     { "path": "/api/cron?payroll=1", "schedule": "0 3 * * *" },
