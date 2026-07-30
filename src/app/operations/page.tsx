@@ -25,7 +25,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
   }
 
   const sp = await searchParams;
-  const resources = await db.resource.findMany({ where: { category: { not: "__phone_line__" } }, orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }] });
+  const resources = await db.resource.findMany({ where: { category: { notIn: ["__phone_line__", "__phone_setup__"] } }, orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }] });
   const editing = sp.edit ? resources.find((r) => r.id === sp.edit) ?? null : null;
 
   const byCat = new Map<string, Resource[]>();

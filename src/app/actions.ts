@@ -942,6 +942,25 @@ export async function deletePhoneLine(formData: FormData) {
   redirect("/phone-health?saved=1#tracker");
 }
 
+// Foundational setup checklist status (Trust Hub, monitoring, 10DLC, etc.) — one JSON
+// row of { taskKey: "todo"|"doing"|"done" } in Resource (no migration).
+const PHONE_SETUP_CAT = "__phone_setup__";
+export async function savePhoneSetup(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const key = String(formData.get("key") ?? "").trim().slice(0, 40);
+  const status = String(formData.get("status") ?? "");
+  if (!key || !["todo", "doing", "done"].includes(status)) return;
+  const row = await db.resource.findFirst({ where: { category: PHONE_SETUP_CAT } });
+  let map: Record<string, string> = {};
+  if (row) { try { map = JSON.parse(row.description || "{}"); } catch {} }
+  map[key] = status;
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(map) } });
+  else await db.resource.create({ data: { title: "phone-setup", category: PHONE_SETUP_CAT, url: "", description: JSON.stringify(map) } });
+  revalidatePath("/phone-health");
+  redirect("/phone-health?saved=1#setup");
+}
+
 export async function saveTeamProfile(formData: FormData) {
   const me = await getCurrentUser();
   if (!me || !isAdmin(me)) return; // Jon only

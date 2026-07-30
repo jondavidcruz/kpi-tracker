@@ -1,10 +1,27 @@
 import Link from "next/link";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { savePhoneLine, deletePhoneLine } from "@/app/actions";
+import { savePhoneLine, deletePhoneLine, savePhoneSetup } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 
 const PHONE_LINE_CAT = "__phone_line__"; // reserved Resource category for phone lines
+const PHONE_SETUP_CAT = "__phone_setup__"; // reserved Resource category for the setup checklist
+
+// The foundational setup — root-cause fixes. `top3` = the free "start here" trio.
+const SETUP_TASKS: { key: string; title: string; detail: string; cost: string; top3?: boolean; link?: { href: string; label: string } }[] = [
+  { key: "free_registry", title: "Free Caller Registry", detail: "One free form feeds all three carrier engines (Hiya, TNS, First Orion). Register every Twilio & Telnyx number. Re-register whenever you add one.", cost: "Free · today", top3: true, link: { href: "https://www.freecallerregistry.com", label: "freecallerregistry.com" } },
+  { key: "trust_hub", title: "Twilio Trust Hub — Business Profile + SHAKEN/STIR", detail: "You own the Twilio account, so this is unblocked. Top-tier attestation tells the analytics engines you're a legitimate caller. Vetting takes days — start now, it costs nothing.", cost: "Free · start today", top3: true, link: { href: "https://console.twilio.com/us1/account/trust-hub", label: "Twilio Console → Trust Hub" } },
+  { key: "pacing", title: "Fix dialer pacing", detail: "Highest actual impact, and free: ≤100 dials per number/day · 8am–9pm seller-local · 30-second rings · 2-week warm-up on new numbers · stable caller ID. Monitoring without this is just watching yourself create flags.", cost: "Free · highest impact", top3: true },
+  { key: "monitoring", title: "Reputation monitoring service ($100–200/mo)", detail: "Twilio Voice Integrity, Telnyx Number Reputation, or a third party (Caller ID Reputation / Number Verifier). Third-party works across BOTH Twilio & Telnyx at once — survives the migration decision. Replaces daily manual checking outright. Add in week two to prove the free fixes worked.", cost: "~$100–200/mo", link: { href: "https://calleridreputation.com", label: "calleridreputation.com" } },
+  { key: "scrub", title: "Scrub your lists", detail: "Disconnected numbers, wrong numbers, and DNC hits all drag your score down. The cheapest reputation protection there is.", cost: "Cost of data" },
+  { key: "tendlc", title: "10DLC approval + text-first", detail: "A text before the call makes the call expected — that beats fixing any label. Both Twilio & Telnyx require 10DLC or business texts get blocked. Highest-leverage item still to unblock.", cost: "~$10/mo + one-time" },
+  { key: "three_phone", title: "Three-phone test (monthly / quarterly)", detail: "The only thing that shows literally what a seller sees. Grab AT&T + Verizon + T-Mobile phones and call from each number. Once monitoring is live you only spot-test the DIDs the dashboard already flagged — ~5, not 40.", cost: "Free · ongoing" },
+];
+const SETUP_STATUS: Record<string, { label: string; cls: string }> = {
+  done: { label: "✓ Done", cls: "bg-emerald-100 text-emerald-700" },
+  doing: { label: "In progress", cls: "bg-amber-100 text-amber-800" },
+  todo: { label: "To do", cls: "bg-slate-100 text-slate-500" },
+};
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +60,14 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
     });
   } catch { storeOk = false; }
 
+  // Setup checklist statuses (one JSON row)
+  let setupStatus: Record<string, string> = {};
+  try {
+    const row = await db.resource.findFirst({ where: { category: PHONE_SETUP_CAT } });
+    if (row) setupStatus = JSON.parse(row.description || "{}");
+  } catch {}
+  const setupDone = SETUP_TASKS.filter((t) => setupStatus[t.key] === "done").length;
+
   const flaggedCount = lines.filter((l) => health(l.meta).label.startsWith("⚠️")).length;
   const unregistered = lines.filter((l) => !l.meta.registered).length;
   const healthy = lines.filter((l) => health(l.meta).label.startsWith("✓")).length;
@@ -70,6 +95,51 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
         </div>
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800">⚠️ “Verified” (STIR/SHAKEN) proves <i>who</i> is calling, not <i>how you behave</i>. Verified numbers still get flagged. And there is <b>no master whitelist</b> — anyone charging you to “whitelist” numbers is a scam. Registration is always free.</p>
       </Card>
+
+      {/* ── Foundational setup checklist ─────────────────────────── */}
+      <div id="setup" className="scroll-mt-4">
+        <Card className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-slate-800">🧭 Foundational setup — attack the root cause</h2>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">{setupDone}/{SETUP_TASKS.length} done</span>
+          </div>
+          <p className="mt-1 rounded-lg bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800"><b>If you only do three things:</b> Free registry → Trust Hub + SHAKEN/STIR → dialer pacing. All three are free, all three attack the root cause, and together they move your connect rate more than any subscription. Add monitoring in week two to prove it worked.</p>
+          <div className="mt-3 space-y-2">
+            {SETUP_TASKS.map((t) => {
+              const st = setupStatus[t.key] === "done" ? "done" : setupStatus[t.key] === "doing" ? "doing" : "todo";
+              const s = SETUP_STATUS[st];
+              return (
+                <div key={t.key} className={`rounded-xl border p-3 ${st === "done" ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-slate-800">{t.title}</span>
+                        {t.top3 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">⭐ Start here</span>}
+                        <span className="text-[11px] font-semibold text-slate-400">{t.cost}</span>
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-slate-600">{t.detail}</p>
+                      {t.link && <a href={t.link.href} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[12px] font-semibold text-sky-700 hover:underline">{t.link.label} →</a>}
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${s.cls}`}>{s.label}</span>
+                  </div>
+                  {manager && (
+                    <div className="mt-2 flex items-center gap-1 border-t border-slate-100 pt-2">
+                      <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Set status:</span>
+                      {(["todo", "doing", "done"] as const).map((v) => (
+                        <form key={v} action={savePhoneSetup}>
+                          <input type="hidden" name="key" value={t.key} />
+                          <input type="hidden" name="status" value={v} />
+                          <button className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${st === v ? "bg-brand-navy text-white" : "text-slate-500 hover:bg-slate-100"}`}>{SETUP_STATUS[v].label}</button>
+                        </form>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
 
       {/* The plays */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
