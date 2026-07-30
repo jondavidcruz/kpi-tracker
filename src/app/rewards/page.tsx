@@ -110,11 +110,13 @@ export default async function RewardsPage() {
           <form action={saveReward} className="grid grid-cols-1 gap-2 sm:grid-cols-12">
             <input name="icon" defaultValue="🎁" className={`${inputCls} text-center sm:col-span-1`} title="emoji" />
             <select name="scope" defaultValue="team" className={`${inputCls} sm:col-span-2`}><option value="team">Whole team</option><option value="individual">One person</option></select>
-            <select name="userId" defaultValue="" className={`${inputCls} sm:col-span-2`}><option value="">— person (if individual) —</option>{reps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+            <select name="userId" defaultValue="" className={`${inputCls} sm:col-span-3`}><option value="">— person (if individual) —</option>{reps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
             <input name="goal" placeholder="Goal to hit (optional)" className={`${inputCls} sm:col-span-3`} />
-            <input name="reward" placeholder="Reward + paste store link (e.g. AirPods https://…)" required className={`${inputCls} sm:col-span-3`} />
+            <input name="reward" placeholder="Reward / gift name" required className={`${inputCls} sm:col-span-3`} />
+            <input name="link" placeholder="🔗 Gift link — where to order it (paste the store URL)" className={`${inputCls} sm:col-span-11`} />
             <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700 sm:col-span-1">Add</button>
           </form>
+          <p className="mt-1.5 text-[11px] text-slate-400">The 🔗 gift link becomes a clickable <b>Order this</b> button on the reward card, so you can go straight to the store when someone earns it.</p>
         </Card>
       </section>
 

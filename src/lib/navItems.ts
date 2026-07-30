@@ -31,6 +31,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/alerts", label: "Alerts", gate: "manager" },
     { href: "/pip", label: "PIPs", gate: "manager" },
     { href: "/call-scoring", label: "Call scoring", gate: "all" },
+    { href: "/phone-health", label: "Phone Health", gate: "all" },
     { href: "/scripts", label: "Scripts", gate: "all" },
     { href: "/glossary", label: "Glossary", gate: "all" },
     { href: "/playbooks", label: "Playbooks", gate: "all" },

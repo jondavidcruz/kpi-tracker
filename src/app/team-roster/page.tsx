@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { saveTeamProfile, uploadTeamDoc, deleteTeamDoc } from "@/app/actions";
-import { getCurrentUser, canAccessCSuite, isOwner } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { getRevenueByUser, tierFor, REVENUE_LADDER } from "@/lib/roster-revenue";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
@@ -45,7 +45,7 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
     );
   }
   const sp = await searchParams;
-  const owner = isOwner(me); // revenue + promotion ladder are Jon-only, even within C-suite
+  const owner = canAccessCSuite(me); // revenue + promotion ladder shown to C-suite (Jon, Viktoriia, Enrico)
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
   const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -82,7 +82,7 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
 
       {owner && (
         <details className="rounded-xl bg-violet-50/60 p-3 ring-1 ring-violet-200">
-          <summary className="cursor-pointer text-sm font-bold text-violet-800">💜 Promotion ladder &amp; revenue credit <span className="font-normal text-violet-600">— how these numbers work (owner-only)</span></summary>
+          <summary className="cursor-pointer text-sm font-bold text-violet-800">💜 Promotion ladder &amp; revenue credit <span className="font-normal text-violet-600">— how these numbers work (C-suite)</span></summary>
           <div className="mt-2 space-y-2 text-[13px] text-violet-800">
             <div className="flex flex-wrap gap-2">
               {REVENUE_LADDER.map((t) => (

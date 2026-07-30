@@ -903,6 +903,45 @@ export async function saveMyAddress(formData: FormData) {
   redirect("/account?addr=1");
 }
 
+// ── Phone health tracker ─────────────────────────────────────────────────────
+// Stored in the existing Resource table under a reserved category (no migration).
+const PHONE_LINE_CAT = "__phone_line__";
+export async function savePhoneLine(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "").trim();
+  const number = String(formData.get("number") ?? "").trim().slice(0, 40);
+  if (!number) redirect("/phone-health?err=Enter+a+phone+number#tracker");
+  const rateRaw = Number(String(formData.get("answerRate") ?? "").trim());
+  const meta = {
+    provider: String(formData.get("provider") ?? "twilio") === "telnyx" ? "telnyx" : "twilio",
+    label: String(formData.get("label") ?? "").trim().slice(0, 60),
+    registered: formData.get("registered") === "on",
+    lastTested: String(formData.get("lastTested") ?? "").slice(0, 10),
+    att: String(formData.get("att") ?? "unknown"),
+    verizon: String(formData.get("verizon") ?? "unknown"),
+    tmobile: String(formData.get("tmobile") ?? "unknown"),
+    answerRate: Number.isFinite(rateRaw) && rateRaw >= 0 ? rateRaw : null,
+    notes: String(formData.get("notes") ?? "").trim().slice(0, 400),
+  };
+  const data = { title: number, category: PHONE_LINE_CAT, url: meta.provider, description: JSON.stringify(meta) };
+  if (id) await db.resource.update({ where: { id }, data });
+  else {
+    const max = await db.resource.aggregate({ where: { category: PHONE_LINE_CAT }, _max: { sortOrder: true } });
+    await db.resource.create({ data: { ...data, sortOrder: (max._max.sortOrder ?? 0) + 1 } });
+  }
+  revalidatePath("/phone-health");
+  redirect("/phone-health?saved=1#tracker");
+}
+export async function deletePhoneLine(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.resource.deleteMany({ where: { id, category: PHONE_LINE_CAT } });
+  revalidatePath("/phone-health");
+  redirect("/phone-health?saved=1#tracker");
+}
+
 export async function saveTeamProfile(formData: FormData) {
   const me = await getCurrentUser();
   if (!me || !isAdmin(me)) return; // Jon only
@@ -2651,8 +2690,13 @@ export async function saveReward(formData: FormData) {
   const me = await getCurrentUser();
   if (!canAccessPayroll(me)) return; // C-suite only (Jon / Viktoriia / Enrico)
   const id = String(formData.get("id") ?? "").trim();
-  const reward = String(formData.get("reward") ?? "").trim().slice(0, 200);
-  if (!reward) return;
+  const base = String(formData.get("reward") ?? "").trim().slice(0, 200);
+  if (!base) return;
+  // Separate "gift link" field → stored appended to the reward text; the card auto-detects
+  // the URL and renders a clickable "Order this" button. Keeps us migration-free.
+  let link = String(formData.get("link") ?? "").trim().slice(0, 400);
+  if (link && !/^https?:\/\//i.test(link)) link = `https://${link}`;
+  const reward = link ? `${base} ${link}` : base;
   const scope = String(formData.get("scope")) === "individual" ? "individual" : "team";
   const data = {
     scope,

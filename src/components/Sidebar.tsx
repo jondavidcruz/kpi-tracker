@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -33,6 +33,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/deals": "pipeline dispositions",
   "/huddle": "standup morning brief",
   "/call-scoring": "call recording transcript coaching score",
+  "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers",
   "/software": "logins passwords tools vendors",
   "/tickets": "requests help support",
   "/leaks": "war room health issues",
@@ -87,6 +88,7 @@ export default function Sidebar({
       { href: "/alerts", label: "Alerts", Icon: Bell, managerOnly: true },
       { href: "/pip", label: "PIPs", Icon: ShieldAlert, managerOnly: true },
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
+      { href: "/phone-health", label: "Phone Health", Icon: Phone },
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
       { href: "/glossary", label: "Glossary", Icon: BookOpen },
       { href: "/playbooks", label: "Playbooks", Icon: Lightbulb },
