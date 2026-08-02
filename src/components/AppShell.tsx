@@ -10,6 +10,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import Sidebar from "./Sidebar";
 import ContentWrap from "./ContentWrap";
+import ThemeToggle from "./ThemeToggle";
 import { parseNavHidden, isPathHidden } from "@/lib/navItems";
 import ClientWidgets from "./ClientWidgets";
 
@@ -69,6 +70,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   return (
     <div className="md:flex md:min-h-screen">
+      <ThemeToggle />
       <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} />
       <main className="min-w-0 flex-1">
         <ContentWrap>
