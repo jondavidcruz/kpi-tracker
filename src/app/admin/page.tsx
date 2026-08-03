@@ -134,9 +134,10 @@ export default async function AdminPage({
               <label><span className={labelCls}>Scorecard</span><select name="position" defaultValue="" className={inputCls}><option value="">none</option>{POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
               <label className="flex items-end gap-4 pb-1">
                 <span className="flex items-center gap-1.5 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked /> active</span>
-                <span className="flex items-center gap-1.5 text-sm text-slate-600" title="Show the internet speed test on this person's entry screen"><input type="checkbox" name="tracksInternet" /> ⚡️ speed test</span>
+                <span className="flex items-center gap-1.5 text-sm text-slate-600" title="Show the internet speed test on this person's entry screen"><input type="checkbox" name="tracksInternet" defaultChecked /> ⚡️ speed test</span>
               </label>
             </div>
+            <label><span className={labelCls}>Note (schedule / part-time hours)</span><input name="note" placeholder="e.g. Part-time · Mon–Fri 8am–12pm" className={inputCls} /></label>
             <div><SaveBtn small>+ Add person</SaveBtn></div>
           </form>
           <p className="mt-2 text-[11px] text-slate-400">Tip: to give them a password too, use <a href="#access" className="font-semibold text-slate-500 underline">Logins &amp; passwords</a> below — or “Create a new login” there does both at once.</p>
