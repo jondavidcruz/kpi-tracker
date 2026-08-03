@@ -215,22 +215,9 @@ function buildSlides(d: MeetingDeck): Slide[] {
     )});
   }
 
-  // 8. Annual goal
-  s.push({ name: "Annual Goal", node: (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-amber-900 via-brand-navy to-brand-navy-950 px-[8%] text-center text-white">
-      <div className="font-extrabold text-brand-gold" style={{ fontSize: "clamp(20px,3.4cqw,46px)" }}>{new Date().getFullYear()} Sales Goal</div>
-      <div className="mt-2 font-bold" style={{ fontSize: "clamp(16px,2.6cqw,34px)" }}>Help {d.goal.homeownersGoal} homeowners in need</div>
-      <div className="mt-1 text-brand-gold-soft font-semibold" style={{ fontSize: "clamp(14px,2.2cqw,28px)" }}>{d.goal.homeownersDone} / {d.goal.homeownersGoal} complete</div>
-      <div className="mt-[3%] h-3 w-[70%] overflow-hidden rounded-full bg-white/15">
-        <div className="h-full rounded-full bg-brand-gold" style={{ width: `${Math.round(d.goal.pct * 100)}%` }} />
-      </div>
-      <div className="mt-1 text-white/70" style={{ fontSize: "clamp(11px,1.5cqw,18px)" }}>{money(d.goal.revenueClosed)} of {money(d.goal.revenueGoal)} {d.goal.revenueGoal ? `(${Math.round(d.goal.pct * 100)}%)` : ""}</div>
-      <div className="mt-[4%] space-y-1" style={{ fontSize: "clamp(11px,1.6cqw,20px)" }}>
-        {d.goal.reward && <div><span className="font-bold text-brand-gold">{money(d.goal.revenueGoal)} goal</span> = {d.goal.reward}</div>}
-        {d.goal.stretchGoal > 0 && d.goal.stretchReward && <div><span className="font-bold text-brand-gold">{money(d.goal.stretchGoal)} stretch</span> = {d.goal.stretchReward}</div>}
-      </div>
-    </div>
-  )});
+  // 8. Annual goal slide removed per Jon — the year-to-date closed count (e.g. "2 / 24")
+  // read as demotivating in the all-call. Reward/stretch incentives still live on the deck's
+  // Coming-Soon / editorial slides and the goal data is unchanged elsewhere.
 
   // 9. Recognition
   s.push({ name: "Recognition", node: (
