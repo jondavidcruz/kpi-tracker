@@ -242,14 +242,10 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
               <span className={labelCls}>Change / Coming Soon (one per line)</span>
               <textarea name="mtgComingSoon" defaultValue={settings.mtgComingSoon} rows={4} className={inputCls} />
             </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>🎥 Monday meeting — Google Meet link (Join button)</span>
-              <input name="teamMeetLink" defaultValue={settings.teamMeetLink} placeholder="https://meet.google.com/…" className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>🎥 Daily huddle — Google Meet link (Join button on the Huddle page)</span>
-              <input name="huddleMeetLink" defaultValue={settings.huddleMeetLink} placeholder="https://meet.google.com/…" className={inputCls} />
-            </label>
+            {/* Meet-link inputs removed from this page per Jon. Values preserved so the
+                existing "Join Meet" buttons keep working and a save here doesn't wipe them. */}
+            <input type="hidden" name="teamMeetLink" defaultValue={settings.teamMeetLink} />
+            <input type="hidden" name="huddleMeetLink" defaultValue={settings.huddleMeetLink} />
             <div className="sm:col-span-2">
               <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save deck content</button>
             </div>
