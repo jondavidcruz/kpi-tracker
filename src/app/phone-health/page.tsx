@@ -3,6 +3,54 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { savePhoneLine, deletePhoneLine, savePhoneSetup, savePhoneAlertConfig, testPhoneAlert, getPhoneAlertWebhook } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
+import CopyButton from "@/components/CopyButton";
+
+// Consolidated from the Caller ID Reputation "Business Best Practices" + TNS
+// "Recommended Best Practices for Call Originators" (Aug 2024) guides Jon shared.
+const BEST_PRACTICES: { title: string; items: string[] }[] = [
+  { title: "🚩 What flags you — the signals analytics engines watch", items: [
+    "Large bursts of calls in a short window",
+    "Low average call duration (lots of quick hang-ups)",
+    "Low call-completion ratio — few of your calls get answered",
+    "Dialing invalid / unassigned / disconnected numbers at volume",
+    "Inconsistent or shared caller-ID name (CNAM) across your lines",
+    "High spam complaints and FCC / FTC reports",
+    "Sequential dialing and flurry (rapid re-dialing) patterns",
+    "Calls landing on honeypot / do-not-call trap numbers",
+  ] },
+  { title: "📞 Dialing best practices", items: [
+    "Cap each number at ≤100 calls/day — spread volume across numbers, never push one harder",
+    "Max ~3 calls to a customer in any 7 days; ≤2/week to cold (non-subscriber) contacts",
+    "No flurry-dialing: ≤2 dials to a cold contact per week and ≤2 in any 4-hour window",
+    "Never redial after a call is blocked or after a voicemail was delivered",
+    "Call 8am–9pm the recipient's LOCAL time — if you're unsure of their location, play it safe",
+    "Disconnect if no one answers within 15 seconds / 4 rings",
+    "Warm up new or dormant numbers: 1–2 calls to major-carrier phones 2–3 days before a campaign, then ramp slowly — avoid sudden volume spikes",
+    "Leave a meaningful voicemail: state the purpose and a callback number",
+    "Ask good contacts to save your number — a saved number reads as a wanted, expected call",
+  ] },
+  { title: "🔢 Number hygiene", items: [
+    "One number = one purpose. Don't mix marketing and support on the same line (mixed-use gets flagged as a telemarketer for ALL its calls)",
+    "Make the number on your website Do-Not-Originate (receive-only) — scammers spoof the number that's easiest to find",
+    "Always present a consistent, real, call-back-able number; the agent's intro should match the caller-ID name shown",
+    "Register and keep a consistent CNAM; consider a call-branding service to show who's calling",
+    "Don't repeatedly dial unassigned / disconnected numbers — that mirrors bad-actor behavior",
+    "Make only verifiable, signed calls (SHAKEN/STIR · Twilio Trust Hub) so carriers can trust the origin",
+    "Limit campaigns to ~90 days after last engagement — people report as spam long before the legal 1-year window",
+  ] },
+  { title: "✅ Consent & compliance", items: [
+    "Consent tiers: implied for conversational texts · express for informational · express WRITTEN for marketing/promo",
+    "Text from a business service with local 10DLC — unregistered business texts get blocked",
+    "Keep a Do-Not-Contact list, honor every request, and retain it for 5 years",
+    "At opt-in, state your business name, message frequency, and any rates",
+    "Always honor STOP / opt-out immediately",
+    "Respect the National Do-Not-Call Registry — violations trigger FCC reports, a top spam driver",
+    "Follow TCPA and FDCPA",
+    "Monitor call-center activity — excessive or off-hours calling drives complaints; train the team on anything a customer could see as deceptive or abusive",
+  ] },
+];
+const BP_TEXT = "FREEDOM OFFERS — PHONE HEALTH BEST PRACTICES\n(Source: Caller ID Reputation + TNS, 2024)\n\n" +
+  BEST_PRACTICES.map((s) => `${s.title}\n` + s.items.map((i) => `  • ${i}`).join("\n")).join("\n\n");
 
 const PHONE_LINE_CAT = "__phone_line__"; // reserved Resource category for phone lines
 const PHONE_SETUP_CAT = "__phone_setup__"; // reserved Resource category for the setup checklist
@@ -12,7 +60,7 @@ const SETUP_TASKS: { key: string; title: string; detail: string; cost: string; t
   { key: "free_registry", title: "Free Caller Registry", detail: "One free form feeds all three carrier engines (Hiya, TNS, First Orion). Register every Twilio & Telnyx number. Re-register whenever you add one.", cost: "Free · today", top3: true, link: { href: "https://www.freecallerregistry.com", label: "freecallerregistry.com" } },
   { key: "trust_hub", title: "Twilio Trust Hub — Business Profile + SHAKEN/STIR", detail: "You own the Twilio account, so this is unblocked. Top-tier attestation tells the analytics engines you're a legitimate caller. Vetting takes days — start now, it costs nothing.", cost: "Free · start today", top3: true, link: { href: "https://console.twilio.com/us1/account/trust-hub", label: "Twilio Console → Trust Hub" } },
   { key: "pacing", title: "Fix dialer pacing", detail: "Highest actual impact, and free: ≤100 dials per number/day · 8am–9pm seller-local · 30-second rings · 2-week warm-up on new numbers · stable caller ID. Monitoring without this is just watching yourself create flags.", cost: "Free · highest impact", top3: true },
-  { key: "monitoring", title: "Reputation monitoring service ($100–200/mo)", detail: "Twilio Voice Integrity, Telnyx Number Reputation, or a third party (Caller ID Reputation / Number Verifier). Third-party works across BOTH Twilio & Telnyx at once — survives the migration decision. Replaces daily manual checking outright. Add in week two to prove the free fixes worked.", cost: "~$100–200/mo", link: { href: "https://calleridreputation.com", label: "calleridreputation.com" } },
+  { key: "monitoring", title: "Reputation monitoring service ($100–200/mo)", detail: "Twilio Voice Integrity, Telnyx Number Reputation, or a third party (Caller ID Reputation / DialRight / Number Verifier). Third-party works across BOTH Twilio & Telnyx at once — survives the migration decision. Replaces daily manual checking outright. Add in week two to prove the free fixes worked.", cost: "~$100–200/mo", link: { href: "https://calleridreputation.com", label: "calleridreputation.com" } },
   { key: "scrub", title: "Scrub your lists", detail: "Disconnected numbers, wrong numbers, and DNC hits all drag your score down. The cheapest reputation protection there is.", cost: "Cost of data" },
   { key: "tendlc", title: "10DLC approval + text-first", detail: "A text before the call makes the call expected — that beats fixing any label. Both Twilio & Telnyx require 10DLC or business texts get blocked. Highest-leverage item still to unblock.", cost: "~$10/mo + one-time" },
   { key: "three_phone", title: "Three-phone test (monthly / quarterly)", detail: "The only thing that shows literally what a seller sees. Grab AT&T + Verizon + T-Mobile phones and call from each number. Once monitoring is live you only spot-test the DIDs the dashboard already flagged — ~5, not 40.", cost: "Free · ongoing" },
@@ -255,6 +303,27 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
           </div>
         </Card>
       </div>
+
+      {/* ── Full best-practices reference (review + copy) ──────────── */}
+      <Card className="p-5" id="best-practices">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-bold text-slate-800">📋 Best practices — keep every number's reputation healthy</h2>
+          <CopyButton text={BP_TEXT} label="Copy all" />
+        </div>
+        <p className="mt-1 text-[12px] text-slate-500">The full playbook for legitimate call originators, from the Caller ID Reputation &amp; TNS guides. Read it, and hit “Copy all” to paste into a doc or share with the team.</p>
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {BEST_PRACTICES.map((s) => (
+            <div key={s.title} className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <div className="text-[13px] font-bold text-slate-800">{s.title}</div>
+              <ul className="mt-1.5 space-y-1.5">
+                {s.items.map((i, n) => (
+                  <li key={n} className="flex gap-1.5 text-[12px] text-slate-600"><span className="text-slate-300">•</span><span>{i}</span></li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       {/* ── Number tracker ─────────────────────────────────────────── */}
       <div id="tracker" className="scroll-mt-4">
