@@ -159,6 +159,10 @@ export function dayBar(
   tz: string,
   now: Date,
   shiftEndMin: number | null,
+  // If the person's heartbeat went stale while still clocked in, treat everything from
+  // that last-seen minute to now as an outage (power/internet drop) — so the timeline
+  // matches the live presence board instead of drawing green "working" through the gap.
+  droppedSinceMin: number | null = null,
 ): DayBar | null {
   const toMin = (d: Date) => { const s = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d); const [h, m] = s.split(":").map(Number); return h * 60 + m; };
   const nowMin = toMin(now);
@@ -196,6 +200,10 @@ export function dayBar(
   for (const o of outages) {
     const oEnd = o.ongoing ? nowMin : o.endMin;
     for (let mm = Math.max(o.startMin, barStart); mm < Math.min(oEnd, barEnd); mm++) arr[mm - barStart] = "outage";
+  }
+  // Heartbeat drop → paint an outage from last-seen to now (unless they clocked out first).
+  if (droppedSinceMin != null && liveEnd === nowMin) {
+    for (let mm = Math.max(droppedSinceMin, barStart); mm < Math.min(nowMin, barEnd); mm++) arr[mm - barStart] = "outage";
   }
 
   const segments: BarSeg[] = [];

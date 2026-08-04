@@ -202,6 +202,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const myCap = workCapAt(today, settings.orgTimezone, me.name); // the viewer's own shift end
   const capMs = myCap ? myCap.getTime() : null;
   const STALE = 2 * 60 * 1000; // 2 min without a heartbeat = dropped (fast detection)
+  const toMinTz = (d: Date) => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(d); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); };
+  // Is this person clocked-in but heartbeat-stale (dropped), with no already-logged outage?
+  // Returns the last-seen minute (drop start) or null. Treated as an outage everywhere.
+  const droppedSinceMinFor = (u: { id: string; lastSeenAt: Date | null }, working: boolean): number | null => {
+    if (!working || liveByUser.has(u.id) || !u.lastSeenAt) return null;
+    return now.getTime() - new Date(u.lastSeenAt).getTime() > STALE ? toMinTz(new Date(u.lastSeenAt)) : null;
+  };
+  const droppedMinFor = (id: string, sinceMin: number | null) => sinceMin == null ? 0 : Math.max(0, nowMinTz - sinceMin);
   // All of today's outages (incl. ended) for the break/lunch history — so the timeline
   // shows when someone lost power/internet and when they came back.
   const nowMinTz = (() => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); })();
@@ -229,9 +237,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       const working = state === "online" || state === "break" || state === "lunch" || state === "meeting" || state === "appointment" || state === "errand" || state === "training" || state === "bathroom";
       const o = liveByUser.get(u.id);
       let st: string = state;
+      const dropSince = droppedSinceMinFor(u, working);
       if (o) st = "outage";
-      else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
-      const worked = Math.max(0, workedMinutes(ps, now, workCapAt(today, settings.orgTimezone, u.name)) - outageMinFor(u.id));
+      else if (dropSince != null) st = "dropped";
+      const worked = Math.max(0, workedMinutes(ps, now, workCapAt(today, settings.orgTimezone, u.name)) - outageMinFor(u.id) - droppedMinFor(u.id, dropSince));
       return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "bathroom" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: worked };
     });
 
@@ -472,7 +481,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
               const ps = byUser.get(u.id) ?? [];
               const tl = daySegments(ps, now);
               const uOut = outagesByUser.get(u.id) ?? [];
-              const bar = dayBar(ps, rawOutagesByUser.get(u.id) ?? [], settings.orgTimezone, now, capMin);
+              const uState = stateFromPunches(ps).state;
+              const uWorking = uState !== "offline";
+              const bar = dayBar(ps, rawOutagesByUser.get(u.id) ?? [], settings.orgTimezone, now, capMin, droppedSinceMinFor(u, uWorking));
               if (!bar && uOut.length === 0) return null;
               return (
                 <div key={u.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
