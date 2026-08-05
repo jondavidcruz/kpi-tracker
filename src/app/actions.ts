@@ -123,8 +123,8 @@ export async function saveUserAccess(formData: FormData) {
   await db.user.update({
     where: { id: userId },
     data: {
-      accessCsuite: formData.get("accessCsuite") === "on",
-      accessPayroll: formData.get("accessPayroll") === "on",
+      // C-Suite & pay access are no longer toggle-driven — they're hard-limited to
+      // Jon/Enrico/Viktoriia by name in auth.ts, so we leave those stored flags untouched.
       accessMarketing: formData.get("accessMarketing") === "on",
       navHidden,
     },

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canAccessCSuite, canTrackTime, isOwner } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canAccessCSuite, canTrackTime, isOwner, isCSuitePerson } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
@@ -116,11 +116,11 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
             <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Edit {firstName}&apos;s access {sp.saved && <span className="ml-2 text-emerald-600">✓ saved</span>}</div>
 
             <div className="mb-1 text-[11px] font-semibold text-slate-500">Sensitive data</div>
-            <div className="mb-3 flex flex-wrap gap-x-6 gap-y-2">
-              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessCsuite" defaultChecked={selected.accessCsuite} className="h-4 w-4 accent-brand-navy" /> C-Suite (financials · roadmap · roster)</label>
-              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessPayroll" defaultChecked={selected.accessPayroll} className="h-4 w-4 accent-brand-navy" /> See pay $ amounts</label>
+            <div className="mb-2 flex flex-wrap items-center gap-x-6 gap-y-2">
+              <span className="flex items-center gap-1.5 text-sm text-slate-500">🔒 C-Suite &amp; pay ($ amounts, P&amp;L, payroll, roadmap, roster): <b className={isCSuitePerson(selected) ? "text-emerald-700" : "text-slate-700"}>{isCSuitePerson(selected) ? "Allowed" : "Locked"}</b></span>
               <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessMarketing" defaultChecked={selected.accessMarketing} className="h-4 w-4 accent-brand-navy" /> Markets &amp; Buyers</label>
             </div>
+            <p className="mb-3 text-[11px] text-slate-400">C-Suite &amp; pay data is hard-limited to <b>Jon, Enrico &amp; Viktoriia</b> — it can&apos;t be granted to anyone else here, and new hires never get it.</p>
 
             <div className="mb-1 text-[11px] font-semibold text-slate-500">Menu sections — uncheck to remove (hidden from their sidebar entirely)</div>
             <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">

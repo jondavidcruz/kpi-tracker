@@ -49,9 +49,22 @@ export function canAccessMarketing(user: User | null): boolean {
   return !!user?.accessMarketing;
 }
 
-/** Can see PAY ($ rates, gross, bonuses, totals). Editable per-user. */
+// C-Suite + sensitive data (financials/P&L, payroll & pay amounts, roadmap, team roster,
+// war-room health) is HARD-LIMITED to these three people by name. No per-user toggle can
+// grant it to anyone else, and any new hire never gets it by default. To change who can
+// see sensitive data, edit this set — nothing else grants it.
+const CSUITE_PEOPLE = new Set(["jon", "enrico", "viktoriia"]);
+function firstNameOf(user: { name?: string } | null): string {
+  return (user?.name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+}
+/** Is this person one of the three sensitive-data owners (Jon, Enrico, Viktoriia)? */
+export function isCSuitePerson(user: { name?: string } | null): boolean {
+  return CSUITE_PEOPLE.has(firstNameOf(user));
+}
+
+/** Can see PAY ($ rates, gross, bonuses, totals). Locked to Jon/Enrico/Viktoriia. */
 export function canAccessPayroll(user: User | null): boolean {
-  return !!user?.accessPayroll;
+  return isCSuitePerson(user);
 }
 
 /** Can open the Time Card (track hours). Managers (Marie + Jon) + pay staff. */
@@ -59,10 +72,10 @@ export function canTrackTime(user: User | null): boolean {
   return isManager(user) || canAccessPayroll(user);
 }
 
-/** Can see the C-Suite section (financials, roadmap, roster). Editable per-user
- *  (Admin → Access preview), so it's excluded even from other admins/managers like Marie. */
+/** Can see the C-Suite section (financials, roadmap, roster) + sensitive data.
+ *  Locked to Jon/Enrico/Viktoriia by name — no toggle grants it to anyone else. */
 export function canAccessCSuite(user: User | null): boolean {
-  return !!user?.accessCsuite;
+  return isCSuitePerson(user);
 }
 
 // Restricted users see ONLY these page prefixes (first = their home page).
