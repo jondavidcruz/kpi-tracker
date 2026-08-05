@@ -69,8 +69,8 @@ export function canAccessCSuite(user: User | null): boolean {
 // Ethan is part-time, listings-only — no acquisitions scorecard, just his pipeline.
 const RESTRICTED_NAV: Record<string, string[]> = {
   ethan: ["/deals", "/process", "/underwriting", "/schedule", "/rewards", "/call-scoring", "/scripts", "/account"],
-  // Nicholas Fair — part-time acquisitions; owner limited him to just these.
-  nicholas: ["/entry", "/report", "/process", "/underwriting", "/rewards", "/culture", "/scripts", "/onboarding", "/account"],
+  // Nicholas Fair — access controlled by Jon in Admin → Access preview (per-user navHidden),
+  // so he can pick sections himself rather than a hardcoded allowlist.
 };
 
 // A person still in the onboarding ramp only sees learning + day-to-day basics — none
