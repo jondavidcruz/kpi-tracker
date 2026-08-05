@@ -53,7 +53,9 @@ export function canAccessMarketing(user: User | null): boolean {
 // war-room health) is HARD-LIMITED to these three people by name. No per-user toggle can
 // grant it to anyone else, and any new hire never gets it by default. To change who can
 // see sensitive data, edit this set — nothing else grants it.
-const CSUITE_PEOPLE = new Set(["jon", "enrico", "viktoriia"]);
+// The only people who may ever see sensitive data: Jon/Jonathan Cruz, Viktoriia Cruz,
+// Enrico Cruz. Matched by first name (both "jon" and "jonathan" accepted).
+const CSUITE_PEOPLE = new Set(["jon", "jonathan", "enrico", "viktoriia"]);
 function firstNameOf(user: { name?: string } | null): string {
   return (user?.name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
 }
@@ -112,5 +114,6 @@ export function isPathAllowed(path: string, allow: string[]): boolean {
 /** The owner (Jon). Not a tracked employee — no personal time card / not on the board. */
 export function isOwner(user: { name: string } | null): boolean {
   if (!user) return false;
-  return (user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "") === "jon";
+  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return first === "jon" || first === "jonathan";
 }
