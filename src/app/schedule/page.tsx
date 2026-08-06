@@ -500,8 +500,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         </section>
       )}
 
-      {/* REPORT A POWER / INTERNET OUTAGE — self-serve, unpaid time */}
-      {!isOwner(me) && (
+      {/* REPORT A POWER / INTERNET OUTAGE — self-serve, unpaid time.
+          Hidden for the owner and for anyone exempted from outage reporting (e.g. Nick). */}
+      {!isOwner(me) && !["nicholas"].includes(me.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "") && (
         <Card className="p-5">
           <h3 className="mb-1 text-sm font-bold text-slate-700">⚡ Report a power or internet outage</h3>
           <p className="mb-3 text-xs text-slate-500">If you couldn&apos;t work because of a power or internet outage, log when it started and ended. This time is unpaid and is taken off your hours automatically.</p>
