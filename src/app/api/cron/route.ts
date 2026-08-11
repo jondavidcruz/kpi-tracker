@@ -86,6 +86,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, job: "buyerreport", ...res });
   }
 
+  // Advance any armed buyer cascades whose wait window has elapsed (next 3 buyers).
+  if (url.searchParams.get("cascade") === "1") {
+    const { advanceCascades } = await import("@/lib/cascade");
+    const res = await advanceCascades();
+    return NextResponse.json({ ok: true, job: "cascade", ...res });
+  }
+
   // Daily phone-health digest → posts unhealthy numbers to the phone-health Chat space.
   if (url.searchParams.get("phonehealth") === "1") {
     const [cfg, rows] = await Promise.all([

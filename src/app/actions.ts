@@ -1085,6 +1085,28 @@ export async function saveBuyerTerms(formData: FormData) {
   redirect("/marketing?saved=1#terms");
 }
 
+// ── Automated cascade: arm / stop a deal's auto-send waterfall ────────────────
+export async function armCascade(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const dealId = String(formData.get("dealId") ?? "");
+  if (!dealId) return;
+  const { armDeal } = await import("@/lib/cascade");
+  const r = await armDeal(dealId, me?.name ?? "manager");
+  revalidatePath("/deals");
+  redirect(`/deals?cascade=${r.sent > 0 ? "armed" : "noone"}`);
+}
+export async function stopCascade(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const dealId = String(formData.get("dealId") ?? "");
+  if (!dealId) return;
+  const { stopDeal } = await import("@/lib/cascade");
+  await stopDeal(dealId);
+  revalidatePath("/deals");
+  redirect("/deals?cascade=stopped");
+}
+
 export async function saveTeamProfile(formData: FormData) {
   const me = await getCurrentUser();
   if (!me || !isAdmin(me)) return; // Jon only
