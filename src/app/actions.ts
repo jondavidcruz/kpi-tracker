@@ -1058,6 +1058,33 @@ export async function sendCascadeOffer(formData: FormData) {
   redirect(`/deals?cascade=${sent ? "sent" : "nomail"}`);
 }
 
+// ── Per-buyer terms: proof of funds + max offer % (no migration; Resource JSON) ──
+const BUYER_TERMS_CAT = "__buyer_terms__";
+type BuyerTerms = Record<string, { pof?: boolean; maxOfferPct?: number }>;
+export async function readBuyerTerms(): Promise<BuyerTerms> {
+  const row = await db.resource.findFirst({ where: { category: BUYER_TERMS_CAT } }).catch(() => null);
+  if (!row) return {};
+  try { return JSON.parse(row.description || "{}"); } catch { return {}; }
+}
+export async function saveBuyerTerms(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const buyerId = String(formData.get("buyerId") ?? "");
+  if (!buyerId) return;
+  const pof = formData.get("pof") === "on";
+  const pctRaw = Number(String(formData.get("maxOfferPct") ?? "").replace(/[^0-9.]/g, ""));
+  const maxOfferPct = Number.isFinite(pctRaw) && pctRaw > 0 ? Math.min(120, pctRaw) : undefined;
+  const map = await readBuyerTerms();
+  map[buyerId] = { ...(pof ? { pof: true } : {}), ...(maxOfferPct ? { maxOfferPct } : {}) };
+  if (!pof && !maxOfferPct) delete map[buyerId];
+  const row = await db.resource.findFirst({ where: { category: BUYER_TERMS_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(map) } });
+  else await db.resource.create({ data: { title: "buyer-terms", category: BUYER_TERMS_CAT, url: "", description: JSON.stringify(map) } });
+  revalidatePath("/marketing");
+  revalidatePath("/deals");
+  redirect("/marketing?saved=1#terms");
+}
+
 export async function saveTeamProfile(formData: FormData) {
   const me = await getCurrentUser();
   if (!me || !isAdmin(me)) return; // Jon only

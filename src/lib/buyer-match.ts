@@ -22,6 +22,8 @@ export type MatchBuyer = {
   closingSpeed?: string;   // "7 days" / "cash 2 weeks" — faster ranks higher
   decisionMaker?: string;  // "Direct/principal" ranks higher than "Agent"
   companySize?: string;    // "National (DR Horton)" / "fund / REIT" ranks higher
+  proofOfFunds?: boolean;  // verified cash — cleaner, more certain close
+  maxOfferPct?: number;    // % of ARV they'll pay — the sharpest "pays the most" signal
 };
 
 export type BuyerMatch = {
@@ -147,6 +149,13 @@ export function matchBuyersForDeal(
     // 4) Positioning — direct principals and national/fund buyers are stronger, cleaner exits.
     if (/direct|principal/i.test(b.decisionMaker ?? "")) { score += 2; reasons.push("🎯 direct decision-maker"); }
     if (/national|fund|reit|regional/i.test(b.companySize ?? "")) { score += 1.5; reasons.push("🏢 institutional"); }
+
+    // 4b) Explicit terms — verified proof of funds + how high they'll go (% of ARV).
+    if (b.proofOfFunds) { score += 2.5; reasons.push("💵 proof of funds"); }
+    if (b.maxOfferPct != null && b.maxOfferPct > 0) {
+      score += Math.min(4, Math.max(0, (b.maxOfferPct - 70) / 5)); // 80% → +2, 90% → +4
+      reasons.push(`📈 up to ${Math.round(b.maxOfferPct)}% ARV`);
+    }
 
     // 5) Vetted/active buyers are readier than raw leads.
     if (b.vetStage === "active") score += 2;

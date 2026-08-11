@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap } from "@/app/actions";
+import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap, saveBuyerTerms, readBuyerTerms } from "@/app/actions";
 import ImageUpload from "@/components/ImageUpload";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
@@ -62,6 +62,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   // Research, grouped by type so it reads consistently across both pages.
   const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
   const vettedRows = rows.filter((r) => VETTED(r) && !isJv(r));
+  const buyerTerms = await readBuyerTerms();
 
   // Buyer cascade lookup — type an address (+ price) and rank vetted buyers to send to.
   const cascadeAddr = (sp.addr ?? "").trim();
@@ -73,6 +74,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           bestContact: r.bestContact, phone: r.phone, email: r.email, igHandle: r.igHandle,
           buyBoxAreas: r.buyBoxAreas, market: r.market, priceRange: r.priceRange,
           closingSpeed: r.closingSpeed, decisionMaker: r.decisionMaker, companySize: r.companySize,
+          proofOfFunds: buyerTerms[r.id]?.pof, maxOfferPct: buyerTerms[r.id]?.maxOfferPct,
         })))
     : [];
   // JV partners — kept completely separate from our vetted buyers/developers.
@@ -141,6 +143,27 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           )
         )}
       </Card>
+
+      {/* Per-buyer terms — feed the cascade's "pays the most / cleanest close" ranking */}
+      <details id="terms" className="scroll-mt-4 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+        <summary className="cursor-pointer text-sm font-bold text-slate-800">⚙️ Buyer terms — proof of funds &amp; max offer % <span className="font-normal text-slate-400">({vettedRows.length} vetted buyers)</span></summary>
+        <p className="mt-1 text-[12px] text-slate-500">These sharpen the cascade: a buyer with verified funds and a higher % of ARV ranks nearer the top. Set what you know; blanks are fine.</p>
+        <div className="mt-3 divide-y divide-slate-100">
+          {vettedRows.map((r) => {
+            const t = buyerTerms[r.id] ?? {};
+            return (
+              <form key={r.id} action={saveBuyerTerms} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
+                <input type="hidden" name="buyerId" value={r.id} />
+                <span className="min-w-[160px] flex-1 font-semibold text-slate-800">{r.name}</span>
+                <label className="flex items-center gap-1.5 text-[13px] text-slate-600"><input type="checkbox" name="pof" defaultChecked={!!t.pof} className="h-4 w-4" /> 💵 Proof of funds</label>
+                <label className="flex items-center gap-1.5 text-[13px] text-slate-600">Max offer <input name="maxOfferPct" type="number" min="0" max="120" step="1" defaultValue={t.maxOfferPct ?? ""} placeholder="85" className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm" /> % ARV</label>
+                <button className="rounded-md bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
+              </form>
+            );
+          })}
+          {vettedRows.length === 0 && <p className="py-2 text-sm text-slate-400">No vetted buyers yet.</p>}
+        </div>
+      </details>
 
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">

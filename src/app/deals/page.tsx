@@ -1,4 +1,4 @@
-import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade } from "@/app/actions";
+import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms } from "@/app/actions";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getActiveDeals, getActiveReps, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -42,6 +42,8 @@ export default async function DealsPage({
   // Vetted buyers only — JV partners (type "jv_partner") are managed separately on /marketing, not matched here.
   const buyers = mktAccess ? (await db.marketContact.findMany({ orderBy: { sortOrder: "asc" } })).filter((b) => b.type !== "jv_partner") : [];
   const cascade = mktAccess ? await readCascade() : {};
+  const terms = mktAccess ? await readBuyerTerms() : {};
+  const buyersWithTerms = buyers.map((b) => ({ ...b, proofOfFunds: terms[b.id]?.pof, maxOfferPct: terms[b.id]?.maxOfferPct }));
   const ERRORS = {
     hud: "A HUD statement is required to close a deal.",
     fields: "Add a valid close date and profit amount.",
@@ -129,7 +131,7 @@ export default async function DealsPage({
             today={today}
             repNames={repNames}
             canClose={canClose}
-            matches={mktAccess ? matchBuyersForDeal(d.address, d.contractPrice ?? d.askingPrice, buyers) : []}
+            matches={mktAccess ? matchBuyersForDeal(d.address, d.contractPrice ?? d.askingPrice, buyersWithTerms) : []}
             cascadeStatus={cascade[d.id] ?? {}}
           />
         ))}
