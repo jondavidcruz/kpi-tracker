@@ -162,17 +162,21 @@ function DealCard({ deal, today, repNames, canClose, matches }: { deal: Deal; to
 
       {/* Matching buyers from Markets & Buyers (read-only; full CRM lives in REI Reply) */}
       {matches.length > 0 && (
-        <details className="mb-3 rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-200">
+        <details open className="mb-3 rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-200">
           <summary className="cursor-pointer text-sm font-bold text-emerald-800">
-            🎯 {matches.length} buyer{matches.length === 1 ? "" : "s"} already vetted for this area
+            📤 Buyer cascade — send in this order ({matches.length})
           </summary>
+          <p className="mt-1 text-[11px] text-emerald-700">Work top-down: offer to #1 first; only if they pass, move to #2. Ranked by area fit, then who pays the most &amp; closes fastest — not blasted to everyone.</p>
           <div className="mt-2 space-y-1.5">
             {matches.map((m) => {
               const reach = [m.phone, m.email, m.igHandle].filter(Boolean).join("  ·  ");
               const kind = /develop|custom|remodel|build/i.test(m.type) ? "Developer" : m.category === "luxury" ? "Developer" : "Flipper";
+              const first = m.rank === 1;
               return (
-                <div key={m.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                <div key={m.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg p-1.5 text-xs ${first ? "bg-white ring-1 ring-emerald-300" : ""}`}>
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${first ? "bg-emerald-600 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}>{m.rank}</span>
                   <span className="font-semibold text-slate-800">{m.name}</span>
+                  {first && <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">👑 Send first</span>}
                   <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{kind}</span>
                   {m.vetStage === "active" && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">active buyer</span>}
                   {m.reasons.map((r, i) => (
@@ -185,7 +189,7 @@ function DealCard({ deal, today, repNames, canClose, matches }: { deal: Deal; to
             })}
           </div>
           <p className="mt-2 text-[11px] text-slate-400">
-            Ranked by area + price fit vs this deal. Dead/on-hold buyers are hidden. Manage the list in Markets &amp; Buyers.
+            Vetted buyers only; dead/on-hold hidden. Sharpen each buyer&apos;s target areas + price box in Markets &amp; Buyers to tighten the ranking.
           </p>
         </details>
       )}

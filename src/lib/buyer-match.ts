@@ -33,6 +33,10 @@ export type BuyerMatch = {
   igHandle: string;
   score: number;
   reasons: string[];
+  topPrice: number | null; // the most they'll pay (top of their buy-box range)
+  priceRange: string;
+  fast: boolean;           // cash / developer = quicker, cleaner close
+  rank: number;            // 1 = send first, cascade down from there
 };
 
 const AREA_STOP = new Set(["the", "and", "san", "los", "new", "for", "all", "any", "ave", "rd", "st", "dr", "blvd", "ca", "usa"]);
@@ -96,22 +100,30 @@ export function matchBuyersForDeal(
       reasons.push(`📍 ${hit.replace(/\b\w/g, (c) => c.toUpperCase())}`);
     }
 
-    // 2) Price fit against their stated buy-box range.
-    if (dealPrice != null && b.priceRange) {
-      const [lo, hi] = parseRange(b.priceRange);
-      if (lo != null || hi != null) {
-        const okLo = lo == null || dealPrice >= lo * 0.9;
-        const okHi = hi == null || dealPrice <= hi * 1.1;
-        if (okLo && okHi) {
-          score += 4;
-          reasons.push(`💲 fits their ${b.priceRange} box`);
-        } else {
-          score -= 3; // stated a range and this deal is clearly outside it
-        }
+    // 2) Price fit + how much they'll pay (the cascade's core signal).
+    const [lo, hi] = parseRange(b.priceRange);
+    const topPrice = hi; // the most they'll pay = top of their stated box
+    if (dealPrice != null && (lo != null || hi != null)) {
+      const okLo = lo == null || dealPrice >= lo * 0.9;
+      const okHi = hi == null || dealPrice <= hi * 1.1;
+      if (okLo && okHi) {
+        score += 4;
+        reasons.push(`💲 fits their ${b.priceRange} box`);
+      } else {
+        score -= 3; // stated a range and this deal is clearly outside it
       }
     }
+    // Pays-the-most: a higher ceiling ranks up, capped so a real area fit still leads.
+    if (topPrice != null) {
+      score += Math.min(6, topPrice / 200_000);
+      reasons.push(`💰 up to ${usdShort(topPrice)}`);
+    }
 
-    // 3) Vetted/active buyers are readier than raw leads.
+    // 3) Speed / terms — cash buyers, developers & flippers close faster and cleaner.
+    const fast = /cash|develop|custom|build|remodel|flip|investor/i.test(`${b.type} ${b.category}`);
+    if (fast) { score += 2; reasons.push("⚡ cash / fast close"); }
+
+    // 4) Vetted/active buyers are readier than raw leads.
     if (b.vetStage === "active") score += 2;
     else if (b.vetStage === "vetted") score += 1;
 
@@ -120,10 +132,19 @@ export function matchBuyersForDeal(
       out.push({
         id: b.id, name: b.name, category: b.category, type: b.type, vetStage: b.vetStage,
         bestContact: b.bestContact, phone: b.phone, email: b.email, igHandle: b.igHandle,
-        score, reasons,
+        score, reasons, topPrice, priceRange: b.priceRange, fast, rank: 0,
       });
     }
   }
 
-  return out.sort((x, y) => y.score - x.score);
+  // Cascade order: best overall fit first, tie-broken by who pays the most.
+  out.sort((x, y) => (y.score - x.score) || ((y.topPrice ?? 0) - (x.topPrice ?? 0)));
+  out.forEach((m, i) => { m.rank = i + 1; });
+  return out;
+}
+
+/** Compact USD for buy-box ceilings, e.g. 1_250_000 → "$1.3M", 450_000 → "$450k". */
+function usdShort(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
+  return `$${Math.round(n / 1000)}k`;
 }
