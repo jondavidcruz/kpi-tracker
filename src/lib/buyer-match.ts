@@ -19,6 +19,9 @@ export type MatchBuyer = {
   buyBoxAreas: string;
   market: string;
   priceRange: string;
+  closingSpeed?: string;   // "7 days" / "cash 2 weeks" — faster ranks higher
+  decisionMaker?: string;  // "Direct/principal" ranks higher than "Agent"
+  companySize?: string;    // "National (DR Horton)" / "fund / REIT" ranks higher
 };
 
 export type BuyerMatch = {
@@ -60,6 +63,17 @@ function parseMoney(s: string): number | null {
   else if (unit === "m") n *= 1_000_000;
   else if (n < 10_000) n *= 1_000; // bare "450" almost always means 450k in this context
   return n;
+}
+
+/** Parse a close-speed string like "7 days", "cash 2 weeks", "~1 month" → number of days. */
+function parseDays(s: string | null | undefined): number | null {
+  const m = (s || "").match(/(\d+)\s*(day|week|wk|month|mo)/i);
+  if (!m) return null;
+  let n = parseInt(m[1], 10);
+  const u = m[2].toLowerCase();
+  if (u.startsWith("week") || u === "wk") n *= 7;
+  else if (u.startsWith("mo")) n *= 30;
+  return Number.isFinite(n) ? n : null;
 }
 
 /** Parse a price range like "$400k–$700k" / "400-700k" / "up to 1.2M". Returns [min,max]. */
@@ -119,11 +133,22 @@ export function matchBuyersForDeal(
       reasons.push(`💰 up to ${usdShort(topPrice)}`);
     }
 
-    // 3) Speed / terms — cash buyers, developers & flippers close faster and cleaner.
-    const fast = /cash|develop|custom|build|remodel|flip|investor/i.test(`${b.type} ${b.category}`);
-    if (fast) { score += 2; reasons.push("⚡ cash / fast close"); }
+    // 3) Speed — how fast they close (stated days beat a type guess).
+    const days = parseDays(b.closingSpeed);
+    const fast = days != null ? days <= 21 : /cash|develop|custom|build|remodel|flip|investor/i.test(`${b.type} ${b.category}`);
+    if (days != null) {
+      score += Math.max(0, 5 - days / 7); // 7d → +4, 21d → +2, 35d → +0
+      reasons.push(`⚡ ~${days}-day close`);
+    } else if (fast) {
+      score += 2;
+      reasons.push("⚡ cash / fast close");
+    }
 
-    // 4) Vetted/active buyers are readier than raw leads.
+    // 4) Positioning — direct principals and national/fund buyers are stronger, cleaner exits.
+    if (/direct|principal/i.test(b.decisionMaker ?? "")) { score += 2; reasons.push("🎯 direct decision-maker"); }
+    if (/national|fund|reit|regional/i.test(b.companySize ?? "")) { score += 1.5; reasons.push("🏢 institutional"); }
+
+    // 5) Vetted/active buyers are readier than raw leads.
     if (b.vetStage === "active") score += 2;
     else if (b.vetStage === "vetted") score += 1;
 

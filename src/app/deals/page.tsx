@@ -1,4 +1,4 @@
-import { archiveDeal, saveDeal, closeDeal } from "@/app/actions";
+import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade } from "@/app/actions";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getActiveDeals, getActiveReps, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -27,7 +27,7 @@ const lblCls = "block text-[11px] font-semibold text-slate-500 mb-0.5";
 export default async function DealsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; closed?: string; err?: string }>;
+  searchParams: Promise<{ saved?: string; closed?: string; err?: string; cascade?: string }>;
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
@@ -41,6 +41,7 @@ export default async function DealsPage({
   const mktAccess = canAccessMarketing(me);
   // Vetted buyers only — JV partners (type "jv_partner") are managed separately on /marketing, not matched here.
   const buyers = mktAccess ? (await db.marketContact.findMany({ orderBy: { sortOrder: "asc" } })).filter((b) => b.type !== "jv_partner") : [];
+  const cascade = mktAccess ? await readCascade() : {};
   const ERRORS = {
     hud: "A HUD statement is required to close a deal.",
     fields: "Add a valid close date and profit amount.",
@@ -77,6 +78,8 @@ export default async function DealsPage({
           🎉 Deal closed &amp; verified — it&apos;s now in Closed Deals.
         </div>
       )}
+      {sp.cascade === "sent" && <div className="rounded-xl bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-800 ring-1 ring-sky-200">📧 Offer emailed to the buyer and marked sent. If they pass, hit &ldquo;Passed&rdquo; to advance the cascade.</div>}
+      {sp.cascade === "nomail" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Marked sent, but that buyer has no email on file — add one on Vetted Buyers, or reach them by phone/IG.</div>}
       {errMsg && (
         <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">
           ⚠️ {errMsg}
@@ -127,6 +130,7 @@ export default async function DealsPage({
             repNames={repNames}
             canClose={canClose}
             matches={mktAccess ? matchBuyersForDeal(d.address, d.contractPrice ?? d.askingPrice, buyers) : []}
+            cascadeStatus={cascade[d.id] ?? {}}
           />
         ))}
       </div>
@@ -134,7 +138,9 @@ export default async function DealsPage({
   );
 }
 
-function DealCard({ deal, today, repNames, canClose, matches }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[] }) {
+function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string> }) {
+  // The next buyer to send to = highest-ranked one not already sent or passed.
+  const nextId = matches.find((m) => cascadeStatus[m.id] !== "sent" && cascadeStatus[m.id] !== "passed")?.id ?? null;
   const st = STATUSES.find((s) => s.key === deal.status) ?? STATUSES[0];
   const isLive = !["dead", "closed"].includes(deal.status);
   const aging = analyzeDeal(deal, today);
@@ -171,19 +177,33 @@ function DealCard({ deal, today, repNames, canClose, matches }: { deal: Deal; to
             {matches.map((m) => {
               const reach = [m.phone, m.email, m.igHandle].filter(Boolean).join("  ·  ");
               const kind = /develop|custom|remodel|build/i.test(m.type) ? "Developer" : m.category === "luxury" ? "Developer" : "Flipper";
-              const first = m.rank === 1;
+              const status = cascadeStatus[m.id];
+              const isNext = m.id === nextId;
               return (
-                <div key={m.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg p-1.5 text-xs ${first ? "bg-white ring-1 ring-emerald-300" : ""}`}>
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${first ? "bg-emerald-600 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}>{m.rank}</span>
+                <div key={m.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg p-1.5 text-xs ${isNext ? "bg-white ring-1 ring-emerald-300" : status === "passed" ? "opacity-50" : ""}`}>
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${isNext ? "bg-emerald-600 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}>{m.rank}</span>
                   <span className="font-semibold text-slate-800">{m.name}</span>
-                  {first && <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">👑 Send first</span>}
+                  {isNext && <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">👑 Send next</span>}
+                  {status === "sent" && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">✓ sent</span>}
+                  {status === "passed" && <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">passed</span>}
                   <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{kind}</span>
-                  {m.vetStage === "active" && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">active buyer</span>}
                   {m.reasons.map((r, i) => (
                     <span key={i} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200">{r}</span>
                   ))}
-                  {m.bestContact && <span className="text-violet-700">📣 {m.bestContact}</span>}
                   {reach && <span className="text-brand-navy">{reach}</span>}
+                  {/* Cascade controls */}
+                  {isNext && (
+                    <span className="flex items-center gap-1">
+                      {m.email && (
+                        <form action={sendCascadeOffer}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><button className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700">📧 Send offer</button></form>
+                      )}
+                      <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="sent" /><button className="rounded-md bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-300" title="I sent it myself">Mark sent</button></form>
+                      <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="passed" /><button className="rounded-md px-2 py-0.5 text-[10px] font-semibold text-slate-400 hover:text-red-600" title="They passed — go to next">Passed →</button></form>
+                    </span>
+                  )}
+                  {(status === "sent" || status === "passed") && (
+                    <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="clear" /><button className="text-[10px] text-slate-300 hover:text-slate-600">undo</button></form>
+                  )}
                 </div>
               );
             })}

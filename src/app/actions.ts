@@ -998,6 +998,66 @@ export async function testPhoneAlert() {
   redirect(`/phone-health?${ok ? "saved=1" : "err=Test+failed+%E2%80%94+check+the+webhook+URL"}#alerts`);
 }
 
+// ── Buyer cascade (ping-tree) send tracking ──────────────────────────────────
+// Per-deal {buyerId: "sent"|"passed"} stored as one JSON row in Resource (no migration).
+const CASCADE_CAT = "__cascade__";
+type CascadeMap = Record<string, Record<string, string>>;
+export async function readCascade(): Promise<CascadeMap> {
+  const row = await db.resource.findFirst({ where: { category: CASCADE_CAT } }).catch(() => null);
+  if (!row) return {};
+  try { return JSON.parse(row.description || "{}"); } catch { return {}; }
+}
+async function writeCascade(map: CascadeMap) {
+  const row = await db.resource.findFirst({ where: { category: CASCADE_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(map) } });
+  else await db.resource.create({ data: { title: "cascade", category: CASCADE_CAT, url: "", description: JSON.stringify(map) } });
+}
+export async function markCascade(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const dealId = String(formData.get("dealId") ?? "");
+  const buyerId = String(formData.get("buyerId") ?? "");
+  const status = String(formData.get("status") ?? "");
+  if (!dealId || !buyerId) return;
+  const map = await readCascade();
+  map[dealId] = map[dealId] || {};
+  if (status === "clear") delete map[dealId][buyerId];
+  else if (status === "sent" || status === "passed") map[dealId][buyerId] = status;
+  await writeCascade(map);
+  revalidatePath("/deals");
+}
+function offerEmail(deal: { address: string; contractPrice: number | null; askingPrice: number | null; nextSteps: string }, buyerName: string, from: string): string {
+  const price = deal.contractPrice ?? deal.askingPrice;
+  const priceLine = price ? `Asking: $${Math.round(price).toLocaleString()}` : "Price: call for details";
+  return `<p>Hi ${escapeForEmail(buyerName.split(" ")[0] || "there")},</p>
+<p>We have an off-market deal that fits your buy box:</p>
+<p><b>${escapeForEmail(deal.address)}</b><br>${priceLine}</p>
+${deal.nextSteps ? `<p>${escapeForEmail(deal.nextSteps)}</p>` : ""}
+<p>You're first in line on this one. Reply or call if you want the full package (comps, photos, terms) — first to commit gets it.</p>
+<p>— ${escapeForEmail(from)}, Freedom Offers</p>`;
+}
+/** Manager-initiated: email the drafted offer to a cascade buyer + mark them "sent". */
+export async function sendCascadeOffer(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const dealId = String(formData.get("dealId") ?? "");
+  const buyerId = String(formData.get("buyerId") ?? "");
+  if (!dealId || !buyerId) redirect("/deals?cascade=err");
+  const [deal, buyer] = await Promise.all([
+    db.deal.findUnique({ where: { id: dealId }, select: { address: true, contractPrice: true, askingPrice: true, nextSteps: true } }),
+    db.marketContact.findUnique({ where: { id: buyerId }, select: { name: true, email: true } }),
+  ]);
+  if (!deal || !buyer) redirect("/deals?cascade=err");
+  let sent = false;
+  if (buyer.email) sent = await sendEmailTo([buyer.email], `Off-market deal — ${deal.address}`, offerEmail(deal, buyer.name, me?.name ?? "Freedom Offers"));
+  const map = await readCascade();
+  map[dealId] = map[dealId] || {};
+  map[dealId][buyerId] = "sent";
+  await writeCascade(map);
+  revalidatePath("/deals");
+  redirect(`/deals?cascade=${sent ? "sent" : "nomail"}`);
+}
+
 export async function saveTeamProfile(formData: FormData) {
   const me = await getCurrentUser();
   if (!me || !isAdmin(me)) return; // Jon only

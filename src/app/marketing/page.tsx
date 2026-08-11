@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
 import VettingTable, { type Prospect } from "@/components/VettingTable";
+import { matchBuyersForDeal, type MatchBuyer } from "@/lib/buyer-match";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ function toProspect(r: Record<string, unknown>): Prospect {
 }
 
 
-export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ saved?: string; imp?: string }> }) {
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ saved?: string; imp?: string; addr?: string; price?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) {
     return (
@@ -61,6 +62,19 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   // Research, grouped by type so it reads consistently across both pages.
   const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
   const vettedRows = rows.filter((r) => VETTED(r) && !isJv(r));
+
+  // Buyer cascade lookup — type an address (+ price) and rank vetted buyers to send to.
+  const cascadeAddr = (sp.addr ?? "").trim();
+  const cascadePriceNum = sp.price ? Number(String(sp.price).replace(/[^0-9.]/g, "")) : NaN;
+  const cascadeMatches = cascadeAddr
+    ? matchBuyersForDeal(cascadeAddr, Number.isFinite(cascadePriceNum) ? cascadePriceNum : null,
+        vettedRows.map((r): MatchBuyer => ({
+          id: r.id, name: r.name, category: r.category, type: r.type, vetStage: r.vetStage,
+          bestContact: r.bestContact, phone: r.phone, email: r.email, igHandle: r.igHandle,
+          buyBoxAreas: r.buyBoxAreas, market: r.market, priceRange: r.priceRange,
+          closingSpeed: r.closingSpeed, decisionMaker: r.decisionMaker, companySize: r.companySize,
+        })))
+    : [];
   // JV partners — kept completely separate from our vetted buyers/developers.
   const jvPartners = rows.filter(isJv).sort((a, b) => a.name.localeCompare(b.name));
   const isDevRow = (r: { category: string; type: string }) => r.category === "luxury" || r.type === "developer";
@@ -94,6 +108,39 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} contact{sp.imp === "1" ? "" : "s"}.</div>}
       {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
       {sp.imp === "noname" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Your CSV needs a header row with a &ldquo;name&rdquo; column.</div>}
+
+      {/* Buyer cascade lookup — type an address to see who to send it to first */}
+      <Card className="border-l-4 border-emerald-400 p-4">
+        <h2 className="text-sm font-bold text-slate-800">📤 Buyer cascade — who to send a deal to first</h2>
+        <p className="mt-0.5 text-[12px] text-slate-500">Type a property address (and price if you have it). We rank your vetted buyers by area fit → who pays the most → fastest close, so you offer top-down instead of blasting everyone.</p>
+        <form action="/marketing" method="get" className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="min-w-[240px] flex-1"><span className={labelCls}>Property address / area</span><input name="addr" defaultValue={cascadeAddr} placeholder="e.g. 1423 Sunset Cliffs Blvd, San Diego" className={inputCls} /></label>
+          <label className="w-36"><span className={labelCls}>Price (optional)</span><input name="price" defaultValue={sp.price ?? ""} placeholder="$650,000" className={inputCls} /></label>
+          <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Rank buyers</button>
+        </form>
+        {cascadeAddr && (
+          cascadeMatches.length === 0 ? (
+            <p className="mt-3 text-[13px] text-amber-700">No vetted buyer&apos;s target area matches &ldquo;{cascadeAddr}&rdquo; yet. Tighten buyers&apos; target-areas below, or add a buyer for this market.</p>
+          ) : (
+            <div className="mt-3 space-y-1.5">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Send in this order</div>
+              {cascadeMatches.map((m) => {
+                const reach = [m.phone, m.email, m.igHandle].filter(Boolean).join("  ·  ");
+                const first = m.rank === 1;
+                return (
+                  <div key={m.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg p-1.5 text-xs ${first ? "bg-emerald-50 ring-1 ring-emerald-300" : "bg-slate-50"}`}>
+                    <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${first ? "bg-emerald-600 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}>{m.rank}</span>
+                    <span className="font-semibold text-slate-800">{m.name}</span>
+                    {first && <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">👑 Send first</span>}
+                    {m.reasons.map((r, i) => <span key={i} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200">{r}</span>)}
+                    {reach && <span className="text-brand-navy">{reach}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </Card>
 
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">
