@@ -2786,7 +2786,8 @@ export async function startOutage(formData: FormData) {
   const detectedMin = u0?.lastSeenAt ? localMinOf(u0.lastSeenAt.getTime(), settings.orgTimezone) : null;
   const enteredMin = toMinutes(String(formData.get("at") ?? "")); // optional manager-entered start time
   const startMin = enteredMin ?? (detectedMin !== null && now - detectedMin >= 5 ? detectedMin : now);
-  await db.outage.create({ data: { userId, date, kind, startMin, endMin: Math.max(startMin + 1, now), detectedMin: detectedMin ?? undefined, ongoing: true, reportedBy: me!.name } });
+  const note = String(formData.get("note") ?? "").trim().slice(0, 300); // manager's override note (Marie)
+  await db.outage.create({ data: { userId, date, kind, startMin, endMin: Math.max(startMin + 1, now), detectedMin: detectedMin ?? undefined, ongoing: true, reportedBy: me!.name, note } });
   const u = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
   const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: settings.orgTimezone });
   sendTimecardChat(`🔴 ${u?.name ?? "Team member"} is OFFLINE — ${kind === "power" ? "⚡ power" : kind === "internet" ? "📶 internet"  : ""} outage · ${time}`).catch(() => {});

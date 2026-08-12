@@ -350,6 +350,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                     <form action={startOutage} className="ml-auto flex flex-wrap items-center gap-2">
                       <input type="hidden" name="userId" value={u.id} />
                       <input type="time" name="at" title="Optional — when the outage started (leave blank = now)" className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs" />
+                      <input type="text" name="note" placeholder="Note (optional)" title="Add a note about this override, e.g. reason or ETA" className="w-40 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs" />
                       <button formAction={startOutage} name="kind" value="power" className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200">⚡ Power outage</button>
                       <button formAction={startOutage} name="kind" value="internet" className="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-200">📶 Internet outage</button>
                     </form>

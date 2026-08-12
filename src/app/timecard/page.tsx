@@ -133,7 +133,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
           const outAt = [...ps].reverse().find((p) => p.kind === "out")?.at ?? null;
           // Auto day-note: outage windows, time off, day off, then any manual note.
           const dayOutages = outageByDay.get(`${u.id}|${d}`) ?? [];
-          const noteParts: string[] = dayOutages.map((o) => `⚡ ${o.kind} outage ${hhmmAP(o.startMin)}–${hhmmAP(o.endMin)}`);
+          const noteParts: string[] = dayOutages.map((o) => `⚡ ${o.kind} outage ${hhmmAP(o.startMin)}–${hhmmAP(o.endMin)}${o.note ? ` — ${o.note}` : ""}`);
           if (leave) noteParts.push(LEAVE[leave.type] ?? "Time off");
           if (adj?.status === "day_off") noteParts.push("Day off");
           // Ended the day early — self clock-out or a manager "Off for the day". Flag it so the
