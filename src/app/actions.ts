@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { fromInput, type Unit } from "@/lib/format";
-import { dispatchHardAlerts, evaluateAndRecordAlerts } from "@/lib/alerts";
+import { evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendTeamChat, sendTimecardChat, sendCallAuditChat, postChatWebhook } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
@@ -207,15 +207,12 @@ export async function saveDay(formData: FormData) {
     await sendTeamChat(`🎉 *Contract signed!* ${who} just locked up ${w.n > 1 ? `${w.n} ${type} contracts` : `a ${type} contract`} — let's go! 🔥`).catch(() => {});
   }
 
-  // Instant alerting on save:
-  //  • In-app flags update immediately (dashboard + alerts inbox).
-  //  • HARD (green money) misses fire to Google Chat + email RIGHT AWAY, each
-  //    with a gap assessment + training plan, so a manager is notified the
-  //    moment someone is off a money KPI.
-  //  • SOFT (activity) misses are batched into the twice-daily digest
-  //    (8:30am pre-shift + 6:30pm post-shift via /api/cron).
-  const created = await evaluateAndRecordAlerts(date, [...touchedKpiIds]);
-  await dispatchHardAlerts(created);
+  // Record alerts in-app immediately (dashboard + Alerts inbox stay truthful),
+  // but DON'T fire a Google Chat / email ping on every save. The real-time
+  // "behind target right now" pings were daily noise — especially mid-day on a
+  // KPI the team is chronically behind on. Awareness now comes from ONE place:
+  // the end-of-day "Daily Results" email (met/missed + why + results). No nag.
+  await evaluateAndRecordAlerts(date, [...touchedKpiIds]);
 
   revalidateKpiViews();
   revalidatePath("/alerts");
@@ -1772,9 +1769,8 @@ export async function saveSpeedTest(formData: FormData) {
   } else {
     await db.entry.create({ data: { kpiId: kpi.id, userId, date, value: mbps, enteredBy: "speedtest" } });
   }
-  // Instant alert if below goal (it's a soft/blue KPI but still flags).
-  const created = await evaluateAndRecordAlerts(date, [kpi.id]);
-  await dispatchHardAlerts(created);
+  // Record the flag in-app if below goal (no Chat/email ping — see save handler above).
+  await evaluateAndRecordAlerts(date, [kpi.id]);
   revalidatePath("/entry");
   revalidatePath("/dashboard");
 }

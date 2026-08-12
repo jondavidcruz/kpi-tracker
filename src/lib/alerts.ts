@@ -694,12 +694,13 @@ export async function runScheduledChecks(opts?: {
     missing = await generateMissingEntryAlerts(date);
   }
 
-  // KPI digest — Google Chat only, and only on the evening/EOD run when the money
-  // (hard) alert set has CHANGED (handled inside sendDailyDigest). The daily digest
-  // EMAIL is retired: the single end-of-day "Daily Results" email (sendDailyTeamReview
-  // below) is now the one place Jon learns what was hit, what wasn't and why, and the
-  // day's end results — so we don't flood inboxes with separate digest/justify/missing mails.
-  const digestSent = weekdayOrForce && postCutoff ? await sendDailyDigest(date, { chat: true, email: false }) : false;
+  // KPI digest to the team's Google Chat — WEEKLY now (Monday evening only), not daily.
+  // Daily miss-pings (both the real-time "behind target right now" ones and a nightly
+  // digest) had become nagging noise — it read like the team never hits its numbers.
+  // Awareness is now: in-app Alerts (live, no push) + the single end-of-day "Daily
+  // Results" email + this once-a-week team Chat pulse. The digest EMAIL stays retired.
+  const isMonday = isWeekday(tz, "Mon");
+  const digestSent = opts?.force || (isMonday && postCutoff) ? await sendDailyDigest(date, { chat: true, email: false }) : false;
   // Weekly team KPI email — Monday morning only (or any forced run with ?weekly=1).
   const isMondayMorning = isWeekday(tz, "Mon") && !pastCutoff("12:00", tz);
   // Dispo Deal Watch — WEEKLY now (Monday morning only), per Jon. Was daily; too noisy.
