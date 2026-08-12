@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 
 const TABS = [
   { key: "assignment", label: "Cash (Homes)", emoji: "🏠", blurb: "Cash offer on a house. MAO = (ARV × market %) − repairs − your fee. The market % already covers the flipper's carry + profit. Anchor opens below MAO." },
@@ -175,6 +175,31 @@ function SideCalc() {
   const [fresh, setFresh] = useState(true);   // next digit starts a new number
   const [hist, setHist] = useState("");
 
+  // Draggable: remember where the user drops it (persisted per device).
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem("uwCalcPos");
+      if (s) { setPos(JSON.parse(s)); return; }
+    } catch {}
+    setPos({ x: Math.max(8, window.innerWidth - 236), y: 88 }); // default: top-right
+  }, []);
+  useEffect(() => { if (pos) { try { localStorage.setItem("uwCalcPos", JSON.stringify(pos)); } catch {} } }, [pos]);
+  const onDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    const panel = e.currentTarget.parentElement as HTMLElement;
+    const r = panel.getBoundingClientRect();
+    dragRef.current = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const x = Math.min(Math.max(0, e.clientX - dragRef.current.dx), window.innerWidth - 44);
+    const y = Math.min(Math.max(0, e.clientY - dragRef.current.dy), window.innerHeight - 44);
+    setPos({ x, y });
+  };
+  const onDragEnd = (e: React.PointerEvent<HTMLDivElement>) => { dragRef.current = null; e.currentTarget.releasePointerCapture?.(e.pointerId); };
+
   const fmt = (n: number) => (!isFinite(n) ? "Error" : String(Math.round(n * 1e10) / 1e10));
   const apply = (a: number, o: string, b: number) => (o === "+" ? a + b : o === "−" ? a - b : o === "×" ? a * b : o === "÷" ? a / b : b);
   const digit = (d: string) => { setCur((c) => (fresh || c === "0" ? d : c.length < 14 ? c + d : c)); setFresh(false); };
@@ -209,10 +234,13 @@ function SideCalc() {
   );
 
   return (
-    <div className="fixed right-2 top-20 z-40 w-52 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-200 sm:right-3 sm:top-24 sm:w-56">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">🧮 Calculator</span>
-        <button type="button" onClick={() => setOpen(false)} title="Hide" className="rounded px-1.5 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600">✕</button>
+    <div className="fixed z-40 w-52 touch-none rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-200 sm:w-56"
+      style={pos ? { left: pos.x, top: pos.y } : { right: 12, top: 88 }}>
+      <div onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd}
+        className="mb-1 flex cursor-move items-center justify-between rounded-lg px-1 py-0.5 hover:bg-slate-50 active:cursor-grabbing"
+        title="Drag to move">
+        <span className="select-none text-[11px] font-bold uppercase tracking-wide text-slate-400">⠿ 🧮 Calculator</span>
+        <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => setOpen(false)} title="Hide" className="rounded px-1.5 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600">✕</button>
       </div>
       <div className="mb-2 rounded-lg bg-slate-900 px-3 py-2 text-right">
         <div className="h-3 truncate text-[10px] text-slate-400">{hist}</div>
