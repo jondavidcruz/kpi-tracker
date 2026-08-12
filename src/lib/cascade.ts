@@ -7,12 +7,14 @@ import { db } from "./db";
 import { matchBuyersForDeal, type MatchBuyer, type BuyerMatch } from "./buyer-match";
 import { sendEmailTo, sendTeamChat } from "./notify";
 import { getChannelConfig } from "./notify";
+import { APP_URL } from "./site";
 
 const CAT = "__cascade_auto__";
 const SECRET = process.env.CRON_SECRET || "cascade-dev-secret";
 const ROUND_SIZE = 3;
 export const CASCADE_WINDOW_HOURS = 3; // wait this long before offering to the next 3
-export const APP_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://kpi-tracker-lovat.vercel.app";
+// APP_URL is shared from ./site (single env var APP_URL) so a domain change updates
+// every outbound email link — weekly reports AND these cascade claim/pass links — at once.
 
 export type DealCascade = { status: "armed" | "claimed" | "stopped" | "done"; round: number; lastAt: string; claimedBy?: string; armedBy?: string; sent: Record<string, "sent" | "passed" | "interested"> };
 type Store = Record<string, DealCascade>;
