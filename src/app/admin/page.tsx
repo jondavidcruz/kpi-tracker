@@ -8,7 +8,7 @@ import { categoryMeta } from "@/lib/kpi";
 import { POSITIONS, positionLabel } from "@/lib/roles";
 import type { User } from "@prisma/client";
 import { Card, SectionTitle } from "@/components/ui";
-import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, isOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -326,6 +326,11 @@ export default async function AdminPage({
       {/* ════ KPIs & GOALS ════ */}
       <section id="kpis" className="scroll-mt-20">
         <SectionTitle title="🎯 KPIs & goals" subtitle="Category drives alert urgency · duration goals are in minutes" accent="bg-emerald-400" />
+        {isOwner(me) && (
+          <Link href="/admin/recalibrate" className="mb-3 inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-200">
+            🎯 Recalibrate goals from real performance
+          </Link>
+        )}
         <Card className="p-6">
           {[...POSITIONS.map((p) => ({ key: p.key, label: `${p.emoji} ${p.label}` })), { key: "", label: "🏢 Team / shared" }].map((group) => {
             const groupKpis = kpis.filter((k) => (group.key === "" ? k.scope === "team" : k.roleKey === group.key));

@@ -3563,3 +3563,40 @@ export async function submitAssessment(formData: FormData) {
   revalidatePath(`/assess/${token}`);
   redirect(`/assess/${token}?done=${instrument}`);
 }
+
+// --- Goal recalibration (owner-only) -----------------------------------------
+// Apply the reviewed per-rep daily goals from /admin/recalibrate. Each field is
+// named `goal:<userId>:<kpiId>`; a blank or unchanged value is skipped. Writes a
+// standing per-rep Target override (period null) — a normal runtime write, no
+// schema migration.
+export async function applyGoalRecalibration(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+
+  let applied = 0;
+  for (const [name, raw] of formData.entries()) {
+    if (!name.startsWith("goal:")) continue;
+    const [, userId, kpiId] = name.split(":");
+    if (!userId || !kpiId) continue;
+    const val = String(raw).trim();
+    if (val === "") continue;
+    const n = Number(val);
+    if (!Number.isFinite(n) || n < 0) continue;
+
+    const existing = await db.target.findFirst({ where: { kpiId, userId, period: null } });
+    if (existing) {
+      if (existing.goalValue !== n) {
+        await db.target.update({ where: { id: existing.id }, data: { goalValue: n } });
+        applied++;
+      }
+    } else {
+      await db.target.create({ data: { kpiId, userId, period: null, goalValue: n } });
+      applied++;
+    }
+  }
+
+  revalidateKpiViews();
+  revalidatePath("/admin/recalibrate");
+  revalidatePath("/dashboard");
+  redirect(`/admin/recalibrate?applied=${applied}`);
+}
