@@ -118,6 +118,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, job: "phonehealth", sent: ok, flagged: bad.length });
   }
 
+  // Daily compliance line check — hits Twilio + Telnyx live via API and posts any
+  // issues (numbers not active, account not active, unreachable API) to the
+  // phone-health Chat space so we catch line problems before the team feels them.
+  if (url.searchParams.get("compliance") === "1") {
+    const { allLineHealth } = await import("@/lib/telco");
+    const cfg = await db.resource.findFirst({ where: { category: "__phone_config__" } });
+    const webhook = cfg?.url ?? "";
+    const health = await allLineHealth();
+    const lines: string[] = [];
+    for (const h of health) {
+      if (h.connected && h.issues.length) lines.push(`*${h.provider}*: ${h.issues.join("; ")}`);
+    }
+    if (webhook && lines.length) {
+      await postChatWebhook(webhook, `🛡️ *Compliance line check* — issues found:\n${lines.join("\n")}\n\nReview in the War Room → Compliance.`);
+    }
+    return NextResponse.json({ ok: true, job: "compliance", checked: health.map((h) => ({ p: h.provider, connected: h.connected, issues: h.issues.length })), posted: Boolean(webhook && lines.length) });
+  }
+
   // Payday — checked daily; only sends on actual semi-monthly paydays (the 15th
   // and the last day of the month). `&force=1` sends regardless for a test.
   if (url.searchParams.get("payroll") === "1") {

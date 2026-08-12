@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -34,6 +34,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/huddle": "standup morning brief",
   "/call-scoring": "call recording transcript coaching score",
   "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers",
+  "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
   "/software": "logins passwords tools vendors",
   "/tickets": "requests help support",
   "/leaks": "war room health issues",
@@ -75,6 +76,10 @@ export default function Sidebar({
       { href: "/rewards", label: "Rewards", Icon: Gift },
       { href: "/culture", label: "Culture", Icon: PartyPopper },
     ] },
+    { label: "Business Heartbeat", items: [
+      { href: "/compliance", label: "Compliance", Icon: ShieldCheck },
+      { href: "/phone-health", label: "Phone Health", Icon: Phone },
+    ] },
     { label: "Performance", items: [
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/report", label: "KPI Reports", Icon: FileText },
@@ -88,7 +93,6 @@ export default function Sidebar({
       { href: "/alerts", label: "Alerts", Icon: Bell, managerOnly: true },
       { href: "/pip", label: "PIPs", Icon: ShieldAlert, managerOnly: true },
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
-      { href: "/phone-health", label: "Phone Health", Icon: Phone },
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
       { href: "/glossary", label: "Glossary", Icon: BookOpen },
       { href: "/playbooks", label: "Playbooks", Icon: Lightbulb },

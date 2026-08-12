@@ -18,6 +18,10 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/rewards", label: "Rewards", gate: "all" },
     { href: "/culture", label: "Culture", gate: "all" },
   ] },
+  { group: "Business Heartbeat", items: [
+    { href: "/compliance", label: "Compliance", gate: "all" },
+    { href: "/phone-health", label: "Phone Health", gate: "all" },
+  ] },
   { group: "Performance", items: [
     { href: "/entry", label: "Enter KPIs", gate: "all" },
     { href: "/report", label: "KPI Reports", gate: "all" },
@@ -31,7 +35,6 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/alerts", label: "Alerts", gate: "manager" },
     { href: "/pip", label: "PIPs", gate: "manager" },
     { href: "/call-scoring", label: "Call scoring", gate: "all" },
-    { href: "/phone-health", label: "Phone Health", gate: "all" },
     { href: "/scripts", label: "Scripts", gate: "all" },
     { href: "/glossary", label: "Glossary", gate: "all" },
     { href: "/playbooks", label: "Playbooks", gate: "all" },

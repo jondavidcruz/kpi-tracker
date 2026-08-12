@@ -8,6 +8,7 @@
     { "path": "/api/cron?buyerreport=1", "schedule": "30 22 * * 5" },
     { "path": "/api/cron?buyerreport=1", "schedule": "0 14 * * 1" },
     { "path": "/api/cron?phonehealth=1", "schedule": "0 15 * * 1-5" },
+    { "path": "/api/cron?compliance=1", "schedule": "0 16 * * 1-5" },
     { "path": "/api/cron?cascade=1", "schedule": "0 16 * * *" },
     { "path": "/api/cron?cascade=1", "schedule": "0 19 * * *" },
     { "path": "/api/cron?cascade=1", "schedule": "0 22 * * *" },
