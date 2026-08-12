@@ -2495,12 +2495,60 @@ export async function uploadTeamDoc(formData: FormData) {
   if (!userId || !(file instanceof File) || file.size === 0) redirect("/team-roster?err=file");
   const f = file as File;
   if (f.size > 15 * 1024 * 1024) redirect("/team-roster?err=size");
-  const data = Buffer.from(await f.arrayBuffer());
-  await db.teamDoc.create({
-    data: { userId, label, filename: f.name, contentType: f.type || "application/octet-stream", size: f.size, data, uploadedBy: me.name },
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const mime = f.type || "application/octet-stream";
+  // Offload straight to Google Drive when configured, so the doc doesn't bloat Postgres.
+  const { gdriveConfigured, uploadToDrivePrivate } = await import("@/lib/gdrive");
+  let stored: Uint8Array<ArrayBuffer> = bytes;
+  let driveId: string | null = null;
+  if (gdriveConfigured()) {
+    try { driveId = await uploadToDrivePrivate(f.name, bytes, mime); stored = new Uint8Array(0); } catch { driveId = null; stored = bytes; }
+  }
+  const doc = await db.teamDoc.create({
+    data: { userId, label, filename: f.name, contentType: mime, size: f.size, data: stored, uploadedBy: me.name },
   });
+  if (driveId) { const { setDriveFile } = await import("@/lib/drive-store"); await setDriveFile(`doc:${doc.id}`, driveId); }
   revalidatePath("/team-roster");
   redirect("/team-roster?saved=Document");
+}
+
+// Owner-only: move existing HUD statements + HR docs from Postgres to private Google
+// Drive (verifies the Drive copy is retrievable BEFORE freeing the Postgres bytes — the
+// file is relocated, never deleted). Runs in small batches; click again to continue.
+export async function offloadBlobsToDrive() {
+  const me = await getCurrentUser();
+  if (!me || !isAdmin(me)) return;
+  const { gdriveConfigured, uploadToDrivePrivate, downloadFromDrive } = await import("@/lib/gdrive");
+  if (!gdriveConfigured()) redirect("/closed-deals?offload=noconfig");
+  const { setDriveFile } = await import("@/lib/drive-store");
+  let moved = 0;
+  const huds = await db.closedDeal.findMany({ where: { hudData: { not: null } }, select: { id: true, hudData: true, hudName: true, hudType: true }, take: 12 });
+  for (const h of huds) {
+    if (!h.hudData) continue;
+    try {
+      const fileId = await uploadToDrivePrivate(h.hudName || `HUD-${h.id}.pdf`, new Uint8Array(h.hudData as unknown as Buffer), h.hudType || "application/pdf");
+      const back = await downloadFromDrive(fileId);
+      if (!back || back.length === 0) continue; // verify before freeing
+      await setDriveFile(`hud:${h.id}`, fileId);
+      await db.closedDeal.update({ where: { id: h.id }, data: { hudData: null } });
+      moved++;
+    } catch {}
+  }
+  const docs = await db.teamDoc.findMany({ select: { id: true, data: true, filename: true, contentType: true }, orderBy: { createdAt: "desc" }, take: 20 });
+  for (const d of docs) {
+    const buf = d.data as unknown as Buffer | null;
+    if (!buf || buf.length === 0) continue; // already offloaded
+    try {
+      const fileId = await uploadToDrivePrivate(d.filename || `doc-${d.id}`, new Uint8Array(buf), d.contentType || "application/octet-stream");
+      const back = await downloadFromDrive(fileId);
+      if (!back || back.length === 0) continue;
+      await setDriveFile(`doc:${d.id}`, fileId);
+      await db.teamDoc.update({ where: { id: d.id }, data: { data: new Uint8Array(0) } });
+      moved++;
+    } catch {}
+  }
+  revalidatePath("/closed-deals");
+  redirect(`/closed-deals?offload=${moved}`);
 }
 
 export async function deleteTeamDoc(formData: FormData) {

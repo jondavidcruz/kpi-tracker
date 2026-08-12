@@ -73,3 +73,33 @@ export async function uploadToDrive(name: string, bytes: Uint8Array, mime: strin
   });
   return `https://drive.google.com/uc?export=download&id=${j.id}`;
 }
+
+/** Upload bytes PRIVATELY (no public permission) — for sensitive files like HUD
+ *  statements and HR docs. Returns the Drive file id; only the service account can read
+ *  it, so the app streams it back server-side (owner-gated) via downloadFromDrive. */
+export async function uploadToDrivePrivate(name: string, bytes: Uint8Array, mime: string): Promise<string> {
+  const token = await getAccessToken();
+  const folderId = process.env.GDRIVE_FOLDER_ID;
+  const boundary = "wrb_" + crypto.randomBytes(8).toString("hex");
+  const meta = JSON.stringify({ name, parents: [folderId] });
+  const pre = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`;
+  const body = Buffer.concat([Buffer.from(pre), Buffer.from(bytes), Buffer.from(`\r\n--${boundary}--`)]);
+  const up = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  const j = await up.json();
+  if (!j.id) throw new Error("gdrive private upload failed: " + JSON.stringify(j).slice(0, 200));
+  return j.id as string; // NOT made public
+}
+
+/** Download a private Drive file's bytes server-side (service account). */
+export async function downloadFromDrive(fileId: string): Promise<Uint8Array | null> {
+  try {
+    const token = await getAccessToken();
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    return new Uint8Array(await res.arrayBuffer());
+  } catch { return null; }
+}

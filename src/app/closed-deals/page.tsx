@@ -4,6 +4,8 @@ import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { friendlyDate } from "@/lib/date";
 import { Card, SectionTitle, MetricCard } from "@/components/ui";
 import HubTabs from "@/components/HubTabs";
+import { offloadBlobsToDrive } from "@/app/actions";
+import { gdriveConfigured, driveCheck } from "@/lib/gdrive";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,7 @@ const LEAD_LABEL: Record<string, string> = {
   other: "Other",
 };
 
-export default async function ClosedDealsPage() {
+export default async function ClosedDealsPage({ searchParams }: { searchParams: Promise<{ offload?: string }> }) {
   const me = await getCurrentUser();
   if (!isAdmin(me)) {
     return (
@@ -53,10 +55,35 @@ export default async function ClosedDealsPage() {
   }
   const years = [...byYear.entries()].sort((a, b) => b[0] - a[0]);
 
+  // Google Drive offload status (owner-only storage tooling).
+  const sp = await searchParams;
+  const driveOn = gdriveConfigured();
+  const [hudsInDb, drive] = await Promise.all([
+    db.closedDeal.count({ where: { hudData: { not: null } } }),
+    driveOn ? driveCheck() : Promise.resolve<{ ok: boolean; folder?: string; error?: string }>({ ok: false }),
+  ]);
+
   return (
     <div className="space-y-7">
       <HubTabs tabs={[{ href: "/deals", label: "Active deals" }, { href: "/closing", label: "Escrow & Closing" }, { href: "/closed-deals", label: "Closed deals" }]} />
       <SectionTitle title="💰 Closed Deals" subtitle="Every paid deal, profit verified from the HUD statements. Owner-only." accent="bg-emerald-400" />
+
+      {/* Google Drive offload — move heavy HUD/doc files out of the database to save space + speed */}
+      <Card className="border-l-4 border-sky-400 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-bold text-slate-800">☁️ Storage — move HUD &amp; doc files to Google Drive</h2>
+          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${driveOn && drive.ok ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{driveOn ? (drive.ok ? "✓ Drive connected" : "⚠️ Drive error") : "Not configured"}</span>
+        </div>
+        <p className="mt-1 text-[12px] text-slate-500">Relocates the HUD PDFs &amp; HR docs out of the database into your Google Drive (kept private, still owner-only). It <b>verifies the Drive copy before freeing the database copy</b> — files are moved, never deleted. New uploads go straight to Drive automatically.</p>
+        {sp.offload && /^\d+$/.test(sp.offload) && <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-[13px] font-semibold text-emerald-800">✓ Moved {sp.offload} file{sp.offload === "1" ? "" : "s"} to Drive. Click again to continue if more remain.</div>}
+        {sp.offload === "noconfig" && <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[13px] font-semibold text-amber-800">Google Drive isn&apos;t configured yet (needs GOOGLE_SERVICE_ACCOUNT_JSON + GDRIVE_FOLDER_ID in Vercel). Same setup the call recordings use.</div>}
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <span className="text-[12px] text-slate-600"><b>{hudsInDb}</b> HUD file{hudsInDb === 1 ? "" : "s"} still in the database{drive.folder ? ` · Drive: ${drive.folder}` : ""}</span>
+          {driveOn && drive.ok && (
+            <form action={offloadBlobsToDrive}><button className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700">Move a batch to Drive →</button></form>
+          )}
+        </div>
+      </Card>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="Total profit (all-time)" value={money(total)} hint={`${deals.length} deals`} />
