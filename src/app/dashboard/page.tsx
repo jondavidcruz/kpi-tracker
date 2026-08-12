@@ -132,9 +132,21 @@ export default async function DashboardPage({
     } catch { t360Remaining = 0; }
   }
 
-  // --- Deal funnel (this month): leads → opportunities → offers → contracts → closed ---
+  // --- Deal funnel + money pace + internet speed: batch the independent reads into
+  // one parallel wave (was 3 sequential DB round-trips) to speed up the dashboard. ---
   const FUNNEL_KEYS = ["ppl_leads", "text_responses", "direct_mail_responses", "quality_convos", "offers_made", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"];
-  const funnelKpis = await db.kpi.findMany({ where: { key: { in: FUNNEL_KEYS } }, select: { id: true, key: true } });
+  const internetSpeedKpi = perRepKpis.find((k) => k.roleKey === "internet") ?? null;
+  const [isy, ism, isd] = date.split("-").map(Number);
+  const speedWinStart = new Date(Date.UTC(isy, ism - 1, isd));
+  speedWinStart.setUTCDate(speedWinStart.getUTCDate() - 13);
+  const speedDays = datesInRange(speedWinStart.toISOString().slice(0, 10), date); // 14 days incl. today
+  const [funnelKpis, monthExp, speedEntries] = await Promise.all([
+    db.kpi.findMany({ where: { key: { in: FUNNEL_KEYS } }, select: { id: true, key: true } }),
+    db.expenseLine.findMany({ where: { month }, select: { category: true, actual: true, label: true } }),
+    internetSpeedKpi
+      ? db.entry.findMany({ where: { kpiId: internetSpeedKpi.id, date: { gte: speedDays[0], lte: date } }, select: { userId: true, date: true, value: true } })
+      : Promise.resolve([] as { userId: string | null; date: string; value: number }[]),
+  ]);
   const fIdToKey = new Map(funnelKpis.map((k) => [k.id, k.key]));
   const fEntries = await db.entry.findMany({ where: { kpiId: { in: funnelKpis.map((k) => k.id) }, date: { gte: monthStart, lte: date } }, select: { kpiId: true, value: true } });
   const byKey: Record<string, number> = {};
@@ -154,7 +166,6 @@ export default async function DashboardPage({
   // Wire the money pace rows to REAL data — these team-monthly KPIs (deals closed,
   // revenue, spend) aren't entered by hand, so they sat at $0. Pull them live from
   // the closed-deal ledger + the P&L (ExpenseLine) instead.
-  const monthExp = await db.expenseLine.findMany({ where: { month }, select: { category: true, actual: true, label: true } });
   const marketingLines = monthExp.filter((e) => e.category === "marketing");
   const marketingMonth = marketingLines.reduce((s, e) => s + e.actual, 0);
   const opexMonth = monthExp.reduce((s, e) => s + e.actual, 0);
@@ -176,18 +187,7 @@ export default async function DashboardPage({
   setMtd("contracts_sent", perRepMtd("acq_contracts_sent"));
   setMtd("contracts_signed", ["acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"].reduce((s, k) => s + perRepMtd(k), 0));
 
-  // --- Internet speed: today's recorded reading per rep + a 14-day history/trend ---
-  const internetSpeedKpi = perRepKpis.find((k) => k.roleKey === "internet") ?? null;
-  const [sy, sm, sd] = date.split("-").map(Number);
-  const winStart = new Date(Date.UTC(sy, sm - 1, sd));
-  winStart.setUTCDate(winStart.getUTCDate() - 13);
-  const speedDays = datesInRange(winStart.toISOString().slice(0, 10), date); // 14 days incl. today
-  const speedEntries = internetSpeedKpi
-    ? await db.entry.findMany({
-        where: { kpiId: internetSpeedKpi.id, date: { gte: speedDays[0], lte: date } },
-        select: { userId: true, date: true, value: true },
-      })
-    : [];
+  // --- Internet speed: today's reading per rep + 14-day trend (fetched in the batch above) ---
   const speedMap = new Map<string, number>();
   for (const e of speedEntries) speedMap.set(`${e.userId}|${e.date}`, e.value);
   const speedReps = reps.filter((r) => r.tracksInternet);

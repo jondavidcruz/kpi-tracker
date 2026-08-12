@@ -136,7 +136,7 @@ export function resolveGoalWith(
 
 /** Map of "kpiId|userId" -> value for a given date (daily entries). */
 export async function getDailyValues(date: string): Promise<Map<string, number>> {
-  const entries = await db.entry.findMany({ where: { date } });
+  const entries = await db.entry.findMany({ where: { date }, select: { kpiId: true, userId: true, value: true } });
   const map = new Map<string, number>();
   for (const e of entries) map.set(`${e.kpiId}|${e.userId ?? ""}`, e.value);
   return map;
@@ -147,6 +147,7 @@ export async function getMonthToDateSums(date: string): Promise<Map<string, numb
   const { start } = monthBounds(date);
   const entries = await db.entry.findMany({
     where: { date: { gte: start, lte: date } },
+    select: { kpiId: true, value: true },
   });
   const sums = new Map<string, number>();
   for (const e of entries) sums.set(e.kpiId, (sums.get(e.kpiId) ?? 0) + e.value);
@@ -156,7 +157,7 @@ export async function getMonthToDateSums(date: string): Promise<Map<string, numb
 /** Monthly KPIs are stored as a single entry per month, dated to month start. */
 export async function getMonthlyValues(date: string): Promise<Map<string, number>> {
   const { start } = monthBounds(date);
-  const entries = await db.entry.findMany({ where: { date: start, userId: null } });
+  const entries = await db.entry.findMany({ where: { date: start, userId: null }, select: { kpiId: true, value: true } });
   const map = new Map<string, number>();
   for (const e of entries) map.set(e.kpiId, e.value);
   return map;
@@ -202,7 +203,7 @@ export async function getDealMetrics(yearPrefix: string) {
 
 /** Sum of entries per "kpiId|userId" across an inclusive date range (for weekly report). */
 export async function getRangeSums(start: string, end: string): Promise<Map<string, number>> {
-  const entries = await db.entry.findMany({ where: { date: { gte: start, lte: end } } });
+  const entries = await db.entry.findMany({ where: { date: { gte: start, lte: end } }, select: { kpiId: true, userId: true, value: true } });
   const sums = new Map<string, number>();
   for (const e of entries) {
     const key = `${e.kpiId}|${e.userId ?? ""}`;
