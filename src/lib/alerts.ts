@@ -697,11 +697,10 @@ export async function runScheduledChecks(opts?: {
   // Skip on weekends (team works Mon–Fri) unless a manual force run is requested.
   // Email goes on both runs; Google Chat only on the evening/EOD run (chat: postCutoff).
   const digestSent = weekdayOrForce ? await sendDailyDigest(date, { chat: postCutoff }) : false;
-  // Dispo deal-aging watch rides along — same once-a-day Chat rule.
-  const dealAlertsSent = weekdayOrForce ? await sendDealAgingAlerts(date, { chat: postCutoff }) : false;
-
   // Weekly team KPI email — Monday morning only (or any forced run with ?weekly=1).
   const isMondayMorning = isWeekday(tz, "Mon") && !pastCutoff("12:00", tz);
+  // Dispo Deal Watch — WEEKLY now (Monday morning only), per Jon. Was daily; too noisy.
+  const dealAlertsSent = (opts?.force || isMondayMorning) ? await sendDealAgingAlerts(date, { chat: true }) : false;
   const weeklySent =
     opts?.weekly || isMondayMorning ? await sendWeeklyTeamEmail(date) : false;
   // Record last week's top-performer wins for the gamified leaderboard (Mondays).
