@@ -187,7 +187,7 @@ export async function getOpenDeals() {
 
 /** Revenue/escrow rollups for the report's page-4 money metrics. */
 export async function getDealMetrics(yearPrefix: string) {
-  const deals = await db.deal.findMany({ where: { active: true } });
+  const deals = await db.deal.findMany({ where: { active: true }, select: { status: true, soldDate: true, assignmentFee: true } });
   const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
   const closed = deals.filter((d) => d.status === "closed");
   const inEscrow = deals.filter((d) => d.status === "in_escrow");
