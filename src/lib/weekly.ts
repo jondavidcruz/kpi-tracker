@@ -142,6 +142,18 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
   const valByUserKpi = new Map<string, number>();
   for (const e of entries) if (e.userId) valByUserKpi.set(`${e.userId}|${e.kpiId}`, e.value);
 
+  // Justifications (why targets were missed) + the day's deal outcomes, so this
+  // single end-of-day email tells Jon: what was hit, what wasn't and WHY, plus
+  // the end results — no separate justification/deal emails needed.
+  const [todaysAlerts, signedToday, closedToday] = await Promise.all([
+    db.alert.findMany({ where: { date, status: { in: ["open", "ack", "resolved"] } }, include: { kpi: true, user: true }, orderBy: { severity: "asc" } }),
+    db.deal.findMany({ where: { contractDate: date } }),
+    db.deal.findMany({ where: { soldDate: date } }),
+  ]);
+
+  // Running met/missed tally across every goal-bearing KPI on the scorecard.
+  const tally = { hit: 0, miss: 0, close: 0, none: 0 };
+
   const repBlocks = reps
     .map((rep) => {
       const repKpis = [
@@ -157,6 +169,8 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
           const val = valByUserKpi.get(`${rep.id}|${k.id}`) ?? 0;
           const goal = resolveGoalWith(targets, k, rep.id, month);
           const status = has ? statusVsGoal(k.goalKind, val, goal) : "none";
+          // Only tally KPIs that actually carry a goal (skip tracked/activity metrics).
+          if (goal !== null && k.goalKind !== "tracked") tally[status as keyof typeof tally]++;
           const color = status === "hit" ? "#047857" : status === "close" ? "#b45309" : status === "miss" ? "#b91c1c" : "#94a3b8";
           const goalStr = goal === null || k.goalKind === "tracked" ? "" : ` <span style="color:#94a3b8;">/ ${formatValue(k.unit as Unit, goal)}</span>`;
           return `<tr><td style="padding:3px 8px;color:#334155;">${esc(k.emoji)} ${esc(k.name)}</td>
@@ -190,13 +204,66 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
       </div>`
     : "";
 
+  // ---- Top-line: were the numbers met? ----
+  const goaled = tally.hit + tally.miss + tally.close + tally.none;
+  const metAll = goaled > 0 && tally.miss === 0 && tally.none === 0;
+  const summaryTone = metAll ? "#047857" : tally.miss > 0 ? "#b91c1c" : "#b45309";
+  const summaryLine = goaled === 0
+    ? "No goal-bearing KPIs on today's scorecard."
+    : metAll
+      ? `✅ All ${goaled} tracked targets met today — clean day.`
+      : `${tally.hit} hit · ${tally.miss} missed · ${tally.close} close · ${tally.none} not entered (of ${goaled}).`;
+  const summaryStrip = `<div style="margin:0 0 16px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-left:5px solid ${summaryTone};border-radius:10px;">
+    <div style="font-weight:800;font-size:16px;color:${summaryTone};">${summaryLine}</div>
+  </div>`;
+
+  // ---- Why targets were missed (justifications logged in Alerts) ----
+  const justified = todaysAlerts.filter((a) => (a.status === "resolved") && (a.resolutionNote || a.correctiveAction));
+  const openMoney = todaysAlerts.filter((a) => a.status !== "resolved" && a.severity === "hard");
+  const whyRows = [
+    ...justified.map((a) => {
+      const who = a.user?.name ? `${esc(a.user.name)} · ` : "";
+      const reason = (a.resolutionNote || a.correctiveAction || "").trim();
+      const cat = a.resolutionCategory ? `${esc(reasonLabel(a.resolutionCategory))}: ` : "";
+      return `<li style="margin:4px 0;color:#334155;">✅ ${who}${esc(a.kpi.emoji)} ${esc(a.kpi.name)} — <em style="color:#475569;">${cat}${esc(reason)}</em></li>`;
+    }),
+    ...openMoney.map((a) => {
+      const who = a.user?.name ? `${esc(a.user.name)} · ` : "";
+      return `<li style="margin:4px 0;color:#b91c1c;">🔴 ${who}${esc(a.kpi.emoji)} ${esc(a.kpi.name)} — <em>reason pending — justify in Alerts</em></li>`;
+    }),
+  ].join("");
+  const whyBlock = whyRows
+    ? `<div style="margin:18px 0 0;padding:14px 16px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;">
+        <h2 style="margin:0 0 6px;color:#0b1f3a;font-size:16px;">Why targets were missed</h2>
+        <ul style="margin:0;padding-left:20px;font-size:13px;">${whyRows}</ul>
+      </div>`
+    : "";
+
+  // ---- End results: the day's deal outcomes ----
+  const usd = (n: number | null | undefined) => (n == null ? "" : `$${Math.round(n).toLocaleString()}`);
+  const closedRevenue = closedToday.reduce((s, d) => s + (d.assignmentFee ?? 0), 0);
+  const resultRows = [
+    ...closedToday.map((d) => `<li style="margin:4px 0;color:#047857;">🏆 <strong>Closed:</strong> ${esc(d.address)}${d.assignmentFee ? ` — ${usd(d.assignmentFee)} fee` : ""}${d.assignedTo ? ` · ${esc(d.assignedTo)}` : ""}</li>`),
+    ...signedToday.map((d) => `<li style="margin:4px 0;color:#0369a1;">📝 <strong>Under contract:</strong> ${esc(d.address)}${d.contractPrice ? ` — ${usd(d.contractPrice)}` : ""}${d.assignedTo ? ` · ${esc(d.assignedTo)}` : ""}</li>`),
+  ].join("");
+  const resultsBlock = `<div style="margin:18px 0 0;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;">
+      <h2 style="margin:0 0 6px;color:#065f46;font-size:16px;">End results — today</h2>
+      ${resultRows
+        ? `<ul style="margin:0;padding-left:20px;font-size:13px;">${resultRows}</ul>${closedToday.length ? `<div style="margin-top:8px;font-weight:700;color:#065f46;">Revenue closed today: ${usd(closedRevenue)}</div>` : ""}`
+        : `<div style="color:#475569;font-size:13px;">No new contracts or closings logged today.</div>`}
+    </div>`;
+
   const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:640px;margin:0 auto;color:#0f172a;">
-    <h1 style="color:#0b1f3a;">📋 End-of-Day Team Review</h1>
-    <p style="color:#64748b;">${esc(friendlyDate(date))} · each member's KPIs for today vs goal.</p>
+    <h1 style="color:#0b1f3a;">📋 Daily Results — End of Day</h1>
+    <p style="color:#64748b;">${esc(friendlyDate(date))} · did we hit the numbers, why not, and the end results.</p>
+    ${summaryStrip}
+    ${whyBlock}
+    ${resultsBlock}
+    <h2 style="margin:22px 0 6px;color:#0b1f3a;font-size:16px;">Scorecard — each member vs goal</h2>
     ${repBlocks}
     ${pipBlock}
     <p style="margin-top:16px;font-size:12px;color:#94a3b8;">🟢 on goal · 🟠 close · 🔴 behind · — not entered. Live: ${APP_URL}/dashboard</p>
   </div>`;
 
-  return sendEmail(`📋 End-of-Day Team Review, ${friendlyDate(date)}`, html, await reportCfg());
+  return sendEmail(`📋 Daily Results (${friendlyDate(date)}): ${summaryLine.replace(/^✅ /, "")}`, html, await reportCfg());
 }

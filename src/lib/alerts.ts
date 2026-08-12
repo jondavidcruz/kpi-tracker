@@ -487,8 +487,9 @@ export async function sendAlertJustificationReminder(date: string): Promise<bool
 
 /** Send a single Chat + email digest of all open alerts for the date.
  *  Money (hard) flags include a gap + training plan; activity/missing are listed. */
-export async function sendDailyDigest(date: string, opts?: { chat?: boolean }): Promise<boolean> {
+export async function sendDailyDigest(date: string, opts?: { chat?: boolean; email?: boolean }): Promise<boolean> {
   const sendChat = opts?.chat ?? true;
+  const sendEmailFlag = opts?.email ?? true;
   const [open, resolvedAll] = await Promise.all([
     db.alert.findMany({ where: { status: "open", date }, orderBy: [{ severity: "asc" }], include: { kpi: true, user: true } }),
     db.alert.findMany({ where: { status: "resolved", date }, include: { kpi: true, user: true } }),
@@ -570,11 +571,13 @@ export async function sendDailyDigest(date: string, opts?: { chat?: boolean }): 
           justified.map((a) => `${a.user?.name ?? "Team"} — ${a.kpi.name}: ${(a.resolutionNote || a.correctiveAction || "").trim()}${a.resolvedBy ? ` (— ${a.resolvedBy})` : ""}`),
         )
       : "");
-  const emailOk = await sendEmail(
-    `📊 KPI Digest (${date}): ${open.length} open · ${justified.length} justified`,
-    emailHtml,
-    cfg,
-  );
+  const emailOk = sendEmailFlag
+    ? await sendEmail(
+        `📊 KPI Digest (${date}): ${open.length} open · ${justified.length} justified`,
+        emailHtml,
+        cfg,
+      )
+    : false;
   return chatOk || emailOk;
 }
 
@@ -691,12 +694,12 @@ export async function runScheduledChecks(opts?: {
     missing = await generateMissingEntryAlerts(date);
   }
 
-  // The twice-daily digest is the scheduled snapshot of everything still open
-  // (hard + soft + missing), each with its gap + training plan. Instant hard
-  // alerts already fired on save; the digest is the pre-/post-shift summary.
-  // Skip on weekends (team works Mon–Fri) unless a manual force run is requested.
-  // Email goes on both runs; Google Chat only on the evening/EOD run (chat: postCutoff).
-  const digestSent = weekdayOrForce ? await sendDailyDigest(date, { chat: postCutoff }) : false;
+  // KPI digest — Google Chat only, and only on the evening/EOD run when the money
+  // (hard) alert set has CHANGED (handled inside sendDailyDigest). The daily digest
+  // EMAIL is retired: the single end-of-day "Daily Results" email (sendDailyTeamReview
+  // below) is now the one place Jon learns what was hit, what wasn't and why, and the
+  // day's end results — so we don't flood inboxes with separate digest/justify/missing mails.
+  const digestSent = weekdayOrForce && postCutoff ? await sendDailyDigest(date, { chat: true, email: false }) : false;
   // Weekly team KPI email — Monday morning only (or any forced run with ?weekly=1).
   const isMondayMorning = isWeekday(tz, "Mon") && !pastCutoff("12:00", tz);
   // Dispo Deal Watch — WEEKLY now (Monday morning only), per Jon. Was daily; too noisy.
@@ -708,24 +711,15 @@ export async function runScheduledChecks(opts?: {
   // Weekly EOS pulse to managers — off-track Rocks, To-Dos, open-issue counts.
   if (opts?.weekly || isMondayMorning) await sendEosPulse(date).catch(() => {});
 
-  // End-of-day team review — on the post-cutoff (6:30pm) weekday run, after KPIs
-  // are entered. Force with ?review=1.
+  // THE single end-of-day email — "Daily Results": did we hit the numbers, why the
+  // misses happened (justifications), and the day's end results (deals). Runs once on
+  // the post-cutoff (~6:30pm; Fri 2pm) weekday run. Force with ?review=1. This replaces
+  // the separate justification-reminder and missing-KPI emails (now folded in here), so
+  // Jon gets ONE awareness email a day instead of a stream he'd learn to ignore.
   const dailyReviewSent =
     opts?.review || (weekdayOrForce && postCutoff)
       ? await sendDailyTeamReview(date)
       : false;
 
-  // EOD missing-KPI email to managers (Marie + Jon) — who hasn't logged today.
-  const missingKpiEmailSent =
-    opts?.review || (weekdayOrForce && postCutoff)
-      ? await sendMissingKpiEmail(date)
-      : false;
-
-  // Remind Marie (+ Jon) to justify any still-open alerts before 7pm.
-  const justifyReminderSent =
-    opts?.review || (weekdayOrForce && postCutoff)
-      ? await sendAlertJustificationReminder(date)
-      : false;
-
-  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent, dailyReviewSent, missingKpiEmailSent, justifyReminderSent };
+  return { date, newAlerts: created.length, missing: missing.length, digestSent, dealAlertsSent, weeklySent, dailyReviewSent, missingKpiEmailSent: false, justifyReminderSent: false };
 }
