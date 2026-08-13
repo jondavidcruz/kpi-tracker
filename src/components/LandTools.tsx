@@ -212,12 +212,32 @@ function CfdCalc() {
   );
 }
 
+// Quick acre ⇄ sq ft converter (infill lots are usually quoted in sq ft).
+function AcreConverter() {
+  const ACRE = 43560;
+  const [acres, setAcres] = useState("");
+  const [sqft, setSqft] = useState("");
+  const n = (s: string) => Number(String(s).replace(/[^0-9.]/g, "")) || 0;
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm dark:border-emerald-800 dark:bg-emerald-950">
+      <div className="font-semibold text-emerald-900 dark:text-emerald-200">📐 Acre ⇄ sq ft — <span className="font-mono">43,560 sq ft = 1 acre</span></div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-emerald-900 dark:text-emerald-200">
+        <input value={acres} onChange={(e) => { setAcres(e.target.value); setSqft(e.target.value ? Math.round(n(e.target.value) * ACRE).toString() : ""); }} placeholder="acres" className={`${inputCls} w-28`} />
+        <span className="font-semibold">acres =</span>
+        <input value={sqft} onChange={(e) => { setSqft(e.target.value); setAcres(e.target.value ? (n(e.target.value) / ACRE).toFixed(3).replace(/\.?0+$/, "") : ""); }} placeholder="sq ft" className={`${inputCls} w-36`} />
+        <span className="font-semibold">sq ft</span>
+      </div>
+    </div>
+  );
+}
+
 export default function LandTools() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-        🌱 <strong>Land tools</strong> — offer auto-rules, batch blind offers for mail merge, and owner-finance (CFD) math for the land pivot.
+        🌱 <strong>Land tools</strong> — offer auto-rules, batch blind offers for mail merge, and owner-finance (CFD) math for the land pivot. <span className="font-mono">(43,560 sq ft = 1 acre)</span>
       </div>
+      <AcreConverter />
       <div className="grid gap-4 lg:grid-cols-2">
         <OfferCalc />
         <CfdCalc />
