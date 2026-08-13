@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { normalizeIncoming, pushTelcoAlerts } from "@/lib/telco-alerts";
+import { humanizeAlarm } from "@/lib/telco-errors";
 import { db } from "@/lib/db";
 import { postChatWebhook } from "@/lib/notify";
 
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
   try {
     const cfg = await db.resource.findFirst({ where: { category: "__phone_config__" } });
     if (cfg?.url) {
-      const lines = alerts.map((a) => `${a.level === "error" ? "🔴" : "⚠️"} *${a.provider}*${a.code ? ` [${a.code}]` : ""}: ${a.text}`);
+      const lines = alerts.map((a) => { const h = humanizeAlarm(a.code, a.text); return `${a.level === "error" ? "🔴" : "⚠️"} *${a.provider}*${a.code ? ` [${a.code}]` : ""}: ${h.meaning}${h.action ? ` — ${h.action}` : ""}`; });
       await postChatWebhook(cfg.url, `🚨 *Line alarm*\n${lines.join("\n")}`);
     }
   } catch { /* chat is best-effort */ }

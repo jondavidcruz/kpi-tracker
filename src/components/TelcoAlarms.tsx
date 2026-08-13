@@ -1,5 +1,6 @@
 import { readTelcoAlerts, type TelcoAlert } from "@/lib/telco-alerts";
 import { twilioDebuggerAlarms, type LiveAlarm } from "@/lib/telco";
+import { humanizeAlarm } from "@/lib/telco-errors";
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
@@ -29,16 +30,22 @@ export default async function TelcoAlarms() {
       {all.length === 0 ? (
         <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">✓ No alarms. (Point Twilio Debugger + Telnyx webhooks at <code className="text-xs">/api/telco-alert</code> to capture real-time alerts.)</p>
       ) : (
-        <ul className="mt-2 space-y-1.5">
-          {all.map((a, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm">
-              <span>{a.level === "error" ? "🔴" : a.level === "warning" ? "🟠" : "🔵"}</span>
-              <span className="flex-1 text-slate-700 dark:text-slate-200">
-                <span className="font-semibold">{a.provider}</span>{a.code ? ` · ${a.code}` : ""} — {a.text}
-              </span>
-              <span className="shrink-0 text-[11px] text-slate-400">{ago(a.at)} ago</span>
-            </li>
-          ))}
+        <ul className="mt-2 space-y-2">
+          {all.map((a, i) => {
+            const h = humanizeAlarm(a.code, a.text);
+            return (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <span>{a.level === "error" ? "🔴" : a.level === "warning" ? "🟠" : "🔵"}</span>
+                <span className="flex-1 text-slate-700 dark:text-slate-200">
+                  <span className="font-semibold">{a.provider}</span>
+                  {a.code ? <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[11px] font-mono text-slate-500 dark:bg-slate-800 dark:text-slate-400">{a.code}</span> : null}
+                  <span className="ml-1.5">{h.meaning}</span>
+                  {h.action && <span className="mt-0.5 block text-[12px] text-slate-500 dark:text-slate-400">→ {h.action}</span>}
+                </span>
+                <span className="shrink-0 text-[11px] text-slate-400">{ago(a.at)} ago</span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

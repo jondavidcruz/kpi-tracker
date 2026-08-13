@@ -130,9 +130,10 @@ export async function GET(request: Request) {
     for (const h of health) {
       if (h.connected && h.issues.length) lines.push(`*${h.provider}*: ${h.issues.join("; ")}`);
     }
-    // Surface any live Twilio Debugger errors from the last check too.
+    // Surface any live Twilio Debugger errors from the last check too (plain English).
+    const { humanizeAlarm } = await import("@/lib/telco-errors");
     const errAlarms = alarms.filter((a) => a.level === "error").slice(0, 6);
-    for (const a of errAlarms) lines.push(`*${a.provider}*${a.code ? ` [${a.code}]` : ""}: ${a.text}`);
+    for (const a of errAlarms) { const h = humanizeAlarm(a.code, a.text); lines.push(`*${a.provider}*${a.code ? ` [${a.code}]` : ""}: ${h.meaning}${h.action ? ` — ${h.action}` : ""}`); }
     if (webhook && lines.length) {
       await postChatWebhook(webhook, `🛡️ *Compliance line check* — issues found:\n${lines.join("\n")}\n\nReview in the War Room → Compliance.`);
     }
