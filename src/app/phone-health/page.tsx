@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { savePhoneLine, deletePhoneLine, savePhoneSetup, savePhoneAlertConfig, testPhoneAlert, getPhoneAlertWebhook } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import CopyButton from "@/components/CopyButton";
+import TelcoAlarms from "@/components/TelcoAlarms";
 
 // Consolidated from the Caller ID Reputation "Business Best Practices" + TNS
 // "Recommended Best Practices for Call Originators" (Aug 2024) guides Jon shared.
@@ -124,6 +125,9 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-6">
       <SectionTitle title="📞 Phone Health — Answer-Rate Playbook" subtitle="Keep every Twilio & Telnyx number out of “Spam Likely” so sellers actually pick up. Register, dial clean, monitor, dispute." accent="bg-brand-gold" />
+
+      {/* Live alarms from Twilio/Telnyx (same feed as Compliance) */}
+      <TelcoAlarms />
 
       {/* At-a-glance */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

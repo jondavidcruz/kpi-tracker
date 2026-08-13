@@ -9,6 +9,7 @@
 
 export interface LineHealth {
   provider: "Twilio" | "Telnyx";
+  role: string;                 // which CRM / channel this account powers
   connected: boolean;
   reason?: string;              // why not connected (missing creds / error)
   numbers?: number;            // count of phone numbers on the account
@@ -17,6 +18,11 @@ export interface LineHealth {
   a2p?: { label: string; ok: boolean }[]; // A2P 10DLC brand/campaign status chips
   checkedAt: string;           // ISO
 }
+
+// Twilio powers the ACQUISITIONS CRM (calls / dialer); Telnyx powers the MARKETING
+// CRM (outbound SMS / dialer / email / mail campaigns).
+export const TWILIO_ROLE = "Acquisitions CRM · calls & dialer";
+export const TELNYX_ROLE = "Marketing CRM · SMS, dialer & mail";
 
 /** Which telco credentials the running server can actually see (never the values). */
 export function telcoEnvStatus(): { twilioSid: boolean; twilioToken: boolean; telnyx: boolean } {
@@ -46,13 +52,13 @@ export async function twilioHealth(): Promise<LineHealth> {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   if (!sid || !token) {
-    return { provider: "Twilio", connected: false, reason: "Add TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN in Vercel to enable live monitoring.", issues: [], checkedAt: now };
+    return { provider: "Twilio", role: TWILIO_ROLE, connected: false, reason: "Add TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN in Vercel to enable live monitoring.", issues: [], checkedAt: now };
   }
   const auth = "Basic " + Buffer.from(`${sid}:${token}`).toString("base64");
   try {
     const acct = await fetchJson(`https://api.twilio.com/2010-04-01/Accounts/${sid}.json`, { headers: { Authorization: auth } });
     if (!acct.ok) {
-      return { provider: "Twilio", connected: false, reason: `Twilio API returned ${acct.status} — check the credentials.`, issues: [], checkedAt: now };
+      return { provider: "Twilio", role: TWILIO_ROLE, connected: false, reason: `Twilio API returned ${acct.status} — check the credentials.`, issues: [], checkedAt: now };
     }
     const a = acct.json as { status?: string; friendly_name?: string };
     const issues: string[] = [];
@@ -84,7 +90,7 @@ export async function twilioHealth(): Promise<LineHealth> {
     } catch { /* A2P is best-effort */ }
 
     return {
-      provider: "Twilio",
+      provider: "Twilio", role: TWILIO_ROLE,
       connected: true,
       numbers,
       detail: `${a.friendly_name ?? "Account"} · status ${a.status ?? "?"}${numbers != null ? ` · ${numbers} number(s)` : ""}`,
@@ -93,7 +99,7 @@ export async function twilioHealth(): Promise<LineHealth> {
       checkedAt: now,
     };
   } catch (e) {
-    return { provider: "Twilio", connected: false, reason: `Couldn't reach Twilio (${(e as Error).name}).`, issues: [], checkedAt: now };
+    return { provider: "Twilio", role: TWILIO_ROLE, connected: false, reason: `Couldn't reach Twilio (${(e as Error).name}).`, issues: [], checkedAt: now };
   }
 }
 
@@ -102,12 +108,12 @@ export async function telnyxHealth(): Promise<LineHealth> {
   const now = new Date().toISOString();
   const key = process.env.TELNYX_API_KEY;
   if (!key) {
-    return { provider: "Telnyx", connected: false, reason: "Add TELNYX_API_KEY in Vercel to enable live monitoring.", issues: [], checkedAt: now };
+    return { provider: "Telnyx", role: TELNYX_ROLE, connected: false, reason: "Add TELNYX_API_KEY in Vercel to enable live monitoring.", issues: [], checkedAt: now };
   }
   try {
     const res = await fetchJson(`https://api.telnyx.com/v2/phone_numbers?page[size]=250`, { headers: { Authorization: `Bearer ${key}` } });
     if (!res.ok) {
-      return { provider: "Telnyx", connected: false, reason: `Telnyx API returned ${res.status} — check the API key.`, issues: [], checkedAt: now };
+      return { provider: "Telnyx", role: TELNYX_ROLE, connected: false, reason: `Telnyx API returned ${res.status} — check the API key.`, issues: [], checkedAt: now };
     }
     const body = res.json as { data?: { status?: string; phone_number?: string }[]; meta?: { total_results?: number } };
     const data = body.data ?? [];
@@ -143,7 +149,7 @@ export async function telnyxHealth(): Promise<LineHealth> {
     } catch { /* A2P is best-effort */ }
 
     return {
-      provider: "Telnyx",
+      provider: "Telnyx", role: TELNYX_ROLE,
       connected: true,
       numbers,
       detail: `${numbers} number(s)${notActive.length ? ` · ${notActive.length} need attention` : " · all active"}`,
@@ -152,11 +158,34 @@ export async function telnyxHealth(): Promise<LineHealth> {
       checkedAt: now,
     };
   } catch (e) {
-    return { provider: "Telnyx", connected: false, reason: `Couldn't reach Telnyx (${(e as Error).name}).`, issues: [], checkedAt: now };
+    return { provider: "Telnyx", role: TELNYX_ROLE, connected: false, reason: `Couldn't reach Telnyx (${(e as Error).name}).`, issues: [], checkedAt: now };
   }
 }
 
 /** Both providers in parallel. */
 export async function allLineHealth(): Promise<LineHealth[]> {
   return Promise.all([twilioHealth(), telnyxHealth()]);
+}
+
+export interface LiveAlarm { provider: string; level: string; code?: string; text: string; at: string }
+
+/** Twilio Debugger alerts (errors/warnings) pulled live — e.g. 30007 message filtered,
+ *  11200 HTTP retrieval failure. Best-effort; empty if no creds or API error. */
+export async function twilioDebuggerAlarms(limit = 15): Promise<LiveAlarm[]> {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  if (!sid || !token) return [];
+  const auth = "Basic " + Buffer.from(`${sid}:${token}`).toString("base64");
+  try {
+    const res = await fetchJson(`https://monitor.twilio.com/v1/Alerts?PageSize=${limit}`, { headers: { Authorization: auth } });
+    if (!res.ok) return [];
+    const rows = ((res.json as { alerts?: unknown[] }).alerts ?? []) as { error_code?: string; log_level?: string; alert_text?: string; more_info?: string; date_generated?: string }[];
+    return rows.map((a) => ({
+      provider: "Twilio",
+      level: (a.log_level ?? "error").toLowerCase(),
+      code: a.error_code ? String(a.error_code) : undefined,
+      text: (a.alert_text ?? a.more_info ?? "Twilio alert").slice(0, 200),
+      at: a.date_generated ?? new Date().toISOString(),
+    }));
+  } catch { return []; }
 }

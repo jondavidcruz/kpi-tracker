@@ -9,6 +9,7 @@ import {
 } from "@/lib/compliance";
 import { allLineHealth, telcoEnvStatus } from "@/lib/telco";
 import { getCurrentUser, isOwner } from "@/lib/auth";
+import TelcoAlarms, { DELIVERABILITY_TIPS } from "@/components/TelcoAlarms";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,7 @@ export default async function CompliancePage() {
                   <strong className="text-slate-900 dark:text-slate-100">{dot} {h.provider}</strong>
                   <span className="text-[11px] text-slate-400">{timeAgo(h.checkedAt)}</span>
                 </div>
+                <div className="text-[11px] font-medium text-slate-500">{h.role}</div>
                 {h.connected ? (
                   <>
                     <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{h.detail}</p>
@@ -101,6 +103,22 @@ export default async function CompliancePage() {
         <p className="mt-2 text-xs text-slate-400">
           Number-level answer-rate & spam-flag tracking lives on <Link href="/phone-health" className="underline">Phone Health</Link>. Live status here reads Twilio/Telnyx directly via API.
         </p>
+        <div className="mt-3"><TelcoAlarms /></div>
+      </section>
+
+      {/* ── Connect-rate & deliverability playbook ── */}
+      <section>
+        <SectionTitle title="📈 Connect rate & SMS deliverability" subtitle="Levers to keep numbers healthy and messages landing" accent="bg-teal-400" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          {DELIVERABILITY_TIPS.map((b) => (
+            <Card key={b.area} className="p-4">
+              <strong className="text-slate-900 dark:text-slate-100">{b.area}</strong>
+              <ul className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
+                {b.tips.map((t, i) => <li key={i}>• {t}</li>)}
+              </ul>
+            </Card>
+          ))}
+        </div>
       </section>
 
       {/* ── Operating footprint + state matrix ── */}

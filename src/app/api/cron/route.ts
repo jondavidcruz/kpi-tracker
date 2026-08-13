@@ -122,18 +122,21 @@ export async function GET(request: Request) {
   // issues (numbers not active, account not active, unreachable API) to the
   // phone-health Chat space so we catch line problems before the team feels them.
   if (url.searchParams.get("compliance") === "1") {
-    const { allLineHealth } = await import("@/lib/telco");
+    const { allLineHealth, twilioDebuggerAlarms } = await import("@/lib/telco");
     const cfg = await db.resource.findFirst({ where: { category: "__phone_config__" } });
     const webhook = cfg?.url ?? "";
-    const health = await allLineHealth();
+    const [health, alarms] = await Promise.all([allLineHealth(), twilioDebuggerAlarms(10)]);
     const lines: string[] = [];
     for (const h of health) {
       if (h.connected && h.issues.length) lines.push(`*${h.provider}*: ${h.issues.join("; ")}`);
     }
+    // Surface any live Twilio Debugger errors from the last check too.
+    const errAlarms = alarms.filter((a) => a.level === "error").slice(0, 6);
+    for (const a of errAlarms) lines.push(`*${a.provider}*${a.code ? ` [${a.code}]` : ""}: ${a.text}`);
     if (webhook && lines.length) {
       await postChatWebhook(webhook, `🛡️ *Compliance line check* — issues found:\n${lines.join("\n")}\n\nReview in the War Room → Compliance.`);
     }
-    return NextResponse.json({ ok: true, job: "compliance", checked: health.map((h) => ({ p: h.provider, connected: h.connected, issues: h.issues.length })), posted: Boolean(webhook && lines.length) });
+    return NextResponse.json({ ok: true, job: "compliance", checked: health.map((h) => ({ p: h.provider, connected: h.connected, issues: h.issues.length })), alarms: errAlarms.length, posted: Boolean(webhook && lines.length) });
   }
 
   // Payday — checked daily; only sends on actual semi-monthly paydays (the 15th
