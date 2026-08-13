@@ -24,6 +24,8 @@ export type MatchBuyer = {
   companySize?: string;    // "National (DR Horton)" / "fund / REIT" ranks higher
   proofOfFunds?: boolean;  // verified cash — cleaner, more certain close
   maxOfferPct?: number;    // % of ARV they'll pay — the sharpest "pays the most" signal
+  isLandBuyer?: boolean;   // tagged land buyer — boosted when ranking lot deals
+  targetZips?: string;     // comma-separated zips; a match to the deal address boosts
 };
 
 export type BuyerMatch = {
@@ -157,12 +159,18 @@ export function matchBuyersForDeal(
       reasons.push(`📈 up to ${Math.round(b.maxOfferPct)}% ARV`);
     }
 
+    // 4c) Land buyers — tag + a target-zip hit against the deal address.
+    const zips = (b.targetZips ?? "").split(/[,\s]+/).map((z) => z.trim()).filter((z) => /^\d{5}$/.test(z));
+    const zipHit = zips.some((z) => a.includes(z));
+    if (b.isLandBuyer) { score += 3; reasons.push("🌱 land buyer"); }
+    if (zipHit) { score += 4; reasons.push("📍 target-zip match"); }
+
     // 5) Vetted/active buyers are readier than raw leads.
     if (b.vetStage === "active") score += 2;
     else if (b.vetStage === "vetted") score += 1;
 
-    // Only surface a buyer if there's a real area hit (avoids noise from price-only).
-    if (hit && score > 0) {
+    // Surface on a real area hit OR a target-zip hit (land buyers often match by zip).
+    if ((hit || zipHit) && score > 0) {
       out.push({
         id: b.id, name: b.name, category: b.category, type: b.type, vetStage: b.vetStage,
         bestContact: b.bestContact, phone: b.phone, email: b.email, igHandle: b.igHandle,

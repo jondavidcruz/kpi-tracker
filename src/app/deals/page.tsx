@@ -1,4 +1,4 @@
-import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand } from "@/app/actions";
+import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand } from "@/app/actions";
 import { readAuto, type DealCascade } from "@/lib/cascade";
 import { LAND_FIELDS, LAND_FALLOUT_REASONS, landFlags, type DealLand } from "@/lib/deal-land";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
@@ -45,7 +45,8 @@ export default async function DealsPage({
   const buyers = mktAccess ? (await db.marketContact.findMany({ orderBy: { sortOrder: "asc" } })).filter((b) => b.type !== "jv_partner") : [];
   const cascade = mktAccess ? await readCascade() : {};
   const terms = mktAccess ? await readBuyerTerms() : {};
-  const buyersWithTerms = buyers.map((b) => ({ ...b, proofOfFunds: terms[b.id]?.pof, maxOfferPct: terms[b.id]?.maxOfferPct }));
+  const buyerLand = mktAccess ? await readBuyerLand() : {};
+  const buyersWithTerms = buyers.map((b) => ({ ...b, proofOfFunds: terms[b.id]?.pof, maxOfferPct: terms[b.id]?.maxOfferPct, isLandBuyer: buyerLand[b.id]?.isLandBuyer, targetZips: buyerLand[b.id]?.targetZips }));
   const auto = mktAccess ? await readAuto() : {};
   const landMap = await readDealLand();
   const buyerNameById = new Map(buyers.map((b) => [b.id, b.name] as const));

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap, saveBuyerTerms, readBuyerTerms } from "@/app/actions";
+import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap, saveBuyerTerms, readBuyerTerms, saveBuyerLand, readBuyerLand } from "@/app/actions";
+import { BUILDER_TYPES } from "@/lib/buyer-land";
 import ImageUpload from "@/components/ImageUpload";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
@@ -63,6 +64,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
   const vettedRows = rows.filter((r) => VETTED(r) && !isJv(r));
   const buyerTerms = await readBuyerTerms();
+  const buyerLand = await readBuyerLand();
 
   // Buyer cascade lookup — type an address (+ price) and rank vetted buyers to send to.
   const cascadeAddr = (sp.addr ?? "").trim();
@@ -151,14 +153,37 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         <div className="mt-3 divide-y divide-slate-100">
           {vettedRows.map((r) => {
             const t = buyerTerms[r.id] ?? {};
+            const l = buyerLand[r.id] ?? {};
             return (
-              <form key={r.id} action={saveBuyerTerms} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
-                <input type="hidden" name="buyerId" value={r.id} />
-                <span className="min-w-[160px] flex-1 font-semibold text-slate-800">{r.name}</span>
-                <label className="flex items-center gap-1.5 text-[13px] text-slate-600"><input type="checkbox" name="pof" defaultChecked={!!t.pof} className="h-4 w-4" /> 💵 Proof of funds</label>
-                <label className="flex items-center gap-1.5 text-[13px] text-slate-600">Max offer <input name="maxOfferPct" type="number" min="0" max="120" step="1" defaultValue={t.maxOfferPct ?? ""} placeholder="85" className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm" /> % ARV</label>
-                <button className="rounded-md bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
-              </form>
+              <div key={r.id} className="py-2">
+                <form action={saveBuyerTerms} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <input type="hidden" name="buyerId" value={r.id} />
+                  <span className="min-w-[160px] flex-1 font-semibold text-slate-800">{r.name}{l.isLandBuyer ? <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">🌱 LAND</span> : null}</span>
+                  <label className="flex items-center gap-1.5 text-[13px] text-slate-600"><input type="checkbox" name="pof" defaultChecked={!!t.pof} className="h-4 w-4" /> 💵 Proof of funds</label>
+                  <label className="flex items-center gap-1.5 text-[13px] text-slate-600">Max offer <input name="maxOfferPct" type="number" min="0" max="120" step="1" defaultValue={t.maxOfferPct ?? ""} placeholder="85" className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm" /> % ARV</label>
+                  <button className="rounded-md bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
+                </form>
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-[12px] font-semibold text-emerald-700">🌱 Land buy-box{l.isLandBuyer ? " · on" : ""}</summary>
+                  <form action={saveBuyerLand} className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg bg-emerald-50/50 p-2.5 sm:grid-cols-4">
+                    <input type="hidden" name="buyerId" value={r.id} />
+                    <label className="col-span-2 flex items-center gap-1.5 text-[13px] text-slate-600"><input type="checkbox" name="isLandBuyer" defaultChecked={!!l.isLandBuyer} className="h-4 w-4" /> 🌱 Land buyer (boost in cascade)</label>
+                    <label className="text-[12px] text-slate-600">$/lot<input name="pricePerLot" type="number" defaultValue={l.pricePerLot ?? ""} placeholder="$" className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+                    <label className="text-[12px] text-slate-600">Permits/12mo<input name="permits12mo" type="number" defaultValue={l.permits12mo ?? ""} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+                    <label className="text-[12px] text-slate-600">Lot min (ac)<input name="lotMin" type="number" step="any" defaultValue={l.lotMin ?? ""} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+                    <label className="text-[12px] text-slate-600">Lot max (ac)<input name="lotMax" type="number" step="any" defaultValue={l.lotMax ?? ""} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+                    <label className="col-span-2 text-[12px] text-slate-600">Target zips<input name="targetZips" defaultValue={l.targetZips ?? ""} placeholder="92101, 92028" className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+                    <label className="text-[12px] text-slate-600">Builder type
+                      <select name="builderType" defaultValue={l.builderType ?? ""} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm">
+                        {BUILDER_TYPES.map((b) => <option key={b} value={b}>{b || "—"}</option>)}
+                      </select>
+                    </label>
+                    <label className="flex items-end gap-1.5 pb-1 text-[12px] text-slate-600"><input type="checkbox" name="utilitiesRequired" defaultChecked={!!l.utilitiesRequired} className="h-4 w-4" /> Utilities req.</label>
+                    <label className="col-span-2 text-[12px] text-slate-600">Deal breakers<input name="dealBreakers" defaultValue={l.dealBreakers ?? ""} placeholder="wetlands, no utilities…" className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+                    <div className="col-span-2 sm:col-span-4"><button className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700">Save land buy-box</button></div>
+                  </form>
+                </details>
+              </div>
             );
           })}
           {vettedRows.length === 0 && <p className="py-2 text-sm text-slate-400">No vetted buyers yet.</p>}

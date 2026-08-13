@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin, isOwner, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import type { DealLand } from "@/lib/deal-land";
+import type { BuyerLand } from "@/lib/buyer-land";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
@@ -1078,6 +1079,38 @@ export async function saveBuyerTerms(formData: FormData) {
   const row = await db.resource.findFirst({ where: { category: BUYER_TERMS_CAT } });
   if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(map) } });
   else await db.resource.create({ data: { title: "buyer-terms", category: BUYER_TERMS_CAT, url: "", description: JSON.stringify(map) } });
+  revalidatePath("/marketing");
+  revalidatePath("/deals");
+  redirect("/marketing?saved=1#terms");
+}
+
+// ── Land buy-box per vetted buyer (JSON side-store; feeds cascade ranking) ────
+const BUYER_LAND_CAT = "__buyer_land__";
+export async function readBuyerLand(): Promise<Record<string, BuyerLand>> {
+  const row = await db.resource.findFirst({ where: { category: BUYER_LAND_CAT } }).catch(() => null);
+  if (!row) return {};
+  try { return JSON.parse(row.description || "{}"); } catch { return {}; }
+}
+export async function saveBuyerLand(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const buyerId = String(formData.get("buyerId") ?? "");
+  if (!buyerId) return;
+  const num = (k: string) => { const n = Number(String(formData.get(k) ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) && n > 0 ? n : undefined; };
+  const str = (k: string) => { const s = String(formData.get(k) ?? "").trim(); return s || undefined; };
+  const rec: BuyerLand = {
+    isLandBuyer: formData.get("isLandBuyer") === "on" ? true : undefined,
+    pricePerLot: num("pricePerLot"), lotMin: num("lotMin"), lotMax: num("lotMax"),
+    targetZips: str("targetZips"), utilitiesRequired: formData.get("utilitiesRequired") === "on" ? true : undefined,
+    builderType: str("builderType"), dealBreakers: str("dealBreakers"), permits12mo: num("permits12mo"),
+  };
+  const cleaned = Object.fromEntries(Object.entries(rec).filter(([, v]) => v !== undefined)) as BuyerLand;
+  const map = await readBuyerLand();
+  if (Object.keys(cleaned).length === 0) delete map[buyerId];
+  else map[buyerId] = cleaned;
+  const row = await db.resource.findFirst({ where: { category: BUYER_LAND_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(map) } });
+  else await db.resource.create({ data: { title: "buyer-land", category: BUYER_LAND_CAT, url: "", description: JSON.stringify(map) } });
   revalidatePath("/marketing");
   revalidatePath("/deals");
   redirect("/marketing?saved=1#terms");

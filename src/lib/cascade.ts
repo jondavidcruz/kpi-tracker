@@ -46,7 +46,10 @@ async function rankedForDeal(dealId: string): Promise<{ deal: { address: string;
   const termsRow = await db.resource.findFirst({ where: { category: "__buyer_terms__" } });
   let terms: Record<string, { pof?: boolean; maxOfferPct?: number }> = {};
   try { terms = JSON.parse(termsRow?.description || "{}"); } catch {}
-  const buyers: MatchBuyer[] = rows.map((r) => ({ ...r, proofOfFunds: terms[r.id]?.pof, maxOfferPct: terms[r.id]?.maxOfferPct }));
+  const landRow = await db.resource.findFirst({ where: { category: "__buyer_land__" } });
+  let land: Record<string, { isLandBuyer?: boolean; targetZips?: string }> = {};
+  try { land = JSON.parse(landRow?.description || "{}"); } catch {}
+  const buyers: MatchBuyer[] = rows.map((r) => ({ ...r, proofOfFunds: terms[r.id]?.pof, maxOfferPct: terms[r.id]?.maxOfferPct, isLandBuyer: land[r.id]?.isLandBuyer, targetZips: land[r.id]?.targetZips }));
   return { deal, ranked: matchBuyersForDeal(deal.address, deal.contractPrice ?? deal.askingPrice, buyers) };
 }
 
