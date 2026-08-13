@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess, toggleOffboardingTask } from "@/app/actions";
+import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess, toggleOffboardingTask, installLandKpis } from "@/app/actions";
 import { adminConfigured } from "@/lib/supabase/admin";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -24,7 +24,7 @@ const labelCls = "mb-1 block text-xs font-semibold text-slate-500";
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; pwok?: string; pwerr?: string }>;
+  searchParams: Promise<{ saved?: string; pwok?: string; pwerr?: string; landkpis?: string }>;
 }) {
   const sp = await searchParams;
 
@@ -327,9 +327,21 @@ export default async function AdminPage({
       <section id="kpis" className="scroll-mt-20">
         <SectionTitle title="🎯 KPIs & goals" subtitle="Category drives alert urgency · duration goals are in minutes" accent="bg-emerald-400" />
         {isOwner(me) && (
-          <Link href="/admin/recalibrate" className="mb-3 inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-200">
-            🎯 Recalibrate goals from real performance
-          </Link>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Link href="/admin/recalibrate" className="inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-200">
+              🎯 Recalibrate goals from real performance
+            </Link>
+            {!kpis.some((k) => k.key.startsWith("land_")) && (
+              <form action={installLandKpis}>
+                <button className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-200">🌱 Install land KPI pack</button>
+              </form>
+            )}
+          </div>
+        )}
+        {sp.landkpis !== undefined && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
+            🌱 Installed {sp.landkpis} land KPI{sp.landkpis === "1" ? "" : "s"} as team tracked counters. Set goals / make them per-rep here when ready.
+          </div>
         )}
         <Card className="p-6">
           {[...POSITIONS.map((p) => ({ key: p.key, label: `${p.emoji} ${p.label}` })), { key: "", label: "🏢 Team / shared" }].map((group) => {

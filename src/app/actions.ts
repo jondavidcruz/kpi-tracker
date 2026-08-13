@@ -1084,6 +1084,43 @@ export async function saveBuyerTerms(formData: FormData) {
   redirect("/marketing?saved=1#terms");
 }
 
+// ── Land KPI pack — one-click owner installer (idempotent; runtime write) ─────
+// Adds the land-pivot activity KPIs as team-scoped TRACKED counters (no goals →
+// no alert nags, no disruption to existing per-rep scorecards). Jon can convert
+// any of them to per-rep + goals later in Admin. Safe to run more than once.
+const LAND_KPI_PACK: { key: string; name: string; emoji: string; unit: string; cadence: string }[] = [
+  { key: "land_mailers_sent", name: "Mailers Sent", emoji: "✉️", unit: "count", cadence: "daily" },
+  { key: "land_mail_responses", name: "Mail Responses", emoji: "📬", unit: "count", cadence: "daily" },
+  { key: "land_sms_convos", name: "SMS Conversations (Land)", emoji: "💬", unit: "count", cadence: "daily" },
+  { key: "land_offers_made", name: "Land Offers Made", emoji: "📝", unit: "count", cadence: "daily" },
+  { key: "land_contracts_signed", name: "Land Contracts Signed", emoji: "✍️", unit: "count", cadence: "daily" },
+  { key: "land_assignments_closed", name: "Land Assignments Closed", emoji: "🏆", unit: "count", cadence: "monthly" },
+  { key: "land_avg_assignment_fee", name: "Avg Assignment Fee (Land)", emoji: "💰", unit: "currency", cadence: "monthly" },
+];
+export async function installLandKpis() {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const agg = await db.kpi.aggregate({ _max: { sortOrder: true } });
+  let order = (agg._max.sortOrder ?? 0) + 1;
+  let created = 0;
+  for (const k of LAND_KPI_PACK) {
+    const exists = await db.kpi.findUnique({ where: { key: k.key } });
+    if (exists) continue; // don't clobber anything Jon has edited
+    await db.kpi.create({
+      data: {
+        key: k.key, name: k.name, emoji: k.emoji, category: "blue", unit: k.unit,
+        scope: "team", roleKey: "", cadence: k.cadence, goalKind: "tracked", goalValue: null,
+        computed: false, definition: "Land-pivot KPI (installed pack). Convert to per-rep + a goal in Admin when ready.",
+        sortOrder: order++,
+      },
+    });
+    created++;
+  }
+  revalidateKpiViews();
+  revalidatePath("/admin");
+  redirect(`/admin?landkpis=${created}`);
+}
+
 // ── Land buy-box per vetted buyer (JSON side-store; feeds cascade ranking) ────
 const BUYER_LAND_CAT = "__buyer_land__";
 export async function readBuyerLand(): Promise<Record<string, BuyerLand>> {
