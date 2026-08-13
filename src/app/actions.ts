@@ -13,6 +13,7 @@ import { getCurrentUser, isManager, isAdmin, isOwner, canCurateSoftware, canAcce
 import { isExcusedReason } from "@/lib/alert-resolution";
 import type { DealLand } from "@/lib/deal-land";
 import type { BuyerLand } from "@/lib/buyer-land";
+import type { CfdNote } from "@/lib/cfd";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
@@ -1082,6 +1083,49 @@ export async function saveBuyerTerms(formData: FormData) {
   revalidatePath("/marketing");
   revalidatePath("/deals");
   redirect("/marketing?saved=1#terms");
+}
+
+// ── CFD / owner-finance notes ledger (JSON side-store __cfd_notes__) ──────────
+const CFD_CAT = "__cfd_notes__";
+export async function readCfdNotes(): Promise<CfdNote[]> {
+  const row = await db.resource.findFirst({ where: { category: CFD_CAT } }).catch(() => null);
+  if (!row) return [];
+  try { const a = JSON.parse(row.description || "[]"); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+async function writeCfdNotes(list: CfdNote[]) {
+  const row = await db.resource.findFirst({ where: { category: CFD_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(list) } });
+  else await db.resource.create({ data: { title: "cfd-notes", category: CFD_CAT, url: "", description: JSON.stringify(list) } });
+}
+export async function saveCfdNote(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !(isManager(me) || me.position === "dispositions")) return;
+  const id = String(formData.get("id") ?? "").trim();
+  const num = (k: string) => { const n = Number(String(formData.get(k) ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) && n > 0 ? n : undefined; };
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const note: CfdNote = {
+    id: id || `cfd_${Date.now()}`,
+    parcel: str("parcel"), buyer: str("buyer"),
+    downPayment: num("downPayment"), monthlyAmount: num("monthlyAmount"), rate: num("rate"), term: num("term"),
+    nextDue: str("nextDue"), status: str("status") || "current",
+    taxesInvoiced: formData.get("taxesInvoiced") === "on" ? true : undefined, notes: str("notes") || undefined,
+  };
+  if (!note.parcel && !note.buyer) return;
+  const list = await readCfdNotes();
+  const i = list.findIndex((n) => n.id === note.id);
+  if (i >= 0) list[i] = note; else list.push(note);
+  await writeCfdNotes(list);
+  revalidatePath("/cfd-notes");
+  redirect("/cfd-notes?saved=1");
+}
+export async function deleteCfdNote(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !(isManager(me) || me.position === "dispositions")) return;
+  const id = String(formData.get("id") ?? "");
+  const list = (await readCfdNotes()).filter((n) => n.id !== id);
+  await writeCfdNotes(list);
+  revalidatePath("/cfd-notes");
+  redirect("/cfd-notes?saved=1");
 }
 
 // ── Land KPI pack — one-click owner installer (idempotent; runtime write) ─────

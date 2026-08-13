@@ -12,6 +12,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/process", label: "Process Map", gate: "all" },
     { href: "/underwriting", label: "Underwriting", gate: "all" },
     { href: "/schedule", label: "Schedule & Time", gate: "all" },
+    { href: "/cfd-notes", label: "CFD Notes", gate: "manager" },
     { href: "/marketing", label: "Vetted Buyers", gate: "marketing" },
     { href: "/lead-sourcing", label: "Lead Sourcing", gate: "marketing" },
     { href: "/vetting", label: "Buyer Research", gate: "marketing" },
