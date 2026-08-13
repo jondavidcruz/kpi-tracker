@@ -1,5 +1,6 @@
-import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade } from "@/app/actions";
+import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand } from "@/app/actions";
 import { readAuto, type DealCascade } from "@/lib/cascade";
+import { LAND_FIELDS, LAND_FALLOUT_REASONS, landFlags, type DealLand } from "@/lib/deal-land";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getActiveDeals, getActiveReps, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -46,6 +47,7 @@ export default async function DealsPage({
   const terms = mktAccess ? await readBuyerTerms() : {};
   const buyersWithTerms = buyers.map((b) => ({ ...b, proofOfFunds: terms[b.id]?.pof, maxOfferPct: terms[b.id]?.maxOfferPct }));
   const auto = mktAccess ? await readAuto() : {};
+  const landMap = await readDealLand();
   const buyerNameById = new Map(buyers.map((b) => [b.id, b.name] as const));
   const ERRORS = {
     hud: "A HUD statement is required to close a deal.",
@@ -141,6 +143,7 @@ export default async function DealsPage({
             cascadeStatus={cascade[d.id] ?? {}}
             auto={auto[d.id]}
             claimedName={auto[d.id]?.claimedBy ? buyerNameById.get(auto[d.id]!.claimedBy!) ?? null : null}
+            land={landMap[d.id]}
           />
         ))}
       </div>
@@ -148,7 +151,8 @@ export default async function DealsPage({
   );
 }
 
-function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null }) {
+function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand }) {
+  const lFlags = landFlags(land);
   // The next buyer to send to = highest-ranked one not already sent or passed.
   const nextId = matches.find((m) => cascadeStatus[m.id] !== "sent" && cascadeStatus[m.id] !== "passed")?.id ?? null;
   const st = STATUSES.find((s) => s.key === deal.status) ?? STATUSES[0];
@@ -168,6 +172,15 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
           </span>
         )}
       </div>
+
+      {/* Land diligence flags — the killers, at a glance */}
+      {lFlags.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {lFlags.map((f, i) => (
+            <span key={i} className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">{f}</span>
+          ))}
+        </div>
+      )}
 
       {/* Recommendation banner (only when there's something to act on) */}
       {isLive && (aging.level !== "fresh" || (aging.contractDaysLeft !== null && aging.contractDaysLeft <= 7)) && (
@@ -246,6 +259,36 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
           </p>
         </details>
       )}
+
+      {/* Land diligence — structured fields the house deal record never had */}
+      <details className="mb-3 rounded-lg border border-amber-200 bg-amber-50/40 p-3" {...(lFlags.length ? { open: true } : {})}>
+        <summary className="cursor-pointer text-sm font-bold text-amber-900">🌱 Land details {lFlags.length ? `· ${lFlags.length} flag${lFlags.length === 1 ? "" : "s"}` : ""}</summary>
+        <form action={saveDealLand} className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
+          <input type="hidden" name="dealId" value={deal.id} />
+          {LAND_FIELDS.map((f) => (
+            <label key={f.key} className="block">
+              <span className={lblCls}>{f.label}</span>
+              {f.type === "select" ? (
+                <select name={f.key} defaultValue={land?.[f.key] ?? ""} className={inputCls}>
+                  {(f.options ?? []).map((o) => <option key={o} value={o}>{o || "—"}</option>)}
+                </select>
+              ) : (
+                <input name={f.key} type={f.type === "number" ? "number" : "text"} step="any" defaultValue={land?.[f.key] ?? ""} placeholder={f.ph} className={inputCls} />
+              )}
+            </label>
+          ))}
+          <label className="block">
+            <span className={lblCls}>Fallout reason (if dead)</span>
+            <select name="falloutReason" defaultValue={land?.falloutReason ?? ""} className={inputCls}>
+              <option value="">—</option>
+              {LAND_FALLOUT_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+          <div className="col-span-2 sm:col-span-4">
+            <button className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save land details</button>
+          </div>
+        </form>
+      </details>
 
       <form action={saveDeal} className="grid grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
         <input type="hidden" name="id" value={deal.id} />

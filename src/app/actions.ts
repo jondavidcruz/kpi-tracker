@@ -11,6 +11,7 @@ import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendTeamChat,
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, isManager, isAdmin, isOwner, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
+import type { DealLand } from "@/lib/deal-land";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
@@ -1080,6 +1081,40 @@ export async function saveBuyerTerms(formData: FormData) {
   revalidatePath("/marketing");
   revalidatePath("/deals");
   redirect("/marketing?saved=1#terms");
+}
+
+// ── Land details on deals (no schema migration — JSON side-store keyed by deal id) ──
+// The land pivot needs structured diligence fields the house deal record never had
+// (APN, county, acreage, zoning, access, utilities, flood/wetlands, back taxes) plus
+// land-specific fallout reasons. Stored as one JSON blob in Resource __deal_land__.
+const DEAL_LAND_CAT = "__deal_land__";
+export async function readDealLand(): Promise<Record<string, DealLand>> {
+  const row = await db.resource.findFirst({ where: { category: DEAL_LAND_CAT } }).catch(() => null);
+  if (!row) return {};
+  try { return JSON.parse(row.description || "{}"); } catch { return {}; }
+}
+export async function saveDealLand(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !(isManager(me) || me.position === "dispositions" || me.position === "acquisitions")) return;
+  const dealId = String(formData.get("dealId") ?? "");
+  if (!dealId) return;
+  const g = (k: string) => String(formData.get(k) ?? "").trim();
+  const rec: DealLand = {
+    apn: g("apn"), county: g("county"), acreage: g("acreage"), lotSqFt: g("lotSqFt"), zoning: g("zoning"),
+    legalAccess: g("legalAccess"), physicalAccess: g("physicalAccess"), water: g("water"), sewer: g("sewer"), power: g("power"),
+    floodZone: g("floodZone"), wetlandsPct: g("wetlandsPct"), slope: g("slope"), hoa: g("hoa"), backTaxes: g("backTaxes"),
+    falloutReason: g("falloutReason"),
+  };
+  // Drop empty fields so the blob stays lean; delete the key entirely if all blank.
+  const cleaned: DealLand = Object.fromEntries(Object.entries(rec).filter(([, v]) => v !== "")) as DealLand;
+  const map = await readDealLand();
+  if (Object.keys(cleaned).length === 0) delete map[dealId];
+  else map[dealId] = cleaned;
+  const row = await db.resource.findFirst({ where: { category: DEAL_LAND_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(map) } });
+  else await db.resource.create({ data: { title: "deal-land", category: DEAL_LAND_CAT, url: "", description: JSON.stringify(map) } });
+  revalidatePath("/deals");
+  redirect("/deals?saved=1");
 }
 
 // ── Automated cascade: arm / stop a deal's auto-send waterfall ────────────────
