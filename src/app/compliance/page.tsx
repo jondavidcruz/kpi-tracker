@@ -7,7 +7,8 @@ import {
   PLAYBOOKS,
   COMPLIANCE_DISCLAIMER,
 } from "@/lib/compliance";
-import { allLineHealth } from "@/lib/telco";
+import { allLineHealth, telcoEnvStatus } from "@/lib/telco";
+import { getCurrentUser, isOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,10 @@ function timeAgo(iso: string): string {
 }
 
 export default async function CompliancePage() {
-  const [states, health] = await Promise.all([deriveOperatingStates(), allLineHealth()]);
+  const [states, health, me] = await Promise.all([deriveOperatingStates(), allLineHealth(), getCurrentUser()]);
+  const owner = isOwner(me);
+  const env = telcoEnvStatus();
+  const anyKeyMissing = !env.twilioSid || !env.twilioToken || !env.telnyx;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -41,6 +45,21 @@ export default async function CompliancePage() {
           <SectionTitle title="📡 Live line health" subtitle="Twilio + Telnyx, checked live via API" accent="bg-emerald-400" />
           <Link href="/compliance" className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">↻ Refresh</Link>
         </div>
+        {owner && anyKeyMissing && (
+          <div className="mb-3 rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800/50">
+            <div className="font-semibold text-slate-700 dark:text-slate-200">🔑 Keys the live server can see right now:</div>
+            <ul className="mt-1.5 space-y-0.5 text-slate-600 dark:text-slate-300">
+              <li>{env.twilioSid ? "✅" : "❌"} <code>TWILIO_ACCOUNT_SID</code></li>
+              <li>{env.twilioToken ? "✅" : "❌"} <code>TWILIO_AUTH_TOKEN</code></li>
+              <li>{env.telnyx ? "✅" : "❌"} <code>TELNYX_API_KEY</code></li>
+            </ul>
+            <p className="mt-2 text-xs text-slate-500">
+              A ❌ means the running deployment isn&apos;t receiving that variable. Fix in Vercel → Settings → Environment Variables:
+              set it for the <strong>Production</strong> environment (check the Production box), then <strong>redeploy</strong> — env vars only reach a
+              deployment that was built <em>after</em> they were added. This notice disappears once all three are detected.
+            </p>
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           {health.map((h) => {
             const ok = h.connected && h.issues.length === 0;
@@ -55,6 +74,15 @@ export default async function CompliancePage() {
                 {h.connected ? (
                   <>
                     <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{h.detail}</p>
+                    {h.a2p && h.a2p.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {h.a2p.map((c, n) => (
+                          <span key={n} className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${c.ok ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"}`}>
+                            {c.ok ? "✓" : "⚠️"} {c.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {h.issues.length > 0 ? (
                       <ul className="mt-2 space-y-1 text-sm text-red-700 dark:text-red-300">
                         {h.issues.map((i, n) => <li key={n}>⚠️ {i}</li>)}

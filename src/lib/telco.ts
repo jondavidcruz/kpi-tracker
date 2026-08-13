@@ -14,7 +14,17 @@ export interface LineHealth {
   numbers?: number;            // count of phone numbers on the account
   detail?: string;             // one-line human summary
   issues: string[];            // things that need attention (empty = healthy)
+  a2p?: { label: string; ok: boolean }[]; // A2P 10DLC brand/campaign status chips
   checkedAt: string;           // ISO
+}
+
+/** Which telco credentials the running server can actually see (never the values). */
+export function telcoEnvStatus(): { twilioSid: boolean; twilioToken: boolean; telnyx: boolean } {
+  return {
+    twilioSid: Boolean(process.env.TWILIO_ACCOUNT_SID),
+    twilioToken: Boolean(process.env.TWILIO_AUTH_TOKEN),
+    telnyx: Boolean(process.env.TELNYX_API_KEY),
+  };
 }
 
 async function fetchJson(url: string, init: RequestInit, timeoutMs = 8000): Promise<{ ok: boolean; status: number; json: unknown }> {
@@ -55,12 +65,31 @@ export async function twilioHealth(): Promise<LineHealth> {
       const n = nums.json as { total?: number };
       if (typeof n.total === "number") numbers = n.total;
     }
+    // A2P 10DLC brand registration status (best-effort — texting compliance headline).
+    const a2p: { label: string; ok: boolean }[] = [];
+    try {
+      const br = await fetchJson(`https://messaging.twilio.com/v1/a2p/BrandRegistrations`, { headers: { Authorization: auth } });
+      if (br.ok) {
+        const rows = ((br.json as { data?: unknown[]; brand_registrations?: unknown[] }).data
+          ?? (br.json as { brand_registrations?: unknown[] }).brand_registrations
+          ?? []) as { status?: string; brand_type?: string }[];
+        for (const b of rows.slice(0, 6)) {
+          const st = (b.status ?? "UNKNOWN").toUpperCase();
+          const ok = st === "APPROVED";
+          a2p.push({ label: `Brand: ${st}`, ok });
+          if (!ok) issues.push(`A2P brand registration is ${st} (not APPROVED) — texts can be filtered until it's approved.`);
+        }
+        if (rows.length === 0) a2p.push({ label: "No A2P brand registered", ok: false });
+      }
+    } catch { /* A2P is best-effort */ }
+
     return {
       provider: "Twilio",
       connected: true,
       numbers,
       detail: `${a.friendly_name ?? "Account"} · status ${a.status ?? "?"}${numbers != null ? ` · ${numbers} number(s)` : ""}`,
       issues,
+      a2p: a2p.length ? a2p : undefined,
       checkedAt: now,
     };
   } catch (e) {
@@ -86,12 +115,40 @@ export async function telnyxHealth(): Promise<LineHealth> {
     const notActive = data.filter((d) => d.status && d.status !== "active");
     const issues: string[] = [];
     if (notActive.length) issues.push(`${notActive.length} Telnyx number(s) not active: ${notActive.slice(0, 5).map((d) => `${d.phone_number ?? "?"} (${d.status})`).join(", ")}`);
+
+    // 10DLC brand + campaign registration status (best-effort).
+    const a2p: { label: string; ok: boolean }[] = [];
+    try {
+      const brand = await fetchJson(`https://api.telnyx.com/v2/10dlc/brand`, { headers: { Authorization: `Bearer ${key}` } });
+      if (brand.ok) {
+        const recs = ((brand.json as { records?: unknown[]; data?: unknown[] }).records ?? (brand.json as { data?: unknown[] }).data ?? []) as { identityStatus?: string; status?: string }[];
+        for (const b of recs.slice(0, 4)) {
+          const st = (b.identityStatus ?? b.status ?? "UNKNOWN").toUpperCase();
+          const ok = st === "VERIFIED" || st === "APPROVED" || st === "ACTIVE";
+          a2p.push({ label: `Brand: ${st}`, ok });
+          if (!ok) issues.push(`10DLC brand is ${st} (not verified) — register/verify to avoid carrier filtering.`);
+        }
+      }
+      const camp = await fetchJson(`https://api.telnyx.com/v2/10dlc/campaign?page[size]=20`, { headers: { Authorization: `Bearer ${key}` } });
+      if (camp.ok) {
+        const recs = ((camp.json as { records?: unknown[]; data?: unknown[] }).records ?? (camp.json as { data?: unknown[] }).data ?? []) as { status?: string; campaignId?: string }[];
+        for (const c of recs.slice(0, 6)) {
+          const st = (c.status ?? "UNKNOWN").toUpperCase();
+          const ok = ["ACTIVE", "TCR_ACCEPTED", "APPROVED", "REGISTERED"].includes(st);
+          a2p.push({ label: `Campaign: ${st}`, ok });
+          if (!ok) issues.push(`10DLC campaign ${c.campaignId ?? ""} is ${st} — texts may be blocked until it's active.`);
+        }
+        if (recs.length === 0) a2p.push({ label: "No 10DLC campaign", ok: false });
+      }
+    } catch { /* A2P is best-effort */ }
+
     return {
       provider: "Telnyx",
       connected: true,
       numbers,
       detail: `${numbers} number(s)${notActive.length ? ` · ${notActive.length} need attention` : " · all active"}`,
       issues,
+      a2p: a2p.length ? a2p : undefined,
       checkedAt: now,
     };
   } catch (e) {
