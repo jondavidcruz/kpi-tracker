@@ -502,20 +502,36 @@ export default function UnderwritingCalculator() {
 
   // ---- Flip / Wholetail (from MAO.xlsx) ----
   const fMinProfit = f.fMinProfit != null && f.fMinProfit !== "" ? n("fMinProfit") : 30000;
-  const fHold = n("fHold") || 6;
+  const fHold = n("fHold") || 6; // months — flippers average 4–6 depending on scope/market/season
   const fRehab = (n("fRehab") || n("sqft") * num(v("rehabSf"))) + majorTotal;
   const fComm = arv * (num(v("fComm") || "3") / 100);
   const fClosing = arv * (num(v("fClosing") || "2") / 100);
-  const fCarry = arv * (num(v("fCarry") || "1") / 100); // utilities, taxes, insurance
+  // Carry (utilities/taxes/insurance) is ANNUAL and scales with hold time — a 12-month
+  // hold costs twice a 6-month one. Default 2%/yr × the 6-mo default = the old 1% flat.
+  const fCarry = arv * (num(v("fCarry") || "2") / 100) * (fHold / 12);
   const fHoaCost = n("fHoa") * fHold;
   const fPropertyCosts = fRehab + fComm + fClosing + fCarry + fHoaCost + n("fPm");
-  const fLoan = n("fLoan"), fRate = num(v("fRate") || "10") / 100, fPoints = num(v("fPoints") || "1") / 100, fSvc = n("fSvc");
+  // Money costs — flippers are almost never true cash buyers (Jon), so if no loan is
+  // entered we AUTO-ASSUME hard money at 85% of the purchase + 100% of the rehab and
+  // solve the MAO exactly (the loan depends on the purchase, so it's a small equation:
+  // MAO = (A − k·rehab) / (1 + 0.85k), where k = points + rate/12 × hold months).
+  const fRate = num(v("fRate") || "10") / 100, fPoints = num(v("fPoints") || "1") / 100, fSvc = n("fSvc");
   const fGap = n("fGap"), fGapRate = num(v("fGapRate") || "15") / 100;
-  const fPointsCost = fLoan * fPoints;
-  const fInterest = (fLoan * fRate / 12) * fHold + (fGap * fGapRate / 12) * fHold;
-  const fMoneyCost = fPointsCost + fInterest + fSvc;
+  const fGapCost = (fGap * fGapRate / 12) * fHold;
+  const kMoney = fPoints + (fRate / 12) * fHold; // money cost per borrowed dollar over the hold
+  const fLoanIn = n("fLoan");
+  let fMao: number, fLoan: number;
+  if (fLoanIn > 0) {
+    fLoan = fLoanIn;
+    fMao = arv + n("fPurchCredit") - fMinProfit - fPropertyCosts - (fLoan * kMoney + fSvc + fGapCost);
+  } else {
+    const A = arv + n("fPurchCredit") - fMinProfit - fPropertyCosts - fSvc - fGapCost;
+    fMao = (A - kMoney * fRehab) / (1 + 0.85 * kMoney);
+    fLoan = Math.max(0, 0.85 * Math.max(0, fMao) + fRehab);
+  }
+  const fLoanAuto = fLoanIn <= 0;
+  const fMoneyCost = fLoan * kMoney + fSvc + fGapCost;
   const fTotalCosts = fPropertyCosts + fMoneyCost;
-  const fMao = arv + n("fPurchCredit") - fMinProfit - fTotalCosts;
   const fProfit = arv - fTotalCosts - n("fPurchase");
 
   // ---- Buy & Hold / Rental (landlord + BRRRR lens) ----
@@ -537,8 +553,17 @@ export default function UnderwritingCalculator() {
   // seller must sit BELOW that — the gap is our monthly spread on the wrap.
   const rWrapCF = n("rWrapCF") || 300;                     // end buyer's target cashflow/mo
   const rSellerPmt = n("rSellerPmt");                       // our monthly payment on the locked terms
-  const rMaxWrapPmt = Math.max(0, rNoi / 12 - rWrapCF);     // max monthly the end buyer can pay us
+  // This is a PRINCIPAL + INTEREST ceiling — taxes/insurance/HOA/vacancy/management
+  // are already subtracted inside NOI, so don't double-count them here.
+  const rMaxWrapPmt = Math.max(0, rNoi / 12 - rWrapCF);     // max monthly P&I the end buyer can pay us
   const rWrapSpread = rSellerPmt > 0 ? rMaxWrapPmt - rSellerPmt : 0; // our monthly cashflow on the wrap
+  // BRRRR check: real BRRRR buyers exit by refinancing at ~75% of ARV — the deal only
+  // works if their ALL-IN (price + rehab) fits under that, or their cash stays stuck.
+  const rArv = n("rArv") || arv;
+  const rRehabCost = n("rRehab");
+  const rAllIn = rPrice + rRehabCost;
+  const rRefiLimit = rArv * 0.75;
+  const rBrrrOk = rArv > 0 && rPrice > 0 ? rAllIn <= rRefiLimit : null;
 
   // 3-rung offer ladder consistent with our open-low-work-up model: Open (the anchor) →
   // Target (midpoint) → Max (the MAO). All ascending, never above the MAO.
@@ -1219,21 +1244,21 @@ export default function UnderwritingCalculator() {
               </label>
               {rehabDesc(v("rehabSf")) && <p className="sm:col-span-2 -mt-1 text-[11px] italic text-slate-500">📋 {rehabDesc(v("rehabSf"))}</p>}
               {majorRepairs()}
-              {stepDiv(3, "What does it cost to hold & sell?", "While the flipper owns it and when they resell. Defaults are fine — only change what you know.")}
-              <Field k="fHold" label="Months they'll hold it" placeholder="6" req="opt" />
+              {stepDiv(3, "What does it cost to hold & sell?", "Flippers average 4–6 months depending on the work, crew speed, market & listing season. Carry costs scale with the months you set.")}
+              <Field k="fHold" label="Months they'll hold it (avg 4–6)" placeholder="6" req="opt" />
               <Field k="fComm" label="Realtor commission (% of ARV)" suffix="%" placeholder="3" req="opt" />
               <Field k="fClosing" label="Closing costs (% of ARV)" suffix="%" placeholder="2" req="opt" />
-              <Field k="fCarry" label="Utilities / taxes / insurance (% of ARV)" suffix="%" placeholder="1" req="opt" />
+              <Field k="fCarry" label="Utilities / taxes / insurance (% of ARV per YEAR)" suffix="%" placeholder="2" req="opt" />
               <Field k="fHoa" label="Monthly HOA ($)" prefix="$" req="opt" />
               <Field k="fPm" label="Project manager / misc ($)" prefix="$" req="opt" />
-              {stepDiv(4, "What does their money cost?", "The flipper's hard-money loan. Pick a lender preset — it fills the rate, points & fee for you.")}
+              {stepDiv(4, "What does their money cost?", "Flippers almost never pay true cash — they use hard/private money. Leave the loan blank and we auto-assume 85% of the purchase + all of the rehab. Pick a lender preset to fill the rate, points & fee.")}
               <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Lender preset (fills rate / points / fee)</span>
                 <select value={v("fLender")} onChange={(e) => { const L = LENDERS[e.target.value]; setF((p) => ({ ...p, fLender: e.target.value, ...(L ? { fRate: L.rate, fPoints: L.points, fSvc: L.svc } : {}) })); }} className={inputCls}>
                   <option value="">— custom —</option>
                   {Object.keys(LENDERS).map((k) => <option key={k} value={k}>{k}</option>)}
                 </select>
               </label>
-              <Field k="fLoan" label="Loan amount" prefix="$" req="opt" />
+              <Field k="fLoan" label="Loan amount (blank = auto-estimate)" prefix="$" req="opt" />
               <Field k="fRate" label="Interest rate" suffix="%" placeholder="10" req="opt" />
               <Field k="fPoints" label="Points" suffix="%" placeholder="1" req="opt" />
               <Field k="fSvc" label="Service fee ($)" prefix="$" req="opt" />
@@ -1264,6 +1289,9 @@ export default function UnderwritingCalculator() {
               {stepDiv(4, "🎁 Wrap & assign — the terms we can lock up", "Lock seller-finance / sub-to terms, wrap them, assign to a cash-flowing end buyer. Our payment to the seller must sit BELOW their max — the gap is our monthly spread.")}
               <Field k="rWrapCF" label="End buyer's cashflow target ($/mo)" prefix="$" placeholder="300" req="opt" />
               <Field k="rSellerPmt" label="Our monthly payment on locked terms ($)" prefix="$" placeholder="0" req="opt" />
+              {stepDiv(5, "🏦 BRRRR check — can they refi out?", "BRRRR buyers refinance at ~75% of ARV to pull their cash back. Price + rehab must fit under that or their money stays stuck in the deal.")}
+              <Field k="rArv" label="ARV — fixed-up value ($)" prefix="$" placeholder={arv ? arv.toLocaleString() : "400,000"} req="opt" />
+              <Field k="rRehab" label="Rehab cost ($)" prefix="$" placeholder="0" req="opt" />
             </>
           )}
         </div>
@@ -1421,7 +1449,7 @@ export default function UnderwritingCalculator() {
                   { text: `Start with the fixed-up value (ARV)${n("fPurchCredit") > 0 ? ` + ${money(n("fPurchCredit"))} purchase credit` : ""}`, amount: money(arv + n("fPurchCredit")) },
                   { text: "Take away the repair cost", amount: money(fRehab), minus: true },
                   { text: `Take away hold & sell costs (commission, closing, carry, HOA over ${fHold} mo)`, amount: money(fPropertyCosts - fRehab), minus: true },
-                  ...(fMoneyCost > 0 ? [{ text: "Take away their loan cost (points + interest + fees)", amount: money(fMoneyCost), minus: true }] : []),
+                  ...(fMoneyCost > 0 ? [{ text: `Take away their hard-money cost${fLoanAuto ? ` (auto: ${money(fLoan)} loan ≈ 85% of purchase + rehab)` : " (points + interest + fees)"}`, amount: money(fMoneyCost), minus: true }] : []),
                   { text: "Take away the flipper's minimum profit", amount: money(fMinProfit), minus: true },
                 ]}
                 totalLabel="MAX OFFER (flip MAO)"
@@ -1429,6 +1457,7 @@ export default function UnderwritingCalculator() {
                 coach={fMao > 0 ? `A flipper can pay up to ${money(fMao)} and still make their ${money(fMinProfit)}. Never contract above it.` : "Fill in the ARV and repairs above to get your number."}
               />
               <Res label="Total property costs" value={money(fPropertyCosts)} tone="muted" />
+              {fLoanAuto && fLoan > 0 && <Res label="Assumed hard-money loan (85% purchase + rehab)" value={money(fLoan)} tone="muted" />}
               <Res label="Total money cost" value={money(fMoneyCost)} tone="muted" />
               <Res label="Total costs" value={money(fTotalCosts)} tone="muted" />
               <Res label="− Minimum profit" value={money(fMinProfit)} tone="muted" />
@@ -1461,12 +1490,25 @@ export default function UnderwritingCalculator() {
                   <div className="text-[12px] font-bold text-violet-800">🎁 Wrap &amp; assign — the terms to lock up</div>
                   <div className="mt-1 space-y-0.5 text-[12px] text-violet-700">
                     <div>Monthly profit (NOI ÷ 12): <b>{money(rNoi / 12)}</b> − end buyer&apos;s cashflow <b>{money(rWrapCF)}</b> =</div>
-                    <div className="text-sm font-extrabold text-violet-900">Max all-in monthly the end buyer can pay: {money(rMaxWrapPmt)}</div>
+                    <div className="text-sm font-extrabold text-violet-900">Max monthly payment (P&amp;I) the end buyer can pay us: {money(rMaxWrapPmt)}</div>
+                    <div className="text-[11px] text-violet-500">Taxes, insurance &amp; HOA are already counted inside NOI — this ceiling is principal + interest only.</div>
                     {rSellerPmt > 0 ? (
                       <div>Our locked payment to the seller is <b>{money(rSellerPmt)}</b> → monthly spread on the wrap: <b className={rWrapSpread > 0 ? "text-emerald-700" : "text-red-600"}>{money(rWrapSpread)}/mo</b>{rWrapSpread <= 0 ? " — locked terms are TOO HIGH, negotiate the payment down" : ""}</div>
                     ) : (
                       <div>Lock up seller terms with a monthly payment <b>below {money(rMaxWrapPmt)}</b> — every dollar under it is our monthly spread.</div>
                     )}
+                  </div>
+                </div>
+              )}
+              {rBrrrOk !== null && (
+                <div className={`sm:col-span-2 mt-1 rounded-lg px-3 py-2 ring-1 ${rBrrrOk ? "bg-emerald-50 ring-emerald-200" : "bg-red-50 ring-red-200"}`}>
+                  <div className={`text-[12px] font-bold ${rBrrrOk ? "text-emerald-800" : "text-red-800"}`}>
+                    {rBrrrOk ? "🏦 ✅ BRRRR-able" : "🏦 🚫 Won't refi out"} — all-in {money(rAllIn)} vs 75% of ARV = {money(rRefiLimit)}
+                  </div>
+                  <div className={`mt-0.5 text-[11px] leading-snug ${rBrrrOk ? "text-emerald-700" : "text-red-700"}`}>
+                    {rBrrrOk
+                      ? `The buyer can refinance at 75% of the ${money(rArv)} ARV and pull their cash back out — a real BRRRR exit. Room to spare: ${money(rRefiLimit - rAllIn)}.`
+                      : `Price + rehab exceeds the 75%-of-ARV refi by ${money(rAllIn - rRefiLimit)} — their cash stays stuck in the deal. Lower the price, or pitch it as a plain rental, not a BRRRR.`}
                   </div>
                 </div>
               )}
