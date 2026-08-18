@@ -117,6 +117,37 @@ function Res({ label, value, tone = "navy", big }: { label: string; value: strin
 
 // 3-rung offer ladder (course-style 95/85/65% of max) — gives the rep an opening,
 // a target, and a floor instead of a single number.
+// "Show me the math" receipt — the dummy-proof view. Numbered plain-English steps
+// with the rep's ACTUAL numbers filled in, ending in one big unmissable total.
+// No formulas to interpret: read top to bottom like a grocery receipt.
+function MathReceipt({ title, rows, totalLabel, total, coach }: {
+  title: string;
+  rows: { text: string; amount: string; minus?: boolean }[];
+  totalLabel: string;
+  total: string;
+  coach?: string;
+}) {
+  return (
+    <div className="mb-3 rounded-xl bg-white p-3 ring-2 ring-brand-navy/20 sm:col-span-2">
+      <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-brand-navy">🧾 {title} — step by step</div>
+      <ol className="space-y-1">
+        {rows.map((r, i) => (
+          <li key={i} className="flex items-center gap-2 text-[13px]">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">{i + 1}</span>
+            <span className="flex-1 text-slate-600">{r.text}</span>
+            <span className={`shrink-0 font-bold tabular-nums ${r.minus ? "text-red-500" : "text-slate-800"}`}>{r.minus ? "− " : ""}{r.amount}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-2 flex items-center justify-between border-t-2 border-dashed border-slate-200 pt-2">
+        <span className="text-sm font-extrabold text-brand-navy">= {totalLabel}</span>
+        <span className="text-xl font-extrabold tabular-nums text-brand-navy">{total}</span>
+      </div>
+      {coach && <p className="mt-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[12px] font-medium text-emerald-800">💡 {coach}</p>}
+    </div>
+  );
+}
+
 function OfferLadder({ rungs }: { rungs: { label: string; v: number }[] }) {
   if (!rungs.length) return null;
   return (
@@ -1269,6 +1300,18 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "assignment" && (
             <>
+              <MathReceipt
+                title="Cash offer"
+                rows={[
+                  { text: `Fixed-up value (ARV) is ${money(arv)}. A flipper pays ${marketPct}% of that`, amount: money(flipperTarget) },
+                  { text: "Take away the repair cost", amount: money(repairs), minus: true },
+                  ...(aHoa + aExtra > 0 ? [{ text: "Take away HOA dues + extras (keys, liens…)", amount: money(aHoa + aExtra), minus: true }] : []),
+                  { text: "Take away our assignment fee (what we earn)", amount: money(aFee), minus: true },
+                ]}
+                totalLabel="MAX OFFER to the seller"
+                total={money(cashMao)}
+                coach={cashMao > 0 ? `Never offer above ${money(cashMao)}. Open the conversation at ${money(aAnchor)} and work up.` : "Fill in ARV and repairs above to get your number."}
+              />
               <Res label={`Flipper resale target (${marketPct}% of ARV)`} value={money(flipperTarget)} tone="muted" />
               <Res label="− Repairs" value={money(repairs)} tone="muted" />
               {aHoa > 0 && <Res label="− HOA / special dues" value={money(aHoa)} tone="muted" />}
@@ -1350,6 +1393,19 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "novation" && (
             <>
+              <MathReceipt
+                title="Novation offer"
+                rows={[
+                  { text: `List it at ${money(nList)} — realistically it sells for ${nRealismPct}% of that`, amount: money(nExpectedSale) },
+                  { text: `Take away the agent's commission (${nComm}%)`, amount: money(nExpectedSale * (nComm / 100)), minus: true },
+                  { text: `Take away seller closing costs (${nSellerClosePct}%)`, amount: money(nSellerClose), minus: true },
+                  ...(nRepairCredit + nHoaCost + nExtra + nReserve > 0 ? [{ text: "Take away repair credit + HOA + extras + reserve", amount: money(nRepairCredit + nHoaCost + nExtra + nReserve), minus: true }] : []),
+                  { text: "Take away our fee (what we earn)", amount: money(nMinFee), minus: true },
+                ]}
+                totalLabel="MAX we can pay the seller"
+                total={money(novMao)}
+                coach={novMao > 0 ? `The seller can walk away with up to ${money(novMao)}. Open at ${money(novAnchor)} — every dollar below max is extra fee for us.` : "Enter the list price and fee above to get your number."}
+              />
               {suggestedList > 0 && <Res label="🏷️ Recommended list price" value={money(suggestedList)} tone="good" />}
               {nList > 0 && <Res label={`Expected sale at ${nRealismPct}% of list`} value={money(nExpectedSale)} tone="muted" />}
               {nReserve > 0 && <Res label="− Reserve (misc + lender repairs)" value={money(nReserve)} tone="muted" />}
@@ -1392,6 +1448,17 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "rental" && (
             <>
+              <MathReceipt
+                title="Buy & Hold offer"
+                rows={[
+                  { text: `Rent ${money(rRent)}/mo × 12 months = a year of rent`, amount: money(rGrossYr) },
+                  { text: `Take away taxes, insurance, HOA, vacancy, management & repairs`, amount: money(rOpEx), minus: true },
+                  { text: `What's left is the yearly profit (NOI) — divide it by the buyer's ${rTargetCap}% target return`, amount: money(rNoi) },
+                ]}
+                totalLabel={`MAX OFFER at ${rTargetCap}% cap`}
+                total={money(rMaxOffer)}
+                coach={rMaxOffer > 0 ? `A landlord wanting ${rTargetCap}% back per year can pay up to ${money(rMaxOffer)}. Quick screen: rent should be ≥1% of price (this deal: ${rOnePct.toFixed(2)}%).` : "Enter the monthly rent above to get your number."}
+              />
               <Res label="Gross annual rent" value={money(rGrossYr)} tone="muted" />
               <Res label="− Operating expenses" value={money(rOpEx)} tone="muted" />
               <Res label="Net operating income (NOI)" value={money(rNoi)} tone="muted" />
