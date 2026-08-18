@@ -14,9 +14,8 @@
 // Per-person exception: Marie works a 6-hour shift — 12:00–6:00 PM Mon–Thu, and
 // 8:00 AM–1:00 PM on Fridays (the whole team is on the short 8–1 Friday). Pass her
 // name as `who`.
-// TEMPORARY exception: Sharyn is on a reduced 8:00 AM–1:00 PM (5h) shift Mon–Thu
-// (she keeps the normal 8–2 Friday) during a family hardship. She takes one 15-min
-// break at 10 and no lunch. Remove her line in shiftEndHour to restore full days.
+// (Sharyn's temporary reduced 8–1 hardship schedule ended 2026-08-17 — she's back
+// on the standard 8–5 Mon–Thu with the normal lunch, and 8–2 Friday.)
 
 const DEFAULT_TZ = "America/New_York";
 
@@ -66,9 +65,6 @@ export function shiftEndHour(dateStr: string, who?: string | null): { hour: numb
   const dow = dowOf(dateStr);
   if (dow < 1 || dow > 5) return null; //                  Sat/Sun → off
   if (dow === 5) return { hour: 14, min: 0 }; //            Fri     → 2:00 PM (whole team, no lunch — incl. Sharyn)
-  // TEMPORARY (family hardship): Sharyn on a reduced 8:00 AM–1:00 PM shift Mon–Thu
-  // (she keeps the normal 8–2 Friday). Remove this line to restore her full days.
-  if (firstName(who) === "sharyn") return { hour: 13, min: 0 };
   if (firstName(who) === "marie") return { hour: 18, min: 0 }; // Marie Mon–Thu → 6:00 PM
   return { hour: 17, min: 0 }; //                           Mon–Thu → 5:00 PM
 }

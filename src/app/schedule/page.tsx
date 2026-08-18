@@ -497,7 +497,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
               );
             })}
           </Card>
-          <p className="mt-1.5 text-[11px] text-slate-400">Green = working · amber = break · orange = lunch · red = power/internet outage · grey = not yet / done. The dark line marks now. Sharyn is on a temporary reduced shift — 8–1 Mon–Thu, 8–2 Fri, one 15-min break at 10, no lunch; Michelle lunches 1–2; Marie takes one 15-min break.</p>
+          <p className="mt-1.5 text-[11px] text-slate-400">Green = working · amber = break · orange = lunch · red = power/internet outage · grey = not yet / done. The dark line marks now. Michelle &amp; Sharyn work 8–5 Mon–Thu (lunch 1–2) and 8–2 Fri; Marie takes one 15-min break.</p>
         </section>
       )}
 
