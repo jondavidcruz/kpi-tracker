@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which Claude? — Visual Card</title>
+<style>
+  :root{
+    --stock:#E6E2D0; --ink:#1C2118; --soft:#5A6050; --rule:#B0AA92;
+    --stamp:#9B2E24;
+    --haiku:#37707F; --sonnet:#4A6B2F; --opus:#8A5A1E; --fable:#6B2F3C;
+    --mono: ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:20px 12px 44px;background:var(--stock);color:var(--ink);font-family:var(--sans)}
+  .card{max-width:840px;margin:0 auto;border:3px solid var(--ink);background:var(--stock);box-shadow:7px 7px 0 rgba(28,33,24,.12)}
+
+  header{padding:20px;border-bottom:3px solid var(--ink);text-align:center}
+  h1{font-family:var(--mono);text-transform:uppercase;font-size:clamp(22px,6vw,34px);margin:0;line-height:1.05;font-weight:700}
+  .sub{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--soft);margin-top:10px}
+
+  /* ── decision flow ── */
+  .flow{padding:22px 16px;border-bottom:3px solid var(--ink)}
+  .q{display:flex;align-items:center;gap:12px;border:2px solid var(--ink);background:rgba(255,255,255,.35);padding:12px 14px;border-radius:4px;margin-bottom:0}
+  .q .icon{font-size:26px;line-height:1}
+  .q .txt{font-size:15px;font-weight:600;line-height:1.3}
+  .arrow{text-align:center;font-size:22px;color:var(--soft);line-height:1;padding:7px 0}
+  .ansrow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .ans{border:2px dashed var(--rule);border-radius:4px;padding:10px;text-align:center;font-size:13px;line-height:1.35}
+  .ans .big{font-size:24px;display:block;margin-bottom:4px}
+  .ans b{font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+
+  /* ── tiers ── */
+  .tier{display:flex;gap:14px;padding:20px;border-bottom:2px dashed var(--rule);align-items:flex-start}
+  .tier:last-of-type{border-bottom:0}
+  .glyph{
+    flex:0 0 78px;height:78px;border:3px solid var(--ink);border-radius:6px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:32px;line-height:1;background:rgba(255,255,255,.4)
+  }
+  .glyph small{font-family:var(--mono);font-size:8px;letter-spacing:.14em;margin-top:5px;text-transform:uppercase;color:var(--soft)}
+  .tinfo{flex:1;min-width:0}
+  .tname{font-family:var(--mono);font-size:19px;font-weight:700;text-transform:uppercase;margin:0 0 2px;letter-spacing:.01em}
+  .tline{font-size:14px;font-weight:600;margin:0 0 10px}
+
+  .meters{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:11px}
+  .meter{display:flex;align-items:center;gap:7px}
+  .meter span{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--soft);width:44px}
+  .pips{display:flex;gap:3px}
+  .pip{width:15px;height:11px;border:1.5px solid var(--ink);border-radius:2px}
+
+  .uses{display:flex;flex-wrap:wrap;gap:6px}
+  .use{font-size:12.5px;border:1.5px solid var(--rule);border-radius:20px;padding:4px 10px;background:rgba(255,255,255,.35)}
+
+  .stamp{display:inline-block;margin-top:10px;font-family:var(--mono);font-size:11px;font-weight:700;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--stamp);border:2.5px solid var(--stamp);
+    border-radius:3px;padding:5px 11px;transform:rotate(-2.5deg)}
+
+  /* ── job table ── */
+  .panel{border-top:3px solid var(--ink);padding:20px}
+  h2{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin:0 0 14px;color:var(--soft)}
+  .jobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}
+  .job{border:2px solid var(--ink);border-radius:5px;padding:11px;background:rgba(255,255,255,.35)}
+  .job .e{font-size:23px;display:block;margin-bottom:5px}
+  .job .w{font-size:12.5px;line-height:1.35;margin-bottom:8px;min-height:34px}
+  .job .m{font-family:var(--mono);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:3px 7px;border-radius:3px;color:#fff;display:inline-block}
+
+  /* ── dial ── */
+  .dial{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+  .step{border:2px solid var(--ink);border-radius:5px;padding:11px;text-align:center;background:rgba(255,255,255,.3)}
+  .step .bars{font-size:17px;letter-spacing:2px;line-height:1;margin-bottom:7px}
+  .step b{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:4px}
+  .step small{font-size:11.5px;line-height:1.3;display:block;color:var(--soft)}
+  .step.here{border-color:var(--stamp);border-width:3px}
+  .step.here b{color:var(--stamp)}
+
+  footer{border-top:3px solid var(--ink);padding:14px 20px;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--soft);text-align:center}
+
+  @media(max-width:480px){
+    .glyph{flex:0 0 62px;height:62px;font-size:26px}
+    .ansrow{grid-template-columns:1fr}
+  }
+  @media print{body{background:#fff;padding:0}.card{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="card">
+
+  <header>
+    <h1>Which Claude<br>do I send in?</h1>
+    <div class="sub">Pick by job · not by habit</div>
+  </header>
+
+  <!-- decision flow -->
+  <section class="flow">
+    <div class="q">
+      <span class="icon">🤔</span>
+      <span class="txt">Is this a hard task, or just a long one?</span>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="ansrow">
+      <div class="ans"><span class="big">📋</span>Long but simple<br><b style="color:var(--sonnet)">Sonnet 5</b></div>
+      <div class="ans"><span class="big">🧩</span>Genuinely hard<br><b style="color:var(--opus)">Opus 5</b></div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="q" style="border-style:dashed">
+      <span class="icon">✅</span>
+      <span class="txt">Still not sure? Use Sonnet 5. Bump up only if the answer misses.</span>
+    </div>
+  </section>
+
+  <!-- tiers -->
+  <div class="tier">
+    <div class="glyph" style="border-color:var(--haiku)">⚡<small>Tier 1</small></div>
+    <div class="tinfo">
+      <p class="tname" style="color:var(--haiku)">Haiku 4.5</p>
+      <p class="tline">The runner. In and out, fast.</p>
+      <div class="meters">
+        <div class="meter"><span>Speed</span><div class="pips">
+          <i class="pip" style="background:var(--haiku)"></i><i class="pip" style="background:var(--haiku)"></i><i class="pip" style="background:var(--haiku)"></i><i class="pip" style="background:var(--haiku)"></i><i class="pip" style="background:var(--haiku)"></i></div></div>
+        <div class="meter"><span>Depth</span><div class="pips">
+          <i class="pip" style="background:var(--haiku)"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></div></div>
+      </div>
+      <div class="uses"><span class="use">🔤 Reformat a list</span><span class="use">🏷️ Tag leads</span><span class="use">❓ Quick facts</span><span class="use">🔁 Same task ×200</span></div>
+    </div>
+  </div>
+
+  <div class="tier">
+    <div class="glyph" style="border-color:var(--sonnet)">🎯<small>Tier 2</small></div>
+    <div class="tinfo">
+      <p class="tname" style="color:var(--sonnet)">Sonnet 5</p>
+      <p class="tline">The workhorse. Handles ~80% of what you do.</p>
+      <div class="meters">
+        <div class="meter"><span>Speed</span><div class="pips">
+          <i class="pip" style="background:var(--sonnet)"></i><i class="pip" style="background:var(--sonnet)"></i><i class="pip" style="background:var(--sonnet)"></i><i class="pip" style="background:var(--sonnet)"></i><i class="pip"></i></div></div>
+        <div class="meter"><span>Depth</span><div class="pips">
+          <i class="pip" style="background:var(--sonnet)"></i><i class="pip" style="background:var(--sonnet)"></i><i class="pip" style="background:var(--sonnet)"></i><i class="pip" style="background:var(--sonnet)"></i><i class="pip"></i></div></div>
+      </div>
+      <div class="uses"><span class="use">📝 Lead notes</span><span class="use">🏠 Property summaries</span><span class="use">✉️ Seller emails</span><span class="use">📄 Contract questions</span></div>
+      <span class="stamp">Start here ✓</span>
+    </div>
+  </div>
+
+  <div class="tier">
+    <div class="glyph" style="border-color:var(--opus)">🧠<small>Tier 3</small></div>
+    <div class="tinfo">
+      <p class="tname" style="color:var(--opus)">Opus 5</p>
+      <p class="tline">The strategist. Many moving parts at once.</p>
+      <div class="meters">
+        <div class="meter"><span>Speed</span><div class="pips">
+          <i class="pip" style="background:var(--opus)"></i><i class="pip" style="background:var(--opus)"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></div></div>
+        <div class="meter"><span>Depth</span><div class="pips">
+          <i class="pip" style="background:var(--opus)"></i><i class="pip" style="background:var(--opus)"></i><i class="pip" style="background:var(--opus)"></i><i class="pip" style="background:var(--opus)"></i><i class="pip" style="background:var(--opus)"></i></div></div>
+      </div>
+      <div class="uses"><span class="use">📊 2-week call analysis</span><span class="use">📈 Growth plan</span><span class="use">🤝 Deal terms review</span><span class="use">🤖 Build automations</span></div>
+    </div>
+  </div>
+
+  <div class="tier">
+    <div class="glyph" style="border-color:var(--fable)">🏔️<small>Tier 4</small></div>
+    <div class="tinfo">
+      <p class="tname" style="color:var(--fable)">Fable 5</p>
+      <p class="tline">The specialist. Break glass in case of emergency.</p>
+      <div class="meters">
+        <div class="meter"><span>Speed</span><div class="pips">
+          <i class="pip" style="background:var(--fable)"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></div></div>
+        <div class="meter"><span>Depth</span><div class="pips">
+          <i class="pip" style="background:var(--fable)"></i><i class="pip" style="background:var(--fable)"></i><i class="pip" style="background:var(--fable)"></i><i class="pip" style="background:var(--fable)"></i><i class="pip" style="background:var(--fable)"></i></div></div>
+      </div>
+      <div class="uses"><span class="use">🌀 No clear path in</span><span class="use">🗂️ Huge messy synthesis</span><span class="use">⚠️ Rare — most days, skip it</span></div>
+    </div>
+  </div>
+
+  <!-- jobs -->
+  <section class="panel">
+    <h2>Your jobs → your model</h2>
+    <div class="jobs">
+      <div class="job"><span class="e">📞</span><div class="w">Cold-call team weekly analysis</div><span class="m" style="background:var(--opus)">Opus 5</span></div>
+      <div class="job"><span class="e">📝</span><div class="w">Homeowner lead notes</div><span class="m" style="background:var(--sonnet)">Sonnet 5</span></div>
+      <div class="job"><span class="e">🏠</span><div class="w">Property summary write-up</div><span class="m" style="background:var(--sonnet)">Sonnet 5</span></div>
+      <div class="job"><span class="e">📇</span><div class="w">Reformat lead list for skip trace</div><span class="m" style="background:var(--haiku)">Haiku 4.5</span></div>
+      <div class="job"><span class="e">✉️</span><div class="w">Outreach + follow-up emails</div><span class="m" style="background:var(--sonnet)">Sonnet 5</span></div>
+      <div class="job"><span class="e">📜</span><div class="w">Contract / partnership review</div><span class="m" style="background:var(--opus)">Opus 5</span></div>
+      <div class="job"><span class="e">🤖</span><div class="w">Build a multi-step automation</div><span class="m" style="background:var(--opus)">Opus 5</span></div>
+      <div class="job"><span class="e">📊</span><div class="w">Sunday HTML dashboard</div><span class="m" style="background:var(--opus)">Opus 5</span></div>
+    </div>
+  </section>
+
+  <!-- dial -->
+  <section class="panel">
+    <h2>Effort dial — the second lever</h2>
+    <div class="dial">
+      <div class="step"><div class="bars">▮▯▯▯</div><b>Low</b><small>Snap answers</small></div>
+      <div class="step"><div class="bars">▮▮▯▯</div><b>Medium</b><small>Everyday</small></div>
+      <div class="step here"><div class="bars">▮▮▮▯</div><b>High ← you</b><small>Thinks first</small></div>
+      <div class="step"><div class="bars">▮▮▮▮</div><b>Max</b><small>Slow &amp; thorough</small></div>
+    </div>
+    <div class="uses" style="margin-top:12px">
+      <span class="use">💡 Raising effort on Sonnet often beats jumping a tier</span>
+      <span class="use">⚡ Haiku has no effort dial</span>
+      <span class="use">🔄 You can switch models mid-chat</span>
+    </div>
+  </section>
+
+  <footer>Freedom Offers · pin it up · rev 18 aug 26</footer>
+</div>
+</body>
+</html>

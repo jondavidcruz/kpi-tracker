@@ -32,6 +32,7 @@ export const NAV_GROUPS: NavGroup[] = [
   ] },
   { group: "Coaching", items: [
     { href: "/training", label: "Training Portal", gate: "training" },
+    { href: "/ai-training", label: "AI Training", gate: "all" },
     { href: "/onboarding", label: "Onboarding", gate: "manager" },
     { href: "/alerts", label: "Alerts", gate: "manager" },
     { href: "/pip", label: "PIPs", gate: "manager" },

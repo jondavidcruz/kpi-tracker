@@ -36,6 +36,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers",
   "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
   "/cfd-notes": "cfd contract for deed owner finance notes ledger seller financing payments default land",
+  "/ai-training": "ai training claude chatgpt gemini perplexity prompt prompting models haiku sonnet opus fable effort artificial intelligence learn",
   "/software": "logins passwords tools vendors",
   "/tickets": "requests help support",
   "/leaks": "war room health issues",
@@ -91,6 +92,7 @@ export default function Sidebar({
     ] },
     { label: "Coaching", items: [
       { href: "/training", label: "Training Portal", Icon: GraduationCap, trainingOnly: true },
+      { href: "/ai-training", label: "AI Training", Icon: Bot },
       { href: "/onboarding", label: "Onboarding", Icon: UserPlus, managerOnly: true },
       { href: "/alerts", label: "Alerts", Icon: Bell, managerOnly: true },
       { href: "/pip", label: "PIPs", Icon: ShieldAlert, managerOnly: true },
