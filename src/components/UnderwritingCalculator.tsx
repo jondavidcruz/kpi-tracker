@@ -758,7 +758,7 @@ export default function UnderwritingCalculator() {
     // inputted. Heavy/major systems (roof, HVAC, water heater, foundation, windows) are
     // flagged so the seller sees exactly why the price is where it is.
     const majorItems = MAJOR.filter(([key]) => n(`maj_${key}`) > 0).map(([key, label]) => ({ label, cost: n(`maj_${key}`) }));
-    const rehabBaseOnly = n("repairs") || repairsCalc;
+    const rehabBaseOnly = repairsCalc;
     const repairLine = (label: string, val: string, major = false) =>
       `<tr style="background:${major ? "#fff7ed" : "#fff"}"><td style="padding:7px 12px;color:${major ? "#9a3412" : "#475569"};font-weight:${major ? 700 : 400}">${major ? "🔨 " : ""}${esc(label)}${major ? ' <span style="font-size:9px;background:#fed7aa;color:#9a3412;padding:1px 5px;border-radius:6px;font-weight:700;text-transform:uppercase">major</span>' : ""}</td><td style="padding:7px 12px;text-align:right;font-weight:700;color:#0f172a">${esc(val)}</td></tr>`;
     const repairRows: string[] = [];
