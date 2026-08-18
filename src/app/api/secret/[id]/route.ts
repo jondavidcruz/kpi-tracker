@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, canViewLogins, onAccessList } from "@/lib/auth";
 import { decryptSecret, vaultConfigured } from "@/lib/crypto";
 
 export const runtime = "nodejs";
@@ -19,8 +19,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const sw = await db.software.findUnique({ where: { id } });
   if (!sw || !sw.secret) return NextResponse.json({ error: "no password stored" }, { status: 404 });
 
-  const names = sw.accessList.split(/[\n,]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
-  const allowed = isManager(me) || names.includes(me.name.toLowerCase());
+  // Certified core team + managers see every login; others need to be named on
+  // this tool's access list (matched by first OR full name).
+  const allowed = canViewLogins(me) || onAccessList(sw.accessList, me);
   if (!allowed) return NextResponse.json({ error: "no access" }, { status: 403 });
 
   if (!vaultConfigured()) return NextResponse.json({ error: "vault not set up" }, { status: 503 });

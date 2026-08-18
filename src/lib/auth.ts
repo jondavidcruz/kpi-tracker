@@ -69,6 +69,30 @@ export function canAccessPayroll(user: User | null): boolean {
   return isCSuitePerson(user);
 }
 
+// The certified / core team — full access to reveal ANY stored login. New or
+// uncertified hires are NOT in this set, so by default they can only reveal a
+// tool they've been explicitly added to (per-tool access list). Add a name here
+// once someone is certified. Managers/admins always have access.
+const CERTIFIED_TEAM = new Set(["jon", "jonathan", "viktoriia", "enrico", "sharyn", "marie", "michelle"]);
+
+/** Can reveal any stored login (certified core team + managers). */
+export function canViewLogins(user: { name?: string } | null): boolean {
+  return isManager(user as User) || CERTIFIED_TEAM.has(firstNameOf(user));
+}
+
+/** Is this user named on a per-tool access list? Matches first OR full name, so a
+ *  list that says "Sharyn" grants "Sharyn Mangubat" (the bug this fixes). */
+export function onAccessList(accessList: string, user: { name?: string } | null): boolean {
+  const full = (user?.name ?? "").trim().toLowerCase();
+  if (!full) return false;
+  const first = full.split(/\s+/)[0];
+  return (accessList || "")
+    .split(/[\n,]/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .some((n) => n === full || n === first);
+}
+
 /** Can open the Time Card (track hours). Managers (Marie + Jon) + pay staff. */
 export function canTrackTime(user: User | null): boolean {
   return isManager(user) || canAccessPayroll(user);

@@ -1,5 +1,5 @@
 import { saveSoftware, deleteSoftware, clearSecret } from "@/app/actions";
-import { getCurrentUser, isAdmin, isManager, canCurateSoftware } from "@/lib/auth";
+import { getCurrentUser, isAdmin, isManager, canCurateSoftware, canViewLogins, onAccessList } from "@/lib/auth";
 import { vaultConfigured } from "@/lib/crypto";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
@@ -54,9 +54,7 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
   if (!me) return null;
   const sp = await searchParams;
   const owner = isAdmin(me);
-  const manager = isManager(me);
   const canEdit = canCurateSoftware(me); // owner + managers + named curators (Sharyn)
-  const meName = me.name.toLowerCase();
   const configured = vaultConfigured();
 
   const [list, recent] = await Promise.all([
@@ -129,8 +127,7 @@ export default async function SoftwarePage({ searchParams }: { searchParams: Pro
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {byCat.get(cat)!.map((s) => {
               const hasSecret = withSecret.has(s.id);
-              const names = s.accessList.split(/[\n,]/).map((x) => x.trim().toLowerCase()).filter(Boolean);
-              const canReveal = manager || names.includes(meName);
+              const canReveal = canViewLogins(me) || onAccessList(s.accessList, me);
               const hay = [s.name, s.loginEmail, s.owner, s.category, s.plan, s.notes, s.accessList, s.vaultRef]
                 .filter(Boolean).join(" ").toLowerCase();
               return (
