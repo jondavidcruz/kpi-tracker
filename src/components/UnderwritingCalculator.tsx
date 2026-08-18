@@ -815,6 +815,17 @@ export default function UnderwritingCalculator() {
   const reqDiv = "sm:col-span-2 mt-1 border-t border-red-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-red-500";
   const optDiv = "sm:col-span-2 mt-1 border-t border-amber-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-amber-500";
   const goodDiv = "sm:col-span-2 mt-1 border-t border-emerald-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-emerald-600";
+  // Numbered step header — fields flow top-to-bottom in the same order as the math,
+  // so someone bad at math can just fill the form downward and read the receipt.
+  const stepDiv = (num: number, title: string, hint?: string) => (
+    <div className="sm:col-span-2 mt-2 border-t border-slate-200 pt-2.5">
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-navy text-[12px] font-extrabold text-white">{num}</span>
+        <span className="text-[13px] font-extrabold text-brand-navy">{title}</span>
+      </div>
+      {hint && <p className="mt-0.5 pl-8 text-[11px] text-slate-400">{hint}</p>}
+    </div>
+  );
   // Reused under both comps sections — explains why comps are GREEN (hard facts).
   const compsNote = "🟢 Green = hard facts — real, recent closed sales in the area, not speculation or hopeful pricing. Pull them, then verify each on the MLS / county records before recording all 3. Never send an offer that isn't backed by comps.";
   const legend = (
@@ -1190,9 +1201,8 @@ export default function UnderwritingCalculator() {
           {tab === "flip" && (
             <>
               {legend}
-              <Field k="arv" label="ARV" prefix="$" placeholder="350,000" req="need" />
-              <Field k="fMinProfit" label="Minimum profit" prefix="$" placeholder="30,000" req="opt" />
-              <div className={goodDiv}>🟢 ARV comps (required · addr · sold $ · days on market)</div>
+              {stepDiv(1, "What's it worth fixed up?", "The ARV — what it sells for AFTER the flip. Back it with 3 real sold comps.")}
+              <Field k="arv" label="ARV — fixed-up value" prefix="$" placeholder="350,000" span={2} req="need" />
               <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">{compsNote}</p>
               {[1, 2, 3].map((i) => (
                 <div key={i} className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
@@ -1201,22 +1211,22 @@ export default function UnderwritingCalculator() {
                   <Field k={`comp${i}d`} label="DOM" req="good" />
                 </div>
               ))}
-              <div className={reqDiv}>Rehab (required) — direct $, or sqft × $/sf</div>
-              <Field k="fRehab" label="Override rehab cost ($)" prefix="$" span={2} req="need" />
+              {stepDiv(2, "What will the repairs cost?", "Type a bid if you have one; otherwise sqft × condition estimates it. Tap the big-ticket items that apply.")}
+              <Field k="fRehab" label="Contractor bid / known rehab cost ($ — optional)" prefix="$" span={2} req="need" />
               <Field k="sqft" label="Square feet" req="need" />
               <label><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Condition ($/sf)</span>
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
               {rehabDesc(v("rehabSf")) && <p className="sm:col-span-2 -mt-1 text-[11px] italic text-slate-500">📋 {rehabDesc(v("rehabSf"))}</p>}
               {majorRepairs()}
-              <div className={optDiv}>Property costs (optional · % of ARV)</div>
-              <Field k="fComm" label="Realtor commission" suffix="%" placeholder="3" req="opt" />
-              <Field k="fClosing" label="Closing costs" suffix="%" placeholder="2" req="opt" />
-              <Field k="fCarry" label="Utilities / taxes / insurance" suffix="%" placeholder="1" req="opt" />
+              {stepDiv(3, "What does it cost to hold & sell?", "While the flipper owns it and when they resell. Defaults are fine — only change what you know.")}
+              <Field k="fHold" label="Months they'll hold it" placeholder="6" req="opt" />
+              <Field k="fComm" label="Realtor commission (% of ARV)" suffix="%" placeholder="3" req="opt" />
+              <Field k="fClosing" label="Closing costs (% of ARV)" suffix="%" placeholder="2" req="opt" />
+              <Field k="fCarry" label="Utilities / taxes / insurance (% of ARV)" suffix="%" placeholder="1" req="opt" />
               <Field k="fHoa" label="Monthly HOA ($)" prefix="$" req="opt" />
               <Field k="fPm" label="Project manager / misc ($)" prefix="$" req="opt" />
-              <Field k="fPurchCredit" label="Purchase commission credit ($)" prefix="$" req="opt" />
-              <div className={optDiv}>Money costs (optional · hard-money)</div>
+              {stepDiv(4, "What does their money cost?", "The flipper's hard-money loan. Pick a lender preset — it fills the rate, points & fee for you.")}
               <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Lender preset (fills rate / points / fee)</span>
                 <select value={v("fLender")} onChange={(e) => { const L = LENDERS[e.target.value]; setF((p) => ({ ...p, fLender: e.target.value, ...(L ? { fRate: L.rate, fPoints: L.points, fSvc: L.svc } : {}) })); }} className={inputCls}>
                   <option value="">— custom —</option>
@@ -1224,12 +1234,14 @@ export default function UnderwritingCalculator() {
                 </select>
               </label>
               <Field k="fLoan" label="Loan amount" prefix="$" req="opt" />
-              <Field k="fHold" label="Hold time (months)" placeholder="6" req="opt" />
               <Field k="fRate" label="Interest rate" suffix="%" placeholder="10" req="opt" />
               <Field k="fPoints" label="Points" suffix="%" placeholder="1" req="opt" />
               <Field k="fSvc" label="Service fee ($)" prefix="$" req="opt" />
               <Field k="fGap" label="Gap loan amount ($)" prefix="$" req="opt" />
               <Field k="fGapRate" label="Gap interest rate" suffix="%" placeholder="15" req="opt" />
+              {stepDiv(5, "What does the flipper need to make?", "Their minimum profit to say yes — plus any commission credit they get back at purchase.")}
+              <Field k="fMinProfit" label="Flipper's minimum profit" prefix="$" placeholder="30,000" req="opt" />
+              <Field k="fPurchCredit" label="Purchase commission credit ($)" prefix="$" req="opt" />
               <div className={optDiv}>Profit check (optional)</div>
               <Field k="fPurchase" label="Your purchase price ($)" prefix="$" span={2} req="opt" />
             </>
@@ -1237,22 +1249,21 @@ export default function UnderwritingCalculator() {
           {tab === "rental" && (
             <>
               {legend}
+              {stepDiv(1, "The property", "What it costs and what it rents for. That's most of the math.")}
               <Field k="rPrice" label="Purchase price (defaults to ARV)" prefix="$" placeholder={arv ? arv.toLocaleString() : "350,000"} req="need" />
               <Field k="rRent" label="Expected monthly rent" prefix="$" placeholder="2,400" req="need" />
-              <div className={optDiv}>Operating expenses (optional)</div>
+              {stepDiv(2, "What the landlord pays each year", "Taxes + insurance + HOA, plus the standard set-asides (defaults are industry-normal — leave them unless you know better).")}
               <Field k="rTax" label="Annual property tax ($)" prefix="$" req="opt" />
               <Field k="rIns" label="Annual insurance ($)" prefix="$" req="opt" />
               <Field k="rHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
-              <Field k="rVac" label="Vacancy" suffix="%" placeholder="5" req="opt" />
+              <Field k="rVac" label="Vacancy set-aside" suffix="%" placeholder="5" req="opt" />
               <Field k="rMgmt" label="Property management" suffix="%" placeholder="8" req="opt" />
               <Field k="rMaint" label="Maintenance / capex" suffix="%" placeholder="8" req="opt" />
-              <div className={optDiv}>Buyer&apos;s target</div>
-              <Field k="rTargetCap" label="Target cap rate" suffix="%" placeholder="7" req="opt" />
-              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 Speaks to your landlord / BRRRR buyers. The max offer is the price at which the deal still hits their target cap rate.</p>
-              <div className={optDiv}>🎁 Wrap &amp; assign — what terms can we lock up?</div>
+              {stepDiv(3, "What return does the buyer want?", "Their target cap rate. The max offer is the price where this deal still hits it.")}
+              <Field k="rTargetCap" label="Target cap rate" suffix="%" placeholder="7" span={2} req="opt" />
+              {stepDiv(4, "🎁 Wrap & assign — the terms we can lock up", "Lock seller-finance / sub-to terms, wrap them, assign to a cash-flowing end buyer. Our payment to the seller must sit BELOW their max — the gap is our monthly spread.")}
               <Field k="rWrapCF" label="End buyer's cashflow target ($/mo)" prefix="$" placeholder="300" req="opt" />
               <Field k="rSellerPmt" label="Our monthly payment on locked terms ($)" prefix="$" placeholder="0" req="opt" />
-              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🎁 Lock up seller-finance / subject-to terms, wrap them, and assign to a cash-flowing end buyer. Their max all-in monthly = monthly profit (NOI÷12) − the cashflow they need. Our payment to the seller must sit BELOW that — the gap is our monthly spread.</p>
             </>
           )}
         </div>
@@ -1404,6 +1415,19 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "flip" && (
             <>
+              <MathReceipt
+                title="Flip / Wholetail offer"
+                rows={[
+                  { text: `Start with the fixed-up value (ARV)${n("fPurchCredit") > 0 ? ` + ${money(n("fPurchCredit"))} purchase credit` : ""}`, amount: money(arv + n("fPurchCredit")) },
+                  { text: "Take away the repair cost", amount: money(fRehab), minus: true },
+                  { text: `Take away hold & sell costs (commission, closing, carry, HOA over ${fHold} mo)`, amount: money(fPropertyCosts - fRehab), minus: true },
+                  ...(fMoneyCost > 0 ? [{ text: "Take away their loan cost (points + interest + fees)", amount: money(fMoneyCost), minus: true }] : []),
+                  { text: "Take away the flipper's minimum profit", amount: money(fMinProfit), minus: true },
+                ]}
+                totalLabel="MAX OFFER (flip MAO)"
+                total={money(fMao)}
+                coach={fMao > 0 ? `A flipper can pay up to ${money(fMao)} and still make their ${money(fMinProfit)}. Never contract above it.` : "Fill in the ARV and repairs above to get your number."}
+              />
               <Res label="Total property costs" value={money(fPropertyCosts)} tone="muted" />
               <Res label="Total money cost" value={money(fMoneyCost)} tone="muted" />
               <Res label="Total costs" value={money(fTotalCosts)} tone="muted" />
