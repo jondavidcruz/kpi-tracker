@@ -2,15 +2,17 @@
 
 import { useState, useEffect, useRef, createContext, useContext } from "react";
 
+// Ordered LAND-first for the land pivot, then the home strategies. `group` drives
+// the grouped tab bar so the sheet leads with what the team uses most now.
 const TABS = [
-  { key: "assignment", label: "Cash (Homes)", emoji: "🏠", blurb: "Cash offer on a house. MAO = (ARV × market %) − repairs − your fee. The market % already covers the flipper's carry + profit. Anchor opens below MAO." },
-  { key: "cash_land", label: "Cash (Land)", emoji: "🌵", blurb: "Cash offer on vacant land. Comp recent LAND sales in the area, average them, and offer ~33% of that average. MAO = avg land sale × 33%. Anchor opens below MAO." },
-  { key: "developer", label: "Developer", emoji: "🏗️", blurb: "Land-for-luxury-builds cash offer (Lux Blueprint). Value the LOT from 3 comp methods → dispo price, then MAO = dispo − a $100–150k spread. No repairs — the developer tears down. Aim for a six-figure fee." },
-  { key: "novation", label: "Novation", emoji: "📋", blurb: "List at current similar-condition value, cover the seller's closing + commission (no holding — retail buyer). Find the max seller payout." },
-  { key: "creative", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
-  { key: "listing", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
-  { key: "flip", label: "Flip / Wholetail", emoji: "🔨", blurb: "Full buyer's-lens analysis: Max Offer = ARV + purchase credit − min profit − (property costs + money costs)." },
-  { key: "rental", label: "Buy & Hold", emoji: "🏘️", blurb: "Landlord / BRRRR buyer's lens: gross yield, cap rate, the 1% rule, and the max offer that still hits their target cap rate." },
+  { key: "cash_land", group: "Land", label: "Cash (Land)", emoji: "🌵", blurb: "Cash offer on vacant land. Comp recent LAND sales in the area, average them, and offer ~33% of that average. MAO = avg land sale × 33%. Anchor opens below MAO." },
+  { key: "developer", group: "Land", label: "Developer", emoji: "🏗️", blurb: "Land-for-luxury-builds cash offer (Lux Blueprint). Value the LOT from 3 comp methods → dispo price, then MAO = dispo − a $100–150k spread. No repairs — the developer tears down. Aim for a six-figure fee." },
+  { key: "assignment", group: "Homes", label: "Cash (Homes)", emoji: "🏠", blurb: "Cash offer on a house. MAO = (ARV × market %) − repairs − your fee. The market % already covers the flipper's carry + profit. Anchor opens below MAO." },
+  { key: "novation", group: "Homes", label: "Novation", emoji: "📋", blurb: "List at current similar-condition value, cover the seller's closing + commission (no holding — retail buyer). Find the max seller payout." },
+  { key: "creative", group: "Homes", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
+  { key: "listing", group: "Homes", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
+  { key: "flip", group: "Homes", label: "Flip / Wholetail", emoji: "🔨", blurb: "Full buyer's-lens analysis: Max Offer = ARV + purchase credit − min profit − (property costs + money costs)." },
+  { key: "rental", group: "Homes", label: "Buy & Hold", emoji: "🏘️", blurb: "Landlord / BRRRR buyer's lens: gross yield, cap rate, the 1% rule, and the max offer that still hits their target cap rate." },
 ] as const;
 
 // Wholesale (Assignment) vs Novation — quick decision guide (from the team's sheet).
@@ -273,7 +275,7 @@ function SideCalc() {
 }
 
 export default function UnderwritingCalculator() {
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("assignment");
+  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("cash_land");
   const [f, setF] = useState<Record<string, string>>({});
   const v = (k: string) => f[k] ?? "";
   const n = (k: string) => num(v(k));
@@ -887,9 +889,14 @@ export default function UnderwritingCalculator() {
         <span className="w-full text-[11px] text-slate-400">Every underwrite is timed automatically — it starts when you begin entering fields and stops when you export the offer. The time + comp date print at the bottom of the PDF.</span>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {TABS.map((t) => (
-          <button key={t.key} type="button" onClick={() => setTab(t.key)} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${tab === t.key ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{t.emoji} {t.label}</button>
+      <div className="space-y-2">
+        {(["Land", "Homes"] as const).map((g) => (
+          <div key={g} className="flex flex-wrap items-center gap-2">
+            <span className="w-14 shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-400">{g === "Land" ? "🌱 Land" : "🏠 Homes"}</span>
+            {TABS.filter((t) => t.group === g).map((t) => (
+              <button key={t.key} type="button" onClick={() => setTab(t.key)} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${tab === t.key ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{t.emoji} {t.label}</button>
+            ))}
+          </div>
         ))}
       </div>
       <p className="text-xs text-slate-500">{TABS.find((t) => t.key === tab)!.blurb}</p>
