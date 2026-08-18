@@ -12,7 +12,7 @@ const TABS = [
   { key: "creative", group: "Homes", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
   { key: "listing", group: "Homes", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
   { key: "flip", group: "Homes", label: "Flip / Wholetail", emoji: "🔨", blurb: "Full buyer's-lens analysis: Max Offer = ARV + purchase credit − min profit − (property costs + money costs)." },
-  { key: "rental", group: "Homes", label: "Buy & Hold", emoji: "🏘️", blurb: "Landlord / BRRRR buyer's lens: gross yield, cap rate, the 1% rule, and the max offer that still hits their target cap rate." },
+  { key: "rental", group: "Homes", label: "Buy & Hold / Wrap", emoji: "🏘️", blurb: "Landlord / BRRRR buyer's lens: cap rate, the 1% rule, the max offer at their target cap — AND the wrap check: the max monthly terms we can lock up and still assign to a cash-flowing end buyer." },
 ] as const;
 
 // Wholesale (Assignment) vs Novation — quick decision guide (from the team's sheet).
@@ -350,12 +350,9 @@ export default function UnderwritingCalculator() {
   const aFee = f.aFee != null && f.aFee !== "" ? n("aFee") : suggestedFee;
   const sqft = n("sqft"), rehabSf = num(v("rehabSf"));
   const repairsCalc = sqft * rehabSf;
-  // Rehab contingency — an OPTIONAL cushion on the repair estimate for surprises.
-  // Off by default (0%) so it doesn't silently lower every offer on top of the anchor;
-  // reps add it only when the repair scope is uncertain.
-  const contingencyPct = num(v("contingencyPct") || "0");
-  const repairsBase = (n("repairs") || repairsCalc) + majorTotal;
-  const repairs = repairsBase * (1 + contingencyPct / 100);
+  // Repairs = sqft × $/sf + checked major systems. (Per Jon: no manual override
+  // and no contingency knob — one clear path so anyone gets the same number.)
+  const repairs = repairsCalc + majorTotal;
   // The market tier % ALREADY builds in the flipper's profit AND their carry / money
   // costs — so we don't make the team estimate the flipper's holding (they rarely know
   // it). We only subtract KNOWN, deal-specific costs: HOA/special dues + extras
@@ -384,24 +381,22 @@ export default function UnderwritingCalculator() {
   // gives a small simultaneous-close discount). This is our cost, so it eats the fee / MAO.
   // Total = closing costs on BOTH escrows (× the simultaneous-close discount) + the transactional
   // / gap-funding fee to fund the A→B leg for the few minutes we hold title.
-  const dblCost = (on: boolean, pct: number, buy: number, sell: number, disc: number, fund: number) => on ? Math.max(0, Math.round((buy + sell) * (pct / 100) * (1 - disc / 100)) + Math.max(0, fund)) : 0;
+  // ONE BUTTON (per Jon): on A→B we cover the SELLER's closing costs; on B→C we
+  // cover only OUR seller-side closing — the end buyer pays their own. Seller-side
+  // closing ≈ 1.5% per escrow, so total extra cost = 1.5% × (A→B price + B→C price).
+  const DBL_PCT = 1.5;
+  const dblCost = (on: boolean, buy: number, sell: number) => on ? Math.round((buy + sell) * (DBL_PCT / 100)) : 0;
   // Cash (Homes)
   const aDblOn = v("aDblClose") === "1";
-  const aDblPct = num(v("aDblPct") || "1.5");
-  const aDblDisc = num(v("aDblDisc") || "0");
-  const aDblBuy = n("aDblBuy") || cashMao;                 // A→B: our purchase from the seller
-  const aDblSell = n("aDblSell") || (cashMao + aFee);      // B→C: our resale to the end buyer
-  const aDblFund = n("aDblFund");                          // transactional / gap-funding fee
-  const aDblCost = dblCost(aDblOn, aDblPct, aDblBuy, aDblSell, aDblDisc, aDblFund);
+  const aDblBuy = cashMao;                 // A→B: our purchase from the seller
+  const aDblSell = cashMao + aFee;         // B→C: our resale to the end buyer
+  const aDblCost = dblCost(aDblOn, aDblBuy, aDblSell);
   const aDblMao = Math.max(0, cashMao - aDblCost);
   // Cash (Land)
   const clDblOn = v("clDblClose") === "1";
-  const clDblPct = num(v("clDblPct") || "1.5");
-  const clDblDisc = num(v("clDblDisc") || "0");
-  const clDblBuy = n("clDblBuy") || clMao;
-  const clDblSell = n("clDblSell") || clMao;
-  const clDblFund = n("clDblFund");
-  const clDblCost = dblCost(clDblOn, clDblPct, clDblBuy, clDblSell, clDblDisc, clDblFund);
+  const clDblBuy = clMao;
+  const clDblSell = clMao;
+  const clDblCost = dblCost(clDblOn, clDblBuy, clDblSell);
   const clDblMao = Math.max(0, clMao - clDblCost);
 
   // ---- Novation ----
@@ -413,12 +408,12 @@ export default function UnderwritingCalculator() {
   const novFeeBasis = nList > 0 ? nList : arv;
   const novSuggestedFee = feeForArv(novFeeBasis);
   const nMinFee = f.nMinFee != null && f.nMinFee !== "" ? n("nMinFee") : novSuggestedFee;
-  // Realistic-sale factor: a listing rarely nets the full list (price drops + buyer
-  // concessions), so we model the EXPECTED SALE at this % of list (default 95%) and base
-  // the % costs on that — a more honest MAO than assuming we net the whole list.
-  const nRealismPct = num(v("nRealismPct") || "95");
+  // HARD-CODED (per Jon — not per-deal knobs): a listing realistically nets ~95%
+  // of list (price drops + concessions), and we cover ONLY the seller-side closing
+  // (~1.5%); the buyer's closing costs are never our problem.
+  const nRealismPct = 95;
   const nExpectedSale = nList * (nRealismPct / 100);
-  const nSellerClosePct = num(v("nSellerClosePct") || "1.5"); // seller's closing only — we cover it
+  const nSellerClosePct = 1.5;
   const nSellerClose = nExpectedSale * (nSellerClosePct / 100);
   const nHoldMonths = n("nHoldMonths") || 2;        // months on market before it sells
   const nHoaCost = n("nHoa") * nHoldMonths;          // HOA dues while listed
@@ -470,14 +465,11 @@ export default function UnderwritingCalculator() {
   const devDispo = devAvgPerAcre > 0 && devSubjAcres > 0 ? Math.round(devAvgPerAcre * devSubjAcres) : 0;
   const devSpread = n("devSpread") || 100000; // Lux Blueprint target spread: $100k–$150k
   const devMao = devDispo > 0 ? Math.max(0, devDispo - devSpread) : 0;
-  // Developer double close (developer-seller won't assign → two escrows; developers are cash so no seasoning issue).
+  // Developer double close (seller won't assign → two escrows; same one-button model).
   const devDblOn = v("devDblClose") === "1";
-  const devDblPct = num(v("devDblPct") || "1.5");
-  const devDblDisc = num(v("devDblDisc") || "0");
-  const devDblBuy = n("devDblBuy") || devMao;      // A→B: our purchase from the seller
-  const devDblSell = n("devDblSell") || devDispo;  // B→C: our resale to the developer (dispo price)
-  const devDblFund = n("devDblFund");
-  const devDblCost = dblCost(devDblOn, devDblPct, devDblBuy, devDblSell, devDblDisc, devDblFund);
+  const devDblBuy = devMao;      // A→B: our purchase from the seller
+  const devDblSell = devDispo;   // B→C: our resale to the developer (dispo price)
+  const devDblCost = dblCost(devDblOn, devDblBuy, devDblSell);
   const devDblMao = Math.max(0, devMao - devDblCost);
   const devAnchorPct = v("devAnchorPct") || "8";
   const devAnchor = devMao * (1 - num(devAnchorPct) / 100);
@@ -511,7 +503,7 @@ export default function UnderwritingCalculator() {
   // ---- Flip / Wholetail (from MAO.xlsx) ----
   const fMinProfit = f.fMinProfit != null && f.fMinProfit !== "" ? n("fMinProfit") : 30000;
   const fHold = n("fHold") || 6;
-  const fRehab = ((n("fRehab") || n("sqft") * num(v("rehabSf"))) + majorTotal) * (1 + contingencyPct / 100);
+  const fRehab = (n("fRehab") || n("sqft") * num(v("rehabSf"))) + majorTotal;
   const fComm = arv * (num(v("fComm") || "3") / 100);
   const fClosing = arv * (num(v("fClosing") || "2") / 100);
   const fCarry = arv * (num(v("fCarry") || "1") / 100); // utilities, taxes, insurance
@@ -539,6 +531,14 @@ export default function UnderwritingCalculator() {
   const rGrossYield = rPrice > 0 ? (rGrossYr / rPrice) * 100 : 0;
   const rOnePct = rPrice > 0 ? (rRent / rPrice) * 100 : 0;             // the "1% rule"
   const rMaxOffer = rTargetCap > 0 ? rNoi / (rTargetCap / 100) : 0;    // price that hits the target cap
+  // Wrap & assign (per Jon): what TERMS can we lock up with the seller and wrap
+  // to an end buyer who still cash-flows? End buyer's max all-in monthly payment
+  // = monthly NOI − the cashflow they need to see. Our locked-up payment to the
+  // seller must sit BELOW that — the gap is our monthly spread on the wrap.
+  const rWrapCF = n("rWrapCF") || 300;                     // end buyer's target cashflow/mo
+  const rSellerPmt = n("rSellerPmt");                       // our monthly payment on the locked terms
+  const rMaxWrapPmt = Math.max(0, rNoi / 12 - rWrapCF);     // max monthly the end buyer can pay us
+  const rWrapSpread = rSellerPmt > 0 ? rMaxWrapPmt - rSellerPmt : 0; // our monthly cashflow on the wrap
 
   // 3-rung offer ladder consistent with our open-low-work-up model: Open (the anchor) →
   // Target (midpoint) → Max (the MAO). All ascending, never above the MAO.
@@ -574,7 +574,7 @@ export default function UnderwritingCalculator() {
       const comps = [1, 2, 3].map((i) => { const a = v(`comp${i}`); const p = v(`comp${i}p`); const d = v(`comp${i}d`); return a ? `${esc(a)}${p ? ` — $${esc(p)}` : ""}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...extraItems("aExtra", aExtraN).map((x) => [x.note || "Additional cost", money(x.amt)] as [string, string]), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`], ...(aDblOn ? ([[`🔁 Double-close closing cost (${aDblPct}% × 2${aDblDisc > 0 ? `, −${aDblDisc}%` : ""})`, money(aDblCost)], ["🎯 Double-close MAO (offer this instead)", money(aDblMao)]] as [string, string][]) : [])],
+        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...extraItems("aExtra", aExtraN).map((x) => [x.note || "Additional cost", money(x.amt)] as [string, string]), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`], ...(aDblOn ? ([["🔁 Double-close closing cost (seller side ×2)", money(aDblCost)], ["🎯 Double-close MAO (offer this instead)", money(aDblMao)]] as [string, string][]) : [])],
         note: aDblOn
           ? "DOUBLE CLOSE — the seller won't let us assign, so we do two separate simultaneous closings (A→B buy, B→C sell). Closing costs are paid on BOTH escrows (escrow usually gives a small simultaneous-close discount). That extra cost is ours, so offer the seller the Double-close MAO to keep the same fee — or hold the MAO and the fee shrinks by that amount."
           : "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. On assignment the end buyer covers BOTH the seller's and the buyer's closing costs, so no closing is deducted here. If the seller won't meet MAO, pivot to Novation.",
@@ -591,7 +591,7 @@ export default function UnderwritingCalculator() {
           ["🎯 Cash (Land) MAO — max offer to seller", money(clMao)],
           [`Anchor / opening (${clAnchorPct}% below MAO)`, money(clAnchor)],
           ["Negotiation range", `${money(clAnchor)} → ${money(clMao)}`],
-          ...(clDblOn ? ([[`🔁 Double-close closing cost (${clDblPct}% × 2${clDblDisc > 0 ? `, −${clDblDisc}%` : ""})`, money(clDblCost)], ["🎯 Double-close MAO (offer this instead)", money(clDblMao)]] as [string, string][]) : []),
+          ...(clDblOn ? ([["🔁 Double-close closing cost (seller side ×2)", money(clDblCost)], ["🎯 Double-close MAO (offer this instead)", money(clDblMao)]] as [string, string][]) : []),
         ],
         note: (clDblOn ? "DOUBLE CLOSE — two separate simultaneous closings (seller won't assign), so closing costs are paid on BOTH escrows; offer the seller the Double-close MAO to keep the same margin. " : "") + "Vacant land. Pull recent comparable LAND sales in the area, average them, and offer about 33% of that average — that discount is our room for a fee plus the buyer's margin. Open at the anchor and negotiate up to the MAO, never past it.",
       };
@@ -612,7 +612,7 @@ export default function UnderwritingCalculator() {
           [`Anchor / opening (${devAnchorPct}% below MAO)`, money(devAnchor)],
           ["Negotiation range", `${money(devAnchor)} → ${money(devMao)}`],
           ["Your fee at the MAO", money(devFeeAtMao)],
-          ...(devDblOn ? ([[`🔁 Double-close cost (${devDblPct}% × 2${devDblDisc > 0 ? `, −${devDblDisc}%` : ""}${devDblFund > 0 ? ` + ${money(devDblFund)} funding` : ""})`, money(devDblCost)], ["🎯 Double-close MAO (offer this instead)", money(devDblMao)]] as [string, string][]) : []),
+          ...(devDblOn ? ([["🔁 Double-close cost (seller side ×2)", money(devDblCost)], ["🎯 Double-close MAO (offer this instead)", money(devDblMao)]] as [string, string][]) : []),
         ],
         note: (devDblOn ? "DOUBLE CLOSE — the seller won't assign, so two separate simultaneous escrows; closing costs are paid twice plus transactional funding. Offer the seller the Double-close MAO to keep the same spread. (Developers pay cash, so there's no lender-seasoning issue.) " : "") + "Land for luxury new builds. Comp for-sale + sold lots nearby by LOT SIZE, using what the DEVELOPER paid for each raw lot (from its sale history — NOT the current sold price, which includes the build). Average $/acre × the subject's acreage = the land value; subtract a $100–150k spread for your fee. No repairs: the buyer tears down. Waterfront lots use waterfront comps only. Open at the anchor, negotiate up to the MAO — never past it.",
       };
@@ -764,7 +764,6 @@ export default function UnderwritingCalculator() {
     const repairRows: string[] = [];
     for (const m of majorItems) repairRows.push(repairLine(m.label, money(m.cost), true));
     if (rehabBaseOnly > 0) repairRows.push(repairLine(`General / interior rehab${rehabDesc(v("rehabSf")) ? ` — ${rehabDesc(v("rehabSf"))}` : ""}`, money(rehabBaseOnly)));
-    if (contingencyPct > 0) repairRows.push(repairLine(`Contingency (+${contingencyPct}% for surprises)`, money(repairsBase * (contingencyPct / 100))));
     const repairsHtml = repairRows.length
       ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9a3412;margin:16px 0 4px">🔧 Repairs &amp; condition — justification for the price (per underwriter)</div>
          <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #fed7aa;border-radius:8px;overflow:hidden">
@@ -985,35 +984,22 @@ export default function UnderwritingCalculator() {
                 {suggestedFee > 0 && <button type="button" onClick={() => setV("aFee", String(suggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(arv)} ARV`}>Use {money(suggestedFee)}</button>}
               </div>
               {feeTierTable(arv, "ARV")}
-              <div className={reqDiv}>Repairs (required) — type a figure, or estimate from sqft</div>
-              <Field k="repairs" label="Override repair estimate ($)" prefix="$" span={2} req="need" />
+              <div className={reqDiv}>Repairs (required) — square feet × condition</div>
               <Field k="sqft" label="Square feet" req="need" />
               <label><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Condition ($/sf)</span>
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
               {rehabDesc(v("rehabSf")) && <p className="sm:col-span-2 -mt-1 text-[11px] italic text-slate-500">📋 {rehabDesc(v("rehabSf"))}</p>}
-              <Field k="contingencyPct" label="Rehab contingency % (optional cushion)" suffix="%" span={2} placeholder="0" req="opt" />
               {majorRepairs()}
               <div className={optDiv}>Optional — refine the offer</div>
               <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
               <Field k="aHoa" label="HOA / special dues ($)" prefix="$" placeholder="0" req="opt" />
               <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 No need to enter the flipper&apos;s holding or money costs — the market tier % already builds in their carry and profit. Detailed money-cost math lives on the Flip / Wholetail tab.</p>
 
-              <div className={optDiv}>🔁 Double close? (only if the seller won&apos;t let us assign)</div>
-              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Exit</span>
-                <select value={v("aDblClose")} onChange={set("aDblClose")} className={`${inputCls} border-amber-200`}>
-                  <option value="">Assignment — the end buyer covers closing (default)</option>
-                  <option value="1">Double close — we pay closing on BOTH escrows</option>
-                </select>
-              </label>
-              {aDblOn && (<>
-                <Field k="aDblPct" label="Closing cost — each side" suffix="%" placeholder="1.5" req="opt" />
-                <Field k="aDblDisc" label="Escrow simultaneous discount" suffix="%" placeholder="0" req="opt" />
-                <Field k="aDblBuy" label="Buy price A→B (blank = MAO)" prefix="$" req="opt" />
-                <Field k="aDblSell" label="Resale B→C (to end buyer)" prefix="$" req="opt" />
-                <Field k="aDblFund" label="Transactional / gap funding fee ($)" prefix="$" placeholder="0" span={2} req="opt" />
-                <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🔁 Two simultaneous closings = closing costs paid twice (make the % include your county/city transfer tax — it&apos;s charged on BOTH transfers). The funding fee is the flash-cash/transactional-funding cost to fund the A→B leg (often a flat fee or ~1% of the buy side). Blank prices default to your MAO / MAO+fee.</p>
-              </>)}
+              <button type="button" onClick={() => setV("aDblClose", aDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${aDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
+                🔁 Double close? {aDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
+                <span className="mt-0.5 block text-[11px] font-normal">{aDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (1.5% each) = ${money(aDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
+              </button>
               {additionalCosts("aExtra", aExtraN, setAExtraN)}
               <div className={goodDiv}>🟢 ARV comps (required · addr · sold $ · days on market)</div>
               <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">{compsNote}</p>
@@ -1095,21 +1081,10 @@ export default function UnderwritingCalculator() {
               </label>
               <Field k="devAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" req="opt" />
 
-              <div className={optDiv}>🔁 Double close? (only if the seller won&apos;t let us assign)</div>
-              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Exit</span>
-                <select value={v("devDblClose")} onChange={set("devDblClose")} className={`${inputCls} border-amber-200`}>
-                  <option value="">Assignment — the developer takes our contract (default)</option>
-                  <option value="1">Double close — we pay closing on BOTH escrows</option>
-                </select>
-              </label>
-              {devDblOn && (<>
-                <Field k="devDblPct" label="Closing cost — each side" suffix="%" placeholder="1.5" req="opt" />
-                <Field k="devDblDisc" label="Escrow simultaneous discount" suffix="%" placeholder="0" req="opt" />
-                <Field k="devDblBuy" label="Buy price A→B (blank = MAO)" prefix="$" req="opt" />
-                <Field k="devDblSell" label="Resale B→C (blank = dispo)" prefix="$" req="opt" />
-                <Field k="devDblFund" label="Transactional / gap funding fee ($)" prefix="$" placeholder="0" span={2} req="opt" />
-                <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🔁 Two simultaneous closings = closing costs paid twice (include transfer tax in the % — charged on both). Developers are cash, so no lender-seasoning issue. Funding fee = flash-cash to fund the A→B leg.</p>
-              </>)}
+              <button type="button" onClick={() => setV("devDblClose", devDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${devDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
+                🔁 Double close? {devDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
+                <span className="mt-0.5 block text-[11px] font-normal">{devDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (1.5% each) = ${money(devDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
+              </button>
             </>
           )}
           {tab === "cash_land" && (
@@ -1129,21 +1104,10 @@ export default function UnderwritingCalculator() {
               <Field k="clAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" req="opt" />
               <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 We aim for ~33% of the average area land sale. That deep discount on raw land is our room for a fee plus the end buyer&apos;s margin.</p>
 
-              <div className={optDiv}>🔁 Double close? (only if the seller won&apos;t let us assign)</div>
-              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Exit</span>
-                <select value={v("clDblClose")} onChange={set("clDblClose")} className={`${inputCls} border-amber-200`}>
-                  <option value="">Assignment — the end buyer covers closing (default)</option>
-                  <option value="1">Double close — we pay closing on BOTH escrows</option>
-                </select>
-              </label>
-              {clDblOn && (<>
-                <Field k="clDblPct" label="Closing cost — each side" suffix="%" placeholder="1.5" req="opt" />
-                <Field k="clDblDisc" label="Escrow simultaneous discount" suffix="%" placeholder="0" req="opt" />
-                <Field k="clDblBuy" label="Buy price A→B (blank = MAO)" prefix="$" req="opt" />
-                <Field k="clDblSell" label="Resale B→C (to end buyer)" prefix="$" req="opt" />
-                <Field k="clDblFund" label="Transactional / gap funding fee ($)" prefix="$" placeholder="0" span={2} req="opt" />
-                <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🔁 Two simultaneous closings = closing costs paid twice (include transfer tax in the % — charged on both). The funding fee is the flash-cash cost to fund the A→B leg. Blank prices default to your MAO.</p>
-              </>)}
+              <button type="button" onClick={() => setV("clDblClose", clDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${clDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
+                🔁 Double close? {clDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
+                <span className="mt-0.5 block text-[11px] font-normal">{clDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (1.5% each) = ${money(clDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
+              </button>
             </>
           )}
           {tab === "novation" && (
@@ -1168,8 +1132,7 @@ export default function UnderwritingCalculator() {
               </div>
               {feeTierTable(novFeeBasis, "similar-condition value (EMV for land)")}
               <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" req="opt" />
-              <Field k="nSellerClosePct" label="Seller closing % (we cover)" suffix="%" placeholder="1.5" req="opt" />
-              <Field k="nRealismPct" label="Realistic sale (% of list)" suffix="%" placeholder="95" req="opt" />
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">📌 Baked in automatically: sale nets 95% of list (price drops + concessions) and we cover the seller-side closing (1.5%) — never the buyer&apos;s.</p>
               <Field k="nReserve" label="Reserve — misc + lender repairs ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" req="opt" />
               <Field k="nHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
@@ -1245,7 +1208,6 @@ export default function UnderwritingCalculator() {
                 <select value={v("rehabSf")} onChange={set("rehabSf")} className={`${inputCls} border-red-300`}>{REHAB_LEVELS.map(([val, l]) => <option key={val || "x"} value={val}>{l}</option>)}</select>
               </label>
               {rehabDesc(v("rehabSf")) && <p className="sm:col-span-2 -mt-1 text-[11px] italic text-slate-500">📋 {rehabDesc(v("rehabSf"))}</p>}
-              <Field k="contingencyPct" label="Rehab contingency % (optional cushion)" suffix="%" span={2} placeholder="0" req="opt" />
               {majorRepairs()}
               <div className={optDiv}>Property costs (optional · % of ARV)</div>
               <Field k="fComm" label="Realtor commission" suffix="%" placeholder="3" req="opt" />
@@ -1287,6 +1249,10 @@ export default function UnderwritingCalculator() {
               <div className={optDiv}>Buyer&apos;s target</div>
               <Field k="rTargetCap" label="Target cap rate" suffix="%" placeholder="7" req="opt" />
               <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 Speaks to your landlord / BRRRR buyers. The max offer is the price at which the deal still hits their target cap rate.</p>
+              <div className={optDiv}>🎁 Wrap &amp; assign — what terms can we lock up?</div>
+              <Field k="rWrapCF" label="End buyer's cashflow target ($/mo)" prefix="$" placeholder="300" req="opt" />
+              <Field k="rSellerPmt" label="Our monthly payment on locked terms ($)" prefix="$" placeholder="0" req="opt" />
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🎁 Lock up seller-finance / subject-to terms, wrap them, and assign to a cash-flowing end buyer. Their max all-in monthly = monthly profit (NOI÷12) − the cashflow they need. Our payment to the seller must sit BELOW that — the gap is our monthly spread.</p>
             </>
           )}
         </div>
@@ -1321,7 +1287,7 @@ export default function UnderwritingCalculator() {
               {aDblOn && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
                   <div className="text-[12px] font-bold text-amber-800">🔁 Double close — closing paid on BOTH escrows</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">{money(aDblBuy)} + {money(aDblSell)} × {aDblPct}% each{aDblDisc > 0 ? `, less ${aDblDisc}% escrow discount` : ""}{aDblFund > 0 ? ` + ${money(aDblFund)} funding` : ""} = <b>{money(aDblCost)}</b> (vs $0 on an assignment). Offer the seller <b>{money(aDblMao)}</b> to keep the same fee — or hold the MAO and your fee drops by {money(aDblCost)}.</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">Seller&apos;s closing on A→B ({money(aDblBuy)}) + our seller-side on B→C ({money(aDblSell)}) at 1.5% each = <b>{money(aDblCost)}</b> (vs $0 on an assignment). The end buyer pays their own closing. Offer the seller <b>{money(aDblMao)}</b> to keep the same fee — or hold the MAO and your fee drops by {money(aDblCost)}.</div>
                 </div>
               )}
               {aDblOn && <Res label="🎯 Double-close MAO (offer this instead)" value={money(aDblMao)} tone={aDblMao > 0 ? "navy" : "bad"} big />}
@@ -1349,7 +1315,7 @@ export default function UnderwritingCalculator() {
               {devDblOn && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
                   <div className="text-[12px] font-bold text-amber-800">🔁 Double close — closing paid on BOTH escrows</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">{money(devDblBuy)} + {money(devDblSell)} × {devDblPct}% each{devDblDisc > 0 ? `, less ${devDblDisc}% escrow discount` : ""}{devDblFund > 0 ? ` + ${money(devDblFund)} funding` : ""} = <b>{money(devDblCost)}</b>. Offer the seller <b>{money(devDblMao)}</b> to keep the same spread.</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">Seller&apos;s closing on A→B ({money(devDblBuy)}) + our seller-side on B→C ({money(devDblSell)}) at 1.5% each = <b>{money(devDblCost)}</b>. The developer pays their own closing. Offer the seller <b>{money(devDblMao)}</b> to keep the same spread.</div>
                 </div>
               )}
               {devDblOn && <Res label="🎯 Double-close MAO (offer this instead)" value={money(devDblMao)} tone={devDblMao > 0 ? "navy" : "bad"} big />}
@@ -1380,7 +1346,7 @@ export default function UnderwritingCalculator() {
               {clDblOn && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
                   <div className="text-[12px] font-bold text-amber-800">🔁 Double close — closing paid on BOTH escrows</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">{money(clDblBuy)} + {money(clDblSell)} × {clDblPct}% each{clDblDisc > 0 ? `, less ${clDblDisc}% escrow discount` : ""}{clDblFund > 0 ? ` + ${money(clDblFund)} funding` : ""} = <b>{money(clDblCost)}</b>. Offer the seller <b>{money(clDblMao)}</b> to keep the same margin.</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">Seller&apos;s closing on A→B ({money(clDblBuy)}) + our seller-side on B→C ({money(clDblSell)}) at 1.5% each = <b>{money(clDblCost)}</b>. The end buyer pays their own closing. Offer the seller <b>{money(clDblMao)}</b> to keep the same margin.</div>
                 </div>
               )}
               {clDblOn && <Res label="🎯 Double-close MAO (offer this instead)" value={money(clDblMao)} tone={clDblMao > 0 ? "navy" : "bad"} big />}
@@ -1466,6 +1432,20 @@ export default function UnderwritingCalculator() {
               <Res label="Gross yield" value={rPrice > 0 ? `${rGrossYield.toFixed(1)}%` : "—"} tone="muted" />
               <Res label="1% rule (rent ÷ price)" value={rPrice > 0 ? `${rOnePct.toFixed(2)}%` : "—"} tone={rOnePct >= 1 ? "good" : "bad"} />
               <Res label={`🎯 Max offer at ${rTargetCap}% cap`} value={money(rMaxOffer)} tone={rMaxOffer > 0 ? "navy" : "bad"} big />
+              {rNoi > 0 && (
+                <div className="sm:col-span-2 mt-1 rounded-lg bg-violet-50 px-3 py-2 ring-1 ring-violet-200">
+                  <div className="text-[12px] font-bold text-violet-800">🎁 Wrap &amp; assign — the terms to lock up</div>
+                  <div className="mt-1 space-y-0.5 text-[12px] text-violet-700">
+                    <div>Monthly profit (NOI ÷ 12): <b>{money(rNoi / 12)}</b> − end buyer&apos;s cashflow <b>{money(rWrapCF)}</b> =</div>
+                    <div className="text-sm font-extrabold text-violet-900">Max all-in monthly the end buyer can pay: {money(rMaxWrapPmt)}</div>
+                    {rSellerPmt > 0 ? (
+                      <div>Our locked payment to the seller is <b>{money(rSellerPmt)}</b> → monthly spread on the wrap: <b className={rWrapSpread > 0 ? "text-emerald-700" : "text-red-600"}>{money(rWrapSpread)}/mo</b>{rWrapSpread <= 0 ? " — locked terms are TOO HIGH, negotiate the payment down" : ""}</div>
+                    ) : (
+                      <div>Lock up seller terms with a monthly payment <b>below {money(rMaxWrapPmt)}</b> — every dollar under it is our monthly spread.</div>
+                    )}
+                  </div>
+                </div>
+              )}
               <p className="mt-2 text-[11px] text-slate-400">Cap rate = NOI ÷ price. The 1% rule (monthly rent ≥ 1% of price) is a quick screen. Max offer = NOI ÷ the buyer&apos;s target cap rate.</p>
             </>
           )}
