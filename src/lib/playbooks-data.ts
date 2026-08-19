@@ -7,6 +7,8 @@ export interface Playbook {
   key: string; title: string; emoji: string; category: string; summary: string; sections: PBSection[];
   pdfUrl?: string;               // the real document, viewable inline + downloadable
   pdfLabel?: string;             // link text for the PDF
+  courseUrl?: string;            // in-app course-library link (e.g. /playbooks/land?doc=…)
+  courseLabel?: string;          // button text for the course link
   images?: { src: string; caption?: string }[]; // real page images (e.g. a HUD statement)
   callouts?: { label: string; note: string }[]; // "what to look for" highlights
   diagram?: string;              // key of an inline how-it-works diagram (assignment | double_close | subject_to | novation)
@@ -307,7 +309,8 @@ export const PLAYBOOKS: Playbook[] = [
   },
   // ───────────────────────── LAND COURSES (added by Claude from Jon's 3-course study) ─────────────────────────
   {
-    key: "k_land_infill", title: "Infill Lots System (John — High Value Land)", emoji: "🏘️", category: "Land Courses",
+    key: "k_land_infill", title: "Infill Lots System (John Duong — High Value Land)", emoji: "🏘️", category: "Land Courses",
+    courseUrl: "/playbooks/land?doc=infill-playbook", courseLabel: "📚 Read John Duong's full infill course",
     summary: "Buy vacant city lots off-market, sell to builders. Research by ZIP, pull with Direct REI, dispo through our vetted-builder list.",
     sections: [
       { heading: "🎯 The model", body: "A vacant lot between houses already has utilities — builders pay up for it because utility hookups are their biggest site cost. We contract the lot off-market and assign or double-close to a builder from our vetted list. Fees: $10–20k standard, $40–100k on sniper lots in luxury pockets." },
@@ -318,7 +321,8 @@ export const PLAYBOOKS: Playbook[] = [
     ],
   },
   {
-    key: "k_land_rec", title: "Recreational Land System (Hunter — Sell The Earth)", emoji: "🌲", category: "Land Courses",
+    key: "k_land_rec", title: "Recreational Land System (Hunter P. — Sell The Earth)", emoji: "🌲", category: "Land Courses",
+    courseUrl: "/playbooks/land?doc=rec-course-complete", courseLabel: "📚 Read Hunter P.'s complete 56-video course",
     summary: "Buy rural parcels ≤5 ac for $1–5k cash off-market, resell $10–30k — cash or seller-financed at 3–7x. The county-zoning-first research method.",
     sections: [
       { heading: "🎯 The model", body: "Rural recreational parcels 1–3 hours outside a metro. Buy for a few thousand cash from owners who inherited it or forgot it; sell to consumers who want to camp, park an RV, build a cabin, or live cheap. Biggest profits come from contract-for-deed (we become the bank): e.g. buy $3.5k → sell $1k down + $500/mo × 48 ≈ $25k. ~1 in 5 CFD buyers default around month 4 — we keep every payment AND the land, then resell it." },
@@ -331,7 +335,8 @@ export const PLAYBOOKS: Playbook[] = [
     ],
   },
   {
-    key: "k_land_goldmine", title: "Goldmine Markets (Lux Blueprint) — find luxury teardown pockets", emoji: "🏰", category: "Land Courses",
+    key: "k_land_goldmine", title: "Goldmine Markets (Tyson Smith — Lux Blueprint) — find luxury teardown pockets", emoji: "🏰", category: "Land Courses",
+    courseUrl: "/playbooks/land?doc=lux-breakdown", courseLabel: "📚 Read Tyson Smith's Lux Blueprint breakdown",
     summary: "The 10-step Zillow method to find pockets where builders actively buy old homes to tear down — and the exact list to pull from it.",
     sections: [
       { heading: "🎯 What a goldmine market is", body: "Both at once: builders are actively buying old homes, demolishing, and building new luxury; AND old homes are still cheap enough that owners will sell and builders will pay. Our teardown pulls and infill sniper lists are the SAME lists — this method just sharpens them." },
@@ -341,7 +346,8 @@ export const PLAYBOOKS: Playbook[] = [
     ],
   },
   {
-    key: "k_land_cheatsheet", title: "Market Research Cheat Sheet — John vs Hunter formulas", emoji: "🗺️", category: "Land Courses",
+    key: "k_land_cheatsheet", title: "Market Research Cheat Sheet — John Duong vs Hunter P. formulas", emoji: "🗺️", category: "Land Courses",
+    courseUrl: "/playbooks/land?doc=research-cheatsheet", courseLabel: "📚 Open the full research cheat sheet + all course docs",
     summary: "Side-by-side: how to grade an infill zip vs a recreational county before we pull a single lead.",
     sections: [
       { heading: "Infill (research unit = ZIP)", bullets: ["Sold lots last 30 days $50k+ (Zillow) — the demand pulse", "Satellite house-lot-house pattern — the supply pulse", "New construction built this year — the builder pulse (only reliable TX signal)", "Months of inventory: active ÷ monthly sold — high number = saturated, walk away (Canyon Lake: 677 active ÷ 20/mo ≈ 33 months → demoted)"] },

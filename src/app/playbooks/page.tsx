@@ -77,6 +77,9 @@ export default async function PlaybooksPage() {
                     {pb.pdfUrl && (!pb.images || pb.images.length === 0) && (
                       <a href={pb.pdfUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-navy px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-brand-navy-700">📄 Open {pb.pdfLabel || "the document"} (PDF)</a>
                     )}
+                    {pb.courseUrl && (
+                      <a href={pb.courseUrl} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-emerald-700">{pb.courseLabel || "📚 Open the full course"}</a>
+                    )}
                   </div>
                 </details>
               </Card>
