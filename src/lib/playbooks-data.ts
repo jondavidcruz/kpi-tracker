@@ -293,6 +293,7 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "exit_structure", title: "Which exit? Novation vs Assignment vs Double Close", emoji: "🧭", category: "Escrow & Closing",
     summary: "Pick the right closing structure by BUYER TYPE — the single biggest mistake is bolting an assignment or double close onto a novation when you don't need to.",
+    diagram: "exit_compare",
     sections: [
       { heading: "🧠 The reframe — these are 3 different exits, not steps", body: "Novation, Assignment, and Double Close are separate ways to get paid — not a chain. The confusion (“novation → MLS → agent → assignment addendum → double close”) comes from mixing them. In a TRUE novation you do none of the assignment/double-close mechanics: the retail buyer contracts and closes DIRECTLY with the seller on a normal purchase agreement, and you're paid your fee at closing through your novation agreement with the seller. One escrow, one transfer." },
       { heading: "✅ MLS / agent / retail buyer → do a TRUE NOVATION", body: "This is the whole reason novation exists. Because the buyer buys directly from the seller (you're not assigning), you can list on the MLS with an agent at RETAIL and sell to FINANCED buyers (FHA / conventional). You lock the seller's net; anything above it is your fee, paid at closing. No assignment addendum shown to the buyer, no double close.", tip: "Run these in the Underwriting calculator → Novation tab for the seller-payout MAO + your fee." },
