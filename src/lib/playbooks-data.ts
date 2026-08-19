@@ -12,7 +12,7 @@ export interface Playbook {
   diagram?: string;              // key of an inline how-it-works diagram (assignment | double_close | subject_to | novation)
 }
 
-export const PLAYBOOK_CATEGORIES = ["Deal Analysis", "Scripts & Outreach", "Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing", "Training Library"] as const;
+export const PLAYBOOK_CATEGORIES = ["Deal Analysis", "Scripts & Outreach", "Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing", "Training Library", "Land Courses"] as const;
 
 export const PLAYBOOKS: Playbook[] = [
   {
@@ -303,6 +303,51 @@ export const PLAYBOOKS: Playbook[] = [
         "Reserve double close for cash buyers where seasoning isn't a factor.",
       ] },
       { heading: "⚠️ Not legal advice", body: "Educational only. California is aggressive on wholesaling disclosure — run the final structure past your transaction coordinator, broker, and a CA real-estate attorney before it becomes the playbook." },
+    ],
+  },
+  // ───────────────────────── LAND COURSES (added by Claude from Jon's 3-course study) ─────────────────────────
+  {
+    key: "k_land_infill", title: "Infill Lots System (John — High Value Land)", emoji: "🏘️", category: "Land Courses",
+    summary: "Buy vacant city lots off-market, sell to builders. Research by ZIP, pull with Direct REI, dispo through our vetted-builder list.",
+    sections: [
+      { heading: "🎯 The model", body: "A vacant lot between houses already has utilities — builders pay up for it because utility hookups are their biggest site cost. We contract the lot off-market and assign or double-close to a builder from our vetted list. Fees: $10–20k standard, $40–100k on sniper lots in luxury pockets." },
+      { heading: "Market research (by ZIP)", bullets: ["Zillow: lots SOLD last 30 days at $50k+ per zip — count them; more sold = active builder demand.", "Satellite pass: look for the house–lot–house pattern (scattered vacant lots inside built-out streets).", "New-construction check: homes built this year per zip = builder activity (this is the ONLY reliable signal in Texas — TX is a non-disclosure state, so Zillow sold counts undercount).", "Builder permit density heat map (John's tool) as the third source when available."] },
+      { heading: "Our confirmed infill markets", bullets: ["Nashville: 37013 (Antioch), 37115 (Madison) + 37138/37086/37167 · sniper: 37027 Brentwood, 37220 Oak Hill", "Houston: 77016, 77026, 77051 + 77028/77033 · gentrifying: 77004/77020/77021 · acreage: 77433/77429/77327", "Atlanta: 30327 (Tuxedo/Mt. Paran) + 30305/30342 — Goodwin buy box", "Charlotte Phase 2 (buyers first): 28205/06/08/16 + 28209/28211"] },
+      { heading: "Offer math", body: "Start from the BUYER, not the seller: buyer's box price − our target fee − closing = max offer. Dalamar pays sub-$120k for 0.2ac+ Nashville lots and buys 10–40 lot packages; Goodall pays ~$50k/ac on 15+ ac within 50 miles of Nashville. Know the box before you make the call.", tip: "Buyers first, always. A lot without a matching buy box is a comp exercise, not a deal." },
+      { heading: "Dispo", body: "Run the buyer cascade tool top-down (best-fit buyer first, never blast). Sharyn/Marie capture new builder boxes daily — permits, new-construction listings, cold list, builder calls." },
+    ],
+  },
+  {
+    key: "k_land_rec", title: "Recreational Land System (Hunter — Sell The Earth)", emoji: "🌲", category: "Land Courses",
+    summary: "Buy rural parcels ≤5 ac for $1–5k cash off-market, resell $10–30k — cash or seller-financed at 3–7x. The county-zoning-first research method.",
+    sections: [
+      { heading: "🎯 The model", body: "Rural recreational parcels 1–3 hours outside a metro. Buy for a few thousand cash from owners who inherited it or forgot it; sell to consumers who want to camp, park an RV, build a cabin, or live cheap. Biggest profits come from contract-for-deed (we become the bank): e.g. buy $3.5k → sell $1k down + $500/mo × 48 ≈ $25k. ~1 in 5 CFD buyers default around month 4 — we keep every payment AND the land, then resell it." },
+      { heading: "Research: county zoning IS the filter", bullets: ["Pick the metro you'll SELL to → list every county 1–3 hrs out (one county removed ≈ 1 hour).", "Call each county zoning dept with 4 questions: camping/RV time limit? (want: none) · minimum build size? (want: none or ≤400 sqft) · mobile homes allowed? · short-term rentals allowed?", "County with NO zoning department = automatic green.", "Tie-breakers: sell-through ratio (sold ÷ listed, near 1:1), Zillow floor under $50k, lake/forest/trail draw.", "Satellite tell: RVs parked on bare land with no house = camping allowed + no HOA in practice."] },
+      { heading: "List pull (Direct REI)", bullets: ["Vacant · ≤5.1 ac · assessed value ≤$10k · improvement ≈ $0 · out-of-county (or out-of-state) owner · outside city limits", "Slope: ≥50% of parcel under 15% · not landlocked · FEMA ≤50% · wetlands ≤50% · exclude church/cemetery/state/county/timber/LLC owners", "Scrub in Excel: dedupe by owner + mailing address; kill recent retail sales and neighbors-buying-neighbors; target 100–600 records per pocket."] },
+      { heading: "Offer rule — all 3 checks must pass", bullets: ["① Offer ≤ assessed value", "② Offer ≤ ⅓ of your resale estimate (all-in, incl. closing)", "③ Offer ≤ the cheapest active listing in the area (worst case: we list cheapest-on-market and still profit)"], tip: "First call = questions only. Never accept a price on call #1 — even a great one. Research, then call back same day." },
+      { heading: "Call handling", body: "Let every seller call go to VOICEMAIL. Reverse-search the number, Ctrl-F the mail list, pull the parcel on the GIS, THEN call back informed. Ask about buildability, utilities, anything they know — then: how much would you like to let it go for? → a range? → what did you pay for it?" },
+      { heading: "Dispo (consumer machine)", bullets: ["~90-day average hold; summer fast, Nov–Dec slow.", "Value adds in order: zoning/area knowledge in the listing → pro photos + drone + parcel-map overlay → $2k gravel driveway or cleared pad when the lift is worth it.", "Channels: own website → Facebook Marketplace + up to 20 metro buy/sell groups (half his sales, free) → Craigslist → MLS last resort.", "List in the METRO location, not the parcel town. Multiple posts per parcel: full price / $999-down / monthly-payment number. Small lots in sqft, not acres. Adjacent lots solo AND bundled.", "The $50 buy-now deposit (72 hrs to sign, credited to price) filters out the 90% who flake."] },
+      { heading: "Our rec markets", body: "Hot Springs AR (71913, 71909 POA-check, 71901) · Cherokee Village AR (72529/72542 + 72512) · Eufaula OK (74432/74426/74845/74425/74430)." },
+    ],
+  },
+  {
+    key: "k_land_goldmine", title: "Goldmine Markets (Lux Blueprint) — find luxury teardown pockets", emoji: "🏰", category: "Land Courses",
+    summary: "The 10-step Zillow method to find pockets where builders actively buy old homes to tear down — and the exact list to pull from it.",
+    sections: [
+      { heading: "🎯 What a goldmine market is", body: "Both at once: builders are actively buying old homes, demolishing, and building new luxury; AND old homes are still cheap enough that owners will sell and builders will pay. Our teardown pulls and infill sniper lists are the SAME lists — this method just sharpens them." },
+      { heading: "The 10 steps (Zillow, free)", bullets: ["Filter: year built ≥ 2022 · houses · price min $2M (raise in pricier markets) · REMOVE BOUNDARY.", "Study 3–4 recent new builds: the original sale in the price history = what the BUILDER paid for the teardown.", "Extract the trend: builders' preferred lot size + purchase price range.", "Zestimate check on surrounding old homes: target Zestimates ~$200–300k ABOVE the builder purchase price — that small % discount is why luxury owners say yes.", "Size discipline: if new builds are 6,000 sqft, skip old houses over ~3,000 sqft.", "One pocket at a time — never cross major roads (3+ lanes or yellow lines); values break at those lines.", "Flip to SOLD with the same filters to prove demand.", "Document the pocket: boundary streets, teardown year-built range, builder lot-size range."] },
+      { heading: "The list pull (Direct REI translation)", bullets: ["HOUSE list, not vacant land: MLS status = not listed · owner 5+ yrs (sort by sale date after import) · acres/lot size = builder preference · year built max = teardown era + 10 yrs · building sqft max ~2,500 · Est. Market Value = builder price + $200–300k band · map-draw the pocket, never cross the big roads."] },
+      { heading: "Where we run it", body: "Brentwood/Oak Hill 37027/37220 (Drees) · Atlanta 30327 Tuxedo/Mt. Paran (Goodwin: $600k–1.4M, ≥0.5 ac, cash, <14 days) · coastal Orange County (Revere, Cefalia, Brad Kinney). MAO method = the How To Analyze A Developer Deal SOP above: dispo price − $100–150k.", tip: "Waterfront only comps waterfront. Buildable area beats paper acreage. Get the seller's number before running comps." },
+    ],
+  },
+  {
+    key: "k_land_cheatsheet", title: "Market Research Cheat Sheet — John vs Hunter formulas", emoji: "🗺️", category: "Land Courses",
+    summary: "Side-by-side: how to grade an infill zip vs a recreational county before we pull a single lead.",
+    sections: [
+      { heading: "Infill (research unit = ZIP)", bullets: ["Sold lots last 30 days $50k+ (Zillow) — the demand pulse", "Satellite house-lot-house pattern — the supply pulse", "New construction built this year — the builder pulse (only reliable TX signal)", "Months of inventory: active ÷ monthly sold — high number = saturated, walk away (Canyon Lake: 677 active ÷ 20/mo ≈ 33 months → demoted)"] },
+      { heading: "Recreational (research unit = COUNTY)", bullets: ["1–3 hrs from the metro you sell to", "4-question county zoning call (camping limit · min build size · mobile homes · STR) — no-zoning county = green", "Sell-through ratio near 1:1 · Zillow floor under $50k", "Income/population gap: low-income rural county next to high-income metro = the spread", "RVs on bare land via satellite = freedom confirmed"] },
+      { heading: "Luxury teardown (research unit = POCKET)", bullets: ["$2M+ new builds present (or kill) · builder paid X (price history) → hunt Zestimates X + $200–300k · never cross main roads or water lines"] },
+      { heading: "Non-disclosure states", body: "TX, NM, ID, UT, MT hide sold prices — Zillow sold counts are unreliable there. Judge by new-construction counts + direct builder calls instead." },
     ],
   },
 ];
