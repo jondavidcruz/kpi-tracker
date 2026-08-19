@@ -9,6 +9,8 @@ export interface Playbook {
   pdfLabel?: string;             // link text for the PDF
   courseUrl?: string;            // in-app course-library link (e.g. /playbooks/land?doc=…)
   courseLabel?: string;          // button text for the course link
+  flow?: { emoji: string; label: string }[];   // the model as a left-to-right pipeline (rendered visually)
+  stats?: { value: string; label: string }[];  // the numbers that matter, as big stat tiles
   images?: { src: string; caption?: string }[]; // real page images (e.g. a HUD statement)
   callouts?: { label: string; note: string }[]; // "what to look for" highlights
   diagram?: string;              // key of an inline how-it-works diagram (assignment | double_close | subject_to | novation)
@@ -20,6 +22,14 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_analyze_deal", title: "How To Analyze A Developer Deal (SOP)", emoji: "🏗️", category: "Deal Analysis",
     summary: "The Lux Blueprint step-by-step: how to look at a lot and figure out the most we should offer (the MAO) for a land-for-luxury-builds deal.",
+    flow: [
+      { emoji: "🎯", label: "Seller's number first" }, { emoji: "🔍", label: "Zillow check" }, { emoji: "🏗️", label: "$2M+ new builds?" },
+      { emoji: "📐", label: "Study the LOT" }, { emoji: "📊", label: "3-method comps" }, { emoji: "💰", label: "Dispo − spread = MAO" },
+    ],
+    stats: [
+      { value: "$2M+", label: "new builds needed nearby" }, { value: "3", label: "comp methods averaged" },
+      { value: "$100–150k", label: "spread = our fee target" }, { value: "$50k", label: "absolute floor" },
+    ],
     pdfUrl: "/playbooks/sop/how-to-analyze-a-deal.pdf", pdfLabel: "the full Student Guide (SOP)",
     images: [
       { src: "/playbooks/sop/analyze-deal-1.png", caption: "SOP p1 — the goal + Step 1 (what the seller wants)" },
@@ -311,6 +321,14 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_land_infill", title: "Infill Lots System (John Duong — High Value Land)", emoji: "🏘️", category: "Land Courses",
     courseUrl: "/playbooks/land?doc=infill-playbook", courseLabel: "📚 Read John Duong's full infill course",
+    flow: [
+      { emoji: "🗺️", label: "Grade the ZIP" }, { emoji: "📥", label: "Pull (Direct REI)" }, { emoji: "✉️", label: "Mail the list" },
+      { emoji: "☎️", label: "Seller convos" }, { emoji: "📝", label: "Contract" }, { emoji: "🏗️", label: "Assign to builder" },
+    ],
+    stats: [
+      { value: "$10–20k", label: "standard fee" }, { value: "$40–100k", label: "sniper-lot fee" },
+      { value: "$50k+", label: "sold-lot pulse (30 days)" }, { value: "Buyer first", label: "offer = box − fee − closing" },
+    ],
     summary: "Buy vacant city lots off-market, sell to builders. Research by ZIP, pull with Direct REI, dispo through our vetted-builder list.",
     sections: [
       { heading: "🎯 The model", body: "A vacant lot between houses already has utilities — builders pay up for it because utility hookups are their biggest site cost. We contract the lot off-market and assign or double-close to a builder from our vetted list. Fees: $10–20k standard, $40–100k on sniper lots in luxury pockets." },
@@ -323,6 +341,14 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_land_rec", title: "Recreational Land System (Hunter P. — Sell The Earth)", emoji: "🌲", category: "Land Courses",
     courseUrl: "/playbooks/land?doc=rec-course-complete", courseLabel: "📚 Read Hunter P.'s complete 56-video course",
+    flow: [
+      { emoji: "🏙️", label: "Pick the metro" }, { emoji: "🏛️", label: "4-question zoning call" }, { emoji: "📥", label: "Pull ≤5 ac list" },
+      { emoji: "✉️", label: "Mail" }, { emoji: "☎️", label: "Convo-first pricing" }, { emoji: "💵", label: "Cash or CFD exit" },
+    ],
+    stats: [
+      { value: "⅓", label: "of resale = max offer" }, { value: "≤ assessed", label: "never pay more" },
+      { value: "3–7x", label: "CFD markup" }, { value: "1–3 hrs", label: "from the metro" },
+    ],
     summary: "Buy rural parcels ≤5 ac for $1–5k cash off-market, resell $10–30k — cash or seller-financed at 3–7x. The county-zoning-first research method.",
     sections: [
       { heading: "🎯 The model", body: "Rural recreational parcels 1–3 hours outside a metro. Buy for a few thousand cash from owners who inherited it or forgot it; sell to consumers who want to camp, park an RV, build a cabin, or live cheap. Biggest profits come from contract-for-deed (we become the bank): e.g. buy $3.5k → sell $1k down + $500/mo × 48 ≈ $25k. ~1 in 5 CFD buyers default around month 4 — we keep every payment AND the land, then resell it." },
@@ -337,6 +363,14 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_land_goldmine", title: "Goldmine Markets (Tyson Smith — Lux Blueprint) — find luxury teardown pockets", emoji: "🏰", category: "Land Courses",
     courseUrl: "/playbooks/land?doc=lux-breakdown", courseLabel: "📚 Read Tyson Smith's Lux Blueprint breakdown",
+    flow: [
+      { emoji: "🔍", label: "Zillow ≥2022 · $2M+" }, { emoji: "🕵️", label: "Price-history dig" }, { emoji: "🎯", label: "Old + small homes" },
+      { emoji: "🗺️", label: "One pocket only" }, { emoji: "📥", label: "Pull the HOUSE list" }, { emoji: "💰", label: "Dispo − $100–150k" },
+    ],
+    stats: [
+      { value: "$2M+", label: "new-build filter" }, { value: "$200–300k", label: "Zestimate band above builder buy" },
+      { value: "≤½", label: "of new-build sqft" }, { value: "Never", label: "cross 3-lane roads / water" },
+    ],
     summary: "The 10-step Zillow method to find pockets where builders actively buy old homes to tear down — and the exact list to pull from it.",
     sections: [
       { heading: "🎯 What a goldmine market is", body: "Both at once: builders are actively buying old homes, demolishing, and building new luxury; AND old homes are still cheap enough that owners will sell and builders will pay. Our teardown pulls and infill sniper lists are the SAME lists — this method just sharpens them." },
@@ -348,6 +382,10 @@ export const PLAYBOOKS: Playbook[] = [
   {
     key: "k_land_cheatsheet", title: "Market Research Cheat Sheet — John Duong vs Hunter P. formulas", emoji: "🗺️", category: "Land Courses",
     courseUrl: "/playbooks/land?doc=research-cheatsheet", courseLabel: "📚 Open the full research cheat sheet + all course docs",
+    stats: [
+      { value: "ZIP", label: "infill research unit" }, { value: "COUNTY", label: "rec research unit" },
+      { value: "1:1", label: "sell-through target" }, { value: "<$50k", label: "Zillow floor (rec)" },
+    ],
     summary: "Side-by-side: how to grade an infill zip vs a recreational county before we pull a single lead.",
     sections: [
       { heading: "Infill (research unit = ZIP)", bullets: ["Sold lots last 30 days $50k+ (Zillow) — the demand pulse", "Satellite house-lot-house pattern — the supply pulse", "New construction built this year — the builder pulse (only reliable TX signal)", "Months of inventory: active ÷ monthly sold — high number = saturated, walk away (Canyon Lake: 677 active ÷ 20/mo ≈ 33 months → demoted)"] },

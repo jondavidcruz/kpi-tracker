@@ -5,11 +5,19 @@ export const dynamic = "force-dynamic";
 
 // ── Tiny markdown renderer (headings, bold, bullets, numbered, tables, hr) ──
 // Purpose-built for the course docs; keeps everything server-rendered + themed.
+// Money/percent highlighter — the numbers that matter pop visually.
+function hiNum(text: string): React.ReactNode {
+  const parts = text.split(/(\$[\d,.]+(?:[kKMm])?(?:\s*[–\-]\s*\$?[\d,.]+[kKMm]?)?|\b\d+(?:\.\d+)?%|⅓|⅔|½|¼)/g);
+  return parts.map((p, i) =>
+    i % 2 === 1 ? <strong key={i} className="rounded bg-emerald-50 px-0.5 font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{p}</strong> : <span key={i}>{p}</span>,
+  );
+}
+
 function inline(text: string, key: number): React.ReactNode {
   const parts = text.split(/\*\*([^*]+)\*\*/g);
   return (
     <span key={key}>
-      {parts.map((p, i) => (i % 2 === 1 ? <strong key={i} className="font-bold text-slate-900 dark:text-slate-100">{p}</strong> : p))}
+      {parts.map((p, i) => (i % 2 === 1 ? <strong key={i} className="font-bold text-slate-900 dark:text-slate-100">{hiNum(p)}</strong> : <span key={i}>{hiNum(p)}</span>))}
     </span>
   );
 }
