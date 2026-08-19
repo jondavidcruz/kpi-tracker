@@ -5,6 +5,7 @@ import { savePhoneLine, deletePhoneLine, savePhoneSetup, savePhoneAlertConfig, t
 import { Card, SectionTitle } from "@/components/ui";
 import CopyButton from "@/components/CopyButton";
 import TelcoAlarms from "@/components/TelcoAlarms";
+import LeadTextingSop from "@/components/LeadTextingSop";
 
 // Consolidated from the Caller ID Reputation "Business Best Practices" + TNS
 // "Recommended Best Practices for Call Originators" (Aug 2024) guides Jon shared.
@@ -128,6 +129,9 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
 
       {/* Live alarms from Twilio/Telnyx (same feed as Compliance) */}
       <TelcoAlarms />
+
+      {/* Lead-gen SOP: list pull → skip trace → scrub → SMS (from Jon's SOP PDF) */}
+      <LeadTextingSop />
 
       {/* At-a-glance */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

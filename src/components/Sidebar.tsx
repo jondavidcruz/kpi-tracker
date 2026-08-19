@@ -33,7 +33,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/deals": "pipeline dispositions",
   "/huddle": "standup morning brief",
   "/call-scoring": "call recording transcript coaching score",
-  "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers",
+  "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers list pull skip trace sms sop directrei regrid skipmatrix scrub dnc litigator suppression texting campaign",
   "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
   "/cfd-notes": "cfd contract for deed owner finance notes ledger seller financing payments default land",
   "/ai-training": "ai training claude chatgpt gemini perplexity prompt prompting models haiku sonnet opus fable effort artificial intelligence learn",

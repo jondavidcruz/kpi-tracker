@@ -101,7 +101,7 @@ export default async function CompliancePage() {
           })}
         </div>
         <p className="mt-2 text-xs text-slate-400">
-          Number-level answer-rate & spam-flag tracking lives on <Link href="/phone-health" className="underline">Phone Health</Link>. Live status here reads Twilio/Telnyx directly via API.
+          Number-level answer-rate & spam-flag tracking lives on <Link href="/phone-health" className="underline">Phone Health</Link> — along with the visual <Link href="/phone-health" className="underline">List Pull → Skip Trace → SMS SOP</Link> to run before any texting campaign. Live status here reads Twilio/Telnyx directly via API.
         </p>
         <div className="mt-3"><TelcoAlarms /></div>
       </section>
