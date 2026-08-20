@@ -377,11 +377,24 @@ export default function UnderwritingCalculator() {
   const aAnchorPct = v("aAnchorPct") || "10";
   const aAnchor = cashMao * (1 - num(aAnchorPct) / 100);
 
-  // ---- Cash (Land) ---- vacant land: comp recent LAND sales, offer ~33% of the average.
+  // ---- Cash (Land) ---- Hunter's offer rule: ALL caps must pass — the LOWEST wins.
+  //  ① ~33% of the average sold land value, ALL-IN (so minus our ~$1.5k closing)
+  //  ② ≤ county assessed value   ③ ≤ cheapest active listing  (both optional inputs —
+  //  they only bind when entered, but the course says always check them.)
   const clComps = [n("clC1"), n("clC2"), n("clC3")].filter((x) => x > 0);
   const clLandAvg = clComps.length ? Math.round(clComps.reduce((s, x) => s + x, 0) / clComps.length) : 0;
   const clPct = num(v("clPct") || "33");             // team target: ~33% of area land sales
-  const clMao = clLandAvg > 0 ? Math.round(clLandAvg * (clPct / 100)) : 0;
+  const clCloseCost = n("clCloseCost") || 1500;      // our side of closing (title co) — the "all-in" part
+  const clThird = clLandAvg > 0 ? Math.round(clLandAvg * (clPct / 100) - clCloseCost) : 0;
+  const clAssessed = n("clAssessed");
+  const clCheapest = n("clCheapest");
+  const clCaps: { label: string; v: number }[] = [
+    ...(clThird > 0 ? [{ label: `${clPct}% of land value, all-in`, v: clThird }] : []),
+    ...(clAssessed > 0 ? [{ label: "county assessed value", v: clAssessed }] : []),
+    ...(clCheapest > 0 ? [{ label: "cheapest active listing", v: clCheapest }] : []),
+  ];
+  const clMao = clCaps.length ? Math.round(Math.min(...clCaps.map((c) => c.v))) : 0;
+  const clBind = clCaps.find((c) => Math.round(c.v) === clMao)?.label ?? "";
   const clAnchorPct = v("clAnchorPct") || "8";
   const clAnchor = clMao * (1 - num(clAnchorPct) / 100);
   const clAsk = n("clAsk");
@@ -638,13 +651,15 @@ export default function UnderwritingCalculator() {
         comps: `<strong>Subject:</strong> ${esc(addr)}${v("clLot") ? `<br><strong>Lot:</strong> ${esc(v("clLot"))}` : ""}${comps ? `<br><strong>Comparable land sales:</strong> ${comps}` : ""}`,
         rows: [
           ["Avg area land sale (comps)", money(clLandAvg)],
-          [`Offer target (${clPct}% of land value)`, `${clPct}%`],
-          ["🎯 Cash (Land) MAO — max offer to seller", money(clMao)],
+          [`Cap ① — ${clPct}% of land value, all-in (−${money(clCloseCost)} closing)`, money(clThird)],
+          ...(clAssessed > 0 ? ([["Cap ② — county assessed value", money(clAssessed)]] as [string, string][]) : []),
+          ...(clCheapest > 0 ? ([["Cap ③ — cheapest active listing", money(clCheapest)]] as [string, string][]) : []),
+          ["🎯 Cash (Land) MAO — lowest cap wins", money(clMao)],
           [`Anchor / opening (${clAnchorPct}% below MAO)`, money(clAnchor)],
           ["Negotiation range", `${money(clAnchor)} → ${money(clMao)}`],
           ...(clDblOn ? ([["🔁 Double-close closing cost (seller side ×2)", money(clDblCost)], ["🎯 Double-close MAO (offer this instead)", money(clDblMao)]] as [string, string][]) : []),
         ],
-        note: (clDblOn ? "DOUBLE CLOSE — two separate simultaneous closings (seller won't assign), so closing costs are paid on BOTH escrows; offer the seller the Double-close MAO to keep the same margin. " : "") + "Vacant land. Pull recent comparable LAND sales in the area, average them, and offer about 33% of that average — that discount is our room for a fee plus the buyer's margin. Open at the anchor and negotiate up to the MAO, never past it.",
+        note: (clDblOn ? "DOUBLE CLOSE — two separate simultaneous closings (seller won't assign), so closing costs are paid on BOTH escrows; offer the seller the Double-close MAO to keep the same margin. " : "") + "Vacant land — Hunter's rule: the offer must pass ALL the caps (≈33% of avg sold land value all-in, ≤ county assessed, ≤ cheapest active listing); the LOWEST wins. Open at the anchor and negotiate up to the MAO, never past it. Never accept a price on call #1.",
       };
     }
     if (tab === "developer") {
@@ -1157,19 +1172,23 @@ export default function UnderwritingCalculator() {
           {tab === "cash_land" && (
             <>
               {legend}
+              {stepDiv(1, "The parcel", "What the seller wants and how big it is. Get their number FIRST — never comp blind.")}
               <Field k="clAsk" label="Seller's asking price ($)" prefix="$" placeholder="120,000" req="opt" />
               <Field k="clLot" label="Lot size (e.g. 0.25 ac / 10,000 sf)" span={2} req="opt" />
 
-              <div className={goodDiv}>🟢 Comparable LAND sales in the area (recent sold prices)</div>
-              <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">Pull 2–3 recently SOLD vacant-land parcels near the subject, similar size. Enter each sold price — we average them into the area land value.</p>
+              {stepDiv(2, "What has land SOLD for nearby?", "2–3 recently SOLD vacant parcels, similar size — sold prices, never asking. We average them into the area land value.")}
               <Field k="clC1" label="① Land sale — sold $" prefix="$" span={2} req="good" />
               <Field k="clC2" label="② Land sale — sold $" prefix="$" span={2} req="good" />
               <Field k="clC3" label="③ Land sale — sold $" prefix="$" span={2} req="good" />
 
-              <div className={optDiv}>Offer target + opening</div>
-              <Field k="clPct" label="Offer as % of avg land value" suffix="%" placeholder="33" req="opt" />
-              <Field k="clAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" req="opt" />
-              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 We aim for ~33% of the average area land sale. That deep discount on raw land is our room for a fee plus the end buyer&apos;s margin.</p>
+              {stepDiv(3, "Hunter's offer caps — the LOWEST wins", "The course rule: the offer must pass ALL THREE — ~33% of land value (all-in), under the county assessed value, and under the cheapest active listing.")}
+              <Field k="clPct" label="① Offer as % of avg land value" suffix="%" placeholder="33" req="opt" />
+              <Field k="clCloseCost" label="Our closing cost (all-in rule)" prefix="$" placeholder="1,500" req="opt" />
+              <Field k="clAssessed" label="② County assessed value ($)" prefix="$" placeholder="from the assessor" req="good" />
+              <Field k="clCheapest" label="③ Cheapest ACTIVE listing ($)" prefix="$" placeholder="Zillow, land nearby" req="good" />
+
+              {stepDiv(4, "Opening move", "Open below the max and work up slowly. Never accept a price on call #1.")}
+              <Field k="clAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" span={2} req="opt" />
 
               <button type="button" onClick={() => setV("clDblClose", clDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${clDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
                 🔁 Double close? {clDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
@@ -1378,6 +1397,17 @@ export default function UnderwritingCalculator() {
           {tab === "developer" && (
             <>
               {!devLux && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-300">🚫 No $2M+ luxury new builds here → no developer demand. Mark this deal dead.</div>}
+              <MathReceipt
+                title="Developer offer"
+                rows={[
+                  { text: `What developers pay per acre here (avg of your comps${devCompRows.some((c) => c.yrs > 0) ? ", grown to today" : ""})`, amount: devAvgPerAcre > 0 ? `${money(devAvgPerAcre)}/ac` : "—" },
+                  { text: `× the subject's ${devSubjAcres > 0 ? devSubjAcres.toFixed(2) : "—"} acres = what we can SELL the lot for (dispo)`, amount: money(devDispo) },
+                  { text: "Take away our spread — that gap IS our fee", amount: money(devSpread), minus: true },
+                ]}
+                totalLabel="MAX OFFER to the seller"
+                total={money(devMao)}
+                coach={devMao > 0 ? `Open at ${money(devAnchor)} (fee ${money(devFeeAtAnchor)}) and never pass ${money(devMao)}. Aim six figures — floor $50k.` : "Enter the lot size and 2–3 developer lot-purchase comps to get your number."}
+              />
               <Res label="Subject lot" value={devSubjAcres > 0 ? `${devSubjAcres.toFixed(2)} acres` : "—"} tone="muted" />
               {[1, 2, 3].map((i) => { const c = devComp(i); return c.perAcre > 0 ? <Res key={i} label={`Comp ${i} — ${(v(`devC${i}Status`) || "sold") === "forsale" ? "for sale" : "sold"} (developer $/acre)`} value={`${money(c.perAcre)}/acre`} tone="muted" /> : null; })}
               <Res label="Avg developer $/acre" value={devAvgPerAcre > 0 ? `${money(devAvgPerAcre)}/acre` : "—"} tone={devAvgPerAcre > 0 ? "navy" : "bad"} />
@@ -1409,11 +1439,20 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "cash_land" && (
             <>
-              <Res label="① Land sale (sold)" value={money(n("clC1"))} tone="muted" />
-              <Res label="② Land sale (sold)" value={money(n("clC2"))} tone="muted" />
-              <Res label="③ Land sale (sold)" value={money(n("clC3"))} tone="muted" />
+              <MathReceipt
+                title="Land cash offer"
+                rows={[
+                  { text: `Average of your ${clComps.length || 3} sold land comps`, amount: money(clLandAvg) },
+                  { text: `Take ${clPct}% of it (the deep-discount rule) minus ~${money(clCloseCost)} closing`, amount: money(clThird) },
+                  ...(clAssessed > 0 ? [{ text: "Cap ②: never above the county assessed value", amount: money(clAssessed) }] : []),
+                  ...(clCheapest > 0 ? [{ text: "Cap ③: never above the cheapest active listing", amount: money(clCheapest) }] : []),
+                ]}
+                totalLabel="MAX OFFER (lowest cap wins)"
+                total={money(clMao)}
+                coach={clMao > 0 ? `Bound by the ${clBind}. Open at ${money(clAnchor)} — never accept a price on call #1.${clAssessed <= 0 || clCheapest <= 0 ? " ⚠️ Hunter's rule wants all 3 caps — add the assessed value and cheapest listing." : ""}` : "Enter 2–3 sold land comps above to get your number."}
+              />
               <Res label="🎯 Avg area land value" value={money(clLandAvg)} tone={clLandAvg > 0 ? "navy" : "bad"} big />
-              <Res label={`× Offer target (${clPct}%)`} value={`${clPct}%`} tone="muted" />
+              {clCaps.map((c) => <Res key={c.label} label={`Cap: ${c.label}`} value={money(c.v)} tone={Math.round(c.v) === clMao ? "navy" : "muted"} />)}
               <Res label="🎯 Cash (Land) MAO — max offer" value={money(clMao)} tone={clMao > 0 ? "navy" : "bad"} big />
               {clDblOn && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
