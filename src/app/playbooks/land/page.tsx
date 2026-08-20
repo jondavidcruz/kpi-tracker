@@ -119,6 +119,17 @@ export default async function LandCoursePage({ searchParams }: { searchParams: P
         <span className="rounded-xl bg-white/15 px-4 py-2 text-sm font-bold">Open ↗</span>
       </a>
 
+      {/* The visual one-pager — Jon's Master Plan */}
+      <a href="/training/land-master-plan.html" target="_blank" rel="noopener noreferrer"
+        className="mb-4 flex items-center gap-3 rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-emerald-50 p-4 shadow-sm transition hover:shadow-md dark:border-amber-700 dark:from-amber-950 dark:to-emerald-950">
+        <span className="text-3xl">🏔️</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-extrabold text-slate-900 dark:text-slate-100">Land Master Plan — the visual one-pager</span>
+          <span className="block text-[13px] text-slate-600 dark:text-slate-300">All 3 systems on one page: the 10-second snapshot, each lane's 4 steps, target ZIPs, buy boxes, offer rules, golden rules + today&apos;s action list.</span>
+        </span>
+        <span className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-[13px] font-bold text-white">Open ↗</span>
+      </a>
+
       <div className="flex flex-col gap-4 lg:flex-row">
         {/* Doc nav, grouped by instructor */}
         <nav className="shrink-0 space-y-3 lg:w-72">
