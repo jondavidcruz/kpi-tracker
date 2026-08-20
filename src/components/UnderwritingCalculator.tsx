@@ -15,6 +15,19 @@ const TABS = [
   { key: "rental", group: "Homes", label: "Buy & Hold / Wrap", emoji: "🏘️", blurb: "Landlord / BRRRR buyer's lens: cap rate, the 1% rule, the max offer at their target cap — AND the wrap check: the max monthly terms we can lock up and still assign to a cash-flowing end buyer." },
 ] as const;
 
+// Pre-send sanity checks per exit — ADVISORY ONLY (per Jon: recommend, never block
+// the export). Unchecked items just flag what hasn't been verified yet.
+const KILL_CHECKS: Record<string, string[]> = {
+  assignment: ["Not listed on the MLS (no agent already involved)", "3 SOLD comps verified — not asking prices", "Seller gave an actual number", "Repairs from sqft × condition (walked or photos)"],
+  cash_land: ["Not listed on the MLS", "3 SOLD land comps — not asking prices", "Road access verified (legal + physical)", "Flood / wetlands checked (Regrid)", "Back taxes checked"],
+  developer: ["$2M+ luxury new builds confirmed nearby", "Not listed on the MLS", "Seller gave a real number", "Comps match style + view (Water Rule)", "Buildable area checked — not just paper lot size"],
+  novation: ["Seller is OK with the retail timeline (3–6 mo)", "Comps support the list price", "Cash MAO doesn't beat the novation payout"],
+  flip: ["ARV backed by 3 sold comps", "Rehab walked, bid, or honestly estimated", "Hold time realistic (4–6 months)"],
+  rental: ["Rent verified with rental comps — not a guess", "Taxes reflect REASSESSED value (price × rate)", "BRRRR refi check run if the buyer refinances"],
+  creative: ["Loan balance + payment verified from a statement", "Seller understands the loan stays in place"],
+  listing: ["Seller expectations set on timeline + price"],
+};
+
 // Wholesale (Assignment) vs Novation — quick decision guide (from the team's sheet).
 const EXIT_COMPARE: [string, string, string][] = [
   ["Speed of exit", "30–45 days (faster with a deeper discount)", "3–6 months (retail MLS timeline)"],
@@ -454,10 +467,17 @@ export default function UnderwritingCalculator() {
   const devSubjAcres = toAcres(n("devLotSize"), v("devLotUnit") || "acres");
   // Comps: for each, what the DEVELOPER paid for the raw lot ÷ that lot's size = $/acre. We use
   // the developer's PURCHASE price (from the lot's sale history), NOT the current/sold price.
+  // Stale comps auto-appreciate: a lot bought in 2022 is grown at devGrow %/yr to today
+  // (Lux rule ≈ 4–5%/yr) — this was a manual mental step reps forgot; now it's automatic.
+  const devGrow = num(v("devGrow") || "4.5") / 100;
+  const NOW_YR = new Date().getFullYear();
   const devComp = (i: number) => {
     const price = n(`devC${i}Price`);
     const acres = toAcres(n(`devC${i}Lot`), v(`devC${i}Unit`) || "acres");
-    return { price, acres, perAcre: acres > 0 && price > 0 ? Math.round(price / acres) : 0 };
+    const buyYr = n(`devC${i}BuyYr`);
+    const yrs = buyYr >= 2000 && buyYr < NOW_YR ? Math.min(10, NOW_YR - buyYr) : 0;
+    const grown = price * Math.pow(1 + devGrow, yrs);
+    return { price, acres, yrs, perAcre: acres > 0 && price > 0 ? Math.round(grown / acres) : 0 };
   };
   const devCompRows = [devComp(1), devComp(2), devComp(3)];
   const devPerAcres = devCompRows.map((c) => c.perAcre).filter((x) => x > 0);
@@ -537,7 +557,13 @@ export default function UnderwritingCalculator() {
   // ---- Buy & Hold / Rental (landlord + BRRRR lens) ----
   const rPrice = n("rPrice") || arv;                 // purchase price (defaults to ARV)
   const rRent = n("rRent");                           // monthly rent
-  const rTax = n("rTax"), rIns = n("rIns"), rHoaMo = n("rHoa");
+  // Property tax REASSESSES at the sale price — the seller's old bill understates it.
+  // Blank tax field → auto-estimate price × rate (default 1%/yr, editable per market).
+  const rTaxRate = num(v("rTaxRate") || "1.0");
+  const rTaxIn = n("rTax");
+  const rTax = rTaxIn || rPrice * (rTaxRate / 100);
+  const rTaxAuto = rTaxIn <= 0 && rTax > 0;
+  const rIns = n("rIns"), rHoaMo = n("rHoa");
   const rVacPct = num(v("rVac") || "5"), rMgmtPct = num(v("rMgmt") || "8"), rMaintPct = num(v("rMaint") || "8");
   const rTargetCap = num(v("rTargetCap") || "7");     // target cap rate %
   const rGrossYr = rRent * 12;
@@ -827,6 +853,7 @@ export default function UnderwritingCalculator() {
         <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${rowsHtml}</table>
         ${repairsHtml}
         ${r.note ? `<p style="margin-top:14px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
+        ${(() => { const items = KILL_CHECKS[tab] ?? []; const missing = items.filter((_, ci) => v(`kc_${tab}_${ci}`) !== "1"); return missing.length ? `<p style="margin-top:8px;color:#b45309;font-size:11px;font-weight:700">⚠️ Unverified at export: ${esc(missing.join(" · "))}</p>` : items.length ? `<p style="margin-top:8px;color:#047857;font-size:11px;font-weight:700">✅ All pre-send checks confirmed</p>` : ""; })()}
         <div style="margin-top:22px;padding-top:8px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
           🗓️ Comped on <b style="color:#475569">${esc(compDate)}</b> at ${esc(compTime)}${compSeconds != null ? ` &nbsp;·&nbsp; ⏱ Underwrite time: <b style="color:#475569">${esc(mmss(compSeconds))}</b>` : ""}<br>
           <span style="color:#cbd5e1">Re-comp every ~30 days — values move as new sales hit the market.</span>
@@ -1101,11 +1128,15 @@ export default function UnderwritingCalculator() {
                       <label className="col-span-2"><span className="mb-0.5 block text-[10px] font-semibold text-emerald-600">Developer bought lot for ($)</span><input inputMode="decimal" value={v(`devC${i}Price`)} onChange={set(`devC${i}Price`)} placeholder="raw-lot purchase $" className={inputCls} /></label>
                       <label><span className="mb-0.5 block text-[10px] font-semibold text-emerald-600">Lot size</span><input inputMode="decimal" value={v(`devC${i}Lot`)} onChange={set(`devC${i}Lot`)} placeholder="0.40" className={inputCls} /></label>
                       <label><span className="mb-0.5 block text-[10px] font-semibold text-emerald-600">Unit</span><select value={v(`devC${i}Unit`) || "acres"} onChange={set(`devC${i}Unit`)} className={inputCls}><option value="acres">acres</option><option value="sqft">sq ft</option></select></label>
-                      <label className="col-span-2"><span className="mb-0.5 block text-[10px] font-semibold text-slate-400">Year built (double-check only)</span><input value={v(`devC${i}Yr`)} onChange={set(`devC${i}Yr`)} placeholder="optional" className={inputCls} /></label>
+                      <label><span className="mb-0.5 block text-[10px] font-semibold text-emerald-600">Bought in (year)</span><input inputMode="numeric" value={v(`devC${i}BuyYr`)} onChange={set(`devC${i}BuyYr`)} placeholder="2022" className={inputCls} /></label>
+                      <label><span className="mb-0.5 block text-[10px] font-semibold text-slate-400">Year built (check)</span><input value={v(`devC${i}Yr`)} onChange={set(`devC${i}Yr`)} placeholder="optional" className={inputCls} /></label>
+                      {c.yrs > 0 && <span className="col-span-2 self-center text-[10px] font-semibold text-emerald-600">📈 grown {c.yrs} yr{c.yrs > 1 ? "s" : ""} @ {Math.round(devGrow * 1000) / 10}%/yr → {money(c.perAcre)}/acre today</span>}
                     </div>
                   </div>
                 );
               })}
+
+              <Field k="devGrow" label="Market growth %/yr (auto-grows old comp buys to today)" suffix="%" placeholder="4.5" span={2} req="opt" />
 
               <div className={optDiv}>Set your fee spread + opening</div>
               <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Spread below dispo = your fee (Lux Blueprint target $100k–150k)</span>
@@ -1278,7 +1309,9 @@ export default function UnderwritingCalculator() {
               <Field k="rPrice" label="Purchase price (defaults to ARV)" prefix="$" placeholder={arv ? arv.toLocaleString() : "350,000"} req="need" />
               <Field k="rRent" label="Expected monthly rent" prefix="$" placeholder="2,400" req="need" />
               {stepDiv(2, "What the landlord pays each year", "Taxes + insurance + HOA, plus the standard set-asides (defaults are industry-normal — leave them unless you know better).")}
-              <Field k="rTax" label="Annual property tax ($)" prefix="$" req="opt" />
+              <Field k="rTax" label="Annual property tax ($ — blank = auto)" prefix="$" req="opt" />
+              <Field k="rTaxRate" label="Tax rate %/yr (auto = price × this)" suffix="%" placeholder="1.0" req="opt" />
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 Taxes REASSESS at the sale price — don&apos;t trust the seller&apos;s old bill. Leave tax blank and we estimate price × the rate.</p>
               <Field k="rIns" label="Annual insurance ($)" prefix="$" req="opt" />
               <Field k="rHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="rVac" label="Vacancy set-aside" suffix="%" placeholder="5" req="opt" />
@@ -1478,6 +1511,7 @@ export default function UnderwritingCalculator() {
                 total={money(rMaxOffer)}
                 coach={rMaxOffer > 0 ? `A landlord wanting ${rTargetCap}% back per year can pay up to ${money(rMaxOffer)}. Quick screen: rent should be ≥1% of price (this deal: ${rOnePct.toFixed(2)}%).` : "Enter the monthly rent above to get your number."}
               />
+              {rTaxAuto && <Res label={`Est. property tax (reassessed: price × ${rTaxRate}%)`} value={`${money(rTax)}/yr`} tone="muted" />}
               <Res label="Gross annual rent" value={money(rGrossYr)} tone="muted" />
               <Res label="− Operating expenses" value={money(rOpEx)} tone="muted" />
               <Res label="Net operating income (NOI)" value={money(rNoi)} tone="muted" />
@@ -1542,6 +1576,35 @@ export default function UnderwritingCalculator() {
           </div>
         )}
       </div>
+
+      {/* Advisory pre-send checks — recommend, never block (per Jon). */}
+      {KILL_CHECKS[tab] && (() => {
+        const items = KILL_CHECKS[tab];
+        const done = items.filter((_, i) => v(`kc_${tab}_${i}`) === "1").length;
+        const allDone = done === items.length;
+        return (
+          <div className={`rounded-xl border-2 p-3.5 ${allDone ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50"}`}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className={`text-sm font-extrabold ${allDone ? "text-emerald-800" : "text-amber-900"}`}>
+                {allDone ? "✅ All pre-send checks confirmed" : `🛑 Before you send — ${done}/${items.length} confirmed`}
+              </span>
+              <span className="text-[11px] text-slate-400">Advisory only — export always works</span>
+            </div>
+            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+              {items.map((label, i) => {
+                const on = v(`kc_${tab}_${i}`) === "1";
+                return (
+                  <button key={i} type="button" onClick={() => setV(`kc_${tab}_${i}`, on ? "" : "1")}
+                    className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 text-left text-[12.5px] font-medium transition ${on ? "border-emerald-300 bg-white text-slate-500 line-through decoration-emerald-400" : "border-amber-300 bg-white text-slate-700 hover:border-amber-400"}`}>
+                    <span className="text-sm leading-none">{on ? "✅" : "⬜"}</span>{label}
+                  </button>
+                );
+              })}
+            </div>
+            {!allDone && <p className="mt-2 text-[11.5px] font-semibold text-amber-800">⚠️ {items.length - done} unverified — double-check before the offer goes out (the PDF will note it).</p>}
+          </div>
+        );
+      })()}
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={exportPdf} className="rounded-lg bg-brand-gold px-5 py-2.5 text-sm font-bold text-brand-navy hover:opacity-90">📄 Export to CRM (PDF) — stops the timer</button>
