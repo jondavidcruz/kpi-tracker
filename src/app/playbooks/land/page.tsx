@@ -108,6 +108,17 @@ export default async function LandCoursePage({ searchParams }: { searchParams: P
         <Link href="/playbooks" className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">← Playbooks</Link>
       </div>
 
+      {/* The visual Master Plan — all 3 courses on one page (Jon's HTML, served verbatim) */}
+      <a href="/playbooks/land-master-plan.html" target="_blank" rel="noopener noreferrer"
+        className="mb-4 flex flex-wrap items-center gap-4 rounded-2xl bg-gradient-to-r from-slate-900 to-[#1e3a5f] p-5 text-white shadow-md transition hover:shadow-lg">
+        <span className="text-4xl">🏔️</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-lg font-extrabold">Land Master Plan — start here</span>
+          <span className="block text-sm text-slate-300">All 3 systems on one visual page: the 10-second snapshot, each lane step-by-step, the golden rules, and what to do today.</span>
+        </span>
+        <span className="rounded-xl bg-white/15 px-4 py-2 text-sm font-bold">Open ↗</span>
+      </a>
+
       <div className="flex flex-col gap-4 lg:flex-row">
         {/* Doc nav, grouped by instructor */}
         <nav className="shrink-0 space-y-3 lg:w-72">

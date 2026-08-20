@@ -8,7 +8,7 @@ export interface LandDoc { slug: string; title: string; group: LandGroup; md: st
 
 export const LAND_GROUPS: Record<LandGroup, { label: string; emoji: string }> = {
   john: { label: "John Duong — Infill Lots", emoji: "🏘️" },
-  hunter: { label: "Hunter P. — Recreational Land", emoji: "🌲" },
+  hunter: { label: "Hunter Pogatchnik — Recreational Land (Sell The Earth)", emoji: "🌲" },
   tyson: { label: "Tyson Smith — Luxury Infill (Lux Blueprint)", emoji: "🏰" },
   ops: { label: "All Three Combined — Our Operating Docs", emoji: "🧭" },
 };
