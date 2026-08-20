@@ -88,77 +88,7 @@ function OfferCalc() {
   );
 }
 
-// ── 2. Blind-offer batch calculator (mail merge) ─────────────────────────────
-function BatchCalc() {
-  const [raw, setRaw] = useState("");
-  const [method, setMethod] = useState<"pct" | "perAcre">("pct");
-  const [pct, setPct] = useState("33");
-  const [perAcre, setPerAcre] = useState("2000");
-  const [round, setRound] = useState("100");
-
-  const n = (s: string) => Number(String(s).replace(/[^0-9.]/g, "")) || 0;
-  const rows = useMemo(() => {
-    const factor = method === "pct" ? n(pct) / 100 : n(perAcre);
-    const rnd = Math.max(1, n(round));
-    return raw
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const parts = line.split(/[,\t]/).map((p) => p.trim());
-        // last numeric column is the driver (value for %, acres for $/acre)
-        const label = parts.length > 1 ? parts.slice(0, -1).join(" ") : parts[0];
-        const driver = n(parts[parts.length - 1]);
-        const offerRaw = method === "pct" ? driver * factor : driver * factor;
-        const offer = Math.round(offerRaw / rnd) * rnd;
-        return { label, driver, offer };
-      });
-  }, [raw, method, pct, perAcre, round]);
-
-  const csv = useMemo(
-    () => "label,input,offer\n" + rows.map((r) => `${r.label.replace(/,/g, " ")},${r.driver},${r.offer}`).join("\n"),
-    [rows],
-  );
-
-  return (
-    <Card title="📋 Blind-offer batch calculator">
-      <p className="mb-2 text-xs text-slate-500">
-        Paste one property per line — <code>label, {method === "pct" ? "value" : "acres"}</code> (or just the {method === "pct" ? "value" : "acres"}).
-        Generates an offer column you can paste into your mail-merge sheet.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-4">
-        <label className="sm:col-span-1"><span className={lbl}>Method</span>
-          <select value={method} onChange={(e) => setMethod(e.target.value as "pct" | "perAcre")} className={inputCls}>
-            <option value="pct">% of value</option>
-            <option value="perAcre">$ per acre</option>
-          </select>
-        </label>
-        {method === "pct"
-          ? <label><span className={lbl}>Offer %</span><input value={pct} onChange={(e) => setPct(e.target.value)} className={inputCls} /></label>
-          : <label><span className={lbl}>$ / acre</span><input value={perAcre} onChange={(e) => setPerAcre(e.target.value)} className={inputCls} /></label>}
-        <label><span className={lbl}>Round to nearest $</span><input value={round} onChange={(e) => setRound(e.target.value)} className={inputCls} /></label>
-      </div>
-      <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={5} className={`${inputCls} mt-3 font-mono`} placeholder={"123 Main Pkwy, 40000\n456 Rural Rd, 25000"} />
-      {rows.length > 0 && (
-        <>
-          <div className="mt-3 max-h-48 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-800"><tr><th className="px-3 py-1.5">Label</th><th className="px-3 py-1.5 text-right">Input</th><th className="px-3 py-1.5 text-right">Offer</th></tr></thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i} className="border-t border-slate-100 dark:border-slate-800"><td className="px-3 py-1.5">{r.label}</td><td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{r.driver.toLocaleString()}</td><td className="px-3 py-1.5 text-right font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{money(r.offer)}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button onClick={() => navigator.clipboard?.writeText(csv)} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900">Copy CSV ({rows.length} offers)</button>
-        </>
-      )}
-    </Card>
-  );
-}
-
-// ── 3. CFD / contract-for-deed calculator ────────────────────────────────────
+// ── 2. CFD / contract-for-deed calculator ────────────────────────────────────
 function CfdCalc() {
   const [price, setPrice] = useState("");
   const [down, setDown] = useState("");
@@ -235,14 +165,13 @@ export default function LandTools() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-        🌱 <strong>Land tools</strong> — offer auto-rules, batch blind offers for mail merge, and owner-finance (CFD) math for the land pivot. <span className="font-mono">(43,560 sq ft = 1 acre)</span>
+        🌱 <strong>Land tools</strong> — offer auto-rules and owner-finance (CFD) math for the land pivot. <span className="font-mono">(43,560 sq ft = 1 acre)</span>
       </div>
       <AcreConverter />
       <div className="grid gap-4 lg:grid-cols-2">
         <OfferCalc />
         <CfdCalc />
       </div>
-      <BatchCalc />
     </div>
   );
 }

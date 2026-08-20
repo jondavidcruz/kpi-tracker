@@ -632,6 +632,60 @@ export default function UnderwritingCalculator() {
   const overAsk = asking - dealMax; // > 0 means the seller is asking above our max offer
   const buyExit = tab === "assignment" || tab === "novation" || tab === "flip";
 
+  // ── Offer confidence — how much of this number is EVIDENCE vs guesses. ──
+  // Evidence = the key inputs actually filled with real data; verification = the
+  // pre-send checks confirmed. Advisory like everything else — never blocks.
+  const compCount = (keys: string[]) => keys.filter((k) => n(k) > 0).length;
+  const EVIDENCE: Record<string, { label: string; ok: boolean }[]> = {
+    assignment: [
+      { label: "ARV entered", ok: arv > 0 },
+      { label: "2+ sold comps", ok: compCount(["comp1p", "comp2p", "comp3p"]) >= 2 },
+      { label: "Square feet", ok: sqft > 0 },
+      { label: "Condition picked", ok: !!v("rehabSf") },
+    ],
+    cash_land: [
+      { label: "2+ sold land comps", ok: clComps.length >= 2 },
+      { label: "County assessed value", ok: clAssessed > 0 },
+      { label: "Cheapest active listing", ok: clCheapest > 0 },
+      { label: "Lot size", ok: !!v("clLot") },
+      { label: "Seller's asking price", ok: clAsk > 0 },
+    ],
+    developer: [
+      { label: "Lot size", ok: devSubjAcres > 0 },
+      { label: "2+ developer lot comps", ok: devPerAcres.length >= 2 },
+      { label: "Comp purchase years", ok: [1, 2, 3].some((i) => n(`devC${i}BuyYr`) > 0) },
+      { label: "$2M+ new builds confirmed", ok: devLux },
+      { label: "Seller's asking price", ok: devAsk > 0 },
+    ],
+    novation: [
+      { label: "List price entered", ok: nList > 0 },
+      { label: "2+ as-is comps", ok: compCount(["nComp1p", "nComp2p", "nComp3p"]) >= 2 },
+      { label: "Our fee set", ok: nMinFee > 0 },
+    ],
+    flip: [
+      { label: "ARV entered", ok: arv > 0 },
+      { label: "2+ sold comps", ok: compCount(["comp1p", "comp2p", "comp3p"]) >= 2 },
+      { label: "Rehab estimated", ok: fRehab > 0 },
+      { label: "Lender terms set", ok: fLoanIn > 0 || !!v("fLender") },
+    ],
+    rental: [
+      { label: "Monthly rent", ok: rRent > 0 },
+      { label: "Purchase price", ok: rPrice > 0 },
+      { label: "ARV (for the BRRRR check)", ok: rArv > 0 },
+    ],
+    creative: [
+      { label: "Price / terms entered", ok: n("cPrice") > 0 },
+      { label: "Our fee set", ok: cFee > 0 },
+    ],
+    listing: [{ label: "List price entered", ok: lList > 0 }],
+  };
+  const confEvidence = EVIDENCE[tab] ?? [];
+  const confKills = (KILL_CHECKS[tab] ?? []).map((label, i) => ({ label, ok: v(`kc_${tab}_${i}`) === "1" }));
+  const confAll = [...confEvidence, ...confKills];
+  const confPct = confAll.length ? Math.round((confAll.filter((c) => c.ok).length / confAll.length) * 100) : 0;
+  const confMissing = confAll.filter((c) => !c.ok).map((c) => c.label);
+  const confTone = confPct >= 80 ? "good" : confPct >= 50 ? "warn" : "bad";
+
   function buildReport(): { title: string; rows: [string, string][]; comps?: string; note?: string } {
     const addr = v("subject") || "—";
     if (tab === "assignment") {
@@ -868,6 +922,7 @@ export default function UnderwritingCalculator() {
         <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${rowsHtml}</table>
         ${repairsHtml}
         ${r.note ? `<p style="margin-top:14px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
+        ${confAll.length ? `<p style="margin-top:8px;font-size:11px;font-weight:700;color:${confPct >= 80 ? "#047857" : confPct >= 50 ? "#b45309" : "#b91c1c"}">🎯 Offer confidence: ${confPct}% (${confAll.filter((c) => c.ok).length}/${confAll.length} evidence + checks)</p>` : ""}
         ${(() => { const items = KILL_CHECKS[tab] ?? []; const missing = items.filter((_, ci) => v(`kc_${tab}_${ci}`) !== "1"); return missing.length ? `<p style="margin-top:8px;color:#b45309;font-size:11px;font-weight:700">⚠️ Unverified at export: ${esc(missing.join(" · "))}</p>` : items.length ? `<p style="margin-top:8px;color:#047857;font-size:11px;font-weight:700">✅ All pre-send checks confirmed</p>` : ""; })()}
         <div style="margin-top:22px;padding-top:8px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
           🗓️ Comped on <b style="color:#475569">${esc(compDate)}</b> at ${esc(compTime)}${compSeconds != null ? ` &nbsp;·&nbsp; ⏱ Underwrite time: <b style="color:#475569">${esc(mmss(compSeconds))}</b>` : ""}<br>
@@ -1350,6 +1405,24 @@ export default function UnderwritingCalculator() {
 
         {/* Results */}
         <div className="rounded-2xl bg-gradient-to-b from-slate-50 to-white p-4 ring-1 ring-slate-200">
+          {/* Offer confidence — evidence + verifications, advisory */}
+          {confAll.length > 0 && (
+            <div className="mb-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">Offer confidence</span>
+                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                  <div className={`h-full rounded-full transition-all ${confTone === "good" ? "bg-emerald-500" : confTone === "warn" ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${Math.max(4, confPct)}%` }} />
+                </div>
+                <span className={`text-sm font-extrabold tabular-nums ${confTone === "good" ? "text-emerald-600" : confTone === "warn" ? "text-amber-600" : "text-red-500"}`}>{confPct}%</span>
+              </div>
+              {confMissing.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {confMissing.slice(0, 4).map((m) => <span key={m} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-500">+ {m}</span>)}
+                  {confMissing.length > 4 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-400">+{confMissing.length - 4} more</span>}
+                </div>
+              )}
+            </div>
+          )}
           {(tab === "assignment" || tab === "novation") && maoConflict && (
             <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300">
               ⚠️ Cash MAO ({money(cashMao)}) is HIGHER than your Novation MAO ({money(novMao)}). Novation should usually let you offer the seller <em>more</em> than cash (no flipper margin or holding). Re-check the novation list price, commission, or fees — something&apos;s off.
