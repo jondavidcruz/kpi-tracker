@@ -14,6 +14,7 @@ import { isExcusedReason } from "@/lib/alert-resolution";
 import type { DealLand } from "@/lib/deal-land";
 import type { BuyerLand } from "@/lib/buyer-land";
 import type { CfdNote } from "@/lib/cfd";
+import type { UwRec } from "@/lib/underwrite-history";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
@@ -1083,6 +1084,39 @@ export async function saveBuyerTerms(formData: FormData) {
   revalidatePath("/marketing");
   revalidatePath("/deals");
   redirect("/marketing?saved=1#terms");
+}
+
+// ── Underwrite history (calibration loop) — JSON side-store __underwrites__ ───
+// Every exported offer is snapshotted here; /admin/calibration matches them to
+// closed deals by address and scores predicted fee vs actual profit over time.
+const UW_CAT = "__underwrites__";
+export async function readUnderwrites(): Promise<UwRec[]> {
+  const row = await db.resource.findFirst({ where: { category: UW_CAT } }).catch(() => null);
+  if (!row) return [];
+  try { const a = JSON.parse(row.description || "[]"); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+export async function saveUnderwrite(snap: { tab: string; market: string; address: string; mao: number; fee: number; confidence: number; seconds: number | null }) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const clean = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? Math.round(x) : 0);
+  const rec: UwRec = {
+    id: `uw_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    at: new Date().toISOString(),
+    by: me.name,
+    tab: String(snap.tab).slice(0, 24),
+    market: String(snap.market).slice(0, 8),
+    address: String(snap.address).slice(0, 120),
+    mao: clean(snap.mao),
+    fee: clean(snap.fee),
+    confidence: Math.min(100, Math.max(0, clean(snap.confidence))),
+    seconds: snap.seconds != null && Number.isFinite(snap.seconds) ? Math.round(snap.seconds) : null,
+  };
+  const list = await readUnderwrites();
+  list.unshift(rec);
+  const capped = list.slice(0, 250);
+  const row = await db.resource.findFirst({ where: { category: UW_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(capped) } });
+  else await db.resource.create({ data: { title: "underwrite-history", category: UW_CAT, url: "", description: JSON.stringify(capped) } });
 }
 
 // ── CFD / owner-finance notes ledger (JSON side-store __cfd_notes__) ──────────

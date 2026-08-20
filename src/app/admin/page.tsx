@@ -331,6 +331,9 @@ export default async function AdminPage({
             <Link href="/admin/recalibrate" className="inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-200">
               🎯 Recalibrate goals from real performance
             </Link>
+            <Link href="/admin/calibration" className="inline-flex items-center gap-2 rounded-lg bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-200">
+              📐 Underwriting calibration (predicted vs actual)
+            </Link>
             {!kpis.some((k) => k.key.startsWith("land_")) && (
               <form action={installLandKpis}>
                 <button className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-200">🌱 Install land KPI pack</button>

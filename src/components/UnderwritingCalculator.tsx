@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { saveUnderwrite } from "@/app/actions";
 
 // Ordered LAND-first for the land pivot, then the home strategies. `group` drives
 // the grouped tab bar so the sheet leads with what the team uses most now.
@@ -800,6 +801,15 @@ export default function UnderwritingCalculator() {
     const compTime = stamp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     stopTimer(); // exporting = done comping → freeze the timer
     const r = buildReport();
+
+    // Calibration loop: snapshot this underwrite (fire-and-forget) so
+    // /admin/calibration can score predicted fee vs actual profit when it closes.
+    const predFee =
+      tab === "assignment" ? aFee : tab === "novation" ? nMinFee : tab === "developer" ? devFeeAtMao :
+      tab === "cash_land" ? Math.max(0, clLandAvg - clMao) : tab === "creative" ? cMargin :
+      tab === "listing" ? mktFee : 0;
+    saveUnderwrite({ tab, market: v("mkt") || "tn", address: v("subject") || "", mao: dealMax, fee: predFee, confidence: confPct, seconds: compSeconds ?? null }).catch(() => {});
+
     const w = window.open("", "_blank", "width=860,height=940");
     if (!w) return;
 
