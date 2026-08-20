@@ -15,6 +15,19 @@ const TABS = [
   { key: "rental", group: "Homes", label: "Buy & Hold / Wrap", emoji: "🏘️", blurb: "Landlord / BRRRR buyer's lens: cap rate, the 1% rule, the max offer at their target cap — AND the wrap check: the max monthly terms we can lock up and still assign to a cash-flowing end buyer." },
 ] as const;
 
+// Closing-cost reality differs by state (transfer taxes, attorney vs escrow close,
+// title schedules). Picking the deal's market sets the DEFAULTS below — every one
+// stays editable on the sheet. Conservative approximations, not legal advice.
+const MARKETS: Record<string, { label: string; sellerPct: number; buyClosePct: number; landClose: number; note: string }> = {
+  tn: { label: "Tennessee — Nashville", sellerPct: 1.7, buyClosePct: 2, landClose: 1800, note: "Transfer tax ~0.37%; budget it on our side when we double close." },
+  tx: { label: "Texas — Houston", sellerPct: 1.3, buyClosePct: 2, landClose: 1500, note: "No transfer tax; title priced by state schedule. Non-disclosure state — comp carefully." },
+  ga: { label: "Georgia — Atlanta", sellerPct: 1.5, buyClosePct: 2, landClose: 1600, note: "Transfer 0.1%; attorney-close state." },
+  ar: { label: "Arkansas — rec land", sellerPct: 1.6, buyClosePct: 2, landClose: 1400, note: "Transfer ~0.33% ($3.30/$1k), usually split." },
+  ok: { label: "Oklahoma — rec land", sellerPct: 1.5, buyClosePct: 2, landClose: 1400, note: "Doc stamps ~0.15% ($1.50/$1k)." },
+  ca: { label: "California — SD/OC", sellerPct: 1.9, buyClosePct: 2.2, landClose: 2200, note: "County transfer $1.10/$1k + city transfer taxes in some cities; escrow + title run higher." },
+  nc: { label: "North Carolina — Charlotte", sellerPct: 1.6, buyClosePct: 2, landClose: 1500, note: "Excise 0.2% seller-side; attorney-close state." },
+};
+
 // Pre-send sanity checks per exit — ADVISORY ONLY (per Jon: recommend, never block
 // the export). Unchecked items just flag what hasn't been verified yet.
 const KILL_CHECKS: Record<string, string[]> = {
@@ -377,6 +390,7 @@ export default function UnderwritingCalculator() {
   const aAnchorPct = v("aAnchorPct") || "10";
   const aAnchor = cashMao * (1 - num(aAnchorPct) / 100);
 
+  const mkt = MARKETS[v("mkt") || "tn"] ?? MARKETS.tn; // market-aware closing defaults (see MARKETS)
   // ---- Cash (Land) ---- Hunter's offer rule: ALL caps must pass — the LOWEST wins.
   //  ① ~33% of the average sold land value, ALL-IN (so minus our ~$1.5k closing)
   //  ② ≤ county assessed value   ③ ≤ cheapest active listing  (both optional inputs —
@@ -384,7 +398,7 @@ export default function UnderwritingCalculator() {
   const clComps = [n("clC1"), n("clC2"), n("clC3")].filter((x) => x > 0);
   const clLandAvg = clComps.length ? Math.round(clComps.reduce((s, x) => s + x, 0) / clComps.length) : 0;
   const clPct = num(v("clPct") || "33");             // team target: ~33% of area land sales
-  const clCloseCost = n("clCloseCost") || 1500;      // our side of closing (title co) — the "all-in" part
+  const clCloseCost = n("clCloseCost") || mkt.landClose;      // our side of closing (title co) — the "all-in" part
   const clThird = clLandAvg > 0 ? Math.round(clLandAvg * (clPct / 100) - clCloseCost) : 0;
   const clAssessed = n("clAssessed");
   const clCheapest = n("clCheapest");
@@ -410,7 +424,7 @@ export default function UnderwritingCalculator() {
   // ONE BUTTON (per Jon): on A→B we cover the SELLER's closing costs; on B→C we
   // cover only OUR seller-side closing — the end buyer pays their own. Seller-side
   // closing ≈ 1.5% per escrow, so total extra cost = 1.5% × (A→B price + B→C price).
-  const DBL_PCT = 1.5;
+  const DBL_PCT = mkt.sellerPct; // seller-side closing % for the selected market
   const dblCost = (on: boolean, buy: number, sell: number) => on ? Math.round((buy + sell) * (DBL_PCT / 100)) : 0;
   // Cash (Homes)
   const aDblOn = v("aDblClose") === "1";
@@ -439,7 +453,7 @@ export default function UnderwritingCalculator() {
   // (~1.5%); the buyer's closing costs are never our problem.
   const nRealismPct = 95;
   const nExpectedSale = nList * (nRealismPct / 100);
-  const nSellerClosePct = 1.5;
+  const nSellerClosePct = mkt.sellerPct; // seller-side only (market default) — never the buyer's
   const nSellerClose = nExpectedSale * (nSellerClosePct / 100);
   const nHoldMonths = n("nHoldMonths") || 2;        // months on market before it sells
   const nHoaCost = n("nHoa") * nHoldMonths;          // HOA dues while listed
@@ -538,7 +552,7 @@ export default function UnderwritingCalculator() {
   const fHold = n("fHold") || 6; // months — flippers average 4–6 depending on scope/market/season
   const fRehab = (n("fRehab") || n("sqft") * num(v("rehabSf"))) + majorTotal;
   const fComm = arv * (num(v("fComm") || "3") / 100);
-  const fClosing = arv * (num(v("fClosing") || "2") / 100);
+  const fClosing = arv * (num(v("fClosing") || String(mkt.buyClosePct)) / 100);
   // Carry (utilities/taxes/insurance) is ANNUAL and scales with hold time — a 12-month
   // hold costs twice a 6-month one. Default 2%/yr × the 6-mo default = the old 1% flat.
   const fCarry = arv * (num(v("fCarry") || "2") / 100) * (fHold / 12);
@@ -1052,6 +1066,15 @@ export default function UnderwritingCalculator() {
         <span className="w-full text-[11px] text-slate-400">Every underwrite is timed automatically — it starts when you begin entering fields and stops when you export the offer. The time + comp date print at the bottom of the PDF.</span>
       </div>
 
+      {/* Market — sets closing-cost defaults (all editable per-field) */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-2.5 ring-1 ring-slate-200">
+        <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">📍 Market</span>
+        <select value={v("mkt") || "tn"} onChange={set("mkt")} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-semibold">
+          {Object.entries(MARKETS).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+        </select>
+        <span className="text-[11px] text-slate-400">{mkt.note} <b>Defaults set:</b> seller-side {mkt.sellerPct}% · buyer closing {mkt.buyClosePct}% · land closing {money(mkt.landClose)}.</span>
+      </div>
+
       <div className="space-y-2">
         {(["Land", "Homes"] as const).map((g) => (
           <div key={g} className="flex flex-wrap items-center gap-2">
@@ -1131,7 +1154,7 @@ export default function UnderwritingCalculator() {
 
               <button type="button" onClick={() => setV("aDblClose", aDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${aDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
                 🔁 Double close? {aDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
-                <span className="mt-0.5 block text-[11px] font-normal">{aDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (1.5% each) = ${money(aDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
+                <span className="mt-0.5 block text-[11px] font-normal">{aDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (${DBL_PCT}% each) = ${money(aDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
               </button>
               {additionalCosts("aExtra", aExtraN, setAExtraN)}
               <div className={goodDiv}>🟢 ARV comps (required · addr · sold $ · days on market)</div>
@@ -1220,7 +1243,7 @@ export default function UnderwritingCalculator() {
 
               <button type="button" onClick={() => setV("devDblClose", devDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${devDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
                 🔁 Double close? {devDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
-                <span className="mt-0.5 block text-[11px] font-normal">{devDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (1.5% each) = ${money(devDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
+                <span className="mt-0.5 block text-[11px] font-normal">{devDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (${DBL_PCT}% each) = ${money(devDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
               </button>
             </>
           )}
@@ -1247,7 +1270,7 @@ export default function UnderwritingCalculator() {
 
               <button type="button" onClick={() => setV("clDblClose", clDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${clDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
                 🔁 Double close? {clDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
-                <span className="mt-0.5 block text-[11px] font-normal">{clDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (1.5% each) = ${money(clDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
+                <span className="mt-0.5 block text-[11px] font-normal">{clDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (${DBL_PCT}% each) = ${money(clDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
               </button>
             </>
           )}
@@ -1273,7 +1296,7 @@ export default function UnderwritingCalculator() {
               </div>
               {feeTierTable(novFeeBasis, "similar-condition value (EMV for land)")}
               <Field k="nComm" label="Agent commission" suffix="%" placeholder="5" req="opt" />
-              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">📌 Baked in automatically: sale nets 95% of list (price drops + concessions) and we cover the seller-side closing (1.5%) — never the buyer&apos;s.</p>
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">📌 Baked in automatically: sale nets 95% of list (price drops + concessions) and we cover the seller-side closing ({nSellerClosePct}% — the market default) — never the buyer&apos;s.</p>
               <Field k="nReserve" label="Reserve — misc + lender repairs ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" req="opt" />
               <Field k="nHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
@@ -1451,7 +1474,7 @@ export default function UnderwritingCalculator() {
               {aDblOn && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
                   <div className="text-[12px] font-bold text-amber-800">🔁 Double close — closing paid on BOTH escrows</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">Seller&apos;s closing on A→B ({money(aDblBuy)}) + our seller-side on B→C ({money(aDblSell)}) at 1.5% each = <b>{money(aDblCost)}</b> (vs $0 on an assignment). The end buyer pays their own closing. Offer the seller <b>{money(aDblMao)}</b> to keep the same fee — or hold the MAO and your fee drops by {money(aDblCost)}.</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">Seller&apos;s closing on A→B ({money(aDblBuy)}) + our seller-side on B→C ({money(aDblSell)}) at {DBL_PCT}% each = <b>{money(aDblCost)}</b> (vs $0 on an assignment). The end buyer pays their own closing. Offer the seller <b>{money(aDblMao)}</b> to keep the same fee — or hold the MAO and your fee drops by {money(aDblCost)}.</div>
                 </div>
               )}
               {aDblOn && <Res label="🎯 Double-close MAO (offer this instead)" value={money(aDblMao)} tone={aDblMao > 0 ? "navy" : "bad"} big />}
@@ -1490,7 +1513,7 @@ export default function UnderwritingCalculator() {
               {devDblOn && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
                   <div className="text-[12px] font-bold text-amber-800">🔁 Double close — closing paid on BOTH escrows</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">Seller&apos;s closing on A→B ({money(devDblBuy)}) + our seller-side on B→C ({money(devDblSell)}) at 1.5% each = <b>{money(devDblCost)}</b>. The developer pays their own closing. Offer the seller <b>{money(devDblMao)}</b> to keep the same spread.</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">Seller&apos;s closing on A→B ({money(devDblBuy)}) + our seller-side on B→C ({money(devDblSell)}) at {DBL_PCT}% each = <b>{money(devDblCost)}</b>. The developer pays their own closing. Offer the seller <b>{money(devDblMao)}</b> to keep the same spread.</div>
                 </div>
               )}
               {devDblOn && <Res label="🎯 Double-close MAO (offer this instead)" value={money(devDblMao)} tone={devDblMao > 0 ? "navy" : "bad"} big />}
@@ -1530,7 +1553,7 @@ export default function UnderwritingCalculator() {
               {clDblOn && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
                   <div className="text-[12px] font-bold text-amber-800">🔁 Double close — closing paid on BOTH escrows</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">Seller&apos;s closing on A→B ({money(clDblBuy)}) + our seller-side on B→C ({money(clDblSell)}) at 1.5% each = <b>{money(clDblCost)}</b>. The end buyer pays their own closing. Offer the seller <b>{money(clDblMao)}</b> to keep the same margin.</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-amber-700">Seller&apos;s closing on A→B ({money(clDblBuy)}) + our seller-side on B→C ({money(clDblSell)}) at {DBL_PCT}% each = <b>{money(clDblCost)}</b>. The end buyer pays their own closing. Offer the seller <b>{money(clDblMao)}</b> to keep the same margin.</div>
                 </div>
               )}
               {clDblOn && <Res label="🎯 Double-close MAO (offer this instead)" value={money(clDblMao)} tone={clDblMao > 0 ? "navy" : "bad"} big />}
