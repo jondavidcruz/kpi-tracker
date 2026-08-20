@@ -26,6 +26,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/closing": "escrow closing hud profit expenses",
   "/scripts": "objections rebuttals seller luxury talk tracks",
   "/playbooks": "sop process novation double close outreach",
+  "/land-master": "land master plan infill recreational luxury john hunter lux tyson courses playbook goldmine mao",
   "/glossary": "definitions terms meaning",
   "/team-360": "peer review superpowers strengths growth feedback",
   "/report": "kpi history reports past dates calendar",
@@ -100,6 +101,7 @@ export default function Sidebar({
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
       { href: "/glossary", label: "Glossary", Icon: BookOpen },
       { href: "/playbooks", label: "Playbooks", Icon: Lightbulb },
+      { href: "/land-master", label: "Land Master Plan", Icon: Map },
     ] },
     { label: "EOS", items: [
       { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },

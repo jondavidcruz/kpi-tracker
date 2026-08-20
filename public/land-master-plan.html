@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Freedom Offers — Land Master Plan</title>
+<style>
+  :root{
+    --infill:#2563eb; --infill-bg:#eff6ff; --infill-br:#bfdbfe;
+    --rec:#16a34a; --rec-bg:#f0fdf4; --rec-br:#bbf7d0;
+    --lux:#b8860b; --lux-bg:#fefce8; --lux-br:#fde68a;
+    --ink:#1e293b; --mut:#64748b; --line:#e2e8f0; --card:#ffffff; --bg:#f8fafc;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 20px 80px}
+
+  /* HERO */
+  .hero{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;padding:44px 20px 40px;text-align:center}
+  .hero h1{font-size:34px;font-weight:800;letter-spacing:-.5px}
+  .hero p{color:#cbd5e1;font-size:16px;margin-top:8px;max-width:640px;margin-left:auto;margin-right:auto}
+  .hero .tag{display:inline-block;background:rgba(255,255,255,.12);color:#e2e8f0;font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px;margin-top:16px;letter-spacing:.4px}
+
+  /* STICKY NAV */
+  nav{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:10px}
+  nav a{font-size:13px;font-weight:700;text-decoration:none;color:var(--mut);padding:7px 13px;border-radius:8px}
+  nav a:hover{background:var(--bg);color:var(--ink)}
+  nav a.i{color:var(--infill)} nav a.r{color:var(--rec)} nav a.l{color:var(--lux)}
+
+  /* SECTION */
+  section{margin-top:40px}
+  .sec-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .sec-head .ico{font-size:30px}
+  .sec-head h2{font-size:24px;font-weight:800;letter-spacing:-.3px}
+  .sec-sub{color:var(--mut);font-size:15px;margin-bottom:18px}
+
+  /* 3-ENGINE TOP CARDS */
+  .engines{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
+  .eng{border-radius:16px;padding:18px;border:2px solid;background:var(--card)}
+  .eng.i{border-color:var(--infill-br)} .eng.r{border-color:var(--rec-br)} .eng.l{border-color:var(--lux-br)}
+  .eng .badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.5px;padding:4px 9px;border-radius:6px;color:#fff}
+  .eng.i .badge{background:var(--infill)} .eng.r .badge{background:var(--rec)} .eng.l .badge{background:var(--lux)}
+  .eng h3{font-size:18px;font-weight:800;margin:10px 0 2px}
+  .eng .who{font-size:13px;color:var(--mut);margin-bottom:12px}
+  .eng .row{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-top:1px dashed var(--line)}
+  .eng .row b{font-weight:700}
+  .eng .fee{font-size:22px;font-weight:800;margin-top:10px}
+  .eng.i .fee{color:var(--infill)} .eng.r .fee{color:var(--rec)} .eng.l .fee{color:var(--lux)}
+
+  /* LANE (per course) */
+  .lane{border-radius:16px;border:1px solid var(--line);background:var(--card);overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .lane-top{padding:16px 20px;color:#fff;display:flex;align-items:center;gap:12px}
+  .lane-top .n{font-size:26px}
+  .lane-top h3{font-size:20px;font-weight:800}
+  .lane-top .s{font-size:13px;opacity:.9;font-weight:500}
+  .lane.i .lane-top{background:var(--infill)} .lane.r .lane-top{background:var(--rec)} .lane.l .lane-top{background:var(--lux)}
+  .lane-body{padding:20px}
+  .step-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+  .step{border-radius:12px;padding:14px;position:relative;border:1px solid var(--line);background:var(--bg)}
+  .step .num{position:absolute;top:-9px;left:12px;width:24px;height:24px;border-radius:50%;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .lane.i .step .num{background:var(--infill)} .lane.r .step .num{background:var(--rec)} .lane.l .step .num{background:var(--lux)}
+  .step h4{font-size:14px;font-weight:800;margin:6px 0 4px}
+  .step p{font-size:13px;color:var(--mut)}
+
+  .block{margin-top:18px}
+  .block h4{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-size:12.5px;font-weight:600;padding:6px 11px;border-radius:20px;border:1px solid}
+  .lane.i .chip{background:var(--infill-bg);border-color:var(--infill-br);color:#1e40af}
+  .lane.r .chip{background:var(--rec-bg);border-color:var(--rec-br);color:#166534}
+  .lane.l .chip{background:var(--lux-bg);border-color:var(--lux-br);color:#854d0e}
+
+  .money{border-radius:12px;padding:14px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px;margin-top:6px}
+  .lane.i .money{background:var(--infill-bg);color:#1e40af}
+  .lane.r .money{background:var(--rec-bg);color:#166534}
+  .lane.l .money{background:var(--lux-bg);color:#854d0e}
+  .money .big{font-size:15px;font-weight:800}
+
+  /* RULES */
+  .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .rule{background:var(--card);border:1px solid var(--line);border-left:4px solid #0ea5e9;border-radius:10px;padding:14px}
+  .rule .t{font-weight:800;font-size:14px;margin-bottom:3px}
+  .rule .d{font-size:13px;color:var(--mut)}
+
+  /* ACTION */
+  .actions{counter-reset:a}
+  .act{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+  .act::before{counter-increment:a;content:counter(a);flex:0 0 32px;height:32px;border-radius:50%;background:#0f172a;color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .act h4{font-size:15px;font-weight:800}
+  .act p{font-size:13px;color:var(--mut);margin-top:2px}
+
+  /* CALLOUT */
+  .call{border-radius:12px;padding:15px 18px;margin-top:16px;font-size:14px;display:flex;gap:12px;align-items:flex-start}
+  .call.warn{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+  .call.tip{background:#f0f9ff;border:1px solid #bae6fd;color:#075985}
+  .call .k{font-weight:800}
+
+  footer{text-align:center;color:var(--mut);font-size:12px;margin-top:50px;padding-top:20px;border-top:1px solid var(--line)}
+  @media(max-width:720px){.engines{grid-template-columns:1fr}.hero h1{font-size:27px}}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>🏔️ Freedom Offers — Land Master Plan</h1>
+  <p>Three ways to make money in dirt. Same team, same tools, three products. Everything from all 3 courses on one page.</p>
+  <div class="tag">JOHN · infill lots &nbsp;|&nbsp; HUNTER · rec land &nbsp;|&nbsp; LUX · luxury teardowns</div>
+</div>
+
+<nav>
+  <a href="#snapshot">⚡ Snapshot</a>
+  <a href="#infill" class="i">🏘️ Infill</a>
+  <a href="#rec" class="r">🌲 Rec Land</a>
+  <a href="#lux" class="l">🏰 Luxury</a>
+  <a href="#rules">🧭 Golden Rules</a>
+  <a href="#today">✅ Do Today</a>
+</nav>
+
+<div class="wrap">
+
+  <!-- SNAPSHOT -->
+  <section id="snapshot">
+    <div class="sec-head"><span class="ico">⚡</span><h2>The 10-Second Snapshot</h2></div>
+    <p class="sec-sub">If you read nothing else, read these three cards.</p>
+    <div class="engines">
+      <div class="eng i">
+        <span class="badge">JOHN · INFILL</span>
+        <h3>🏘️ Vacant City Lots</h3>
+        <div class="who">Sell to builders</div>
+        <div class="row"><span>Buy</span><b>Off-market lot w/ utilities</b></div>
+        <div class="row"><span>Research by</span><b>ZIP code</b></div>
+        <div class="row"><span>Exit</span><b>Assign / double-close</b></div>
+        <div class="fee">$10–20k <span style="font-size:13px;color:var(--mut);font-weight:600">/ sniper $40–100k</span></div>
+      </div>
+      <div class="eng r">
+        <span class="badge">HUNTER · REC</span>
+        <h3>🌲 Rural Parcels</h3>
+        <div class="who">Sell to consumers</div>
+        <div class="row"><span>Buy</span><b>≤5 ac, 1–3 hrs from city</b></div>
+        <div class="row"><span>Research by</span><b>COUNTY (zoning)</b></div>
+        <div class="row"><span>Exit</span><b>Cash or owner-finance</b></div>
+        <div class="fee">3–7× <span style="font-size:13px;color:var(--mut);font-weight:600">$3–5k in → $15–30k out</span></div>
+      </div>
+      <div class="eng l">
+        <span class="badge">LUX · TEARDOWN</span>
+        <h3>🏰 Old House / Rich Dirt</h3>
+        <div class="who">Sell to developers</div>
+        <div class="row"><span>Buy</span><b>Small old house, $2M+ area</b></div>
+        <div class="row"><span>Research by</span><b>POCKET (never cross roads)</b></div>
+        <div class="row"><span>Exit</span><b>Assign to developer</b></div>
+        <div class="fee">$100k+ <span style="font-size:13px;color:var(--mut);font-weight:600">/ floor $50k</span></div>
+      </div>
+    </div>
+    <div class="call tip"><span class="ico">🔑</span><div><span class="k">The one idea that ties it together:</span> in all three, <b>the research IS the product.</b> You get paid because you know the zoning / price truth the seller and the buyer don't. Find the dirt a builder wants + a price they'll pay = your fee.</div></div>
+  </section>
+
+  <!-- INFILL -->
+  <section id="infill">
+    <div class="lane i">
+      <div class="lane-top"><span class="n">🏘️</span><div><h3>Infill Lots — John's System</h3><div class="s">Vacant city lots → builders. Markets: Nashville · Houston · Atlanta (+ Charlotte Phase 2)</div></div></div>
+      <div class="lane-body">
+
+        <div class="step-grid">
+          <div class="step"><span class="num">1</span><h4>Count sold lots</h4><p>Zillow: vacant lots SOLD in 30 days at $50k+ per zip. More sold = more builder demand.</p></div>
+          <div class="step"><span class="num">2</span><h4>Satellite check</h4><p>Look for the house–lot–house pattern: scattered empty lots inside built-out streets.</p></div>
+          <div class="step"><span class="num">3</span><h4>New-build count</h4><p>Homes built this year per zip = builder activity. <b>The ONLY reliable TX signal</b> (TX hides sold prices).</p></div>
+          <div class="step"><span class="num">4</span><h4>Price from the buyer</h4><p>Offer = buyer's box price − your fee − closing. Start from the builder, never the seller.</p></div>
+        </div>
+
+        <div class="block">
+          <h4>📍 Target ZIPs</h4>
+          <div class="chips">
+            <span class="chip">Nashville 37013 · 37115</span>
+            <span class="chip">Sniper: 37027 Brentwood · 37220 Oak Hill</span>
+            <span class="chip">Houston 77016 · 77026 · 77051</span>
+            <span class="chip">Atlanta 30327 + 30305 · 30342</span>
+            <span class="chip">Charlotte (Ph2) 28205/06/08/16</span>
+          </div>
+        </div>
+
+        <div class="block">
+          <h4>🎯 Known Buy Boxes</h4>
+          <div class="chips">
+            <span class="chip">Dalamar — Nashville lots &lt;$120k, 0.2ac+, buys 10–40 packs</span>
+            <span class="chip">Goodall — $50k/ac, 15+ ac, 50mi of Nashville</span>
+            <span class="chip">Goodwin — Atlanta $600k–1.4M, cash, &lt;14 days</span>
+            <span class="chip">DR Horton / Pulte — Austin tracts</span>
+          </div>
+        </div>
+
+        <div class="money"><span style="font-size:20px">💰</span><div><span class="big">Buyers first, always.</span> A lot with no matching buy box is a comp exercise, not a deal. Run the buyer cascade top-down — best-fit buyer first, never blast.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REC -->
+  <section id="rec">
+    <div class="lane r">
+      <div class="lane-top"><span class="n">🌲</span><div><h3>Recreational Land — Hunter's System</h3><div class="s">Rural parcels → consumers. Markets: Hot Springs AR · Cherokee Village AR · Eufaula OK</div></div></div>
+      <div class="lane-body">
+
+        <div class="step-grid">
+          <div class="step"><span class="num">1</span><h4>Pick the city you SELL to</h4><p>Buy 1–3 hrs out (one county over ≈ 1 hr). &lt;1hr too pricey, &gt;3hr too few buyers.</p></div>
+          <div class="step"><span class="num">2</span><h4>Call the county — 4 Qs</h4><p>Camping limit? Min build size? Mobile homes OK? STR OK? <b>No zoning dept = auto-green.</b></p></div>
+          <div class="step"><span class="num">3</span><h4>Satellite tell</h4><p>RVs parked on bare land = camping allowed + no HOA in practice. Instant validator.</p></div>
+          <div class="step"><span class="num">4</span><h4>Sanity check price</h4><p>Sell-through near 1:1, Zillow floor under $50k. Low-income county next to rich metro = the spread.</p></div>
+        </div>
+
+        <div class="block">
+          <h4>🧲 Direct REI Pull Filters</h4>
+          <div class="chips">
+            <span class="chip">Vacant · ≤5.1 ac</span>
+            <span class="chip">Assessed ≤ $10k</span>
+            <span class="chip">Out-of-county / out-of-state owner</span>
+            <span class="chip">Outside city limits</span>
+            <span class="chip">Slope: 50%+ under 15%</span>
+            <span class="chip">Not landlocked</span>
+            <span class="chip">FEMA ≤ 50% · Wetlands ≤ 50%</span>
+            <span class="chip">Exclude church/cemetery/LLC owners</span>
+          </div>
+        </div>
+
+        <div class="block">
+          <h4>🧮 The Offer Rule — ALL 3 must pass</h4>
+          <div class="chips">
+            <span class="chip">① ≤ assessed value</span>
+            <span class="chip">② ≤ ⅓ of resale (all-in)</span>
+            <span class="chip">③ ≤ cheapest active listing</span>
+          </div>
+        </div>
+
+        <div class="money"><span style="font-size:20px">📞</span><div><span class="big">Voicemail first.</span> Let every seller call go to VM → reverse-lookup the number → pull the parcel → THEN call back informed. First call = questions only, never accept a price on call #1.</div></div>
+        <div class="money" style="margin-top:8px"><span style="font-size:20px">🏦</span><div><span class="big">Owner-finance = the money engine.</span> Buy $3.5k → sell $1k down + $500/mo × 48 ≈ $25k. ~1 in 5 default around month 4 → you keep every payment AND the land, then resell. Stack 4–5 notes ≈ $2k+/mo passive.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LUX -->
+  <section id="lux">
+    <div class="lane l">
+      <div class="lane-top"><span class="n">🏰</span><div><h3>Luxury Teardowns — Lux Blueprint</h3><div class="s">Old house on premium dirt → developers. Pockets: Brentwood 37027 · Atlanta 30327 · Coastal OC</div></div></div>
+      <div class="lane-body">
+
+        <div class="step-grid">
+          <div class="step"><span class="num">1</span><h4>Filter Zillow</h4><p>Built ≥ 2022 · houses · $2M+ · <b>remove boundary</b>. No $2M+ new builds nearby = kill it.</p></div>
+          <div class="step"><span class="num">2</span><h4>Find builder's cost</h4><p>Open 3–4 new builds → price history → what they PAID for the raw lot. That's true land value.</p></div>
+          <div class="step"><span class="num">3</span><h4>Hunt the owners</h4><p>Old small houses (≤25% of new-build sqft) whose Zestimate is $200–300k ABOVE builder cost.</p></div>
+          <div class="step"><span class="num">4</span><h4>MAO</h4><p>Dispo price − $100–150k. Round DOWN to the number you can <b>defend to a developer.</b></p></div>
+        </div>
+
+        <div class="block">
+          <h4>⚡ The 3× Rule (fast gut-check)</h4>
+          <div class="money"><span style="font-size:20px">📐</span><div>Lock a teardown at ~$1M <span class="big">only if new builds in that pocket sell $3M+.</span> Ratio not there? Walk. Works in most luxury markets.</div></div>
+        </div>
+
+        <div class="block">
+          <h4>🚫 The 3 Hard Rules</h4>
+          <div class="chips">
+            <span class="chip">🌊 Water only comps water (never mix)</span>
+            <span class="chip">🛣️ Never cross a 3-lane / yellow-line road</span>
+            <span class="chip">📏 Value buildable area, not deed acreage</span>
+          </div>
+        </div>
+
+        <div class="block">
+          <h4>✍️ The Signing Move</h4>
+          <div class="chips">
+            <span class="chip">"Our simple 4-page vs. the state contract?"</span>
+            <span class="chip">DocuSign — walk page 1 only</span>
+            <span class="chip">Never mention the earnest deposit</span>
+          </div>
+        </div>
+
+        <div class="money"><span style="font-size:20px">💬</span><div><span class="big">The "politician" tactic.</span> Seller asks a question you can't answer (lot size, lender)? Never answer straight — give a vague positive + fire back YOUR question. "It's a tennis match — you only score by serving the ball back. End everything with a question."</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RULES -->
+  <section id="rules">
+    <div class="sec-head"><span class="ico">🧭</span><h2>Golden Rules (all 3 courses agree)</h2></div>
+    <p class="sec-sub">Break these and you lose money. Follow them and it's hard to.</p>
+    <div class="rules">
+      <div class="rule"><div class="t">🔎 Research is the product</div><div class="d">You get paid for knowing the zoning/price truth. Do the homework before you spend a dollar on mail.</div></div>
+      <div class="rule"><div class="t">🚫 Never blind-offer</div><div class="d">All 3 teach conversation-first pricing. A formula lowballs your best deals and overpays your worst.</div></div>
+      <div class="rule"><div class="t">📬 Mail is king</div><div class="d">Personal, handwritten-style, no "investor." Direct REI native. 10%+ response on a tight list.</div></div>
+      <div class="rule"><div class="t">🤝 Buyers first</div><div class="d">Build the buyer list while you build the pull list. Copy every developer name as you research.</div></div>
+      <div class="rule"><div class="t">🧾 Round DOWN</div><div class="d">Always take the safe number you can defend. "The worst thing is chasing your best comp and failing."</div></div>
+      <div class="rule"><div class="t">🗺️ Know your unit</div><div class="d">Infill = ZIP. Rec = COUNTY. Luxury = POCKET. Never zoom out past your unit.</div></div>
+    </div>
+    <div class="call warn"><span class="ico">⚠️</span><div><span class="k">Texas & other non-disclosure states (TX, NM, ID, UT, MT):</span> Zillow hides sold prices — undercounts everything. Judge by <b>new-construction counts + direct builder calls</b> instead.</div></div>
+  </section>
+
+  <!-- TODAY -->
+  <section id="today">
+    <div class="sec-head"><span class="ico">✅</span><h2>What To Do Today</h2></div>
+    <p class="sec-sub">In order. Don't overthink it — just start at #1.</p>
+    <div class="actions">
+      <div class="act"><div><h4>Make the 5 money calls</h4><p>Carlos Gil · Dalamar/Darryl · Nick Moran (Drees) · Marco (Goodwin) · Kade (DR Horton). Reactivate the 22 cold buyers.</p></div></div>
+      <div class="act"><div><h4>Pull Nashville infill (Direct REI)</h4><p>List 1: zips 37013 / 37115 → Full import → letters out. Houston + Atlanta next.</p></div></div>
+      <div class="act"><div><h4>Run rec zoning calls</h4><p>Garland (Hot Springs) · Sharp/Fulton (Cherokee Village) · McIntosh (Eufaula). Hunter's 4 questions + POA check on 71909.</p></div></div>
+      <div class="act"><div><h4>Verify a Lux goldmine pocket</h4><p>Run built≥2022 / $2M+ price-history dig on Brentwood 37027 and Atlanta 30327 → pull the teardown house list.</p></div></div>
+      <div class="act"><div><h4>Point Sharyn &amp; Marie at developers</h4><p>Add Lux's two questions to capture: "price range per lot?" + "how fast can you move?"</p></div></div>
+    </div>
+    <div class="call tip"><span class="ico">📱</span><div><span class="k">When A2P clears:</span> fire REI Reply SMS campaigns using the Lux one-structured-message format (no first-name field — luxury owners are LLCs/trusts).</div></div>
+  </section>
+
+  <footer>
+    Freedom Offers · Internal playbook · Built from John Duong (infill), Hunter Pogatchnik / Sell The Earth (rec), and Lux Blueprint Academy.<br>
+    Educational only — confirm contracts &amp; closings with your title company / attorney.
+  </footer>
+
+</div>
+</body>
+</html>
