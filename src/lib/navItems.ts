@@ -28,6 +28,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/report", label: "KPI Reports", gate: "all" },
     { href: "/kpi-sources", label: "KPI Sources", gate: "all" },
     { href: "/analytics", label: "Analytics", gate: "manager" },
+    { href: "/lead-roi", label: "Lead ROI", gate: "all" },
     { href: "/internet", label: "Internet Speed", gate: "manager" },
   ] },
   { group: "Coaching", items: [

@@ -38,6 +38,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
   "/cfd-notes": "cfd contract for deed owner finance notes ledger seller financing payments default land",
   "/ai-training": "ai training claude chatgpt gemini perplexity prompt prompting models haiku sonnet opus fable effort artificial intelligence learn",
+  "/lead-roi": "lead roi cost per lead acquisition cpl cpa marketing spend funnel conversion ppl direct mail sms cold call return on investment break even",
   "/software": "logins passwords tools vendors",
   "/tickets": "requests help support",
   "/leaks": "war room health issues",
@@ -89,6 +90,7 @@ export default function Sidebar({
       { href: "/report", label: "KPI Reports", Icon: FileText },
       { href: "/kpi-sources", label: "KPI Sources", Icon: ScrollText },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
+      { href: "/lead-roi", label: "Lead ROI", Icon: TrendingUp },
       { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
     ] },
     { label: "Coaching", items: [
