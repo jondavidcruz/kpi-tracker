@@ -15,6 +15,7 @@ import { formatValue, type Unit } from "@/lib/format";
 import { statusClasses, statusVsGoal, statusVsPace, alertSeverity, isKpiHiddenForRep, type Status } from "@/lib/kpi";
 import { dailyGap, monthlyGap, monthlyCatchup, buildCoaching } from "@/lib/gap";
 import { dealsNeedingAttention } from "@/lib/deals";
+import { addrMatch } from "@/lib/underwrite-history";
 import { findPipCandidates } from "@/lib/pip";
 import { getDailyTrends } from "@/lib/trends";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
@@ -92,8 +93,8 @@ export default async function DashboardPage({
   const yearStart = `${year}-01-01`;
   const [acqKpis, closings, closedDeals, ytdOpExAgg] = await Promise.all([
     db.kpi.findMany({ where: { key: { in: ["acq_contracts_sent", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"] } }, select: { id: true, key: true } }),
-    db.closing.findMany({ where: { status: "fell_through" }, select: { status: true, closeDate: true } }),
-    db.closedDeal.findMany({ where: { year: Number(year) }, select: { profit: true, month: true } }), // HUD-backed ledger
+    db.closing.findMany({ where: { status: { in: ["fell_through", "closed"] } }, select: { status: true, closeDate: true, revenue: true, address: true } }),
+    db.closedDeal.findMany({ where: { year: Number(year) }, select: { profit: true, month: true, address: true } }), // HUD-backed ledger
     db.expenseLine.aggregate({ where: { month: { startsWith: year } }, _sum: { actual: true } }), // YTD operating expenses (P&L)
   ]);
   const sentId = acqKpis.find((k) => k.key === "acq_contracts_sent")?.id;
@@ -109,8 +110,12 @@ export default async function DashboardPage({
   ]);
   // Closed deals + revenue come from the HUD-backed ClosedDeal ledger; company net =
   // that revenue minus year-to-date operating expenses from the P&L.
-  const closedCount = closedDeals.length;
-  const grossRevenue = closedDeals.reduce((s, c) => s + c.profit, 0);
+  // Revenue lives in TWO ledgers: the HUD-backed ClosedDeal table AND deals marked
+  // "closed" on the Escrow & Closing tracker. Union them, deduped by address, so
+  // gross revenue reflects every closing no matter which flow recorded it.
+  const escrowClosed = closings.filter((c) => c.status === "closed" && c.closeDate.startsWith(year) && c.revenue > 0 && !closedDeals.some((d) => addrMatch(d.address, c.address)));
+  const closedCount = closedDeals.length + escrowClosed.length;
+  const grossRevenue = closedDeals.reduce((s, c) => s + c.profit, 0) + escrowClosed.reduce((s, c) => s + c.revenue, 0);
   const ytdOpEx = ytdOpExAgg._sum.actual ?? 0;
   const netProfit = grossRevenue - ytdOpEx;
   const falloutYTD = closings.filter((c) => c.status === "fell_through" && (c.closeDate ? c.closeDate >= yearStart : true)).length;
@@ -153,7 +158,8 @@ export default async function DashboardPage({
   for (const e of fEntries) { const key = fIdToKey.get(e.kpiId); if (key) byKey[key] = (byKey[key] ?? 0) + e.value; }
   const kv = (key: string) => byKey[key] ?? 0;
   const moNum = Number(month.slice(5, 7));
-  const closedThisMonth = closedDeals.filter((c) => c.month === moNum).length;
+  const closedThisMonth = closedDeals.filter((c) => c.month === moNum).length
+    + escrowClosed.filter((c) => Number(c.closeDate.slice(5, 7)) === moNum).length;
   const funnelStages = [
     { label: "Leads", count: kv("ppl_leads") + kv("text_responses") + kv("direct_mail_responses"), source: "PPL + SMS + mail" },
     { label: "Opportunities", count: kv("quality_convos"), source: "quality conversations" },
@@ -169,7 +175,8 @@ export default async function DashboardPage({
   const marketingLines = monthExp.filter((e) => e.category === "marketing");
   const marketingMonth = marketingLines.reduce((s, e) => s + e.actual, 0);
   const opexMonth = monthExp.reduce((s, e) => s + e.actual, 0);
-  const grossRevMonth = closedDeals.filter((c) => c.month === moNum).reduce((s, c) => s + c.profit, 0);
+  const grossRevMonth = closedDeals.filter((c) => c.month === moNum).reduce((s, c) => s + c.profit, 0)
+    + escrowClosed.filter((c) => Number(c.closeDate.slice(5, 7)) === moNum).reduce((s, c) => s + c.revenue, 0);
   const monthlyIdByKey = new Map(teamMonthly.map((k) => [k.key, k.id]));
   const setMtd = (key: string, val: number) => { const id = monthlyIdByKey.get(key); if (id != null) mtdSums.set(id, val); };
   setMtd("deals_closed", closedThisMonth);

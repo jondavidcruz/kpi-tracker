@@ -38,7 +38,7 @@ const KILL_CHECKS: Record<string, string[]> = {
   novation: ["Seller is OK with the retail timeline (3–6 mo)", "Comps support the list price", "Cash MAO doesn't beat the novation payout"],
   flip: ["ARV backed by 3 sold comps", "Rehab walked, bid, or honestly estimated", "Hold time realistic (4–6 months)"],
   rental: ["Rent verified with rental comps — not a guess", "Taxes reflect REASSESSED value (price × rate)", "BRRRR refi check run if the buyer refinances"],
-  creative: ["Loan balance + payment verified from a statement", "Seller understands the loan stays in place"],
+  creative: ["Loan balance + payment verified from a statement", "Seller understands the loan stays in place", "End-buyer cash-flow check run (rent vs payment)"],
   listing: ["Seller expectations set on timeline + price"],
 };
 
@@ -510,6 +510,9 @@ export default function UnderwritingCalculator() {
   const devCompRows = [devComp(1), devComp(2), devComp(3)];
   const devPerAcres = devCompRows.map((c) => c.perAcre).filter((x) => x > 0);
   const devAvgPerAcre = devPerAcres.length ? Math.round(devPerAcres.reduce((s, x) => s + x, 0) / devPerAcres.length) : 0;
+  // Comp-quality guard (Tyson: "the three methods should land close") — when the high
+  // comp is 2× the low, the average is meaningless until an outlier is explained/dropped.
+  const devCompsDisagree = devPerAcres.length >= 2 && Math.max(...devPerAcres) > 2 * Math.min(...devPerAcres);
   const devDispo = devAvgPerAcre > 0 && devSubjAcres > 0 ? Math.round(devAvgPerAcre * devSubjAcres) : 0;
   const devSpread = n("devSpread") || 100000; // Lux Blueprint target spread: $100k–$150k
   const devMao = devDispo > 0 ? Math.max(0, devDispo - devSpread) : 0;
@@ -545,6 +548,15 @@ export default function UnderwritingCalculator() {
   const cBuyerDown = n("cBuyerDown"); // down we collect from the end buyer
   const cDownMarkup = Math.max(0, cBuyerDown - cDown);
   const cMargin = cFee + cDownMarkup; // total we make on the creative deal
+  // End-buyer cash-flow check (borrowed from the Wrap tab): can a buyer actually
+  // carry these payments? Their max monthly = market rent − the cashflow they need.
+  // Our locked payment must sit BELOW that, or the terms won't assign.
+  const cPmtN = n("cPmt");
+  const cRentN = n("cRent");
+  const cCFTarget = n("cCFTarget") || 300;
+  const cMaxPmt = cRentN > 0 ? Math.max(0, cRentN - cCFTarget) : 0;
+  const cCashflow = cRentN > 0 && cPmtN > 0 ? cRentN - cPmtN : null;
+  const cTermsOk = cCashflow != null ? cPmtN <= cMaxPmt : null;
   const lList = n("lList"), lComm = num(v("lComm") || "2.5"), lRef = num(v("lRef") || "25"), lFlat = n("lFlat");
   const mktFee = lFlat > 0 ? lFlat : lList * (lComm / 100) * (lRef / 100);
 
@@ -689,8 +701,9 @@ export default function UnderwritingCalculator() {
       { label: "ARV (for the BRRRR check)", ok: rArv > 0 },
     ],
     creative: [
-      { label: "Price / terms entered", ok: n("cPrice") > 0 },
+      { label: "Price / terms entered", ok: n("cPrice") > 0 || n("cLoan") > 0 },
       { label: "Our fee set", ok: cFee > 0 },
+      { label: "Market rent (cash-flow check)", ok: n("cRent") > 0 },
     ],
     listing: [{ label: "List price entered", ok: lList > 0 }],
   };
@@ -1350,6 +1363,10 @@ export default function UnderwritingCalculator() {
               <p className="sm:col-span-2 -mt-1 text-[11px] text-slate-500">We collect a bigger down from the end buyer than we owe the seller and keep the spread (e.g. seller down $5k → tell the end buyer $10–15k), plus our assignment fee.</p>
               <Field k="cFee" label="Our assignment fee (to end buyer)" prefix="$" placeholder="15,000" req="need" />
               <Field k="cBuyerDown" label="Down we charge the end buyer" prefix="$" placeholder="15,000" req="need" />
+              <div className={optDiv}>🎁 Can an end buyer cash-flow these terms?</div>
+              <Field k="cRent" label="Market rent for this house ($/mo)" prefix="$" placeholder="2,400" req="good" />
+              <Field k="cCFTarget" label="Cashflow the buyer needs ($/mo)" prefix="$" placeholder="300" req="opt" />
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 The end buyer&apos;s max monthly = rent − their cashflow target. If the payment we locked is ABOVE that, the terms won&apos;t assign — renegotiate before signing. (Sub-to PITI covers taxes/insurance; on seller-finance P&amp;I, leave extra cushion.)</p>
             </>
           )}
           {tab === "listing" && (
@@ -1503,6 +1520,11 @@ export default function UnderwritingCalculator() {
           {tab === "developer" && (
             <>
               {!devLux && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-300">🚫 No $2M+ luxury new builds here → no developer demand. Mark this deal dead.</div>}
+              {devCompsDisagree && (
+                <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300">
+                  ⚠️ Your comps DISAGREE — {money(Math.min(...devPerAcres))}/acre vs {money(Math.max(...devPerAcres))}/acre (more than 2×). The average is meaningless until you explain the outlier: wrong lot size, permits/plans in the price, waterfront vs not, or a different pocket. Verify or drop it before trusting this number.
+                </div>
+              )}
               <MathReceipt
                 title="Developer offer"
                 rows={[
@@ -1609,6 +1631,17 @@ export default function UnderwritingCalculator() {
               <Res label="Assignment fee" value={money(cFee)} tone="muted" />
               <Res label={`Down markup (buyer ${money(cBuyerDown)} − seller ${money(cDown)})`} value={money(cDownMarkup)} tone={cDownMarkup > 0 ? "good" : "muted"} />
               <Res label="🎯 Total margin to us" value={money(cMargin)} tone={cMargin > 0 ? "good" : "muted"} big />
+              {cCashflow != null && (
+                <div className={`sm:col-span-2 mt-1 rounded-lg px-3 py-2 ring-1 ${cTermsOk ? "bg-emerald-50 ring-emerald-200" : "bg-red-50 ring-red-200"}`}>
+                  <div className={`text-[12px] font-bold ${cTermsOk ? "text-emerald-800" : "text-red-800"}`}>
+                    {cTermsOk ? "🎁 ✅ These terms will assign" : "🎁 🚫 Terms too rich — the end buyer can't cash-flow them"}
+                  </div>
+                  <div className={`mt-0.5 text-[11px] leading-snug ${cTermsOk ? "text-emerald-700" : "text-red-700"}`}>
+                    Rent {money(cRentN)} − our locked payment {money(cPmtN)} = <b>{money(cCashflow)}/mo</b> for the buyer (they need {money(cCFTarget)}).
+                    {cTermsOk ? ` Max payment that still assigns: ${money(cMaxPmt)}.` : ` Renegotiate the monthly below ${money(cMaxPmt)} before signing.`}
+                  </div>
+                </div>
+              )}
               <p className="mt-2 text-[11px] text-slate-400">We don&apos;t buy on these terms — we assign them to an end buyer who wants them. We make the assignment fee + the spread on the down payment; they assume the exact agreed terms.</p>
             </>
           )}
