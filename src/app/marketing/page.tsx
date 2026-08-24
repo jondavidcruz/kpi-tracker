@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap, saveBuyerTerms, readBuyerTerms, saveBuyerLand, readBuyerLand } from "@/app/actions";
+import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap, saveBuyerTerms, readBuyerTerms, saveBuyerLand, readBuyerLand, installLandMarkets } from "@/app/actions";
 import { BUILDER_TYPES } from "@/lib/buyer-land";
 import ImageUpload from "@/components/ImageUpload";
-import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
+import { getCurrentUser, isManager, canAccessMarketing, isOwner } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
@@ -30,7 +30,7 @@ function toProspect(r: Record<string, unknown>): Prospect {
 }
 
 
-export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ saved?: string; imp?: string; addr?: string; price?: string }> }) {
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ saved?: string; imp?: string; addr?: string; price?: string; landpack?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) {
     return (
@@ -229,7 +229,20 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
 
       {/* Target markets — detail by county + neighborhoods (editable) */}
       <div>
-        <SectionTitle title="🎯 Target Markets & Neighborhoods" subtitle="The areas we're farming — top zips, neighborhoods, and the developers who buy there. Add the neighborhoods you're pulling leads in." accent="bg-red-400" />
+        <SectionTitle title="🎯 Target Markets & Neighborhoods" subtitle="The areas we're farming — luxury teardown pockets, vacant-land infill zips, and recreational-land counties, with the buyers for each. Add the neighborhoods you're pulling leads in." accent="bg-red-400" />
+        {sp.landpack && (
+          <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">
+            🌱 Installed {sp.landpack.split("-")[0]} land market(s) + {sp.landpack.split("-")[1]} builder buy-box(es) from the course research. Builders landed in Buyer Research → to-vet.
+          </div>
+        )}
+        {isOwner(me) && !targets.some((t) => t.name.includes("Infill") || t.name.includes("Rec Land")) && (
+          <form action={installLandMarkets} className="mb-3">
+            <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-200">
+              🌱 Install land markets from the course research (infill + rec)
+            </button>
+            <span className="ml-2 text-[11px] text-slate-400">Nashville/Houston/Atlanta/Charlotte infill · Hot Springs/Cherokee Village/Eufaula rec — plus Dalamar, Goodall, Goodwin, DR Horton &amp; Pulte buy boxes into vetting.</span>
+          </form>
+        )}
         {targets.length > 0 && (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {targets.map((t) => (

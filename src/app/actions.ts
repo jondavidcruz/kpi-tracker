@@ -1205,6 +1205,93 @@ export async function installLandKpis() {
   redirect(`/admin?landkpis=${created}`);
 }
 
+// ── Land markets + builder buy-boxes installer (owner, idempotent, runtime) ───
+// Adds the vacant-land (infill) + recreational markets from the course research
+// (John Duong / Hunter P. pack) to Target Markets, and the named builder buy
+// boxes into Buyer Research as to_vet rows. Dedupes by name — safe to re-run.
+export async function installLandMarkets() {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+
+  const MARKETS_PACK = [
+    { name: "🏘️ Nashville, TN — Infill", region: "TN", tier: "1", sortOrder: 20, lat: 36.1627, lng: -86.7816,
+      summary: "Infill priority #1 (John's system). Volume: 37013 Antioch / 37115 Madison. Sniper: 37027 Brentwood / 37220 Oak Hill — six-figure fees, comp by price history like Lux. Fast permits, deep builder pool.",
+      neighborhoods: "37013 — Antioch (volume)\n37115 — Madison (volume)\n37138 · 37086 · 37167 — secondary\n37027 — Brentwood (sniper)\n37220 — Oak Hill (sniper)",
+      developers: "Dalamar — <$120k/lot, 0.2 ac+, buys 10–40 lot packages\nGoodall — ~$50k/acre, 15+ ac, within 50 mi of Nashville\nDrees (Nick Moran) — money-call list" },
+    { name: "🏘️ Houston, TX — Infill", region: "TX", tier: "1", sortOrder: 21, lat: 29.7604, lng: -95.3698,
+      summary: "Volume: 77016 / 77026 / 77051 (+77028/77033). Gentrifying: 77004/77020/77021. Acreage: 77433/77429/77327. TX is NON-DISCLOSURE — judge demand by new-construction counts + builder calls, not Zillow solds.",
+      neighborhoods: "77016 · 77026 · 77051 — volume\n77028 · 77033 — secondary\n77004 · 77020 · 77021 — gentrifying\n77433 · 77429 · 77327 — acreage",
+      developers: "DR Horton (Kade) — tract builder\nPulte — tracts\nBuild the Houston list on pull day — buyers first, always" },
+    { name: "🏘️ Atlanta, GA — Infill", region: "GA", tier: "2", sortOrder: 22, lat: 33.849, lng: -84.4277,
+      summary: "30327 Tuxedo Park / Mt. Paran + 30305/30342 — the Goodwin buy box; overlaps our luxury teardown pocket, so infill + teardown pulls share the list.",
+      neighborhoods: "30327 — Tuxedo Park / Mt. Paran\n30305 · 30342 — Buckhead-adjacent",
+      developers: "Goodwin — $600k–1.4M, ≥0.5 ac, CASH, <14-day close" },
+    { name: "🏘️ Charlotte, NC — Infill (Phase 2)", region: "NC", tier: "3", sortOrder: 23, lat: 35.2271, lng: -80.8431,
+      summary: "Phase 2 — BUYERS FIRST, then pull. Do not mail until the builder list exists.",
+      neighborhoods: "28205 · 28206 · 28208 · 28216\n28209 · 28211",
+      developers: "(build the builder list before pulling)" },
+    { name: "🌲 Hot Springs, AR — Rec Land", region: "AR", tier: "1", sortOrder: 24, lat: 34.5037, lng: -93.0552,
+      summary: "Garland County — lake draw, 1–3 hrs from Little Rock (the metro we SELL to). Run Hunter's 4-question zoning call before any mail; 71909 POA pockets need the HOA check. Filters: ≤5 ac · assessed ≤$10k · Zillow floor <$50k.",
+      neighborhoods: "Garland County — Hot Springs\n71909 — Hot Springs Village (POA / HOA check!)\nSell metro: Little Rock",
+      developers: "Buyers = CONSUMERS — FB Marketplace + Craigslist, listed in Little Rock\nExits: cash or CFD (~$1k down + ~$500/mo — see CFD Notes)" },
+    { name: "🌲 Cherokee Village, AR — Rec Land", region: "AR", tier: "2", sortOrder: 25, lat: 36.2984, lng: -91.5157,
+      summary: "Sharp / Fulton County. Zillow floor under $50k, sell-through near 1:1. Zoning call (camping / min build / mobile homes / STR) before pulling.",
+      neighborhoods: "Sharp County · Fulton County\nSell metro: Little Rock / Memphis",
+      developers: "Buyers = CONSUMERS — marketplace listings in the metro\nExits: cash or CFD" },
+    { name: "🌲 Eufaula, OK — Rec Land", region: "OK", tier: "2", sortOrder: 26, lat: 35.2873, lng: -95.5825,
+      summary: "McIntosh County — Lake Eufaula draw, ~1.5 hrs from Tulsa. Zoning call first; same rec filters (≤5 ac, assessed ≤$10k).",
+      neighborhoods: "McIntosh County — Eufaula / Lake Eufaula\nSell metros: Tulsa · OKC",
+      developers: "Buyers = CONSUMERS — marketplace listings in Tulsa/OKC\nExits: cash or CFD" },
+  ];
+
+  const BUILDERS_PACK = [
+    { name: "Dalamar Homes", market: "Nashville, TN", region: "TN", buyBox: "Infill lots <$120k, 0.2 ac+, buys 10–40 lot packages", buyBoxAreas: "37013, 37115, 37138, 37086, 37167", companySize: "Regional", zips: "37013, 37115, 37138, 37086, 37167", pricePerLot: 120000 },
+    { name: "Goodall Homes", market: "Nashville, TN", region: "TN", buyBox: "~$50k/acre, 15+ acres, within 50 miles of Nashville", buyBoxAreas: "Nashville 50-mile radius", companySize: "Regional", zips: "", pricePerLot: 0 },
+    { name: "Goodwin Homes", market: "Atlanta, GA", region: "GA", buyBox: "Teardowns/lots $600k–1.4M, ≥0.5 ac, CASH, <14-day close", buyBoxAreas: "30327, 30305, 30342", companySize: "Regional", zips: "30327, 30305, 30342", pricePerLot: 1400000 },
+    { name: "DR Horton (Austin)", market: "Austin, TX", region: "TX", buyBox: "Tract land — Austin metro", buyBoxAreas: "Austin metro", companySize: "National (DR Horton)", zips: "", pricePerLot: 0 },
+    { name: "Pulte (Austin)", market: "Austin, TX", region: "TX", buyBox: "Tract land — Austin metro", buyBoxAreas: "Austin metro", companySize: "National", zips: "", pricePerLot: 0 },
+  ];
+
+  const [existingMarkets, existingContacts] = await Promise.all([
+    db.targetMarket.findMany({ select: { name: true } }),
+    db.marketContact.findMany({ select: { id: true, name: true } }),
+  ]);
+  const mNames = new Set(existingMarkets.map((m) => m.name.toLowerCase()));
+  const firstToken = (s: string) => s.trim().split(/\s+/)[0].toLowerCase();
+  const cTokens = new Set(existingContacts.map((c) => firstToken(c.name)));
+
+  let markets = 0;
+  for (const m of MARKETS_PACK) {
+    if (mNames.has(m.name.toLowerCase())) continue;
+    await db.targetMarket.create({ data: m });
+    markets++;
+  }
+
+  let builders = 0;
+  const landFlags = await readBuyerLand();
+  for (const b of BUILDERS_PACK) {
+    if (cTokens.has(firstToken(b.name))) continue; // likely already on the buyer list — don't duplicate
+    const row = await db.marketContact.create({
+      data: {
+        name: b.name, category: "luxury", type: "developer", vetStage: "to_vet",
+        market: b.market, region: b.region, buyBox: b.buyBox, buyBoxAreas: b.buyBoxAreas,
+        companySize: b.companySize, status: "Buy Box (course research)",
+      },
+    });
+    landFlags[row.id] = { isLandBuyer: true, ...(b.zips ? { targetZips: b.zips } : {}), ...(b.pricePerLot ? { pricePerLot: b.pricePerLot } : {}) };
+    builders++;
+  }
+  if (builders > 0) {
+    const row = await db.resource.findFirst({ where: { category: "__buyer_land__" } });
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(landFlags) } });
+    else await db.resource.create({ data: { title: "buyer-land", category: "__buyer_land__", url: "", description: JSON.stringify(landFlags) } });
+  }
+
+  revalidatePath("/marketing");
+  revalidatePath("/vetting");
+  redirect(`/marketing?landpack=${markets}-${builders}`);
+}
+
 // ── Land buy-box per vetted buyer (JSON side-store; feeds cascade ranking) ────
 const BUYER_LAND_CAT = "__buyer_land__";
 export async function readBuyerLand(): Promise<Record<string, BuyerLand>> {
