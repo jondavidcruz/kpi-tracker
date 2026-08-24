@@ -15,6 +15,7 @@ import type { DealLand } from "@/lib/deal-land";
 import type { BuyerLand } from "@/lib/buyer-land";
 import type { CfdNote } from "@/lib/cfd";
 import type { UwRec } from "@/lib/underwrite-history";
+import { NAV_GROUPS } from "@/lib/navItems";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
@@ -119,17 +120,22 @@ export async function saveUserAccess(formData: FormData) {
   if (!userId) return;
   // Per-section menu access: anything offered but not checked becomes hidden for them.
   let navHidden = "";
+  const shown = new Set(formData.getAll("navShow").map(String));
   try {
     const available: string[] = JSON.parse(String(formData.get("navAvailable") ?? "[]")) || [];
-    const shown = new Set(formData.getAll("navShow").map(String));
     navHidden = JSON.stringify(available.filter((h) => !shown.has(h)));
   } catch { navHidden = ""; }
+  // Markets & Buyers: granted by the toggle OR by checking any marketing-gated
+  // section (Vetted Buyers / Buyer Research / Lead Sourcing) — so ticking the
+  // sections just works, no separate toggle hunt (Jon's Michelle report).
+  const marketingHrefs = new Set(NAV_GROUPS.flatMap((g) => g.items.filter((i) => i.gate === "marketing").map((i) => i.href)));
+  const accessMarketing = formData.get("accessMarketing") === "on" || [...shown].some((h) => marketingHrefs.has(h));
   await db.user.update({
     where: { id: userId },
     data: {
       // C-Suite & pay access are no longer toggle-driven — they're hard-limited to
       // Jon/Enrico/Viktoriia by name in auth.ts, so we leave those stored flags untouched.
-      accessMarketing: formData.get("accessMarketing") === "on",
+      accessMarketing,
       navHidden,
     },
   });

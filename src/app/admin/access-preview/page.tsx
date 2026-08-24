@@ -49,8 +49,12 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
     gate === "csuite" ? flags.csuite :
     gate === "training" ? trains : false;
   const hiddenSet = new Set(parseNavHidden(selected.navHidden));
-  // Items the person could see (role-allowed) — the toggleable list for the editor.
-  const availableHrefs = NAV_GROUPS.flatMap((g) => g.items.filter((it) => roleAllows(it.gate)).map((it) => it.href));
+  // Items grantable in the editor. Marketing-gated rows (Vetted Buyers, Buyer
+  // Research, Lead Sourcing) are ALWAYS listed — checking one grants the
+  // Markets & Buyers flag on save, so the owner can just tick the sections
+  // instead of hunting for the separate toggle.
+  const grantable = (gate: NavGate) => roleAllows(gate) || gate === "marketing";
+  const availableHrefs = NAV_GROUPS.flatMap((g) => g.items.filter((it) => grantable(it.gate)).map((it) => it.href));
   const can = (it: { href: string; gate: NavGate }) => roleAllows(it.gate) && !hiddenSet.has(it.href);
   const editable = isAdmin(me); // only the owner edits access
 
@@ -118,14 +122,14 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
             <div className="mb-1 text-[11px] font-semibold text-slate-500">Sensitive data</div>
             <div className="mb-2 flex flex-wrap items-center gap-x-6 gap-y-2">
               <span className="flex items-center gap-1.5 text-sm text-slate-500">🔒 C-Suite &amp; pay ($ amounts, P&amp;L, payroll, roadmap, roster): <b className={isCSuitePerson(selected) ? "text-emerald-700" : "text-slate-700"}>{isCSuitePerson(selected) ? "Allowed" : "Locked"}</b></span>
-              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessMarketing" defaultChecked={selected.accessMarketing} className="h-4 w-4 accent-brand-navy" /> Markets &amp; Buyers</label>
+              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessMarketing" defaultChecked={selected.accessMarketing} className="h-4 w-4 accent-brand-navy" /> Markets &amp; Buyers <span className="text-[11px] text-slate-400">(auto-granted when any 🩷 Buyers section below is checked)</span></label>
             </div>
             <p className="mb-3 text-[11px] text-slate-400">C-Suite &amp; pay data is hard-limited to <b>Jon, Enrico &amp; Viktoriia</b> — it can&apos;t be granted to anyone else here, and new hires never get it.</p>
 
             <div className="mb-1 text-[11px] font-semibold text-slate-500">Menu sections — uncheck to remove (hidden from their sidebar entirely)</div>
             <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
               {NAV_GROUPS.map((g) => {
-                const items = g.items.filter((it) => roleAllows(it.gate));
+                const items = g.items.filter((it) => grantable(it.gate));
                 if (items.length === 0) return null;
                 return (
                   <div key={g.group}>
@@ -133,7 +137,8 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
                     <div className="space-y-1">
                       {items.map((it) => (
                         <label key={it.href} className="flex items-center gap-2 text-[13px] text-slate-700">
-                          <input type="checkbox" name="navShow" value={it.href} defaultChecked={!hiddenSet.has(it.href)} className="h-3.5 w-3.5 accent-brand-navy" /> {it.label}
+                          <input type="checkbox" name="navShow" value={it.href} defaultChecked={it.gate === "marketing" ? flags.marketing && !hiddenSet.has(it.href) : !hiddenSet.has(it.href)} className="h-3.5 w-3.5 accent-brand-navy" /> {it.label}
+                          {it.gate === "marketing" && <span className="rounded bg-pink-100 px-1 py-0.5 text-[10px] font-bold text-pink-700">Buyers</span>}
                         </label>
                       ))}
                     </div>
