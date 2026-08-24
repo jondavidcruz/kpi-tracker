@@ -16,79 +16,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
-// ── 1. Land offer calculator (course auto-rules) ─────────────────────────────
-function OfferCalc() {
-  const [mode, setMode] = useState<"cash" | "infill">("cash");
-  const [estValue, setEstValue] = useState("");
-  const [assessed, setAssessed] = useState("");
-  const [cheapestComp, setCheapestComp] = useState("");
-  const [acres, setAcres] = useState("");
-  const [buyBox, setBuyBox] = useState("");
-  const [spreadPct, setSpreadPct] = useState("30");
-
-  const n = (s: string) => Number(String(s).replace(/[^0-9.]/g, "")) || 0;
-  const r = useMemo(() => {
-    const ev = n(estValue), asr = n(assessed), comp = n(cheapestComp), ac = n(acres), bb = n(buyBox), sp = n(spreadPct) / 100;
-    const caps: { label: string; value: number }[] = [];
-    if (mode === "cash") {
-      if (ev > 0) caps.push({ label: "≤ ⅓ of est. value (Hunter rule)", value: ev / 3 });
-      if (asr > 0) caps.push({ label: "≤ county assessed value", value: asr });
-      if (comp > 0) caps.push({ label: "undercut cheapest active comp (−15%)", value: comp * 0.85 });
-    } else {
-      if (bb > 0 && sp > 0) caps.push({ label: `builder buy-box − ${Math.round(sp * 100)}% spread`, value: bb * (1 - sp) });
-      if (asr > 0) caps.push({ label: "≤ county assessed value", value: asr });
-    }
-    const offer = caps.length ? Math.min(...caps.map((c) => c.value)) : 0;
-    const perAcre = ac > 0 && offer > 0 ? offer / ac : 0;
-    return { caps, offer, perAcre };
-  }, [mode, estValue, assessed, cheapestComp, acres, buyBox, spreadPct]);
-
-  return (
-    <Card title="🎯 Land offer calculator">
-      <div className="mb-3 inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-        {(["cash", "infill"] as const).map((m) => (
-          <button key={m} onClick={() => setMode(m)} className={`rounded-md px-3 py-1 text-xs font-semibold ${mode === m ? "bg-white text-slate-900 shadow dark:bg-slate-700 dark:text-slate-100" : "text-slate-500"}`}>
-            {m === "cash" ? "Cash (rural land)" : "Infill (builder)"}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {mode === "cash" ? (
-          <>
-            <label><span className={lbl}>Est. market value</span><input value={estValue} onChange={(e) => setEstValue(e.target.value)} className={inputCls} placeholder="$" /></label>
-            <label><span className={lbl}>County assessed</span><input value={assessed} onChange={(e) => setAssessed(e.target.value)} className={inputCls} placeholder="$" /></label>
-            <label><span className={lbl}>Cheapest active comp</span><input value={cheapestComp} onChange={(e) => setCheapestComp(e.target.value)} className={inputCls} placeholder="$" /></label>
-          </>
-        ) : (
-          <>
-            <label><span className={lbl}>Builder buy-box price</span><input value={buyBox} onChange={(e) => setBuyBox(e.target.value)} className={inputCls} placeholder="$" /></label>
-            <label><span className={lbl}>Target spread %</span><input value={spreadPct} onChange={(e) => setSpreadPct(e.target.value)} className={inputCls} placeholder="12–50" /></label>
-            <label><span className={lbl}>County assessed</span><input value={assessed} onChange={(e) => setAssessed(e.target.value)} className={inputCls} placeholder="$ (optional)" /></label>
-          </>
-        )}
-        <label><span className={lbl}>Acreage (for $/acre)</span><input value={acres} onChange={(e) => setAcres(e.target.value)} className={inputCls} placeholder="acres" /></label>
-      </div>
-
-      <div className="mt-4 rounded-xl bg-emerald-50 p-4 dark:bg-emerald-950">
-        <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Max offer (lowest cap wins)</div>
-        <div className="text-3xl font-extrabold text-emerald-800 dark:text-emerald-200">{money(r.offer)}</div>
-        {r.perAcre > 0 && <div className="text-sm text-emerald-700 dark:text-emerald-300">{money(r.perAcre)} / acre</div>}
-      </div>
-      {r.caps.length > 0 && (
-        <ul className="mt-3 space-y-1 text-sm text-slate-600 dark:text-slate-300">
-          {r.caps.map((c, i) => (
-            <li key={i} className={c.value === r.offer ? "font-semibold text-emerald-700 dark:text-emerald-300" : ""}>
-              {c.value === r.offer ? "→ " : "• "}{c.label}: {money(c.value)}
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="mt-2 text-xs text-slate-400">Rules of thumb from the land courses. Always verify comps, access, and title before sending.</p>
-    </Card>
-  );
-}
-
-// ── 2. CFD / contract-for-deed calculator ────────────────────────────────────
+// ── CFD / contract-for-deed calculator ────────────────────────────────────
 function CfdCalc() {
   const [price, setPrice] = useState("");
   const [down, setDown] = useState("");
@@ -165,13 +93,10 @@ export default function LandTools() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-        🌱 <strong>Land tools</strong> — offer auto-rules and owner-finance (CFD) math for the land pivot. <span className="font-mono">(43,560 sq ft = 1 acre)</span>
+        🌱 <strong>Land tools</strong> — owner-finance (CFD) exit math + the acre converter. Land OFFERS live in the calculator above — Cash (Land), Developer, or Novation. <span className="font-mono">(43,560 sq ft = 1 acre)</span>
       </div>
       <AcreConverter />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <OfferCalc />
-        <CfdCalc />
-      </div>
+      <CfdCalc />
     </div>
   );
 }

@@ -17,7 +17,7 @@ export default function UnderwritingPage() {
 
       <SectionTitle
         title="🌱 Land Tools"
-        subtitle="Land-specific math for the pivot — offer auto-rules ($/acre, ⅓-value, assessed & comp caps, builder-spread), a blind-offer batch calculator for mail merge, and a CFD / owner-finance payment calculator."
+        subtitle="The acre ⇄ sq ft converter and the CFD / owner-finance exit calculator. Land OFFERS are made in the calculator above — Cash (Land), Developer, or Novation."
         accent="bg-emerald-500"
       />
       <LandTools />

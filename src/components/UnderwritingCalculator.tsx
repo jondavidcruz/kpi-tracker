@@ -6,10 +6,10 @@ import { saveUnderwrite } from "@/app/actions";
 // Ordered LAND-first for the land pivot, then the home strategies. `group` drives
 // the grouped tab bar so the sheet leads with what the team uses most now.
 const TABS = [
-  { key: "cash_land", group: "Land", label: "Cash (Land)", emoji: "🌵", blurb: "Cash offer on vacant land. Comp recent LAND sales in the area, average them, and offer ~33% of that average. MAO = avg land sale × 33%. Anchor opens below MAO." },
-  { key: "developer", group: "Land", label: "Developer", emoji: "🏗️", blurb: "Land-for-luxury-builds cash offer (Lux Blueprint). Value the LOT from 3 comp methods → dispo price, then MAO = dispo − a $100–150k spread. No repairs — the developer tears down. Aim for a six-figure fee." },
+  { key: "cash_land", group: "Land", label: "Cash (Land)", emoji: "🌵", blurb: "Land offer #1 — CASH. Sales in the area → comp the sold parcels and offer ~33%, all-in. Nothing sold nearby → go BLIND: ~⅓ of the EMV / county assessed value. Lowest cap always wins." },
+  { key: "developer", group: "Land", label: "Developer", emoji: "🏗️", blurb: "Land offer #2 — DEVELOPER. Know the builder's buy box → lock it up at box − our fee − closing (John's infill). No box → comp what developers PAID for lots (Lux): $/acre × the lot − a $100–150k spread." },
   { key: "assignment", group: "Homes", label: "Cash (Homes)", emoji: "🏠", blurb: "Cash offer on a house. MAO = (ARV × market %) − repairs − your fee. The market % already covers the flipper's carry + profit. Anchor opens below MAO." },
-  { key: "novation", group: "Homes", label: "Novation", emoji: "📋", blurb: "List at current similar-condition value, cover the seller's closing + commission (no holding — retail buyer). Find the max seller payout." },
+  { key: "novation", group: "Homes", label: "Novation", emoji: "📋", blurb: "Houses AND land offer #3 — list it at similar-condition value / EMV, cover the seller's closing + commission. Land: 3–6 months minimum on market; no sold comps = a blind listing (flagged)." },
   { key: "creative", group: "Homes", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
   { key: "listing", group: "Homes", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
   { key: "flip", group: "Homes", label: "Flip / Wholetail", emoji: "🔨", blurb: "Full buyer's-lens analysis: Max Offer = ARV + purchase credit − min profit − (property costs + money costs)." },
@@ -35,6 +35,7 @@ const KILL_CHECKS: Record<string, string[]> = {
   assignment: ["Not listed on the MLS (no agent already involved)", "3 SOLD comps verified — not asking prices", "Seller gave an actual number", "Repairs from sqft × condition (walked or photos)"],
   cash_land: ["Not listed on the MLS", "3 SOLD land comps — not asking prices", "Road access verified (legal + physical)", "Flood / wetlands checked (Regrid)", "Back taxes checked"],
   developer: ["$2M+ luxury new builds confirmed nearby", "Not listed on the MLS", "Seller gave a real number", "Comps match style + view (Water Rule)", "Buildable area checked — not just paper lot size"],
+  developer_buybox: ["Builder's buy box confirmed (price + lot criteria)", "Lot fits the box (size / zip / utilities)", "Not listed on the MLS", "Seller gave a real number"],
   novation: ["Seller is OK with the retail timeline (3–6 mo)", "Comps support the list price", "Cash MAO doesn't beat the novation payout"],
   flip: ["ARV backed by 3 sold comps", "Rehab walked, bid, or honestly estimated", "Hold time realistic (4–6 months)"],
   rental: ["Rent verified with rental comps — not a guess", "Taxes reflect REASSESSED value (price × rate)", "BRRRR refi check run if the buyer refinances"],
@@ -396,16 +397,25 @@ export default function UnderwritingCalculator() {
   //  ① ~33% of the average sold land value, ALL-IN (so minus our ~$1.5k closing)
   //  ② ≤ county assessed value   ③ ≤ cheapest active listing  (both optional inputs —
   //  they only bind when entered, but the course says always check them.)
+  // Two situations (Jon's 3-offer land model): SALES IN THE AREA → comp-based
+  // (avg of sold land × ~33%). NO sales nearby → BLIND: ~33% of EMV/assessed,
+  // since there's nothing to comp. Same cap machinery either way — lowest wins.
+  const clMode = v("clMode") === "blind" ? "blind" : "comps";
   const clComps = [n("clC1"), n("clC2"), n("clC3")].filter((x) => x > 0);
   const clLandAvg = clComps.length ? Math.round(clComps.reduce((s, x) => s + x, 0) / clComps.length) : 0;
-  const clPct = num(v("clPct") || "33");             // team target: ~33% of area land sales
+  const clPct = num(v("clPct") || "33");             // team target: ~33% of land value
   const clCloseCost = n("clCloseCost") || mkt.landClose;      // our side of closing (title co) — the "all-in" part
-  const clThird = clLandAvg > 0 ? Math.round(clLandAvg * (clPct / 100) - clCloseCost) : 0;
   const clAssessed = n("clAssessed");
+  const clEmv = n("clEmv");                          // blind mode: estimated market value (if we have one)
+  const clValueBase = clMode === "blind" ? (clEmv || clAssessed) : clLandAvg;
+  const clBaseLabel = clMode === "blind" ? (clEmv > 0 ? "est. market value" : "county assessed value") : "avg of sold land comps";
+  const clThird = clValueBase > 0 ? Math.round(clValueBase * (clPct / 100) - clCloseCost) : 0;
   const clCheapest = n("clCheapest");
   const clCaps: { label: string; v: number }[] = [
-    ...(clThird > 0 ? [{ label: `${clPct}% of land value, all-in`, v: clThird }] : []),
-    ...(clAssessed > 0 ? [{ label: "county assessed value", v: clAssessed }] : []),
+    ...(clThird > 0 ? [{ label: `${clPct}% of ${clBaseLabel}, all-in`, v: clThird }] : []),
+    // In blind mode the assessed value is the BASE when there's no EMV; it's only a
+    // separate cap when a different base (EMV or comps) is in play.
+    ...(clAssessed > 0 && !(clMode === "blind" && clEmv <= 0) ? [{ label: "county assessed value", v: clAssessed }] : []),
     ...(clCheapest > 0 ? [{ label: "cheapest active listing", v: clCheapest }] : []),
   ];
   const clMao = clCaps.length ? Math.round(Math.min(...clCaps.map((c) => c.v))) : 0;
@@ -415,7 +425,7 @@ export default function UnderwritingCalculator() {
   const clAsk = n("clAsk");
   const clOverAsk = clAsk > 0 && clMao > 0 ? clAsk - clMao : 0;
   const clSaneTone: "good" | "warn" | "bad" = clMao <= 0 ? "bad" : clPct > 45 ? "warn" : "good";
-  const clSaneWord = clMao <= 0 ? "🚫 enter land comps" : clPct > 45 ? `⚠️ ${clPct}% is high for land` : `✅ ${clPct}% of area land value`;
+  const clSaneWord = clMao <= 0 ? (clMode === "blind" ? "🚫 enter the assessed value" : "🚫 enter land comps") : clPct > 45 ? `⚠️ ${clPct}% is high for land` : `✅ ${clPct}% of ${clBaseLabel}`;
 
   // ---- Double close (Cash tabs) ---- when the seller won't let us assign, we do TWO separate,
   // simultaneous closings (A→B buy, B→C sell) — closing costs are paid twice (escrow usually
@@ -456,7 +466,11 @@ export default function UnderwritingCalculator() {
   const nExpectedSale = nList * (nRealismPct / 100);
   const nSellerClosePct = mkt.sellerPct; // seller-side only (market default) — never the buyer's
   const nSellerClose = nExpectedSale * (nSellerClosePct / 100);
-  const nHoldMonths = n("nHoldMonths") || 2;        // months on market before it sells
+  const nPropType = v("nPropType") === "land" ? "land" : "house";
+  // Land listings move slower — 3–6 months minimum (Jon). Default the hold to 5
+  // months on land vs 2 on houses so the carry math is honest.
+  const nHoldMonths = n("nHoldMonths") || (nPropType === "land" ? 5 : 2);
+  const nBlindListing = nPropType === "land" && novCompPrices.length === 0; // nothing sold nearby — listing and hoping
   const nHoaCost = n("nHoa") * nHoldMonths;          // HOA dues while listed
   const nExtra = extraSum("nExtra", nExtraN);        // manual override: cash-for-keys, eviction, etc.
   const nReserve = n("nReserve");                    // reserve: misc out-of-pocket + lender-required repairs
@@ -513,9 +527,19 @@ export default function UnderwritingCalculator() {
   // Comp-quality guard (Tyson: "the three methods should land close") — when the high
   // comp is 2× the low, the average is meaningless until an outlier is explained/dropped.
   const devCompsDisagree = devPerAcres.length >= 2 && Math.max(...devPerAcres) > 2 * Math.min(...devPerAcres);
-  const devDispo = devAvgPerAcre > 0 && devSubjAcres > 0 ? Math.round(devAvgPerAcre * devSubjAcres) : 0;
+  // Two ways to price a developer deal (Jon's model): BUY BOX (John's infill —
+  // we KNOW what the builder pays: offer = box − our fee − closing) or COMPS
+  // (Lux — value the lot from developer purchases, then take the spread).
+  const devMode = v("devMode") === "buybox" ? "buybox" : "comps";
+  const devBox = n("devBox");                    // builder's buy-box price for a lot like this
+  const devBoxFee = n("devBoxFee") || 15000;     // our infill fee target (John: $10–20k)
+  const devBoxClose = n("devBoxClose") || mkt.landClose;
+  const devCompDispo = devAvgPerAcre > 0 && devSubjAcres > 0 ? Math.round(devAvgPerAcre * devSubjAcres) : 0;
+  const devDispo = devMode === "buybox" ? devBox : devCompDispo;
   const devSpread = n("devSpread") || 100000; // Lux Blueprint target spread: $100k–$150k
-  const devMao = devDispo > 0 ? Math.max(0, devDispo - devSpread) : 0;
+  const devMao = devMode === "buybox"
+    ? (devBox > 0 ? Math.max(0, Math.round(devBox - devBoxFee - devBoxClose)) : 0)
+    : (devDispo > 0 ? Math.max(0, devDispo - devSpread) : 0);
   // Developer double close (seller won't assign → two escrows; same one-button model).
   const devDblOn = v("devDblClose") === "1";
   const devDblBuy = devMao;      // A→B: our purchase from the seller
@@ -529,8 +553,12 @@ export default function UnderwritingCalculator() {
   const devAsk = n("devAsk");
   const devOverAsk = devAsk > 0 && devMao > 0 ? devAsk - devMao : 0;
   // Fee sanity — Lux Blueprint wants a six-figure fee. Green ≥100k, yellow 50–100k, red <50k.
-  const devSaneTone: "good" | "warn" | "bad" = devMao <= 0 || devFeeAtMao < 50000 ? "bad" : devFeeAtMao < 100000 ? "warn" : "good";
-  const devSaneWord = devMao <= 0 ? "🚫 no room" : devFeeAtMao < 50000 ? "🚫 fee too thin — aim $100k+" : devFeeAtMao < 100000 ? "⚠️ under the $100k target" : "✅ six-figure fee";
+  const devSaneTone: "good" | "warn" | "bad" = devMao <= 0 ? "bad"
+    : devMode === "buybox" ? (devBoxFee < 10000 ? "warn" : "good")
+    : devFeeAtMao < 50000 ? "bad" : devFeeAtMao < 100000 ? "warn" : "good";
+  const devSaneWord = devMao <= 0 ? "🚫 no room"
+    : devMode === "buybox" ? (devBoxFee < 10000 ? `⚠️ fee ${money(devBoxFee)} — infill standard is $10–20k` : `✅ fee ${money(devBoxFee)} (infill standard)`)
+    : devFeeAtMao < 50000 ? "🚫 fee too thin — aim $100k+" : devFeeAtMao < 100000 ? "⚠️ under the $100k target" : "✅ six-figure fee";
 
   // "On-market equivalent" — a seller talking point (NO input; fixed assumption). Our cash /
   // land offer is a NET to the seller; to net the same on the open market they'd have to SELL
@@ -644,7 +672,7 @@ export default function UnderwritingCalculator() {
   const accepted = n("acceptedPrice");
   let dealMax = 0, profitAtAccepted = 0, marginLabel = "Your profit", showAsking = true;
   if (tab === "assignment") { dealMax = cashMao; profitAtAccepted = (flipperTarget - repairs - aHoa - aExtra) - accepted; marginLabel = "Your assignment fee"; }
-  else if (tab === "cash_land") { dealMax = clMao; profitAtAccepted = clLandAvg - accepted; marginLabel = "Your spread vs land value"; showAsking = true; }
+  else if (tab === "cash_land") { dealMax = clMao; profitAtAccepted = clValueBase - accepted; marginLabel = "Your spread vs land value"; showAsking = true; }
   else if (tab === "developer") { dealMax = devMao; profitAtAccepted = devDispo - accepted; marginLabel = "Your assignment fee"; showAsking = true; }
   else if (tab === "novation") { dealMax = novMao; profitAtAccepted = nNet - accepted; marginLabel = "Your fee"; }
   else if (tab === "flip") { dealMax = fMao; profitAtAccepted = arv - fTotalCosts - accepted; marginLabel = "Your profit"; }
@@ -670,20 +698,34 @@ export default function UnderwritingCalculator() {
       { label: "Square feet", ok: sqft > 0 },
       { label: "Condition picked", ok: !!v("rehabSf") },
     ],
-    cash_land: [
-      { label: "2+ sold land comps", ok: clComps.length >= 2 },
-      { label: "County assessed value", ok: clAssessed > 0 },
-      { label: "Cheapest active listing", ok: clCheapest > 0 },
-      { label: "Lot size", ok: !!v("clLot") },
-      { label: "Seller's asking price", ok: clAsk > 0 },
-    ],
-    developer: [
-      { label: "Lot size", ok: devSubjAcres > 0 },
-      { label: "2+ developer lot comps", ok: devPerAcres.length >= 2 },
-      { label: "Comp purchase years", ok: [1, 2, 3].some((i) => n(`devC${i}BuyYr`) > 0) },
-      { label: "$2M+ new builds confirmed", ok: devLux },
-      { label: "Seller's asking price", ok: devAsk > 0 },
-    ],
+    cash_land: clMode === "blind"
+      ? [
+          { label: "County assessed value", ok: clAssessed > 0 },
+          { label: "Est. market value (EMV)", ok: clEmv > 0 },
+          { label: "Cheapest active listing", ok: clCheapest > 0 },
+          { label: "Lot size", ok: !!v("clLot") },
+          { label: "Seller's asking price", ok: clAsk > 0 },
+        ]
+      : [
+          { label: "2+ sold land comps", ok: clComps.length >= 2 },
+          { label: "County assessed value", ok: clAssessed > 0 },
+          { label: "Cheapest active listing", ok: clCheapest > 0 },
+          { label: "Lot size", ok: !!v("clLot") },
+          { label: "Seller's asking price", ok: clAsk > 0 },
+        ],
+    developer: devMode === "buybox"
+      ? [
+          { label: "Buy-box price entered", ok: devBox > 0 },
+          { label: "Seller's asking price", ok: devAsk > 0 },
+          { label: "Lot size", ok: devSubjAcres > 0 },
+        ]
+      : [
+          { label: "Lot size", ok: devSubjAcres > 0 },
+          { label: "2+ developer lot comps", ok: devPerAcres.length >= 2 },
+          { label: "Comp purchase years", ok: [1, 2, 3].some((i) => n(`devC${i}BuyYr`) > 0) },
+          { label: "$2M+ new builds confirmed", ok: devLux },
+          { label: "Seller's asking price", ok: devAsk > 0 },
+        ],
     novation: [
       { label: "List price entered", ok: nList > 0 },
       { label: "2+ as-is comps", ok: compCount(["nComp1p", "nComp2p", "nComp3p"]) >= 2 },
@@ -708,7 +750,9 @@ export default function UnderwritingCalculator() {
     listing: [{ label: "List price entered", ok: lList > 0 }],
   };
   const confEvidence = EVIDENCE[tab] ?? [];
-  const confKills = (KILL_CHECKS[tab] ?? []).map((label, i) => ({ label, ok: v(`kc_${tab}_${i}`) === "1" }));
+  // Developer buy-box mode has its own check set (John's infill, not Lux rules).
+  const checksKey = tab === "developer" && devMode === "buybox" ? "developer_buybox" : tab;
+  const confKills = (KILL_CHECKS[checksKey] ?? []).map((label, i) => ({ label, ok: v(`kc_${checksKey}_${i}`) === "1" }));
   const confAll = [...confEvidence, ...confKills];
   const confPct = confAll.length ? Math.round((confAll.filter((c) => c.ok).length / confAll.length) * 100) : 0;
   const confMissing = confAll.filter((c) => !c.ok).map((c) => c.label);
@@ -732,7 +776,7 @@ export default function UnderwritingCalculator() {
         title: "Cash (Land) Analysis",
         comps: `<strong>Subject:</strong> ${esc(addr)}${v("clLot") ? `<br><strong>Lot:</strong> ${esc(v("clLot"))}` : ""}${comps ? `<br><strong>Comparable land sales:</strong> ${comps}` : ""}`,
         rows: [
-          ["Avg area land sale (comps)", money(clLandAvg)],
+          [clMode === "blind" ? `Blind base (${clBaseLabel})` : "Avg area land sale (comps)", money(clValueBase)],
           [`Cap ① — ${clPct}% of land value, all-in (−${money(clCloseCost)} closing)`, money(clThird)],
           ...(clAssessed > 0 ? ([["Cap ② — county assessed value", money(clAssessed)]] as [string, string][]) : []),
           ...(clCheapest > 0 ? ([["Cap ③ — cheapest active listing", money(clCheapest)]] as [string, string][]) : []),
@@ -960,7 +1004,7 @@ export default function UnderwritingCalculator() {
         ${repairsHtml}
         ${r.note ? `<p style="margin-top:14px;color:#64748b;font-size:12px;font-style:italic">${esc(r.note)}</p>` : ""}
         ${confAll.length ? `<p style="margin-top:8px;font-size:11px;font-weight:700;color:${confPct >= 80 ? "#047857" : confPct >= 50 ? "#b45309" : "#b91c1c"}">🎯 Offer confidence: ${confPct}% (${confAll.filter((c) => c.ok).length}/${confAll.length} evidence + checks)</p>` : ""}
-        ${(() => { const items = KILL_CHECKS[tab] ?? []; const missing = items.filter((_, ci) => v(`kc_${tab}_${ci}`) !== "1"); return missing.length ? `<p style="margin-top:8px;color:#b45309;font-size:11px;font-weight:700">⚠️ Unverified at export: ${esc(missing.join(" · "))}</p>` : items.length ? `<p style="margin-top:8px;color:#047857;font-size:11px;font-weight:700">✅ All pre-send checks confirmed</p>` : ""; })()}
+        ${(() => { const items = KILL_CHECKS[checksKey] ?? []; const missing = items.filter((_, ci) => v(`kc_${checksKey}_${ci}`) !== "1"); return missing.length ? `<p style="margin-top:8px;color:#b45309;font-size:11px;font-weight:700">⚠️ Unverified at export: ${esc(missing.join(" · "))}</p>` : items.length ? `<p style="margin-top:8px;color:#047857;font-size:11px;font-weight:700">✅ All pre-send checks confirmed</p>` : ""; })()}
         <div style="margin-top:22px;padding-top:8px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
           🗓️ Comped on <b style="color:#475569">${esc(compDate)}</b> at ${esc(compTime)}${compSeconds != null ? ` &nbsp;·&nbsp; ⏱ Underwrite time: <b style="color:#475569">${esc(mmss(compSeconds))}</b>` : ""}<br>
           <span style="color:#cbd5e1">Re-comp every ~30 days — values move as new sales hit the market.</span>
@@ -1194,6 +1238,19 @@ export default function UnderwritingCalculator() {
           {tab === "developer" && (
             <>
               {legend}
+              {stepDiv(1, "How are we pricing this lot?", "Know the builder's buy box → price from it (John's infill way). No box → comp what developers paid for lots (Lux way).")}
+              <div className="sm:col-span-2 flex gap-2">
+                <button type="button" onClick={() => setV("devMode", "buybox")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold ring-1 transition ${devMode === "buybox" ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>🎯 Known buy box<span className="block text-[10px] font-normal opacity-80">box − our fee − closing</span></button>
+                <button type="button" onClick={() => setV("devMode", "")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold ring-1 transition ${devMode === "comps" ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>📊 Comp the lot<span className="block text-[10px] font-normal opacity-80">developer $/acre − spread</span></button>
+              </div>
+              {devMode === "buybox" && (<>
+                <div className={reqDiv}>The builder&apos;s buy box — price first, work backward</div>
+                <Field k="devBox" label="Buy-box price for a lot like this ($ — what the builder pays)" prefix="$" span={2} req="need" />
+                <Field k="devBoxFee" label="Our fee ($ — infill standard 10–20k)" prefix="$" placeholder="15,000" req="opt" />
+                <Field k="devBoxClose" label="Our closing cost ($)" prefix="$" placeholder="1,500" req="opt" />
+                <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🎯 John&apos;s rule: lock it up at <b>buy-box price − our fee − closing</b>. Know the box BEFORE the seller call — it&apos;s on Vetted Buyers → land buy-box (Dalamar, Goodall, Goodwin…). A lot with no matching box is a comp exercise, not a deal.</p>
+              </>)}
+              {devMode === "comps" && (<>
               <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-red-600">Area has luxury new builds selling $2M+?</span>
                 <select value={v("devLux") || "1"} onChange={set("devLux")} className={`${inputCls} border-red-300`}>
                   <option value="1">Yes — developers are building here</option>
@@ -1213,6 +1270,7 @@ export default function UnderwritingCalculator() {
                 </select>
               </label>
               {devView && <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">👀 A view/hilltop drives a big price premium — every comp above must be the same style AND the same view (a flat lot won&apos;t compare).</p>}
+              </>)}
               <Field k="devAsk" label="Seller's asking price ($)" prefix="$" placeholder="1,250,000" req="opt" />
               {/* Subject lot size + auto acres ↔ sq ft converter */}
               <div className="sm:col-span-2 grid grid-cols-3 gap-2">
@@ -1227,6 +1285,7 @@ export default function UnderwritingCalculator() {
               <Field k="devBuild" label="Buildable area after setbacks / cul-de-sac — optional" span={2} req="opt" />
               <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 Value the <b>buildable</b> land, not the paper lot. On a main road (3+ lanes / yellow center lines)? It&apos;s worth less.</p>
 
+              {devMode === "comps" && (<>
               <div className={goodDiv}>🟢 Comps — what the DEVELOPER bought each lot for, by lot size</div>
               <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">Pull for-sale + sold comps near the subject. For each, open its <b>sale history</b> and use what the developer <b>PAID for the raw lot</b> before they built — <b>not</b> the current/sold price (that includes the build). Enter that price + the lot size; we turn it into $/acre and apply it to the subject lot. Year built isn&apos;t used in the math — it&apos;s just a double-check.</p>
               {[1, 2, 3].map((i) => {
@@ -1253,15 +1312,16 @@ export default function UnderwritingCalculator() {
               })}
 
               <Field k="devGrow" label="Market growth %/yr (auto-grows old comp buys to today)" suffix="%" placeholder="4.5" span={2} req="opt" />
+              </>)}
 
-              <div className={optDiv}>Set your fee spread + opening</div>
-              <label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Spread below dispo = your fee (Lux Blueprint target $100k–150k)</span>
+              {devMode === "comps" && <div className={optDiv}>Set your fee spread + opening</div>}
+              {devMode === "comps" ? (<label className="sm:col-span-2"><span className="mb-0.5 block text-[11px] font-semibold text-amber-600">Spread below dispo = your fee (Lux Blueprint target $100k–150k)</span>
                 <select value={v("devSpread") || "100000"} onChange={set("devSpread")} className={`${inputCls} border-amber-200`}>
                   <option value="150000">$150,000 — safest, biggest fee</option>
                   <option value="100000">$100,000 — target</option>
                   <option value="50000">$50,000 — most aggressive (least we take)</option>
                 </select>
-              </label>
+              </label>) : null}
               <Field k="devAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" req="opt" />
 
               <button type="button" onClick={() => setV("devDblClose", devDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${devDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
@@ -1277,16 +1337,30 @@ export default function UnderwritingCalculator() {
               <Field k="clAsk" label="Seller's asking price ($)" prefix="$" placeholder="120,000" req="opt" />
               <Field k="clLot" label="Lot size (e.g. 0.25 ac / 10,000 sf)" span={2} req="opt" />
 
-              {stepDiv(2, "What has land SOLD for nearby?", "2–3 recently SOLD vacant parcels, similar size — sold prices, never asking. We average them into the area land value.")}
-              <Field k="clC1" label="① Land sale — sold $" prefix="$" span={2} req="good" />
-              <Field k="clC2" label="② Land sale — sold $" prefix="$" span={2} req="good" />
-              <Field k="clC3" label="③ Land sale — sold $" prefix="$" span={2} req="good" />
+              {stepDiv(2, "Are there SOLD land comps nearby?", "Sales in the area → comp them. Nothing sold nearby → go BLIND off the assessed value / EMV.")}
+              <div className="sm:col-span-2 flex gap-2">
+                <button type="button" onClick={() => setV("clMode", "")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold ring-1 transition ${clMode === "comps" ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>📊 Sales in the area<span className="block text-[10px] font-normal opacity-80">comp the sold parcels</span></button>
+                <button type="button" onClick={() => setV("clMode", "blind")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold ring-1 transition ${clMode === "blind" ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>🕶️ No sales nearby<span className="block text-[10px] font-normal opacity-80">blind: ⅓ of EMV / assessed</span></button>
+              </div>
+              {clMode === "comps" ? (
+                <>
+                  <Field k="clC1" label="① Land sale — sold $" prefix="$" span={2} req="good" />
+                  <Field k="clC2" label="② Land sale — sold $" prefix="$" span={2} req="good" />
+                  <Field k="clC3" label="③ Land sale — sold $" prefix="$" span={2} req="good" />
+                </>
+              ) : (
+                <>
+                  <Field k="clAssessed" label="County assessed value ($ — the blind base)" prefix="$" span={2} req="need" />
+                  <Field k="clEmv" label="Est. market value ($ — optional, used over assessed)" prefix="$" span={2} req="opt" />
+                  <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🕶️ Blind rule: with nothing sold nearby, offer ~⅓ of the best value estimate you have. The assessed value is the floor of truth; an EMV (Zillow/agent) refines it. Stay conservative — you can always come up.</p>
+                </>
+              )}
 
-              {stepDiv(3, "Hunter's offer caps — the LOWEST wins", "The course rule: the offer must pass ALL THREE — ~33% of land value (all-in), under the county assessed value, and under the cheapest active listing.")}
-              <Field k="clPct" label="① Offer as % of avg land value" suffix="%" placeholder="33" req="opt" />
+              {stepDiv(3, "Hunter's offer caps — the LOWEST wins", "The offer must pass every cap you can check: ~33% of value (all-in), under the county assessed value, and under the cheapest active listing.")}
+              <Field k="clPct" label={`① Offer as % of ${clMode === "blind" ? "EMV / assessed" : "avg land value"}`} suffix="%" placeholder="33" req="opt" />
               <Field k="clCloseCost" label="Our closing cost (all-in rule)" prefix="$" placeholder="1,500" req="opt" />
-              <Field k="clAssessed" label="② County assessed value ($)" prefix="$" placeholder="from the assessor" req="good" />
-              <Field k="clCheapest" label="③ Cheapest ACTIVE listing ($)" prefix="$" placeholder="Zillow, land nearby" req="good" />
+              {clMode === "comps" && <Field k="clAssessed" label="② County assessed value ($)" prefix="$" placeholder="from the assessor" req="good" />}
+              <Field k="clCheapest" label={`${clMode === "comps" ? "③" : "②"} Cheapest ACTIVE listing ($)`} prefix="$" placeholder="Zillow, land nearby" req="good" />
 
               {stepDiv(4, "Opening move", "Open below the max and work up slowly. Never accept a price on call #1.")}
               <Field k="clAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" span={2} req="opt" />
@@ -1300,6 +1374,11 @@ export default function UnderwritingCalculator() {
           {tab === "novation" && (
             <>
               {legend}
+              <div className="sm:col-span-2 flex gap-2">
+                <button type="button" onClick={() => setV("nPropType", "")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-bold ring-1 transition ${nPropType === "house" ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>🏠 House</button>
+                <button type="button" onClick={() => setV("nPropType", "land")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-bold ring-1 transition ${nPropType === "land" ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>🌱 Land<span className="ml-1.5 text-[10px] font-normal opacity-80">3–6 mo minimum</span></button>
+              </div>
+              {nPropType === "land" && <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🌱 Land novation: we list the parcel at EMV backed by what has SOLD in the area. Expect <b>3–6 months minimum</b> on market — set the seller&apos;s timeline expectation up front. No sold comps = a blind listing (flagged below).</p>}
               <div className="sm:col-span-2 flex items-end gap-2">
                 <div className="flex-1"><Field k="nList" label="List price (similar-condition value · EMV for land)" prefix="$" placeholder="420,000" req="need" /></div>
                 {suggestedList > 0 && (
@@ -1519,28 +1598,45 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "developer" && (
             <>
-              {!devLux && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-300">🚫 No $2M+ luxury new builds here → no developer demand. Mark this deal dead.</div>}
+              {devMode === "comps" && !devLux && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-300">🚫 No $2M+ luxury new builds here → no developer demand. Mark this deal dead.</div>}
               {devCompsDisagree && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300">
                   ⚠️ Your comps DISAGREE — {money(Math.min(...devPerAcres))}/acre vs {money(Math.max(...devPerAcres))}/acre (more than 2×). The average is meaningless until you explain the outlier: wrong lot size, permits/plans in the price, waterfront vs not, or a different pocket. Verify or drop it before trusting this number.
                 </div>
               )}
               <MathReceipt
-                title="Developer offer"
-                rows={[
-                  { text: `What developers pay per acre here (avg of your comps${devCompRows.some((c) => c.yrs > 0) ? ", grown to today" : ""})`, amount: devAvgPerAcre > 0 ? `${money(devAvgPerAcre)}/ac` : "—" },
-                  { text: `× the subject's ${devSubjAcres > 0 ? devSubjAcres.toFixed(2) : "—"} acres = what we can SELL the lot for (dispo)`, amount: money(devDispo) },
-                  { text: "Take away our spread — that gap IS our fee", amount: money(devSpread), minus: true },
-                ]}
-                totalLabel="MAX OFFER to the seller"
+                title={devMode === "buybox" ? "Developer offer — from the buy box" : "Developer offer — from comps"}
+                rows={devMode === "buybox"
+                  ? [
+                      { text: "The builder's buy-box price for a lot like this", amount: money(devBox) },
+                      { text: "Take away our fee", amount: money(devBoxFee), minus: true },
+                      { text: "Take away our closing cost", amount: money(devBoxClose), minus: true },
+                    ]
+                  : [
+                      { text: `What developers pay per acre here (avg of your comps${devCompRows.some((c) => c.yrs > 0) ? ", grown to today" : ""})`, amount: devAvgPerAcre > 0 ? `${money(devAvgPerAcre)}/ac` : "—" },
+                      { text: `× the subject's ${devSubjAcres > 0 ? devSubjAcres.toFixed(2) : "—"} acres = what we can SELL the lot for (dispo)`, amount: money(devDispo) },
+                      { text: "Take away our spread — that gap IS our fee", amount: money(devSpread), minus: true },
+                    ]}
+                totalLabel={devMode === "buybox" ? "LOCK IT UP AT (max offer)" : "MAX OFFER to the seller"}
                 total={money(devMao)}
-                coach={devMao > 0 ? `Open at ${money(devAnchor)} (fee ${money(devFeeAtAnchor)}) and never pass ${money(devMao)}. Aim six figures — floor $50k.` : "Enter the lot size and 2–3 developer lot-purchase comps to get your number."}
+                coach={devMao > 0
+                  ? devMode === "buybox"
+                    ? `Open at ${money(devAnchor)} and never pass ${money(devMao)} — every dollar under the box price above ${money(devBoxFee + devBoxClose)} is extra fee.`
+                    : `Open at ${money(devAnchor)} (fee ${money(devFeeAtAnchor)}) and never pass ${money(devMao)}. Aim six figures — floor $50k.`
+                  : devMode === "buybox" ? "Enter the builder's buy-box price to get your lock-up number." : "Enter the lot size and 2–3 developer lot-purchase comps to get your number."}
               />
+              {devMode === "comps" && (<>
               <Res label="Subject lot" value={devSubjAcres > 0 ? `${devSubjAcres.toFixed(2)} acres` : "—"} tone="muted" />
               {[1, 2, 3].map((i) => { const c = devComp(i); return c.perAcre > 0 ? <Res key={i} label={`Comp ${i} — ${(v(`devC${i}Status`) || "sold") === "forsale" ? "for sale" : "sold"} (developer $/acre)`} value={`${money(c.perAcre)}/acre`} tone="muted" /> : null; })}
               <Res label="Avg developer $/acre" value={devAvgPerAcre > 0 ? `${money(devAvgPerAcre)}/acre` : "—"} tone={devAvgPerAcre > 0 ? "navy" : "bad"} />
               <Res label="🎯 Dispo price (land value = $/acre × lot)" value={money(devDispo)} tone={devDispo > 0 ? "navy" : "bad"} big />
               <Res label="− Spread (your fee)" value={money(devSpread)} tone="muted" />
+              </>)}
+              {devMode === "buybox" && (<>
+              <Res label="🎯 Builder's buy-box price" value={money(devBox)} tone={devBox > 0 ? "navy" : "bad"} big />
+              <Res label="− Our fee" value={money(devBoxFee)} tone="muted" />
+              <Res label="− Our closing" value={money(devBoxClose)} tone="muted" />
+              </>)}
               <Res label="🎯 Developer MAO (max offer to seller)" value={money(devMao)} tone={devMao > 0 ? "navy" : "bad"} big />
               {devDblOn && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
@@ -1561,25 +1657,29 @@ export default function UnderwritingCalculator() {
               <Res label="Negotiate (offer to seller)" value={`${money(devAnchor)} → ${money(devMao)}`} tone="muted" />
               {devMao > 0 && <OfferLadder rungs={ladder(devAnchor, devMao)} />}
               {devOverAsk > 0 && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-200">Seller asking {money(devAsk)} — {money(devOverAsk)} over your max. If they won&apos;t come down, it&apos;s likely dead.</div>}
-              {devWater && <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 text-[11px] text-sky-700 ring-1 ring-sky-200">🌊 Waterfront — make sure every comp above is also waterfront, or the number will be too high.</div>}
-              {devView && <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 text-[11px] text-sky-700 ring-1 ring-sky-200">👀 View / hilltop — make sure every comp is the same style AND the same view (hilltop/ocean/city). A flat or no-view lot will pull the number off.</div>}
+              {devMode === "comps" && devWater && <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 text-[11px] text-sky-700 ring-1 ring-sky-200">🌊 Waterfront — make sure every comp above is also waterfront, or the number will be too high.</div>}
+              {devMode === "comps" && devView && <div className="sm:col-span-2 rounded-lg bg-sky-50 px-3 py-2 text-[11px] text-sky-700 ring-1 ring-sky-200">👀 View / hilltop — make sure every comp is the same style AND the same view (hilltop/ocean/city). A flat or no-view lot will pull the number off.</div>}
             </>
           )}
           {tab === "cash_land" && (
             <>
               <MathReceipt
-                title="Land cash offer"
+                title={clMode === "blind" ? "Blind land offer (no sales nearby)" : "Land cash offer"}
                 rows={[
-                  { text: `Average of your ${clComps.length || 3} sold land comps`, amount: money(clLandAvg) },
+                  clMode === "blind"
+                    ? { text: `Blind base — the ${clBaseLabel}`, amount: money(clValueBase) }
+                    : { text: `Average of your ${clComps.length || 3} sold land comps`, amount: money(clLandAvg) },
                   { text: `Take ${clPct}% of it (the deep-discount rule) minus ~${money(clCloseCost)} closing`, amount: money(clThird) },
-                  ...(clAssessed > 0 ? [{ text: "Cap ②: never above the county assessed value", amount: money(clAssessed) }] : []),
-                  ...(clCheapest > 0 ? [{ text: "Cap ③: never above the cheapest active listing", amount: money(clCheapest) }] : []),
+                  ...(clAssessed > 0 && !(clMode === "blind" && clEmv <= 0) ? [{ text: "Cap: never above the county assessed value", amount: money(clAssessed) }] : []),
+                  ...(clCheapest > 0 ? [{ text: "Cap: never above the cheapest active listing", amount: money(clCheapest) }] : []),
                 ]}
                 totalLabel="MAX OFFER (lowest cap wins)"
                 total={money(clMao)}
-                coach={clMao > 0 ? `Bound by the ${clBind}. Open at ${money(clAnchor)} — never accept a price on call #1.${clAssessed <= 0 || clCheapest <= 0 ? " ⚠️ Hunter's rule wants all 3 caps — add the assessed value and cheapest listing." : ""}` : "Enter 2–3 sold land comps above to get your number."}
+                coach={clMao > 0
+                  ? `Bound by the ${clBind}. Open at ${money(clAnchor)} — never accept a price on call #1.${clMode === "comps" && (clAssessed <= 0 || clCheapest <= 0) ? " ⚠️ Hunter's rule wants all 3 caps — add the assessed value and cheapest listing." : ""}${clMode === "blind" ? " 🕶️ Blind number — verify access/flood before contract, and re-comp the moment a sale shows up." : ""}`
+                  : clMode === "blind" ? "Enter the county assessed value (or an EMV) to get your blind number." : "Enter 2–3 sold land comps above to get your number."}
               />
-              <Res label="🎯 Avg area land value" value={money(clLandAvg)} tone={clLandAvg > 0 ? "navy" : "bad"} big />
+              <Res label={clMode === "blind" ? `🎯 Blind base (${clBaseLabel})` : "🎯 Avg area land value"} value={money(clValueBase)} tone={clValueBase > 0 ? "navy" : "bad"} big />
               {clCaps.map((c) => <Res key={c.label} label={`Cap: ${c.label}`} value={money(c.v)} tone={Math.round(c.v) === clMao ? "navy" : "muted"} />)}
               <Res label="🎯 Cash (Land) MAO — max offer" value={money(clMao)} tone={clMao > 0 ? "navy" : "bad"} big />
               {clDblOn && (
@@ -1598,8 +1698,13 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "novation" && (
             <>
+              {nBlindListing && (
+                <div className="sm:col-span-2 mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300">
+                  🕶️ BLIND LISTING — no sold land comps entered. You&apos;re listing and hoping it sells: price conservatively, expect a longer market time than 3–6 months, and warn the seller. Add sold comps the moment any appear.
+                </div>
+              )}
               <MathReceipt
-                title="Novation offer"
+                title={nPropType === "land" ? "Land novation (list it)" : "Novation offer"}
                 rows={[
                   { text: `List it at ${money(nList)} — realistically it sells for ${nRealismPct}% of that`, amount: money(nExpectedSale) },
                   { text: `Take away the agent's commission (${nComm}%)`, amount: money(nExpectedSale * (nComm / 100)), minus: true },
@@ -1609,7 +1714,7 @@ export default function UnderwritingCalculator() {
                 ]}
                 totalLabel="MAX we can pay the seller"
                 total={money(novMao)}
-                coach={novMao > 0 ? `The seller can walk away with up to ${money(novMao)}. Open at ${money(novAnchor)} — every dollar below max is extra fee for us.` : "Enter the list price and fee above to get your number."}
+                coach={novMao > 0 ? `The seller can walk away with up to ${money(novMao)}. Open at ${money(novAnchor)} — every dollar below max is extra fee for us.${nPropType === "land" ? ` 🌱 Timeline talk: 3–6 months minimum on market (carry modeled at ${nHoldMonths} mo).` : ""}` : "Enter the list price and fee above to get your number."}
               />
               {suggestedList > 0 && <Res label="🏷️ Recommended list price" value={money(suggestedList)} tone="good" />}
               {nList > 0 && <Res label={`Expected sale at ${nRealismPct}% of list`} value={money(nExpectedSale)} tone="muted" />}
@@ -1756,9 +1861,9 @@ export default function UnderwritingCalculator() {
       </div>
 
       {/* Advisory pre-send checks — recommend, never block (per Jon). */}
-      {KILL_CHECKS[tab] && (() => {
-        const items = KILL_CHECKS[tab];
-        const done = items.filter((_, i) => v(`kc_${tab}_${i}`) === "1").length;
+      {KILL_CHECKS[checksKey] && (() => {
+        const items = KILL_CHECKS[checksKey];
+        const done = items.filter((_, i) => v(`kc_${checksKey}_${i}`) === "1").length;
         const allDone = done === items.length;
         return (
           <div className={`rounded-xl border-2 p-3.5 ${allDone ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50"}`}>
@@ -1770,9 +1875,9 @@ export default function UnderwritingCalculator() {
             </div>
             <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
               {items.map((label, i) => {
-                const on = v(`kc_${tab}_${i}`) === "1";
+                const on = v(`kc_${checksKey}_${i}`) === "1";
                 return (
-                  <button key={i} type="button" onClick={() => setV(`kc_${tab}_${i}`, on ? "" : "1")}
+                  <button key={i} type="button" onClick={() => setV(`kc_${checksKey}_${i}`, on ? "" : "1")}
                     className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 text-left text-[12.5px] font-medium transition ${on ? "border-emerald-300 bg-white text-slate-500 line-through decoration-emerald-400" : "border-amber-300 bg-white text-slate-700 hover:border-amber-400"}`}>
                     <span className="text-sm leading-none">{on ? "✅" : "⬜"}</span>{label}
                   </button>
