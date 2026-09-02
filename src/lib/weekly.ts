@@ -12,7 +12,7 @@ import {
 import { lastWeekRange, datesInRange, friendlyDate } from "./date";
 import { formatValue, type Unit } from "./format";
 import { statusVsGoal } from "./kpi";
-import { POSITIONS, positionLabel } from "./roles";
+import { POSITIONS, positionLabel, secondaryPositionOf } from "./roles";
 import { findPipCandidates, PIP_CONSECUTIVE_MISSES } from "./pip";
 import { sendEmail, getChannelConfig } from "./notify";
 import { reasonLabel } from "./alert-resolution";
@@ -156,9 +156,13 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
 
   const repBlocks = reps
     .map((rep) => {
+      // Hybrids (Michelle/Sharyn): secondary-role KPIs appear ONLY when they
+      // actually logged something there today — no "—" noise, no judgment.
+      const secRole = secondaryPositionOf(rep);
       const repKpis = [
         ...perRep.filter((k) => k.roleKey === rep.position),
         ...(rep.tracksInternet ? perRep.filter((k) => k.roleKey === "internet") : []),
+        ...(secRole ? perRep.filter((k) => k.roleKey === secRole && valByUserKpi.has(`${rep.id}|${k.id}`)) : []),
       ];
       if (repKpis.length === 0) return ""; // owner / unassigned (Jon) — not on a scorecard
       const logged = repKpis.some((k) => valByUserKpi.has(`${rep.id}|${k.id}`));

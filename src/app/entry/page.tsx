@@ -16,7 +16,7 @@ import {
 import { statusVsGoal, isKpiHiddenForRep } from "@/lib/kpi";
 import { todayStr, friendlyDate, monthOf } from "@/lib/date";
 import { toInputNumber, type Unit } from "@/lib/format";
-import { positionLabel } from "@/lib/roles";
+import { positionLabel, secondaryPositionOf } from "@/lib/roles";
 
 // Developer/luxury outreach KPIs (shown only on a developer-focus day).
 const DEV_KEYS = new Set(["dev_instagram", "dev_facebook", "dev_linkedin", "dev_website", "dev_wordofmouth", "dev_conversations"]);
@@ -47,9 +47,15 @@ export default async function EntryPage({
   // show on her card. Text Responses is auto-synced, never hand-entered.
   const marieId = allReps.find((r) => r.name.trim().split(/\s+/)[0].toLowerCase() === "marie")?.id;
 
-  const [roleKpis, internetKpis, teamDaily, values, targets] = await Promise.all([
+  // Hybrid reps (Michelle/Sharyn): their cross-trained secondary scorecard shows
+  // as an OPTIONAL section — logged entries count, skipping them never nags.
+  const secRole = rep ? secondaryPositionOf(rep) : null;
+  const [roleKpis, secRoleKpis, internetKpis, teamDaily, values, targets] = await Promise.all([
     rep
       ? getKpis({ scope: "per_rep", cadence: "daily", computed: false, roleKey: rep.position })
+      : Promise.resolve([]),
+    rep && secRole
+      ? getKpis({ scope: "per_rep", cadence: "daily", computed: false, roleKey: secRole })
       : Promise.resolve([]),
     // Internet-speed test shows for EVERY rep so each person's daily speed is
     // recorded (alerts still only fire for tracksInternet reps — see alerts.ts).
@@ -132,6 +138,14 @@ export default async function EntryPage({
   if (rep) {
     if (moneyKpis.length > 0) groups.push({ title: "💰 Money — results", hint: "The outcomes that move revenue.", items: moneyKpis.map(toItem) });
     if (activityKpis.length > 0) groups.push({ title: focus === "developer" ? "📊 Activity — developer outreach" : "📊 Activity", hint: "Your daily effort.", items: activityKpis.map(toItem) });
+    if (secRole && secRoleKpis.length > 0) {
+      const secItems = secRoleKpis.filter((k) => !isKpiHiddenForRep(rep.name, k.key)).map(toItem);
+      if (secItems.length > 0) groups.push({
+        title: `🔁 ${positionLabel(secRole)} — secondary role (optional)`,
+        hint: "You're cross-trained here. Log anything you did in this lane today — it counts on the scorecards, but skipping it never flags you.",
+        items: secItems,
+      });
+    }
   }
   // Lead sources only appear on Marie's card; Text Responses is removed (auto-synced).
   const leadSourceItems = selectedId === marieId ? teamDaily.filter((k) => k.key !== "text_responses") : [];
