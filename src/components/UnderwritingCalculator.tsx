@@ -16,19 +16,6 @@ const TABS = [
   { key: "rental", group: "Homes", label: "Buy & Hold / Wrap", emoji: "🏘️", blurb: "Landlord / BRRRR buyer's lens: cap rate, the 1% rule, the max offer at their target cap — AND the wrap check: the max monthly terms we can lock up and still assign to a cash-flowing end buyer." },
 ] as const;
 
-// Closing-cost reality differs by state (transfer taxes, attorney vs escrow close,
-// title schedules). Picking the deal's market sets the DEFAULTS below — every one
-// stays editable on the sheet. Conservative approximations, not legal advice.
-const MARKETS: Record<string, { label: string; sellerPct: number; buyClosePct: number; landClose: number; note: string }> = {
-  tn: { label: "Tennessee — Nashville", sellerPct: 1.7, buyClosePct: 2, landClose: 1800, note: "Transfer tax ~0.37%; budget it on our side when we double close." },
-  tx: { label: "Texas — Houston", sellerPct: 1.3, buyClosePct: 2, landClose: 1500, note: "No transfer tax; title priced by state schedule. Non-disclosure state — comp carefully." },
-  ga: { label: "Georgia — Atlanta", sellerPct: 1.5, buyClosePct: 2, landClose: 1600, note: "Transfer 0.1%; attorney-close state." },
-  ar: { label: "Arkansas — rec land", sellerPct: 1.6, buyClosePct: 2, landClose: 1400, note: "Transfer ~0.33% ($3.30/$1k), usually split." },
-  ok: { label: "Oklahoma — rec land", sellerPct: 1.5, buyClosePct: 2, landClose: 1400, note: "Doc stamps ~0.15% ($1.50/$1k)." },
-  ca: { label: "California — SD/OC", sellerPct: 1.9, buyClosePct: 2.2, landClose: 2200, note: "County transfer $1.10/$1k + city transfer taxes in some cities; escrow + title run higher." },
-  nc: { label: "North Carolina — Charlotte", sellerPct: 1.6, buyClosePct: 2, landClose: 1500, note: "Excise 0.2% seller-side; attorney-close state." },
-};
-
 // Pre-send sanity checks per exit — ADVISORY ONLY (per Jon: recommend, never block
 // the export). Unchecked items just flag what hasn't been verified yet.
 const KILL_CHECKS: Record<string, string[]> = {
@@ -392,7 +379,6 @@ export default function UnderwritingCalculator() {
   const aAnchorPct = v("aAnchorPct") || "10";
   const aAnchor = cashMao * (1 - num(aAnchorPct) / 100);
 
-  const mkt = MARKETS[v("mkt") || "tn"] ?? MARKETS.tn; // market-aware closing defaults (see MARKETS)
   // ---- Cash (Land) ---- Hunter's offer rule: ALL caps must pass — the LOWEST wins.
   //  ① ~33% of the average sold land value, ALL-IN (so minus our ~$1.5k closing)
   //  ② ≤ county assessed value   ③ ≤ cheapest active listing  (both optional inputs —
@@ -404,7 +390,7 @@ export default function UnderwritingCalculator() {
   const clComps = [n("clC1"), n("clC2"), n("clC3")].filter((x) => x > 0);
   const clLandAvg = clComps.length ? Math.round(clComps.reduce((s, x) => s + x, 0) / clComps.length) : 0;
   const clPct = num(v("clPct") || "33");             // team target: ~33% of land value
-  const clCloseCost = n("clCloseCost") || mkt.landClose;      // our side of closing (title co) — the "all-in" part
+  const clCloseCost = n("clCloseCost") || 1500;      // our side of closing (title co) — the "all-in" part
   const clAssessed = n("clAssessed");
   const clEmv = n("clEmv");                          // blind mode: estimated market value (if we have one)
   const clValueBase = clMode === "blind" ? (clEmv || clAssessed) : clLandAvg;
@@ -435,7 +421,7 @@ export default function UnderwritingCalculator() {
   // ONE BUTTON (per Jon): on A→B we cover the SELLER's closing costs; on B→C we
   // cover only OUR seller-side closing — the end buyer pays their own. Seller-side
   // closing ≈ 1.5% per escrow, so total extra cost = 1.5% × (A→B price + B→C price).
-  const DBL_PCT = mkt.sellerPct; // seller-side closing % for the selected market
+  const DBL_PCT = 1.5; // seller-side closing % per escrow (typical; costs are editable per field)
   const dblCost = (on: boolean, buy: number, sell: number) => on ? Math.round((buy + sell) * (DBL_PCT / 100)) : 0;
   // Cash (Homes)
   const aDblOn = v("aDblClose") === "1";
@@ -464,7 +450,7 @@ export default function UnderwritingCalculator() {
   // (~1.5%); the buyer's closing costs are never our problem.
   const nRealismPct = 95;
   const nExpectedSale = nList * (nRealismPct / 100);
-  const nSellerClosePct = mkt.sellerPct; // seller-side only (market default) — never the buyer's
+  const nSellerClosePct = 1.5; // seller-side only — never the buyer's
   const nSellerClose = nExpectedSale * (nSellerClosePct / 100);
   const nPropType = v("nPropType") === "land" ? "land" : "house";
   // Land listings move slower — 3–6 months minimum (Jon). Default the hold to 5
@@ -533,7 +519,7 @@ export default function UnderwritingCalculator() {
   const devMode = v("devMode") === "buybox" ? "buybox" : "comps";
   const devBox = n("devBox");                    // builder's buy-box price for a lot like this
   const devBoxFee = n("devBoxFee") || 15000;     // our infill fee target (John: $10–20k)
-  const devBoxClose = n("devBoxClose") || mkt.landClose;
+  const devBoxClose = n("devBoxClose") || 1500;
   const devCompDispo = devAvgPerAcre > 0 && devSubjAcres > 0 ? Math.round(devAvgPerAcre * devSubjAcres) : 0;
   const devDispo = devMode === "buybox" ? devBox : devCompDispo;
   const devSpread = n("devSpread") || 100000; // Lux Blueprint target spread: $100k–$150k
@@ -593,7 +579,7 @@ export default function UnderwritingCalculator() {
   const fHold = n("fHold") || 6; // months — flippers average 4–6 depending on scope/market/season
   const fRehab = (n("fRehab") || n("sqft") * num(v("rehabSf"))) + majorTotal;
   const fComm = arv * (num(v("fComm") || "3") / 100);
-  const fClosing = arv * (num(v("fClosing") || String(mkt.buyClosePct)) / 100);
+  const fClosing = arv * (num(v("fClosing") || "2") / 100);
   // Carry (utilities/taxes/insurance) is ANNUAL and scales with hold time — a 12-month
   // hold costs twice a 6-month one. Default 2%/yr × the 6-mo default = the old 1% flat.
   const fCarry = arv * (num(v("fCarry") || "2") / 100) * (fHold / 12);
@@ -865,7 +851,7 @@ export default function UnderwritingCalculator() {
       tab === "assignment" ? aFee : tab === "novation" ? nMinFee : tab === "developer" ? devFeeAtMao :
       tab === "cash_land" ? Math.max(0, clLandAvg - clMao) : tab === "creative" ? cMargin :
       tab === "listing" ? mktFee : 0;
-    saveUnderwrite({ tab, market: v("mkt") || "tn", address: v("subject") || "", mao: dealMax, fee: predFee, confidence: confPct, seconds: compSeconds ?? null }).catch(() => {});
+    saveUnderwrite({ tab, market: "", address: v("subject") || "", mao: dealMax, fee: predFee, confidence: confPct, seconds: compSeconds ?? null }).catch(() => {});
 
     const w = window.open("", "_blank", "width=860,height=940");
     if (!w) return;
@@ -1131,15 +1117,6 @@ export default function UnderwritingCalculator() {
           </>
         )}
         <span className="w-full text-[11px] text-slate-400">Every underwrite is timed automatically — it starts when you begin entering fields and stops when you export the offer. The time + comp date print at the bottom of the PDF.</span>
-      </div>
-
-      {/* Market — sets closing-cost defaults (all editable per-field) */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-2.5 ring-1 ring-slate-200">
-        <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">📍 Market</span>
-        <select value={v("mkt") || "tn"} onChange={set("mkt")} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-semibold">
-          {Object.entries(MARKETS).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
-        </select>
-        <span className="text-[11px] text-slate-400">{mkt.note} <b>Defaults set:</b> seller-side {mkt.sellerPct}% · buyer closing {mkt.buyClosePct}% · land closing {money(mkt.landClose)}.</span>
       </div>
 
       <div className="space-y-2">
