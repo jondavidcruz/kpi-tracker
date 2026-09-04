@@ -67,6 +67,25 @@ export const NAV_GROUPS: NavGroup[] = [
   ] },
 ];
 
+// Default template for a BRAND-NEW rep (Jon's checklist, 2026-08-26): they start
+// with ONLY these sections visible; the owner widens access per person in
+// Admin → Access preview as they ramp. Every other "all"-gated section begins
+// hidden. (Manager/marketing/C-Suite gates already exclude new reps by role,
+// and C-Suite/pay data is hard-locked to Jon/Enrico/Viktoriia by name.)
+export const NEW_REP_ALLOWED = new Set<string>([
+  "/process", "/underwriting", "/schedule", "/rewards", "/culture",   // Overview
+  "/entry", "/report",                                                 // Performance
+  "/ai-training", "/call-scoring", "/scripts", "/glossary",            // Coaching
+  "/rocks", "/vto", "/team-360",                                       // EOS
+  "/tickets", "/software", "/ai-champion",                             // Requests & Support
+]);
+
+/** navHidden JSON for a freshly created rep — everything not in the template. */
+export function defaultNewRepNavHidden(): string {
+  const hidden = NAV_GROUPS.flatMap((g) => g.items.filter((i) => i.gate === "all" && !NEW_REP_ALLOWED.has(i.href)).map((i) => i.href));
+  return JSON.stringify(hidden);
+}
+
 /** Parse the per-user hidden-href list (JSON array stored on User.navHidden). */
 export function parseNavHidden(raw: string | null | undefined): string[] {
   if (!raw) return [];

@@ -15,7 +15,7 @@ import type { DealLand } from "@/lib/deal-land";
 import type { BuyerLand } from "@/lib/buyer-land";
 import type { CfdNote } from "@/lib/cfd";
 import type { UwRec } from "@/lib/underwrite-history";
-import { NAV_GROUPS } from "@/lib/navItems";
+import { NAV_GROUPS, defaultNewRepNavHidden } from "@/lib/navItems";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
@@ -1736,7 +1736,10 @@ export async function saveUser(formData: FormData) {
   if (id) {
     await db.user.update({ where: { id }, data });
   } else {
-    await db.user.create({ data });
+    // New reps start on the restricted default template (Jon's rule): only the
+    // NEW_REP_ALLOWED sections visible, no Markets & Buyers, and C-Suite/pay is
+    // name-locked anyway. The owner widens access in Access preview as they ramp.
+    await db.user.create({ data: { ...data, navHidden: defaultNewRepNavHidden(), accessMarketing: false } });
   }
   revalidatePath("/admin");
   revalidatePath("/entry");
