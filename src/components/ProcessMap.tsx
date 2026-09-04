@@ -257,8 +257,8 @@ export default function ProcessMap({ allowedDepts = null }: { allowedDepts?: str
       {/* Role filter — each role's slice of the pipeline = their SOP */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] font-semibold text-slate-400">View role:</span>
-        <button type="button" onClick={() => setRoleFilter("")} className={`rounded-full px-3 py-1 text-xs font-semibold ${roleFilter === "" ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Whole pipeline</button>
-        {DEPTS.map((dep) => (
+        <button type="button" onClick={() => setRoleFilter("")} className={`rounded-full px-3 py-1 text-xs font-semibold ${roleFilter === "" ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{allowedDepts ? "My lanes" : "Whole pipeline"}</button>
+        {DEPTS.filter((dep) => !allowedDepts || allowedDepts.includes(dep)).map((dep) => (
           <button key={dep} type="button" onClick={() => setRoleFilter(dep)} className={`rounded-full px-3 py-1 text-xs font-semibold ${roleFilter === dep ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{dep}</button>
         ))}
       </div>
