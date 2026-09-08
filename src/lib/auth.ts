@@ -36,6 +36,15 @@ export function isAdmin(user: User | null): boolean {
 // edit software entries without changing their global role.
 const SOFTWARE_CURATORS = ["sharyn", "marie"];
 
+// Hard-blocked from the Software & Logins page entirely (Jon 2026-08-26: Nick +
+// Austin should not see the vault at all — not even tool names/login emails).
+// Name-keyed like the other locks so a checkbox can never re-grant it.
+const SOFTWARE_BLOCKED = new Set(["nick", "nicholas", "austin"]);
+export function isSoftwareBlocked(user: { name?: string } | null): boolean {
+  const first = (user?.name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return SOFTWARE_BLOCKED.has(first);
+}
+
 /** Can add/edit/delete entries in the Software & Logins directory. */
 export function canCurateSoftware(user: User | null): boolean {
   if (!user) return false;

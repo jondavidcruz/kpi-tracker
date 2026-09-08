@@ -1,5 +1,5 @@
 import { saveSoftware, deleteSoftware, clearSecret } from "@/app/actions";
-import { getCurrentUser, isAdmin, isManager, canCurateSoftware, canViewLogins, onAccessList } from "@/lib/auth";
+import { getCurrentUser, isAdmin, isManager, canCurateSoftware, canViewLogins, onAccessList, isSoftwareBlocked } from "@/lib/auth";
 import { vaultConfigured } from "@/lib/crypto";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
@@ -52,6 +52,15 @@ function SoftwareForm({ sw, hasSecret }: { sw?: SW; hasSecret?: boolean }) {
 export default async function SoftwarePage({ searchParams }: { searchParams: Promise<{ saved?: string; novault?: string }> }) {
   const me = await getCurrentUser();
   if (!me) return null;
+  if (isSoftwareBlocked(me)) {
+    return (
+      <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center">
+        <div className="mb-2 text-3xl">🔒</div>
+        <h1 className="text-xl font-bold">No access</h1>
+        <p className="mt-2 text-sm text-slate-500">The Software &amp; Logins directory isn&apos;t available on your account.</p>
+      </div>
+    );
+  }
   const sp = await searchParams;
   const owner = isAdmin(me);
   const canEdit = canCurateSoftware(me); // owner + managers + named curators (Sharyn)

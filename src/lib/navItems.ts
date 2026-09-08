@@ -77,7 +77,7 @@ export const NEW_REP_ALLOWED = new Set<string>([
   "/entry", "/report",                                                 // Performance
   "/ai-training", "/call-scoring", "/scripts", "/glossary",            // Coaching
   "/rocks", "/vto", "/team-360",                                       // EOS
-  "/tickets", "/software", "/ai-champion",                             // Requests & Support
+  "/tickets", "/ai-champion",                                          // Requests & Support (no Software & Logins by default — Jon 2026-08-26)
 ]);
 
 /** navHidden JSON for a freshly created rep — everything not in the template. */

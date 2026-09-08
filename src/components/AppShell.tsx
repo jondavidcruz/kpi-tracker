@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { getSessionEmail, getCurrentUser, isManager, isAdmin, isOwner, canAccessMarketing, canAccessPayroll, canAccessCSuite, navAllowlist, isPathAllowed } from "@/lib/auth";
+import { getSessionEmail, getCurrentUser, isManager, isAdmin, isOwner, canAccessMarketing, canAccessPayroll, canAccessCSuite, navAllowlist, isPathAllowed , isSoftwareBlocked} from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
@@ -33,7 +33,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
   // Restricted users (e.g. Ethan — listings only) can only reach their allowed
   // pages; bounce them to their home page if they land anywhere else.
   const allow = navAllowlist(me);
-  const hiddenNav = parseNavHidden(me.navHidden);
+  const hiddenNav = [...parseNavHidden(me.navHidden), ...(isSoftwareBlocked(me) ? ["/software"] : [])];
   if (allow && !isPathAllowed(reqPath, allow)) redirect(allow[0]);
   // Per-user hidden sections are blocked by URL too — not just removed from the menu.
   if (isPathHidden(reqPath, hiddenNav)) redirect("/dashboard");
