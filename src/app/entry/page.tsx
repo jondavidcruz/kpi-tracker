@@ -167,6 +167,25 @@ export default async function EntryPage({
     });
   }
 
+  // No scorecard resolves for this login → say WHY instead of a silent empty page
+  // (Austin case, 2026-08-26: new rep with no Position / mismatched email).
+  if (!rep) {
+    const reason = !me
+      ? "Your login isn't linked to a team profile — the email you sign in with must match the email on your profile. Ask Jon to check Admin → People."
+      : !me.active
+        ? "Your profile is marked inactive. Ask Jon to reactivate it in Admin → People."
+        : !me.position
+          ? `No scorecard is assigned to you yet — your Position is blank. Ask Jon to set it (e.g. Acquisitions) in Admin → People and your KPIs will appear immediately.`
+          : "Your position has no daily KPIs configured. Ask Jon to check Admin → KPIs & goals.";
+    return (
+      <div className="mx-auto max-w-md rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
+        <div className="mb-2 text-3xl">📝</div>
+        <h1 className="text-xl font-bold text-slate-900">No KPI card yet</h1>
+        <p className="mt-2 text-sm text-amber-900">{reason}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
