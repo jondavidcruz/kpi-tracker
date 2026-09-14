@@ -23,6 +23,7 @@ import { rollupResearchKpis, orgToday } from "@/lib/research-kpis";
 import { migrateScoreById } from "@/lib/recording-migrate";
 import { zonedTime } from "@/lib/shift";
 import { writeDay as crmWriteDay, writeOpps as crmWriteOpps, writeActivity as crmWriteActivity } from "@/lib/crm-sync";
+import { SPEED_CHECKS_CATEGORY, speedChecksTitle, parseSpeedChecks } from "@/lib/speed-checks";
 import { after } from "next/server";
 
 /** Pull today's CRM numbers (calls + offers/contracts) on demand so the scorecard
@@ -2047,6 +2048,16 @@ export async function saveSpeedTest(formData: FormData) {
     await db.entry.update({ where: { id: existing.id }, data: { value: mbps, enteredBy: "speedtest" } });
   } else {
     await db.entry.create({ data: { kpiId: kpi.id, userId, date, value: mbps, enteredBy: "speedtest" } });
+  }
+  // Append to the day's timestamped check log (__speed_checks__) so EVERY test
+  // shows with its completion time — the Entry above stays the headline number.
+  const logTitle = speedChecksTitle(userId, date);
+  const log = await db.resource.findFirst({ where: { category: SPEED_CHECKS_CATEGORY, title: logTitle } });
+  const checks = [...parseSpeedChecks(log?.description), { t: new Date().toISOString(), mbps }].slice(-48);
+  if (log) {
+    await db.resource.update({ where: { id: log.id }, data: { description: JSON.stringify(checks) } });
+  } else {
+    await db.resource.create({ data: { title: logTitle, url: "", category: SPEED_CHECKS_CATEGORY, description: JSON.stringify(checks) } });
   }
   // Record the flag in-app if below goal (no Chat/email ping — see save handler above).
   await evaluateAndRecordAlerts(date, [kpi.id]);

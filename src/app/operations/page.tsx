@@ -25,7 +25,9 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
   }
 
   const sp = await searchParams;
-  const resources = await db.resource.findMany({ where: { category: { notIn: ["__phone_line__", "__phone_setup__"] } }, orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }] });
+  // "__"-prefixed categories are reserved JSON side-stores (phone config, land
+  // deals, underwrites, speed-check logs, …) — never listed as resources.
+  const resources = await db.resource.findMany({ where: { NOT: { category: { startsWith: "__" } } }, orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }] });
   const editing = sp.edit ? resources.find((r) => r.id === sp.edit) ?? null : null;
 
   const byCat = new Map<string, Resource[]>();

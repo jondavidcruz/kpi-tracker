@@ -17,6 +17,7 @@ import { statusVsGoal, isKpiHiddenForRep } from "@/lib/kpi";
 import { todayStr, friendlyDate, monthOf } from "@/lib/date";
 import { toInputNumber, type Unit } from "@/lib/format";
 import { positionLabel, secondaryPositionOf } from "@/lib/roles";
+import { SPEED_CHECKS_CATEGORY, speedChecksTitle, parseSpeedChecks, fmtCheckTime, hasAfternoonCheck, afternoonCheckRequired } from "@/lib/speed-checks";
 
 // Developer/luxury outreach KPIs (shown only on a developer-focus day).
 const DEV_KEYS = new Set(["dev_instagram", "dev_facebook", "dev_linkedin", "dev_website", "dev_wordofmouth", "dev_conversations"]);
@@ -82,6 +83,16 @@ export default async function EntryPage({
   const internetGoal = internetKpi && rep ? resolveGoalWith(targets, internetKpi, rep.id, month) : null;
   const internetInitial =
     internetKpi && rep ? values.get(`${internetKpi.id}|${rep.id}`) ?? null : null;
+  // Every speed check run today, with its completion time — plus whether the
+  // Mon–Thu post-lunch re-check (~1:00 PM) is still due.
+  const speedLog =
+    internetKpi && rep
+      ? await db.resource.findFirst({ where: { category: SPEED_CHECKS_CATEGORY, title: speedChecksTitle(rep.id, date) } })
+      : null;
+  const speedChecks = parseSpeedChecks(speedLog?.description);
+  const dateDow = new Date(date + "T12:00:00Z").getUTCDay();
+  const pmCheckRequired = afternoonCheckRequired(dateDow);
+  const pmCheckDone = hasAfternoonCheck(speedChecks, settings.orgTimezone);
 
   // Dispositions reps can flip between traditional (dialer) and developer/luxury
   // outreach for the day. The focus decides which KPIs show + how they're scored.
@@ -337,6 +348,10 @@ export default async function EntryPage({
           date={date}
           goal={internetGoal ?? 50}
           initial={internetInitial}
+          checks={speedChecks.map((c) => ({ time: fmtCheckTime(c.t, settings.orgTimezone), mbps: c.mbps }))}
+          tz={settings.orgTimezone}
+          pmRequired={pmCheckRequired}
+          pmDone={pmCheckDone}
         />
       )}
 

@@ -12,6 +12,7 @@ import { dealsNeedingAttention } from "./deals";
 import { sendWeeklyTeamEmail, sendDailyTeamReview } from "./weekly";
 import { recordWeeklyAwards } from "./awards";
 import { sendEosPulse } from "./eos-pulse";
+import { SPEED_CHECKS_CATEGORY, parseSpeedChecks, hasAfternoonCheck, afternoonCheckRequired } from "./speed-checks";
 import {
   alertEmailHtml,
   getChannelConfig,
@@ -457,6 +458,43 @@ export async function sendShiftStartSpeedReminders(date: string, slot: "am" | "p
       "Goal: 50+ Mbps for a smooth dialer, calls, and CRM. If you're below, restart your router and re-test before you start dialing.",
     ]);
     if (await sendEmailTo([rep.email], "📡 Run your internet speed test", html)) sent++;
+  }
+  return sent;
+}
+
+/** Post-lunch re-check nudge (Mon–Thu, ~1:30pm PT cron): the morning crew works
+ *  through the 12–1 lunch, so anyone without a speed test since 12:30 PM gets a
+ *  "back from lunch — re-test" email. Marie starts at noon Mon–Thu, so her
+ *  start-of-shift test already covers the afternoon (no double nag). Friday has
+ *  no lunch break (team releases at 2pm) — no afternoon check that day. */
+export async function sendPostLunchSpeedReminders(date: string, laDow: number): Promise<number> {
+  if (!afternoonCheckRequired(laDow)) return 0;
+
+  const kpi = await db.kpi.findFirst({ where: { roleKey: "internet" } });
+  if (!kpi) return 0;
+
+  const settings = await getSettings();
+  const [reps, logs] = await Promise.all([
+    getActiveReps(),
+    db.resource.findMany({ where: { category: SPEED_CHECKS_CATEGORY, title: { endsWith: `|${date}` } } }),
+  ]);
+  const checksByUser = new Map(logs.map((l) => [l.title.split("|")[0], parseSpeedChecks(l.description)]));
+
+  let sent = 0;
+  for (const rep of reps) {
+    if (!rep.tracksInternet || !rep.email) continue;
+    // Known schedules: respect off-days and skip afternoon-start shifts.
+    // Reps without a schedule entry are assumed on the standard morning shift.
+    const cfg = SHIFT_START_HOURS.find((s) => rep.name.toLowerCase().includes(s.match));
+    const start = cfg ? cfg.startHour(laDow) : 8;
+    if (start == null || start >= 12) continue;
+    if (hasAfternoonCheck(checksByUser.get(rep.id) ?? [], settings.orgTimezone)) continue;
+    const html = alertEmailHtml("🍽 Back from lunch — run your speed check", [
+      `Hi ${rep.name.split(" ")[0]} — welcome back from lunch.`,
+      "Run your internet speed test again on the Enter KPIs screen. Connections drift during the day, so a second check after lunch (~1:00 PM) is part of the routine — it takes about 10 seconds and logs the time automatically.",
+      "Goal: 50+ Mbps. If you're below, restart your router and re-test before you get back on the dialer.",
+    ]);
+    if (await sendEmailTo([rep.email], "🍽 Post-lunch internet speed check", html)) sent++;
   }
   return sent;
 }

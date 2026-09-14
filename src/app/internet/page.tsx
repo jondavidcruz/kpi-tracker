@@ -4,6 +4,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getActiveReps, getAllTargets, getSettings, resolveGoalWith } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, currentWeekRange, datesInRange } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
+import { SPEED_CHECKS_CATEGORY, parseSpeedChecks, fmtCheckTime, hasAfternoonCheck, afternoonCheckRequired, type SpeedCheck } from "@/lib/speed-checks";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,14 @@ export default async function InternetPage({ searchParams }: { searchParams: Pro
   const valAt = new Map<string, number>();
   for (const e of entries) if (e.userId) valAt.set(`${e.userId}|${e.date}`, e.value);
 
+  // Today's full check log per rep (every test with its completion time — a
+  // rerun never erases earlier checks) + the Mon–Thu post-lunch requirement.
+  const checkRows = await db.resource.findMany({ where: { category: SPEED_CHECKS_CATEGORY, title: { endsWith: `|${today}` } } });
+  const checksByUser = new Map<string, SpeedCheck[]>(checkRows.map((r) => [r.title.split("|")[0], parseSpeedChecks(r.description)]));
+  const todayDow = new Date(today + "T12:00:00Z").getUTCDay();
+  const pmRequired = afternoonCheckRequired(todayDow);
+  const tz = settings.orgTimezone;
+
   const week = currentWeekRange(today);
   const weekDays = datesInRange(week.start, week.end)
     .filter((d) => {
@@ -65,7 +74,7 @@ export default async function InternetPage({ searchParams }: { searchParams: Pro
     <div className="space-y-6">
       <SectionTitle
         title="📡 Internet Speed"
-        subtitle="Each rep's daily speed-test reading — today, this week, and this month. Goal 50+ Mbps for a smooth dialer, calls & CRM."
+        subtitle="Each rep's daily speed tests — every check is logged with its time (shift start + post-lunch re-check Mon–Thu). Goal 50+ Mbps for a smooth dialer, calls & CRM."
         accent="bg-indigo-400"
         right={<span className="text-sm font-semibold text-slate-500">{week.label}</span>}
       />
@@ -81,6 +90,8 @@ export default async function InternetPage({ searchParams }: { searchParams: Pro
               {reps.map((rep) => {
                 const goal = goalFor(rep.id);
                 const v = valAt.get(`${rep.id}|${today}`) ?? null;
+                const checks = checksByUser.get(rep.id) ?? [];
+                const pmDone = hasAfternoonCheck(checks, tz);
                 return (
                   <Card key={rep.id} className="p-4">
                     <div className="truncate text-xs font-medium text-slate-500">{rep.name}</div>
@@ -91,6 +102,20 @@ export default async function InternetPage({ searchParams }: { searchParams: Pro
                     <div className={`text-xs font-semibold ${tone(v, goal)}`}>
                       {v === null ? "not tested yet" : v >= goal ? "✓ good to work" : v >= 25 ? "⚠️ below goal" : "🔴 too slow"}
                     </div>
+                    {checks.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {checks.map((c, i) => (
+                          <span key={i} className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200 tabular-nums">
+                            {fmtCheckTime(c.t, tz)} · {c.mbps}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {pmRequired && (
+                      <div className={`mt-1.5 text-[11px] font-semibold ${pmDone ? "text-emerald-600" : "text-amber-600"}`}>
+                        {pmDone ? "✓ post-lunch check done" : "🍽 post-lunch check pending"}
+                      </div>
+                    )}
                   </Card>
                 );
               })}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { runScheduledChecks, sendShiftStartSpeedReminders } from "@/lib/alerts";
+import { runScheduledChecks, sendShiftStartSpeedReminders, sendPostLunchSpeedReminders } from "@/lib/alerts";
+import { SPEED_CHECKS_CATEGORY } from "@/lib/speed-checks";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
@@ -325,12 +326,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, breaknudge: slot, chat });
   }
 
-  // Midday run: the pm-shift crew's speed-test nudge (Marie). (Legacy ?ethan=1 param.)
+  // Midday run (~1:30pm PT): the pm-shift crew's start-of-shift speed nudge
+  // (Marie) + the post-lunch RE-check nudge for the morning crew (Mon–Thu —
+  // Friday has no lunch). Also prunes speed-check logs older than 60 days.
+  // (Legacy ?ethan=1 param.)
   if (url.searchParams.get("ethan") === "1") {
     const settings = await getSettings();
     const today = date ?? todayStr(settings.orgTimezone);
-    const speedTestReminded = await sendShiftStartSpeedReminders(today, "pm", laNow().dow);
-    return NextResponse.json({ ok: true, speedTestReminded });
+    const la = laNow();
+    const speedTestReminded = await sendShiftStartSpeedReminders(today, "pm", la.dow);
+    const postLunchReminded = await sendPostLunchSpeedReminders(today, la.dow);
+    await db.resource.deleteMany({
+      where: { category: SPEED_CHECKS_CATEGORY, createdAt: { lt: new Date(Date.now() - 60 * 86400000) } },
+    });
+    return NextResponse.json({ ok: true, speedTestReminded, postLunchReminded });
   }
 
   // Full scheduled pass. On the MORNING run (before noon PT) also send the am

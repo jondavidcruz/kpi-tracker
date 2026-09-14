@@ -12,6 +12,7 @@ import Sidebar from "./Sidebar";
 import ContentWrap from "./ContentWrap";
 import ThemeToggle from "./ThemeToggle";
 import { parseNavHidden, isPathHidden } from "@/lib/navItems";
+import { SPEED_CHECKS_CATEGORY, speedChecksTitle, parseSpeedChecks, hasAfternoonCheck, afternoonCheckRequired, AFTERNOON_CHECK_MINUTES } from "@/lib/speed-checks";
 import ClientWidgets from "./ClientWidgets";
 
 export default async function AppShell({ children }: { children: React.ReactNode }) {
@@ -54,7 +55,10 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   // Start-of-shift nag: if this rep tracks internet and hasn't run today's speed
   // test, show a persistent banner until they do (they open the app at shift start).
+  // Mon–Thu a SECOND banner appears after 12:30 PM org time until the post-lunch
+  // re-check is logged (Friday has no lunch break).
   let needsSpeedTest = false;
+  let needsPmSpeedTest = false;
   if (me.tracksInternet) {
     const settings = await getSettings();
     const today = todayStr(settings.orgTimezone);
@@ -65,6 +69,15 @@ export default async function AppShell({ children }: { children: React.ReactNode
         select: { id: true },
       });
       needsSpeedTest = !logged;
+    }
+    if (!needsSpeedTest) {
+      const parts = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, weekday: "short", hour: "numeric", minute: "numeric", hour12: false }).formatToParts(new Date());
+      const dow = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[parts.find((p) => p.type === "weekday")?.value ?? "Sun"] ?? 0;
+      const mins = (Number(parts.find((p) => p.type === "hour")?.value ?? 0) % 24) * 60 + Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+      if (afternoonCheckRequired(dow) && mins >= AFTERNOON_CHECK_MINUTES) {
+        const log = await db.resource.findFirst({ where: { category: SPEED_CHECKS_CATEGORY, title: speedChecksTitle(me.id, today) }, select: { description: true } });
+        needsPmSpeedTest = !hasAfternoonCheck(parseSpeedChecks(log?.description), settings.orgTimezone);
+      }
     }
   }
 
@@ -93,6 +106,19 @@ export default async function AppShell({ children }: { children: React.ReactNode
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-bold text-amber-900">Run your internet speed test for today</div>
                 <div className="text-xs text-amber-700">Quick start-of-shift check — it records to your KPIs automatically. Goal 50+ Mbps.</div>
+              </div>
+              <span className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white">Run it →</span>
+            </Link>
+          )}
+          {needsPmSpeedTest && (
+            <Link
+              href="/entry"
+              className="mb-5 flex items-center gap-3 rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-amber-300 transition hover:bg-amber-100"
+            >
+              <span className="text-xl">🍽</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-amber-900">Back from lunch — run your speed check again</div>
+                <div className="text-xs text-amber-700">Second check of the day (~1:00 PM). It logs with the time automatically — earlier checks are kept too.</div>
               </div>
               <span className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white">Run it →</span>
             </Link>
