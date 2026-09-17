@@ -130,6 +130,17 @@ export default async function LandCoursePage({ searchParams }: { searchParams: P
         <span className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-[13px] font-bold text-white">Open ↗</span>
       </a>
 
+      {/* Visual valuation guide — appraiser math behind the 3 offers */}
+      <a href="/training/land-valuation.html" target="_blank" rel="noopener noreferrer"
+        className="mb-4 flex items-center gap-3 rounded-2xl border-2 border-emerald-300 bg-gradient-to-r from-emerald-50 to-sky-50 p-4 shadow-sm transition hover:shadow-md dark:border-emerald-700 dark:from-emerald-950 dark:to-sky-950">
+        <span className="text-3xl">💰</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-extrabold text-slate-900 dark:text-slate-100">How Land Is Actually Priced — the visual guide</span>
+          <span className="block text-[13px] text-slate-600 dark:text-slate-300">The value ladder (why cash / developer / novation are 3 different values), the 6 appraiser pricing tools with worked examples, Highest &amp; Best Use, Schedule B red flags + seller scripts.</span>
+        </span>
+        <span className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-[13px] font-bold text-white">Open ↗</span>
+      </a>
+
       <div className="flex flex-col gap-4 lg:flex-row">
         {/* Doc nav, grouped by instructor */}
         <nav className="shrink-0 space-y-3 lg:w-72">

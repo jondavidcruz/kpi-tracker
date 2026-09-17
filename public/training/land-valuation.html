@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Freedom Offers — How Land Is Actually Priced</title>
+<style>
+  :root{
+    --cash:#16a34a; --cash-bg:#f0fdf4; --cash-br:#bbf7d0;
+    --dev:#2563eb; --dev-bg:#eff6ff; --dev-br:#bfdbfe;
+    --nov:#b8860b; --nov-bg:#fefce8; --nov-br:#fde68a;
+    --red:#dc2626; --red-bg:#fef2f2; --red-br:#fecaca;
+    --ink:#1e293b; --mut:#64748b; --line:#e2e8f0; --card:#ffffff; --bg:#f8fafc;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 20px 80px}
+
+  .hero{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;padding:44px 20px 40px;text-align:center}
+  .hero h1{font-size:32px;font-weight:800;letter-spacing:-.5px}
+  .hero p{color:#cbd5e1;font-size:16px;margin-top:8px;max-width:680px;margin-left:auto;margin-right:auto}
+  .hero .tag{display:inline-block;background:rgba(255,255,255,.12);color:#e2e8f0;font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px;margin-top:16px;letter-spacing:.4px}
+
+  nav{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:10px}
+  nav a{font-size:13px;font-weight:700;text-decoration:none;color:var(--mut);padding:7px 13px;border-radius:8px}
+  nav a:hover{background:var(--bg);color:var(--ink)}
+
+  section{margin-top:44px}
+  .sec-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .sec-head .ico{font-size:30px}
+  .sec-head h2{font-size:24px;font-weight:800;letter-spacing:-.3px}
+  .sec-sub{color:var(--mut);font-size:15px;margin-bottom:18px;max-width:760px}
+
+  .card{border-radius:16px;border:1px solid var(--line);background:var(--card);padding:20px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+
+  /* value ladder */
+  .ladder{display:flex;border-radius:14px;overflow:hidden;border:1px solid var(--line);margin:14px 0 6px}
+  .rung{flex:1;padding:14px 10px;text-align:center;color:#fff;min-width:0}
+  .rung b{display:block;font-size:14px}
+  .rung span{display:block;font-size:11.5px;opacity:.9;margin-top:2px}
+  .ladder-note{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);font-weight:700;padding:0 4px}
+
+  .pinrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:18px}
+  .pin{border-radius:14px;border:2px solid;padding:16px;background:var(--card)}
+  .pin .badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.5px;padding:4px 9px;border-radius:6px;color:#fff}
+  .pin h3{font-size:17px;font-weight:800;margin:9px 0 3px}
+  .pin p{font-size:13px;color:var(--mut)}
+  .pin .why{margin-top:10px;font-size:12.5px;background:var(--bg);border-radius:8px;padding:9px 11px;border:1px dashed var(--line)}
+  .pin.c{border-color:var(--cash-br)} .pin.c .badge{background:var(--cash)}
+  .pin.d{border-color:var(--dev-br)} .pin.d .badge{background:var(--dev)}
+  .pin.n{border-color:var(--nov-br)} .pin.n .badge{background:var(--nov)}
+
+  .callout{display:flex;gap:12px;border-radius:14px;padding:16px;margin-top:16px;border:2px solid var(--red-br);background:var(--red-bg)}
+  .callout .ico{font-size:24px}
+  .callout b{color:var(--red)}
+  .callout p{font-size:13.5px}
+  .callout.gold{border-color:var(--nov-br);background:var(--nov-bg)}
+  .callout.gold b{color:#92400e}
+
+  /* technique cards */
+  .tech-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  .tech{border-radius:14px;border:1px solid var(--line);background:var(--card);overflow:hidden}
+  .tech-top{padding:12px 16px;display:flex;align-items:center;gap:10px;color:#fff;background:#334155}
+  .tech-top .n{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex:none}
+  .tech-top h3{font-size:15.5px;font-weight:800}
+  .tech-body{padding:14px 16px}
+  .tech-body p{font-size:13.5px;color:var(--mut)}
+  .math{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:#0f172a;color:#a7f3d0;border-radius:9px;padding:10px 12px;margin:10px 0;overflow-x:auto;white-space:nowrap}
+  .use{font-size:12.5px;font-weight:700;border-radius:8px;padding:8px 11px;margin-top:8px}
+  .use.we{background:var(--cash-bg);color:#166534;border:1px dashed var(--cash-br)}
+  .use.fy{background:var(--bg);color:var(--mut);border:1px dashed var(--line)}
+
+  /* decision flow */
+  .flow{display:flex;flex-direction:column;gap:0;align-items:stretch;margin-top:8px}
+  .q{background:#1e3a5f;color:#fff;border-radius:12px;padding:12px 16px;font-weight:800;font-size:14.5px;text-align:center}
+  .branches{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}
+  .branch{border-radius:12px;border:1px solid var(--line);background:var(--card);padding:13px 14px}
+  .branch .cond{font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase}
+  .branch .then{font-size:13.5px;margin-top:5px}
+  .arrow{ text-align:center;color:var(--mut);font-size:18px;line-height:1;margin:6px 0}
+
+  /* IRV grid */
+  .irv{width:100%;max-width:460px;border-collapse:collapse;margin:12px auto;font-size:14px}
+  .irv th,.irv td{border:1px solid var(--line);padding:9px 12px;text-align:center}
+  .irv th{background:var(--bg);font-size:12px;letter-spacing:.5px}
+  .irv .lab{font-weight:800;background:var(--bg)}
+  .irv .hl{background:var(--cash-bg);font-weight:800;color:#166534}
+  .irv .giv{color:var(--ink);font-weight:600}
+  .irv .calc{color:var(--dev);font-weight:700}
+
+  /* dev stack */
+  .stack{max-width:440px;margin:14px auto 4px}
+  .slab{border-radius:9px;padding:10px 14px;color:#fff;font-size:13.5px;font-weight:700;display:flex;justify-content:space-between;margin-top:6px}
+  .stack .minus{text-align:center;color:var(--mut);font-weight:800;margin-top:6px;font-size:14px}
+
+  /* HBU funnel */
+  .funnel{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:10px}
+  .ftier{color:#fff;border-radius:10px;padding:10px 16px;font-size:13.5px;font-weight:700;text-align:center}
+  .fnote{font-size:12px;color:var(--mut);text-align:center}
+
+  /* checklist */
+  .checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-top:10px}
+  .chk{display:flex;gap:10px;border-radius:12px;border:1px solid var(--red-br);background:var(--red-bg);padding:12px 14px}
+  .chk .ico{font-size:18px}
+  .chk b{font-size:13.5px;display:block}
+  .chk p{font-size:12.5px;color:var(--mut)}
+
+  /* scripts */
+  .script{border-radius:12px;border:1px solid var(--line);background:var(--card);padding:14px 16px;margin-top:10px}
+  .script .say{font-size:12px;font-weight:800;letter-spacing:.4px;color:var(--mut);text-transform:uppercase}
+  .script .obj{font-size:14.5px;font-weight:800;margin-top:2px}
+  .script .ans{font-size:13.5px;margin-top:8px;background:var(--bg);border-left:3px solid var(--cash);border-radius:0 9px 9px 0;padding:9px 12px}
+
+  footer{margin-top:56px;text-align:center;color:var(--mut);font-size:12.5px}
+  @media (max-width:640px){ .ladder{flex-direction:column} .ladder-note{display:none} }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>💰 How Land Is Actually Priced</h1>
+  <p>The appraiser playbook behind our Cash, Developer, and Novation offers — so you always know which "value" a seller, agent, or county is quoting, and why our number is right.</p>
+  <span class="tag">FREEDOM OFFERS · LAND TRAINING · 10-MINUTE READ</span>
+</div>
+
+<nav>
+  <a href="#values">1 · The Value Ladder</a>
+  <a href="#offers">2 · Our 3 Offers</a>
+  <a href="#techniques">3 · The 6 Pricing Tools</a>
+  <a href="#hbu">4 · Highest &amp; Best Use</a>
+  <a href="#title">5 · Title &amp; Schedule B</a>
+  <a href="#scripts">6 · Seller Scripts</a>
+</nav>
+
+<div class="wrap">
+
+  <!-- ─────────────── 1. VALUE LADDER ─────────────── -->
+  <section id="values">
+    <div class="sec-head"><span class="ico">🪜</span><h2>"Value" is not one number</h2></div>
+    <p class="sec-sub">The same parcel has FIVE different values at the same moment — and they can be wildly far apart. Every pricing argument you'll ever have with a seller is really an argument about <b>which value</b> they're looking at.</p>
+
+    <div class="card">
+      <div class="ladder">
+        <div class="rung" style="background:#dc2626"><b>Liquidation</b><span>sold FAST — days, not months</span></div>
+        <div class="rung" style="background:#f59e0b"><b>Assessed</b><span>the county's TAX number</span></div>
+        <div class="rung" style="background:#16a34a"><b>Market</b><span>full exposure, no rush</span></div>
+        <div class="rung" style="background:#2563eb"><b>Investment</b><span>one buyer's own math</span></div>
+        <div class="rung" style="background:#7c3aed"><b>Use</b><span>value to one specific user</span></div>
+      </div>
+      <div class="ladder-note"><span>← usually lowest</span><span>usually highest →</span></div>
+
+      <ul style="margin:16px 0 0 20px;font-size:13.5px;color:var(--mut);display:grid;gap:6px">
+        <li><b style="color:#dc2626">Liquidation value</b> — what a property fetches when it must sell in a very short window (distress, foreclosure, "I need it gone"). Always below market. <b>Speed costs money — that discount is the seller's trade, not a trick.</b></li>
+        <li><b style="color:#b45309">Assessed value</b> — what the county taxes it on. It is <b>not</b> an opinion of market price; it's a formula, often a percentage of an old number.</li>
+        <li><b style="color:#166534">Market value</b> — the textbook one: the <i>probable</i> price, in cash, after <b>reasonable time on the open market</b>, with an informed buyer and seller and <b>no pressure on either side</b>. Notice how much of that definition is about TIME and NO DURESS.</li>
+        <li><b style="color:#1d4ed8">Investment value</b> — what one specific buyer can pay given the return THEY require. A builder who needs 20% profit has a different number than one who accepts 12%. Same dirt, different value.</li>
+        <li><b style="color:#6d28d9">Use value</b> — value to a single user's special situation (the neighbor who needs your lot for their driveway). No market behind it — but occasionally your best exit.</li>
+      </ul>
+    </div>
+
+    <div class="callout">
+      <span class="ico">⚠️</span>
+      <div>
+        <b>Blind-offer trap: assessed value can be DECADES old.</b>
+        <p>In California, Prop 13 (1978) froze tax values — they can only creep up ~2%/yr until the property sells. A parcel held since the 90s can be assessed at a small fraction of what it's worth. Other states reassess on their own cycles. <b>Before you anchor a blind offer to ⅓ of assessed value, check when the parcel last changed hands.</b> Long-held parcel → assessed is stale-low → your ⅓ offer may be insultingly low (or, sometimes, accidentally too high in states that assess near market). When in doubt, use ⅓ of estimated market value instead.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────── 2. OUR 3 OFFERS ─────────────── -->
+  <section id="offers">
+    <div class="sec-head"><span class="ico">🎯</span><h2>Our 3 offers = 3 different values</h2></div>
+    <p class="sec-sub">This is the whole game in one picture. We aren't giving a seller three random prices — we're letting them pick <b>which value they want and what they'll trade for it.</b></p>
+
+    <div class="pinrow">
+      <div class="pin c">
+        <span class="badge">CASH OFFER</span>
+        <h3>Prices near liquidation value</h3>
+        <p>Certain close, fast, as-is, no listing. The seller trades price for <b>speed and certainty</b>.</p>
+        <div class="why">🗣️ "A cash price is a <b>speed</b> price. You're not selling the land cheap — you're buying back six months of your life."</div>
+      </div>
+      <div class="pin d">
+        <span class="badge">DEVELOPER OFFER</span>
+        <h3>Prices at investment value</h3>
+        <p>Comes from the builder's own buy-box math — their finished-product revenue minus their costs, profit, and time.</p>
+        <div class="why">🗣️ "This number isn't from comps — it's what a builder's spreadsheet says the dirt is worth <b>to them</b>."</div>
+      </div>
+      <div class="pin n">
+        <span class="badge">NOVATION</span>
+        <h3>Prices at market value</h3>
+        <p>Full exposure on the open market — which is exactly why it takes 3–6 months minimum. Market value <b>requires</b> market time.</p>
+        <div class="why">🗣️ "To get the top number, the market has to see it. Time on market isn't a bug of this option — it's the ingredient."</div>
+      </div>
+    </div>
+
+    <div class="callout gold">
+      <span class="ico">💡</span>
+      <div>
+        <b>Why this framing wins negotiations.</b>
+        <p>The appraisal definition of market value literally includes "reasonable exposure time" and "no duress." So when a seller wants a <b>market price</b> with <b>cash-offer speed</b>, they're asking for two things that cannot coexist by definition. Show them the ladder and let them choose the trade. No arguing, just physics.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────── 3. SIX TECHNIQUES ─────────────── -->
+  <section id="techniques">
+    <div class="sec-head"><span class="ico">🧮</span><h2>The 6 ways pros price dirt</h2></div>
+    <p class="sec-sub">Appraisers have exactly six tools for land value. You already use #1 daily. The rest are your backup when there are no land sales — and #6 explains every developer offer you'll ever write.</p>
+
+    <div class="tech-grid">
+      <div class="tech">
+        <div class="tech-top" style="background:#16a34a"><span class="n">1</span><h3>Sales Comparison — the king</h3></div>
+        <div class="tech-body">
+          <p>Recent sold <b>land</b> comps, adjusted, usually per acre or per buildable lot. When enough land sales exist, nothing else matters.</p>
+          <div class="math">sold $/acre (grown to today) × subject acres = value</div>
+          <div class="use we">✅ OURS: this is the Cash (Land) calculator's comps mode.</div>
+        </div>
+      </div>
+
+      <div class="tech">
+        <div class="tech-top" style="background:#0891b2"><span class="n">2</span><h3>Allocation — the lot % shortcut</h3></div>
+        <div class="tech-body">
+          <p>In any neighborhood, the lot is a fairly stable <b>slice of the finished home price</b> (often ~20–30% for infill). No lot sales needed — just house sales.</p>
+          <div class="math">new builds sell $400k × 25% lot share ≈ $100k lot</div>
+          <div class="use we">✅ OURS: fastest sanity check on an infill lot — grab the new-construction price next door and take the slice.</div>
+        </div>
+      </div>
+
+      <div class="tech">
+        <div class="tech-top" style="background:#7c3aed"><span class="n">3</span><h3>Extraction — subtract the building</h3></div>
+        <div class="tech-body">
+          <p>Take a sold house, estimate what the <b>structure</b> is worth (replacement cost minus wear), subtract it — the leftovers are the dirt. Best on old/teardown houses where the building is worth little.</p>
+          <div class="math">$310k sale − $60k tired house = $250k dirt</div>
+          <div class="use we">✅ OURS: perfect for teardown-heavy luxury infill streets — every old-house sale is secretly a land comp.</div>
+        </div>
+      </div>
+
+      <div class="tech">
+        <div class="tech-top" style="background:#f59e0b"><span class="n">4</span><h3>Ground Rent Cap — income ÷ rate</h3></div>
+        <div class="tech-body">
+          <p>If the land itself earns rent (farm lease, billboard, cell tower, ground lease), divide that income by the market's land cap rate.</p>
+          <div class="math">$6,000/yr farm rent ÷ 6% = $100,000</div>
+          <div class="use fy">FYI: rare for us, but a leased-out parcel is worth MORE than the raw comps say — don't miss it.</div>
+        </div>
+      </div>
+
+      <div class="tech">
+        <div class="tech-top" style="background:#64748b"><span class="n">5</span><h3>Land Residual — what's left over</h3></div>
+        <div class="tech-body">
+          <p>For income property: total income, minus the income the <b>building</b> must earn, leaves the income the <b>land</b> earns → divide by the land cap rate.</p>
+          <table class="irv">
+            <tr><th></th><th>Income (I)</th><th>Rate (R)</th><th>Value (V)</th></tr>
+            <tr><td class="lab">Building</td><td class="calc">$67,500</td><td class="giv">7.5%</td><td class="giv">$900,000</td></tr>
+            <tr><td class="lab">Land</td><td class="calc">$82,500</td><td class="giv">5.5%</td><td class="hl">$1,500,000</td></tr>
+            <tr><td class="lab">Total</td><td class="giv">$150,000</td><td></td><td></td></tr>
+          </table>
+          <p style="font-size:12.5px">Building must earn $900k × 7.5% = <b>$67,500</b>. The remaining $150k − $67.5k = <b>$82,500</b> belongs to the land → ÷ 5.5% = <b>$1.5M</b>. (Memory hook: in the I-R-V row, ← multiply, → divide.)</p>
+          <div class="use fy">FYI: know it exists — it's how commercial people talk. Not our daily tool.</div>
+        </div>
+      </div>
+
+      <div class="tech">
+        <div class="tech-top" style="background:#2563eb"><span class="n">6</span><h3>Subdivision DCF — the developer's brain</h3></div>
+        <div class="tech-body">
+          <p>How builders price bigger parcels: start from finished-lot revenue and subtract everything it takes to get there — including their profit and the cost of waiting.</p>
+          <div class="stack">
+            <div class="slab" style="background:#16a34a"><span>Finished lots will sell for</span><span>$2.0M</span></div>
+            <div class="minus">− minus −</div>
+            <div class="slab" style="background:#64748b"><span>Roads, utilities, entitlement</span><span>$700k</span></div>
+            <div class="slab" style="background:#64748b"><span>Builder profit requirement</span><span>$400k</span></div>
+            <div class="slab" style="background:#64748b"><span>Time / carry (money waits years)</span><span>$300k</span></div>
+            <div class="minus">= leaves =</div>
+            <div class="slab" style="background:#2563eb"><span>What the RAW LAND is worth to them</span><span>$600k</span></div>
+          </div>
+          <div class="use we">✅ OURS: this IS the developer buy-box. Their offer already contains their profit and carry — so "but comps say more" doesn't move them. Lock up below their residual number and the spread is ours.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="q">Which tool do I reach for?</div>
+      <div class="arrow">↓</div>
+      <div class="branches">
+        <div class="branch" style="border-color:var(--cash-br)">
+          <div class="cond" style="color:var(--cash)">Sold land comps exist</div>
+          <div class="then"><b>Sales comparison.</b> Done. Use the Cash (Land) comps mode.</div>
+        </div>
+        <div class="branch" style="border-color:#a5f3fc">
+          <div class="cond" style="color:#0891b2">Infill lot, no lot sales</div>
+          <div class="then"><b>Allocation</b> (lot % of new-build price) or <b>extraction</b> (old-house sale − structure).</div>
+        </div>
+        <div class="branch" style="border-color:var(--dev-br)">
+          <div class="cond" style="color:var(--dev)">Bigger parcel, builder exit</div>
+          <div class="then"><b>Think like their DCF:</b> price from THEIR buy-box, not from comps.</div>
+        </div>
+        <div class="branch" style="border-color:var(--red-br)">
+          <div class="cond" style="color:var(--red)">No sales, no data</div>
+          <div class="then"><b>Blind rules:</b> ⅓ of estimated market value (or assessed — after checking how stale it is).</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────── 4. HIGHEST & BEST USE ─────────────── -->
+  <section id="hbu">
+    <div class="sec-head"><span class="ico">🏗️</span><h2>Highest &amp; Best Use — why "weed lot" ≠ weed-lot price</h2></div>
+    <p class="sec-sub">Land is valued at its best <b>legal</b> use, not its current use. Appraisers run every parcel through four tests, in order — each one filters the last.</p>
+
+    <div class="card">
+      <div class="funnel">
+        <div class="ftier" style="background:#334155;width:100%">1 · LEGALLY PERMISSIBLE — what does zoning actually allow? (the step-1 check on every deal)</div>
+        <div class="ftier" style="background:#475569;width:88%">2 · PHYSICALLY POSSIBLE — size, shape, slope, flood, utilities, access</div>
+        <div class="ftier" style="background:#2563eb;width:74%">3 · FINANCIALLY FEASIBLE — does building it actually pencil?</div>
+        <div class="ftier" style="background:#16a34a;width:58%">4 · MAXIMALLY PRODUCTIVE — of what's left, which use pays the most?</div>
+      </div>
+      <p class="fnote" style="margin-top:10px">A "vacant weed lot" surrounded by new builds passes all four tests as a homesite → it's worth <b>builder money</b>, whatever it looks like today. A gorgeous parcel that fails test 1 or 2 (unbuildable zoning, no access, all wetland) is worth almost nothing. <b>The dirt doesn't set the price — the best allowed use does.</b></p>
+    </div>
+  </section>
+
+  <!-- ─────────────── 5. TITLE ─────────────── -->
+  <section id="title">
+    <div class="sec-head"><span class="ico">📜</span><h2>Title insurance &amp; Schedule B — where land deals die</h2></div>
+    <p class="sec-sub">Title insurance protects a buyer/lender against defects in ownership. The policy is not the interesting part — <b>Schedule B is.</b> It's the list of everything the policy REFUSES to cover, which on land is exactly the list of things that can kill a build.</p>
+
+    <div class="card" style="margin-bottom:14px">
+      <b style="font-size:15px">The three habits:</b>
+      <ol style="margin:8px 0 0 20px;font-size:13.5px;display:grid;gap:6px;color:var(--mut)">
+        <li><b style="color:var(--ink)">Open escrow → order the prelim EARLY.</b> Schedule B surprises found in week 1 are negotiation ammo; found in week 5 they're a dead deal and wasted marketing.</li>
+        <li><b style="color:var(--ink)">Read Schedule B line by line — and push back.</b> Exceptions are not gospel: old easements can be removed, expired items deleted, liens cleared before close. You're allowed to question every line.</li>
+        <li><b style="color:var(--ink)">NEVER throw the contract away — even years after closing.</b> It's your proof of what was promised and insured if a claim ever surfaces.</li>
+      </ol>
+    </div>
+
+    <b style="font-size:15px">🚩 Schedule B red flags on LAND (check every deal):</b>
+    <div class="checks">
+      <div class="chk"><span class="ico">🚧</span><div><b>No recorded legal access</b><p>Landlocked parcels are near-worthless until an easement is bought. THE classic land trap.</p></div></div>
+      <div class="chk"><span class="ico">⚡</span><div><b>Utility easement through the build area</b><p>A power/pipeline easement across the middle of a lot can shrink the buildable envelope to nothing.</p></div></div>
+      <div class="chk"><span class="ico">⛏️</span><div><b>Mineral rights severed</b><p>Someone else may own what's under the surface — some buyers (and lenders) walk.</p></div></div>
+      <div class="chk"><span class="ico">📏</span><div><b>Deed restrictions / HOA rules</b><p>Minimum square footage, no mobile homes, approval committees — they can void your buyer's plan.</p></div></div>
+      <div class="chk"><span class="ico">💸</span><div><b>Unpaid taxes, liens, assessments</b><p>They close on top of your price. Know the payoff before you talk numbers.</p></div></div>
+      <div class="chk"><span class="ico">👪</span><div><b>Breaks in the chain of title</b><p>Deceased owner, missing heirs, old unreleased deeds of trust — fixable, but it takes TIME. Price the delay in.</p></div></div>
+    </div>
+  </section>
+
+  <!-- ─────────────── 6. SCRIPTS ─────────────── -->
+  <section id="scripts">
+    <div class="sec-head"><span class="ico">🗣️</span><h2>Turning this into seller conversations</h2></div>
+    <p class="sec-sub">Every common price objection is a value-ladder mix-up. Name the value they're quoting, then offer the trade.</p>
+
+    <div class="script">
+      <div class="say">Seller says</div>
+      <div class="obj">"Zillow / an online estimate says it's worth more."</div>
+      <div class="ans">"Those tools estimate <b>market value</b> — the price after months of full exposure with no time pressure. Our cash number is a <b>speed</b> price: close in weeks, as-is, zero fees, zero risk of it falling out. If time isn't a problem for you, our novation option chases that market number — it just needs 3–6 months to earn it."</div>
+    </div>
+    <div class="script">
+      <div class="say">Seller says</div>
+      <div class="obj">"The county says it's worth $X." (assessed value)</div>
+      <div class="ans">"That's the county's <b>tax</b> number, not a sale price — it comes from a formula, and depending on when you bought, it can run way below or above what buyers actually pay. Let's look at what land has actually <b>sold</b> for around you — that's the only number a buyer will honor."</div>
+    </div>
+    <div class="script">
+      <div class="say">Seller says</div>
+      <div class="obj">"A developer offered my neighbor way more."</div>
+      <div class="ans">"Developers pay <b>investment value</b> — their own spreadsheet: what finished lots sell for minus their build costs, their profit, and years of waiting. Two parcels a street apart can pencil completely differently. If your land fits a builder's box, we run that exact math — that's literally our developer offer."</div>
+    </div>
+    <div class="script">
+      <div class="say">Seller says</div>
+      <div class="obj">"I'm not in a hurry — I want full price."</div>
+      <div class="ans">"Then the honest answer is our <b>novation</b>: we list it to the open market, which is the only way to reach full market value — and we tell you upfront it takes 3–6 months minimum, because market value <b>requires</b> market time. Cash is for when weeks matter."</div>
+    </div>
+  </section>
+
+  <footer>Freedom Offers · internal training · distilled from appraisal coursework (valuation process, land valuation techniques, value types, title insurance) and rewritten for our land operation. Companion doc lives in the Land Course Library.</footer>
+</div>
+
+</body>
+</html>
