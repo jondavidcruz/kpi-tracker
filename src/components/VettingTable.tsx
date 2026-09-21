@@ -273,7 +273,7 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                   <th className="w-32">Number</th>
                   <th className="w-44">Email</th>
                   <th className="w-[340px]">Notes</th>
-                  <th className="w-36">Buying area</th>
+                  <th className="w-64">Buying area</th>
                   <th className="w-44">Buy box</th>
                   <th className="w-28">Status</th>
                 </tr>
@@ -308,8 +308,12 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                         <td className="px-1 py-1">{canEdit ? <Cell id={p.id} field="email" value={p.email} placeholder="email" /> : p.email && <a href={`mailto:${p.email}`} className="px-1.5 text-brand-navy hover:underline">{p.email}</a>}</td>
                         {/* Notes — bigger */}
                         <td className="px-1 py-1 text-slate-600">{canEdit ? <NotesCell id={p.id} field="outreachLog" value={p.outreachLog} placeholder="notes — touches, replies, who to ask for, next step…" /> : <span className="whitespace-pre-wrap px-1.5">{p.outreachLog}</span>}</td>
-                        {/* Buying area */}
-                        <td className="px-1 py-1 text-emerald-700">{canEdit ? <Cell id={p.id} field="buyBoxAreas" value={p.buyBoxAreas} placeholder="areas they buy" /> : <span className="px-1.5">{p.buyBoxAreas}</span>}</td>
+                        {/* Buying area — roomy multiline (one city/county per line), autosaves */}
+                        <td className="px-1 py-1 text-emerald-700">
+                          {canEdit
+                            ? <NotesCell id={p.id} field="buyBoxAreas" value={p.buyBoxAreas} placeholder="areas they buy — one city / county per line" minW="min-w-[240px]" rows={3} />
+                            : <span className="whitespace-pre-wrap px-1.5">{p.buyBoxAreas}</span>}
+                        </td>
                         {/* Buy box summary (edit via ⊕) */}
                         <td className="px-1.5 py-1 align-top">
                           {(() => { const chips = buyBoxChips(p); return chips.length

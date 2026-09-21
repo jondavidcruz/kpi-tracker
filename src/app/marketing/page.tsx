@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap, saveBuyerTerms, readBuyerTerms, saveBuyerLand, readBuyerLand, installLandMarkets } from "@/app/actions";
-import { BUILDER_TYPES } from "@/lib/buyer-land";
+import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap, saveBuyerTerms, readBuyerTerms, readBuyerLand, installLandMarkets } from "@/app/actions";
+import DevInterviews from "@/components/DevInterviews";
 import ImageUpload from "@/components/ImageUpload";
 import { getCurrentUser, isManager, canAccessMarketing, isOwner } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
@@ -52,19 +52,33 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const TIER_PILL: Record<string, string> = { S: "bg-red-100 text-red-700", "1": "bg-orange-100 text-orange-700", "2": "bg-amber-100 text-amber-700", "3": "bg-sky-100 text-sky-700" };
   // JV partners are NOT our buyers — they're separate. Keep them out of every buyer view.
   const isJv = (r: { type: string }) => r.type === "jv_partner";
-  const buyers: Buyer[] = rows
-    .filter((r) => (r.vetStage === "vetted" || r.vetStage === "active") && !isJv(r))
-    .map((r) => ({
-      id: r.id, name: r.name, category: r.category, type: r.type, region: r.region, market: r.market,
-      status: r.status, email: r.email, phone: r.phone, website: r.website, buyBox: r.buyBox,
-      buyBoxAreas: r.buyBoxAreas, lat: r.lat, lng: r.lng, notes: r.notes, buyBoxMapUrl: r.contact,
-    }));
+  // (buyers for the map are built below, after the land interviews are loaded —
+  // interview counties/cities enrich each buyer's searchable area text.)
   // Vetted Buyers shows ONLY vetted/active buyers — same spreadsheet table as Buyer
   // Research, grouped by type so it reads consistently across both pages.
   const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
   const vettedRows = rows.filter((r) => VETTED(r) && !isJv(r));
   const buyerTerms = await readBuyerTerms();
   const buyerLand = await readBuyerLand();
+  const buyers: Buyer[] = rows
+    .filter((r) => (r.vetStage === "vetted" || r.vetStage === "active") && !isJv(r))
+    .map((r) => {
+      const l = buyerLand[r.id];
+      return {
+        id: r.id, name: r.name, category: r.category, type: r.type, region: r.region, market: r.market,
+        status: r.status, email: r.email, phone: r.phone, website: r.website, buyBox: r.buyBox,
+        // Interview WHERE data joins the searchable area text, so the map's
+        // state→county drill-down and area search see it too. Counties are
+        // normalized to "Davidson County, TN" so the map's detector reads them.
+        buyBoxAreas: [
+          r.buyBoxAreas,
+          l?.buyCounties?.split(/[\n;]+/).map((s) => s.trim()).filter(Boolean)
+            .map((s) => (/county/i.test(s) ? s : s.replace(/^([^,]+)/, "$1 County"))).join(" · "),
+          l?.buyCities?.replace(/\n/g, " · "),
+        ].filter(Boolean).join(" · "),
+        lat: r.lat, lng: r.lng, notes: r.notes, buyBoxMapUrl: r.contact,
+      };
+    });
 
   // Buyer cascade lookup — type an address (+ price) and rank vetted buyers to send to.
   const cascadeAddr = (sp.addr ?? "").trim();
@@ -107,7 +121,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-6">
       <SectionTitle title="🏛 Vetted Buyers" subtitle="Our vetted buyers & developers and their buy boxes — search a market to see exactly who'd want the deal. Sourcing new buyers? Start in Buyer Research." accent="bg-brand-gold"
-        right={<Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🔎 Buyer Research</Link>} />
+        right={
+          <div className="flex items-center gap-2">
+            <a href="/api/export/buyers" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" title="One clean spreadsheet: every contact + the full buy-box interview per row">⬇️ Export CSV</a>
+            <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🔎 Buyer Research</Link>
+          </div>
+        } />
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
       {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} contact{sp.imp === "1" ? "" : "s"}.</div>}
       {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
@@ -146,6 +165,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         )}
       </Card>
 
+      {/* Where developers buy (demand board) + the standard buy-box interviews */}
+      <DevInterviews
+        rows={vettedRows.filter((r) => isDevRow(r) || buyerLand[r.id]?.isLandBuyer).map((r) => ({ id: r.id, name: r.name, market: r.market, company: r.company }))}
+        land={buyerLand}
+      />
+
       {/* Per-buyer terms — feed the cascade's "pays the most / cleanest close" ranking */}
       <details id="terms" className="scroll-mt-4 rounded-xl bg-white p-4 ring-1 ring-slate-200">
         <summary className="cursor-pointer text-sm font-bold text-slate-800">⚙️ Buyer terms — proof of funds &amp; max offer % <span className="font-normal text-slate-400">({vettedRows.length} vetted buyers)</span></summary>
@@ -163,26 +188,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                   <label className="flex items-center gap-1.5 text-[13px] text-slate-600">Max offer <input name="maxOfferPct" type="number" min="0" max="120" step="1" defaultValue={t.maxOfferPct ?? ""} placeholder="85" className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm" /> % ARV</label>
                   <button className="rounded-md bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
                 </form>
-                <details className="mt-1">
-                  <summary className="cursor-pointer text-[12px] font-semibold text-emerald-700">🌱 Land buy-box{l.isLandBuyer ? " · on" : ""}</summary>
-                  <form action={saveBuyerLand} className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg bg-emerald-50/50 p-2.5 sm:grid-cols-4">
-                    <input type="hidden" name="buyerId" value={r.id} />
-                    <label className="col-span-2 flex items-center gap-1.5 text-[13px] text-slate-600"><input type="checkbox" name="isLandBuyer" defaultChecked={!!l.isLandBuyer} className="h-4 w-4" /> 🌱 Land buyer (boost in cascade)</label>
-                    <label className="text-[12px] text-slate-600">$/lot<input name="pricePerLot" type="number" defaultValue={l.pricePerLot ?? ""} placeholder="$" className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
-                    <label className="text-[12px] text-slate-600">Permits/12mo<input name="permits12mo" type="number" defaultValue={l.permits12mo ?? ""} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
-                    <label className="text-[12px] text-slate-600">Lot min (ac)<input name="lotMin" type="number" step="any" defaultValue={l.lotMin ?? ""} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
-                    <label className="text-[12px] text-slate-600">Lot max (ac)<input name="lotMax" type="number" step="any" defaultValue={l.lotMax ?? ""} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
-                    <label className="col-span-2 text-[12px] text-slate-600">Target zips<input name="targetZips" defaultValue={l.targetZips ?? ""} placeholder="92101, 92028" className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
-                    <label className="text-[12px] text-slate-600">Builder type
-                      <select name="builderType" defaultValue={l.builderType ?? ""} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm">
-                        {BUILDER_TYPES.map((b) => <option key={b} value={b}>{b || "—"}</option>)}
-                      </select>
-                    </label>
-                    <label className="flex items-end gap-1.5 pb-1 text-[12px] text-slate-600"><input type="checkbox" name="utilitiesRequired" defaultChecked={!!l.utilitiesRequired} className="h-4 w-4" /> Utilities req.</label>
-                    <label className="col-span-2 text-[12px] text-slate-600">Deal breakers<input name="dealBreakers" defaultValue={l.dealBreakers ?? ""} placeholder="wetlands, no utilities…" className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
-                    <div className="col-span-2 sm:col-span-4"><button className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700">Save land buy-box</button></div>
-                  </form>
-                </details>
+                {/* Land questions moved to the standard Developer buy-box interview card (#interviews). */}
               </div>
             );
           })}

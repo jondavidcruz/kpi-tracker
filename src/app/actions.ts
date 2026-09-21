@@ -1307,11 +1307,17 @@ export async function saveBuyerLand(formData: FormData) {
   if (!buyerId) return;
   const num = (k: string) => { const n = Number(String(formData.get(k) ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) && n > 0 ? n : undefined; };
   const str = (k: string) => { const s = String(formData.get(k) ?? "").trim(); return s || undefined; };
+  // Full standard-interview record (Jon 2026-09-21) — the form submits every
+  // field, so a wholesale replace both saves and clears correctly.
+  const landTypes = formData.getAll("landTypes").map(String).map((s) => s.trim()).filter(Boolean).join(", ") || undefined;
   const rec: BuyerLand = {
     isLandBuyer: formData.get("isLandBuyer") === "on" ? true : undefined,
-    pricePerLot: num("pricePerLot"), lotMin: num("lotMin"), lotMax: num("lotMax"),
-    targetZips: str("targetZips"), utilitiesRequired: formData.get("utilitiesRequired") === "on" ? true : undefined,
-    builderType: str("builderType"), dealBreakers: str("dealBreakers"), permits12mo: num("permits12mo"),
+    buyStates: str("buyStates"), buyCounties: str("buyCounties"), buyCities: str("buyCities"), targetZips: str("targetZips"),
+    landTypes, lotMin: num("lotMin"), lotMax: num("lotMax"), acresTypical: str("acresTypical"),
+    utilities: str("utilities"), zoningPref: str("zoningPref"),
+    priceMin: num("priceMin"), priceMax: num("priceMax"), pricePerLot: num("pricePerLot"), closeSpeed: str("closeSpeed"),
+    lotsPerYear: num("lotsPerYear"), permits12mo: num("permits12mo"),
+    builderType: str("builderType"), dealBreakers: str("dealBreakers"), notes: str("notes"),
   };
   const cleaned = Object.fromEntries(Object.entries(rec).filter(([, v]) => v !== undefined)) as BuyerLand;
   const map = await readBuyerLand();
@@ -1322,7 +1328,7 @@ export async function saveBuyerLand(formData: FormData) {
   else await db.resource.create({ data: { title: "buyer-land", category: BUYER_LAND_CAT, url: "", description: JSON.stringify(map) } });
   revalidatePath("/marketing");
   revalidatePath("/deals");
-  redirect("/marketing?saved=1#terms");
+  redirect("/marketing?saved=1#interviews");
 }
 
 // ── Land details on deals (no schema migration — JSON side-store keyed by deal id) ──
