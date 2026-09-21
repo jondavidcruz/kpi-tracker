@@ -238,10 +238,9 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
               <span className={labelCls}>Team Announcements (one per line)</span>
               <textarea name="mtgAnnouncements" defaultValue={settings.mtgAnnouncements} rows={4} placeholder={"New script live\nUpdated underwriting process\n…"} className={inputCls} />
             </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Change / Coming Soon (one per line)</span>
-              <textarea name="mtgComingSoon" defaultValue={settings.mtgComingSoon} rows={4} className={inputCls} />
-            </label>
+            {/* Coming-Soon slide removed from the deck per Jon (2026-09-21) — announcements
+                carry any upcoming changes now. Value preserved so a save doesn't wipe it. */}
+            <input type="hidden" name="mtgComingSoon" defaultValue={settings.mtgComingSoon} />
             {/* Meet-link inputs removed from this page per Jon. Values preserved so the
                 existing "Join Meet" buttons keep working and a save here doesn't wipe them. */}
             <input type="hidden" name="teamMeetLink" defaultValue={settings.teamMeetLink} />
@@ -254,7 +253,7 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
 
         <Card className="mt-4 p-6">
           <h3 className="mb-1 text-sm font-bold text-slate-700">Training-tip backlog</h3>
-          <p className="mb-3 text-xs text-slate-500">Each Monday the deck shows the tip matching the team&apos;s weakest KPI; untagged tips rotate as the general fallback.</p>
+          <p className="mb-3 text-xs text-slate-500">The deck now shows one Acquisitions + one Dispositions tip weekly, rotating through a built-in library of ~50 — so it&apos;s fresh every week even with this backlog empty. Tips you add here join the rotation (tagged to a KPI → that department&apos;s pool; a tip tagged to the week&apos;s weakest KPI takes priority).</p>
           <div className="mb-4 space-y-2">
             {tips.length === 0 && <p className="text-sm text-slate-400">No tips yet — add your first below.</p>}
             {tips.map((t) => (

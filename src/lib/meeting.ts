@@ -11,6 +11,7 @@ import { POSITIONS, positionLabel } from "./roles";
 import { analyzeDeal } from "./deals";
 import { quarterOf, quarterLabel } from "./eos";
 import { EXPENSE_CATEGORIES, LEAD_KPI_KEYS } from "./expenses";
+import { ACQ_TIPS, DISPO_TIPS, TEAM_ACTIVITIES } from "./training-tips";
 
 export interface Glance { key: string; name: string; value: string }
 export interface RoleTable {
@@ -59,7 +60,12 @@ export interface MeetingDeck {
     reward: string; stretchReward: string; pct: number;
   };
   recognition: Recognition[];
-  trainingTip: { text: string; targetKpi: string } | null;
+  // One tip per department each week, rotating through the built-in library +
+  // the owner's backlog (see lib/training-tips.ts). `focus` set when the tip
+  // was targeted at last week's weakest KPI.
+  trainingTips: { role: string; emoji: string; text: string; focus?: string }[];
+  // Weekly team-building closer (2–5 min), rotates from TEAM_ACTIVITIES.
+  activity: { title: string; how: string; minutes: number };
 }
 
 const ROLLUP_KEYS = ["offers_made", "acq_contracts_sent", "deals_sold", "new_buyers"];
@@ -320,13 +326,38 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     const attain = total / expected;
     if (!weakest || attain < weakest.attain) weakest = { key: k.key, name: k.name, attain };
   }
+  // One tip per department, rotating weekly through the built-in library plus
+  // the owner's backlog (KPI-tagged tips join their role's pool; untagged join
+  // both). A backlog tip targeted at the weakest KPI overrides its role's pick.
   const tips = await db.trainingTip.findMany({ where: { active: true } });
-  const pickTip = (pool: typeof tips) => (pool.length ? pool[hashWeek(wk.start) % pool.length] : null);
-  const targeted = weakest ? tips.filter((t) => t.kpiKey === weakest!.key) : [];
-  const chosen = pickTip(targeted.length ? targeted : tips.filter((t) => !t.kpiKey));
-  const trainingTip = chosen
-    ? { text: chosen.text, targetKpi: weakest && targeted.length ? weakest.name : "" }
-    : null;
+  const roleOfKey = new Map(perRepKpis.map((k) => [k.key, k.roleKey]));
+  const seed = hashWeek(wk.start);
+  const buildPool = (role: string, builtIn: string[]) => [
+    ...tips.filter((t) => t.kpiKey && roleOfKey.get(t.kpiKey) === role).map((t) => t.text),
+    ...tips.filter((t) => !t.kpiKey).map((t) => t.text),
+    ...builtIn,
+  ];
+  const acqPool = buildPool("acquisitions", ACQ_TIPS);
+  const dispoPool = buildPool("dispositions", DISPO_TIPS);
+  let acqText = acqPool[seed % acqPool.length];
+  let dispoText = dispoPool[(seed * 7 + 3) % dispoPool.length];
+  if (dispoText === acqText && dispoPool.length > 1) dispoText = dispoPool[(seed * 7 + 4) % dispoPool.length];
+  const trainingTips: MeetingDeck["trainingTips"] = [
+    { role: "Acquisitions", emoji: "🎯", text: acqText },
+    { role: "Dispositions", emoji: "🤝", text: dispoText },
+  ];
+  if (weakest) {
+    const targeted = tips.filter((t) => t.kpiKey === weakest!.key);
+    const weakRole = roleOfKey.get(weakest.key);
+    const slot = trainingTips.find((t) => t.role.toLowerCase() === (weakRole ?? ""));
+    if (targeted.length && slot) {
+      slot.text = targeted[seed % targeted.length].text;
+      slot.focus = weakest.name;
+    }
+  }
+
+  // Weekly team-building closer — its own seed so it never syncs with the tips.
+  const activity = TEAM_ACTIVITIES[hashWeek(wk.start + "act") % TEAM_ACTIVITIES.length];
 
   const thisWeek = currentWeekRange(today);
   return {
@@ -376,7 +407,8 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
       pct: revenueGoal > 0 ? Math.min(1, closedRevenueYTD / revenueGoal) : 0,
     },
     recognition,
-    trainingTip,
+    trainingTips,
+    activity,
   };
 }
 
@@ -444,7 +476,7 @@ export async function buildMeetingSummary(today: string, deck: MeetingDeck): Pro
   if (pipeline.length === 0) pipeline.push("Walk the active pipeline — what's closest to closing?");
 
   const focus: string[] = [];
-  if (deck.trainingTip) focus.push(`Skill focus: ${deck.trainingTip.text}`);
+  for (const t of deck.trainingTips) focus.push(`${t.role} skill focus: ${t.text}`);
   if (deck.goal.revenueGoal > 0) focus.push(`Goal: ${usd(deck.goal.revenueClosed)} of ${usd(deck.goal.revenueGoal)} (${deck.goal.pct}%) — keep the board moving.`);
   if (focus.length === 0) focus.push("Pick one number to move this week and make it the rallying point.");
 

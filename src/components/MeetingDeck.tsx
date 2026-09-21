@@ -8,10 +8,10 @@ export default function MeetingDeckView({ deck }: { deck: MeetingDeck }) {
 }
 
 // One position's KPI table, full width — positions stack top-to-bottom.
-function RoleBlock({ rt }: { rt: MeetingDeck["lastWeek"]["roleTables"][number] }) {
+function RoleBlock({ rt, heading }: { rt: MeetingDeck["lastWeek"]["roleTables"][number]; heading?: string }) {
   return (
     <div className="overflow-hidden rounded-lg ring-1 ring-slate-200">
-      <div className="bg-brand-navy px-3 py-1 font-bold text-white" style={{ fontSize: "clamp(9px,1.3cqw,16px)" }}>{rt.emoji} {rt.label}</div>
+      <div className="bg-brand-navy px-3 py-1 font-bold text-white" style={{ fontSize: "clamp(9px,1.3cqw,16px)" }}>{heading ?? `${rt.emoji} ${rt.label}`}</div>
       <table className="w-full" style={{ fontSize: "clamp(8px,1.15cqw,15px)" }}>
         <thead><tr className="bg-slate-50 text-slate-500">
           <th className="px-2 py-1 text-left">Rep</th>
@@ -30,35 +30,23 @@ function RoleBlock({ rt }: { rt: MeetingDeck["lastWeek"]["roleTables"][number] }
   );
 }
 
-// Shared KPI slide — glance tiles + per-position tables stacked vertically.
-function KpiSlide({ title, glance, roleTables }: { title: string; glance: MeetingDeck["lastWeek"]["glance"]; roleTables: MeetingDeck["lastWeek"]["roleTables"] }) {
-  return (
-    <Light title={title}>
-      {glance.length > 0 && (
-        <div className="grid grid-cols-4 gap-[1.5%]">
-          {glance.slice(0, 8).map((g) => (
-            <div key={g.key} className="rounded-lg bg-slate-50 p-[2.5%] ring-1 ring-slate-200">
-              <div className="text-slate-500" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{g.name}</div>
-              <div className="font-extrabold tabular-nums text-slate-900" style={{ fontSize: "clamp(14px,2.4cqw,32px)" }}>{g.value}</div>
-            </div>
-          ))}
+// One page per position: last week's table + month-to-date table stacked, so the
+// whole department's story fits on a single slide (Jon 2026-09-21: merged weekly +
+// monthly, one page for Acquisitions, one for Dispositions — fewer slides).
+function pushKpiSlides(s: Slide[], d: MeetingDeck) {
+  const labels = [...new Set([...d.lastWeek.roleTables, ...d.monthly.roleTables].map((t) => t.label))];
+  for (const label of labels) {
+    const wk = d.lastWeek.roleTables.find((t) => t.label === label);
+    const mo = d.monthly.roleTables.find((t) => t.label === label);
+    const emoji = (wk ?? mo)!.emoji;
+    s.push({ name: `${label} KPIs`, node: (
+      <Light title={`${emoji} ${label} — KPIs`}>
+        <div className="space-y-[2%]">
+          {wk && <RoleBlock rt={wk} heading={`📅 Last week`} />}
+          {mo && <RoleBlock rt={mo} heading={`🗓 This month (${d.monthly.label})`} />}
         </div>
-      )}
-      <div className="mt-[2.5%] space-y-[1.5%]">
-        {roleTables.map((rt) => <RoleBlock key={rt.label} rt={rt} />)}
-      </div>
-    </Light>
-  );
-}
-
-// Split a KPI section across slides so no position's table gets clipped: the first
-// slide carries the glance tiles + the first position; remaining positions (incl.
-// Dispositions) get their own roomy slide.
-function pushKpiSlides(s: Slide[], title: string, section: MeetingDeck["lastWeek"]) {
-  const tables = section.roleTables;
-  s.push({ name: `${title} KPIs`, node: <KpiSlide title={`${title} — Team KPIs`} glance={section.glance} roleTables={tables.slice(0, 1)} /> });
-  if (tables.length > 1) {
-    s.push({ name: `${title} KPIs (cont.)`, node: <KpiSlide title={`${title} — Team KPIs (cont.)`} glance={[]} roleTables={tables.slice(1)} /> });
+      </Light>
+    ) });
   }
 }
 
@@ -152,16 +140,10 @@ function buildSlides(d: MeetingDeck): Slide[] {
     <Navy title="Team Announcements"><Bullets items={d.announcements} empty="Add this week's announcements below in Edit deck content." /></Navy>
   )});
 
-  // 4. Coming soon
-  s.push({ name: "Coming Soon", node: (
-    <Navy title="Change / Coming Soon"><Bullets items={d.comingSoon} empty="Add upcoming changes below in Edit deck content." /></Navy>
-  )});
+  // 4. Coming-Soon slide removed per Jon (2026-09-21) — announcements carry it now.
 
-  // 5. Last week KPIs — split so each position (incl. Dispositions) is fully visible
-  pushKpiSlides(s, "Last Week", d.lastWeek);
-
-  // 6. This month KPIs — same split, month-to-date
-  pushKpiSlides(s, `This Month (${d.monthly.label})`, d.monthly);
+  // 5. KPIs — one merged weekly+monthly page per position (Acquisitions, Dispositions)
+  pushKpiSlides(s, d);
 
   // 7. Pipeline — paginated so ALL deals show (a fixed slide only fits ~6 rows).
   const PIPE_PAGE = 6;
@@ -237,13 +219,19 @@ function buildSlides(d: MeetingDeck): Slide[] {
     </Light>
   )});
 
-  // 10. Training tip
-  s.push({ name: "Training Tip", node: (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy px-[10%] text-center text-white">
-      <div className="text-brand-gold" style={{ fontSize: "clamp(11px,1.6cqw,20px)", letterSpacing: "0.2em" }}>TRAINING TIP OF THE WEEK</div>
-      {d.trainingTip?.targetKpi && <div className="mt-1 text-white/60" style={{ fontSize: "clamp(10px,1.3cqw,16px)" }}>Focus: {d.trainingTip.targetKpi}</div>}
-      <div className="mt-[4%] max-w-[80%] font-bold leading-snug" style={{ fontSize: "clamp(16px,3cqw,40px)" }}>
-        {d.trainingTip ? d.trainingTip.text : "Add training tips below in Edit deck content."}
+  // 10. Training tips — one per department, fresh every week from the rotating library.
+  s.push({ name: "Training Tips", node: (
+    <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy px-[7%] text-white">
+      <div className="text-center text-brand-gold" style={{ fontSize: "clamp(11px,1.6cqw,20px)", letterSpacing: "0.2em" }}>TRAINING TIPS OF THE WEEK</div>
+      <div className="mt-[3%] w-full space-y-[2.5%]">
+        {d.trainingTips.map((t) => (
+          <div key={t.role} className="rounded-2xl bg-white/10 p-[2.5%] ring-1 ring-white/20">
+            <div className="font-bold text-brand-gold-soft" style={{ fontSize: "clamp(11px,1.5cqw,19px)" }}>
+              {t.emoji} {t.role}{t.focus ? <span className="ml-2 font-normal text-white/60">· focus: {t.focus}</span> : null}
+            </div>
+            <div className="mt-[0.8%] font-bold leading-snug" style={{ fontSize: "clamp(13px,2cqw,27px)" }}>{t.text}</div>
+          </div>
+        ))}
       </div>
     </div>
   )});
@@ -254,6 +242,16 @@ function buildSlides(d: MeetingDeck): Slide[] {
       <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>VERSE OF THE WEEK</div>
       <div className="mt-[4%] max-w-[85%] font-bold italic leading-snug" style={{ fontSize: "clamp(16px,3cqw,42px)" }}>&ldquo;{d.verse.text}&rdquo;</div>
       <div className="mt-[3%] font-semibold text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.8cqw,24px)" }}>— {d.verse.ref}</div>
+    </div>
+  )});
+
+  // Team-building closer — a new 2–5 minute activity every week, right before the send-off.
+  s.push({ name: "Team Building", node: (
+    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-emerald-900 via-brand-navy to-brand-navy-950 px-[9%] text-center text-white">
+      <div className="text-emerald-300" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>BEFORE WE GO — TEAM TIME</div>
+      <div className="mt-[2.5%] font-extrabold" style={{ fontSize: "clamp(20px,3.6cqw,48px)" }}>🎉 {d.activity.title}</div>
+      <div className="mt-[2.5%] max-w-[82%] leading-snug text-white/90" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>{d.activity.how}</div>
+      <div className="mt-[3%] rounded-full bg-white/10 px-5 py-1.5 font-bold text-emerald-200 ring-1 ring-white/20" style={{ fontSize: "clamp(10px,1.4cqw,17px)" }}>⏱ {d.activity.minutes} min — then we're out</div>
     </div>
   )});
 
