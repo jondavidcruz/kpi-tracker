@@ -94,7 +94,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, job: "cascade", ...res });
   }
 
-  // Daily phone-health digest → posts unhealthy numbers to the phone-health Chat space.
+  // Phone-health digest → posts unhealthy numbers to the phone-health Chat space.
+  // NO LONGER SCHEDULED (Jon 2026-09-24: the daily post was all zeros because the
+  // manual tracker rows were never filled in — pure noise). Kept for manual runs:
+  // /api/cron?phonehealth=1&secret=… — the live API monitoring stays on ?compliance=1.
   if (url.searchParams.get("phonehealth") === "1") {
     const [cfg, rows] = await Promise.all([
       db.resource.findFirst({ where: { category: "__phone_config__" } }),
