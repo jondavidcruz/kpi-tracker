@@ -167,7 +167,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
 
       {/* Where developers buy (demand board) + the standard buy-box interviews */}
       <DevInterviews
-        rows={vettedRows.filter((r) => isDevRow(r) || buyerLand[r.id]?.isLandBuyer).map((r) => ({ id: r.id, name: r.name, market: r.market, company: r.company }))}
+        rows={vettedRows.filter((r) => isDevRow(r) || buyerLand[r.id]?.isLandBuyer).map((r) => ({
+          id: r.id, name: r.name, company: r.company,
+          // ⊕ buy-box CRM fields — pre-fill unanswered interview questions.
+          market: r.market, buyBoxAreas: r.buyBoxAreas, closingSpeed: r.closingSpeed,
+          dealType: r.dealType, priceRange: r.priceRange, minLotSize: r.minLotSize, companySize: r.companySize,
+        }))}
         land={buyerLand}
       />
 

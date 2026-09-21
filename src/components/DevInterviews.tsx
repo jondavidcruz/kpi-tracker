@@ -3,7 +3,7 @@ import { saveBuyerLand } from "@/app/actions";
 import { Card } from "@/components/ui";
 import {
   type BuyerLand, BUILDER_TYPES, LAND_TYPES, UTILITY_OPTS, ZONING_OPTS, CLOSE_OPTS,
-  interviewScore, demandAreas,
+  interviewScore, demandAreas, effectiveLand, type CrmSeed,
 } from "@/lib/buyer-land";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
@@ -17,11 +17,42 @@ export default function DevInterviews({
   rows,
   land,
 }: {
-  rows: { id: string; name: string; market: string; company: string }[];
+  rows: ({ id: string; name: string; company: string } & CrmSeed)[];
   land: Record<string, BuyerLand>;
 }) {
   const nameOf = (id: string) => rows.find((r) => r.id === id)?.name ?? "";
+  const idOf = (name: string) => rows.find((r) => r.name === name)?.id ?? "";
   const demand = demandAreas(land, nameOf);
+
+  // Who buys alongside whom — developers sharing at least one interviewed area.
+  const overlap = new Map<string, Set<string>>();
+  for (const d of demand) {
+    if (d.devs.length < 2) continue;
+    for (const a of d.devs) for (const b of d.devs) {
+      if (a === b) continue;
+      (overlap.get(a) ?? overlap.set(a, new Set()).get(a)!).add(b);
+    }
+  }
+
+  // Pull plans — for each area 2+ developers want, combine their interviews into
+  // the exact list-pull criteria: price band, lot band, land types, close speed.
+  const money = (n: number) => `$${n.toLocaleString()}`;
+  const pullPlans = demand.filter((d) => d.devs.length >= 2).slice(0, 6).map((d) => {
+    const lands = d.devs.map((n) => land[idOf(n)]).filter(Boolean) as BuyerLand[];
+    const mins = lands.flatMap((l) => [l.priceMin, l.pricePerLot].filter((x): x is number => !!x));
+    const maxs = lands.flatMap((l) => [l.priceMax, l.pricePerLot].filter((x): x is number => !!x));
+    const lotMins = lands.map((l) => l.lotMin).filter((x): x is number => !!x);
+    const lotMaxs = lands.map((l) => l.lotMax).filter((x): x is number => !!x);
+    const types = [...new Set(lands.flatMap((l) => (l.landTypes ?? "").split(",").map((s) => s.trim()).filter(Boolean)))];
+    const speedIdx = lands.map((l) => CLOSE_OPTS.indexOf(l.closeSpeed ?? "")).filter((i) => i >= 0);
+    return {
+      area: d.area, devs: d.devs,
+      price: mins.length || maxs.length ? `${mins.length ? money(Math.min(...mins)) : "?"} – ${maxs.length ? money(Math.max(...maxs)) : "?"}` : null,
+      lots: lotMins.length || lotMaxs.length ? `${lotMins.length ? Math.min(...lotMins) : "?"}–${lotMaxs.length ? Math.max(...lotMaxs) : "?"} ac` : null,
+      types: types.slice(0, 4),
+      speed: speedIdx.length ? CLOSE_OPTS[Math.min(...speedIdx)] : null,
+    };
+  });
 
   return (
     <>
@@ -51,6 +82,30 @@ export default function DevInterviews({
           </div>
         )}
         {demand.length > 0 && <p className="mt-2 text-[11px] text-slate-400">Hover a chip to see which developers buy there. Dark green = 3+ developers competing for the same dirt — pull lists there first.</p>}
+
+        {/* Ready-made pull plans for the hottest overlaps */}
+        {pullPlans.length > 0 && (
+          <div className="mt-4">
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">🎯 Pull plans — the exact list criteria for each hot area</div>
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {pullPlans.map((p) => (
+                <div key={p.area} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-extrabold text-slate-800">{p.area}</span>
+                    <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{p.devs.length} buyers</span>
+                  </div>
+                  <div className="mt-1.5 space-y-0.5 text-[12px] text-slate-600">
+                    {p.price && <div>💵 They pay <b className="text-emerald-700">{p.price}</b></div>}
+                    {p.lots && <div>📏 Pull parcels <b>{p.lots}</b></div>}
+                    {p.types.length > 0 && <div>🌲 {p.types.join(" · ")}</div>}
+                    {p.speed && <div>⚡ Fastest close: {p.speed}</div>}
+                    <div className="text-[11px] text-slate-400">Sell to: {p.devs.join(", ")}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* ── The standard interview, one per developer ── */}
@@ -65,9 +120,15 @@ export default function DevInterviews({
         <div className="mt-3 divide-y divide-slate-100">
           {rows.length === 0 && <p className="py-2 text-sm text-slate-400">No vetted developers yet — vet them in Buyer Research first.</p>}
           {rows.map((r) => {
-            const l = land[r.id] ?? {};
-            const score = interviewScore(l);
+            const saved = land[r.id] ?? {};
+            // What the form shows: saved answers first, gaps pre-filled from the
+            // ⊕ buy-box CRM fields (price range, close speed, deal type, lot size,
+            // areas). One "Save interview" locks the pre-fills into the store.
+            const l = effectiveLand(saved, r);
+            const score = interviewScore(saved);
+            const seeded = interviewScore(l).done - score.done;
             const full = score.done === score.total;
+            const buddies = [...(overlap.get(r.name) ?? [])].slice(0, 3);
             const whereCount =
               (l.buyCounties ?? "").split(/[\n;]+/).filter((s) => s.trim()).length +
               (l.buyCities ?? "").split(/[\n,;]+/).filter((s) => s.trim()).length;
@@ -83,9 +144,11 @@ export default function DevInterviews({
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${full ? "bg-emerald-600 text-white" : score.done >= 6 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
                     {full ? "✓ complete" : `${score.done}/${score.total} answered`}
                   </span>
+                  {seeded > 0 && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700" title="Answers pulled from the ⊕ buy-box panel — open and hit Save interview to lock them in">＋{seeded} pre-filled — save to lock in</span>}
                   {whereCount > 0 && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">📍 {whereCount} area{whereCount === 1 ? "" : "s"}</span>}
                   {price && <span className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">{price}</span>}
                   {l.closeSpeed && <span className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">⚡ {l.closeSpeed}</span>}
+                  {buddies.length > 0 && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200" title="Developers buying in the same areas">🤝 {buddies.join(", ")}</span>}
                 </summary>
 
                 <form action={saveBuyerLand} className="mt-3 space-y-4 rounded-xl bg-emerald-50/40 p-3.5 ring-1 ring-emerald-100">

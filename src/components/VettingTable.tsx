@@ -168,6 +168,9 @@ function BuyBoxPanel({ p }: { p: Prospect }) {
 
       {dev ? (
         <>
+          <div className="col-span-2 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-800 ring-1 ring-emerald-200 sm:col-span-4">
+            🧾 Land specifics (where they buy, lot size, price, close speed…) live in the <b>Developer buy-box interview</b> on Vetted Buyers — that&apos;s the master copy. Anything you already filled here pre-loads the interview automatically.
+          </div>
           <MultiSelect name="dealType" label="Deal type (pick all)" defaultValue={p.dealType} options={DEAL_TYPE} />
           <MultiSelect name="buildType" label="Developer type — what they build (pick all)" defaultValue={p.buildType} options={BUILD_TYPE} />
           <Sel name="closingSpeed" label="Move speed" def={p.closingSpeed} options={SPEED} />

@@ -89,6 +89,80 @@ export function demandAreas(
     .sort((a, z) => z.devs.length - a.devs.length || a.area.localeCompare(z.area));
 }
 
+// ── Seeding the interview from the older ⊕ buy-box CRM fields ────────────────
+// Developers vetted before the standard interview already answered some of the
+// questions in the spreadsheet's ⊕ panel — pre-fill the interview from those so
+// nobody re-types what we know (first "Save interview" locks them in).
+
+/** "$400k–$700k" / "$50,000 - 500k" → {min, max} in dollars. */
+export function parseMoneyRange(s: string | undefined): { min?: number; max?: number } {
+  const nums = [...(s ?? "").matchAll(/\$?\s*(\d[\d,.]*)\s*([kKmM])?/g)]
+    .map((x) => {
+      let n = Number(x[1].replace(/,/g, ""));
+      const suf = (x[2] ?? "").toLowerCase();
+      if (suf === "k") n *= 1e3;
+      if (suf === "m") n *= 1e6;
+      return n;
+    })
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (!nums.length) return {};
+  return { min: Math.min(...nums), max: nums.length > 1 ? Math.max(...nums) : undefined };
+}
+
+/** "7,000 sf" → 0.16 acres; "2 ac" / "2" → 2. Square feet detected by unit or size. */
+export function parseAcres(s: string | undefined): number | undefined {
+  const m = (s ?? "").match(/(\d[\d,.]*)/);
+  if (!m) return undefined;
+  const n = Number(m[1].replace(/,/g, ""));
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  if (/s\.?\s?f|sq/i.test(s ?? "") || n > 2000) return Math.round((n / 43560) * 100) / 100;
+  return n;
+}
+
+const SPEED_MAP: Record<string, string> = {
+  "Cash, < 14 days": "Cash — under 14 days", "15–30 days": "15–30 days",
+  "30–45 days": "30–60 days", "Financed": "Needs financing / longer",
+};
+const DEAL_TYPE_MAP: Record<string, string> = {
+  "Land / lots": "Infill lots", "Teardown": "Teardowns", "Entitled lots": "Entitled / paper lots",
+  "Build-to-rent": "Build-to-rent tracts",
+};
+const SIZE_MAP: Record<string, string> = {
+  "Mom & Pop (1–2 / yr)": "Mom-and-pop", "Small / local builder": "Regional/Spec",
+  "Regional builder": "Regional/Spec", "National (e.g. DR Horton, Lennar)": "National",
+  "Private investor / fund": "Fund/Investor", "REIT / institutional": "Fund/Investor",
+};
+
+export type CrmSeed = {
+  market?: string; buyBoxAreas?: string; closingSpeed?: string; dealType?: string;
+  priceRange?: string; minLotSize?: string; companySize?: string;
+};
+
+/** Interview defaults derived from the older CRM fields (never overrides saved answers). */
+export function seedFromCrm(crm: CrmSeed): Partial<BuyerLand> {
+  const price = parseMoneyRange(crm.priceRange);
+  const hay = `${crm.market ?? ""} ${crm.buyBoxAreas ?? ""}`;
+  const states = [...new Set([...hay.matchAll(/\b(CA|TX|FL|TN)\b/g)].map((m) => m[1]))].join(", ");
+  const landTypes = (crm.dealType ?? "").split(",").map((s) => DEAL_TYPE_MAP[s.trim()]).filter(Boolean).join(", ");
+  const cities = (crm.buyBoxAreas ?? "").split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).join("\n");
+  const out: Partial<BuyerLand> = {
+    buyStates: states || undefined,
+    buyCities: cities || undefined,
+    landTypes: landTypes || undefined,
+    closeSpeed: SPEED_MAP[(crm.closingSpeed ?? "").trim()],
+    priceMin: price.min, priceMax: price.max,
+    lotMin: parseAcres(crm.minLotSize),
+    builderType: SIZE_MAP[(crm.companySize ?? "").trim()],
+  };
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined && v !== "")) as Partial<BuyerLand>;
+}
+
+/** Saved answers win; CRM seed fills the gaps (what the form actually shows). */
+export function effectiveLand(l: BuyerLand | undefined, crm: CrmSeed): BuyerLand {
+  const saved = Object.fromEntries(Object.entries(l ?? {}).filter(([, v]) => v !== undefined && v !== "")) as BuyerLand;
+  return { ...seedFromCrm(crm), ...saved };
+}
+
 /** True if any of the buyer's target zips appears in the deal address string. */
 export function zipMatch(land: BuyerLand | undefined, address: string): boolean {
   if (!land?.targetZips) return false;
