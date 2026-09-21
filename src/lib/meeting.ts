@@ -4,8 +4,9 @@
 import { db } from "./db";
 import {
   getSettings, getActiveReps, getKpis, getRangeSums, getMonthlyValues, getOpenDeals, getDealMetrics,
+  getAllTargets, resolveGoalWith,
 } from "./data";
-import { lastWeekRange, currentWeekRange, monthBounds, friendlyDate } from "./date";
+import { lastWeekRange, currentWeekRange, monthBounds, monthOf, friendlyDate } from "./date";
 import { formatValue, type Unit } from "./format";
 import { POSITIONS, positionLabel } from "./roles";
 import { analyzeDeal } from "./deals";
@@ -17,7 +18,9 @@ export interface Glance { key: string; name: string; value: string }
 export interface RoleTable {
   label: string; emoji: string;
   columns: { key: string; name: string }[];
-  rows: { rep: string; cells: string[] }[];
+  // met: true = at/above goal pace (green), false = behind (red, with `behind` =
+  // formatted shortfall vs goal × workdays), null = KPI has no pace goal.
+  rows: { rep: string; cells: { v: string; behind: string | null; met: boolean | null }[] }[];
 }
 export interface Recognition { role: string; rep: string; kpi: string; value: string }
 export interface PipelineRow { address: string; status: string; rep: string; days: number | null; level: string; profit: number | null; contractPrice: number | null; askingPrice: number | null; nextSteps: string }
@@ -84,11 +87,25 @@ const CORE_DECK_KPIS: Record<string, string[]> = {
 // The month's core money KPIs (entered monthly, so not in the daily-summed glance).
 const CORE_MONTHLY_KPIS = ["ppl_leads", "gross_revenue", "marketing_spend", "deals_closed"];
 
+/** Mon–Fri days in an inclusive date range — the expected workdays for goal pace. */
+function workdaysBetween(start: string, end: string): number {
+  let n = 0;
+  const e = new Date(end + "T12:00:00Z");
+  for (const d = new Date(start + "T12:00:00Z"); d <= e; d.setUTCDate(d.getUTCDate() + 1)) {
+    const w = d.getUTCDay();
+    if (w >= 1 && w <= 5) n++;
+  }
+  return n;
+}
+
 // Per-position KPI tables for a given sums map (last week or month-to-date).
+// `pace` marks each cell vs goal pace (per-rep resolved goal × workdays in the
+// period): behind → red shortfall on the slide, at/above → green (Jon 2026-09-21).
 function buildRoleTables(
   reps: { id: string; name: string; position: string }[],
-  perRepKpis: { id: string; key: string; name: string; unit: string; roleKey: string }[],
+  perRepKpis: { id: string; key: string; name: string; unit: string; roleKey: string; category: string; goalKind: string; goalValue: number | null; cadence: string }[],
   sums: Map<string, number>,
+  pace: { targets: Parameters<typeof resolveGoalWith>[0]; month: string; workdays: number },
 ): RoleTable[] {
   const tables: RoleTable[] = [];
   for (const pos of POSITIONS) {
@@ -103,7 +120,24 @@ function buildRoleTables(
     tables.push({
       label: pos.label, emoji: pos.emoji,
       columns: roleKpis.map((k) => ({ key: k.key, name: k.name })),
-      rows: roleReps.map((rep) => ({ rep: rep.name, cells: roleKpis.map((k) => formatValue(k.unit as Unit, sums.get(`${k.id}|${rep.id}`) ?? 0)) })),
+      rows: roleReps.map((rep) => ({
+        rep: rep.name,
+        cells: roleKpis.map((k) => {
+          const raw = sums.get(`${k.id}|${rep.id}`) ?? 0;
+          const v = formatValue(k.unit as Unit, raw);
+          // Pace applies to daily "at least" green KPIs with a resolved goal.
+          if (k.category === "green" && k.goalKind === "at_least" && k.cadence === "daily") {
+            const goal = resolveGoalWith(pace.targets, k, rep.id, pace.month) ?? 0;
+            if (goal > 0) {
+              const short = goal * pace.workdays - raw;
+              return short > 0
+                ? { v, behind: formatValue(k.unit as Unit, short), met: false }
+                : { v, behind: null, met: true };
+            }
+          }
+          return { v, behind: null, met: null };
+        }),
+      })),
     });
   }
   return tables;
@@ -254,7 +288,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const mb = monthBounds(today);
   const year = today.slice(0, 4);
 
-  const [settings, reps, perRepKpis, teamKpis, teamMonthlyKpis, wkSums, monthlyVals, deals, dealMetrics, customSlideRows] = await Promise.all([
+  const [settings, reps, perRepKpis, teamKpis, teamMonthlyKpis, wkSums, monthlyVals, deals, dealMetrics, customSlideRows, targets] = await Promise.all([
     getSettings(),
     getActiveReps(),
     getKpis({ scope: "per_rep", computed: false }),
@@ -265,6 +299,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     getOpenDeals(),
     getDealMetrics(year),
     db.deckSlide.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
+    getAllTargets(),
   ]);
 
   // Month-to-date financial dashboard from the team's MONTHLY KPIs (contracts
@@ -275,12 +310,12 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
 
   // ---- Last week: at-a-glance + per-role tables ----
   const lastGlance = glanceFrom(teamKpis, perRepKpis, reps, wkSums);
-  const roleTables = buildRoleTables(reps, perRepKpis, wkSums);
+  const roleTables = buildRoleTables(reps, perRepKpis, wkSums, { targets, month: monthOf(wk.start), workdays: 5 });
 
   // ---- Month-to-date: same KPI breakdown, summed across the whole month ----
   const monthSums = await getRangeSums(mb.start, today);
   const monthGlance = glanceFrom(teamKpis, perRepKpis, reps, monthSums);
-  const monthRoleTables = buildRoleTables(reps, perRepKpis, monthSums);
+  const monthRoleTables = buildRoleTables(reps, perRepKpis, monthSums, { targets, month: monthOf(today), workdays: workdaysBetween(mb.start, today) });
   // Lead with the month's core money KPIs (PPL leads, revenue, spend, closes) — these are
   // entered monthly so they weren't in the daily-summed glance; that's why they showed blank.
   const coreMonthly = CORE_MONTHLY_KPIS.map((key) => financials.find((f) => f.key === key)).filter((f): f is Glance => !!f);
@@ -374,7 +409,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     talkingPoints: bullets(settings.mtgTalkingPoints ?? ""),
     lastWeek: { glance: lastGlance, roleTables },
     monthly: {
-      label: friendlyDate(mb.start).replace(/,.*/, "") + " – today",
+      label: `${friendlyDate(mb.start).replace(/,.*/, "")} – ${friendlyDate(today).replace(/,.*/, "")}`,
       financials, glance: monthDeckGlance, roleTables: monthRoleTables,
       revenueClosed: closedRevenueYTD,
       revenuePending: dealMetrics.revenuePendingEscrow,

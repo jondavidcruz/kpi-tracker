@@ -21,7 +21,14 @@ function RoleBlock({ rt, heading }: { rt: MeetingDeck["lastWeek"]["roleTables"][
           {rt.rows.map((r) => (
             <tr key={r.rep} className="border-t border-slate-100">
               <td className="px-2 py-1 font-semibold text-slate-700">{r.rep}</td>
-              {r.cells.map((c, ci) => <td key={ci} className="px-1.5 py-1 text-center font-bold tabular-nums text-slate-800">{c}</td>)}
+              {r.cells.map((c, ci) => (
+                <td key={ci} className="px-1.5 py-1 text-center">
+                  <span className={`font-bold tabular-nums ${c.met === false ? "text-red-600" : c.met === true ? "text-emerald-700" : "text-slate-800"}`}>{c.v}</span>
+                  {c.behind && (
+                    <span className="ml-1 rounded-full bg-red-100 px-1 font-bold text-red-700" style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>▼{c.behind}</span>
+                  )}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
@@ -42,8 +49,11 @@ function pushKpiSlides(s: Slide[], d: MeetingDeck) {
     s.push({ name: `${label} KPIs`, node: (
       <Light title={`${emoji} ${label} — KPIs`}>
         <div className="space-y-[2%]">
-          {wk && <RoleBlock rt={wk} heading={`📅 Last week`} />}
-          {mo && <RoleBlock rt={mo} heading={`🗓 This month (${d.monthly.label})`} />}
+          {wk && <RoleBlock rt={wk} heading={`📅 Last week · ${d.weekLabel}`} />}
+          {mo && <RoleBlock rt={mo} heading={`🗓 This month · ${d.monthly.label}`} />}
+        </div>
+        <div className="mt-[1.5%] text-slate-400" style={{ fontSize: "clamp(7px,0.95cqw,12px)" }}>
+          Pace = daily goal × workdays in the period. <span className="font-semibold text-red-600">Red ▼ = how far behind goal pace</span> · <span className="font-semibold text-emerald-700">green = at or ahead of pace</span>.
         </div>
       </Light>
     ) });
