@@ -1762,8 +1762,12 @@ export async function saveUser(formData: FormData) {
   const note = String(formData.get("note") ?? "").trim();
   const active = formData.get("active") === "on";
   const tracksInternet = formData.get("tracksInternet") === "on";
+  // "off the time clock" = irregularSchedule: hidden from the availability board,
+  // time card, break/outage inputs, presence, and payday (PH team only inputs
+  // those — Jon 2026-09-25 for Nick).
+  const irregularSchedule = formData.get("irregularSchedule") === "on";
   if (!name || !email) return;
-  const data = { name, email, role, position, note, active, tracksInternet };
+  const data = { name, email, role, position, note, active, tracksInternet, irregularSchedule };
   if (id) {
     await db.user.update({ where: { id }, data });
   } else {

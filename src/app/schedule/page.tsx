@@ -244,6 +244,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "bathroom" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: worked };
     });
 
+  // Who's exempt from time-clock INPUTS (time card, breaks, outage reporting):
+  // the owner, anyone flagged "off the time clock" in Admin, and Nick by name
+  // (Jon 2026-09-25: only the PH team inputs these).
+  const meFirst = me.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const offClock = isOwner(me) || me.irregularSchedule || ["nick", "nicholas"].includes(meFirst);
+
   // My time card today.
   const myPs = byUser.get(me.id) ?? [];
   const myState = stateFromPunches(myPs);
@@ -453,8 +459,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         </section>
       )}
 
-      {/* MY TIME CARD — not for the owner (Jon doesn't punch a clock) */}
-      {!isOwner(me) && (
+      {/* MY TIME CARD — PH team only (owner + off-the-clock folks don't punch) */}
+      {!offClock && (
         <section className="space-y-2">
           <TimeClock state={myState.state} sinceMs={myState.since ? myState.since.getTime() : null} workedMin={myWorked} nowMs={now.getTime()} capMs={capMs} shiftEndLabel={shiftEndLabel(today, me.name)} showLunch={me.name.trim().split(/\s+/)[0]?.toLowerCase() !== "marie" && new Date(today + "T12:00:00Z").getUTCDay() !== 5} />
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500 ring-1 ring-slate-200">
@@ -501,9 +507,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         </section>
       )}
 
-      {/* REPORT A POWER / INTERNET OUTAGE — self-serve, unpaid time.
-          Hidden for the owner and for anyone exempted from outage reporting (e.g. Nick). */}
-      {!isOwner(me) && !["nicholas"].includes(me.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "") && (
+      {/* REPORT A POWER / INTERNET OUTAGE — self-serve, unpaid time. PH team only. */}
+      {!offClock && (
         <Card className="p-5">
           <h3 className="mb-1 text-sm font-bold text-slate-700">⚡ Report a power or internet outage</h3>
           <p className="mb-3 text-xs text-slate-500">If you couldn&apos;t work because of a power or internet outage, log when it started and ended. This time is unpaid and is taken off your hours automatically.</p>

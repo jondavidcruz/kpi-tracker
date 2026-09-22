@@ -135,6 +135,7 @@ export default async function AdminPage({
               <label className="flex items-end gap-4 pb-1">
                 <span className="flex items-center gap-1.5 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked /> active</span>
                 <span className="flex items-center gap-1.5 text-sm text-slate-600" title="Show the internet speed test on this person's entry screen"><input type="checkbox" name="tracksInternet" defaultChecked /> ⚡️ speed test</span>
+                <span className="flex items-center gap-1.5 text-sm text-slate-600" title="Off the time clock: hidden from the availability board, time card, breaks & outage reporting (PH team only inputs those)"><input type="checkbox" name="irregularSchedule" /> 🕒 off the time clock</span>
               </label>
             </div>
             <label><span className={labelCls}>Note (schedule / part-time hours)</span><input name="note" placeholder="e.g. Part-time · Mon–Fri 8am–12pm" className={inputCls} /></label>
@@ -492,6 +493,7 @@ function PersonCard({ u, removed, canDelete, revoke }: { u: User; removed?: bool
         <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-3">
           <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="checkbox" name="active" defaultChecked={u.active} /> active</label>
           <label className="flex items-center gap-1.5 text-sm text-slate-600" title="Show the internet speed test on this person's entry screen"><input type="checkbox" name="tracksInternet" defaultChecked={u.tracksInternet} /> ⚡️ speed test</label>
+          <label className="flex items-center gap-1.5 text-sm text-slate-600" title="Off the time clock: hidden from the availability board, time card, breaks & outage reporting (PH team only inputs those)"><input type="checkbox" name="irregularSchedule" defaultChecked={u.irregularSchedule} /> 🕒 off the time clock</label>
           <div className="ml-auto"><SaveBtn small>Save</SaveBtn></div>
         </div>
       </form>
