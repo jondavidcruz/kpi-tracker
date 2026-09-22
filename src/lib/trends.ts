@@ -2,6 +2,7 @@
 // how many per-rep goal KPIs were on goal vs behind, how many reps logged, and
 // how many alerts were raised. Derived live from entries (no stored rollups).
 import { db } from "./db";
+import { tracksSpeedTest } from "./auth";
 import { getActiveReps, getKpis, getAllTargets, resolveGoalWith } from "./data";
 import { datesInRange, monthOf } from "./date";
 import { statusVsGoal } from "./kpi";
@@ -56,7 +57,7 @@ export async function getDailyTrends(endDate: string, days = 14): Promise<DayPoi
     let behind = 0;
     const loggedReps = new Set<string>();
     for (const rep of reps) {
-      const kpis = rep.tracksInternet
+      const kpis = tracksSpeedTest(rep)
         ? [...perRep.filter((k) => k.roleKey === rep.position), ...internetKpis]
         : perRep.filter((k) => k.roleKey === rep.position);
       for (const k of kpis) {

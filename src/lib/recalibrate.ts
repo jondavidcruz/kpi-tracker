@@ -3,7 +3,7 @@
 // Owner reviews the proposals and applies them; nothing changes automatically.
 import { db } from "./db";
 import { getActiveReps, getKpis, getAllTargets, resolveGoalWith } from "./data";
-import { navAllowlist } from "./auth";
+import { navAllowlist, tracksSpeedTest } from "./auth";
 
 export interface GoalProposal {
   userId: string;
@@ -68,7 +68,7 @@ export async function computeGoalProposals(windowDays = 28): Promise<GoalProposa
     const subjects = reps
       .filter((r) => r.role !== "admin")
       .filter((r) => !navAllowlist(r))
-      .filter((r) => (kpi.roleKey === "internet" ? r.tracksInternet : r.position === kpi.roleKey));
+      .filter((r) => (kpi.roleKey === "internet" ? tracksSpeedTest(r) : r.position === kpi.roleKey));
     for (const r of subjects) {
       const vals = (byPair.get(`${kpi.id}|${r.id}`) ?? []).slice().sort((a, b) => a - b);
       if (vals.length === 0) continue; // no data to base a proposal on — leave the goal untouched

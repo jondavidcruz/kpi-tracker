@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, tracksSpeedTest } from "@/lib/auth";
 import { getActiveReps, getAllTargets, getSettings, resolveGoalWith } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, currentWeekRange, datesInRange } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
@@ -38,7 +38,7 @@ export default async function InternetPage({ searchParams }: { searchParams: Pro
 
   const kpi = await db.kpi.findFirst({ where: { roleKey: "internet" }, select: { id: true, goalValue: true } });
   const allReps = await getActiveReps();
-  const reps = allReps.filter((r) => r.tracksInternet);
+  const reps = allReps.filter((r) => tracksSpeedTest(r));
   const targets = await getAllTargets();
 
   const mb = monthBounds(today);

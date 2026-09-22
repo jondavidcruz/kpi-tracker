@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { saveDay, addRepReason, setDayFocus, refreshCrmToday, importTeamLeads } from "@/app/actions";
-import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
+import { getCurrentUser, isManager, isOwner, tracksSpeedTest } from "@/lib/auth";
 import { db } from "@/lib/db";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
 import SpeedTestCard from "@/components/SpeedTestCard";
@@ -343,7 +343,7 @@ export default async function EntryPage({
         </section>
       )}
 
-      {rep && internetKpi && rep.id === me?.id && (
+      {rep && internetKpi && rep.id === me?.id && tracksSpeedTest(rep) && (
         <SpeedTestCard
           key={`${rep.id}|${date}`}
           userId={rep.id}

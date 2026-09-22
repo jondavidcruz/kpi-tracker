@@ -2,6 +2,7 @@
 // progressive accountability ladder. Consequences are intentionally framed to be
 // defensible (commission/bonus, catch-up time) rather than base-pay docking.
 import { db } from "./db";
+import { tracksSpeedTest } from "./auth";
 import { getActiveReps, getKpis, resolveGoalWith, getAllTargets } from "./data";
 import { datesInRange } from "./date";
 import { statusVsGoal } from "./kpi";
@@ -100,7 +101,7 @@ export async function findPipCandidates(endDate: string): Promise<PipCandidate[]
     if (rep.role === "admin") continue; // the owner manages the team; never auto-flag them
     const repKpis = [
       ...perRep.filter((k) => k.roleKey === rep.position),
-      ...(rep.tracksInternet ? perRep.filter((k) => k.roleKey === "internet") : []),
+      ...(tracksSpeedTest(rep) ? perRep.filter((k) => k.roleKey === "internet") : []),
     ];
     for (const k of repKpis) {
       const goal = resolveGoalWith(targets, k, rep.id, month);

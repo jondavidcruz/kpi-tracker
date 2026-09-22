@@ -50,6 +50,20 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
   const areas = Array.from(areaMap.entries()).map(([area, prospects]) => ({ area, prospects }))
     .sort((a, b) => (a.area === UNASSIGNED ? 1 : b.area === UNASSIGNED ? -1 : b.prospects.length - a.prospects.length));
 
+  // Live research-credit check: what TODAY's work has stamped to this user, and
+  // whether it actually reaches their dispo scorecard. rollupResearchKpis credits
+  // ONLY position === "dispositions" — a mismatched Position fails silently (the
+  // Sharyn 9/22 report), so this strip makes the gate visible to the rep.
+  const myCredits = me
+    ? {
+        added: await db.marketContact.count({ where: { addedById: me.id, addedOn: today } }),
+        box: await db.marketContact.count({ where: { boxById: me.id, boxOn: today } }),
+        vetted: await db.marketContact.count({ where: { vettedById: me.id, vettedOn: today } }),
+        touched: await db.marketContact.count({ where: { touchById: me.id, touchOn: today } }),
+      }
+    : null;
+  const creditsToScorecard = me?.position === "dispositions";
+
   const inPipeline = (s: string) => s === "to_vet" || s === "hold";
   const dueRows = rows
     .filter((r) => r.nextFollowUp && r.nextFollowUp <= today && r.vetStage !== "dead")
@@ -73,6 +87,20 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
         <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-sky-700">{stats.contacted7}</div><div className="text-[11px] font-semibold text-slate-500">Contacted (7d) → 📇 Buyers Contacted</div></Card>
         <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-emerald-700">{stats.vetted}</div><div className="text-[11px] font-semibold text-slate-500">Vetted → ➕ New Buyers Added</div></Card>
       </div>
+
+      {/* Your credited work today — instant feedback that the KPI pipeline is catching it */}
+      {myCredits && (
+        <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl px-4 py-2.5 text-sm ring-1 ${creditsToScorecard ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-300"}`}>
+          <span className="font-bold">📊 Credited to you today:</span>
+          <span>➕ {myCredits.added} added</span>
+          <span>📦 {myCredits.box} buy-boxes</span>
+          <span>✓ {myCredits.vetted} vetted</span>
+          <span>📞 {myCredits.touched} contacted</span>
+          {creditsToScorecard
+            ? <span className="text-[12px] font-semibold">→ auto-logged to your Dispositions scorecard</span>
+            : <span className="text-[12px] font-semibold">⚠️ NOT reaching a scorecard — your Position isn&apos;t set to Dispositions (Admin → People). Tell Jon.</span>}
+        </div>
+      )}
 
       {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} buyer{sp.imp === "1" ? "" : "s"} into the research pool.</div>}
       {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}

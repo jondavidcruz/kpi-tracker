@@ -3,7 +3,7 @@
 // scheduled pace/missing-entry checks.
 import { db } from "./db";
 import { getActiveReps, getSettings, resolveGoal } from "./data";
-import { navAllowlist } from "./auth";
+import { navAllowlist, tracksSpeedTest } from "./auth";
 import { monthOf, paceFraction, todayStr } from "./date";
 import { formatValue, type Unit } from "./format";
 import { alertSeverity, statusVsGoal, statusVsPace } from "./kpi";
@@ -101,7 +101,7 @@ export async function evaluateAndRecordAlerts(
         ? reps
             .filter((r) => r.role !== "admin") // the owner manages the team; no KPI alerts on their own lane
             .filter((r) => !navAllowlist(r)) // restricted/part-time reps (Ethan) aren't on the daily scorecard
-            .filter((r) => (kpi.roleKey === "internet" ? r.tracksInternet : r.position === kpi.roleKey))
+            .filter((r) => (kpi.roleKey === "internet" ? tracksSpeedTest(r) : r.position === kpi.roleKey))
             .map((r) => ({ userId: r.id, userName: r.name }))
         : [{ userId: null, userName: null }];
 
@@ -345,7 +345,7 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
   for (const kpi of kpis) {
     const severity = alertSeverity(kpi);
     if (!severity) continue;
-    for (const rep of reps.filter((r) => (kpi.roleKey === "internet" ? r.tracksInternet : r.position === kpi.roleKey))) {
+    for (const rep of reps.filter((r) => (kpi.roleKey === "internet" ? tracksSpeedTest(r) : r.position === kpi.roleKey))) {
       if (rep.role === "admin") continue; // the owner manages the team; no missing-entry nags
       if (rep.irregularSchedule) continue; // no set schedule, don't nag on off days
       if (navAllowlist(rep)) continue; // restricted/part-time reps (Ethan) — not on the daily scorecard
@@ -395,7 +395,7 @@ export async function sendMissingKpiEmail(date: string): Promise<boolean> {
     if (rep.irregularSchedule) continue; // no set schedule (e.g. part-time) — don't nag
     if (navAllowlist(rep)) continue; // restricted/part-time reps (Ethan) — off the scorecard
     const roleKpis = dailyKpis
-      .filter((k) => (k.roleKey === "internet" ? rep.tracksInternet : k.roleKey === rep.position))
+      .filter((k) => (k.roleKey === "internet" ? tracksSpeedTest(rep) : k.roleKey === rep.position))
       .filter((k) => !exemptForFocus(k.key, focusMap.get(rep.id)));
     if (roleKpis.length === 0) continue;
     const missing = roleKpis.filter((k) => !have.has(`${k.id}|${rep.id}`));
@@ -446,7 +446,7 @@ export async function sendShiftStartSpeedReminders(date: string, slot: "am" | "p
 
   let sent = 0;
   for (const rep of reps) {
-    if (!rep.tracksInternet) continue;
+    if (!tracksSpeedTest(rep)) continue;
     const cfg = SHIFT_START_HOURS.find((s) => rep.name.toLowerCase().includes(s.match));
     const start = cfg?.startHour(laDow);
     if (start == null) continue; // not scheduled / off today
@@ -482,7 +482,7 @@ export async function sendPostLunchSpeedReminders(date: string, laDow: number): 
 
   let sent = 0;
   for (const rep of reps) {
-    if (!rep.tracksInternet || !rep.email) continue;
+    if (!tracksSpeedTest(rep) || !rep.email) continue;
     // Known schedules: respect off-days and skip afternoon-start shifts.
     // Reps without a schedule entry are assumed on the standard morning shift.
     const cfg = SHIFT_START_HOURS.find((s) => rep.name.toLowerCase().includes(s.match));

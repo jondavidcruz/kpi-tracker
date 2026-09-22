@@ -25,7 +25,7 @@ import RecognitionBoards from "@/components/RecognitionBoards";
 import DealFunnel from "@/components/DealFunnel";
 import CrmActivityStrip from "@/components/CrmActivityStrip";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager, canAccessPayroll } from "@/lib/auth";
+import { getCurrentUser, isManager, canAccessPayroll, tracksSpeedTest } from "@/lib/auth";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
 import { CircleCheck, TrendingDown, Bell, Users, Banknote, ShieldAlert, Building2, FileSignature, type LucideIcon } from "lucide-react";
 import type { Kpi, Target, User } from "@prisma/client";
@@ -197,7 +197,7 @@ export default async function DashboardPage({
   // --- Internet speed: today's reading per rep + 14-day trend (fetched in the batch above) ---
   const speedMap = new Map<string, number>();
   for (const e of speedEntries) speedMap.set(`${e.userId}|${e.date}`, e.value);
-  const speedReps = reps.filter((r) => r.tracksInternet);
+  const speedReps = reps.filter((r) => tracksSpeedTest(r));
   const onGoalSeries = trends.map((t) => t.onGoal);
   const behindSeries = trends.map((t) => t.behind);
   const loggedSeries = trends.map((t) => t.logged);
@@ -213,7 +213,7 @@ export default async function DashboardPage({
     const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
     for (const rep of roleReps) {
       // each rep sees their role KPIs + internet KPI if they track it
-      const repKpis = rep.tracksInternet ? [...roleKpis, ...internetKpis] : roleKpis;
+      const repKpis = tracksSpeedTest(rep) ? [...roleKpis, ...internetKpis] : roleKpis;
       for (const k of repKpis) {
         const value = dailyValues.get(`${k.id}|${rep.id}`);
         if (value === undefined) continue;

@@ -1,6 +1,7 @@
 // Weekly team KPI email — full team last-week numbers by role + an Irish focus
 // block. Sent Monday morning to the configured weekly recipients.
 import { db } from "./db";
+import { tracksSpeedTest } from "./auth";
 import {
   getActiveReps,
   getKpis,
@@ -161,7 +162,7 @@ export async function sendDailyTeamReview(date: string): Promise<boolean> {
       const secRole = secondaryPositionOf(rep);
       const repKpis = [
         ...perRep.filter((k) => k.roleKey === rep.position),
-        ...(rep.tracksInternet ? perRep.filter((k) => k.roleKey === "internet") : []),
+        ...(tracksSpeedTest(rep) ? perRep.filter((k) => k.roleKey === "internet") : []),
         ...(secRole ? perRep.filter((k) => k.roleKey === secRole && valByUserKpi.has(`${rep.id}|${k.id}`)) : []),
       ];
       if (repKpis.length === 0) return ""; // owner / unassigned (Jon) — not on a scorecard

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runScheduledChecks, sendShiftStartSpeedReminders, sendPostLunchSpeedReminders } from "@/lib/alerts";
 import { SPEED_CHECKS_CATEGORY } from "@/lib/speed-checks";
+import { rollupResearchKpis } from "@/lib/research-kpis";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
@@ -353,6 +354,17 @@ export async function GET(request: Request) {
     const settings = await getSettings();
     speedTestReminded = await sendShiftStartSpeedReminders(date ?? todayStr(settings.orgTimezone), "am", la.dow);
   }
+  // Self-heal the research-derived dispo KPIs: recompute today + yesterday for
+  // every dispositions rep, so credited work still lands even when it was done
+  // before a Position fix or a rollup hiccup (idempotent; auto entries only).
+  {
+    const settings = await getSettings();
+    const t = todayStr(settings.orgTimezone);
+    const y = new Date(Date.parse(`${t}T12:00:00Z`) - 86400000).toISOString().slice(0, 10);
+    const dispoReps = await db.user.findMany({ where: { active: true, position: "dispositions" }, select: { id: true } });
+    for (const r of dispoReps) { await rollupResearchKpis(r.id, t); await rollupResearchKpis(r.id, y); }
+  }
+
   // Close any time card left open past its scheduled shift (forgot to clock out).
   const autoClockedOut = await autoCloseAbandonedSessions();
   const result = await runScheduledChecks({ date, force, weekly, review });

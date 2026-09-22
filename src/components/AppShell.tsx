@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { getSessionEmail, getCurrentUser, isManager, isAdmin, isOwner, canAccessMarketing, canAccessPayroll, canAccessCSuite, navAllowlist, isPathAllowed , isSoftwareBlocked} from "@/lib/auth";
+import { getSessionEmail, getCurrentUser, isManager, isAdmin, isOwner, canAccessMarketing, canAccessPayroll, canAccessCSuite, navAllowlist, isPathAllowed , isSoftwareBlocked, tracksSpeedTest} from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
@@ -59,7 +59,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
   // re-check is logged (Friday has no lunch break).
   let needsSpeedTest = false;
   let needsPmSpeedTest = false;
-  if (me.tracksInternet) {
+  if (tracksSpeedTest(me)) {
     const settings = await getSettings();
     const today = todayStr(settings.orgTimezone);
     const speedKpi = await db.kpi.findFirst({ where: { roleKey: "internet" }, select: { id: true } });

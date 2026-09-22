@@ -150,3 +150,10 @@ export function isOwner(user: { name: string } | null): boolean {
   const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   return first === "jon" || first === "jonathan";
 }
+
+/** Internet speed testing is for the PH team only — never the owner, regardless
+ *  of the tracksInternet flag (Jon 2026-09-22). Use this everywhere instead of
+ *  reading tracksInternet directly. */
+export function tracksSpeedTest(user: { name: string; tracksInternet?: boolean } | null): boolean {
+  return !!user?.tracksInternet && !isOwner(user);
+}
