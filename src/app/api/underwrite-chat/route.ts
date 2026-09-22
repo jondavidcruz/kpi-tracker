@@ -84,6 +84,9 @@ export async function POST(request: Request) {
       lastStatus = res.status;
       if (TRANSIENT.has(res.status)) continue; // overloaded/rate-limited → retry
       // Non-transient: don't waste retries.
+      const errText = await res.text().catch(() => "");
+      console.error("underwrite-chat api error", res.status, errText.slice(0, 500));
+      if (/credit balance/i.test(errText)) return NextResponse.json({ reply: "⚠️ The Anthropic account is out of credits — Jon: top up at console.anthropic.com → Billing." });
       if (res.status === 401 || res.status === 403) return NextResponse.json({ reply: "⚠️ The AI assistant's access needs attention (auth). Let Jon know — the API key may need renewing." });
       return NextResponse.json({ reply: `The assistant hit an error (${res.status}). Try again in a moment.` });
     } catch {

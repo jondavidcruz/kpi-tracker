@@ -42,7 +42,20 @@ export async function POST(request: Request) {
 
   let body: { messages?: { role: string; content: string }[]; path?: string };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }
-  const msgs = (body.messages ?? []).filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string").slice(-12);
+  // Sanitize for the Messages API (it 400s otherwise): non-empty text only, must
+  // START with a user turn (slicing history can leave an assistant turn first),
+  // and roles must strictly alternate — merge consecutive same-role turns.
+  let msgs = (body.messages ?? [])
+    .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
+    .slice(-12);
+  while (msgs.length && msgs[0].role !== "user") msgs = msgs.slice(1);
+  const merged: { role: string; content: string }[] = [];
+  for (const m of msgs) {
+    const prev = merged[merged.length - 1];
+    if (prev && prev.role === m.role) prev.content = `${prev.content}\n${m.content}`;
+    else merged.push({ role: m.role, content: m.content });
+  }
+  msgs = merged;
   if (msgs.length === 0) return NextResponse.json({ error: "no messages" }, { status: 400 });
 
   const role = isAdmin(me) ? "owner/admin" : isManager(me) ? "manager" : "team member";
@@ -67,7 +80,22 @@ export async function POST(request: Request) {
         messages: msgs.map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })),
       }),
     });
-    if (!res.ok) return NextResponse.json({ reply: `I hit an error (${res.status}) reaching my brain. Tell Jon to check the API key / billing.` });
+    if (!res.ok) {
+      // Read the real reason — Anthropic reports "credit balance is too low" as
+      // a 400, which otherwise looks like a code bug.
+      const errText = await res.text().catch(() => "");
+      console.error("assistant api error", res.status, errText.slice(0, 500));
+      if (/credit balance/i.test(errText)) {
+        return NextResponse.json({ reply: "⚠️ The Anthropic account is out of credits — that's why I keep erroring. Jon: top up at console.anthropic.com → Billing, and I'm instantly back." });
+      }
+      if (res.status === 401 || res.status === 403) {
+        return NextResponse.json({ reply: "⚠️ My API key isn't being accepted (auth). Jon: check ANTHROPIC_API_KEY in Vercel." });
+      }
+      if (res.status === 429) {
+        return NextResponse.json({ reply: "I'm being rate-limited right now — give it a minute and ask again." });
+      }
+      return NextResponse.json({ reply: `I hit an error (${res.status}) reaching my brain. Tell Jon to check the API key / billing.` });
+    }
     const data = await res.json();
     const reply: string = data?.content?.[0]?.text ?? "Hmm — nothing came back. Try asking again.";
     return NextResponse.json({ reply });

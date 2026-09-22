@@ -55,6 +55,14 @@ export async function scoreTranscript(
       }),
     });
     if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error("scoring api error", res.status, errText.slice(0, 500));
+      if (/credit balance/i.test(errText)) {
+        return { ...empty, configured: true, error: "Anthropic account is out of credits — top up at console.anthropic.com → Billing, then re-score." };
+      }
+      if (res.status === 401 || res.status === 403) {
+        return { ...empty, configured: true, error: "API key not accepted — check ANTHROPIC_API_KEY in Vercel." };
+      }
       return { ...empty, configured: true, error: `Scoring API error (${res.status}). Check the API key and billing.` };
     }
     const data = await res.json();

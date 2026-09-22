@@ -190,8 +190,10 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
       const LL = L as any;
       if (cancelled || !mapEl.current || mapRef.current) return;
       const map = LL.map(mapEl.current, { zoomControl: true }).setView([34.5, -101], 4);
-      LL.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap &copy; CARTO", subdomains: "abcd", maxZoom: 19,
+      // OpenStreetMap tiles — keyless. (CARTO's free basemap started serving
+      // "API key needed" tiles — Jon 2026-09-24.)
+      LL.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors", maxZoom: 19,
       }).addTo(map);
       mapRef.current = map;
       layerRef.current = LL.layerGroup().addTo(map);
