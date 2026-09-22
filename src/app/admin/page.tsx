@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess, toggleOffboardingTask, installLandKpis } from "@/app/actions";
+import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess, toggleOffboardingTask, installLandKpis, installLeadsGeneratedKpi } from "@/app/actions";
 import { adminConfigured } from "@/lib/supabase/admin";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -24,7 +24,7 @@ const labelCls = "mb-1 block text-xs font-semibold text-slate-500";
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; pwok?: string; pwerr?: string; landkpis?: string }>;
+  searchParams: Promise<{ saved?: string; pwok?: string; pwerr?: string; landkpis?: string; leadsgen?: string }>;
 }) {
   const sp = await searchParams;
 
@@ -339,6 +339,16 @@ export default async function AdminPage({
                 <button className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-200">🌱 Install land KPI pack</button>
               </form>
             )}
+            {!kpis.some((k) => k.key === "leads_generated") && (
+              <form action={installLeadsGeneratedKpi}>
+                <button className="inline-flex items-center gap-2 rounded-lg bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-200">🧲 Add &ldquo;Leads Generated&rdquo; (Michelle)</button>
+              </form>
+            )}
+          </div>
+        )}
+        {sp.leadsgen !== undefined && (
+          <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800">
+            🧲 &ldquo;Leads Generated&rdquo; added to Michelle&apos;s card (Dispositions, hidden for Sharyn) as a tracked counter — set a goal here when ready.
           </div>
         )}
         {sp.landkpis !== undefined && (

@@ -38,12 +38,14 @@ export default async function EntryPage({
   const date = sp.date ?? todayStr(settings.orgTimezone);
   const month = monthOf(date);
 
-  // EVERYONE (managers included) only sees + enters their OWN KPIs here, to minimize
-  // mis-entry onto someone else's card. Corrections to others happen in Admin.
+  // Reps only see + enter their OWN KPIs here, to minimize mis-entry onto someone
+  // else's card. MANAGERS (Marie + Jon) see every rep's chip and can open any
+  // card on any date to fix past entries (Jon 2026-09-24).
   const allReps = await getActiveReps();
-  const reps = allReps.filter((r) => r.id === me?.id);
-  const selectedId = me?.id ?? reps[0]?.id;
-  const rep = reps.find((r) => r.id === selectedId) ?? reps[0];
+  const canEditOthers = isManager(me);
+  const reps = canEditOthers ? allReps : allReps.filter((r) => r.id === me?.id);
+  const selectedId = (canEditOthers && sp.user) || me?.id || reps[0]?.id;
+  const rep = reps.find((r) => r.id === selectedId) ?? reps.find((r) => r.id === me?.id) ?? reps[0];
   // Lead-source KPIs (PPL, direct-mail, refunds) are Marie's responsibility — they only
   // show on her card. Text Responses is auto-synced, never hand-entered.
   const marieId = allReps.find((r) => r.name.trim().split(/\s+/)[0].toLowerCase() === "marie")?.id;
@@ -341,7 +343,7 @@ export default async function EntryPage({
         </section>
       )}
 
-      {rep && internetKpi && (
+      {rep && internetKpi && rep.id === me?.id && (
         <SpeedTestCard
           key={`${rep.id}|${date}`}
           userId={rep.id}
@@ -361,7 +363,14 @@ export default async function EntryPage({
           <Link href="/admin" className="text-slate-900 underline">Admin</Link>.
         </div>
       ) : (
-        <EntryForm groups={groups} date={date} enteredBy={rep?.name ?? "team"} action={saveDay} />
+        <>
+          {rep && me && rep.id !== me.id && (
+            <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-300">
+              ✏️ Manager edit — you&apos;re updating <b>{rep.name}</b>&apos;s card for {friendlyDate(date)}. Saves are logged under your name.
+            </div>
+          )}
+          <EntryForm groups={groups} date={date} enteredBy={me?.name ?? rep?.name ?? "team"} action={saveDay} />
+        </>
       )}
 
       {mutedKpis.length > 0 && (

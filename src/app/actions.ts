@@ -1206,6 +1206,30 @@ export async function installLandKpis() {
   redirect(`/admin?landkpis=${created}`);
 }
 
+/** One-click installer: "Leads Generated" KPI for Michelle (Jon 2026-09-24).
+ *  Dispositions role so it shows on her card; hidden for Sharyn via the per-rep
+ *  swap map in lib/kpi.ts. Tracked (no goal) — set a goal in Admin when ready. */
+export async function installLeadsGeneratedKpi() {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const exists = await db.kpi.findUnique({ where: { key: "leads_generated" } });
+  if (!exists) {
+    const agg = await db.kpi.aggregate({ _max: { sortOrder: true } });
+    await db.kpi.create({
+      data: {
+        key: "leads_generated", name: "Leads Generated", emoji: "🧲", category: "blue",
+        unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily",
+        goalKind: "tracked", goalValue: null, computed: false,
+        definition: "Leads Michelle generated today (Jon 2026-09-24). Michelle-only — hidden for Sharyn. Convert to a goal in Admin when ready.",
+        sortOrder: (agg._max.sortOrder ?? 0) + 1,
+      },
+    });
+  }
+  revalidateKpiViews();
+  revalidatePath("/admin");
+  redirect("/admin?leadsgen=1");
+}
+
 // ── Land markets + builder buy-boxes installer (owner, idempotent, runtime) ───
 // Adds the vacant-land (infill) + recreational markets from the course research
 // (John Duong / Hunter P. pack) to Target Markets, and the named builder buy
