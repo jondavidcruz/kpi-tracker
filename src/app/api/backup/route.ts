@@ -6,9 +6,21 @@ import { getSettings } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
-/** On-demand full backup download. Owner only. */
-export async function GET() {
+/** On-demand full backup download (owner), or ?buyers=1 to run the buyer
+ *  backup-to-Drive (owner session OR CRON_SECRET — the spec's Phase-1 gate). */
+export async function GET(request: Request) {
+  const url = new URL(request.url);
   const me = await getCurrentUser();
+  const secret = process.env.CRON_SECRET;
+  const secretOk = Boolean(secret) && (url.searchParams.get("secret") === secret || request.headers.get("authorization") === `Bearer ${secret}`);
+
+  if (url.searchParams.get("buyers") === "1") {
+    if (!isAdmin(me) && !secretOk) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    const { runBuyerBackup } = await import("@/lib/buyers/backup");
+    const result = await runBuyerBackup();
+    return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+  }
+
   if (!isAdmin(me)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const settings = await getSettings();

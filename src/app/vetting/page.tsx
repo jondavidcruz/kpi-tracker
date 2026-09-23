@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import VettingTable, { type Prospect } from "@/components/VettingTable";
 import CsvMapImport from "@/components/CsvMapImport";
+import ArchivedBuyers from "@/components/ArchivedBuyers";
 import { saveProspect } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +28,13 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
 
   // Every UNVETTED buyer lives here — the research pool. Vetted/active buyers
   // graduate to Markets / Vetted Buyers and drop off this page.
-  const [rows, vettedCount] = await Promise.all([
+  const [rows, vettedCount, archivedRows] = await Promise.all([
     db.marketContact.findMany({
-      where: { vetStage: { notIn: ["vetted", "active"] } },
+      where: { archivedAt: null, vetStage: { notIn: ["vetted", "active"] } },
       orderBy: [{ vetArea: "asc" }, { name: "asc" }],
     }),
-    db.marketContact.count({ where: { vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } } }),
+    db.marketContact.count({ where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } } }),
+    db.marketContact.findMany({ where: { archivedAt: { not: null } }, orderBy: { archivedAt: "desc" }, select: { id: true, name: true, archivedAt: true, archivedBy: true, archiveReason: true } }),
   ]);
   const UNASSIGNED = "Unassigned / general buyers";
   const toProspect = (r: typeof rows[number]): Prospect => ({
@@ -132,6 +134,8 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
       )}
 
       <VettingTable areas={areas} canEdit={canAccessMarketing(me)} today={today} />
+
+      <ArchivedBuyers rows={archivedRows} />
 
       {/* Start a new deal/area */}
       <Card className="border-l-4 border-emerald-300 bg-emerald-50/40 p-4">

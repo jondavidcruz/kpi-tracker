@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap, saveBuyerTerms, readBuyerTerms, readBuyerLand, installLandMarkets } from "@/app/actions";
 import DevInterviews from "@/components/DevInterviews";
+import ArchivedBuyers from "@/components/ArchivedBuyers";
+import BackupNowButton from "@/components/BackupNowButton";
+import { lastBuyerBackup } from "@/lib/buyers/backup";
 import ImageUpload from "@/components/ImageUpload";
 import { getCurrentUser, isManager, canAccessMarketing, isOwner } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
@@ -43,10 +46,11 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   }
   void isManager;
   const sp = await searchParams;
-  const [settings, rows, targets] = await Promise.all([
+  const [settings, rows, targets, archivedRows] = await Promise.all([
     getSettings(),
-    db.marketContact.findMany({ orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
+    db.marketContact.findMany({ where: { archivedAt: null }, orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
     db.targetMarket.findMany({ orderBy: { sortOrder: "asc" } }),
+    db.marketContact.findMany({ where: { archivedAt: { not: null } }, orderBy: { archivedAt: "desc" }, select: { id: true, name: true, archivedAt: true, archivedBy: true, archiveReason: true } }),
   ]);
   const marketsForMap: Market[] = targets.map((t) => ({ id: t.id, name: t.name, tier: t.tier, score: t.score, lat: t.lat, lng: t.lng }));
   const TIER_PILL: Record<string, string> = { S: "bg-red-100 text-red-700", "1": "bg-orange-100 text-orange-700", "2": "bg-amber-100 text-amber-700", "3": "bg-sky-100 text-sky-700" };
@@ -59,6 +63,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
   const vettedRows = rows.filter((r) => VETTED(r) && !isJv(r));
   const buyerTerms = await readBuyerTerms();
+  const lastBackup = await lastBuyerBackup();
   const buyerLand = await readBuyerLand();
   const buyers: Buyer[] = rows
     .filter((r) => (r.vetStage === "vetted" || r.vetStage === "active") && !isJv(r))
@@ -123,6 +128,13 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       <SectionTitle title="🏛 Vetted Buyers" subtitle="Our vetted buyers & developers and their buy boxes — search a market to see exactly who'd want the deal. Sourcing new buyers? Start in Buyer Research." accent="bg-brand-gold"
         right={
           <div className="flex items-center gap-2">
+            {(() => {
+              const ageH = lastBackup ? (Date.now() - Date.parse(lastBackup.at)) / 3600000 : null;
+              const label = ageH === null ? "no backup yet" : ageH < 1 ? "backed up <1h ago" : `backed up ${Math.round(ageH)}h ago`;
+              const good = lastBackup?.ok && ageH !== null && ageH <= 36;
+              return <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${good ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`} title="Nightly buyer backup to Google Drive (red if older than 36h)">{good ? "🛡" : "⚠️"} {label}</span>;
+            })()}
+            <BackupNowButton />
             <a href="/api/export/buyers" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" title="One clean spreadsheet: every contact + the full buy-box interview per row">⬇️ Export CSV</a>
             <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🔎 Buyer Research</Link>
           </div>
@@ -363,6 +375,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       {buyerGroups.length === 0
         ? <Card className="p-6 text-center text-sm text-slate-400">No vetted buyers yet — vet developers in Buyer Research and they&apos;ll show here.</Card>
         : <VettingTable areas={buyerGroups} canEdit={canAccessMarketing(me)} today={today} allowAdd={false} />}
+
+      <ArchivedBuyers rows={archivedRows} />
 
       {/* ───────── JV PARTNERS — deliberately separate from our vetted buyers ───────── */}
       <div className="mt-8 border-t-4 border-dashed border-indigo-200 pt-6">

@@ -603,7 +603,63 @@ model MarketContact {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // ── Vetted-buyers rebuild, Phase 1 (BUILD_SPEC 2026-09-23). Additive only. ──
+  archivedAt      DateTime? // ARCHIVE, never delete (rule zero)
+  archivedBy      String?
+  archiveReason   String?
+  buyBoxStruct    Json?     // structured buy box (legacy text field `buyBox` kept) — see warroom-vetted-buyers-build/buybox/schema.md
+  buyBoxUpdatedAt DateTime?
+  buyBoxSource    String?   // "backfill_2026-09-22" | "interview" | "web_form" | "manual" | "ai_intake"
+  geoPolygon      Json?     // GeoJSON Feature|FeatureCollection (drawn buy-box area)
+  geoCentroidLat  Float?
+  geoCentroidLng  Float?
+  history  BuyerHistory[]
+  contacts BuyerContact[]
+  touches  BuyerTouch[]
+
   @@index([category])
+}
+
+// Immutable audit trail: every buyer change is recorded here (before/after JSON).
+model BuyerHistory {
+  id      String        @id @default(cuid())
+  buyerId String
+  buyer   MarketContact @relation(fields: [buyerId], references: [id])
+  at      DateTime      @default(now())
+  actor   String? // user email/name if available, else "system"
+  action  String // create | update | archive | restore | buybox_update | polygon_update | import | touch
+  field   String? // for single-field updates
+  before  Json?
+  after   Json?
+
+  @@index([buyerId, at])
+}
+
+// Multiple people per buyer company (e.g. Bloomfield has 3 contacts).
+model BuyerContact {
+  id         String        @id @default(cuid())
+  buyerId    String
+  buyer      MarketContact @relation(fields: [buyerId], references: [id])
+  name       String
+  role       String?
+  phone      String?
+  email      String?
+  isPrimary  Boolean       @default(false)
+  archivedAt DateTime?
+}
+
+// Structured touch log — replaces free-text "2026-08-14: reached out" lines going forward.
+model BuyerTouch {
+  id      String        @id @default(cuid())
+  buyerId String
+  buyer   MarketContact @relation(fields: [buyerId], references: [id])
+  at      DateTime      @default(now())
+  channel String? // call | email | text | linkedin | form
+  outcome String? // no_answer | spoke | vm | replied | meeting
+  note    String?
+  actor   String?
+
+  @@index([buyerId, at])
 }
 
 // Target market (Markets & Buyers) — a county/metro we hunt in, with its heat

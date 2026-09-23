@@ -1,0 +1,58 @@
+[
+  {
+    "name": "Murfreesboro TN land, 20 ac, $900k",
+    "input": {"address": "2118 Old Fort Pkwy, Murfreesboro, TN 37129", "price": 900000, "acres": 20, "assetType": "raw_land"},
+    "expect_geocode": {"county": "Rutherford, TN", "city": "Murfreesboro, TN", "state": "TN", "zip": "37129"},
+    "expect_tier1_includes": ["Goodall Homes", "Legacy South Homes", "M/I Homes", "Ole South", "Ryan Homes"],
+    "expect_tier1_or_2_includes": ["Dream Finders Homes", "Darryl Carey", "Petergaye (PG) Taylor", "Drees Homes", "LDG Development"],
+    "expect_chips": {"Goodall Homes": ["✅ Rutherford Co.", "✅ 20 ac ≥ 15 ac min"], "Ryan Homes": ["⚠️ 20 ac", "✅ $ in range"]},
+    "expect_not_tier1": ["Bloomfield Homes", "Adam Homes", "Brian Koons"]
+  },
+  {
+    "name": "Cape Coral FL single lot, 10,000 sf, $45k",
+    "input": {"address": "1234 SW 20th Ave, Cape Coral, FL 33991", "price": 45000, "acres": 0.23, "assetType": "finished_lots"},
+    "expect_geocode": {"county": "Lee, FL", "city": "Cape Coral, FL"},
+    "expect_tier1_includes": ["Sunlife Homes", "Dan Peshkin", "Adam Homes", "Brian Barnhart", "Tutt Land Company", "DSLD Homes"],
+    "expect_not_tier1": ["Ryan Homes", "Dream Finders Homes"]
+  },
+  {
+    "name": "Crestview FL 40 ac raw",
+    "input": {"address": "Crestview, FL", "acres": 40, "assetType": "raw_land"},
+    "expect_geocode": {"county": "Okaloosa, FL"},
+    "expect_tier1_includes": ["Ag 1 Land Company", "Expedition Homes", "Sugar Sands Construction", "CJL Homes", "Tutt Land Company"]
+  },
+  {
+    "name": "DFW 60 ac raw, $3M",
+    "input": {"address": "Celina, TX 75009", "price": 3000000, "acres": 60, "assetType": "raw_land"},
+    "expect_geocode": {"county": "Collin, TX"},
+    "expect_tier1_includes": ["Bloomfield Homes", "Green Brick Partners", "J Houston Homes", "HomeLand Properties"],
+    "expect_tier2_includes": ["Waterstone Development Group"],
+    "expect_chips": {"Waterstone Development Group": ["⚠️ 60 ac < 100 ac min"]}
+  },
+  {
+    "name": "San Diego teardown, $950k",
+    "input": {"address": "4520 Adams Ave, San Diego, CA 92116", "price": 950000, "assetType": "teardown"},
+    "expect_geocode": {"county": "San Diego, CA"},
+    "expect_tier1_includes": ["Brian Koons", "Alpine Home Builders, LLC", "Distinct Designs Construction"],
+    "expect_chips": {"Brian Koons": ["✅ $ in range"], "Distinct Designs Construction": ["❌ buying paused"]}
+  },
+  {
+    "name": "Lake Havasu lot",
+    "input": {"address": "Lake Havasu City, AZ 86403", "acres": 0.25, "assetType": "raw_land"},
+    "expect_geocode": {"county": "Mohave, AZ"},
+    "expect_tier1_includes": ["Arizona Homes of Lake Havasu City", "Burns Builders", "Homes by Wiesner", "Seville Builders", "Angle Homes"]
+  },
+  {
+    "name": "Newport Beach teardown, $4M",
+    "input": {"address": "Newport Beach, CA 92660", "price": 4000000, "assetType": "teardown"},
+    "expect_geocode": {"county": "Orange, CA"},
+    "expect_tier1_includes": ["Brad Kinney", "Revere Real Estate Development Co.", "Cefalia Development", "La Placa Group"]
+  },
+  {
+    "name": "No coverage — Maury Co TN should return near-miss, not empty",
+    "input": {"address": "Columbia, TN 38401", "acres": 12, "assetType": "raw_land"},
+    "expect_geocode": {"county": "Maury, TN"},
+    "expect_tier1_includes": ["M/I Homes", "Goodall Homes", "Legacy South Homes"],
+    "note": "Maury is inside Nashville MSA + Middle TN regions and within Goodall's 50-mi radius; M/I lists Columbia explicitly."
+  }
+]

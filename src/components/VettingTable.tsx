@@ -343,7 +343,7 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                               )}
                               <form action={deleteProspect}>
                                 <input type="hidden" name="id" value={p.id} />
-                                <button onClick={(e) => { if (!confirm(`Delete ${p.name}? This can't be undone.`)) e.preventDefault(); }} className="rounded px-1.5 py-1 text-[10px] font-semibold text-slate-300 hover:bg-red-50 hover:text-red-600" title="Delete this buyer">🗑</button>
+                                <button onClick={(e) => { if (!confirm(`Archive ${p.name}? This is NOT a delete — restorable any time from the Archived list.`)) e.preventDefault(); }} className="rounded px-1.5 py-1 text-[10px] font-semibold text-slate-300 hover:bg-amber-50 hover:text-amber-700" title="Archive this buyer (never deleted — restorable)">🗂</button>
                               </form>
                             </div>
                           ) : <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${m.cls}`}>{m.label}</span>}

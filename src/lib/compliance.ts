@@ -56,7 +56,7 @@ export interface StateSignal { code: string; name: string; hits: number }
  */
 export async function deriveOperatingStates(): Promise<StateSignal[]> {
   const [contacts, deals] = await Promise.all([
-    db.marketContact.findMany({ select: { market: true, buyBoxAreas: true, region: true, vetArea: true, marketDetails: true } }),
+    db.marketContact.findMany({ where: { archivedAt: null }, select: { market: true, buyBoxAreas: true, region: true, vetArea: true, marketDetails: true } }),
     db.deal.findMany({ where: { active: true }, select: { address: true } }),
   ]);
   const tally = new Map<string, number>();

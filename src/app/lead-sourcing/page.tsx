@@ -22,7 +22,7 @@ export default async function LeadSourcingPage() {
   const [demand, mapRows, targets] = await Promise.all([
     getBuyerDemand(),
     db.marketContact.findMany({
-      where: { vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } },
+      where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } },
       orderBy: [{ category: "asc" }, { name: "asc" }],
       select: { id: true, name: true, category: true, type: true, region: true, market: true, status: true, email: true, phone: true, website: true, buyBox: true, buyBoxAreas: true, lat: true, lng: true, notes: true, contact: true },
     }),

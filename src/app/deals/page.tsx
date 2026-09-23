@@ -42,7 +42,7 @@ export default async function DealsPage({
   // Read-only — REI Reply stays the CRM; this is just a "who do we already know here?" hint.
   const mktAccess = canAccessMarketing(me);
   // Vetted buyers only — JV partners (type "jv_partner") are managed separately on /marketing, not matched here.
-  const buyers = mktAccess ? (await db.marketContact.findMany({ orderBy: { sortOrder: "asc" } })).filter((b) => b.type !== "jv_partner") : [];
+  const buyers = mktAccess ? (await db.marketContact.findMany({ where: { archivedAt: null }, orderBy: { sortOrder: "asc" } })).filter((b) => b.type !== "jv_partner") : [];
   const cascade = mktAccess ? await readCascade() : {};
   const terms = mktAccess ? await readBuyerTerms() : {};
   const buyerLand = mktAccess ? await readBuyerLand() : {};

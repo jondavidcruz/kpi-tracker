@@ -103,3 +103,59 @@ export async function downloadFromDrive(fileId: string): Promise<Uint8Array | nu
     return new Uint8Array(await res.arrayBuffer());
   } catch { return null; }
 }
+
+// ── Buyer-backup helpers (vetted-buyers rebuild Phase 1) ──────────────────────
+
+/** Upload into a SPECIFIC folder (not the default GDRIVE_FOLDER_ID). Private —
+ *  backups aren't link-shared. Returns { id, link } (link opens for folder members). */
+export async function uploadToFolder(folderId: string, name: string, bytes: Uint8Array, mime: string): Promise<{ id: string; link: string }> {
+  const token = await getAccessToken();
+  const boundary = "wrb_" + crypto.randomBytes(8).toString("hex");
+  const meta = JSON.stringify({ name, parents: [folderId] });
+  const pre = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`;
+  const body = Buffer.concat([Buffer.from(pre), Buffer.from(bytes), Buffer.from(`\r\n--${boundary}--`)]);
+  const up = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  const j = await up.json();
+  if (!j.id) throw new Error("gdrive upload failed: " + JSON.stringify(j).slice(0, 200));
+  return { id: j.id, link: j.webViewLink || `https://drive.google.com/file/d/${j.id}/view` };
+}
+
+/** List files directly inside a folder (id, name, createdTime). */
+export async function listFolder(folderId: string): Promise<{ id: string; name: string; createdTime: string; mimeType: string }[]> {
+  const token = await getAccessToken();
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime,mimeType)&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const j = await res.json();
+  return j.files ?? [];
+}
+
+/** Find or create a subfolder by name inside a parent folder. */
+export async function ensureSubfolder(parentId: string, name: string): Promise<string> {
+  const existing = (await listFolder(parentId)).find((f) => f.name === name && f.mimeType === "application/vnd.google-apps.folder");
+  if (existing) return existing.id;
+  const token = await getAccessToken();
+  const res = await fetch("https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] }),
+  });
+  const j = await res.json();
+  if (!j.id) throw new Error("gdrive mkdir failed: " + JSON.stringify(j).slice(0, 200));
+  return j.id;
+}
+
+/** Move a file from one folder to another (used for 90-day retention — never deletes). */
+export async function moveToFolder(fileId: string, fromId: string, toId: string): Promise<void> {
+  const token = await getAccessToken();
+  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${toId}&removeParents=${fromId}&supportsAllDrives=true`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: "{}",
+  });
+}

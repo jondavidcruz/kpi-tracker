@@ -21,7 +21,7 @@ export async function GET() {
   }
 
   const [rows, landRow] = await Promise.all([
-    db.marketContact.findMany({ where: { vetStage: { in: ["vetted", "active"] } }, orderBy: [{ category: "desc" }, { name: "asc" }] }),
+    db.marketContact.findMany({ where: { archivedAt: null, vetStage: { in: ["vetted", "active"] } }, orderBy: [{ category: "desc" }, { name: "asc" }] }),
     db.resource.findFirst({ where: { category: "__buyer_land__" } }),
   ]);
   let land: Record<string, BuyerLand> = {};

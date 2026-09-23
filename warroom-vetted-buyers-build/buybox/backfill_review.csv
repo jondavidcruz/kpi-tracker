@@ -1,0 +1,61 @@
+name,confidence,states,counties,cities,regions,radius,types,acres_min,acres_max,lots_min,price_min,price_max,unit,close_days,buying_now,contact
+Adam Homes,medium,FL,"Lee, FL|Charlotte, FL|Brevard, FL","Cape Coral, FL|Lehigh Acres, FL|Port Charlotte, FL|Palm Bay, FL|Rotonda West, FL|Deep Creek, FL|Gulf Cove, FL",SW Florida,,raw_land|finished_lots,,,,10000,20000,per_lot,,False,
+Adams Homes,high,FL,"Walton, FL|Bay, FL","DeFuniak Springs, FL|Freeport, FL|Callaway, FL|Panama City, FL|Southport, FL",Florida Panhandle,,finished_lots|raw_land,20,,,,120000,per_lot,,,
+Ag 1 Land Company,high,FL,"Okaloosa, FL","Crestview, FL",,,raw_land|entitled_land|finished_lots|teardown,,,,,,,,True,
+"Alpine Home Builders, LLC",medium,CA,"San Diego, CA|Los Angeles, CA|Placer, CA|El Dorado, CA","Alpine, CA|San Diego, CA|Lake Tahoe, CA|Los Angeles, CA",SoCal,,raw_land|finished_lots|entitled_land|teardown,,,,,,,,True,
+Angle Homes,high,AZ,"Mohave, AZ","Kingman, AZ|Golden Valley, AZ|Fort Mohave, AZ|Bullhead City, AZ",Lake Havasu,,raw_land|finished_lots,0.14,,,,,,,,
+Arizona Homes of Lake Havasu City,medium,AZ,"Mohave, AZ","Lake Havasu City, AZ",Lake Havasu,,raw_land|teardown|sfr,,,,,,,,False,
+Bloomfield Homes,high,TX,"Dallas, TX|Tarrant, TX|Collin, TX|Denton, TX|Rockwall, TX|Kaufman, TX|Ellis, TX|Johnson, TX|Parker, TX|Hunt, TX",,DFW,,raw_land|finished_lots|entitled_land,40,,40,,,,14,True,Don Dykstra (chairman) / John Matney
+Blue Fern Homes,high,CA,,,SoCal,,raw_land,20,100,,,,,,,
+Brad Kinney,low,CA,"Orange, CA","Laguna Beach, CA|Newport Beach, CA|Newport Coast, CA|Corona del Mar, CA",Orange County Coastal,,teardown|sfr,,,,,,,,,
+Brian Barnhart,high,FL,"Lee, FL|Charlotte, FL|Sarasota, FL|Collier, FL","Lehigh Acres, FL|Port Charlotte, FL|North Port, FL|Naples, FL",SW Florida,,raw_land|finished_lots,,,,,,,,True,
+Brian Koons,high,CA,"San Diego, CA","San Diego, CA",,,teardown|sfr|multifamily,,,,750000,1200000,total,,True,
+Burns Builders,medium,AZ,"Mohave, AZ","Lake Havasu City, AZ",Lake Havasu,,raw_land,,,,,,,,,Tom Burns (owner)
+Carlos Gil,medium,TX,"Harris, TX|Fort Bend, TX|Montgomery, TX|Brazoria, TX|Galveston, TX|Liberty, TX|Waller, TX|Chambers, TX","Houston, TX|Cypress, TX|Cleveland, TX",Greater Houston,,raw_land|sfr|teardown,,,,,,,,True,
+CJL Homes,high,FL,"Escambia, FL|Santa Rosa, FL|Okaloosa, FL|Walton, FL|Bay, FL|Holmes, FL|Washington, FL|Jackson, FL|Calhoun, FL|Gulf, FL|Franklin, FL|Liberty, FL|Gadsden, FL|Leon, FL|Wakulla, FL","Pensacola, FL|Gulf Breeze, FL|Milton, FL|Pace, FL|Navarre, FL|Fort Walton Beach, FL|Crestview, FL|Niceville, FL|Destin, FL|Panama City, FL|Panama City Beach, FL|Lynn Haven, FL|Callaway, FL|Marianna, FL|Chipley, FL|Bonifay, FL|Tallahassee, FL|Quincy, FL|Crawfordville, FL|Apalachicola, FL|Port St. Joe, FL|Carrabelle, FL",Florida Panhandle,,raw_land|finished_lots,,,,,,,,,Colton Leyendecker / Kasey Bebus (land acq)
+"Crown Contracting, Inc.",low,CA,"Riverside, CA|San Bernardino, CA","Palm Springs, CA|Palm Desert, CA|Yucca Valley, CA",Coachella Valley,,,,,,,,,,False,
+Dan Peshkin,high,FL,"Lee, FL|Charlotte, FL","Cape Coral, FL|Lehigh Acres, FL",SW Florida,,raw_land|finished_lots,,,,18000,90000,per_lot,,,
+Darryl Carey,high,TN|KY|OK,"Davidson, TN|Fayette, KY","Nashville, TN|Lexington, KY",Nashville MSA,,finished_lots,0.2,,10,40000,120000,per_lot,,,
+David James Custom Builder,low,TX,"Harris, TX","Houston, TX|West University Place, TX|Memorial Villages, TX",Greater Houston,,teardown|sfr|multifamily|hospitality,,,,,,,,,
+Davidson Homes,medium,TX,"Harris, TX|Fort Bend, TX|Montgomery, TX|Brazoria, TX|Galveston, TX|Liberty, TX|Waller, TX|Chambers, TX","Houston, TX|Cleveland, TX",Greater Houston,,raw_land|finished_lots|sfr|multifamily,,,,,,,,True,"Christopher Centers, VP Land Acq Houston"
+Distinct Designs Construction,medium,CA,"San Diego, CA","San Diego, CA",,,raw_land|teardown,,,,,500000,per_lot,,False,
+DR Horton,high,TX,"Travis, TX|Williamson, TX|Hays, TX|Bastrop, TX|Caldwell, TX","Georgetown, TX|Kyle, TX|Austin, TX",Austin MSA,,raw_land|finished_lots|entitled_land,,,,,,,540,,Kade Stanley
+Dream Finders Homes,high,TN|FL|GA|NC|SC|TX|AZ|CO|MD|VA|AL,"Davidson, TN","Nashville, TN|Jacksonville, FL|Orlando, FL|Tampa, FL|Atlanta, GA|Savannah, GA|Charlotte, NC|Raleigh, NC|Charleston, SC|Myrtle Beach, SC|Austin, TX|Dallas, TX|Houston, TX|San Antonio, TX|Phoenix, AZ|Denver, CO",Nashville MSA,,raw_land|entitled_land,35,500,,1000000,15000000,total,180,,Jack Beebe (Nashville) / Ben Owenell
+Drees Homes,medium,TN,"Williamson, TN|Davidson, TN","Brentwood, TN|Oak Hill, TN",Nashville MSA,,finished_lots|teardown|raw_land,,,,,,,,,Nick Moran
+DSLD Homes,low,FL,,,,,raw_land|finished_lots,,,,,,,,True,Kallie / contact@dsldhomes.com
+Edward Tunney,low,TN,"Davidson, TN","Nashville, TN",Nashville MSA,,,,,,,,,,False,
+Expedition Homes,high,FL,"Okaloosa, FL|Escambia, FL|Walton, FL","Crestview, FL",Florida Panhandle,,raw_land|entitled_land|finished_lots,,,,,,,,,
+Flintrock Builders,medium,TX,"Bell, TX|Coryell, TX|McLennan, TX|Williamson, TX|Lampasas, TX|Falls, TX|Milam, TX|Burnet, TX","Belton, TX|Temple, TX|Georgetown, TX|Jarrell, TX|Killeen, TX|Lorena, TX|Nolanville, TX|Salado, TX|Troy, TX|Waco, TX",Central Texas,,raw_land|finished_lots,,,,,,,,True,Jon Enterkin
+Gaetano La Placa,low,CA,,,SoCal,,raw_land,,,,,,,,,
+Goodall Homes,high,TN,"Davidson, TN|Rutherford, TN|Williamson, TN|Wilson, TN|Sumner, TN|Maury, TN|Robertson, TN|Cheatham, TN|Dickson, TN|Montgomery, TN|Bedford, TN|Coffee, TN|Marshall, TN|Putnam, TN","Murfreesboro, TN|Spring Hill, TN",Middle Tennessee|Nashville MSA,"Nashville, TN",raw_land|finished_lots,15,,25,,50000,per_acre,,,Danny Hieronimus
+Green Brick Partners,medium,TX,"Dallas, TX|Tarrant, TX|Collin, TX|Denton, TX|Rockwall, TX|Kaufman, TX|Ellis, TX|Johnson, TX|Parker, TX|Hunt, TX",,DFW,,raw_land|entitled_land,50,,,,,,,,Braden Carlson 214-957-3607 / Steve Plevak
+Hilbers Inc,medium,,,,,,commercial|multifamily|mixed_use|industrial|hospitality,5,,,,,,,,
+HomeLand Properties,medium,TX,,,,,raw_land|ag_land,0.5,,,,,,,,
+Homes by Wiesner,medium,AZ,"Mohave, AZ","Lake Havasu City, AZ",Lake Havasu,,raw_land|teardown,,,,,,,,True,Terry
+Ian Riles,high,TX,"Bexar, TX","San Antonio, TX",San Antonio,,sfr|multifamily|commercial,,,,,400000,total,,True,
+J Houston Homes,medium,TX,"Dallas, TX|Tarrant, TX|Collin, TX|Denton, TX|Rockwall, TX|Kaufman, TX|Ellis, TX|Johnson, TX|Parker, TX|Hunt, TX",,DFW,,raw_land|entitled_land,,,30,,,,,,Steven (land acq)
+Jagger,high,CA|AZ,"Riverside, CA|Maricopa, AZ","Palm Springs, CA|Palm Desert, CA|La Quinta, CA|Rancho Mirage, CA|Indian Wells, CA|Scottsdale, AZ",Coachella Valley,,raw_land|teardown,0.25,,,,,,,,
+John & Jared D. Bowen Construction,high,TX,"Bell, TX|Coryell, TX|McLennan, TX|Williamson, TX|Lampasas, TX|Falls, TX|Milam, TX|Burnet, TX","Copperas Cove, TX|Lampasas, TX|Killeen, TX|Belton, TX|Temple, TX|Salado, TX|Liberty Hill, TX",Central Texas,"Kempner, TX",raw_land|commercial,,,,,,,,True,Jared Bowen
+LDG Development,high,TN|KY|TX|GA|NC|OH,"Davidson, TN","Nashville, TN",Nashville MSA,,raw_land|entitled_land|multifamily,10,,,,,,,,Justin Hartz
+Legacy South Homes,medium,TN,"Davidson, TN|Rutherford, TN|Williamson, TN|Wilson, TN|Sumner, TN|Maury, TN|Robertson, TN|Cheatham, TN|Dickson, TN|Montgomery, TN|Bedford, TN|Coffee, TN|Marshall, TN|Putnam, TN",,Middle Tennessee|Nashville MSA,,raw_land|finished_lots|teardown|sfr,,,,,,,,,Scott Fitzpatrick 858-231-5076
+M/I Homes,high,TN,"Davidson, TN|Rutherford, TN|Williamson, TN|Wilson, TN|Sumner, TN|Maury, TN|Robertson, TN|Cheatham, TN|Dickson, TN|Montgomery, TN|Cannon, TN|Macon, TN|Smith, TN|Trousdale, TN|Hickman, TN","Columbia, TN|Antioch, TN|Lebanon, TN|Nashville, TN",Nashville MSA,,raw_land|entitled_land|finished_lots|multifamily,,,40,,,,,True,
+Matt Sadowski,medium,FL,"St. Johns, FL|Putnam, FL|Clay, FL|Flagler, FL",,NE Florida,,raw_land|sfr|commercial,0.5,,,,,,,,
+"Mirage Developer, Inc",high,CA,"Riverside, CA|Ventura, CA","Palm Desert, CA|Ventura, CA",Coachella Valley,,finished_lots|teardown|sfr,,,,,,,,True,Todd
+Morgan Taylor Homes,high,AZ,"Maricopa, AZ|Yavapai, AZ","Rio Verde, AZ|Sedona, AZ|Scottsdale, AZ|Phoenix, AZ|Mesa, AZ|Glendale, AZ|Gilbert, AZ|New River, AZ",Phoenix Valley,,raw_land,,5,,,1000000,total,,,Jack / Sarah
+Moses Hershko Development,low,CA,,,,,raw_land|teardown|sfr|condo_townhome,,,,,,,,,
+Ole South,high,TN,"Davidson, TN|Rutherford, TN","Nashville, TN",Nashville MSA,,finished_lots|raw_land,,,,,,,,,Trey Lewis 615-593-6340
+Petergaye (PG) Taylor,high,TN,"Davidson, TN","Nashville, TN",Nashville MSA|Middle Tennessee,,raw_land,5,,,,,,,False,
+Pulte Group,medium,TX|CA|AZ|TN,"Travis, TX|Williamson, TX|Hays, TX|Bastrop, TX|Caldwell, TX","Austin, TX",Austin MSA,,raw_land|entitled_land|finished_lots|teardown,25,250,,,,,,,"Bryan Beil, VP Land Acq Central TX"
+Robert Johnson,medium,CA,"Riverside, CA","Palm Desert, CA|La Quinta, CA|Palm Springs, CA",Coachella Valley,,raw_land|teardown|mixed_use,,,,3000000,10000000,total,,,
+Ryan Homes,high,TN|KY|OH|IN|IL|PA|MD|VA|WV|NC|SC|GA|FL|NJ|NY|DC,"Davidson, TN|Rutherford, TN|Sumner, TN|Cheatham, TN|Robertson, TN","Nashville, TN|Antioch, TN|Cane Ridge, TN|Madison, TN|Goodlettsville, TN|Hendersonville, TN|Gallatin, TN|Murfreesboro, TN|Smyrna, TN|Pleasant View, TN|White House, TN",Nashville MSA,,raw_land|finished_lots|teardown|ag_land,10,,50,1000000,50000000,total,,,
+Seville Builders,medium,AZ,"Mohave, AZ","Lake Havasu City, AZ",Lake Havasu,,raw_land|teardown|sfr,0.25,,,,,,,,Wesley Yonda / Amber Cheramy-Lyon
+Sugar Sands Construction,high,FL,"Okaloosa, FL","Crestview, FL",Florida Panhandle,,raw_land|entitled_land|finished_lots|teardown|sfr,,,,,,,,True,Dustin / Crystal Hippensteel
+Sunlife Homes,high,FL,"Lee, FL|Charlotte, FL","Cape Coral, FL|Port Charlotte, FL",SW Florida,,raw_land|finished_lots,,,,,,,,True,Rosario
+Transwestern Development Company,high,TX,"Harris, TX","Houston, TX",Greater Houston,,commercial|multifamily|industrial|entitled_land|teardown,2,,,,,,,,Sean Suffel / Carleton Riser
+Tutt Land Company,high,FL,,,,,raw_land|ag_land|entitled_land|teardown,10,1000,,,,,,,Trent Dillard
+Waterstone Development Group,high,TX,"Harris, TX|Fort Bend, TX|Montgomery, TX|Brazoria, TX|Galveston, TX|Liberty, TX|Waller, TX|Chambers, TX|Dallas, TX|Tarrant, TX|Collin, TX|Denton, TX|Rockwall, TX|Kaufman, TX|Ellis, TX|Johnson, TX|Parker, TX|Hunt, TX",,Greater Houston|DFW,,raw_land|ag_land,100,1000,,,,per_acre,30,True,
+Goodwin Homes,low,GA,"Fulton, GA","Atlanta, GA",,,raw_land|teardown|sfr,0.5,,,600000,1400000,total,14,,Marco Guirguis
+La Placa Group,low,CA,"Orange, CA","Newport Beach, CA",Orange County Coastal,,teardown|sfr,,,,500000,,total,,False,
+Revere Real Estate Development Co.,medium,CA,"Orange, CA","Newport Beach, CA|Dana Point, CA|San Clemente, CA",Orange County Coastal,,raw_land|teardown|sfr|multifamily,,,,,,,,,Tyler Grammar
+Cefalia Development,medium,CA,"Orange, CA","Newport Beach, CA|Costa Mesa, CA|San Juan Capistrano, CA",Orange County Coastal,,teardown|raw_land,,,,,,,14,,
+Luna Cedar Brook Property LLC,high,CA,"Los Angeles, CA|Riverside, CA|San Bernardino, CA","Lancaster, CA|Palmdale, CA",,,sfr|condo_townhome,,1,,200000,1100000,arv,,,

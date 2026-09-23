@@ -29,7 +29,7 @@ function areasOf(b: Buyer): string[] {
 export async function getBuyerDemand(): Promise<BuyerDemand> {
   const [rows, targets] = await Promise.all([
     db.marketContact.findMany({
-      where: { vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } },
+      where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } },
       orderBy: [{ type: "asc" }, { name: "asc" }],
       select: { name: true, type: true, region: true, market: true, buyBox: true, buyBoxAreas: true, priceRange: true, dealType: true, buildType: true, propertyType: true, minLotSize: true },
     }),

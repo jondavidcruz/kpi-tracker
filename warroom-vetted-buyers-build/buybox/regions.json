@@ -1,0 +1,130 @@
+{
+ "Nashville MSA": [
+  "Davidson, TN",
+  "Rutherford, TN",
+  "Williamson, TN",
+  "Wilson, TN",
+  "Sumner, TN",
+  "Maury, TN",
+  "Robertson, TN",
+  "Cheatham, TN",
+  "Dickson, TN",
+  "Montgomery, TN",
+  "Cannon, TN",
+  "Macon, TN",
+  "Smith, TN",
+  "Trousdale, TN",
+  "Hickman, TN"
+ ],
+ "Middle Tennessee": [
+  "Davidson, TN",
+  "Rutherford, TN",
+  "Williamson, TN",
+  "Wilson, TN",
+  "Sumner, TN",
+  "Maury, TN",
+  "Robertson, TN",
+  "Cheatham, TN",
+  "Dickson, TN",
+  "Montgomery, TN",
+  "Bedford, TN",
+  "Coffee, TN",
+  "Marshall, TN",
+  "Putnam, TN"
+ ],
+ "DFW": [
+  "Dallas, TX",
+  "Tarrant, TX",
+  "Collin, TX",
+  "Denton, TX",
+  "Rockwall, TX",
+  "Kaufman, TX",
+  "Ellis, TX",
+  "Johnson, TX",
+  "Parker, TX",
+  "Hunt, TX"
+ ],
+ "Greater Houston": [
+  "Harris, TX",
+  "Fort Bend, TX",
+  "Montgomery, TX",
+  "Brazoria, TX",
+  "Galveston, TX",
+  "Liberty, TX",
+  "Waller, TX",
+  "Chambers, TX"
+ ],
+ "Austin MSA": [
+  "Travis, TX",
+  "Williamson, TX",
+  "Hays, TX",
+  "Bastrop, TX",
+  "Caldwell, TX"
+ ],
+ "Central Texas": [
+  "Bell, TX",
+  "Coryell, TX",
+  "McLennan, TX",
+  "Williamson, TX",
+  "Lampasas, TX",
+  "Falls, TX",
+  "Milam, TX",
+  "Burnet, TX"
+ ],
+ "San Antonio": [
+  "Bexar, TX",
+  "Comal, TX",
+  "Guadalupe, TX"
+ ],
+ "Coachella Valley": [
+  "Riverside, CA"
+ ],
+ "SoCal": [
+  "San Diego, CA",
+  "Orange, CA",
+  "Los Angeles, CA",
+  "Riverside, CA",
+  "San Bernardino, CA",
+  "Ventura, CA",
+  "Imperial, CA"
+ ],
+ "Florida Panhandle": [
+  "Escambia, FL",
+  "Santa Rosa, FL",
+  "Okaloosa, FL",
+  "Walton, FL",
+  "Bay, FL",
+  "Holmes, FL",
+  "Washington, FL",
+  "Jackson, FL",
+  "Calhoun, FL",
+  "Gulf, FL",
+  "Franklin, FL",
+  "Liberty, FL",
+  "Gadsden, FL",
+  "Leon, FL",
+  "Wakulla, FL"
+ ],
+ "SW Florida": [
+  "Lee, FL",
+  "Charlotte, FL",
+  "Collier, FL",
+  "Sarasota, FL"
+ ],
+ "Lake Havasu": [
+  "Mohave, AZ"
+ ],
+ "Phoenix Valley": [
+  "Maricopa, AZ"
+ ],
+ "Orange County Coastal": [
+  "Orange, CA"
+ ],
+ "NE Florida": [
+  "St. Johns, FL",
+  "Putnam, FL",
+  "Clay, FL",
+  "Flagler, FL",
+  "Duval, FL"
+ ]
+}

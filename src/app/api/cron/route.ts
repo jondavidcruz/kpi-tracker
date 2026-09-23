@@ -62,6 +62,14 @@ export async function GET(request: Request) {
   // attachment. (Supabase's own PITR/daily backups are the primary; this is a
   // belt-and-suspenders copy that lands in Jon's inbox.)
   if (url.searchParams.get("backup") === "1") {
+    // Nightly buyer backup → Drive (vetted-buyers rebuild Phase 1). Runs first,
+    // isolated, so a Drive hiccup never blocks the full email backup below.
+    let buyerBackup: unknown = null;
+    try {
+      const { runBuyerBackup } = await import("@/lib/buyers/backup");
+      buyerBackup = await runBuyerBackup();
+    } catch (e) { buyerBackup = { ok: false, warning: String(e).slice(0, 200) }; }
+    void buyerBackup;
     const settings = await getSettings();
     const today = date ?? todayStr(settings.orgTimezone);
     const backup = await buildBackup();
@@ -76,7 +84,7 @@ export async function GET(request: Request) {
           { filename: `war-room-backup-${today}.json`, content },
         )
       : false;
-    return NextResponse.json({ ok: true, backedUp: backup.totalRows, emailed });
+    return NextResponse.json({ ok: true, backedUp: backup.totalRows, emailed, buyerBackup });
   }
 
   // Weekly vetted-buyer lead-sourcing report → Jon (Friday end-of-shift). Analyzes only the

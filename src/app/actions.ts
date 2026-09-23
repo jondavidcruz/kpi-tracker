@@ -23,6 +23,7 @@ import { migrateScoreById } from "@/lib/recording-migrate";
 import { zonedTime } from "@/lib/shift";
 import { writeDay as crmWriteDay, writeOpps as crmWriteOpps, writeActivity as crmWriteActivity } from "@/lib/crm-sync";
 import { SPEED_CHECKS_CATEGORY, speedChecksTitle, parseSpeedChecks } from "@/lib/speed-checks";
+import { updateBuyer, archiveBuyer, restoreBuyer, logTouch } from "@/lib/buyers/write";
 import { after } from "next/server";
 
 /** Pull today's CRM numbers (calls + offers/contracts) on demand so the scorecard
@@ -2217,7 +2218,7 @@ export async function deleteMarketContact(formData: FormData) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) return;
   const id = String(formData.get("id") ?? "");
-  if (id) await db.marketContact.delete({ where: { id } });
+  if (id) await archiveBuyer(id, "removed from markets page", me?.name); // rule zero: archive, never delete
   revalidatePath("/marketing");
   redirect("/marketing");
 }
@@ -2252,25 +2253,36 @@ export async function setBuyerStatus(formData: FormData) {
   const WORKING = ["to_contact", "contacted", "messaged", "following_up"];
   const today = orgToday((await getSettings()).orgTimezone);
   if (WORKING.includes(status)) {
-    await db.marketContact.update({ where: { id }, data: { vetStatus: status, vetStage: "to_vet" } });
+    await updateBuyer(id, { vetStatus: status, vetStage: "to_vet" }, me?.name, { field: "status" });
   } else if (status === "vetted") {
     const prev = await db.marketContact.findUnique({ where: { id }, select: { vetStage: true } });
-    await db.marketContact.update({ where: { id }, data: { vetStage: "vetted", ...(prev?.vetStage !== "vetted" ? { vettedById: me!.id, vettedOn: today } : {}) } });
+    await updateBuyer(id, { vetStage: "vetted", ...(prev?.vetStage !== "vetted" ? { vettedById: me!.id, vettedOn: today } : {}) }, me?.name, { field: "status" });
   } else if (status === "not_interested") {
-    await db.marketContact.update({ where: { id }, data: { vetStage: "dead" } });
+    await updateBuyer(id, { vetStage: "dead" }, me?.name, { field: "status" });
   } else return;
   await rollupResearchKpis(me!.id, today);
   revalidatePath("/vetting");
   revalidatePath("/marketing");
 }
 
-/** Permanently delete a buyer/prospect from Buyer Research. */
+/** ARCHIVE a buyer/prospect (rule zero: never delete — restorable any time). */
 export async function deleteProspect(formData: FormData) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  await db.marketContact.delete({ where: { id } });
+  await archiveBuyer(id, String(formData.get("reason") ?? "archived from research table"), me?.name);
+  revalidatePath("/vetting");
+  revalidatePath("/marketing");
+}
+
+/** Restore an archived buyer back into the lists. */
+export async function restoreProspect(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await restoreBuyer(id, me?.name);
   revalidatePath("/vetting");
   revalidatePath("/marketing");
 }
@@ -2286,7 +2298,7 @@ export async function saveProspectField(formData: FormData) {
   const ALLOWED = ["name", "phone", "phone2", "email", "website", "links", "buyBoxAreas", "outreachLog"];
   if (!id || !ALLOWED.includes(field)) return;
   if (field === "name" && !value.trim()) return;
-  await db.marketContact.update({ where: { id }, data: { [field]: value } });
+  await updateBuyer(id, { [field]: value }, me?.name, { field });
   // NO revalidatePath here on purpose: this is an inline autosave and the field already
   // shows the typed value on the client. Revalidating re-renders the whole page, which
   // jumps the scroll back to the top and adds a visible lag on every keystroke-save.
@@ -2371,7 +2383,8 @@ export async function logBuyerOutreach(formData: FormData) {
   if (existing?.touchOn === today) { revalidatePath("/vetting"); revalidatePath("/marketing"); return; }
   const stamped = note ? `${today}: ${note}` : `${today}: reached out`;
   const log = existing?.outreachLog ? `${stamped}\n${existing.outreachLog}` : stamped;
-  await db.marketContact.update({ where: { id }, data: { lastContacted: today, nextFollowUp: nextStr, outreachLog: log.slice(0, 4000), vetStatus: "contacted", touchById: me!.id, touchOn: today } });
+  await updateBuyer(id, { lastContacted: today, nextFollowUp: nextStr, outreachLog: log.slice(0, 4000), vetStatus: "contacted", touchById: me!.id, touchOn: today }, me?.name, { field: "touch" });
+  await logTouch(id, { channel: "call", note: note || "reached out" }, me?.name); // structured touch log (Phase 1)
   await rollupResearchKpis(me!.id, today); // → Developers Contacted
   revalidatePath("/vetting");
   revalidatePath("/marketing");
@@ -2479,7 +2492,7 @@ export async function saveBuyBoxMap(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const mapUrl = String(formData.get("mapUrl") ?? "").trim().slice(0, 1000);
   if (!id) return;
-  await db.marketContact.update({ where: { id }, data: { contact: mapUrl } });
+  await updateBuyer(id, { contact: mapUrl }, me?.name, { field: "areaMapUrl" });
   revalidatePath("/marketing");
   redirect("/marketing?saved=1#buybox-maps");
 }
@@ -2491,7 +2504,7 @@ export async function deleteJvPartner(formData: FormData) {
   if (!id) return;
   const row = await db.marketContact.findUnique({ where: { id }, select: { type: true } });
   if (row?.type !== "jv_partner") return; // safety: this action only removes JV partners
-  await db.marketContact.delete({ where: { id } });
+  await archiveBuyer(id, "jv partner removed", me?.name); // rule zero: archive, never delete
   revalidatePath("/marketing");
   redirect("/marketing?saved=1");
 }

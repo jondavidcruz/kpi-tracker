@@ -42,7 +42,7 @@ export function verify(dealId: string, buyerId: string, action: string, sig: str
 async function rankedForDeal(dealId: string): Promise<{ deal: { address: string; contractPrice: number | null; askingPrice: number | null; nextSteps: string } | null; ranked: BuyerMatch[] }> {
   const deal = await db.deal.findUnique({ where: { id: dealId }, select: { address: true, contractPrice: true, askingPrice: true, nextSteps: true } });
   if (!deal) return { deal: null, ranked: [] };
-  const rows = (await db.marketContact.findMany({ where: { vetStage: { in: ["vetted", "active"] } } })).filter((b) => b.type !== "jv_partner");
+  const rows = (await db.marketContact.findMany({ where: { archivedAt: null, vetStage: { in: ["vetted", "active"] } } })).filter((b) => b.type !== "jv_partner");
   const termsRow = await db.resource.findFirst({ where: { category: "__buyer_terms__" } });
   let terms: Record<string, { pof?: boolean; maxOfferPct?: number }> = {};
   try { terms = JSON.parse(termsRow?.description || "{}"); } catch {}
