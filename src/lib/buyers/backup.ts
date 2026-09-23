@@ -132,7 +132,11 @@ export async function runBuyerBackup(): Promise<BuyerBackupResult> {
       result = { ...result, ok: true, target: "drive", link: `https://drive.google.com/drive/folders/${DRIVE_FOLDER}`, warning: undefined };
       void up1;
     } catch (e) {
-      result.warning = `Drive upload failed: ${String(e).slice(0, 200)}`;
+      // Surface the service-account email so Jon can share the Drive folder with it
+      // (client_email is designed to be shared — not a secret).
+      let saEmail = "";
+      try { saEmail = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "{}").client_email || ""; } catch {}
+      result.warning = `Drive upload failed: ${String(e).slice(0, 200)}${saEmail ? ` — share the folder with ${saEmail}` : ""}`;
     }
   }
 
