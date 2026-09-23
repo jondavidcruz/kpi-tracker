@@ -1247,3 +1247,19 @@ model PeerAssessment {
   @@unique([quarter, raterId, subjectId])
   @@index([quarter, subjectId])
 }
+
+// Geocode cache — we never pay for (or rate-limit into) the same lookup twice.
+// query is the normalized input string; blank lat/lng = a cached MISS.
+model GeoCache {
+  id        String   @id @default(cuid())
+  query     String   @unique
+  lat       Float?
+  lng       Float?
+  formatted String   @default("")
+  county    String   @default("") // "Rutherford, TN"
+  city      String   @default("")
+  state     String   @default("")
+  zip       String   @default("")
+  provider  String   @default("") // google | mapbox | nominatim
+  createdAt DateTime @default(now())
+}

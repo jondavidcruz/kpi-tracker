@@ -1,0 +1,3963 @@
+[
+ {
+  "buyer_id": "cmst66mqu0000ju049gwg469f",
+  "name": "Adam Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "Lee, FL",
+     "Charlotte, FL",
+     "Brevard, FL"
+    ],
+    "cities": [
+     "Cape Coral, FL",
+     "Lehigh Acres, FL",
+     "Port Charlotte, FL",
+     "Palm Bay, FL",
+     "Rotonda West, FL",
+     "Deep Creek, FL",
+     "Gulf Cove, FL"
+    ],
+    "zips": [],
+    "regions": [
+     "SW Florida"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": 10000
+   },
+   "price": {
+    "min": 10000,
+    "max": 20000,
+    "unit": "per_lot",
+    "discount_to_market_pct": "lot price rose slightly per 2026-08",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": false,
+    "volume_note": "not looking for more projects for now (Aug 2026)",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmst66mqu0000ju049gwg469f"
+  }
+ },
+ {
+  "buyer_id": "cmu78rfzn0000l504110yd5wg",
+  "name": "Adams Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "Walton, FL",
+     "Bay, FL"
+    ],
+    "cities": [
+     "DeFuniak Springs, FL",
+     "Freeport, FL",
+     "Callaway, FL",
+     "Panama City, FL",
+     "Southport, FL"
+    ],
+    "zips": [],
+    "regions": [
+     "Florida Panhandle"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "finished_lots",
+     "raw_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 20,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [
+     40,
+     50
+    ],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": 120000,
+    "unit": "per_lot",
+    "discount_to_market_pct": "40' lots ≤65k · 50' lots 65–90k · larger ≤120k · raw land 20+ ac case-by-case; lots must be ≥110' deep",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmu78rfzn0000l504110yd5wg"
+  }
+ },
+ {
+  "buyer_id": "cmu3as6dy0000l30404ziq5qk",
+  "name": "Ag 1 Land Company",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "Okaloosa, FL"
+    ],
+    "cities": [
+     "Crestview, FL"
+    ],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [
+     "TX",
+     "CA"
+    ],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "entitled_land",
+     "finished_lots",
+     "teardown"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "flexible; 50–100+ ac fine"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmu3as6dy0000l30404ziq5qk"
+  }
+ },
+ {
+  "buyer_id": "mc_vet_64f9f73c6568",
+  "name": "Alpine Home Builders, LLC",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "San Diego, CA",
+     "Los Angeles, CA",
+     "Placer, CA",
+     "El Dorado, CA"
+    ],
+    "cities": [
+     "Alpine, CA",
+     "San Diego, CA",
+     "Lake Tahoe, CA",
+     "Los Angeles, CA"
+    ],
+    "zips": [],
+    "regions": [
+     "SoCal"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "North County San Diego focus; builds statewide"
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots",
+     "entitled_land",
+     "teardown"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "no fixed budget; case-by-case"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_vet_64f9f73c6568"
+  }
+ },
+ {
+  "buyer_id": "cmqvd6chd0001jp0411eitwdq",
+  "name": "Angle Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "AZ"
+    ],
+    "counties": [
+     "Mohave, AZ"
+    ],
+    "cities": [
+     "Kingman, AZ",
+     "Golden Valley, AZ",
+     "Fort Mohave, AZ",
+     "Bullhead City, AZ"
+    ],
+    "zips": [],
+    "regions": [
+     "Lake Havasu"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 0.14,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "deal dependent"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmqvd6chd0001jp0411eitwdq"
+  }
+ },
+ {
+  "buyer_id": "cmqzspxai0000jr042ohk7m4d",
+  "name": "Arizona Homes of Lake Havasu City",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "AZ"
+    ],
+    "counties": [
+     "Mohave, AZ"
+    ],
+    "cities": [
+     "Lake Havasu City, AZ"
+    ],
+    "zips": [],
+    "regions": [
+     "Lake Havasu"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "teardown",
+     "sfr"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "deal dependent"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": false,
+    "volume_note": "not interested now; wants future deals",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmqzspxai0000jr042ohk7m4d"
+  }
+ },
+ {
+  "buyer_id": "cmst5503f0000la046s5okbe3",
+  "name": "Bloomfield Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Dallas, TX",
+     "Tarrant, TX",
+     "Collin, TX",
+     "Denton, TX",
+     "Rockwall, TX",
+     "Kaufman, TX",
+     "Ellis, TX",
+     "Johnson, TX",
+     "Parker, TX",
+     "Hunt, TX"
+    ],
+    "cities": [],
+    "zips": [],
+    "regions": [
+     "DFW"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "North Texas only"
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots",
+     "entitled_land"
+    ],
+    "exclusions": [
+     "scattered individual lots"
+    ]
+   },
+   "size": {
+    "acres_min": 40,
+    "acres_max": null,
+    "lots_min": 40,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": "cash",
+    "close_days": 14,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "hundreds of lots typical; 10–20 lot pockets only if adjacent to existing community",
+    "submission_requirements": [
+     "full pricing",
+     "survey",
+     "floodplain status/acreage",
+     "nearest sewer hookup"
+    ],
+    "best_contact": "Don Dykstra (chairman) / John Matney"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmst5503f0000la046s5okbe3"
+  }
+ },
+ {
+  "buyer_id": "mc_vet_241fcbcd9ab1",
+  "name": "Blue Fern Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [],
+    "cities": [],
+    "zips": [],
+    "regions": [
+     "SoCal"
+    ],
+    "radius": null,
+    "nationwide": true,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land"
+    ],
+    "exclusions": [
+     "sfr",
+     "teardown",
+     "finished_lots",
+     "custom work"
+    ]
+   },
+   "size": {
+    "acres_min": 20,
+    "acres_max": 100,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "too variable to pre-qualify"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_vet_241fcbcd9ab1"
+  }
+ },
+ {
+  "buyer_id": "cmql9io8f0002l104bva4jle6",
+  "name": "Brad Kinney",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "Orange, CA"
+    ],
+    "cities": [
+     "Laguna Beach, CA",
+     "Newport Beach, CA",
+     "Newport Coast, CA",
+     "Corona del Mar, CA"
+    ],
+    "zips": [],
+    "regions": [
+     "Orange County Coastal"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "teardown",
+     "sfr"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "low",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmql9io8f0002l104bva4jle6"
+  }
+ },
+ {
+  "buyer_id": "cmud9ax7q0000i604cun31rpa",
+  "name": "Brian Barnhart",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "Lee, FL",
+     "Charlotte, FL",
+     "Sarasota, FL",
+     "Collier, FL"
+    ],
+    "cities": [
+     "Lehigh Acres, FL",
+     "Port Charlotte, FL",
+     "North Port, FL",
+     "Naples, FL"
+    ],
+    "zips": [],
+    "regions": [
+     "SW Florida"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": 10,
+    "notes": "anything ≥10% below retail"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmud9ax7q0000i604cun31rpa"
+  }
+ },
+ {
+  "buyer_id": "cmrazhopl0000la04seq0791p",
+  "name": "Brian Koons",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "San Diego, CA"
+    ],
+    "cities": [
+     "San Diego, CA"
+    ],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "B, B+, A neighborhoods; garage preferred, alley access a plus"
+   },
+   "asset": {
+    "types": [
+     "teardown",
+     "sfr",
+     "multifamily"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": 750000,
+    "max": 1200000,
+    "unit": "total",
+    "discount_to_market_pct": "flexible depending on lot",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmrazhopl0000la04seq0791p"
+  }
+ },
+ {
+  "buyer_id": "cmqvewzwb0001js049zzfs7nm",
+  "name": "Burns Builders",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "AZ"
+    ],
+    "counties": [
+     "Mohave, AZ"
+    ],
+    "cities": [
+     "Lake Havasu City, AZ"
+    ],
+    "zips": [],
+    "regions": [
+     "Lake Havasu"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Tom Burns (owner)"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmqvewzwb0001js049zzfs7nm"
+  }
+ },
+ {
+  "buyer_id": "cms3sl6r30000jp04vk5lzc35",
+  "name": "Carlos Gil",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Harris, TX",
+     "Fort Bend, TX",
+     "Montgomery, TX",
+     "Brazoria, TX",
+     "Galveston, TX",
+     "Liberty, TX",
+     "Waller, TX",
+     "Chambers, TX"
+    ],
+    "cities": [
+     "Houston, TX",
+     "Cypress, TX",
+     "Cleveland, TX"
+    ],
+    "zips": [],
+    "regions": [
+     "Greater Houston"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "sfr",
+     "teardown"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": "hard_money",
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cms3sl6r30000jp04vk5lzc35"
+  }
+ },
+ {
+  "buyer_id": "cmtm8t6s20004ju04ms44tdqx",
+  "name": "CJL Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "Escambia, FL",
+     "Santa Rosa, FL",
+     "Okaloosa, FL",
+     "Walton, FL",
+     "Bay, FL",
+     "Holmes, FL",
+     "Washington, FL",
+     "Jackson, FL",
+     "Calhoun, FL",
+     "Gulf, FL",
+     "Franklin, FL",
+     "Liberty, FL",
+     "Gadsden, FL",
+     "Leon, FL",
+     "Wakulla, FL"
+    ],
+    "cities": [
+     "Pensacola, FL",
+     "Gulf Breeze, FL",
+     "Milton, FL",
+     "Pace, FL",
+     "Navarre, FL",
+     "Fort Walton Beach, FL",
+     "Crestview, FL",
+     "Niceville, FL",
+     "Destin, FL",
+     "Panama City, FL",
+     "Panama City Beach, FL",
+     "Lynn Haven, FL",
+     "Callaway, FL",
+     "Marianna, FL",
+     "Chipley, FL",
+     "Bonifay, FL",
+     "Tallahassee, FL",
+     "Quincy, FL",
+     "Crawfordville, FL",
+     "Apalachicola, FL",
+     "Port St. Joe, FL",
+     "Carrabelle, FL"
+    ],
+    "zips": [],
+    "regions": [
+     "Florida Panhandle"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots"
+    ],
+    "exclusions": [
+     "wetlands"
+    ]
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [
+     "contact info",
+     "parcel number",
+     "address",
+     "asking amount"
+    ],
+    "best_contact": "Colton Leyendecker / Kasey Bebus (land acq)"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmtm8t6s20004ju04ms44tdqx"
+  }
+ },
+ {
+  "buyer_id": "mc_vet_27ebce9174a9",
+  "name": "Crown Contracting, Inc.",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "Riverside, CA",
+     "San Bernardino, CA"
+    ],
+    "cities": [
+     "Palm Springs, CA",
+     "Palm Desert, CA",
+     "Yucca Valley, CA"
+    ],
+    "zips": [],
+    "regions": [
+     "Coachella Valley"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "Morongo Basin"
+   },
+   "asset": {
+    "types": [],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": false,
+    "volume_note": "not buying now; open to deals in a few months",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "low",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_vet_27ebce9174a9"
+  }
+ },
+ {
+  "buyer_id": "cmstedcak0000lb0489qyctrs",
+  "name": "Dan Peshkin",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "Lee, FL",
+     "Charlotte, FL"
+    ],
+    "cities": [
+     "Cape Coral, FL",
+     "Lehigh Acres, FL"
+    ],
+    "zips": [],
+    "regions": [
+     "SW Florida"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": 18000,
+    "max": 90000,
+    "unit": "per_lot",
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "full buy box PDF exists (Coaston Homes) — attach to card",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmstedcak0000lb0489qyctrs"
+  }
+ },
+ {
+  "buyer_id": "cmqjxm6d40003jp04hf82pa3u",
+  "name": "Darryl Carey",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN",
+     "KY",
+     "OK"
+    ],
+    "counties": [
+     "Davidson, TN",
+     "Fayette, KY"
+    ],
+    "cities": [
+     "Nashville, TN",
+     "Lexington, KY"
+    ],
+    "zips": [],
+    "regions": [
+     "Nashville MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "finished_lots"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 0.2,
+    "acres_max": null,
+    "lots_min": 10,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": 40000,
+    "max": 120000,
+    "unit": "per_lot",
+    "discount_to_market_pct": "Nashville <120k/lot · Oklahoma 40–50k/lot; prefers 20–40 lots",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmqjxm6d40003jp04hf82pa3u"
+  }
+ },
+ {
+  "buyer_id": "cmt0ptr2c0005ih04gk9evti1",
+  "name": "David James Custom Builder",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Harris, TX"
+    ],
+    "cities": [
+     "Houston, TX",
+     "West University Place, TX",
+     "Memorial Villages, TX"
+    ],
+    "zips": [],
+    "regions": [
+     "Greater Houston"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "Central Houston / River Oaks"
+   },
+   "asset": {
+    "types": [
+     "teardown",
+     "sfr",
+     "multifamily",
+     "hospitality"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "varies by location"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "low",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmt0ptr2c0005ih04gk9evti1"
+  }
+ },
+ {
+  "buyer_id": "cmt3e2qgt0003l704dcmjmhtc",
+  "name": "Davidson Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Harris, TX",
+     "Fort Bend, TX",
+     "Montgomery, TX",
+     "Brazoria, TX",
+     "Galveston, TX",
+     "Liberty, TX",
+     "Waller, TX",
+     "Chambers, TX"
+    ],
+    "cities": [
+     "Houston, TX",
+     "Cleveland, TX"
+    ],
+    "zips": [],
+    "regions": [
+     "Greater Houston"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots",
+     "sfr",
+     "multifamily"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "in buying mode; send anything",
+    "submission_requirements": [],
+    "best_contact": "Christopher Centers, VP Land Acq Houston"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmt3e2qgt0003l704dcmjmhtc"
+  }
+ },
+ {
+  "buyer_id": "mc_vet_5f0d34615149",
+  "name": "Distinct Designs Construction",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "San Diego, CA"
+    ],
+    "cities": [
+     "San Diego, CA"
+    ],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "teardown"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": 500000,
+    "unit": "per_lot",
+    "discount_to_market_pct": "typical ~$500k/lot",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": false,
+    "volume_note": "not actively seeking; open to SD deals",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_vet_5f0d34615149"
+  }
+ },
+ {
+  "buyer_id": "cmr199f0q0001l704bnh1a9b0",
+  "name": "DR Horton",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Travis, TX",
+     "Williamson, TX",
+     "Hays, TX",
+     "Bastrop, TX",
+     "Caldwell, TX"
+    ],
+    "cities": [
+     "Georgetown, TX",
+     "Kyle, TX",
+     "Austin, TX"
+    ],
+    "zips": [],
+    "regions": [
+     "Austin MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "Austin division: Hwy 29 Georgetown → Kyle; Kade will route CA/AZ/TN deals to other divisions"
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots",
+     "entitled_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [
+     40,
+     50,
+     60,
+     70
+    ],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "offer computed from location, usable acreage, off-site costs"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": 540,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Kade Stanley"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmr199f0q0001l704bnh1a9b0"
+  }
+ },
+ {
+  "buyer_id": "cmt0q9a7e0000kw04pjdnpnul",
+  "name": "Dream Finders Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN",
+     "FL",
+     "GA",
+     "NC",
+     "SC",
+     "TX",
+     "AZ",
+     "CO",
+     "MD",
+     "VA",
+     "AL"
+    ],
+    "counties": [
+     "Davidson, TN"
+    ],
+    "cities": [
+     "Nashville, TN",
+     "Jacksonville, FL",
+     "Orlando, FL",
+     "Tampa, FL",
+     "Atlanta, GA",
+     "Savannah, GA",
+     "Charlotte, NC",
+     "Raleigh, NC",
+     "Charleston, SC",
+     "Myrtle Beach, SC",
+     "Austin, TX",
+     "Dallas, TX",
+     "Houston, TX",
+     "San Antonio, TX",
+     "Phoenix, AZ",
+     "Denver, CO"
+    ],
+    "zips": [],
+    "regions": [
+     "Nashville MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "entitled_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 35,
+    "acres_max": 500,
+    "lots_min": null,
+    "lot_width_ft": [
+     50
+    ],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": 1000000,
+    "max": 15000000,
+    "unit": "total",
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": 180,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Jack Beebe (Nashville) / Ben Owenell"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmt0q9a7e0000kw04pjdnpnul"
+  }
+ },
+ {
+  "buyer_id": "mc_vet_9932a10a9549",
+  "name": "Drees Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN"
+    ],
+    "counties": [
+     "Williamson, TN",
+     "Davidson, TN"
+    ],
+    "cities": [
+     "Brentwood, TN",
+     "Oak Hill, TN"
+    ],
+    "zips": [],
+    "regions": [
+     "Nashville MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "high-value lots only"
+   },
+   "asset": {
+    "types": [
+     "finished_lots",
+     "teardown",
+     "raw_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Nick Moran"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_vet_9932a10a9549"
+  }
+ },
+ {
+  "buyer_id": "cmtn80pcp0000l1045a17tppn",
+  "name": "DSLD Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [],
+    "cities": [],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "no specific buy box — send anything",
+    "submission_requirements": [],
+    "best_contact": "Kallie / contact@dsldhomes.com"
+   },
+   "confidence": "low",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmtn80pcp0000l1045a17tppn"
+  }
+ },
+ {
+  "buyer_id": "cmtbzsh6l0000l204yx05mhqo",
+  "name": "Edward Tunney",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN"
+    ],
+    "counties": [
+     "Davidson, TN"
+    ],
+    "cities": [
+     "Nashville, TN"
+    ],
+    "zips": [],
+    "regions": [
+     "Nashville MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": false,
+    "volume_note": "not buying now; text first before sending",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "low",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmtbzsh6l0000l204yx05mhqo"
+  }
+ },
+ {
+  "buyer_id": "cmtxaly8l0005jt04dyxtd87o",
+  "name": "Expedition Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "Okaloosa, FL",
+     "Escambia, FL",
+     "Walton, FL"
+    ],
+    "cities": [
+     "Crestview, FL"
+    ],
+    "zips": [],
+    "regions": [
+     "Florida Panhandle"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "entitled_land",
+     "finished_lots"
+    ],
+    "exclusions": [
+     "teardown"
+    ]
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmtxaly8l0005jt04dyxtd87o"
+  }
+ },
+ {
+  "buyer_id": "cms9azd560000jq046chyxc6n",
+  "name": "Flintrock Builders",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Bell, TX",
+     "Coryell, TX",
+     "McLennan, TX",
+     "Williamson, TX",
+     "Lampasas, TX",
+     "Falls, TX",
+     "Milam, TX",
+     "Burnet, TX"
+    ],
+    "cities": [
+     "Belton, TX",
+     "Temple, TX",
+     "Georgetown, TX",
+     "Jarrell, TX",
+     "Killeen, TX",
+     "Lorena, TX",
+     "Nolanville, TX",
+     "Salado, TX",
+     "Troy, TX",
+     "Waco, TX"
+    ],
+    "zips": [],
+    "regions": [
+     "Central Texas"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Jon Enterkin"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cms9azd560000jq046chyxc6n"
+  }
+ },
+ {
+  "buyer_id": "cmshscx1e0002jp04vb8s872v",
+  "name": "Gaetano La Placa",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [],
+    "cities": [],
+    "zips": [],
+    "regions": [
+     "SoCal"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "no specific buy box; open to small plots",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "low",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmshscx1e0002jp04vb8s872v"
+  }
+ },
+ {
+  "buyer_id": "mc_vet_bdcfac275f8e",
+  "name": "Goodall Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN"
+    ],
+    "counties": [
+     "Davidson, TN",
+     "Rutherford, TN",
+     "Williamson, TN",
+     "Wilson, TN",
+     "Sumner, TN",
+     "Maury, TN",
+     "Robertson, TN",
+     "Cheatham, TN",
+     "Dickson, TN",
+     "Montgomery, TN",
+     "Bedford, TN",
+     "Coffee, TN",
+     "Marshall, TN",
+     "Putnam, TN"
+    ],
+    "cities": [
+     "Murfreesboro, TN",
+     "Spring Hill, TN"
+    ],
+    "zips": [],
+    "regions": [
+     "Middle Tennessee",
+     "Nashville MSA"
+    ],
+    "radius": {
+     "center": "Nashville, TN",
+     "lat": 36.1627,
+     "lng": -86.7816,
+     "miles": 50
+    },
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "inside or adjacent to city limits, utility access"
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots"
+    ],
+    "exclusions": [
+     "custom homes",
+     "flips",
+     "small parcels"
+    ]
+   },
+   "size": {
+    "acres_min": 15,
+    "acres_max": null,
+    "lots_min": 25,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": 50000,
+    "unit": "per_acre",
+    "discount_to_market_pct": "~$50k/acre guideline, deal dependent",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Danny Hieronimus"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_vet_bdcfac275f8e"
+  }
+ },
+ {
+  "buyer_id": "cmst5hvv40000ju04gkd1nz5j",
+  "name": "Green Brick Partners",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Dallas, TX",
+     "Tarrant, TX",
+     "Collin, TX",
+     "Denton, TX",
+     "Rockwall, TX",
+     "Kaufman, TX",
+     "Ellis, TX",
+     "Johnson, TX",
+     "Parker, TX",
+     "Hunt, TX"
+    ],
+    "cities": [],
+    "zips": [],
+    "regions": [
+     "DFW"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "entitled_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 50,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "deal dependent by submarket/yield/entitlements"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "looking for 100+ ac master-plan sites too",
+    "submission_requirements": [],
+    "best_contact": "Braden Carlson 214-957-3607 / Steve Plevak"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmst5hvv40000ju04gkd1nz5j"
+  }
+ },
+ {
+  "buyer_id": "cmrduaug20000jt04t3z7o6gc",
+  "name": "Hilbers Inc",
+  "buy_box": {
+   "geo": {
+    "states": [],
+    "counties": [],
+    "cities": [],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": true,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "commercial",
+     "multifamily",
+     "mixed_use",
+     "industrial",
+     "hospitality"
+    ],
+    "exclusions": [
+     "sfr"
+    ]
+   },
+   "size": {
+    "acres_min": 5,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "old churches, commercial, MF, mixed-use, retail, industrial, healthcare, build-to-suit",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmrduaug20000jt04t3z7o6gc"
+  }
+ },
+ {
+  "buyer_id": "cmtkp0bfm0000ik042kvn9xdn",
+  "name": "HomeLand Properties",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [],
+    "cities": [],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "ag_land"
+    ],
+    "exclusions": [
+     "finished_lots"
+    ]
+   },
+   "size": {
+    "acres_min": 0.5,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "open if pricing works"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmtkp0bfm0000ik042kvn9xdn"
+  }
+ },
+ {
+  "buyer_id": "cmr2p7gbo0001la04er191vvu",
+  "name": "Homes by Wiesner",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "AZ"
+    ],
+    "counties": [
+     "Mohave, AZ"
+    ],
+    "cities": [
+     "Lake Havasu City, AZ"
+    ],
+    "zips": [],
+    "regions": [
+     "Lake Havasu"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "teardown"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "deal dependent"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Terry"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmr2p7gbo0001la04er191vvu"
+  }
+ },
+ {
+  "buyer_id": "cmtkfm5p50005l7045jwibzt8",
+  "name": "Ian Riles",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Bexar, TX"
+    ],
+    "cities": [
+     "San Antonio, TX"
+    ],
+    "zips": [],
+    "regions": [
+     "San Antonio"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "inside Loop 1604, prefers inside I-410; N/NW/N-Central/NE"
+   },
+   "asset": {
+    "types": [
+     "sfr",
+     "multifamily",
+     "commercial"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": 400000,
+    "unit": "total",
+    "discount_to_market_pct": "prefers ≤$300k for SFR",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmtkfm5p50005l7045jwibzt8"
+  }
+ },
+ {
+  "buyer_id": "cms7th06y0000l104cbewlsf7",
+  "name": "J Houston Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Dallas, TX",
+     "Tarrant, TX",
+     "Collin, TX",
+     "Denton, TX",
+     "Rockwall, TX",
+     "Kaufman, TX",
+     "Ellis, TX",
+     "Johnson, TX",
+     "Parker, TX",
+     "Hunt, TX"
+    ],
+    "cities": [],
+    "zips": [],
+    "regions": [
+     "DFW"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "entitled_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": 30,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "undisclosed"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Steven (land acq)"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cms7th06y0000l104cbewlsf7"
+  }
+ },
+ {
+  "buyer_id": "cmqid59iz0000gy04bmrlpxx4",
+  "name": "Jagger",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA",
+     "AZ"
+    ],
+    "counties": [
+     "Riverside, CA",
+     "Maricopa, AZ"
+    ],
+    "cities": [
+     "Palm Springs, CA",
+     "Palm Desert, CA",
+     "La Quinta, CA",
+     "Rancho Mirage, CA",
+     "Indian Wells, CA",
+     "Scottsdale, AZ"
+    ],
+    "zips": [],
+    "regions": [
+     "Coachella Valley"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "teardown"
+    ],
+    "exclusions": [
+     "tiny lots"
+    ]
+   },
+   "size": {
+    "acres_min": 0.25,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": 8000
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "~$600k benchmark for 1/4-acre Palm Springs lot"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmqid59iz0000gy04bmrlpxx4"
+  }
+ },
+ {
+  "buyer_id": "cms94n3310000jw044g60d9x0",
+  "name": "John & Jared D. Bowen Construction",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Bell, TX",
+     "Coryell, TX",
+     "McLennan, TX",
+     "Williamson, TX",
+     "Lampasas, TX",
+     "Falls, TX",
+     "Milam, TX",
+     "Burnet, TX"
+    ],
+    "cities": [
+     "Copperas Cove, TX",
+     "Lampasas, TX",
+     "Killeen, TX",
+     "Belton, TX",
+     "Temple, TX",
+     "Salado, TX",
+     "Liberty Hill, TX"
+    ],
+    "zips": [],
+    "regions": [
+     "Central Texas"
+    ],
+    "radius": {
+     "center": "Kempner, TX",
+     "lat": 31.0774,
+     "lng": -98.0031,
+     "miles": 75
+    },
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "commercial"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "no set range; case-by-case; must inspect in person"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Jared Bowen"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cms94n3310000jw044g60d9x0"
+  }
+ },
+ {
+  "buyer_id": "cmt0chrmo0000jj04zz55w74g",
+  "name": "LDG Development",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN",
+     "KY",
+     "TX",
+     "GA",
+     "NC",
+     "OH"
+    ],
+    "counties": [
+     "Davidson, TN"
+    ],
+    "cities": [
+     "Nashville, TN"
+    ],
+    "zips": [],
+    "regions": [
+     "Nashville MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "must be QCT or DDA census tract; prefers MF zoning"
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "entitled_land",
+     "multifamily"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 10,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "site economics + HUD max rents"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "200+ garden-style MF units yield",
+    "submission_requirements": [],
+    "best_contact": "Justin Hartz"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmt0chrmo0000jj04zz55w74g"
+  }
+ },
+ {
+  "buyer_id": "cmt0e3sd00004i904q4ufic3u",
+  "name": "Legacy South Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN"
+    ],
+    "counties": [
+     "Davidson, TN",
+     "Rutherford, TN",
+     "Williamson, TN",
+     "Wilson, TN",
+     "Sumner, TN",
+     "Maury, TN",
+     "Robertson, TN",
+     "Cheatham, TN",
+     "Dickson, TN",
+     "Montgomery, TN",
+     "Bedford, TN",
+     "Coffee, TN",
+     "Marshall, TN",
+     "Putnam, TN"
+    ],
+    "cities": [],
+    "zips": [],
+    "regions": [
+     "Middle Tennessee",
+     "Nashville MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots",
+     "teardown",
+     "sfr"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "deal dependent"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Scott Fitzpatrick 858-231-5076"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmt0e3sd00004i904q4ufic3u"
+  }
+ },
+ {
+  "buyer_id": "cmt0alcad0000ky04l97k66s6",
+  "name": "M/I Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN"
+    ],
+    "counties": [
+     "Davidson, TN",
+     "Rutherford, TN",
+     "Williamson, TN",
+     "Wilson, TN",
+     "Sumner, TN",
+     "Maury, TN",
+     "Robertson, TN",
+     "Cheatham, TN",
+     "Dickson, TN",
+     "Montgomery, TN",
+     "Cannon, TN",
+     "Macon, TN",
+     "Smith, TN",
+     "Trousdale, TN",
+     "Hickman, TN"
+    ],
+    "cities": [
+     "Columbia, TN",
+     "Antioch, TN",
+     "Lebanon, TN",
+     "Nashville, TN"
+    ],
+    "zips": [],
+    "regions": [
+     "Nashville MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "entitled_land",
+     "finished_lots",
+     "multifamily"
+    ],
+    "exclusions": [
+     "large rural / large-lot parcels"
+    ]
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": 40,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "40+ units SF or MF",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmt0alcad0000ky04l97k66s6"
+  }
+ },
+ {
+  "buyer_id": "cmu5y8p1k0000l304c4p3xo8j",
+  "name": "Matt Sadowski",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "St. Johns, FL",
+     "Putnam, FL",
+     "Clay, FL",
+     "Flagler, FL"
+    ],
+    "cities": [],
+    "zips": [],
+    "regions": [
+     "NE Florida"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "sfr",
+     "commercial"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 0.5,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "varies by location; commercial needs 50+ ac"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmu5y8p1k0000l304c4p3xo8j"
+  }
+ },
+ {
+  "buyer_id": "mc_vet_e2d1c0ac0911",
+  "name": "Mirage Developer, Inc",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "Riverside, CA",
+     "Ventura, CA"
+    ],
+    "cities": [
+     "Palm Desert, CA",
+     "Ventura, CA"
+    ],
+    "zips": [],
+    "regions": [
+     "Coachella Valley"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "open to other CA if strong (Alpine, Laguna Beach mentioned)"
+   },
+   "asset": {
+    "types": [
+     "finished_lots",
+     "teardown",
+     "sfr"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "prefers build-ready over raw; lot must fit ADU + primary",
+    "submission_requirements": [],
+    "best_contact": "Todd"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_vet_e2d1c0ac0911"
+  }
+ },
+ {
+  "buyer_id": "cmqvdrkhi0002ic05kh7sndrq",
+  "name": "Morgan Taylor Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "AZ"
+    ],
+    "counties": [
+     "Maricopa, AZ",
+     "Yavapai, AZ"
+    ],
+    "cities": [
+     "Rio Verde, AZ",
+     "Sedona, AZ",
+     "Scottsdale, AZ",
+     "Phoenix, AZ",
+     "Mesa, AZ",
+     "Glendale, AZ",
+     "Gilbert, AZ",
+     "New River, AZ"
+    ],
+    "zips": [],
+    "regions": [
+     "Phoenix Valley"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "Rio Verde + Sedona highest priority"
+   },
+   "asset": {
+    "types": [
+     "raw_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": 5,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": 10000
+   },
+   "price": {
+    "min": null,
+    "max": 1000000,
+    "unit": "total",
+    "discount_to_market_pct": "up to $1M+ if subdivision math works; prefer subdividable 3–4 lots; needs paved road, water/well, power",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Jack / Sarah"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmqvdrkhi0002ic05kh7sndrq"
+  }
+ },
+ {
+  "buyer_id": "cmr0yyd6i0002ji04gvpskdhj",
+  "name": "Moses Hershko Development",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [],
+    "cities": [],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "prime top-notch locations only"
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "teardown",
+     "sfr",
+     "condo_townhome"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "low",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmr0yyd6i0002ji04gvpskdhj"
+  }
+ },
+ {
+  "buyer_id": "cmszaglee0003lh045sv1a6ve",
+  "name": "Ole South",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN"
+    ],
+    "counties": [
+     "Davidson, TN",
+     "Rutherford, TN"
+    ],
+    "cities": [
+     "Nashville, TN"
+    ],
+    "zips": [],
+    "regions": [
+     "Nashville MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "finished_lots",
+     "raw_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "must pencil for new homes ≤$599k; infrastructure required"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Trey Lewis 615-593-6340"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmszaglee0003lh045sv1a6ve"
+  }
+ },
+ {
+  "buyer_id": "cmrwiftr70005jr049w6om3yw",
+  "name": "Petergaye (PG) Taylor",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN"
+    ],
+    "counties": [
+     "Davidson, TN"
+    ],
+    "cities": [
+     "Nashville, TN"
+    ],
+    "zips": [],
+    "regions": [
+     "Nashville MSA",
+     "Middle Tennessee"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 5,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "flexible / no set limit"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": false,
+    "volume_note": "not active now; send 5+ ac Nashville land for future",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmrwiftr70005jr049w6om3yw"
+  }
+ },
+ {
+  "buyer_id": "mc_vet_cea419c8f6e5",
+  "name": "Pulte Group",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX",
+     "CA",
+     "AZ",
+     "TN"
+    ],
+    "counties": [
+     "Travis, TX",
+     "Williamson, TX",
+     "Hays, TX",
+     "Bastrop, TX",
+     "Caldwell, TX"
+    ],
+    "cities": [
+     "Austin, TX"
+    ],
+    "zips": [],
+    "regions": [
+     "Austin MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "entitled_land",
+     "finished_lots",
+     "teardown"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 25,
+    "acres_max": 250,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "typically multi-million"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Bryan Beil, VP Land Acq Central TX"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_vet_cea419c8f6e5"
+  }
+ },
+ {
+  "buyer_id": "cmqk7nd8l0000jp047zfz53en",
+  "name": "Robert Johnson",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "Riverside, CA"
+    ],
+    "cities": [
+     "Palm Desert, CA",
+     "La Quinta, CA",
+     "Palm Springs, CA"
+    ],
+    "zips": [],
+    "regions": [
+     "Coachella Valley"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "luxury desert markets"
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "teardown",
+     "mixed_use"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": 3000000,
+    "max": 10000000,
+    "unit": "total",
+    "discount_to_market_pct": "$3M min, up to $10M+; ~$200–225/sf noted",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmqk7nd8l0000jp047zfz53en"
+  }
+ },
+ {
+  "buyer_id": "cmt0n4apb0000l8046wusugbg",
+  "name": "Ryan Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TN",
+     "KY",
+     "OH",
+     "IN",
+     "IL",
+     "PA",
+     "MD",
+     "VA",
+     "WV",
+     "NC",
+     "SC",
+     "GA",
+     "FL",
+     "NJ",
+     "NY",
+     "DC"
+    ],
+    "counties": [
+     "Davidson, TN",
+     "Rutherford, TN",
+     "Sumner, TN",
+     "Cheatham, TN",
+     "Robertson, TN"
+    ],
+    "cities": [
+     "Nashville, TN",
+     "Antioch, TN",
+     "Cane Ridge, TN",
+     "Madison, TN",
+     "Goodlettsville, TN",
+     "Hendersonville, TN",
+     "Gallatin, TN",
+     "Murfreesboro, TN",
+     "Smyrna, TN",
+     "Pleasant View, TN",
+     "White House, TN"
+    ],
+    "zips": [],
+    "regions": [
+     "Nashville MSA"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots",
+     "teardown",
+     "ag_land"
+    ],
+    "exclusions": [
+     "occupied homes",
+     "parcels under 10 ac"
+    ]
+   },
+   "size": {
+    "acres_min": 10,
+    "acres_max": null,
+    "lots_min": 50,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": 1000000,
+    "max": 50000000,
+    "unit": "total",
+    "discount_to_market_pct": "100+ lots ideal",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmt0n4apb0000l8046wusugbg"
+  }
+ },
+ {
+  "buyer_id": "cmqve464t0001jf044j8yc3z5",
+  "name": "Seville Builders",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "AZ"
+    ],
+    "counties": [
+     "Mohave, AZ"
+    ],
+    "cities": [
+     "Lake Havasu City, AZ"
+    ],
+    "zips": [],
+    "regions": [
+     "Lake Havasu"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "teardown",
+     "sfr"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 0.25,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "any bare land at the right price; wants a price with the deal"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Wesley Yonda / Amber Cheramy-Lyon"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmqve464t0001jf044j8yc3z5"
+  }
+ },
+ {
+  "buyer_id": "cmu37dbwl0000l304gml0djup",
+  "name": "Sugar Sands Construction",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "Okaloosa, FL"
+    ],
+    "cities": [
+     "Crestview, FL"
+    ],
+    "zips": [],
+    "regions": [
+     "Florida Panhandle"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "entitled_land",
+     "finished_lots",
+     "teardown",
+     "sfr"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "everything at the moment",
+    "submission_requirements": [],
+    "best_contact": "Dustin / Crystal Hippensteel"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmu37dbwl0000l304gml0djup"
+  }
+ },
+ {
+  "buyer_id": "cmsxfyh580000jn04gs3xq5az",
+  "name": "Sunlife Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [
+     "Lee, FL",
+     "Charlotte, FL"
+    ],
+    "cities": [
+     "Cape Coral, FL",
+     "Port Charlotte, FL"
+    ],
+    "zips": [],
+    "regions": [
+     "SW Florida"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "finished_lots"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": 10000
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "15–20 lots/mo Cape Coral · 5–8/mo Port Charlotte; submit via their Salesforce off-market form",
+    "submission_requirements": [],
+    "best_contact": "Rosario"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmsxfyh580000jn04gs3xq5az"
+  }
+ },
+ {
+  "buyer_id": "cmt9cbapd0007ic04t6yr5qr6",
+  "name": "Transwestern Development Company",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Harris, TX"
+    ],
+    "cities": [
+     "Houston, TX"
+    ],
+    "zips": [],
+    "regions": [
+     "Greater Houston"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "commercial",
+     "multifamily",
+     "industrial",
+     "entitled_land",
+     "teardown"
+    ],
+    "exclusions": [
+     "standard residential",
+     "small infill lots"
+    ]
+   },
+   "size": {
+    "acres_min": 2,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Sean Suffel / Carleton Riser"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmt9cbapd0007ic04t6yr5qr6"
+  }
+ },
+ {
+  "buyer_id": "cmu3bhloi0001l30434k404k6",
+  "name": "Tutt Land Company",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "FL"
+    ],
+    "counties": [],
+    "cities": [],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "ag_land",
+     "entitled_land",
+     "teardown"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 10,
+    "acres_max": 1000,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "at or slightly under market; 20+ ac for development tracts"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Trent Dillard"
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmu3bhloi0001l30434k404k6"
+  }
+ },
+ {
+  "buyer_id": "cmshy04pm0003l504rp7k3v7c",
+  "name": "Waterstone Development Group",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "TX"
+    ],
+    "counties": [
+     "Harris, TX",
+     "Fort Bend, TX",
+     "Montgomery, TX",
+     "Brazoria, TX",
+     "Galveston, TX",
+     "Liberty, TX",
+     "Waller, TX",
+     "Chambers, TX",
+     "Dallas, TX",
+     "Tarrant, TX",
+     "Collin, TX",
+     "Denton, TX",
+     "Rockwall, TX",
+     "Kaufman, TX",
+     "Ellis, TX",
+     "Johnson, TX",
+     "Parker, TX",
+     "Hunt, TX"
+    ],
+    "cities": [],
+    "zips": [],
+    "regions": [
+     "Greater Houston",
+     "DFW"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [
+     "Austin, TX"
+    ],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "ag_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 100,
+    "acres_max": 1000,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": "per_acre",
+    "discount_to_market_pct": 40,
+    "notes": "30–50% below market; ~$18k/ac Montgomery Co. example"
+   },
+   "terms": {
+    "funding": null,
+    "close_days": 30,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": true,
+    "volume_note": "active but highly selective",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmshy04pm0003l504rp7k3v7c"
+  }
+ },
+ {
+  "buyer_id": "mc_goodwin",
+  "name": "Goodwin Homes",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "GA"
+    ],
+    "counties": [
+     "Fulton, GA"
+    ],
+    "cities": [
+     "Atlanta, GA"
+    ],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "Tuxedo Park, Kingswood, Mt Paran, Atlanta Country Club (Buckhead) — web form buyer, needs verification"
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "teardown",
+     "sfr"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": 0.5,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": 600000,
+    "max": 1400000,
+    "unit": "total",
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": "cash",
+    "close_days": 14,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Marco Guirguis"
+   },
+   "confidence": "low",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_goodwin"
+  }
+ },
+ {
+  "buyer_id": "mc_laplaca",
+  "name": "La Placa Group",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "Orange, CA"
+    ],
+    "cities": [
+     "Newport Beach, CA"
+    ],
+    "zips": [],
+    "regions": [
+     "Orange County Coastal"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "teardown",
+     "sfr"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": 500000,
+    "max": null,
+    "unit": "total",
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": false,
+    "volume_note": "not looking for more projects now",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "low",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_laplaca"
+  }
+ },
+ {
+  "buyer_id": "mc_revere",
+  "name": "Revere Real Estate Development Co.",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "Orange, CA"
+    ],
+    "cities": [
+     "Newport Beach, CA",
+     "Dana Point, CA",
+     "San Clemente, CA"
+    ],
+    "zips": [],
+    "regions": [
+     "Orange County Coastal"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "coastal OC"
+   },
+   "asset": {
+    "types": [
+     "raw_land",
+     "teardown",
+     "sfr",
+     "multifamily"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": "Tyler Grammar"
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_revere"
+  }
+ },
+ {
+  "buyer_id": "mc_cefalia",
+  "name": "Cefalia Development",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "Orange, CA"
+    ],
+    "cities": [
+     "Newport Beach, CA",
+     "Costa Mesa, CA",
+     "San Juan Capistrano, CA"
+    ],
+    "zips": [],
+    "regions": [
+     "Orange County Coastal"
+    ],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": ""
+   },
+   "asset": {
+    "types": [
+     "teardown",
+     "raw_land"
+    ],
+    "exclusions": []
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": null,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": null,
+    "max": null,
+    "unit": null,
+    "discount_to_market_pct": null,
+    "notes": "deal dependent"
+   },
+   "terms": {
+    "funding": "cash",
+    "close_days": 14,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "medium",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "mc_cefalia"
+  }
+ },
+ {
+  "buyer_id": "cmqzfvryt0002l804oay20tc7",
+  "name": "Luna Cedar Brook Property LLC",
+  "buy_box": {
+   "geo": {
+    "states": [
+     "CA"
+    ],
+    "counties": [
+     "Los Angeles, CA",
+     "Riverside, CA",
+     "San Bernardino, CA"
+    ],
+    "cities": [
+     "Lancaster, CA",
+     "Palmdale, CA"
+    ],
+    "zips": [],
+    "regions": [],
+    "radius": null,
+    "nationwide": false,
+    "exclusions": [],
+    "neighborhood_notes": "LA Co. ≤$1.1M ARV · Antelope Valley $200–500k ARV · SFV $400k–1.1M (lean <$950k) · Riverside/SB ≤$750k ARV; owner-occupied areas, schools ≥3"
+   },
+   "asset": {
+    "types": [
+     "sfr",
+     "condo_townhome"
+    ],
+    "exclusions": [
+     "manufactured homes",
+     "historic districts"
+    ]
+   },
+   "size": {
+    "acres_min": null,
+    "acres_max": 1,
+    "lots_min": null,
+    "lot_width_ft": [],
+    "lot_sqft_min": null
+   },
+   "price": {
+    "min": 200000,
+    "max": 1100000,
+    "unit": "arv",
+    "discount_to_market_pct": "max $100k rehab; profit ≥40% of rehab; 1100–2500 sf; 3/1+",
+    "notes": ""
+   },
+   "terms": {
+    "funding": null,
+    "close_days": null,
+    "proof_of_funds": null
+   },
+   "status": {
+    "buying_now": null,
+    "volume_note": "",
+    "submission_requirements": [],
+    "best_contact": ""
+   },
+   "confidence": "high",
+   "source": "backfill_2026-09-22",
+   "buyer_id": "cmqzfvryt0002l804oay20tc7"
+  }
+ }
+]
