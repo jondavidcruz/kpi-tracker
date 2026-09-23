@@ -123,6 +123,55 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, job: "phonehealth", sent: ok, flagged: bad.length });
   }
 
+  // One-shot maintenance pack (secret-gated, idempotent — Jon's 2026-09-28 "do it
+  // now" batch): create Michelle's Leads Generated KPI, ensure Michelle + Sharyn
+  // are Position=dispositions (the KPI's role + the research-credit gate),
+  // backfill Sharyn's research credits 7 days, take Nick off the time clock.
+  if (url.searchParams.get("fixpack") === "1") {
+    const report: Record<string, string> = {};
+    const existsKpi = await db.kpi.findUnique({ where: { key: "leads_generated" } });
+    if (!existsKpi) {
+      const agg = await db.kpi.aggregate({ _max: { sortOrder: true } });
+      await db.kpi.create({
+        data: {
+          key: "leads_generated", name: "Leads Generated", emoji: "🧲", category: "blue",
+          unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily",
+          goalKind: "tracked", goalValue: null, computed: false,
+          definition: "Leads Michelle generated today (Jon 2026-09-24). Michelle-only — hidden for Sharyn. Convert to a goal in Admin when ready.",
+          sortOrder: (agg._max.sortOrder ?? 0) + 1,
+        },
+      });
+      report.leadsGenerated = "created";
+    } else report.leadsGenerated = "already existed";
+
+    const users = await db.user.findMany({ where: { active: true } });
+    const first = (n: string) => n.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+    for (const who of ["michelle", "sharyn"]) {
+      const u = users.find((x) => first(x.name) === who);
+      if (!u) { report[who] = "not found"; continue; }
+      if (u.position === "dispositions") report[who] = "position already dispositions";
+      else {
+        await db.user.update({ where: { id: u.id }, data: { position: "dispositions" } });
+        report[who] = `position fixed: "${u.position || "(blank)"}" → dispositions`;
+      }
+    }
+    const sharyn = users.find((x) => first(x.name) === "sharyn");
+    if (sharyn) {
+      const settings = await getSettings();
+      const t = todayStr(settings.orgTimezone);
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(Date.parse(`${t}T12:00:00Z`) - i * 86400000).toISOString().slice(0, 10);
+        await rollupResearchKpis(sharyn.id, d);
+      }
+      report.sharynBackfill = "research credits recomputed for the last 7 days";
+    }
+    const nick = users.find((x) => ["nick", "nicholas"].includes(first(x.name)));
+    if (!nick) report.nick = "not found";
+    else if (nick.irregularSchedule) report.nick = "already off the time clock";
+    else { await db.user.update({ where: { id: nick.id }, data: { irregularSchedule: true } }); report.nick = "off the time clock"; }
+    return NextResponse.json({ ok: true, fixpack: report });
+  }
+
   // Daily compliance line check — hits Twilio + Telnyx live via API and posts any
   // issues (numbers not active, account not active, unreachable API) to the
   // phone-health Chat space so we catch line problems before the team feels them.
