@@ -129,41 +129,48 @@ export async function GET(request: Request) {
   // backfill Sharyn's research credits 7 days, take Nick off the time clock.
   if (url.searchParams.get("fixpack") === "1") {
     const report: Record<string, string> = {};
+    // Leads Generated lives on Michelle's ACQUISITIONS card (Jon 2026-09-28).
+    const kpiSpec = {
+      name: "Leads Generated", emoji: "🧲", category: "blue", unit: "count",
+      scope: "per_rep", roleKey: "acquisitions", cadence: "daily",
+      goalKind: "tracked", goalValue: null, computed: false,
+      definition: "Leads Michelle generated today (Jon 2026-09-28). Michelle-only — hidden for every other rep. Convert to a goal in Admin when ready.",
+    };
     const existsKpi = await db.kpi.findUnique({ where: { key: "leads_generated" } });
     if (!existsKpi) {
       const agg = await db.kpi.aggregate({ _max: { sortOrder: true } });
-      await db.kpi.create({
-        data: {
-          key: "leads_generated", name: "Leads Generated", emoji: "🧲", category: "blue",
-          unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily",
-          goalKind: "tracked", goalValue: null, computed: false,
-          definition: "Leads Michelle generated today (Jon 2026-09-24). Michelle-only — hidden for Sharyn. Convert to a goal in Admin when ready.",
-          sortOrder: (agg._max.sortOrder ?? 0) + 1,
-        },
-      });
-      report.leadsGenerated = "created";
-    } else report.leadsGenerated = "already existed";
+      await db.kpi.create({ data: { key: "leads_generated", ...kpiSpec, sortOrder: (agg._max.sortOrder ?? 0) + 1 } });
+      report.leadsGenerated = "created (acquisitions)";
+    } else if (existsKpi.roleKey !== "acquisitions") {
+      await db.kpi.update({ where: { id: existsKpi.id }, data: { roleKey: "acquisitions", definition: kpiSpec.definition } });
+      report.leadsGenerated = `moved ${existsKpi.roleKey} → acquisitions`;
+    } else report.leadsGenerated = "already on acquisitions";
 
     const users = await db.user.findMany({ where: { active: true } });
     const first = (n: string) => n.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-    for (const who of ["michelle", "sharyn"]) {
+    // Michelle = Acquisitions primary (dispo is her cross-trained secondary);
+    // Sharyn = Dispositions primary.
+    for (const [who, pos] of [["michelle", "acquisitions"], ["sharyn", "dispositions"]] as const) {
       const u = users.find((x) => first(x.name) === who);
       if (!u) { report[who] = "not found"; continue; }
-      if (u.position === "dispositions") report[who] = "position already dispositions";
+      if (u.position === pos) report[who] = `position already ${pos}`;
       else {
-        await db.user.update({ where: { id: u.id }, data: { position: "dispositions" } });
-        report[who] = `position fixed: "${u.position || "(blank)"}" → dispositions`;
+        await db.user.update({ where: { id: u.id }, data: { position: pos } });
+        report[who] = `position fixed: "${u.position || "(blank)"}" → ${pos}`;
       }
     }
-    const sharyn = users.find((x) => first(x.name) === "sharyn");
-    if (sharyn) {
+    {
       const settings = await getSettings();
       const t = todayStr(settings.orgTimezone);
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(Date.parse(`${t}T12:00:00Z`) - i * 86400000).toISOString().slice(0, 10);
-        await rollupResearchKpis(sharyn.id, d);
+      for (const who of ["michelle", "sharyn"]) {
+        const u = users.find((x) => first(x.name) === who);
+        if (!u) continue;
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(Date.parse(`${t}T12:00:00Z`) - i * 86400000).toISOString().slice(0, 10);
+          await rollupResearchKpis(u.id, d);
+        }
       }
-      report.sharynBackfill = "research credits recomputed for the last 7 days";
+      report.backfill = "Michelle + Sharyn research credits recomputed for the last 7 days";
     }
     const nick = users.find((x) => ["nick", "nicholas"].includes(first(x.name)));
     if (!nick) report.nick = "not found";
@@ -410,8 +417,10 @@ export async function GET(request: Request) {
     const settings = await getSettings();
     const t = todayStr(settings.orgTimezone);
     const y = new Date(Date.parse(`${t}T12:00:00Z`) - 86400000).toISOString().slice(0, 10);
-    const dispoReps = await db.user.findMany({ where: { active: true, position: "dispositions" }, select: { id: true } });
-    for (const r of dispoReps) { await rollupResearchKpis(r.id, t); await rollupResearchKpis(r.id, y); }
+    // rollupResearchKpis itself gates on primary-or-secondary dispositions, so
+    // include hybrids (e.g. Michelle: acq primary, dispo secondary).
+    const activeReps = await db.user.findMany({ where: { active: true, position: { in: ["dispositions", "acquisitions"] } }, select: { id: true } });
+    for (const r of activeReps) { await rollupResearchKpis(r.id, t); await rollupResearchKpis(r.id, y); }
   }
 
   // Close any time card left open past its scheduled shift (forgot to clock out).

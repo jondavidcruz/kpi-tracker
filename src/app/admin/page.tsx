@@ -349,7 +349,7 @@ export default async function AdminPage({
         )}
         {sp.leadsgen !== undefined && (
           <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800">
-            🧲 &ldquo;Leads Generated&rdquo; added to Michelle&apos;s card (Dispositions, hidden for Sharyn) as a tracked counter — set a goal here when ready.
+            🧲 &ldquo;Leads Generated&rdquo; added to Michelle&apos;s card (Acquisitions, Michelle-only) as a tracked counter — set a goal here when ready.
           </div>
         )}
         {sp.landkpis !== undefined && (

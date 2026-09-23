@@ -25,9 +25,13 @@ export const EVENT_BASED_KPIS = new Set<string>([
 // Facebook). Keyed by first name (lowercase) → KPI keys that rep should NOT see.
 const PER_REP_HIDDEN_KPIS: Record<string, string[]> = {
   marie: ["dev_instagram"],
-  // leads_generated is Michelle's KPI (Jon 2026-09-24) — hidden for Sharyn even
-  // though both are Dispositions.
+  // leads_generated is Michelle's KPI ONLY (Jon 2026-09-28: on her ACQUISITIONS
+  // card) — hidden for everyone else who could see the acquisitions scorecard
+  // (other acq reps + Sharyn's secondary section).
   sharyn: ["dev_facebook", "leads_generated"],
+  nick: ["leads_generated"],
+  nicholas: ["leads_generated"],
+  austin: ["leads_generated"],
 };
 
 /** True if this KPI should be hidden for this person (per-rep channel swap). */

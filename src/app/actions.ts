@@ -1162,9 +1162,9 @@ export async function installLandKpis() {
   redirect(`/admin?landkpis=${created}`);
 }
 
-/** One-click installer: "Leads Generated" KPI for Michelle (Jon 2026-09-24).
- *  Dispositions role so it shows on her card; hidden for Sharyn via the per-rep
- *  swap map in lib/kpi.ts. Tracked (no goal) — set a goal in Admin when ready. */
+/** One-click installer: "Leads Generated" KPI for Michelle (Jon 2026-09-28).
+ *  ACQUISITIONS role (her primary card); hidden for every other rep via the
+ *  per-rep swap map in lib/kpi.ts. Tracked (no goal) — set a goal when ready. */
 export async function installLeadsGeneratedKpi() {
   const me = await getCurrentUser();
   if (!isOwner(me)) return;
@@ -1174,9 +1174,9 @@ export async function installLeadsGeneratedKpi() {
     await db.kpi.create({
       data: {
         key: "leads_generated", name: "Leads Generated", emoji: "🧲", category: "blue",
-        unit: "count", scope: "per_rep", roleKey: "dispositions", cadence: "daily",
+        unit: "count", scope: "per_rep", roleKey: "acquisitions", cadence: "daily",
         goalKind: "tracked", goalValue: null, computed: false,
-        definition: "Leads Michelle generated today (Jon 2026-09-24). Michelle-only — hidden for Sharyn. Convert to a goal in Admin when ready.",
+        definition: "Leads Michelle generated today (Jon 2026-09-28). Michelle-only — hidden for every other rep. Convert to a goal in Admin when ready.",
         sortOrder: (agg._max.sortOrder ?? 0) + 1,
       },
     });

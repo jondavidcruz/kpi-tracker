@@ -10,11 +10,15 @@ export function orgToday(tz: string): string {
 }
 
 /** Recompute today's Research-derived counts for a rep and upsert their KPI entries.
- *  Only dispositions reps are credited (these KPIs live on that scorecard). */
+ *  Credits anyone whose PRIMARY or SECONDARY role is dispositions (these KPIs live
+ *  on that scorecard) — hybrids like Michelle (acq primary, dispo secondary) count. */
 export async function rollupResearchKpis(userId: string, date: string): Promise<void> {
   if (!userId || !date) return;
-  const user = await db.user.findUnique({ where: { id: userId }, select: { position: true } });
-  if (user?.position !== "dispositions") return; // don't credit managers/other roles
+  const user = await db.user.findUnique({ where: { id: userId }, select: { position: true, name: true } });
+  if (!user) return;
+  const { secondaryPositionOf } = await import("./roles");
+  const isDispo = user.position === "dispositions" || secondaryPositionOf(user) === "dispositions";
+  if (!isDispo) return; // don't credit managers/other roles
 
   const kpis = await db.kpi.findMany({ where: { key: { in: Object.values(KEYS) } }, select: { id: true, key: true } });
   const idOf = (k: string) => kpis.find((x) => x.key === k)?.id;

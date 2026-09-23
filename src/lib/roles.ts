@@ -42,10 +42,11 @@ export function positionLabel(key: string): string {
 // have more people capable of acquisitions"). The primary (User.position) keeps
 // driving goals, alerts, and missing-entry nags; the secondary role's KPIs are
 // OPTIONAL — they appear on /entry as an extra section and show on the daily
-// review when logged, but never alert. Michelle + Sharyn: primarily
-// Dispositions, cross-trained on Acquisitions.
+// review when logged, but never alert. Michelle: primarily Acquisitions
+// (Jon 2026-09-28), cross-trained Dispositions. Sharyn: primarily
+// Dispositions, cross-trained Acquisitions.
 export const SECONDARY_POSITION: Record<string, string> = {
-  michelle: "acquisitions",
+  michelle: "dispositions",
   sharyn: "acquisitions",
 };
 
