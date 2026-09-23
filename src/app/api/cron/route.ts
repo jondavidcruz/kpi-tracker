@@ -141,9 +141,10 @@ export async function GET(request: Request) {
       const agg = await db.kpi.aggregate({ _max: { sortOrder: true } });
       await db.kpi.create({ data: { key: "leads_generated", ...kpiSpec, sortOrder: (agg._max.sortOrder ?? 0) + 1 } });
       report.leadsGenerated = "created (acquisitions)";
-    } else if (existsKpi.roleKey !== "acquisitions" || existsKpi.name !== kpiSpec.name) {
-      await db.kpi.update({ where: { id: existsKpi.id }, data: { roleKey: "acquisitions", name: kpiSpec.name, emoji: existsKpi.emoji || kpiSpec.emoji, definition: kpiSpec.definition } });
-      report.leadsGenerated = `normalized: "${existsKpi.name}" (${existsKpi.roleKey}) → "${kpiSpec.name}" (acquisitions)`;
+    } else if (existsKpi.roleKey !== "acquisitions" || existsKpi.name !== kpiSpec.name || existsKpi.category !== kpiSpec.category) {
+      // category "blue" = Activity section on the entry card (green = Money) — Jon 2026-09-28.
+      await db.kpi.update({ where: { id: existsKpi.id }, data: { roleKey: "acquisitions", name: kpiSpec.name, category: kpiSpec.category, emoji: existsKpi.emoji || kpiSpec.emoji, definition: kpiSpec.definition } });
+      report.leadsGenerated = `normalized: "${existsKpi.name}" (${existsKpi.roleKey}/${existsKpi.category}) → "${kpiSpec.name}" (acquisitions/${kpiSpec.category} = Activity)`;
     } else report.leadsGenerated = "already correct";
     // Deactivate any stray duplicate (e.g. a hand-made "Leads Generated (Caller)").
     const dupes = await db.kpi.findMany({ where: { active: true, key: { not: "leads_generated" }, name: { contains: "Leads Generated" } } });
