@@ -16,8 +16,8 @@ export default function UnderwritingPage() {
       <UnderwritingCalculator />
 
       <SectionTitle
-        title="🌱 Land Tools"
-        subtitle="The acre ⇄ sq ft converter and the CFD / owner-finance exit calculator. Land OFFERS are made in the calculator above — Cash (Land), Developer, or Novation."
+        title="🌱 Land Calculators"
+        subtitle="Run the numbers before you make the offer. Nothing here is saved — it's a scratchpad. Land OFFERS are made in the calculator above — Cash (Land), Developer, or Novation."
         accent="bg-emerald-500"
       />
       <LandTools />
