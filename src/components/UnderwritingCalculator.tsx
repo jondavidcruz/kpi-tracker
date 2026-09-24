@@ -468,6 +468,20 @@ export default function UnderwritingCalculator() {
   // Where the SELLER'S ask lands on the offer ladder → the deal structure.
   const clAskPct = clAsk > 0 && clValueBase > 0 ? clAsk / clValueBase : 0;
   const clBand = clAskPct > 0 ? LAND_BANDS.find((b) => clAskPct > b.lo && clAskPct <= b.hi) ?? null : null;
+  // Hunter-style EMV RANGE → OFFER RANGE (Jon 9/24): run the same ⅓-rule + caps
+  // at the conservative, likely, and aggressive EMVs, so the rep negotiates a
+  // RANGE, not a single point. Caps (assessed / cheapest listing) still clamp.
+  const clOfferAt = (emvVal: number) => {
+    if (!(emvVal > 0)) return 0;
+    const third = Math.round(emvVal * (clPct / 100) - clCloseCost);
+    const caps = [third > 0 ? third : Infinity, clAssessed > 0 ? clAssessed : Infinity, clCheapest > 0 ? clCheapest : Infinity];
+    const m = Math.min(...caps);
+    return Number.isFinite(m) ? Math.max(0, Math.round(m)) : 0;
+  };
+  const clEmvLo = clPerAcre ? Math.round(clLoPpa * clSubjAcres) : 0;
+  const clEmvHi = clPerAcre ? Math.round(clHiPpa * clSubjAcres) : 0;
+  const clOfferLo = clPerAcre ? clOfferAt(clEmvLo) : 0;
+  const clOfferHi = clPerAcre ? clOfferAt(clEmvHi) : 0;
   const clSaneTone: "good" | "warn" | "bad" = clMao <= 0 ? "bad" : clPct > 45 ? "warn" : "good";
   const clSaneWord = clMao <= 0 ? (clMode === "blind" ? "🚫 enter the assessed value" : "🚫 enter land comps") : clPct > 45 ? `⚠️ ${clPct}% is high for land` : `✅ ${clPct}% of ${clBaseLabel}`;
 
@@ -845,6 +859,7 @@ export default function UnderwritingCalculator() {
           [`Cap ① — ${clPct}% of land value, all-in (−${money(clCloseCost)} closing)`, money(clThird)],
           ...(clAssessed > 0 ? ([["Cap ② — county assessed value", money(clAssessed)]] as [string, string][]) : []),
           ...(clCheapest > 0 ? ([["Cap ③ — cheapest active listing", money(clCheapest)]] as [string, string][]) : []),
+          ...(clPerAcre && clEmvHi > clEmvLo ? ([["EMV range (comps low → high)", `${money(clEmvLo)} – ${money(clEmvHi)}`], ["Offer range (⅓ rule + caps at each end)", `${money(clOfferLo)} – ${money(clOfferHi)}`]] as [string, string][]) : []),
           ["🎯 Cash (Land) MAO — lowest cap wins", money(clMao)],
           [`Anchor / opening (${clAnchorPct}% below MAO)`, money(clAnchor)],
           ["Negotiation range", `${money(clAnchor)} → ${money(clMao)}`],
@@ -1771,6 +1786,40 @@ export default function UnderwritingCalculator() {
                       <div className="mt-0.5 text-[10px] leading-snug text-slate-400">{b.why}</div>
                     </div>
                   ))}
+                </div>
+              )}
+              {clPerAcre && clEmvHi > clEmvLo && (
+                <div className="mb-2 rounded-xl bg-white p-3 ring-2 ring-brand-navy/20 sm:col-span-2">
+                  <div className="mb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-brand-navy">🎚 EMV range → offer range (Hunter&apos;s way)</div>
+                  {(() => {
+                    const span = clEmvHi - clEmvLo;
+                    const pos = (x: number) => `${Math.max(0, Math.min(100, ((x - clEmvLo) / span) * 100))}%`;
+                    return (
+                      <div className="relative mb-1 mt-4 h-2.5 rounded-full bg-gradient-to-r from-emerald-300 via-amber-300 to-sky-300">
+                        {[{ x: clEmvLo, l: "low" }, { x: clEmvLikely, l: "likely" }, { x: clEmvHi, l: "high" }].map((t) => (
+                          <div key={t.l} className="absolute -top-4 -translate-x-1/2 text-center" style={{ left: pos(t.x) }}>
+                            <div className="text-[9px] font-bold uppercase text-slate-400">{t.l}</div>
+                            <div className="mx-auto h-4 w-0.5 bg-slate-500" style={{ marginTop: 1 }} />
+                          </div>
+                        ))}
+                        {clAsk > 0 && clAsk >= clEmvLo * 0.5 && clAsk <= clEmvHi * 1.5 && (
+                          <div className="absolute -bottom-5 -translate-x-1/2 text-[9px] font-bold text-red-500" style={{ left: pos(Math.max(clEmvLo, Math.min(clEmvHi, clAsk))) }}>▲ ask</div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <div className="mt-6 flex items-center justify-between text-[12px] font-bold tabular-nums text-slate-700">
+                    <span>{money(clEmvLo)}</span><span className="text-brand-navy">{money(clEmvLikely)}</span><span>{money(clEmvHi)}</span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    {[{ l: "Safe offer", v: clOfferLo, c: "text-emerald-700 bg-emerald-50 ring-emerald-200" }, { l: "Target (MAO)", v: clMao, c: "text-brand-navy bg-slate-50 ring-brand-navy/30 ring-2" }, { l: "Stretch cap", v: clOfferHi, c: "text-sky-700 bg-sky-50 ring-sky-200" }].map((o) => (
+                      <div key={o.l} className={`rounded-lg px-2 py-1.5 text-center ring-1 ${o.c}`}>
+                        <div className="text-[9px] font-bold uppercase tracking-wide opacity-70">{o.l}</div>
+                        <div className="text-sm font-extrabold tabular-nums">{money(o.v)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[10px] leading-snug text-slate-400">The {clPct}% rule + every cap, run at each end of your comp range. Open under the <b>Safe</b> number, negotiate toward the <b>Target</b> — the <b>Stretch</b> is only for a parcel you&apos;d list cheapest-on-market and still profit. The more (and closer) comps you add, the tighter this range gets.</p>
                 </div>
               )}
               <MathReceipt
