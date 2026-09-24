@@ -356,9 +356,11 @@ function AcreQuickRef() {
   );
 }
 
-export default function UnderwritingCalculator() {
+export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeCostN = 0 }: { defaultCloseCost?: number; closeCostN?: number }) {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("cash_land");
-  const [f, setF] = useState<Record<string, string>>({});
+  // clCloseCost starts PRE-FILLED with the average of our ACTUAL logged closings
+  // (from the Closing Calculator) — no more "$1,500 example" (Jon 2026-09-25).
+  const [f, setF] = useState<Record<string, string>>({ clCloseCost: String(defaultCloseCost) });
   const v = (k: string) => f[k] ?? "";
   const n = (k: string) => num(v(k));
   // ── Comp timer (dispo): every underwrite is timed. It auto-starts the moment she edits any
@@ -412,7 +414,7 @@ export default function UnderwritingCalculator() {
   const aExtra = extraSum("aExtra", aExtraN);
   const flipperTarget = arv * (num(marketPct) / 100);
   const cashMao = flipperTarget - repairs - aHoa - aExtra - aFee;
-  const aAnchorPct = v("aAnchorPct") || "10";
+  const aAnchorPct = "10"; // standard anchor — fixed, no input (Jon 2026-09-25)
   const aAnchor = cashMao * (1 - num(aAnchorPct) / 100);
 
   // ---- Cash (Land) ---- Hunter's offer rule: ALL caps must pass — the LOWEST wins.
@@ -461,7 +463,7 @@ export default function UnderwritingCalculator() {
   ];
   const clMao = clCaps.length ? Math.round(Math.min(...clCaps.map((c) => c.v))) : 0;
   const clBind = clCaps.find((c) => Math.round(c.v) === clMao)?.label ?? "";
-  const clAnchorPct = v("clAnchorPct") || "8";
+  const clAnchorPct = "8"; // standard anchor — fixed, no input (Jon 2026-09-25)
   const clAnchor = clMao * (1 - num(clAnchorPct) / 100);
   const clAsk = n("clAsk");
   const clOverAsk = clAsk > 0 && clMao > 0 ? clAsk - clMao : 0;
@@ -548,7 +550,7 @@ export default function UnderwritingCalculator() {
   const nReserve = n("nReserve");                    // reserve: misc out-of-pocket + lender-required repairs
   const nNet = nExpectedSale - nRepairCredit - nExpectedSale * (nComm / 100) - nSellerClose - nHoaCost - nExtra - nReserve;
   const novMao = nNet - nMinFee;
-  const nAnchorPct = v("nAnchorPct") || "7";
+  const nAnchorPct = "7"; // standard anchor — fixed, no input (Jon 2026-09-25)
   const novAnchor = novMao * (1 - num(nAnchorPct) / 100);
   const feeAtAnchor = nNet - novAnchor;
   // Sanity check: novation should usually let us offer the seller MORE than cash (no
@@ -618,7 +620,7 @@ export default function UnderwritingCalculator() {
   const devDblSell = devDispo;   // B→C: our resale to the developer (dispo price)
   const devDblCost = dblCost(devDblOn, devDblBuy, devDblSell);
   const devDblMao = Math.max(0, devMao - devDblCost);
-  const devAnchorPct = v("devAnchorPct") || "8";
+  const devAnchorPct = "8"; // standard anchor — fixed, no input (Jon 2026-09-25)
   const devAnchor = devMao * (1 - num(devAnchorPct) / 100);
   const devFeeAtMao = devDispo > 0 ? devDispo - devMao : 0;       // = the spread
   const devFeeAtAnchor = devDispo > 0 ? devDispo - devAnchor : 0; // bigger if they take the open
@@ -1301,7 +1303,6 @@ export default function UnderwritingCalculator() {
               {rehabDesc(v("rehabSf")) && <p className="sm:col-span-2 -mt-1 text-[11px] italic text-slate-500">📋 {rehabDesc(v("rehabSf"))}</p>}
               {majorRepairs()}
               <div className={optDiv}>Optional — refine the offer</div>
-              <Field k="aAnchorPct" label="Anchor below MAO" suffix="%" placeholder="10" req="opt" />
               <Field k="aHoa" label="HOA / special dues ($)" prefix="$" placeholder="0" req="opt" />
               <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">💡 No need to enter the flipper&apos;s holding or money costs — the market tier % already builds in their carry and profit. Detailed money-cost math lives on the Flip / Wholetail tab.</p>
 
@@ -1408,7 +1409,6 @@ export default function UnderwritingCalculator() {
                   <option value="50000">$50,000 — most aggressive (least we take)</option>
                 </select>
               </label>) : null}
-              <Field k="devAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" req="opt" />
 
               <button type="button" onClick={() => setV("devDblClose", devDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${devDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
                 🔁 Double close? {devDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
@@ -1449,12 +1449,10 @@ export default function UnderwritingCalculator() {
 
               {stepDiv(3, "Hunter's offer caps — the LOWEST wins", "The offer must pass every cap you can check: ~33% of value (all-in), under the county assessed value, and under the cheapest active listing.")}
               <Field k="clPct" label={`① Offer as % of ${clMode === "blind" ? "EMV / assessed" : "avg land value"}`} suffix="%" placeholder="33" req="opt" />
-              <Field k="clCloseCost" label="Our closing cost (all-in rule)" prefix="$" placeholder="1,500" req="opt" />
+              <Field k="clCloseCost" label={closeCostN > 0 ? `Our closing cost (avg of ${closeCostN} actual closing${closeCostN === 1 ? "" : "s"})` : "Our closing cost (all-in rule)"} prefix="$" placeholder="1,500" req="opt" />
               {clMode === "comps" && <Field k="clAssessed" label="② County assessed value ($)" prefix="$" placeholder="from the assessor" req="good" />}
               <Field k="clCheapest" label={`${clMode === "comps" ? "③" : "②"} Cheapest ACTIVE listing ($)`} prefix="$" placeholder="Zillow, land nearby" req="good" />
 
-              {stepDiv(4, "Opening move", "Open below the max and work up slowly. Never accept a price on call #1.")}
-              <Field k="clAnchorPct" label="Anchor below MAO" suffix="%" placeholder="8" span={2} req="opt" />
 
               <button type="button" onClick={() => setV("clDblClose", clDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${clDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
                 🔁 Double close? {clDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
@@ -1512,7 +1510,6 @@ export default function UnderwritingCalculator() {
               <Field k="nRepairCredit" label="Buyer repair credit" prefix="$" req="opt" />
               <Field k="nHoa" label="Monthly HOA ($)" prefix="$" placeholder="0" req="opt" />
               <Field k="nHoldMonths" label="Months on market" placeholder="2" req="opt" />
-              <Field k="nAnchorPct" label="Anchor below MAO" suffix="%" placeholder="7" req="opt" />
               {additionalCosts("nExtra", nExtraN, setNExtraN)}
               <div className={goodDiv}>🟢 As-is comparables (required · addr · sold $ · days on market)</div>
               <p className="sm:col-span-2 -mt-1 text-[11px] text-emerald-600">{compsNote}</p>
