@@ -8,9 +8,10 @@ import { saveUnderwrite } from "@/app/actions";
 const TABS = [
   { key: "cash_land", group: "Land", label: "Cash (Land)", emoji: "🌵", blurb: "Land offer #1 — CASH. Sales in the area → comp the sold parcels and offer ~33%, all-in. Nothing sold nearby → go BLIND: ~⅓ of the EMV / county assessed value. Lowest cap always wins." },
   { key: "developer", group: "Land", label: "Developer", emoji: "🏗️", blurb: "Land offer #2 — DEVELOPER. Know the builder's buy box → lock it up at box − our fee − closing (John's infill). No box → comp what developers PAID for lots (Lux): $/acre × the lot − a $100–150k spread." },
+  { key: "novation_land", group: "Land", label: "Novation", emoji: "🌱", blurb: "Land offer #3 — NOVATION. List the parcel at EMV backed by what has SOLD in the area, cover the seller's closing + commission. 3–6 months minimum on market; no sold comps = a blind listing (flagged)." },
   { key: "note_land", group: "Land", label: "Seller Finance", emoji: "💵", blurb: "Land exit — sell the parcel on TERMS: price, down, rate, term → the buyer's monthly and everything you collect. Standard amortization (interest on the remaining balance); scratchpad only, nothing saved." },
   { key: "assignment", group: "Homes", label: "Cash (Homes)", emoji: "🏠", blurb: "Cash offer on a house. MAO = (ARV × market %) − repairs − your fee. The market % already covers the flipper's carry + profit. Anchor opens below MAO." },
-  { key: "novation", group: "Homes", label: "Novation", emoji: "📋", blurb: "Houses AND land offer #3 — list it at similar-condition value / EMV, cover the seller's closing + commission. Land: 3–6 months minimum on market; no sold comps = a blind listing (flagged)." },
+  { key: "novation", group: "Homes", label: "Novation", emoji: "📋", blurb: "House novation — list it at similar-condition value, cover the seller's closing + commission. Land novations live in the LAND row." },
   { key: "creative", group: "Homes", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
   { key: "listing", group: "Homes", label: "Listing", emoji: "🏷️", blurb: "Traditional listing with our agent. We collect a referral / marketing fee." },
   { key: "flip", group: "Homes", label: "Flip / Wholetail", emoji: "🔨", blurb: "Full buyer's-lens analysis: Max Offer = ARV + purchase credit − min profit − (property costs + money costs)." },
@@ -540,7 +541,8 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   const nExpectedSale = nList * (nRealismPct / 100);
   const nSellerClosePct = 1.5; // seller-side only — never the buyer's
   const nSellerClose = nExpectedSale * (nSellerClosePct / 100);
-  const nPropType = v("nPropType") === "land" ? "land" : "house";
+  const isNovTab = tab === "novation" || tab === "novation_land";
+  const nPropType = tab === "novation_land" ? "land" : "house"; // the tab IS the property type (Jon 2026-09-27)
   // Land listings move slower — 3–6 months minimum (Jon). Default the hold to 5
   // months on land vs 2 on houses so the carry math is honest.
   const nHoldMonths = n("nHoldMonths") || (nPropType === "land" ? 5 : 2);
@@ -748,18 +750,18 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   else if (tab === "cash_land") { dealMax = clMao; profitAtAccepted = clValueBase - accepted; marginLabel = "Your spread vs land value"; showAsking = true; }
   else if (tab === "note_land") { dealMax = 0; profitAtAccepted = 0; marginLabel = "—"; showAsking = false; }
   else if (tab === "developer") { dealMax = devMao; profitAtAccepted = devDispo - accepted; marginLabel = "Your assignment fee"; showAsking = true; }
-  else if (tab === "novation") { dealMax = novMao; profitAtAccepted = nNet - accepted; marginLabel = "Your fee"; }
+  else if (isNovTab) { dealMax = novMao; profitAtAccepted = nNet - accepted; marginLabel = "Your fee"; }
   else if (tab === "flip") { dealMax = fMao; profitAtAccepted = arv - fTotalCosts - accepted; marginLabel = "Your profit"; }
   else if (tab === "creative") { dealMax = n("cPrice"); profitAtAccepted = cMargin; marginLabel = "Your total margin"; showAsking = false; }
   else if (tab === "rental") { dealMax = rMaxOffer; profitAtAccepted = rNoi; marginLabel = "Annual NOI"; showAsking = true; }
   else { dealMax = lList; profitAtAccepted = lFlat > 0 ? lFlat : accepted * (lComm / 100) * (lRef / 100); marginLabel = "Your marketing fee"; showAsking = false; }
   // ROI on the deal: (list/sale price − the price we get it under contract for) ÷ contract.
   // Sale price defaults to ARV (cash/flip) or the list price (novation/listing); editable.
-  const saleDefault = tab === "novation" ? nList : tab === "listing" ? lList : tab === "creative" ? n("cPrice") : arv;
+  const saleDefault = isNovTab ? nList : tab === "listing" ? lList : tab === "creative" ? n("cPrice") : arv;
   const salePrice = n("salePrice") || saleDefault;
   const roi = accepted > 0 && salePrice > 0 ? ((salePrice - accepted) / accepted) * 100 : null;
   const overAsk = asking - dealMax; // > 0 means the seller is asking above our max offer
-  const buyExit = tab === "assignment" || tab === "novation" || tab === "flip";
+  const buyExit = tab === "assignment" || isNovTab || tab === "flip";
 
   // ── Offer confidence — how much of this number is EVIDENCE vs guesses. ──
   // Evidence = the key inputs actually filled with real data; verification = the
@@ -828,9 +830,9 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
       { label: "Rate + term set", ok: sfRate > 0 && sfYears > 0 },
     ],
   };
-  const confEvidence = EVIDENCE[tab] ?? [];
+  const confEvidence = EVIDENCE[tab === "novation_land" ? "novation" : tab] ?? [];
   // Developer buy-box mode has its own check set (John's infill, not Lux rules).
-  const checksKey = tab === "developer" && devMode === "buybox" ? "developer_buybox" : tab;
+  const checksKey = tab === "developer" && devMode === "buybox" ? "developer_buybox" : tab === "novation_land" ? "novation" : tab;
   const confKills = (KILL_CHECKS[checksKey] ?? []).map((label, i) => ({ label, ok: v(`kc_${checksKey}_${i}`) === "1" }));
   const confAll = [...confEvidence, ...confKills];
   const confPct = confAll.length ? Math.round((confAll.filter((c) => c.ok).length / confAll.length) * 100) : 0;
@@ -890,7 +892,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
         note: (devDblOn ? "DOUBLE CLOSE — the seller won't assign, so two separate simultaneous escrows; closing costs are paid twice plus transactional funding. Offer the seller the Double-close MAO to keep the same spread. (Developers pay cash, so there's no lender-seasoning issue.) " : "") + "Land for luxury new builds. Comp for-sale + sold lots nearby by LOT SIZE, using what the DEVELOPER paid for each raw lot (from its sale history — NOT the current sold price, which includes the build). Average $/acre × the subject's acreage = the land value; subtract a $100–150k spread for your fee. No repairs: the buyer tears down. Waterfront lots use waterfront comps only. Open at the anchor, negotiate up to the MAO — never past it.",
       };
     }
-    if (tab === "novation") {
+    if (isNovTab) {
       const comps = [1, 2, 3].map((i) => { const a = v(`nComp${i}`); const p = v(`nComp${i}p`); const d = v(`nComp${i}d`); return a ? `${esc(a)} — ${p ? "$" + esc(p) : "?"}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Novation Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>As-is comps (price · days on market):</strong><br>${comps}` : ""}`,
@@ -955,7 +957,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
     // Calibration loop: snapshot this underwrite (fire-and-forget) so
     // /admin/calibration can score predicted fee vs actual profit when it closes.
     const predFee =
-      tab === "assignment" ? aFee : tab === "novation" ? nMinFee : tab === "developer" ? devFeeAtMao :
+      tab === "assignment" ? aFee : isNovTab ? nMinFee : tab === "developer" ? devFeeAtMao :
       tab === "cash_land" ? Math.max(0, clLandAvg - clMao) : tab === "creative" ? cMargin :
       tab === "listing" ? mktFee : 0;
     if (tab !== "note_land") saveUnderwrite({ tab, market: "", address: v("subject") || "", mao: dealMax, fee: predFee, confidence: confPct, seconds: compSeconds ?? null }).catch(() => {});
@@ -963,7 +965,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
     const w = window.open("", "_blank", "width=860,height=940");
     if (!w) return;
 
-    const isAssign = tab === "assignment", isLand = tab === "cash_land", isDev = tab === "developer", isNov = tab === "novation", isFlip = tab === "flip", isCreative = tab === "creative", isRental = tab === "rental";
+    const isAssign = tab === "assignment", isLand = tab === "cash_land", isDev = tab === "developer", isNov = isNovTab, isFlip = tab === "flip", isCreative = tab === "creative", isRental = tab === "rental";
     // The single headline number (MAO / max offer) — biggest thing on the page.
     const heroVal = isAssign ? cashMao : isLand ? clMao : isDev ? devMao : isNov ? novMao : isFlip ? fMao : isCreative ? cMargin : isRental ? rMaxOffer : mktFee;
     const heroLabel = isAssign ? "Cash (Homes) MAO · the most we offer the seller" : isLand ? "Cash (Land) MAO · max offer to seller" : isDev ? "Developer MAO · max offer to seller" : isNov ? "Novation MAO · max seller payout" : isFlip ? "Max Offer · flip MAO" : isCreative ? "Total margin to us" : isRental ? `Max offer at ${rTargetCap}% cap rate` : "Our marketing fee";
@@ -1241,7 +1243,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
         {v("__info") === "1" && <p className="text-xs text-slate-500">{TABS.find((t) => t.key === tab)!.blurb}</p>}
       </div>
 
-      {(tab === "assignment" || tab === "novation") && (
+      {(tab === "assignment" || isNovTab) && (
         <details className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
           <summary className="cursor-pointer text-xs font-bold text-slate-600 hover:text-brand-navy">⚖️ Wholesale vs Novation — which exit fits this deal?</summary>
           <div className="mt-2 overflow-x-auto">
@@ -1482,13 +1484,9 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
               <AcreQuickRef />
             </>
           )}
-          {tab === "novation" && (
+          {isNovTab && (
             <>
               {legend}
-              <div className="sm:col-span-2 flex gap-2">
-                <button type="button" onClick={() => setV("nPropType", "")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-bold ring-1 transition ${nPropType === "house" ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>🏠 House</button>
-                <button type="button" onClick={() => setV("nPropType", "land")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-bold ring-1 transition ${nPropType === "land" ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>🌱 Land<span className="ml-1.5 text-[10px] font-normal opacity-80">3–6 mo minimum</span></button>
-              </div>
               {nPropType === "land" && <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🌱 Land novation: we list the parcel at EMV backed by what has SOLD in the area. Expect <b>3–6 months minimum</b> on market — set the seller&apos;s timeline expectation up front. No sold comps = a blind listing (flagged below).</p>}
               <div className="sm:col-span-2 flex items-end gap-2">
                 <div className="flex-1"><Field k="nList" label="List price (similar-condition value · EMV for land)" prefix="$" placeholder="420,000" req="need" /></div>
@@ -1662,7 +1660,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
               )}
             </div>
           )}
-          {(tab === "assignment" || tab === "novation") && maoConflict && (
+          {(tab === "assignment" || isNovTab) && maoConflict && (
             <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300">
               ⚠️ Cash MAO ({money(cashMao)}) is HIGHER than your Novation MAO ({money(novMao)}). Novation should usually let you offer the seller <em>more</em> than cash (no flipper margin or holding). Re-check the novation list price, commission, or fees — something&apos;s off.
             </div>
@@ -1892,7 +1890,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
               )}
             </>
           )}
-          {tab === "novation" && (
+          {isNovTab && (
             <>
               {nBlindListing && (
                 <div className="sm:col-span-2 mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300">
