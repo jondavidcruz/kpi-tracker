@@ -192,6 +192,41 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, fixpack: report });
   }
 
+  // One-shot payroll audit (Jon 2026-09-26): from ?start (default 9/16, the
+  // period after the Sept-15 payday) to today, how many minutes past shift-end
+  // +15 did the OLD +30 grace cap count toward pay? Read-only.
+  if (url.searchParams.get("paydayaudit") === "1") {
+    const { workedMinutes } = await import("@/lib/presence");
+    const { shiftEndAt } = await import("@/lib/shift");
+    const { isOwner } = await import("@/lib/auth");
+    const settings = await getSettings();
+    const today = todayStr(settings.orgTimezone);
+    const start = url.searchParams.get("start") ?? "2026-09-16";
+    const [users, punches] = await Promise.all([
+      db.user.findMany({ where: { active: true, irregularSchedule: false }, select: { id: true, name: true } }),
+      db.punch.findMany({ where: { date: { gte: start, lte: today } }, orderBy: { at: "asc" }, select: { userId: true, date: true, kind: true, at: true } }),
+    ]);
+    const now = new Date();
+    const perRep: Record<string, { totalOverMin: number; days: { date: string; overMin: number }[] }> = {};
+    for (const u of users.filter((x) => !isOwner(x))) {
+      const dates = [...new Set(punches.filter((x) => x.userId === u.id).map((x) => x.date))];
+      for (const d of dates) {
+        const end = shiftEndAt(d, settings.orgTimezone, u.name);
+        if (!end) continue;
+        const ps = punches.filter((x) => x.userId === u.id && x.date === d);
+        const oldCap = new Date(end.getTime() + 30 * 60000);
+        const newCap = new Date(end.getTime() + 15 * 60000);
+        const over = Math.max(0, workedMinutes(ps, now, oldCap) - workedMinutes(ps, now, newCap));
+        if (over > 0) {
+          (perRep[u.name] ??= { totalOverMin: 0, days: [] });
+          perRep[u.name].totalOverMin += over;
+          perRep[u.name].days.push({ date: d, overMin: over });
+        }
+      }
+    }
+    return NextResponse.json({ ok: true, audit: "old +30 cap vs new +15 cap", start, end: today, perRep });
+  }
+
   // Daily compliance line check — hits Twilio + Telnyx live via API and posts any
   // issues (numbers not active, account not active, unreachable API) to the
   // phone-health Chat space so we catch line problems before the team feels them.

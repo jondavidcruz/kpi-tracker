@@ -7,7 +7,6 @@ export type NavGroup = { group: string; items: NavItem[] };
 export const NAV_GROUPS: NavGroup[] = [
   { group: "Overview", items: [
     { href: "/dashboard", label: "Dashboard", gate: "all" },
-    { href: "/huddle", label: "Daily Huddle", gate: "all" },
     { href: "/deals", label: "Deals", gate: "all" },
     { href: "/process", label: "Process Map", gate: "all" },
     { href: "/underwriting", label: "Underwriting", gate: "all" },

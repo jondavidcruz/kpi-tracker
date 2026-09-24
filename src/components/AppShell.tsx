@@ -53,6 +53,10 @@ export default async function AppShell({ children }: { children: React.ReactNode
     manager ? db.offboarding.findFirst({ where: { completedAt: null }, include: { _count: { select: { tasks: { where: { done: false } } } } } }) : Promise.resolve(null),
   ]);
 
+  // Meeting quick-links pinned at the top of the sidebar (replaced the Daily
+  // Huddle page — Jon 2026-09-26): the standing office room + the Monday all-call.
+  const meetSettings = await getSettings();
+
   // Start-of-shift nag: if this rep tracks internet and hasn't run today's speed
   // test, show a persistent banner until they do (they open the app at shift start).
   // Mon–Thu a SECOND banner appears after 12:30 PM org time until the post-lunch
@@ -84,7 +88,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
   return (
     <div className="md:flex md:min-h-screen">
       <ThemeToggle />
-      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} />
+      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} />
       <main className="min-w-0 flex-1">
         <ContentWrap>
           {openOffboarding && (

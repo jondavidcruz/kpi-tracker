@@ -33,7 +33,6 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/report": "kpi history reports past dates calendar",
   "/entry": "enter kpis log numbers bulk lead import",
   "/deals": "pipeline dispositions",
-  "/huddle": "standup morning brief",
   "/call-scoring": "call recording transcript coaching score",
   "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers list pull skip trace sms sop directrei regrid skipmatrix scrub dnc litigator suppression texting campaign",
   "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
@@ -47,7 +46,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
 };
 
 export default function Sidebar({
-  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions,
+  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions, officeMeetLink, mondayMeetLink,
 }: {
   name: string;
   manager: boolean;
@@ -61,6 +60,8 @@ export default function Sidebar({
   hiddenNav?: string[];
   newTickets: number;
   newSuggestions: number;
+  officeMeetLink?: string;
+  mondayMeetLink?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -70,7 +71,6 @@ export default function Sidebar({
   const groups: { label: string; items: Item[] }[] = [
     { label: "Overview", items: [
       { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
-      { href: "/huddle", label: "Daily Huddle", Icon: Megaphone },
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/process", label: "Process Map", Icon: Workflow },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
@@ -154,6 +154,22 @@ export default function Sidebar({
           <Logo size="sm" tagline />
         </a>
         {owner && <div className="mt-2"><StatusDot /></div>}
+        {(officeMeetLink || mondayMeetLink) && (
+          <div className="mt-3 space-y-1.5">
+            {officeMeetLink && (
+              <a href={officeMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
+                className="flex items-center gap-2 rounded-lg bg-emerald-600/90 px-3 py-2 text-[13px] font-bold text-white hover:bg-emerald-600">
+                🎥 Freedom Offers Office
+              </a>
+            )}
+            {mondayMeetLink && (
+              <a href={mondayMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
+                className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-[13px] font-bold text-white ring-1 ring-white/15 hover:bg-white/15">
+                📋 Monday Meeting
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Search — jump to any page by name or by what people call it ("payroll", "leads", "P&L") */}
