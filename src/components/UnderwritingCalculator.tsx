@@ -8,6 +8,7 @@ import { saveUnderwrite } from "@/app/actions";
 const TABS = [
   { key: "cash_land", group: "Land", label: "Cash (Land)", emoji: "🌵", blurb: "Land offer #1 — CASH. Sales in the area → comp the sold parcels and offer ~33%, all-in. Nothing sold nearby → go BLIND: ~⅓ of the EMV / county assessed value. Lowest cap always wins." },
   { key: "developer", group: "Land", label: "Developer", emoji: "🏗️", blurb: "Land offer #2 — DEVELOPER. Know the builder's buy box → lock it up at box − our fee − closing (John's infill). No box → comp what developers PAID for lots (Lux): $/acre × the lot − a $100–150k spread." },
+  { key: "note_land", group: "Land", label: "Seller Finance", emoji: "💵", blurb: "Land exit — sell the parcel on TERMS: price, down, rate, term → the buyer's monthly and everything you collect. Standard amortization (interest on the remaining balance); scratchpad only, nothing saved." },
   { key: "assignment", group: "Homes", label: "Cash (Homes)", emoji: "🏠", blurb: "Cash offer on a house. MAO = (ARV × market %) − repairs − your fee. The market % already covers the flipper's carry + profit. Anchor opens below MAO." },
   { key: "novation", group: "Homes", label: "Novation", emoji: "📋", blurb: "Houses AND land offer #3 — list it at similar-condition value / EMV, cover the seller's closing + commission. Land: 3–6 months minimum on market; no sold comps = a blind listing (flagged)." },
   { key: "creative", group: "Homes", label: "Creative", emoji: "🔑", blurb: "Seller-finance or Subject-to. We assign the terms to an end buyer and collect an assignment fee." },
@@ -94,6 +95,22 @@ function num(v: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 const money = (n: number) => (Number.isFinite(n) ? `$${Math.round(n).toLocaleString()}` : "—");
+const money2 = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—");
+const medianOf = (a: number[]) => { const x = [...a].sort((p, q) => p - q); const m = x.length >> 1; return x.length ? (x.length % 2 ? x[m] : (x[m - 1] + x[m]) / 2) : 0; };
+// Standard amortized payment; 0% → straight line. (Seller Finance tab.)
+const amortPmt = (principal: number, annualRate: number, months: number) => { if (!(principal > 0) || !(months > 0)) return 0; const r = annualRate / 100 / 12; return r === 0 ? principal / months : (principal * r) / (1 - Math.pow(1 + r, -months)); };
+type AmRow = { n: number; pay: number; prin: number; interest: number; bal: number };
+const amortize = (principal: number, annualRate: number, months: number): AmRow[] => {
+  const pay = amortPmt(principal, annualRate, months); const r = annualRate / 100 / 12; let bal = principal; const rows: AmRow[] = [];
+  for (let i = 1; i <= months; i++) { const interest = bal * r; let prin = pay - interest; let pp = pay; if (i === months || prin > bal) { prin = bal; pp = prin + interest; } bal = Math.max(0, bal - prin); rows.push({ n: i, pay: pp, prin, interest, bal }); }
+  return rows;
+};
+// The land offer ladder (Jon's structure rules — 33% and 50% belong to the LOWER band).
+const LAND_BANDS = [
+  { lo: 0, hi: 1 / 3, label: "under 33%", what: "Buy it outright — or JV it", tone: "emerald", why: "Under a third of EMV is a deal we buy with our own cash, or joint-venture on. This is the sweet spot." },
+  { lo: 1 / 3, hi: 0.5, label: "33–50%", what: "Most likely a joint venture", tone: "amber", why: "Between 33% and 50% of EMV there's still a spread, but not enough to tie up cash — bring a JV partner to fund it and split the profit." },
+  { lo: 0.5, hi: Infinity, label: "over 50%", what: "Double close — if the margin still works", tone: "sky", why: "Over 50% of EMV, don't buy it: get it under contract and double close to an end buyer, as long as the spread after both closings is worth it." },
+] as const;
 const esc = (s: string) => (s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-slate-200";
@@ -320,6 +337,25 @@ function SideCalc() {
   );
 }
 
+// Little acre ⇄ sq ft reference (kept from the old Land Tools — Jon). Synced pair.
+function AcreQuickRef() {
+  const [ac, setAc] = useState("1");
+  const [sf, setSf] = useState("43560");
+  const from = (which: "ac" | "sf") => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value; const x = num(val);
+    if (which === "ac") { setAc(val); setSf(x > 0 ? String(Math.round(x * 43560)) : ""); }
+    else { setSf(val); setAc(x > 0 ? String(Math.round((x / 43560) * 10000) / 10000) : ""); }
+  };
+  const box = "w-28 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm tabular-nums focus:outline-none";
+  return (
+    <div className="sm:col-span-2 mt-1 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 ring-1 ring-slate-200">
+      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📐 Quick ref</span>
+      <input inputMode="decimal" value={ac} onChange={from("ac")} className={box} /><span className="text-xs text-slate-400">ac =</span>
+      <input inputMode="decimal" value={sf} onChange={from("sf")} className={box} /><span className="text-xs text-slate-400">sq ft · 1 acre = 43,560 sq ft</span>
+    </div>
+  );
+}
+
 export default function UnderwritingCalculator() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("cash_land");
   const [f, setF] = useState<Record<string, string>>({});
@@ -389,12 +425,31 @@ export default function UnderwritingCalculator() {
   const clMode = v("clMode") === "blind" ? "blind" : "comps";
   const clComps = [n("clC1"), n("clC2"), n("clC3")].filter((x) => x > 0);
   const clLandAvg = clComps.length ? Math.round(clComps.reduce((s, x) => s + x, 0) / clComps.length) : 0;
+  // ── $/acre comps (integrated from the standalone Land Calculators, Jon 9/24):
+  // when comp ACRES are entered, value the course way — adjusted $/acre median ×
+  // subject acres = EMV, with conservative/likely/aggressive bands. Without
+  // acres it falls back to the straight average of sold totals above.
+  const clSubjAcres = (() => { const sLot = v("clLot"); const m = sLot.match(/([\d.,]+)/); if (!m) return 0; const x = num(m[1].replace(/,/g, "")); if (!(x > 0)) return 0; return /s\s*\.?\s*f|sq/i.test(sLot) || x > 2000 ? x / 43560 : x; })();
+  const clCompRows = [1, 2, 3].map((i) => { const price = n(`clC${i}`); const ac = n(`clC${i}A`); let adj = num(v(`clC${i}J`)); if (!Number.isFinite(adj)) adj = 0; adj = Math.max(-90, Math.min(200, adj)); return { i, price, ac, adj, adjPpa: price > 0 && ac > 0 ? (price / ac) * (1 + adj / 100) : 0 }; });
+  const clPpas = clCompRows.filter((r) => r.adjPpa > 0).map((r) => r.adjPpa);
+  const clMedPpa = medianOf(clPpas);
+  const clLoPpa = clPpas.length ? Math.min(...clPpas) : 0;
+  const clHiPpa = clPpas.length ? Math.max(...clPpas) : 0;
+  const clPerAcre = clMode === "comps" && clSubjAcres > 0 && clPpas.length > 0;
+  const clEmvLikely = clPerAcre ? Math.round(clMedPpa * clSubjAcres) : 0;
+  const clCompWarn = (() => {
+    const used = clCompRows.filter((r) => r.price > 0 && r.ac > 0);
+    if (clMode !== "comps" || !used.length) return "";
+    if (used.length < 3) return `Add at least 3 comps — one or two sales can be flukes. ${3 - used.length} more to go.`;
+    if (clSubjAcres > 0) { const far = used.filter((r) => r.ac > clSubjAcres * 3 || r.ac < clSubjAcres / 3).length; if (far) return `${far} of your comps ${far === 1 ? "is" : "are"} more than 3× bigger or smaller than your parcel — $/acre shifts a lot with size, so weight those lightly.`; }
+    return "";
+  })();
   const clPct = num(v("clPct") || "33");             // team target: ~33% of land value
   const clCloseCost = n("clCloseCost") || 1500;      // our side of closing (title co) — the "all-in" part
   const clAssessed = n("clAssessed");
   const clEmv = n("clEmv");                          // blind mode: estimated market value (if we have one)
-  const clValueBase = clMode === "blind" ? (clEmv || clAssessed) : clLandAvg;
-  const clBaseLabel = clMode === "blind" ? (clEmv > 0 ? "est. market value" : "county assessed value") : "avg of sold land comps";
+  const clValueBase = clMode === "blind" ? (clEmv || clAssessed) : clPerAcre ? clEmvLikely : clLandAvg;
+  const clBaseLabel = clMode === "blind" ? (clEmv > 0 ? "est. market value" : "county assessed value") : clPerAcre ? "EMV (median $/acre × acres)" : "avg of sold land comps";
   const clThird = clValueBase > 0 ? Math.round(clValueBase * (clPct / 100) - clCloseCost) : 0;
   const clCheapest = n("clCheapest");
   const clCaps: { label: string; v: number }[] = [
@@ -410,8 +465,25 @@ export default function UnderwritingCalculator() {
   const clAnchor = clMao * (1 - num(clAnchorPct) / 100);
   const clAsk = n("clAsk");
   const clOverAsk = clAsk > 0 && clMao > 0 ? clAsk - clMao : 0;
+  // Where the SELLER'S ask lands on the offer ladder → the deal structure.
+  const clAskPct = clAsk > 0 && clValueBase > 0 ? clAsk / clValueBase : 0;
+  const clBand = clAskPct > 0 ? LAND_BANDS.find((b) => clAskPct > b.lo && clAskPct <= b.hi) ?? null : null;
   const clSaneTone: "good" | "warn" | "bad" = clMao <= 0 ? "bad" : clPct > 45 ? "warn" : "good";
   const clSaneWord = clMao <= 0 ? (clMode === "blind" ? "🚫 enter the assessed value" : "🚫 enter land comps") : clPct > 45 ? `⚠️ ${clPct}% is high for land` : `✅ ${clPct}% of ${clBaseLabel}`;
+
+  // ---- Seller Finance (Land note) — exit pricing on terms; scratchpad only ----
+  const sfPrice = n("sfPrice");
+  const sfDown = Math.min(n("sfDown"), sfPrice);
+  const sfRate = v("sfRate") === "" ? 10 : num(v("sfRate"));
+  const sfYears = v("sfYears") === "" ? 5 : num(v("sfYears"));
+  const sfMonths = Math.round(sfYears * 12);
+  const sfPrincipal = sfPrice - sfDown;
+  const sfRows = sfPrincipal > 0 && sfMonths > 0 ? amortize(sfPrincipal, sfRate, sfMonths) : [];
+  const sfTotalPaid = sfRows.reduce((a, r) => a + r.pay, 0);
+  const sfTotalInt = sfRows.reduce((a, r) => a + r.interest, 0);
+  const sfMonthly = sfRows[0]?.pay ?? 0;
+  const sfPayoff = (() => { const d = new Date(); d.setMonth(d.getMonth() + sfMonths); return d; })();
+  const sfShowAll = v("sfAll") === "1";
 
   // ---- Double close (Cash tabs) ---- when the seller won't let us assign, we do TWO separate,
   // simultaneous closings (A→B buy, B→C sell) — closing costs are paid twice (escrow usually
@@ -659,6 +731,7 @@ export default function UnderwritingCalculator() {
   let dealMax = 0, profitAtAccepted = 0, marginLabel = "Your profit", showAsking = true;
   if (tab === "assignment") { dealMax = cashMao; profitAtAccepted = (flipperTarget - repairs - aHoa - aExtra) - accepted; marginLabel = "Your assignment fee"; }
   else if (tab === "cash_land") { dealMax = clMao; profitAtAccepted = clValueBase - accepted; marginLabel = "Your spread vs land value"; showAsking = true; }
+  else if (tab === "note_land") { dealMax = 0; profitAtAccepted = 0; marginLabel = "—"; showAsking = false; }
   else if (tab === "developer") { dealMax = devMao; profitAtAccepted = devDispo - accepted; marginLabel = "Your assignment fee"; showAsking = true; }
   else if (tab === "novation") { dealMax = novMao; profitAtAccepted = nNet - accepted; marginLabel = "Your fee"; }
   else if (tab === "flip") { dealMax = fMao; profitAtAccepted = arv - fTotalCosts - accepted; marginLabel = "Your profit"; }
@@ -734,6 +807,11 @@ export default function UnderwritingCalculator() {
       { label: "Market rent (cash-flow check)", ok: n("cRent") > 0 },
     ],
     listing: [{ label: "List price entered", ok: lList > 0 }],
+    note_land: [
+      { label: "Sale price entered", ok: sfPrice > 0 },
+      { label: "Down payment set", ok: sfDown > 0 },
+      { label: "Rate + term set", ok: sfRate > 0 && sfYears > 0 },
+    ],
   };
   const confEvidence = EVIDENCE[tab] ?? [];
   // Developer buy-box mode has its own check set (John's infill, not Lux rules).
@@ -762,7 +840,8 @@ export default function UnderwritingCalculator() {
         title: "Cash (Land) Analysis",
         comps: `<strong>Subject:</strong> ${esc(addr)}${v("clLot") ? `<br><strong>Lot:</strong> ${esc(v("clLot"))}` : ""}${comps ? `<br><strong>Comparable land sales:</strong> ${comps}` : ""}`,
         rows: [
-          [clMode === "blind" ? `Blind base (${clBaseLabel})` : "Avg area land sale (comps)", money(clValueBase)],
+          ...(clPerAcre ? clCompRows.filter((r) => r.adjPpa > 0).map((r) => [`Comp ${r.i} — ${money(r.price)} ÷ ${r.ac} ac${r.adj ? ` (adj ${r.adj > 0 ? "+" : ""}${r.adj}%)` : ""}`, `${money(r.adjPpa)}/acre`] as [string, string]) : []),
+          [clMode === "blind" ? `Blind base (${clBaseLabel})` : clPerAcre ? `EMV — median ${money(clMedPpa)}/acre × ${clSubjAcres.toFixed(2)} ac` : "Avg area land sale (comps)", money(clValueBase)],
           [`Cap ① — ${clPct}% of land value, all-in (−${money(clCloseCost)} closing)`, money(clThird)],
           ...(clAssessed > 0 ? ([["Cap ② — county assessed value", money(clAssessed)]] as [string, string][]) : []),
           ...(clCheapest > 0 ? ([["Cap ③ — cheapest active listing", money(clCheapest)]] as [string, string][]) : []),
@@ -812,6 +891,18 @@ export default function UnderwritingCalculator() {
       rows.push(["Down we charge the end buyer", money(cBuyerDown)], ["Down markup we keep", money(cDownMarkup)], ["Our assignment fee", money(cFee)], ["🎯 Total margin (fee + down markup)", money(cMargin)]);
       return { title: "Creative (Seller-finance / Subject-to) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`, rows, note: "We DON'T buy on these terms — we assign them to an end buyer who wants them. We make our assignment fee PLUS the markup on the down payment (charge the end buyer a higher down than we owe the seller and keep the spread). They assume the exact terms agreed with the seller." };
     }
+    if (tab === "note_land") {
+      return {
+        title: "Seller-Financing Note",
+        comps: `<strong>Subject:</strong> ${esc(addr)}`,
+        rows: [
+          ["Sale price", money(sfPrice)], ["Down payment", money(sfDown)], ["Amount financed", money(sfPrincipal)],
+          [`Rate / term`, `${sfRate}% · ${sfYears} yrs (${sfMonths} payments)`],
+          ["🎯 Monthly payment", money2(sfMonthly)], ["Total interest earned", money(sfTotalInt)], ["Total you collect", money(sfDown + sfTotalPaid)],
+        ],
+        note: "Interest is calculated monthly on the remaining balance (standard amortization). The buyer pays you directly each month.",
+      };
+    }
     if (tab === "listing") {
       return {
         title: "Listing Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}`,
@@ -851,7 +942,7 @@ export default function UnderwritingCalculator() {
       tab === "assignment" ? aFee : tab === "novation" ? nMinFee : tab === "developer" ? devFeeAtMao :
       tab === "cash_land" ? Math.max(0, clLandAvg - clMao) : tab === "creative" ? cMargin :
       tab === "listing" ? mktFee : 0;
-    saveUnderwrite({ tab, market: "", address: v("subject") || "", mao: dealMax, fee: predFee, confidence: confPct, seconds: compSeconds ?? null }).catch(() => {});
+    if (tab !== "note_land") saveUnderwrite({ tab, market: "", address: v("subject") || "", mao: dealMax, fee: predFee, confidence: confPct, seconds: compSeconds ?? null }).catch(() => {});
 
     const w = window.open("", "_blank", "width=860,height=940");
     if (!w) return;
@@ -1321,9 +1412,14 @@ export default function UnderwritingCalculator() {
               </div>
               {clMode === "comps" ? (
                 <>
-                  <Field k="clC1" label="① Land sale — sold $" prefix="$" span={2} req="good" />
-                  <Field k="clC2" label="② Land sale — sold $" prefix="$" span={2} req="good" />
-                  <Field k="clC3" label="③ Land sale — sold $" prefix="$" span={2} req="good" />
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="sm:col-span-2 grid grid-cols-[1.5fr_0.9fr_0.8fr] gap-2">
+                      <Field k={`clC${i}`} label={`${["①", "②", "③"][i - 1]} Land sale — sold $`} prefix="$" req="good" />
+                      <Field k={`clC${i}A`} label="Acres" req="good" />
+                      <Field k={`clC${i}J`} label="Adjust" suffix="%" req="opt" />
+                    </div>
+                  ))}
+                  <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">Adjust makes a comp match your land: <b>+10</b> if yours is better (road access, power, views), <b>−15</b> if yours is worse (landlocked, wet, odd shape). Leave 0 when they&apos;re alike. With acres entered, we price by <b>median adjusted $/acre × your acres</b> — comp against parcels close to your size ($/acre is not linear).</p>
                 </>
               ) : (
                 <>
@@ -1346,6 +1442,24 @@ export default function UnderwritingCalculator() {
                 🔁 Double close? {clDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
                 <span className="mt-0.5 block text-[11px] font-normal">{clDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (${DBL_PCT}% each) = ${money(clDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
               </button>
+              <AcreQuickRef />
+            </>
+          )}
+          {tab === "note_land" && (
+            <>
+              {legend}
+              {stepDiv(1, "The note", "Sell the parcel on terms — the price, what they put down, and the note you carry.")}
+              <Field k="sfPrice" label="Sale price" prefix="$" placeholder="25,000" req="need" />
+              <Field k="sfDown" label="Down payment" prefix="$" placeholder="2,500" req="need" />
+              <Field k="sfRate" label="Interest rate (per year)" suffix="%" placeholder="10" req="opt" />
+              <Field k="sfYears" label="Term (years)" placeholder="5" req="opt" />
+              <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">Interest is calculated monthly on the remaining balance (standard amortization). The buyer pays you directly each month.</p>
+              <div className="sm:col-span-2 flex flex-wrap gap-2">
+                <button type="button" onClick={() => { setV("sfPrice", ""); setV("sfDown", ""); setV("sfRate", ""); setV("sfYears", ""); setV("sfAll", ""); }} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50">Reset to defaults</button>
+                <button type="button" onClick={async () => { if (!sfRows.length) return; const txt = `Seller financing: ${money(sfPrice)} price, ${money(sfDown)} down, ${money(sfPrincipal)} financed at ${sfRate.toFixed(2)}% over ${sfYears} years = ${money2(sfMonthly)}/mo for ${sfRows.length} months (total interest ${money(sfTotalInt)}).`; try { await navigator.clipboard.writeText(txt); alert("Summary copied."); } catch { window.prompt("Copy this:", txt); } }} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50">📋 Copy summary</button>
+                <button type="button" onClick={() => { if (!sfRows.length) return; const q = (x: string | number) => `"${String(x).replace(/"/g, '""')}"`; const lines: (string | number)[][] = [["Payment #", "Payment", "Principal", "Interest", "Balance"]]; sfRows.forEach((r) => lines.push([r.n, r.pay.toFixed(2), r.prin.toFixed(2), r.interest.toFixed(2), r.bal.toFixed(2)])); const csv = lines.map((r) => r.map(q).join(",")).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "seller-financing-schedule.csv"; a.click(); }} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50">⭳ Export schedule (CSV)</button>
+              </div>
+              <AcreQuickRef />
             </>
           )}
           {tab === "novation" && (
@@ -1640,12 +1754,33 @@ export default function UnderwritingCalculator() {
           )}
           {tab === "cash_land" && (
             <>
+              {clCompWarn && <div className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300 sm:col-span-2">⚠️ {clCompWarn}</div>}
+              {clPerAcre && (
+                <div className="mb-2 space-y-1.5 sm:col-span-2">
+                  {[
+                    { tone: "text-emerald-700 bg-emerald-100", what: "Conservative", ppa: clLoPpa, why: "Priced at your lowest adjusted comp. Use this when you're setting an offer or need a fast sale." },
+                    { tone: "text-amber-800 bg-amber-100", what: "Likely", ppa: clMedPpa, why: "The median comp — the middle of the pack, not pulled around by one odd sale. Your working EMV." },
+                    { tone: "text-sky-800 bg-sky-100", what: "Aggressive", ppa: clHiPpa, why: "Your highest adjusted comp. A ceiling for a patient seller-financed listing, not an offer basis." },
+                  ].map((b) => (
+                    <div key={b.what} className={`rounded-lg bg-slate-50 px-3 py-2 ring-1 ${b.what === "Likely" ? "ring-2 ring-brand-gold" : "ring-slate-200"}`}>
+                      <div className="flex items-center gap-2 text-[13px]">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${b.tone}`}>{b.what}</span>
+                        <span className="font-semibold text-slate-700">{money(b.ppa)} / acre × {clSubjAcres.toFixed(2)} ac</span>
+                        <span className="ml-auto text-base font-extrabold tabular-nums text-slate-900">{money(b.ppa * clSubjAcres)}</span>
+                      </div>
+                      <div className="mt-0.5 text-[10px] leading-snug text-slate-400">{b.why}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <MathReceipt
                 title={clMode === "blind" ? "Blind land offer (no sales nearby)" : "Land cash offer"}
                 rows={[
                   clMode === "blind"
                     ? { text: `Blind base — the ${clBaseLabel}`, amount: money(clValueBase) }
-                    : { text: `Average of your ${clComps.length || 3} sold land comps`, amount: money(clLandAvg) },
+                    : clPerAcre
+                      ? { text: `Median adjusted $/acre (${money(clMedPpa)}) × your ${clSubjAcres.toFixed(2)} acres = the LIKELY value (EMV)`, amount: money(clEmvLikely) }
+                      : { text: `Average of your ${clComps.length || 3} sold land comps`, amount: money(clLandAvg) },
                   { text: `Take ${clPct}% of it (the deep-discount rule) minus ~${money(clCloseCost)} closing`, amount: money(clThird) },
                   ...(clAssessed > 0 && !(clMode === "blind" && clEmv <= 0) ? [{ text: "Cap: never above the county assessed value", amount: money(clAssessed) }] : []),
                   ...(clCheapest > 0 ? [{ text: "Cap: never above the cheapest active listing", amount: money(clCheapest) }] : []),
@@ -1671,6 +1806,63 @@ export default function UnderwritingCalculator() {
               <Res label="Negotiate (offer to seller)" value={`${money(clAnchor)} → ${money(clMao)}`} tone="muted" />
               {clMao > 0 && <OfferLadder rungs={ladder(clAnchor, clMao)} />}
               {clOverAsk > 0 && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-200">Seller asking {money(clAsk)} — {money(clOverAsk)} over your max. If they won&apos;t come down, likely dead.</div>}
+              {clBand && (
+                <div className={`sm:col-span-2 rounded-lg px-3 py-2 ring-1 ${clBand.tone === "emerald" ? "bg-emerald-50 ring-emerald-200" : clBand.tone === "amber" ? "bg-amber-50 ring-amber-200" : "bg-sky-50 ring-sky-200"}`}>
+                  <div className={`text-[12px] font-bold ${clBand.tone === "emerald" ? "text-emerald-800" : clBand.tone === "amber" ? "text-amber-800" : "text-sky-800"}`}>
+                    🪜 Deal structure — seller&apos;s ask is {(clAskPct * 100).toFixed(1)}% of the land value ({clBand.label} of EMV): <span className="uppercase">{clBand.what}</span>
+                  </div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-slate-600">{clBand.why} <span className="text-slate-400">(⅓ of EMV = {money(clValueBase / 3)} · ½ = {money(clValueBase / 2)}. 33% and 50% count as the lower band.)</span>{clBand.tone === "sky" && !clDblOn ? " Tap the 🔁 Double close button on the left to price it." : ""}</div>
+                </div>
+              )}
+            </>
+          )}
+          {tab === "note_land" && (
+            <>
+              <MathReceipt
+                title="Seller-financing note"
+                rows={[
+                  { text: `Sale price ${money(sfPrice)} minus the down payment`, amount: money(sfDown), minus: true },
+                  { text: "= the amount you finance (the note)", amount: money(sfPrincipal) },
+                  { text: `Amortized at ${sfRate}%/yr over ${sfMonths || 0} monthly payments`, amount: money2(sfMonthly) + "/mo" },
+                ]}
+                totalLabel="TOTAL YOU COLLECT (down + all payments)"
+                total={money(sfDown + sfTotalPaid)}
+                coach={sfRows.length ? `You earn ${money(sfTotalInt)} in interest on top of the price — paid off ${sfPayoff.toLocaleDateString("en-US", { month: "short", year: "numeric" })}. Interest accrues monthly on the remaining balance.` : "Enter a price above the down payment and a term to see the schedule."}
+              />
+              <Res label="Monthly payment" value={money2(sfMonthly)} tone={sfMonthly > 0 ? "navy" : "bad"} big />
+              <Res label="Amount financed" value={money(sfPrincipal)} tone="muted" />
+              <Res label="Total interest earned" value={money(sfTotalInt)} tone="good" />
+              <Res label="Total you collect" value={money(sfDown + sfTotalPaid)} tone="navy" big />
+              <Res label={sfMonths ? `${sfMonths} payments` : "—"} value={sfMonths ? `paid off ${sfPayoff.toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : "enter a term"} tone="muted" />
+              {sfRows.length > 0 && (
+                <div className="sm:col-span-2">
+                  <div className="overflow-x-auto rounded-lg ring-1 ring-slate-200">
+                    <table className="w-full border-collapse text-[12px]">
+                      <thead><tr className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500"><th className="px-2 py-1.5">#</th><th className="px-2 py-1.5">Payment</th><th className="px-2 py-1.5">Principal</th><th className="px-2 py-1.5">Interest</th><th className="px-2 py-1.5">Balance</th></tr></thead>
+                      <tbody>
+                        {(() => {
+                          const shown = sfShowAll ? sfRows : sfRows.slice(0, 12);
+                          let yp = 0, yi = 0;
+                          return shown.flatMap((r, i) => {
+                            yp += r.prin; yi += r.interest;
+                            const yearEnd = r.n % 12 === 0 || i === shown.length - 1;
+                            const out = [
+                              <tr key={r.n} className="border-t border-slate-100"><td className="px-2 py-1">{r.n}</td><td className="px-2 py-1 tabular-nums">{money2(r.pay)}</td><td className="px-2 py-1 tabular-nums">{money2(r.prin)}</td><td className="px-2 py-1 tabular-nums">{money2(r.interest)}</td><td className="px-2 py-1 tabular-nums">{money2(r.bal)}</td></tr>,
+                            ];
+                            if (yearEnd) { out.push(<tr key={"y" + r.n} className="border-t border-slate-100 bg-slate-50 font-bold text-slate-500"><td className="px-2 py-1">Year {Math.ceil(r.n / 12)}{r.n % 12 ? " (partial)" : ""}</td><td className="px-2 py-1"></td><td className="px-2 py-1 tabular-nums">{money2(yp)}</td><td className="px-2 py-1 tabular-nums">{money2(yi)}</td><td className="px-2 py-1 tabular-nums">{money2(r.bal)}</td></tr>); yp = 0; yi = 0; }
+                            return out;
+                          });
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                  {sfRows.length > 12 && (
+                    <button type="button" onClick={() => setV("sfAll", sfShowAll ? "" : "1")} className="mt-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-600 hover:bg-slate-50">
+                      {sfShowAll ? "Show first 12 only" : `Show all ${sfRows.length} payments`}
+                    </button>
+                  )}
+                </div>
+              )}
             </>
           )}
           {tab === "novation" && (
@@ -1813,7 +2005,9 @@ export default function UnderwritingCalculator() {
       </div>
 
       {/* DEAL OUTCOME — one place, fill in as the deal moves: did the seller start
-          too high, and what's the real margin once they accept a number? */}
+          too high, and what's the real margin once they accept a number? (Hidden on
+          the Seller Finance scratchpad — it prices an exit, not a purchase.) */}
+      {tab !== "note_land" && (
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <div className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700">🧾 Deal outcome <span className="text-[11px] font-normal text-slate-400">— optional, fill in as you negotiate</span></div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1836,7 +2030,7 @@ export default function UnderwritingCalculator() {
           </div>
         )}
       </div>
-
+      )}
       {/* Advisory pre-send checks — recommend, never block (per Jon). */}
       {KILL_CHECKS[checksKey] && (() => {
         const items = KILL_CHECKS[checksKey];
