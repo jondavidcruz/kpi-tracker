@@ -14,6 +14,7 @@ import { isExcusedReason } from "@/lib/alert-resolution";
 import type { DealLand } from "@/lib/deal-land";
 import type { BuyerLand } from "@/lib/buyer-land";
 import type { UwRec } from "@/lib/underwrite-history";
+import { CLOSING_ACTUALS_CAT, type ClosingActual } from "@/lib/closing-actuals";
 import { NAV_GROUPS, defaultNewRepNavHidden } from "@/lib/navItems";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
@@ -1124,6 +1125,54 @@ export async function saveUnderwrite(snap: { tab: string; market: string; addres
   const row = await db.resource.findFirst({ where: { category: UW_CAT } });
   if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(capped) } });
   else await db.resource.create({ data: { title: "underwrite-history", category: UW_CAT, url: "", description: JSON.stringify(capped) } });
+}
+
+// ── Closing Calculator actuals (JSON side-store __closing_actuals__) ─────────
+export async function readClosingActuals(): Promise<ClosingActual[]> {
+  const row = await db.resource.findFirst({ where: { category: CLOSING_ACTUALS_CAT } }).catch(() => null);
+  if (!row) return [];
+  try { const a = JSON.parse(row.description || "[]"); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+async function writeClosingActuals(list: ClosingActual[]) {
+  const capped = list.slice(0, 200);
+  const row = await db.resource.findFirst({ where: { category: CLOSING_ACTUALS_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(capped) } });
+  else await db.resource.create({ data: { title: "closing-actuals", category: CLOSING_ACTUALS_CAT, url: "", description: JSON.stringify(capped) } });
+}
+export async function saveClosingActual(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const numF = (k: string) => { const x = Number(String(formData.get(k) ?? "").replace(/[^0-9.-]/g, "")); return Number.isFinite(x) && x !== 0 ? x : undefined; };
+  const strF = (k: string) => { const x = String(formData.get(k) ?? "").trim(); return x || undefined; };
+  const id = String(formData.get("id") ?? "").trim();
+  const rec: ClosingActual = {
+    id: id || `ca_${Date.now()}`,
+    at: new Date().toISOString(),
+    by: me?.name ?? "",
+    address: String(formData.get("address") ?? "").trim(),
+    exit: String(formData.get("exit") ?? "assignment"),
+    askPrice: numF("askPrice"), contractPrice: numF("contractPrice"), salePrice: numF("salePrice"),
+    titleEscrow: numF("titleEscrow"), transferTax: numF("transferTax"), recording: numF("recording"),
+    backTaxes: numF("backTaxes"), liens: numF("liens"), commissions: numF("commissions"),
+    concessions: numF("concessions"), txnFunding: numF("txnFunding"), other: numF("other"),
+    otherNote: strF("otherNote"), netFee: numF("netFee"), notes: strF("notes"),
+  };
+  if (!rec.address) { redirect("/closing-calc?err=address"); }
+  const list = await readClosingActuals();
+  const i = list.findIndex((x) => x.id === rec.id);
+  if (i >= 0) list[i] = { ...list[i], ...rec, at: list[i].at };
+  else list.unshift(rec);
+  await writeClosingActuals(list);
+  revalidatePath("/closing-calc");
+  redirect("/closing-calc?saved=1");
+}
+export async function deleteClosingActual(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  await writeClosingActuals((await readClosingActuals()).filter((x) => x.id !== id));
+  revalidatePath("/closing-calc");
+  redirect("/closing-calc?saved=1");
 }
 
 // ── Land KPI pack — one-click owner installer (idempotent; runtime write) ─────

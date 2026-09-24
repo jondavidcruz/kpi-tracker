@@ -1124,10 +1124,10 @@ export default function UnderwritingCalculator() {
   // Reused under both comps sections — explains why comps are GREEN (hard facts).
   const compsNote = "🟢 Green = hard facts — real, recent closed sales in the area, not speculation or hopeful pricing. Pull them, then verify each on the MLS / county records before recording all 3. Never send an offer that isn't backed by comps.";
   const legend = (
-    <div className="sm:col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-[11px] font-semibold ring-1 ring-slate-200">
-      <span className="text-red-600">🔴 Required to give an MAO</span>
-      <span className="text-amber-600">🟡 Optional — refines the number</span>
-      <span className="text-emerald-600">🟢 Hard facts — actual closed sales, not speculation</span>
+    <div className="sm:col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-400">
+      <span className="cursor-help text-red-600" title="Required to give an MAO">🔴 required</span>
+      <span className="cursor-help text-amber-600" title="Optional — refines the number">🟡 optional</span>
+      <span className="cursor-help text-emerald-600" title="Hard facts — actual closed sales, not speculation">🟢 hard facts</span>
     </div>
   );
 
@@ -1235,7 +1235,10 @@ export default function UnderwritingCalculator() {
           </div>
         ))}
       </div>
-      <p className="text-xs text-slate-500">{TABS.find((t) => t.key === tab)!.blurb}</p>
+      <div className="flex items-start gap-2">
+        <button type="button" onClick={() => setV("__info", v("__info") === "1" ? "" : "1")} className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500 hover:bg-slate-200">ℹ️ {v("__info") === "1" ? "hide" : "how this exit works"}</button>
+        {v("__info") === "1" && <p className="text-xs text-slate-500">{TABS.find((t) => t.key === tab)!.blurb}</p>}
+      </div>
 
       {(tab === "assignment" || tab === "novation") && (
         <details className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
@@ -1770,24 +1773,6 @@ export default function UnderwritingCalculator() {
           {tab === "cash_land" && (
             <>
               {clCompWarn && <div className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-300 sm:col-span-2">⚠️ {clCompWarn}</div>}
-              {clPerAcre && (
-                <div className="mb-2 space-y-1.5 sm:col-span-2">
-                  {[
-                    { tone: "text-emerald-700 bg-emerald-100", what: "Conservative", ppa: clLoPpa, why: "Priced at your lowest adjusted comp. Use this when you're setting an offer or need a fast sale." },
-                    { tone: "text-amber-800 bg-amber-100", what: "Likely", ppa: clMedPpa, why: "The median comp — the middle of the pack, not pulled around by one odd sale. Your working EMV." },
-                    { tone: "text-sky-800 bg-sky-100", what: "Aggressive", ppa: clHiPpa, why: "Your highest adjusted comp. A ceiling for a patient seller-financed listing, not an offer basis." },
-                  ].map((b) => (
-                    <div key={b.what} className={`rounded-lg bg-slate-50 px-3 py-2 ring-1 ${b.what === "Likely" ? "ring-2 ring-brand-gold" : "ring-slate-200"}`}>
-                      <div className="flex items-center gap-2 text-[13px]">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${b.tone}`}>{b.what}</span>
-                        <span className="font-semibold text-slate-700">{money(b.ppa)} / acre × {clSubjAcres.toFixed(2)} ac</span>
-                        <span className="ml-auto text-base font-extrabold tabular-nums text-slate-900">{money(b.ppa * clSubjAcres)}</span>
-                      </div>
-                      <div className="mt-0.5 text-[10px] leading-snug text-slate-400">{b.why}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
               {clPerAcre && clEmvHi > clEmvLo && (
                 <div className="mb-2 rounded-xl bg-white p-3 ring-2 ring-brand-navy/20 sm:col-span-2">
                   <div className="mb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-brand-navy">🎚 EMV range → offer range (Hunter&apos;s way)</div>
@@ -1796,8 +1781,12 @@ export default function UnderwritingCalculator() {
                     const pos = (x: number) => `${Math.max(0, Math.min(100, ((x - clEmvLo) / span) * 100))}%`;
                     return (
                       <div className="relative mb-1 mt-4 h-2.5 rounded-full bg-gradient-to-r from-emerald-300 via-amber-300 to-sky-300">
-                        {[{ x: clEmvLo, l: "low" }, { x: clEmvLikely, l: "likely" }, { x: clEmvHi, l: "high" }].map((t) => (
-                          <div key={t.l} className="absolute -top-4 -translate-x-1/2 text-center" style={{ left: pos(t.x) }}>
+                        {[
+                          { x: clEmvLo, l: "low", why: "Priced at your lowest adjusted comp. Use this when you're setting an offer or need a fast sale." },
+                          { x: clEmvLikely, l: "likely", why: "The median comp — the middle of the pack, not pulled around by one odd sale. Your working EMV." },
+                          { x: clEmvHi, l: "high", why: "Your highest adjusted comp. A ceiling for a patient seller-financed listing, not an offer basis." },
+                        ].map((t) => (
+                          <div key={t.l} className="absolute -top-4 -translate-x-1/2 cursor-help text-center" title={t.why} style={{ left: pos(t.x) }}>
                             <div className="text-[9px] font-bold uppercase text-slate-400">{t.l}</div>
                             <div className="mx-auto h-4 w-0.5 bg-slate-500" style={{ marginTop: 1 }} />
                           </div>
@@ -1811,15 +1800,7 @@ export default function UnderwritingCalculator() {
                   <div className="mt-6 flex items-center justify-between text-[12px] font-bold tabular-nums text-slate-700">
                     <span>{money(clEmvLo)}</span><span className="text-brand-navy">{money(clEmvLikely)}</span><span>{money(clEmvHi)}</span>
                   </div>
-                  <div className="mt-2 grid grid-cols-3 gap-1.5">
-                    {[{ l: "Safe offer", v: clOfferLo, c: "text-emerald-700 bg-emerald-50 ring-emerald-200" }, { l: "Target (MAO)", v: clMao, c: "text-brand-navy bg-slate-50 ring-brand-navy/30 ring-2" }, { l: "Stretch cap", v: clOfferHi, c: "text-sky-700 bg-sky-50 ring-sky-200" }].map((o) => (
-                      <div key={o.l} className={`rounded-lg px-2 py-1.5 text-center ring-1 ${o.c}`}>
-                        <div className="text-[9px] font-bold uppercase tracking-wide opacity-70">{o.l}</div>
-                        <div className="text-sm font-extrabold tabular-nums">{money(o.v)}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-1.5 text-[10px] leading-snug text-slate-400">The {clPct}% rule + every cap, run at each end of your comp range. Open under the <b>Safe</b> number, negotiate toward the <b>Target</b> — the <b>Stretch</b> is only for a parcel you&apos;d list cheapest-on-market and still profit. The more (and closer) comps you add, the tighter this range gets.</p>
+                  <p className="mt-1.5 text-[10px] leading-snug text-slate-400">Your MAO below is built on the <b>LIKELY</b> value — one set of offer numbers, in the ladder. Strong comps at the high end? The absolute ceiling is <b>{money(clOfferHi)}</b> ({clPct}% of the high EMV, caps applied) — only for a parcel you&apos;d list cheapest-on-market and still profit. More (and closer) comps = a tighter range.</p>
                 </div>
               )}
               <MathReceipt
@@ -1840,8 +1821,6 @@ export default function UnderwritingCalculator() {
                   ? `Bound by the ${clBind}. Open at ${money(clAnchor)} — never accept a price on call #1.${clMode === "comps" && (clAssessed <= 0 || clCheapest <= 0) ? " ⚠️ Hunter's rule wants all 3 caps — add the assessed value and cheapest listing." : ""}${clMode === "blind" ? " 🕶️ Blind number — verify access/flood before contract, and re-comp the moment a sale shows up." : ""}`
                   : clMode === "blind" ? "Enter the county assessed value (or an EMV) to get your blind number." : "Enter 2–3 sold land comps above to get your number."}
               />
-              <Res label={clMode === "blind" ? `🎯 Blind base (${clBaseLabel})` : "🎯 Avg area land value"} value={money(clValueBase)} tone={clValueBase > 0 ? "navy" : "bad"} big />
-              {clCaps.map((c) => <Res key={c.label} label={`Cap: ${c.label}`} value={money(c.v)} tone={Math.round(c.v) === clMao ? "navy" : "muted"} />)}
               <Res label="🎯 Cash (Land) MAO — max offer" value={money(clMao)} tone={clMao > 0 ? "navy" : "bad"} big />
               {clDblOn && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
@@ -1852,7 +1831,6 @@ export default function UnderwritingCalculator() {
               {clDblOn && <Res label="🎯 Double-close MAO (offer this instead)" value={money(clDblMao)} tone={clDblMao > 0 ? "navy" : "bad"} big />}
               {clLandAvg > 0 && <Res label="Sanity check" value={clSaneWord} tone={clSaneTone} />}
               <Res label="⚓ Anchor (open here)" value={money(clAnchor)} tone="good" />
-              <Res label="Negotiate (offer to seller)" value={`${money(clAnchor)} → ${money(clMao)}`} tone="muted" />
               {clMao > 0 && <OfferLadder rungs={ladder(clAnchor, clMao)} />}
               {clOverAsk > 0 && <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-200">Seller asking {money(clAsk)} — {money(clOverAsk)} over your max. If they won&apos;t come down, likely dead.</div>}
               {clBand && (
@@ -2053,33 +2031,8 @@ export default function UnderwritingCalculator() {
         </div>
       </div>
 
-      {/* DEAL OUTCOME — one place, fill in as the deal moves: did the seller start
-          too high, and what's the real margin once they accept a number? (Hidden on
-          the Seller Finance scratchpad — it prices an exit, not a purchase.) */}
-      {tab !== "note_land" && (
-      <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-        <div className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700">🧾 Deal outcome <span className="text-[11px] font-normal text-slate-400">— optional, fill in as you negotiate</span></div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {showAsking && <Field k="askPrice" label="Seller's asking price (what they want)" prefix="$" placeholder="e.g. 300,000" req="need" />}
-          <Field k="acceptedPrice" label="Under-contract price (what we lock with the seller)" prefix="$" placeholder="e.g. 250,000" req="good" />
-          <Field k="salePrice" label={`List / sale price (defaults to ${tab === "novation" || tab === "listing" ? "list" : "ARV"})`} prefix="$" placeholder={saleDefault ? saleDefault.toLocaleString() : "e.g. 350,000"} req="opt" />
-        </div>
-        {(asking > 0 || accepted > 0) && (
-          <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
-            {showAsking && asking > 0 && dealMax > 0 && (
-              overAsk > 0
-                ? <Res label={`Asking is above your max offer (${money(dealMax)})`} value={`${money(overAsk)} over → overpriced`} tone="bad" />
-                : <Res label={`Asking is within your max offer (${money(dealMax)})`} value={`${money(-overAsk)} of room → workable`} tone="good" />
-            )}
-            {accepted > 0 && <Res label={`${marginLabel} at ${money(accepted)} accepted`} value={money(profitAtAccepted)} tone={profitAtAccepted > 0 ? "good" : "bad"} big />}
-            {accepted > 0 && buyExit && dealMax > 0 && (
-              <Res label="vs your max offer" value={accepted <= dealMax ? `${money(dealMax - accepted)} better than max ✅` : `${money(accepted - dealMax)} over max ⚠️`} tone={accepted <= dealMax ? "good" : "bad"} />
-            )}
-            {roi != null && <Res label={`📈 ROI · ${money(salePrice)} sale vs ${money(accepted)} contract`} value={`${roi >= 0 ? "+" : ""}${roi.toFixed(0)}%`} tone={roi > 0 ? "good" : "bad"} big />}
-          </div>
-        )}
-      </div>
-      )}
+      {/* Deal outcome moved to the Closing Calculator (Jon 2026-09-25) — actuals
+          are logged there at close and scored against this underwrite. */}
       {/* Advisory pre-send checks — recommend, never block (per Jon). */}
       {KILL_CHECKS[checksKey] && (() => {
         const items = KILL_CHECKS[checksKey];
