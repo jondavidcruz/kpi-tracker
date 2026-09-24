@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite, isOwner } from "@/lib/auth";
 import { getAllUsers, getSettings } from "@/lib/data";
 import { todayStr, payPeriod, datesInRange } from "@/lib/date";
 import { workedMinutes, paidMinutes } from "@/lib/presence";
-import { workCapAt, shiftStartAt } from "@/lib/shift";
+import { workCapAt, shiftStartAt, shiftEndAt } from "@/lib/shift";
 import { parseHourly, parseFlatDailyHours, fmtHours } from "@/lib/payroll";
 import { positionLabel } from "@/lib/roles";
 import { saveTimeAdjustment, saveBonus, deleteBonus, savePayHours, savePayDiscrepancy, deleteOutage } from "@/app/actions";
@@ -56,6 +56,40 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
     db.outage.findMany({ where: { date: { gte: period.start, lte: period.end } }, orderBy: { startMin: "asc" } }),
   ]);
   const payEntryByUser = new Map(payEntries.map((p) => [p.userId, p]));
+
+  // ── After-hours audit (Jon 2026-09-26): were they ACTUALLY working past shift
+  // end? For every day someone stayed clocked in past their scheduled end, count
+  // hard system evidence in the hour after: KPI entries saved, buyer records
+  // edited, touches logged. Zero evidence + still on the clock = gaming risk.
+  const periodStartInst = new Date(`${period.start}T00:00:00Z`);
+  const [ahEntries, ahHistory, ahTouches] = await Promise.all([
+    db.entry.findMany({ where: { enteredAt: { gte: periodStartInst } }, select: { userId: true, enteredAt: true, enteredBy: true } }),
+    db.buyerHistory.findMany({ where: { at: { gte: periodStartInst } }, select: { actor: true, at: true } }),
+    db.buyerTouch.findMany({ where: { at: { gte: periodStartInst } }, select: { actor: true, at: true } }),
+  ]);
+  const auditReps = users.filter((u) => u.active && !u.irregularSchedule && !isOwner(u));
+  const fnOf = (n: string) => n.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const auditRows: { name: string; date: string; end: Date; lastOut: Date; minsPast: number; evidence: number }[] = [];
+  for (const u of auditReps) {
+    for (const d of days) {
+      if (d > today) continue;
+      const end = shiftEndAt(d, settings.orgTimezone, u.name);
+      if (!end) continue;
+      const dayPunches = punches.filter((x) => x.userId === u.id && x.date === d);
+      if (!dayPunches.length) continue;
+      const lastAt = new Date(Math.max(...dayPunches.map((x) => new Date(x.at).getTime())));
+      const minsPast = Math.round((lastAt.getTime() - end.getTime()) / 60000);
+      if (minsPast <= 15) continue; // within the paid wrap-up window — fine
+      const winEnd = new Date(end.getTime() + 120 * 60000);
+      const inWin = (t: Date | string) => { const x = new Date(t).getTime(); return x >= end.getTime() && x <= winEnd.getTime(); };
+      const evidence =
+        ahEntries.filter((e) => e.userId === u.id && inWin(e.enteredAt)).length +
+        ahHistory.filter((h) => fnOf(h.actor ?? "") === fnOf(u.name) && inWin(h.at)).length +
+        ahTouches.filter((t) => fnOf(t.actor ?? "") === fnOf(u.name) && inWin(t.at)).length;
+      auditRows.push({ name: u.name, date: d, end, lastOut: lastAt, minsPast, evidence });
+    }
+  }
+  auditRows.sort((a, b) => b.date.localeCompare(a.date) || b.minsPast - a.minsPast);
   const outageByDay = new Map<string, typeof outages>();
   for (const o of outages) { const k = `${o.userId}|${o.date}`; const a = outageByDay.get(k) ?? []; a.push(o); outageByDay.set(k, a); }
   const outageMin = (uid: string, d: string) => (outageByDay.get(`${uid}|${d}`) ?? []).reduce((s, o) => s + Math.max(0, o.endMin - o.startMin), 0);
@@ -81,6 +115,41 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             <Link href={`/timecard?p=${off + 1}`} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-200">→</Link>
           </div>
         } />
+
+      {/* After-hours audit — pay already caps at shift end +15m; this shows WHO keeps
+          staying past and whether the system saw any actual work in that time. */}
+      {auditRows.length > 0 && (
+        <Card className="border-l-4 border-amber-400 p-4">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-slate-800">🔍 After-hours audit — clocked past shift end this period</span>
+            <span className="text-[11px] text-slate-400">pay caps at shift end +15 min regardless; evidence = KPI saves + buyer edits + logged touches in the 2h after shift end</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-400">
+                <th className="px-2 py-1.5">Rep</th><th className="px-2 py-1.5">Day</th><th className="px-2 py-1.5">Shift end</th><th className="px-2 py-1.5">Last punch</th><th className="px-2 py-1.5">Stayed past</th><th className="px-2 py-1.5">System activity after shift</th>
+              </tr></thead>
+              <tbody>
+                {auditRows.slice(0, 30).map((r, i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="px-2 py-1.5 font-semibold text-slate-700">{r.name.split(" ")[0]}</td>
+                    <td className="px-2 py-1.5 text-slate-500">{WD[new Date(r.date + "T12:00:00Z").getUTCDay()]} {mdShort(r.date)}</td>
+                    <td className="px-2 py-1.5 tabular-nums text-slate-500">{clock(r.end)}</td>
+                    <td className="px-2 py-1.5 tabular-nums text-slate-700">{clock(r.lastOut)}</td>
+                    <td className="px-2 py-1.5 tabular-nums font-bold text-amber-700">+{r.minsPast}m</td>
+                    <td className="px-2 py-1.5">
+                      {r.evidence > 0
+                        ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">🟢 {r.evidence} action{r.evidence === 1 ? "" : "s"} — was working</span>
+                        : <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">🔴 zero system activity</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-400">🔴 rows = on the clock past shift with no KPI saves, buyer edits, or logged touches in the system — worth a conversation. (CRM dials/texts sync daily without timestamps, so pure phone work won&apos;t show here.)</p>
+        </Card>
+      )}
       {showPay && <p className="text-xs text-slate-400">Semi-monthly: paid on the <strong>15th</strong> and the <strong>last day</strong> of each month (periods 1–15 & 16–end). Pay = paid hours × hourly rate + bonuses − discrepancies. Salaried management (Marie) is paid a flat daily rate Mon–Fri regardless of the clock; her actual hours are tracked beside as a check, and days/weeks under her flat hours are flagged.</p>}
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

@@ -95,7 +95,10 @@ export function shiftStartAt(dateStr: string, tz: string = DEFAULT_TZ, who?: str
 }
 
 /** Grace minutes past shift end counted as real work before the hard cap. */
-export const SHIFT_GRACE_MIN = 30;
+// Jon 2026-09-26: EOD wrap-up runs to ~15 past the hour, NOT 30 — the girls'
+// time cards cut off at 5:15 PM latest (shift end 5:00 + this grace). Anything
+// they stay past that is unpaid. (Marie's 6:00 PM shift gets the same +15.)
+export const SHIFT_GRACE_MIN = 15;
 
 /**
  * The latest instant the time clock will count toward worked time for `dateStr`.
