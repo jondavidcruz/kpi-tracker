@@ -30,7 +30,12 @@ export async function GET() {
   const byUser = groupByUser(punches);
   const outByUser = new Map(outages.filter((o) => o.ongoing).map((o) => [o.userId, o])); // live outage → "outage" state
   const now = new Date();
-  const STALE = 2 * 60 * 1000; // working but no heartbeat for 2 min = dropped (flag fast, confirm with admin)
+  // Background tabs (Google Meet!) get their timers throttled to ~1/min, and a
+  // memory-saver suspend can pause them longer — 2 min flagged everyone on a call
+  // as "dropped" (Jon 2026-09-26). Board turns amber after 6 min; the Chat alert
+  // waits 12 min so it only fires for real power/internet drops.
+  const STALE = 6 * 60 * 1000;
+  const ALERT_STALE = 12 * 60 * 1000;
   // Current minutes-from-midnight in the org timezone, for outage duration.
   const np = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
   const nowMin = (+(np.find((p) => p.type === "hour")?.value ?? 0) % 24) * 60 + +(np.find((p) => p.type === "minute")?.value ?? 0);
@@ -58,7 +63,8 @@ export async function GET() {
   const stateById = new Map(people.map((p) => [p.id, p.state]));
   for (const u of users) {
     if (isOwner(u)) continue;
-    const dropped = stateById.get(u.id) === "dropped";
+    const ageMs = u.lastSeenAt ? now.getTime() - new Date(u.lastSeenAt).getTime() : 0;
+    const dropped = stateById.get(u.id) === "dropped" && ageMs > ALERT_STALE;
     if (dropped && !u.dropAlertedAt) {
       const won = await db.user.updateMany({ where: { id: u.id, dropAlertedAt: null }, data: { dropAlertedAt: now } });
       if (won.count === 1) {

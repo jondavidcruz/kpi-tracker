@@ -21,14 +21,24 @@ export default function HeartbeatPing() {
       } catch { /* offline — we'll catch up on reconnect */ }
     };
     ping();
-    // Ping every 30s so a real drop is caught fast (the server flags "dropped" after
-    // 2 min with no heartbeat). Also ping the instant the tab is refocused or the
-    // network returns, so a reconnect clears immediately instead of on the next tick.
-    const id = setInterval(ping, 30000);
+    // Ping every 30s. IMPORTANT: browsers throttle background-tab timers hard —
+    // Chrome clamps to once/min after 5 min hidden, exactly what happens while the
+    // team sits in a Google Meet with the War Room tab in the background (that was
+    // the false "disconnected" storm). A Web Worker ticker dodges the clamping;
+    // plain setInterval is only the fallback. Also ping the instant the tab is
+    // refocused or the network returns, so a reconnect clears immediately.
+    let id: ReturnType<typeof setInterval> | null = null;
+    let worker: Worker | null = null;
+    try {
+      const src = URL.createObjectURL(new Blob(["setInterval(function(){postMessage(1)},30000)"], { type: "text/javascript" }));
+      worker = new Worker(src);
+      worker.onmessage = () => ping();
+      URL.revokeObjectURL(src);
+    } catch { id = setInterval(ping, 30000); }
     const onVis = () => { if (document.visibilityState === "visible") ping(); };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("online", ping);
-    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("online", ping); };
+    return () => { alive = false; worker?.terminate(); if (id) clearInterval(id); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("online", ping); };
   }, []);
 
   if (!drop) return null;

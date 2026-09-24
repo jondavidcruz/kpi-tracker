@@ -8,7 +8,7 @@ import { sendTimecardChat } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
-const GAP_MS = 4 * 60 * 1000; // a gap longer than this while clocked in = likely outage
+const GAP_MS = 8 * 60 * 1000; // a gap longer than this while clocked in = likely outage (tolerates background-tab throttling during Meet calls)
 function nowLocalMin(tz: string): number {
   const s = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
   const [h, m] = s.split(":").map(Number);

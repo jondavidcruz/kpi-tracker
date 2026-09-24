@@ -201,7 +201,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const cap = workCapAt(today, settings.orgTimezone); // team default — timeline axis right edge
   const myCap = workCapAt(today, settings.orgTimezone, me.name); // the viewer's own shift end
   const capMs = myCap ? myCap.getTime() : null;
-  const STALE = 2 * 60 * 1000; // 2 min without a heartbeat = dropped (fast detection)
+  const STALE = 6 * 60 * 1000; // tolerant of background-tab throttling (Meet calls)
   const toMinTz = (d: Date) => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(d); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); };
   // Is this person clocked-in but heartbeat-stale (dropped), with no already-logged outage?
   // Returns the last-seen minute (drop start) or null. Treated as an outage everywhere.
