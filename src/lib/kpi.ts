@@ -31,7 +31,6 @@ const PER_REP_HIDDEN_KPIS: Record<string, string[]> = {
   sharyn: ["dev_facebook", "leads_generated"],
   nick: ["leads_generated"],
   nicholas: ["leads_generated"],
-  austin: ["leads_generated"],
 };
 
 /** True if this KPI should be hidden for this person (per-rep channel swap). */

@@ -46,7 +46,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
 };
 
 export default function Sidebar({
-  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions, officeMeetLink, mondayMeetLink,
+  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions, officeMeetLink, mondayMeetLink, navOrder,
 }: {
   name: string;
   manager: boolean;
@@ -62,6 +62,7 @@ export default function Sidebar({
   newSuggestions: number;
   officeMeetLink?: string;
   mondayMeetLink?: string;
+  navOrder?: { groups: string[]; items: Record<string, string[]> } | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -129,6 +130,22 @@ export default function Sidebar({
     ] },
   ];
 
+  // Owner-saved order (Admin → Sidebar order) — reorders groups + tabs for everyone.
+  const orderedGroups = (() => {
+    if (!navOrder) return groups;
+    // (plain objects, not Map — the lucide "Map" icon import shadows the global here)
+    const pos: Record<string, number> = {};
+    navOrder.groups.forEach((g, i) => { pos[g] = i; });
+    const gs = [...groups].sort((a, b) => (pos[a.label] ?? 999) - (pos[b.label] ?? 999));
+    return gs.map((g) => {
+      const ord = navOrder.items[g.label];
+      if (!ord || !ord.length) return g;
+      const ip: Record<string, number> = {};
+      ord.forEach((h, i) => { ip[h] = i; });
+      return { ...g, items: [...g.items].sort((a, b) => (ip[a.href] ?? 999) - (ip[b.href] ?? 999)) };
+    });
+  })();
+
   const hidden = hiddenNav ?? [];
   const visible = (it: Item) =>
     (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard) && (!it.csuiteOnly || csuite) && (!it.trainingOnly || training) &&
@@ -138,7 +155,7 @@ export default function Sidebar({
 
   // Flat, searchable index of every page the user can actually see (+ the wall display).
   const allItems: (Item & { group: string })[] = [
-    ...groups.flatMap((g) => g.items.filter(visible).map((it) => ({ ...it, group: g.label }))),
+    ...orderedGroups.flatMap((g) => g.items.filter(visible).map((it) => ({ ...it, group: g.label }))),
     { href: "/tv", label: "Wall display", Icon: Tv, group: "Display" },
   ];
   const q = query.trim().toLowerCase();
@@ -213,7 +230,7 @@ export default function Sidebar({
           )
         ) : (
         <>
-        {groups.map((g) => {
+        {orderedGroups.map((g) => {
           const items = g.items.filter(visible);
           if (items.length === 0) return null;
           return (

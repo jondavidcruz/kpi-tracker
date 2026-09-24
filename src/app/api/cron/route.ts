@@ -227,6 +227,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, audit: "old +30 cap vs new +15 cap", start, end: today, perRep });
   }
 
+  // One-shot user erase (Jon's explicit removals — secret + exact-name confirm).
+  // /api/cron?eraseuser=1&name=<first or full>&confirm=<same>&secret=…
+  if (url.searchParams.get("eraseuser") === "1") {
+    const name = String(url.searchParams.get("name") ?? "").trim().toLowerCase();
+    const confirm = String(url.searchParams.get("confirm") ?? "").trim().toLowerCase();
+    if (!name || name !== confirm) return NextResponse.json({ ok: false, error: "name and confirm must match" }, { status: 400 });
+    const all = await db.user.findMany();
+    const matches = all.filter((u) => u.name.trim().toLowerCase() === name || u.name.trim().split(/\s+/)[0].toLowerCase() === name);
+    if (matches.length === 0) return NextResponse.json({ ok: false, error: "no user matched", name });
+    if (matches.length > 1) return NextResponse.json({ ok: false, error: "ambiguous — use the full name", candidates: matches.map((m) => m.name) });
+    const target = matches[0];
+    if (target.active) await db.user.update({ where: { id: target.id }, data: { active: false } });
+    const { purgeUser } = await import("@/lib/user-purge");
+    const res = await purgeUser(target.id);
+    return NextResponse.json({ ok: res.ok, erased: res.name, error: res.error });
+  }
+
   // Daily compliance line check — hits Twilio + Telnyx live via API and posts any
   // issues (numbers not active, account not active, unreachable API) to the
   // phone-health Chat space so we catch line problems before the team feels them.

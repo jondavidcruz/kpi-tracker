@@ -71,7 +71,6 @@ const TEAM = [
   { slug: "marie", name: "Marie M.", title: "Operations Director" },
   { slug: "sharyn", name: "Sharyn M.", title: "Dispositions Director" },
   { slug: "michelle", name: "Michelle L.", title: "Acquisitions Officer" },
-  { slug: "ethan", name: "Ethan", title: "Listing Agent" },
 ];
 const SERIF = "Georgia, 'Times New Roman', serif";
 function TeamSlide() {
@@ -81,7 +80,7 @@ function TeamSlide() {
         A small team. <span className="italic" style={{ color: "#5f7a63" }}>By design.</span>
       </h2>
       <p className="mt-[0.6cqw] text-slate-600" style={{ fontSize: "clamp(9px,1.5cqw,20px)" }}>
-        Eight people, working directly with you. No middlemen, no call centers, no scripts.
+        {["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine"][TEAM.length] ?? TEAM.length} people, working directly with you. No middlemen, no call centers, no scripts.
       </p>
       {/* Photos are height-driven (flex-1) inside a fixed 2-row grid so all 8 always
           fit the slide — never cut off, whatever the screen size. */}

@@ -39,7 +39,7 @@ const SOFTWARE_CURATORS = ["sharyn", "marie"];
 // Hard-blocked from the Software & Logins page entirely (Jon 2026-08-26: Nick +
 // Austin should not see the vault at all — not even tool names/login emails).
 // Name-keyed like the other locks so a checkbox can never re-grant it.
-const SOFTWARE_BLOCKED = new Set(["nick", "nicholas", "austin"]);
+const SOFTWARE_BLOCKED = new Set(["nick", "nicholas"]); // austin erased 2026-09-27
 export function isSoftwareBlocked(user: { name?: string } | null): boolean {
   const first = (user?.name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   return SOFTWARE_BLOCKED.has(first);
@@ -116,7 +116,7 @@ export function canAccessCSuite(user: User | null): boolean {
 // Restricted users see ONLY these page prefixes (first = their home page).
 // Ethan is part-time, listings-only — no acquisitions scorecard, just his pipeline.
 const RESTRICTED_NAV: Record<string, string[]> = {
-  ethan: ["/deals", "/process", "/underwriting", "/schedule", "/rewards", "/call-scoring", "/scripts", "/account"],
+  // ethan erased 2026-09-27 (former listings-only part-timer)
   // Nicholas Fair — access controlled by Jon in Admin → Access preview (per-user navHidden),
   // so he can pick sections himself rather than a hardcoded allowlist.
 };

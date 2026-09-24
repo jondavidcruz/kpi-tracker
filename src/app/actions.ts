@@ -15,6 +15,7 @@ import type { DealLand } from "@/lib/deal-land";
 import type { BuyerLand } from "@/lib/buyer-land";
 import type { UwRec } from "@/lib/underwrite-history";
 import { CLOSING_ACTUALS_CAT, type ClosingActual } from "@/lib/closing-actuals";
+import { NAV_ORDER_CAT, parseNavOrder, moveInList, type NavOrder } from "@/lib/nav-order";
 import { NAV_GROUPS, defaultNewRepNavHidden } from "@/lib/navItems";
 import { scoreTranscript } from "@/lib/score";
 import { callTypeLabel } from "@/lib/call-types";
@@ -1127,6 +1128,42 @@ export async function saveUnderwrite(snap: { tab: string; market: string; addres
   else await db.resource.create({ data: { title: "underwrite-history", category: UW_CAT, url: "", description: JSON.stringify(capped) } });
 }
 
+// ── Sidebar order (owner reorders tabs for the whole team — __nav_order__) ───
+async function readNavOrderRow() {
+  const row = await db.resource.findFirst({ where: { category: NAV_ORDER_CAT } });
+  return { row, order: parseNavOrder(row?.description) ?? { groups: [], items: {} } };
+}
+async function writeNavOrder(order: NavOrder, rowId?: string) {
+  const desc = JSON.stringify(order);
+  if (rowId) await db.resource.update({ where: { id: rowId }, data: { description: desc } });
+  else await db.resource.create({ data: { title: "nav-order", category: NAV_ORDER_CAT, url: "", description: desc } });
+  revalidatePath("/admin");
+  redirect("/admin?saved=Sidebar%20order#sidebar-order");
+}
+export async function moveNavGroup(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const label = String(formData.get("group") ?? "");
+  const dir = formData.get("dir") === "up" ? -1 : 1;
+  const canonical = NAV_GROUPS.map((g) => g.group);
+  const { row, order } = await readNavOrderRow();
+  order.groups = moveInList(canonical, order.groups, label, dir as -1 | 1);
+  await writeNavOrder(order, row?.id);
+}
+export async function moveNavItem(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const group = String(formData.get("group") ?? "");
+  const href = String(formData.get("href") ?? "");
+  const dir = formData.get("dir") === "up" ? -1 : 1;
+  const g = NAV_GROUPS.find((x) => x.group === group);
+  if (!g) return;
+  const canonical = g.items.map((i) => i.href);
+  const { row, order } = await readNavOrderRow();
+  order.items[group] = moveInList(canonical, order.items[group], href, dir as -1 | 1);
+  await writeNavOrder(order, row?.id);
+}
+
 // ── Closing Calculator actuals (JSON side-store __closing_actuals__) ─────────
 export async function readClosingActuals(): Promise<ClosingActual[]> {
   const row = await db.resource.findFirst({ where: { category: CLOSING_ACTUALS_CAT } }).catch(() => null);
@@ -1864,18 +1901,18 @@ export async function deleteUser(formData: FormData) {
   if (!id || id === me?.id) return; // never delete yourself
   const u = await db.user.findUnique({ where: { id } });
   if (!u || u.active) return; // must be deactivated first (safety)
+  // Accident guard: the typed confirmation must match their first name exactly.
+  const confirm = String(formData.get("confirm") ?? "").trim().toLowerCase();
+  const first = u.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  if (!confirm || confirm !== first) { redirect("/admin?saved=" + encodeURIComponent("Type their first name to confirm the erase")); }
 
-  // Remove dependent rows before the user (FK), scoped to this one person.
-  await db.entry.deleteMany({ where: { userId: id } });
-  await db.target.deleteMany({ where: { userId: id } });
-  await db.alert.deleteMany({ where: { userId: id } });
-  await db.pip.deleteMany({ where: { userId: id } });
-  await db.ticket.deleteMany({ where: { userId: id } });
-  await db.user.delete({ where: { id } });
+  const { purgeUser } = await import("@/lib/user-purge");
+  await purgeUser(id); // full erasure: every table, like they were never there
 
   revalidatePath("/admin");
   revalidatePath("/dashboard");
-  redirect(`/admin?saved=${encodeURIComponent(u.name + " removed")}`);
+  revalidatePath("/schedule");
+  redirect(`/admin?saved=${encodeURIComponent(u.name + " erased — all records removed")}`);
 }
 
 export async function saveKpi(formData: FormData) {

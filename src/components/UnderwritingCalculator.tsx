@@ -607,12 +607,11 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   const devMode = v("devMode") === "buybox" ? "buybox" : "comps";
   const devBox = n("devBox");                    // builder's buy-box price for a lot like this
   const devBoxFee = n("devBoxFee") || 15000;     // our infill fee target (John: $10–20k)
-  const devBoxClose = n("devBoxClose") || 1500;
   const devCompDispo = devAvgPerAcre > 0 && devSubjAcres > 0 ? Math.round(devAvgPerAcre * devSubjAcres) : 0;
   const devDispo = devMode === "buybox" ? devBox : devCompDispo;
   const devSpread = n("devSpread") || 100000; // Lux Blueprint target spread: $100k–$150k
   const devMao = devMode === "buybox"
-    ? (devBox > 0 ? Math.max(0, Math.round(devBox - devBoxFee - devBoxClose)) : 0)
+    ? (devBox > 0 ? Math.max(0, Math.round(devBox - devBoxFee)) : 0) // assignment: the developer covers ALL closing costs (like the house cash offer)
     : (devDispo > 0 ? Math.max(0, devDispo - devSpread) : 0);
   // Developer double close (seller won't assign → two escrows; same one-button model).
   const devDblOn = v("devDblClose") === "1";
@@ -1334,7 +1333,6 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
                 <div className={reqDiv}>The builder&apos;s buy box — price first, work backward</div>
                 <Field k="devBox" label="Buy-box price for a lot like this ($ — what the builder pays)" prefix="$" span={2} req="need" />
                 <Field k="devBoxFee" label="Our fee ($ — infill standard 10–20k)" prefix="$" placeholder="15,000" req="opt" />
-                <Field k="devBoxClose" label="Our closing cost ($)" prefix="$" placeholder="1,500" req="opt" />
                 <p className="sm:col-span-2 -mt-1 text-[10px] italic text-slate-400">🎯 John&apos;s rule: lock it up at <b>buy-box price − our fee − closing</b>. Know the box BEFORE the seller call — it&apos;s on Vetted Buyers → land buy-box (Dalamar, Goodall, Goodwin…). A lot with no matching box is a comp exercise, not a deal.</p>
               </>)}
               {devMode === "comps" && (<>
@@ -1410,10 +1408,16 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
                 </select>
               </label>) : null}
 
-              <button type="button" onClick={() => setV("devDblClose", devDblOn ? "" : "1")} className={`sm:col-span-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold ring-1 transition ${devDblOn ? "bg-amber-100 text-amber-900 ring-amber-300" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>
-                🔁 Double close? {devDblOn ? "ON — closing costs added below" : "Tap if the seller won't let us assign"}
-                <span className="mt-0.5 block text-[11px] font-normal">{devDblOn ? `We cover the seller's closing on A→B + our seller-side on B→C (${DBL_PCT}% each) = ${money(devDblCost)} extra cost.` : "One tap recalculates the max offer with both closings we'd cover."}</span>
-              </button>
+              {/* Only two developer structures exist (Jon 2026-09-27): assignment
+                  (developer covers ALL closing costs, like the house cash offer)
+                  or a double close (two escrows, we pay both seller sides). */}
+              <div className="sm:col-span-2">
+                <span className="mb-1 block text-[11px] font-semibold text-slate-500">Deal structure</span>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setV("devDblClose", "")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold ring-1 transition ${!devDblOn ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>🏷 Assignment<span className="block text-[10px] font-normal opacity-80">developer covers all closings</span></button>
+                  <button type="button" onClick={() => setV("devDblClose", "1")} className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-bold ring-1 transition ${devDblOn ? "bg-amber-500 text-white ring-amber-500" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-amber-50"}`}>🔁 Double close<span className="block text-[10px] font-normal opacity-80">seller won&apos;t assign — {DBL_PCT}% × both escrows</span></button>
+                </div>
+              </div>
             </>
           )}
           {tab === "cash_land" && (
@@ -1716,7 +1720,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
                   ? [
                       { text: "The builder's buy-box price for a lot like this", amount: money(devBox) },
                       { text: "Take away our fee", amount: money(devBoxFee), minus: true },
-                      { text: "Take away our closing cost", amount: money(devBoxClose), minus: true },
+
                     ]
                   : [
                       { text: `What developers pay per acre here (avg of your comps${devCompRows.some((c) => c.yrs > 0) ? ", grown to today" : ""})`, amount: devAvgPerAcre > 0 ? `${money(devAvgPerAcre)}/ac` : "—" },
@@ -1727,7 +1731,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
                 total={money(devMao)}
                 coach={devMao > 0
                   ? devMode === "buybox"
-                    ? `Open at ${money(devAnchor)} and never pass ${money(devMao)} — every dollar under the box price above ${money(devBoxFee + devBoxClose)} is extra fee.`
+                    ? `Open at ${money(devAnchor)} and never pass ${money(devMao)} — every dollar under the box price above ${money(devBoxFee)} is extra fee. Assignment: the developer covers all closing costs.`
                     : `Open at ${money(devAnchor)} (fee ${money(devFeeAtAnchor)}) and never pass ${money(devMao)}. Aim six figures — floor $50k.`
                   : devMode === "buybox" ? "Enter the builder's buy-box price to get your lock-up number." : "Enter the lot size and 2–3 developer lot-purchase comps to get your number."}
               />
@@ -1741,7 +1745,6 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
               {devMode === "buybox" && (<>
               <Res label="🎯 Builder's buy-box price" value={money(devBox)} tone={devBox > 0 ? "navy" : "bad"} big />
               <Res label="− Our fee" value={money(devBoxFee)} tone="muted" />
-              <Res label="− Our closing" value={money(devBoxClose)} tone="muted" />
               </>)}
               <Res label="🎯 Developer MAO (max offer to seller)" value={money(devMao)} tone={devMao > 0 ? "navy" : "bad"} big />
               {devDblOn && (

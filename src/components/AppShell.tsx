@@ -12,6 +12,7 @@ import Sidebar from "./Sidebar";
 import ContentWrap from "./ContentWrap";
 import ThemeToggle from "./ThemeToggle";
 import { parseNavHidden, isPathHidden } from "@/lib/navItems";
+import { NAV_ORDER_CAT, parseNavOrder } from "@/lib/nav-order";
 import { SPEED_CHECKS_CATEGORY, speedChecksTitle, parseSpeedChecks, hasAfternoonCheck, afternoonCheckRequired, AFTERNOON_CHECK_MINUTES } from "@/lib/speed-checks";
 import ClientWidgets from "./ClientWidgets";
 
@@ -56,6 +57,9 @@ export default async function AppShell({ children }: { children: React.ReactNode
   // Meeting quick-links pinned at the top of the sidebar (replaced the Daily
   // Huddle page — Jon 2026-09-26): the standing office room + the Monday all-call.
   const meetSettings = await getSettings();
+  // Owner-saved sidebar order (tabs + groups) — applies to the whole team.
+  const navOrderRow = await db.resource.findFirst({ where: { category: NAV_ORDER_CAT } }).catch(() => null);
+  const navOrder = parseNavOrder(navOrderRow?.description);
 
   // Start-of-shift nag: if this rep tracks internet and hasn't run today's speed
   // test, show a persistent banner until they do (they open the app at shift start).
@@ -88,7 +92,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
   return (
     <div className="md:flex md:min-h-screen">
       <ThemeToggle />
-      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} />
+      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} navOrder={navOrder} />
       <main className="min-w-0 flex-1">
         <ContentWrap>
           {openOffboarding && (

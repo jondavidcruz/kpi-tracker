@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess, toggleOffboardingTask, installLandKpis, installLeadsGeneratedKpi } from "@/app/actions";
+import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess, toggleOffboardingTask, installLandKpis, installLeadsGeneratedKpi, moveNavGroup, moveNavItem } from "@/app/actions";
 import { adminConfigured } from "@/lib/supabase/admin";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { toInputNumber, type Unit } from "@/lib/format";
 import { categoryMeta } from "@/lib/kpi";
 import { POSITIONS, positionLabel } from "@/lib/roles";
+import { NAV_GROUPS } from "@/lib/navItems";
+import { NAV_ORDER_CAT, parseNavOrder, applyOrder } from "@/lib/nav-order";
 import type { User } from "@prisma/client";
 import { Card, SectionTitle } from "@/components/ui";
 import { getCurrentUser, isManager, isAdmin, isOwner } from "@/lib/auth";
@@ -56,6 +58,12 @@ export default async function AdminPage({
 
   const owner = isAdmin(me);
   const aiLog = owner ? await db.assistantLog.findMany({ orderBy: { createdAt: "desc" }, take: 40 }) : [];
+  const navOrderRow = owner ? await db.resource.findFirst({ where: { category: NAV_ORDER_CAT } }).catch(() => null) : null;
+  const navOrder = parseNavOrder(navOrderRow?.description);
+  const orderedNavGroups = applyOrder(NAV_GROUPS, navOrder?.groups, (g) => g.group).map((g) => ({
+    group: g.group,
+    items: applyOrder([...g.items], navOrder?.items[g.group], (i) => i.href),
+  }));
   const openOffboardings = await db.offboarding.findMany({ where: { completedAt: null }, include: { tasks: { orderBy: { sortOrder: "asc" } } }, orderBy: { createdAt: "desc" } });
   const cats = [
     { id: "people", emoji: "👥", label: "People", show: true },
@@ -113,6 +121,35 @@ export default async function AdminPage({
           </section>
         );
       })}
+
+      {/* ════ SIDEBAR ORDER (owner) — reorder tabs for the whole team ════ */}
+      {owner && (
+        <section id="sidebar-order" className="scroll-mt-20">
+          <SectionTitle title="🧭 Sidebar order" subtitle="Move groups and tabs — everyone's sidebar follows this order instantly. New pages appear in their coded spot until you move them." accent="bg-indigo-400" />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {orderedNavGroups.map((g, gi) => (
+              <Card key={g.group} className="p-3.5">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-700">{g.group}</span>
+                  <div className="ml-auto flex gap-1">
+                    <form action={moveNavGroup}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="dir" value="up" /><button disabled={gi === 0} className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 hover:bg-slate-200 disabled:opacity-30" title="Move group up">↑</button></form>
+                    <form action={moveNavGroup}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="dir" value="down" /><button disabled={gi === orderedNavGroups.length - 1} className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 hover:bg-slate-200 disabled:opacity-30" title="Move group down">↓</button></form>
+                  </div>
+                </div>
+                <div className="space-y-0.5">
+                  {g.items.map((it, ii) => (
+                    <div key={it.href} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1 text-[13px] text-slate-700">
+                      <span className="flex-1">{it.label}</span>
+                      <form action={moveNavItem}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="href" value={it.href} /><input type="hidden" name="dir" value="up" /><button disabled={ii === 0} className="rounded bg-white px-1.5 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-700 disabled:opacity-30">↑</button></form>
+                      <form action={moveNavItem}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="href" value={it.href} /><input type="hidden" name="dir" value="down" /><button disabled={ii === g.items.length - 1} className="rounded bg-white px-1.5 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-700 disabled:opacity-30">↓</button></form>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ════ PEOPLE ════ */}
       <section id="people" className="scroll-mt-20">
@@ -509,8 +546,9 @@ function PersonCard({ u, removed, canDelete, revoke }: { u: User; removed?: bool
       {removed && canDelete && (
         <form action={deleteUser} className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2">
           <input type="hidden" name="id" value={u.id} />
-          <span className="mr-auto text-xs text-slate-400">Permanently remove {u.name.split(" ")[0]} and all their history</span>
-          <button className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-50">🗑 Delete permanently</button>
+          <span className="mr-auto text-xs text-slate-400">Erase {u.name.split(" ")[0]} completely — every record, like they were never here. Type <b>{u.name.split(" ")[0]}</b> to confirm:</span>
+          <input name="confirm" placeholder={u.name.split(" ")[0]} autoComplete="off" className="w-28 rounded-lg border border-red-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-200" required />
+          <button className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-50">🗑 Erase permanently</button>
         </form>
       )}
     </div>
