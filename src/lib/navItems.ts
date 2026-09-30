@@ -44,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
   ] },
   { group: "EOS", items: [
     { href: "/meeting", label: "Monday Meeting", gate: "manager" },
+    { href: "/stoplight", label: "Stoplight Check", gate: "all" },
     { href: "/leadership", label: "Leadership Meeting", gate: "manager" },
     { href: "/rocks", label: "Rocks", gate: "all" },
     { href: "/issues", label: "Issues", gate: "admin" },
@@ -75,7 +76,7 @@ export const NEW_REP_ALLOWED = new Set<string>([
   "/process", "/underwriting", "/schedule", "/rewards", "/culture",   // Overview
   "/entry", "/report",                                                 // Performance
   "/ai-training", "/call-scoring", "/scripts", "/glossary",            // Coaching
-  "/rocks", "/vto", "/team-360",                                       // EOS
+  "/rocks", "/vto", "/team-360", "/stoplight",                         // EOS
   "/tickets", "/ai-champion",                                          // Requests & Support (no Software & Logins by default — Jon 2026-08-26)
 ]);
 

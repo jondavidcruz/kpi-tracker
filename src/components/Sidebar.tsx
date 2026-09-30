@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
   Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck,
+  TrafficCone,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -108,6 +109,7 @@ export default function Sidebar({
     ] },
     { label: "EOS", items: [
       { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
+      { href: "/stoplight", label: "Stoplight Check", Icon: TrafficCone },
       { href: "/leadership", label: "Leadership Meeting", Icon: Crown, managerOnly: true },
       { href: "/rocks", label: "Rocks", Icon: Mountain },
       { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },

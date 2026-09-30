@@ -18,6 +18,7 @@ import { CLOSING_ACTUALS_CAT, type ClosingActual } from "@/lib/closing-actuals";
 import { NAV_ORDER_CAT, parseNavOrder, moveInList, type NavOrder } from "@/lib/nav-order";
 import { NAV_GROUPS, defaultNewRepNavHidden } from "@/lib/navItems";
 import { scoreTranscript } from "@/lib/score";
+import { reportWeek, kpiPace, saveReport, LIGHTS } from "@/lib/stoplight";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
 import { rollupResearchKpis, orgToday } from "@/lib/research-kpis";
@@ -3978,4 +3979,32 @@ export async function applyGoalRecalibration(formData: FormData) {
   revalidatePath("/admin/recalibrate");
   revalidatePath("/dashboard");
   redirect(`/admin/recalibrate?applied=${applied}`);
+}
+
+// --- Weekly Stoplight Check (Monday all-call) --------------------------------
+
+/** File (or update) your 🟢/🟡/🔴 for the week. Yellow/red need a note (and
+ *  auto-raise a team Issue); green with KPIs behind pace needs a one-line why. */
+export async function submitStoplight(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const color = String(formData.get("color") ?? "") as (typeof LIGHTS)[number];
+  if (!LIGHTS.includes(color)) redirect("/stoplight?err=color");
+  const note = String(formData.get("note") ?? "").trim().slice(0, 500);
+  const greenWhy = String(formData.get("greenWhy") ?? "").trim().slice(0, 500);
+  const settings = await getSettings();
+  const today = todayStr(settings.orgTimezone);
+  const week = reportWeek(today);
+  const pace = await kpiPace(me, week.start, today);
+  if (color !== "green" && !note) redirect(`/stoplight?err=note&c=${color}`);
+  if (color === "green" && pace.onPace < pace.total && !greenWhy) redirect("/stoplight?err=why&c=green");
+  await saveReport(me, week.start, week.label, color, {
+    note: color === "green" ? "" : note,
+    greenWhy: color === "green" ? greenWhy : "",
+    onPace: pace.onPace, paceTotal: pace.total,
+  });
+  revalidatePath("/stoplight");
+  revalidatePath("/meeting");
+  revalidatePath("/issues");
+  redirect("/stoplight?saved=1");
 }

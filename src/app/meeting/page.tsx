@@ -109,6 +109,13 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
         )}
       </Card>
 
+      <Link href="/stoplight" className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/70 bg-white px-4 py-3 text-sm hover:bg-slate-50">
+        <span className="font-semibold text-slate-800">🚦 Stoplight Check</span>
+        <span className="text-slate-500">{deck.stoplight.reported} of {deck.stoplight.expected} reported · week of {deck.stoplight.weekLabel}</span>
+        <span>🟢 {deck.stoplight.counts.green} · 🟡 {deck.stoplight.counts.yellow} · 🔴 {deck.stoplight.counts.red}</span>
+        <span className="ml-auto text-xs font-semibold text-brand-navy">Open board →</span>
+      </Link>
+
       <MeetingDeckView deck={deck} />
 
       {/* Recordings archive (Fathom links) */}

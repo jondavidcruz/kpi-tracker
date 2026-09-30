@@ -13,6 +13,7 @@ import { analyzeDeal } from "./deals";
 import { quarterOf, quarterLabel } from "./eos";
 import { EXPENSE_CATEGORIES, LEAD_KPI_KEYS } from "./expenses";
 import { ACQ_TIPS, DISPO_TIPS, TEAM_ACTIVITIES } from "./training-tips";
+import { getBoard, deckWeek, type StoplightBoard } from "./stoplight";
 
 export interface Glance { key: string; name: string; value: string }
 export interface RoleTable {
@@ -69,6 +70,8 @@ export interface MeetingDeck {
   trainingTips: { role: string; emoji: string; text: string; focus?: string }[];
   // Weekly team-building closer (2–5 min), rotates from TEAM_ACTIVITIES.
   activity: { title: string; how: string; minutes: number };
+  // Weekly Stoplight Check — everyone's 🟢/🟡/🔴, grouped by department.
+  stoplight: StoplightBoard;
 }
 
 const ROLLUP_KEYS = ["offers_made", "acq_contracts_sent", "deals_sold", "new_buyers"];
@@ -288,7 +291,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const mb = monthBounds(today);
   const year = today.slice(0, 4);
 
-  const [settings, reps, perRepKpis, teamKpis, teamMonthlyKpis, wkSums, monthlyVals, deals, dealMetrics, customSlideRows, targets] = await Promise.all([
+  const [settings, reps, perRepKpis, teamKpis, teamMonthlyKpis, wkSums, monthlyVals, deals, dealMetrics, customSlideRows, targets, stoplight] = await Promise.all([
     getSettings(),
     getActiveReps(),
     getKpis({ scope: "per_rep", computed: false }),
@@ -300,6 +303,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     getDealMetrics(year),
     db.deckSlide.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
     getAllTargets(),
+    getBoard(deckWeek(today)),
   ]);
 
   // Month-to-date financial dashboard from the team's MONTHLY KPIs (contracts
@@ -444,6 +448,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     recognition,
     trainingTips,
     activity,
+    stoplight,
   };
 }
 

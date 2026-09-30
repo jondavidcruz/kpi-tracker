@@ -6,6 +6,8 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { db } from "@/lib/db";
 import { buildBackup } from "@/lib/backup";
+import { reportWeek, missingReporters } from "@/lib/stoplight";
+import { APP_URL } from "@/lib/site";
 import { sendEmailWithAttachment, sendTeamChat, sendEmailTo, sendTimecardChat, postChatWebhook } from "@/lib/notify";
 import { upcomingCulture, prettyMMDD, whenLabel, ordinal } from "@/lib/culture";
 import { isSemiMonthlyPayday } from "@/lib/date";
@@ -467,6 +469,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, speedTestReminded, postLunchReminded });
   }
 
+  // Stoplight Check nudge — manual test: ?stoplight=1 (posts to Team Chat).
+  if (url.searchParams.get("stoplight") === "1") {
+    return NextResponse.json({ ok: true, stoplight: await sendStoplightReminder() });
+  }
+
   // Full scheduled pass. On the MORNING run (before noon PT) also send the am
   // crew (Michelle/Sharyn, + Marie on Fri) their start-of-shift speed reminder.
   const la = laNow();
@@ -488,8 +495,27 @@ export async function GET(request: Request) {
     for (const r of activeReps) { await rollupResearchKpis(r.id, t); await rollupResearchKpis(r.id, y); }
   }
 
+  // Friday-afternoon run (~3:30pm PT): nudge whoever hasn't filed their weekly
+  // Stoplight Check (due Friday EOD, shown on the Monday deck). Team space only.
+  let stoplightReminded: string[] = [];
+  if (la.dow === 5 && la.hour >= 12) stoplightReminded = await sendStoplightReminder().catch(() => []);
+
   // Close any time card left open past its scheduled shift (forgot to clock out).
   const autoClockedOut = await autoCloseAbandonedSessions();
   const result = await runScheduledChecks({ date, force, weekly, review });
-  return NextResponse.json({ ok: true, speedTestReminded, autoClockedOut, ...result });
+  return NextResponse.json({ ok: true, speedTestReminded, stoplightReminded, autoClockedOut, ...result });
+}
+
+/** Post one Team Chat nudge naming everyone who hasn't filed this week's stoplight. */
+async function sendStoplightReminder(): Promise<string[]> {
+  const settings = await getSettings();
+  const week = reportWeek(todayStr(settings.orgTimezone));
+  const missing = await missingReporters(week.start);
+  if (!missing.length) return [];
+  await sendTeamChat(
+    `🚦 *Stoplight Check — due today (end of day).* Still need: ${missing.join(", ")}.\n` +
+    `🟢 on track · 🟡 something's not working, need help · 🔴 stop, a change is needed.\n` +
+    `Takes 30 seconds → ${APP_URL}/stoplight — it goes on Monday's meeting deck.`,
+  );
+  return missing;
 }

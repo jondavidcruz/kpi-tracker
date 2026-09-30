@@ -100,6 +100,46 @@ function TeamSlide() {
   );
 }
 
+const LIGHT_BG = { green: "bg-emerald-500", yellow: "bg-amber-400", red: "bg-red-500" } as const;
+const LIGHT_RANK = { red: 0, yellow: 1, green: 2 } as const;
+
+function StoplightSlide({ sl }: { sl: MeetingDeck["stoplight"] }) {
+  const trend = (cur: keyof typeof LIGHT_RANK | null, prev: keyof typeof LIGHT_RANK | null) =>
+    !cur || !prev || cur === prev ? null : LIGHT_RANK[cur] > LIGHT_RANK[prev] ? "▲" : "▼";
+  return (
+    <Navy title="🚦 Stoplight Check">
+      <div className="mb-[2cqw] flex items-center justify-center gap-[2cqw] text-white/80" style={{ fontSize: "clamp(10px,1.4cqw,18px)" }}>
+        <span>Week of {sl.weekLabel}</span>
+        <span>🟢 {sl.counts.green} · 🟡 {sl.counts.yellow} · 🔴 {sl.counts.red}</span>
+        {sl.reported < sl.expected && <span className="text-white/50">{sl.expected - sl.reported} not reported</span>}
+      </div>
+      <div className="flex h-[80%] gap-[2cqw]">
+        {sl.groups.map((g) => (
+          <div key={g.dept} className="flex flex-1 flex-col gap-[1cqw]">
+            <div className="font-bold text-brand-gold" style={{ fontSize: "clamp(11px,1.6cqw,20px)" }}>{g.emoji} {g.dept}</div>
+            {g.people.map((p) => {
+              const t = trend(p.color, p.prev);
+              return (
+                <div key={p.name} className="flex items-start gap-[1.2cqw] rounded-lg bg-white/10 p-[1cqw]">
+                  <span className={`mt-[0.2cqw] shrink-0 rounded-full ${p.color ? LIGHT_BG[p.color] : "bg-white/20"}`} style={{ width: "2.6cqw", height: "2.6cqw" }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold" style={{ fontSize: "clamp(11px,1.6cqw,20px)" }}>
+                      {p.name}
+                      {t && <span className={`ml-2 ${t === "▲" ? "text-emerald-300" : "text-red-300"}`} style={{ fontSize: "clamp(8px,1.1cqw,14px)" }}>{t} from last week</span>}
+                      {!p.color && <span className="ml-2 font-normal text-white/50" style={{ fontSize: "clamp(8px,1.1cqw,14px)" }}>not reported</span>}
+                    </div>
+                    {p.note && <div className="line-clamp-2 text-white/80" style={{ fontSize: "clamp(9px,1.2cqw,15px)" }}>{p.note}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </Navy>
+  );
+}
+
 function buildSlides(d: MeetingDeck): Slide[] {
   const s: Slide[] = [];
 
@@ -120,6 +160,9 @@ function buildSlides(d: MeetingDeck): Slide[] {
   s.push({ name: "Team", node: d.teamSlideUrl
     ? <div className="h-full w-full bg-[#f5ede4] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${d.teamSlideUrl})` }} />
     : <TeamSlide /> });
+
+  // 2a. Stoplight Check — everyone's 🟢/🟡/🔴 for the week (reported by Friday EOD on /stoplight).
+  s.push({ name: "Stoplight Check", node: <StoplightSlide sl={d.stoplight} /> });
 
   // 2b. Owner-added custom slides (uploaded photos / text), inserted right after the team.
   for (const cs of d.customSlides) {
