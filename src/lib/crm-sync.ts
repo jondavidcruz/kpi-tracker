@@ -8,8 +8,7 @@ const STAGE_KPI: Record<string, string> = {
   // Process call done = card reaches comp/numbers review (per Jon)
   "276eae09-9722-434a-a47b-e97b012e7ce7": "completed_process_calls", // trad COMP TO OFFER
   "2d6a497d-625f-4d65-92b8-19f8b651d30e": "completed_process_calls", // dev REVIEW NUMBERS
-  // 🧑🏻‍⚖️ COMP REVIEW (AQM) → Deals Comped (always credited to Marie, see below)
-  "381d0841-7ffb-4f74-8f34-cdee2cdc0868": "deals_comped",
+  // COMP REVIEW → Deals Comped RETIRED from the dispo scorecard (Jon 2026-10-01).
   // ⚓ VERBAL OFFER → Offers Made
   "6549e8ff-7695-4cd9-9705-e0316be52d7c": "offers_made",
   "c31d1b15-ad0f-4306-9eb3-8cce3909b7be": "offers_made",
@@ -25,9 +24,7 @@ const STAGE_KPI: Record<string, string> = {
   // separately once we have that DS stage id.
 };
 // Stages whose credit goes to a FIXED rep, not the card's assignedTo.
-const STAGE_FIXED_REP: Record<string, string> = {
-  "381d0841-7ffb-4f74-8f34-cdee2cdc0868": "marie", // COMP REVIEW → Marie comped it
-};
+const STAGE_FIXED_REP: Record<string, string> = {};
 
 // CRM agent → our rep, with the KPI keys each call metric feeds. Connected = a
 // TYPE_CALL whose meta.call.duration ≥ convMin (so voicemails/quick no-answers

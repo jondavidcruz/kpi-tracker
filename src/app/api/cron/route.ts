@@ -58,6 +58,52 @@ export async function GET(request: Request) {
   const weekly = url.searchParams.get("weekly") === "1";
   const review = url.searchParams.get("review") === "1";
 
+  // One-shot dispo scorecard cleanup (Jon 2026-10-01): hide Flipper Conversations
+  // + Deals Comped (deactivate — history kept), rename Developer Conversations →
+  // Buyer Conversations (one KPI for all buyer types: developers + flippers).
+  if (url.searchParams.get("dispokpis") === "1") {
+    const hidFlipper = await db.kpi.updateMany({ where: { key: "buyer_conversations" }, data: { active: false } });
+    const hidComped = await db.kpi.updateMany({ where: { key: "deals_comped" }, data: { active: false } });
+    const renamed = await db.kpi.updateMany({
+      where: { key: "dev_conversations" },
+      data: { name: "Buyer Conversations", definition: "Real conversations with buyers of any type — developers, builders, fix & flippers (call ≥1 min or substantive back-and-forth)." },
+    });
+    const after = await db.kpi.findMany({ where: { key: { in: ["buyer_conversations", "deals_comped", "dev_conversations"] } }, select: { key: true, name: true, active: true } });
+    return NextResponse.json({ ok: true, hidFlipper: hidFlipper.count, hidComped: hidComped.count, renamed: renamed.count, after });
+  }
+
+  // CRM mapping diagnostic — who exists in REI Reply and whose userIds actually
+  // appear on recent TYPE_CALL messages (bounded scan, ~30 conversations). Built
+  // to answer why Sharyn's talk time doesn't auto-feed while Marie's does.
+  if (url.searchParams.get("crmdiag") === "1") {
+    const { listCrmUsers, searchConversations, getMessages } = await import("@/lib/reireply");
+    const users = await listCrmUsers();
+    const conv = await searchConversations({ limit: "30" });
+    const callsByUser: Record<string, { calls: number; talkSec: number; lastCall: string }> = {};
+    let msgScanned = 0;
+    if (conv.ok) {
+      const convs = (conv.body as { conversations?: Array<{ id: string }> }).conversations ?? [];
+      for (const c of convs) {
+        const m = await getMessages(c.id);
+        if (!m.ok) continue;
+        const mb = m.body as { messages?: unknown[] | { messages?: unknown[] } };
+        const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []);
+        for (const raw of list) {
+          const msg = raw as { dateAdded?: string; userId?: string; messageType?: string; meta?: { call?: { duration?: number } } };
+          msgScanned++;
+          if (msg.messageType !== "TYPE_CALL") continue;
+          const uid = String(msg.userId ?? "(none)");
+          const e = (callsByUser[uid] ??= { calls: 0, talkSec: 0, lastCall: "" });
+          e.calls++;
+          e.talkSec += Number(msg.meta?.call?.duration ?? 0) || 0;
+          const dt = String(msg.dateAdded ?? "");
+          if (dt > e.lastCall) e.lastCall = dt;
+        }
+      }
+    }
+    return NextResponse.json({ ok: true, crmUsers: users.users, msgScanned, callsByUser });
+  }
+
   // Nightly off-site backup — full DB export emailed to the owner(s) as a JSON
   // attachment. (Supabase's own PITR/daily backups are the primary; this is a
   // belt-and-suspenders copy that lands in Jon's inbox.)

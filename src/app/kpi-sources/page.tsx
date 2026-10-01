@@ -21,8 +21,7 @@ const SOURCE: Record<string, { tag: string; how: string }> = {
   completed_process_calls: { tag: "🟢 REI Reply", how: "Card → COMP TO OFFER / REVIEW NUMBERS stage" },
   deals_comped: { tag: "🟢 REI Reply", how: "Card → 🧑‍⚖️ COMP REVIEW stage → credited to Marie" },
   // ✋ Manual — the CRM can't distinguish these, so reps enter them on Enter KPIs
-  dev_conversations: { tag: "✋ Manual", how: "Developer conversations — CRM can't tell buyer type, so log manually" },
-  buyer_conversations: { tag: "✋ Manual", how: "Fix/flipper conversations — CRM can't tell buyer type, so log manually" },
+  dev_conversations: { tag: "✋ Manual", how: "Buyer conversations (developers + flippers) — the CRM can't reliably tell a real conversation from a long voicemail, so log manually" },
   deals_sold: { tag: "✋ Manual", how: "Off-market deals blasted to the buyer list (email/SMS) — ON MARKET ≠ sent" },
   // 🔵 Buyer Research (instant)
   new_buyers: { tag: "🔵 Buyer Research", how: "When you add a buyer/developer" },
@@ -92,7 +91,7 @@ export default async function KpiSourcesPage() {
       })}
 
       <Card className="bg-amber-50/60 p-4 text-xs text-amber-800 ring-1 ring-amber-200">
-        <p><strong>*Conversations:</strong> right now Sharyn&apos;s connected calls feed Developer Conversations and Marie&apos;s feed Fix/Flipper Conversations. To make both exact for both reps, tag CRM contacts Developer vs Buyer.</p>
+        <p><strong>*Conversations:</strong> Buyer Conversations covers every buyer type (developers, builders, fix &amp; flippers) in one KPI — reps log it manually since the CRM can&apos;t tell a real conversation from a long voicemail.</p>
         <p className="mt-1"><strong>Changed a pipeline stage in REI Reply?</strong> Tell the app owner so the 🟢 mappings get updated — otherwise that KPI stops counting.</p>
       </Card>
 
