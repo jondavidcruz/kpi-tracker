@@ -35,7 +35,9 @@ export const AGENTS: AgentCfg[] = [
   { crm: "FT34Pug9AUHAG0Kpwg9j", first: "michelle", talk: "acq_talk_time" },
   // Talk time + dials + answered are auto. Developer vs Fix/Flipper CONVERSATIONS are NOT
   // auto — the CRM can't tell which buyer type a call was with — so reps log those manually.
-  { crm: "vFYB3vWFG2o0VOVwwEYd", first: "sharyn", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls" },
+  // Sharyn's CRM account was recreated — old id vFYB3vWFG2o0VOVwwEYd went dead and
+  // her talk time silently stopped feeding (found via ?crmdiag=1, 2026-10-01).
+  { crm: "cBEywYYmuWQ4u5LE6Guj", first: "sharyn", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls" },
   { crm: "IqYEt2UrQ6gVToOzsaaw", first: "marie", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls" },
 ];
 
