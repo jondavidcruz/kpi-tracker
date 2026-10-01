@@ -357,7 +357,7 @@ function AcreQuickRef() {
   );
 }
 
-export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeCostN = 0 }: { defaultCloseCost?: number; closeCostN?: number }) {
+export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeCostN = 0, repName = "" }: { defaultCloseCost?: number; closeCostN?: number; repName?: string }) {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("cash_land");
   // clCloseCost starts PRE-FILLED with the average of our ACTUAL logged closings
   // (from the Closing Calculator) — no more "$1,500 example" (Jon 2026-09-25).
@@ -1101,7 +1101,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
         ${confAll.length ? `<p style="margin-top:8px;font-size:11px;font-weight:700;color:${confPct >= 80 ? "#047857" : confPct >= 50 ? "#b45309" : "#b91c1c"}">🎯 Offer confidence: ${confPct}% (${confAll.filter((c) => c.ok).length}/${confAll.length} evidence + checks)</p>` : ""}
         ${(() => { const items = KILL_CHECKS[checksKey] ?? []; const missing = items.filter((_, ci) => v(`kc_${checksKey}_${ci}`) !== "1"); return missing.length ? `<p style="margin-top:8px;color:#b45309;font-size:11px;font-weight:700">⚠️ Unverified at export: ${esc(missing.join(" · "))}</p>` : items.length ? `<p style="margin-top:8px;color:#047857;font-size:11px;font-weight:700">✅ All pre-send checks confirmed</p>` : ""; })()}
         <div style="margin-top:22px;padding-top:8px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-          🗓️ Comped on <b style="color:#475569">${esc(compDate)}</b> at ${esc(compTime)}${compSeconds != null ? ` &nbsp;·&nbsp; ⏱ Underwrite time: <b style="color:#475569">${esc(mmss(compSeconds))}</b>` : ""}<br>
+          ${repName ? `✍️ Underwritten by <b style="color:#475569">${esc(repName)}</b> &nbsp;·&nbsp; ` : ""}🗓️ Comped on <b style="color:#475569">${esc(compDate)}</b> at ${esc(compTime)}${compSeconds != null ? ` &nbsp;·&nbsp; ⏱ Underwrite time: <b style="color:#475569">${esc(mmss(compSeconds))}</b>` : ""}<br>
           <span style="color:#cbd5e1">Re-comp every ~30 days — values move as new sales hit the market.</span>
         </div>
       </body></html>`);
