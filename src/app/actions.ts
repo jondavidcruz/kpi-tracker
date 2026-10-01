@@ -2476,6 +2476,68 @@ export async function logBuyerOutreach(formData: FormData) {
   revalidatePath("/marketing");
 }
 
+/** Phase 3 cascade: geocode a deal, rank every active buyer against it, and
+ *  remember the search (last 20) for the demand board. Read-only on buyers. */
+export async function cascadeRank(formData: FormData): Promise<{
+  ok: boolean;
+  error?: string;
+  geocode?: { lat: number; lng: number; formatted: string; county: string; city: string; state: string; zip: string };
+  ranked?: Array<{
+    id: string; name: string; company: string; type: string; phone: string; email: string;
+    score: number; tier: 1 | 2 | 3; why: Array<{ ok: boolean | "warn"; label: string }>; geoBasis: string;
+  }>;
+  nearest?: { name: string; miles: number } | null;
+}> {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return { ok: false, error: "no access" };
+  const address = String(formData.get("address") ?? "").trim();
+  if (!address) return { ok: false, error: "enter an address, area, or ZIP" };
+  const price = Number(formData.get("price")) || undefined;
+  const acres = Number(formData.get("acres")) || undefined;
+  const assetType = String(formData.get("assetType") ?? "").trim() || undefined;
+
+  const { geocode } = await import("@/lib/geo/geocode");
+  const g = await geocode(address);
+  if (!g) return { ok: false, error: `Couldn't locate “${address}” — try “City, ST” or a ZIP.` };
+
+  const rows = await db.marketContact.findMany({
+    where: { archivedAt: null },
+    select: {
+      id: true, name: true, company: true, type: true, phone: true, email: true,
+      buyBoxStruct: true, geoPolygon: true, geoCentroidLat: true, geoCentroidLng: true,
+      touches: { orderBy: { at: "desc" }, take: 1, select: { at: true } },
+    },
+  });
+  const { rankBuyers, nearestMiss } = await import("@/lib/buybox/match");
+  const buyers = rows.map((r) => ({
+    id: r.id, name: r.name, buyBox: (r.buyBoxStruct as never) ?? null, geoPolygon: (r.geoPolygon as never) ?? null,
+    geoCentroidLat: r.geoCentroidLat, geoCentroidLng: r.geoCentroidLng, lastTouchAt: r.touches[0]?.at ?? null,
+  }));
+  const deal = { lat: g.lat, lng: g.lng, county: g.county || undefined, city: g.city || undefined, state: g.state || undefined, zip: g.zip || undefined, price, acres, assetType };
+  const ranked = rankBuyers(deal, buyers);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  // Remember the search (cap ~20 rows — CascadeSearch is ours, not buyer data).
+  try {
+    await db.cascadeSearch.create({ data: {
+      actor: me?.name ?? "", address, geocode: g as never, price: price ?? null, acres: acres ?? null,
+      assetType: assetType ?? "", topIds: ranked.slice(0, 10).map((r) => r.buyer.id) as never,
+    } });
+    const old = await db.cascadeSearch.findMany({ orderBy: { at: "desc" }, skip: 20, select: { id: true } });
+    if (old.length) await db.cascadeSearch.deleteMany({ where: { id: { in: old.map((o) => o.id) } } });
+  } catch { /* history is best-effort */ }
+
+  return {
+    ok: true,
+    geocode: g,
+    nearest: ranked.length ? null : nearestMiss(deal, buyers),
+    ranked: ranked.map((r) => {
+      const c = byId.get(r.buyer.id);
+      return { id: r.buyer.id, name: r.buyer.name, company: c?.company ?? "", type: c?.type ?? "", phone: c?.phone ?? "", email: c?.email ?? "", score: r.score, tier: r.tier, why: r.why, geoBasis: r.geoBasis };
+    }),
+  };
+}
+
 /** Create or edit a Target Market (neighborhood/farm). Managers/marketing only. */
 export async function saveTargetMarket(formData: FormData) {
   const me = await getCurrentUser();

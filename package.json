@@ -7,6 +7,7 @@
     "build": "prisma generate && (prisma migrate deploy || echo '⚠️ migrate deploy skipped — DIRECT_URL unreachable; continuing build') && next build",
     "start": "next start",
     "postinstall": "prisma generate",
+    "test": "vitest run",
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
@@ -20,6 +21,9 @@
     "@prisma/client": "^6.19.3",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
+    "@turf/boolean-point-in-polygon": "^7.4.0",
+    "@turf/distance": "^7.4.0",
+    "@turf/helpers": "^7.4.0",
     "lucide-react": "^1.18.0",
     "next": "16.2.6",
     "prisma": "^6.19.3",
@@ -35,6 +39,8 @@
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
   }
 }

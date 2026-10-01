@@ -38,6 +38,6 @@
   ],
   "exclude": [
     "node_modules",
-    "warroom-vetted-buyers-build"
+    "warroom-vetted-buyers-build", "_to_delete"
   ]
 }

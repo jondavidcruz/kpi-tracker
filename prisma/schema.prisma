@@ -1250,6 +1250,22 @@ model PeerAssessment {
 
 // Geocode cache — we never pay for (or rate-limit into) the same lookup twice.
 // query is the normalized input string; blank lat/lng = a cached MISS.
+// Last cascade searches (vetted-buyers Phase 3) — who looked for buyers where.
+// Capped at ~20 rows by the action; feeds the demand board later.
+model CascadeSearch {
+  id        String   @id @default(cuid())
+  at        DateTime @default(now())
+  actor     String   @default("") // war-room user name
+  address   String
+  geocode   Json? // {lat,lng,county,city,state,zip,formatted}
+  price     Float?
+  acres     Float?
+  assetType String   @default("")
+  topIds    Json? // top 10 ranked buyer ids
+
+  @@index([at])
+}
+
 model GeoCache {
   id        String   @id @default(cuid())
   query     String   @unique
