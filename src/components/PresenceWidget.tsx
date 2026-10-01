@@ -36,6 +36,7 @@ export default function PresenceWidget() {
   useEffect(() => {
     let alive = true;
     const load = async () => {
+      if (document.visibilityState === "hidden") return;
       try {
         const r = await fetch("/api/presence", { cache: "no-store" });
         if (!r.ok) return;
@@ -44,8 +45,9 @@ export default function PresenceWidget() {
       } catch { /* keep last good state */ }
     };
     load();
-    const id = setInterval(load, 15000);
-    return () => { alive = false; clearInterval(id); };
+    const id = setInterval(load, 60000);
+    document.addEventListener("visibilitychange", load);
+    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", load); };
   }, []);
 
   const onMove = useCallback((e: PointerEvent) => {

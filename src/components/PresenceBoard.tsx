@@ -55,6 +55,7 @@ export default function PresenceBoard({ initial }: { initial: Person[] }) {
   useEffect(() => {
     let alive = true;
     const load = async () => {
+      if (document.visibilityState === "hidden") return; // nobody's looking — save the server CPU
       try {
         const r = await fetch("/api/presence", { cache: "no-store" });
         if (!r.ok) return;
@@ -64,11 +65,13 @@ export default function PresenceBoard({ initial }: { initial: Person[] }) {
         /* keep last good state */
       }
     };
-    const id = setInterval(load, 12000); // refresh ~every 12s so a drop shows near-instantly
+    const id = setInterval(load, 45000); // 45s keeps a drop visible within the minute without hammering the server
+    document.addEventListener("visibilitychange", load);
     load();
     return () => {
       alive = false;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", load);
     };
   }, []);
 

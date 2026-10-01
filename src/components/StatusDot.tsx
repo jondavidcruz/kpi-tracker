@@ -25,7 +25,7 @@ export default function StatusDot() {
       } catch { /* ignore */ }
     };
     load();
-    const id = setInterval(load, 60000);
+    const id = setInterval(load, 300000); // health rarely flips — 5 min is plenty
     return () => { alive = false; clearInterval(id); };
   }, []);
 

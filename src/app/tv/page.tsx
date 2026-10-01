@@ -82,7 +82,7 @@ export default async function TvPage() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-auto bg-brand-navy text-white">
-      <meta httpEquiv="refresh" content="60" />
+      <meta httpEquiv="refresh" content="180" />
 
       {/* Header */}
       <header className="flex items-center justify-between gap-4 border-b border-white/10 px-8 py-5">

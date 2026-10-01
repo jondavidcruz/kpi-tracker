@@ -21,7 +21,10 @@ export default function HeartbeatPing() {
       } catch { /* offline — we'll catch up on reconnect */ }
     };
     ping();
-    // Ping every 30s. IMPORTANT: browsers throttle background-tab timers hard —
+    // Ping every 90s — the presence thresholds are minutes-level (STALE 6 min,
+    // alert 12 min), so faster pinging only burns Vercel CPU (Jon 2026-09-30:
+    // 75% of the free Fluid CPU tier gone). IMPORTANT: browsers throttle
+    // background-tab timers hard —
     // Chrome clamps to once/min after 5 min hidden, exactly what happens while the
     // team sits in a Google Meet with the War Room tab in the background (that was
     // the false "disconnected" storm). A Web Worker ticker dodges the clamping;
@@ -30,11 +33,11 @@ export default function HeartbeatPing() {
     let id: ReturnType<typeof setInterval> | null = null;
     let worker: Worker | null = null;
     try {
-      const src = URL.createObjectURL(new Blob(["setInterval(function(){postMessage(1)},30000)"], { type: "text/javascript" }));
+      const src = URL.createObjectURL(new Blob(["setInterval(function(){postMessage(1)},90000)"], { type: "text/javascript" }));
       worker = new Worker(src);
       worker.onmessage = () => ping();
       URL.revokeObjectURL(src);
-    } catch { id = setInterval(ping, 30000); }
+    } catch { id = setInterval(ping, 90000); }
     const onVis = () => { if (document.visibilityState === "visible") ping(); };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("online", ping);
