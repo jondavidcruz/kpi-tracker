@@ -12,6 +12,10 @@ import { Card, SectionTitle } from "@/components/ui";
 import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
 import VettingTable, { type Prospect } from "@/components/VettingTable";
 import { matchBuyersForDeal, type MatchBuyer } from "@/lib/buyer-match";
+import { buildScorecard, coverageByCounty } from "@/lib/buyers/scorecard";
+import type { BuyBox } from "@/lib/buybox/types";
+import VettedBuyersBoard from "@/components/VettedBuyersBoard";
+import type { CardBuyer } from "@/components/BuyerCards";
 
 export const dynamic = "force-dynamic";
 
@@ -123,6 +127,31 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     .sort((a, b) => (b.days ?? 9999) - (a.days ?? 9999))
     .slice(0, 24);
 
+  // ── Section 3: vetting scorecard / tier / coverage (derived, read-only) ──
+  const touchRows = await db.buyerTouch.findMany({
+    where: { buyerId: { in: vettedRows.map((r) => r.id) } },
+    orderBy: { at: "desc" },
+    select: { buyerId: true, at: true, channel: true, outcome: true, note: true },
+  });
+  const touchesBy = new Map<string, { at: string; channel: string | null; outcome: string | null; note: string | null }[]>();
+  for (const t of touchRows) {
+    const arr = touchesBy.get(t.buyerId) ?? [];
+    if (arr.length < 5) arr.push({ at: t.at.toISOString(), channel: t.channel, outcome: t.outcome, note: t.note });
+    touchesBy.set(t.buyerId, arr);
+  }
+  const cards: CardBuyer[] = vettedRows.map((r) => {
+    const sc = buildScorecard({
+      id: r.id, name: r.name, company: r.company, type: r.type, category: r.category, market: r.market, region: r.region,
+      buyBoxAreas: r.buyBoxAreas, dealType: r.dealType, buildType: r.buildType, priceRange: r.priceRange, minLotSize: r.minLotSize,
+      closingSpeed: r.closingSpeed, decisionMaker: r.decisionMaker, bestContact: r.bestContact, preferredContact: r.preferredContact,
+      lastContacted: r.lastContacted, outreachLog: r.outreachLog, phone: r.phone, email: r.email, igHandle: r.igHandle, contact: r.contact,
+      buyBoxStruct: (r.buyBoxStruct as unknown as BuyBox | null) ?? null, geoPolygon: r.geoPolygon,
+      land: buyerLand[r.id], terms: buyerTerms[r.id], touches: touchesBy.get(r.id) ?? [],
+    }, today);
+    return { ...sc, company: r.company, type: r.type, phone: r.phone, email: r.email, igHandle: r.igHandle, bestContact: r.bestContact, mapUrl: r.contact || undefined };
+  });
+  const coverage = coverageByCounty(cards);
+
   return (
     <div className="space-y-6">
       <SectionTitle title="🏛 Vetted Buyers" subtitle="Our vetted buyers & developers and their buy boxes — search a market to see exactly who'd want the deal. Sourcing new buyers? Start in Buyer Research." accent="bg-brand-gold"
@@ -176,6 +205,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           )
         )}
       </Card>
+
+      {/* Section 3 — KPI strip · coverage heat board · buyer trading cards */}
+      <VettedBuyersBoard buyers={cards} coverage={coverage} coldCount={cold.length} />
 
       {/* Where developers buy (demand board) + the standard buy-box interviews */}
       <DevInterviews

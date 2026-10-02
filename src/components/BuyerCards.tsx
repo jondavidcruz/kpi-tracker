@@ -2,7 +2,7 @@
 // Buyer "trading cards" — the dispo-on-a-call view. One card per vetted buyer:
 // score ring (10-point vetting scorecard), tier badge, 3–4 chips, last 3 touches,
 // contact line. Filters by tier / county / text. Toggle with the spreadsheet.
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import type { Scorecard, Tier } from "@/lib/buyers/scorecard";
 
 export type CardBuyer = Scorecard & {
@@ -29,6 +29,9 @@ function Ring({ pct, tier, size = 56 }: { pct: number; tier: Tier; size?: number
   );
 }
 
+function readView(): "cards" | "list" { try { return localStorage.getItem("vb_view") === "list" ? "list" : "cards"; } catch { return "cards"; } }
+function subscribeView(cb: () => void) { window.addEventListener("vb_view", cb); window.addEventListener("storage", cb); return () => { window.removeEventListener("vb_view", cb); window.removeEventListener("storage", cb); }; }
+
 export function TierBadge({ tier, title }: { tier: Tier; title?: string }) {
   return <span title={title} className={`inline-grid h-6 w-6 place-items-center rounded-md text-[12px] font-black ring-1 ${TIER_CLS[tier]}`}>{tier}</span>;
 }
@@ -37,9 +40,9 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
   const [q, setQ] = useState("");
   const [tier, setTier] = useState<"" | Tier>("");
   const [open, setOpen] = useState<string | null>(null);
-  const [view, setView] = useState<"cards" | "list">("cards");
-  useEffect(() => { try { const v = localStorage.getItem("vb_view"); if (v === "list" || v === "cards") setView(v); } catch {} }, []);
-  const pick = (v: "cards" | "list") => { setView(v); try { localStorage.setItem("vb_view", v); } catch {} };
+  // Per-viewer convenience only (localStorage); defaults to cards on the server.
+  const view = useSyncExternalStore(subscribeView, readView, () => "cards" as const);
+  const pick = (v: "cards" | "list") => { try { localStorage.setItem("vb_view", v); } catch {} ; window.dispatchEvent(new Event("vb_view")); };
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
