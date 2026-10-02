@@ -17,8 +17,7 @@ type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: bool
 // (e.g. "payroll" finds Schedule & Time, "P&L" finds the Profit & Loss report).
 const SEARCH_KEYWORDS: Record<string, string> = {
   "/underwriting": "calculator offer mao comps deal analyzer novation assignment developer land cash double close",
-  "/marketing": "vetted buyers buy box developers cash buyers jv partners map",
-  "/cascade": "buyer cascade rank match deal address who to call ping tree",
+  "/marketing": "vetted buyers buy box developers cash buyers jv partners map cascade rank deal",
   "/lead-sourcing": "leads pull markets areas where to pull sourcing farm demand",
   "/vetting": "buyer research vet developers unvetted",
   "/schedule": "time card timecard punch clock breaks lunch bathroom pto time off availability hours",
@@ -79,7 +78,6 @@ export default function Sidebar({
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
       { href: "/closing-calc", label: "Closing Calculator", Icon: Receipt, managerOnly: true },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
-      { href: "/cascade", label: "Buyer Cascade", Icon: Target, marketingOnly: true },
       { href: "/vetting", label: "Buyer Research", Icon: Search, marketingOnly: true },
       { href: "/rewards", label: "Rewards", Icon: Gift },
       { href: "/culture", label: "Culture", Icon: PartyPopper },
