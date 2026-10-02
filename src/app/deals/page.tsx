@@ -1,5 +1,6 @@
 import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction } from "@/app/actions";
 import { readAuto, type DealCascade } from "@/lib/cascade";
+import PacketPanel, { type PacketRow } from "@/components/PacketPanel";
 import { LAND_FIELDS, LAND_FALLOUT_REASONS, landFlags, type DealLand } from "@/lib/deal-land";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getActiveDeals, getActiveReps, getSettings } from "@/lib/data";
@@ -52,6 +53,21 @@ export default async function DealsPage({
         include: { buyer: { select: { name: true, blacklistedAt: true } } },
       })
     : [];
+  // Phase 8: offering packets per deal (newest first)
+  const packetRows = mktAccess && deals.length
+    ? await db.dealPacket.findMany({
+        where: { dealId: { in: deals.map((d) => d.id) } },
+        orderBy: { version: "desc" },
+        select: { id: true, dealId: true, version: true, url: true, htmlUrl: true, createdAt: true, generatedBy: true, approvedAt: true, approvedBy: true, model: true },
+      })
+    : [];
+  const packetsByDeal = new Map<string, PacketRow[]>();
+  for (const r of packetRows) {
+    const m = r.model as { toVerify?: string[] } | null;
+    const arr = packetsByDeal.get(r.dealId) ?? [];
+    arr.push({ id: r.id, version: r.version, url: r.url, htmlUrl: r.htmlUrl, createdAt: r.createdAt.toISOString(), generatedBy: r.generatedBy, approvedAt: r.approvedAt?.toISOString() ?? null, approvedBy: r.approvedBy, toVerify: m?.toVerify ?? [], warnings: [] });
+    packetsByDeal.set(r.dealId, arr);
+  }
   const sendsByDeal = new Map<string, typeof sendRows>();
   for (const r of sendRows) {
     const arr = sendsByDeal.get(r.dealId) ?? [];
@@ -161,6 +177,7 @@ export default async function DealsPage({
             land={landMap[d.id]}
             sends={sendsByDeal.get(d.id) ?? []}
             canBlacklist={canClose}
+            packets={packetsByDeal.get(d.id) ?? []}
           />
         ))}
       </div>
@@ -174,7 +191,7 @@ type SendRow = {
   buyer: { name: string; blacklistedAt: Date | null };
 };
 
-function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land, sends = [], canBlacklist = false }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand; sends?: SendRow[]; canBlacklist?: boolean }) {
+function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land, sends = [], canBlacklist = false, packets = [] }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand; sends?: SendRow[]; canBlacklist?: boolean; packets?: PacketRow[] }) {
   const lFlags = landFlags(land);
   // The next buyer to send to = highest-ranked one not already sent or passed.
   const nextId = matches.find((m) => cascadeStatus[m.id] !== "sent" && cascadeStatus[m.id] !== "passed")?.id ?? null;
@@ -211,6 +228,15 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
           💡 {aging.recommendation}
         </div>
       )}
+
+      {/* Phase 8 — Offering packet: APNs in, versioned diligence PDF out. */}
+      <details className="mb-3 rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200" open={packets.length > 0}>
+        <summary className="cursor-pointer text-sm font-bold text-amber-800">📦 Offering packet ({packets.length ? `v${packets[0].version}${packets[0].approvedAt ? " ✅" : " draft"}` : "none yet"})</summary>
+        <p className="mt-1 text-[11px] text-amber-700">Enter the APNs → one draft packet with parcel, FEMA flood, wetlands, and soils pulled automatically. Fill the 🟡 items after your county call, regenerate, then Approve — the approved version is what goes to buyers.</p>
+        <div className="mt-2">
+          <PacketPanel dealId={deal.id} packets={packets} canApprove={canClose} />
+        </div>
+      </details>
 
       {/* Phase 7 — Sends & responses: the buyer feedback loop. Two clicks to log an outcome. */}
       {(sends.length > 0 || matches.length > 0) && (

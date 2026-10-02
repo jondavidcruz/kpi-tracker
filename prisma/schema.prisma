@@ -1297,6 +1297,32 @@ model DealSend {
   @@index([dealId])
 }
 
+// Phase 8: generated offering packets, one row per version — never overwritten.
+model DealPacket {
+  id          String    @id @default(cuid())
+  dealId      String
+  version     Int
+  url         String    @default("") // PDF in Supabase storage (packets/)
+  htmlUrl     String    @default("") // print-ready HTML fallback
+  model       Json // the full PacketModel this version rendered
+  generatedBy String    @default("")
+  createdAt   DateTime  @default(now())
+  approvedAt  DateTime?
+  approvedBy  String    @default("")
+
+  @@index([dealId, version])
+}
+
+// Phase 8: cache for public due-diligence APIs (FEMA/NWI/SDA/3DEP/Regrid) so a
+// packet regeneration is free and we never hammer public endpoints. TTL 90d in code.
+model DiligenceCache {
+  id        String   @id @default(cuid())
+  key       String   @unique // source|hash(input)
+  source    String   @default("")
+  payload   Json
+  createdAt DateTime @default(now())
+}
+
 model GeoCache {
   id        String   @id @default(cuid())
   query     String   @unique

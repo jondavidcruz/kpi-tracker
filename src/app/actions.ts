@@ -2476,6 +2476,36 @@ export async function logBuyerOutreach(formData: FormData) {
   revalidatePath("/marketing");
 }
 
+/** Phase 8: generate a draft offering packet for a deal (APNs → diligence → PDF). */
+export async function generatePacketAction(formData: FormData): Promise<import("@/lib/packet/build").BuildResult> {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return { ok: false, error: "no access" };
+  const dealId = String(formData.get("dealId") ?? "");
+  const apns = String(formData.get("apns") ?? "").split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+  const state = String(formData.get("state") ?? "").trim().toUpperCase().slice(0, 2);
+  const county = String(formData.get("county") ?? "").trim();
+  if (!dealId || !state || !county) return { ok: false, error: "deal, state, and county are required" };
+  const manual = {
+    utilitiesWater: String(formData.get("utilitiesWater") ?? ""), utilitiesSewer: String(formData.get("utilitiesSewer") ?? ""),
+    electric: String(formData.get("electric") ?? ""), setbacks: String(formData.get("setbacks") ?? ""),
+    species: String(formData.get("species") ?? ""), notes: String(formData.get("notes") ?? ""),
+  };
+  const { generatePacket } = await import("@/lib/packet/build");
+  const res = await generatePacket({ dealId, apns, state, county, manual, generatedBy: me?.name ?? "" });
+  revalidatePath("/deals");
+  return res;
+}
+
+/** Phase 8: approve a packet version — this is the one the cascade sends. */
+export async function approvePacketAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("packetId") ?? "");
+  if (!id) return;
+  await db.dealPacket.update({ where: { id }, data: { approvedAt: new Date(), approvedBy: me!.name } });
+  revalidatePath("/deals");
+}
+
 /** Phase 7: log that a deal went to a buyer by hand (call/text/portal sends
  *  the cascade didn't make). Managers + marketing. */
 export async function logDealSendAction(formData: FormData) {
