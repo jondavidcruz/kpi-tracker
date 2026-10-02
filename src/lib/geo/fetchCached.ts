@@ -36,6 +36,7 @@ export async function getJson<T>(url: string, init?: RequestInit, timeoutMs = 20
     signal: AbortSignal.timeout(timeoutMs),
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`${res.status} ${url.slice(0, 120)}`);
+  // Redact credentials from error text — URLs can carry ?token=/&key= params.
+  if (!res.ok) throw new Error(`${res.status} ${url.replace(/([?&](token|key|secret)=)[^&]+/gi, "$1***").slice(0, 120)}`);
   return (await res.json()) as T;
 }
