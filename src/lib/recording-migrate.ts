@@ -30,7 +30,7 @@ async function moveOne(id: string, audioUrl: string): Promise<boolean> {
 /** Orphan sweep: bucket files NO CallScore row references (uploaded but never
  *  scored, or scored before Drive existed). Archived to Drive, then removed —
  *  a verified move, never a plain delete. Budgeted by bytes per run (60s cap). */
-export async function sweepOrphanRecordings(maxBytes = 80 * 1048576): Promise<{ moved: number; mb: number; remaining: number; errors: string[] }> {
+export async function sweepOrphanRecordings(maxBytes = 20 * 1048576, deadlineMs = Date.now() + 42000): Promise<{ moved: number; mb: number; remaining: number; errors: string[] }> {
   if (!gdriveConfigured() || !adminConfigured()) return { moved: 0, mb: 0, remaining: -1, errors: ["not configured"] };
   const admin = createAdminClient();
   const referenced = new Set(
@@ -47,11 +47,13 @@ export async function sweepOrphanRecordings(maxBytes = 80 * 1048576): Promise<{ 
       if (meta?.size != null) files.push({ path: `calls/${d.name}/${f.name}`, size: meta.size });
     }
   }
-  const orphans = files.filter((f) => !referenced.has(f.path));
+  // Smallest first → many quick wins per run; one oversized file can't stall the queue.
+  const orphans = files.filter((f) => !referenced.has(f.path)).sort((a, b) => a.size - b.size);
   let moved = 0, bytesDone = 0;
   const errors: string[] = [];
   for (const f of orphans) {
-    if (bytesDone + f.size > maxBytes) break;
+    if (bytesDone + f.size > maxBytes && moved > 0) break; // always attempt at least one
+    if (Date.now() > deadlineMs) break; // stay under the 60s function cap
     try {
       const { data, error } = await admin.storage.from("call-recordings").download(f.path);
       if (error || !data) { errors.push(f.path); continue; }
@@ -75,7 +77,7 @@ export async function migrateScoreById(id: string): Promise<boolean> {
 }
 
 /** Batched fallback sweep (nightly) for any recordings still on Supabase. */
-export async function migrateRecordingsToDrive(limit = 20): Promise<{ moved: number; errors: string[]; pending: number }> {
+export async function migrateRecordingsToDrive(limit = 3, deadlineMs = Date.now() + 20000): Promise<{ moved: number; errors: string[]; pending: number }> {
   if (!gdriveConfigured() || !adminConfigured()) return { moved: 0, errors: ["not configured"], pending: 0 };
   const where = { audioUrl: { contains: MARKER } };
   const pending = await db.callScore.count({ where });
@@ -83,6 +85,7 @@ export async function migrateRecordingsToDrive(limit = 20): Promise<{ moved: num
   let moved = 0;
   const errors: string[] = [];
   for (const s of scores) {
+    if (Date.now() > deadlineMs) break; // stay well under the 60s function cap
     try { if (await moveOne(s.id, s.audioUrl)) moved++; else errors.push(s.id); }
     catch (e) { errors.push(String(e).slice(0, 120)); }
   }
