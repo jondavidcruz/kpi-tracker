@@ -19,7 +19,7 @@ const MANUAL: Array<[string, string]> = [
   ["species", "Listed species"],
 ];
 
-export default function PacketPanel({ dealId, packets, canApprove }: { dealId: string; packets: PacketRow[]; canApprove: boolean }) {
+export default function PacketPanel({ dealId, packets, canApprove, sellerNotesDefault = "" }: { dealId: string; packets: PacketRow[]; canApprove: boolean; sellerNotesDefault?: string }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; error?: string; version?: number; url?: string; htmlUrl?: string; warnings?: string[]; changed?: string[] } | null>(null);
   const [showManual, setShowManual] = useState(false);
@@ -46,6 +46,10 @@ export default function PacketPanel({ dealId, packets, canApprove }: { dealId: s
             {pending ? "⏳ Pulling Regrid · FEMA · Wetlands · Soils…" : latest ? "↻ Regenerate draft" : "📦 Generate draft"}
           </button>
         </div>
+        <label className="block">
+          <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">📞 Seller call notes — utilities, improvements, access (prints in the packet as &ldquo;seller-reported, unverified&rdquo;)</span>
+          <textarea name="sellerNotes" rows={2} defaultValue={sellerNotesDefault} placeholder="e.g. Seller says county water at street, power pole on NE corner, cleared + filled 2023, legal access via Seward Ave…" className="w-full rounded-md border border-slate-200 px-2 py-1.5" />
+        </label>
         <button type="button" onClick={() => setShowManual((v) => !v)} className="text-[11px] font-semibold text-slate-500 hover:text-slate-700">
           {showManual ? "▴ hide" : "▾ fill the 🟡 items"} (water · sewer · electric · setbacks · species)
         </button>

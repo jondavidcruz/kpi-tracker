@@ -101,6 +101,11 @@ export function renderPacketHtml(m: PacketModel): string {
       ${dd("Setbacks / buildable", manual.setbacks ? esc(manual.setbacks) : tbv(), manual.setbacks ? true : null)}
       ${dd("Listed species", manual.species ? esc(manual.species) : tbv(), manual.species ? true : null, m.state === "FL" ? "FL: confirm scrub-jay review zone with county" : "")}
     </table>
+    ${m.manual.sellerNotes ? `<div style="margin-top:14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:11px 13px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#92400e">📞 Seller-reported details (unverified)</div>
+      <div style="font-size:12px;color:#78350f;margin-top:4px;white-space:pre-wrap;line-height:1.6">${esc(m.manual.sellerNotes)}</div>
+      <div style="font-size:10px;color:#b45309;margin-top:5px">Stated by the seller on our calls — utilities, improvements, access. Buyer to verify independently.</div>
+    </div>` : ""}
     ${m.countyPhone ? `<div style="margin-top:12px;font-size:11px;color:${SLATE}">☎️ County planning/utilities: <b>${esc(m.countyPhone)}</b> — fastest way to clear the 🟡 items.</div>` : ""}
     <div style="margin-top:18px">
       <div style="font-size:12px;font-weight:800;color:${NAVY};margin-bottom:6px">ATTACHED DOCUMENTATION</div>

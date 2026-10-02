@@ -5,6 +5,7 @@
 // still stored and printable from the browser.
 import { db } from "@/lib/db";
 import { adminConfigured, createAdminClient } from "@/lib/supabase/admin";
+import { gdriveConfigured, ensureSubfolder, uploadToFolder } from "@/lib/gdrive";
 import { parcelByApn } from "@/lib/geo/parcels";
 import { femaFlood, nwiWetlands, sdaSoils, elevation, satelliteUrl } from "./sources";
 import { renderPacketHtml } from "./template";
@@ -91,6 +92,7 @@ export async function buildPacketModel(input: BuildInput): Promise<{ model: Pack
       utilitiesWater: input.manual?.utilitiesWater ?? "", utilitiesSewer: input.manual?.utilitiesSewer ?? "",
       electric: input.manual?.electric ?? "", setbacks: input.manual?.setbacks ?? "",
       species: input.manual?.species ?? "", notes: input.manual?.notes ?? "",
+      sellerNotes: (input.manual?.sellerNotes ?? "").slice(0, 2000),
     },
     countyPhone: COUNTY_PHONES[countyKey] ?? "",
     toVerify: [],
@@ -136,27 +138,36 @@ export async function generatePacket(input: BuildInput): Promise<BuildResult> {
   const version = (prev?.version ?? 0) + 1;
 
   let url = "", htmlUrl = "";
-  if (adminConfigured()) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const pdf = await htmlToPdf(html);
+  if (!pdf) warnings.push("PDF engine unavailable here — open the HTML version and print to PDF");
+  // Primary store = Google Drive (Jon 2026-10-02: save Supabase storage). Folder:
+  // <War Room Backups>/Packets/<deal> — same service account as the buyer backup.
+  const DRIVE_ROOT = process.env.PACKET_DRIVE_FOLDER_ID || process.env.BUYER_BACKUP_FOLDER_ID || "18d9kIHwiQHTp54dZcUU53UqczBotrgUB";
+  if (gdriveConfigured()) {
+    try {
+      const dealLabel = ((await db.deal.findUnique({ where: { id: input.dealId }, select: { address: true } }))?.address || input.dealId).replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 80);
+      const packetsId = await ensureSubfolder(DRIVE_ROOT, "Packets");
+      const dealFolderId = await ensureSubfolder(packetsId, dealLabel);
+      const h = await uploadToFolder(dealFolderId, `${stamp}-v${version}.html`, Buffer.from(html), "text/html");
+      htmlUrl = h.link;
+      if (pdf) { const u = await uploadToFolder(dealFolderId, `${stamp}-v${version}.pdf`, pdf, "application/pdf"); url = u.link; }
+    } catch (e) { warnings.push(`Drive: ${String(e).slice(0, 120)} — falling back to Supabase`); }
+  }
+  // Fallback only when Drive is unconfigured or failed — nothing is ever lost.
+  if (!htmlUrl && adminConfigured()) {
     try {
       const admin = createAdminClient();
       await admin.storage.createBucket("packets", { public: false }).catch(() => {});
-      const stamp = new Date().toISOString().slice(0, 10);
       const base = `${input.dealId}/${stamp}-v${version}`;
       const h = await admin.storage.from("packets").upload(`${base}.html`, Buffer.from(html), { contentType: "text/html", upsert: false });
-      if (!h.error) {
-        const signed = await admin.storage.from("packets").createSignedUrl(`${base}.html`, 60 * 60 * 24 * 30);
-        htmlUrl = signed.data?.signedUrl ?? "";
-      }
-      const pdf = await htmlToPdf(html);
+      if (!h.error) htmlUrl = (await admin.storage.from("packets").createSignedUrl(`${base}.html`, 60 * 60 * 24 * 30)).data?.signedUrl ?? "";
       if (pdf) {
         const u = await admin.storage.from("packets").upload(`${base}.pdf`, pdf, { contentType: "application/pdf", upsert: false });
-        if (!u.error) {
-          const signed = await admin.storage.from("packets").createSignedUrl(`${base}.pdf`, 60 * 60 * 24 * 30);
-          url = signed.data?.signedUrl ?? "";
-        }
-      } else warnings.push("PDF engine unavailable here — open the HTML version and print to PDF");
+        if (!u.error) url = (await admin.storage.from("packets").createSignedUrl(`${base}.pdf`, 60 * 60 * 24 * 30)).data?.signedUrl ?? "";
+      }
     } catch (e) { warnings.push(`Storage: ${String(e).slice(0, 100)}`); }
-  } else warnings.push("Supabase service key not configured — packet not stored, HTML returned only");
+  } else if (!htmlUrl) warnings.push("Neither Drive nor Supabase configured — packet not stored");
 
   const row = await db.dealPacket.create({
     data: { dealId: input.dealId, version, url, htmlUrl, model: model as never, generatedBy: input.generatedBy ?? "" },
@@ -171,7 +182,7 @@ export async function generatePacket(input: BuildInput): Promise<BuildResult> {
     if (az !== bz) changed.push(`flood zones ${az || "?"} → ${bz || "?"}`);
     const aw = a.parcels.map((p) => p.wetlands?.pctOfParcel).join(","), bw = b.parcels.map((p) => p.wetlands?.pctOfParcel).join(",");
     if (aw !== bw) changed.push("wetlands coverage changed");
-    for (const k of ["utilitiesWater", "utilitiesSewer", "electric", "setbacks", "species"] as const) {
+    for (const k of ["utilitiesWater", "utilitiesSewer", "electric", "setbacks", "species", "sellerNotes"] as const) {
       if ((a.manual?.[k] ?? "") !== b.manual[k]) changed.push(`${k} updated`);
     }
   }

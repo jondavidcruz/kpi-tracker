@@ -2489,6 +2489,7 @@ export async function generatePacketAction(formData: FormData): Promise<import("
     utilitiesWater: String(formData.get("utilitiesWater") ?? ""), utilitiesSewer: String(formData.get("utilitiesSewer") ?? ""),
     electric: String(formData.get("electric") ?? ""), setbacks: String(formData.get("setbacks") ?? ""),
     species: String(formData.get("species") ?? ""), notes: String(formData.get("notes") ?? ""),
+    sellerNotes: String(formData.get("sellerNotes") ?? ""),
   };
   const { generatePacket } = await import("@/lib/packet/build");
   const res = await generatePacket({ dealId, apns, state, county, manual, generatedBy: me?.name ?? "" });
