@@ -104,6 +104,38 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, crmUsers: users.users, msgScanned, callsByUser });
   }
 
+  // Storage audit (Jon 2026-10-02: cut Supabase/Vercel usage, prefer Drive).
+  // Reports every Supabase bucket's object count+bytes and the biggest DB tables.
+  if (url.searchParams.get("storagereport") === "1") {
+    const { adminConfigured, createAdminClient } = await import("@/lib/supabase/admin");
+    const buckets: Record<string, { files: number; mb: number; sample: string[] }> = {};
+    if (adminConfigured()) {
+      const admin = createAdminClient();
+      const list = await admin.storage.listBuckets();
+      for (const b of list.data ?? []) {
+        let files = 0, bytes = 0;
+        const sample: string[] = [];
+        const walk = async (prefix: string, depth: number) => {
+          if (depth > 3) return;
+          const { data } = await admin.storage.from(b.name).list(prefix, { limit: 1000 });
+          for (const f of data ?? []) {
+            const path = prefix ? `${prefix}/${f.name}` : f.name;
+            const meta = f.metadata as { size?: number } | null;
+            if (meta?.size != null) { files++; bytes += meta.size; if (sample.length < 5) sample.push(`${path} (${Math.round(meta.size / 1024)}kb)`); }
+            else await walk(path, depth + 1); // folder
+          }
+        };
+        await walk("", 0).catch(() => {});
+        buckets[b.name] = { files, mb: Math.round((bytes / 1048576) * 10) / 10, sample };
+      }
+    }
+    const tables = await db.$queryRawUnsafe<Array<{ relname: string; mb: number; rows: number }>>(
+      `SELECT relname, round(pg_total_relation_size(relid)/1048576.0, 1)::float AS mb, n_live_tup::int AS rows
+       FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 15`,
+    ).catch(() => []);
+    return NextResponse.json({ ok: true, buckets, tables });
+  }
+
   // Nightly off-site backup — full DB export emailed to the owner(s) as a JSON
   // attachment. (Supabase's own PITR/daily backups are the primary; this is a
   // belt-and-suspenders copy that lands in Jon's inbox.)

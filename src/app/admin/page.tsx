@@ -122,6 +122,40 @@ export default async function AdminPage({
         );
       })}
 
+      {/* ════ INTEGRATIONS (owner) — which API keys are live; where to get each ════ */}
+      {owner && (
+        <section id="integrations" className="scroll-mt-20">
+          <SectionTitle title="🔑 Integrations" subtitle="Green = the key is set in Vercel and this feature is live. To add one: get the key at the link, paste it in Vercel → kpi-tracker → Settings → Environment Variables, then redeploy (push any commit)." accent="bg-emerald-400" />
+          <Card className="p-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {[
+                { env: "REIREPLY_API_KEY", name: "REI Reply (GoHighLevel)", powers: "talk time · dials · stage-move KPIs · CRM activity", get: "already connected" },
+                { env: "ANTHROPIC_API_KEY", name: "Anthropic (Claude)", powers: "call scoring · underwrite bot · packet context analysis", get: "console.anthropic.com" },
+                { env: "GEMINI_API_KEY", name: "Google Gemini", powers: "call-recording transcription", get: "aistudio.google.com" },
+                { env: "GOOGLE_SERVICE_ACCOUNT_JSON", name: "Google Drive (service account)", powers: "nightly backups · offering-packet storage · recordings", get: "already connected" },
+                { env: "REGRID_API_KEY", name: "Regrid parcels", powers: "packet builder: parcel polygon · acreage · zoning by APN", get: "regrid.com → account → API token" },
+                { env: "GOOGLE_MAPS_API_KEY", name: "Google Maps (Static + Geocoding)", powers: "packet aerials w/ parcel outline · faster cascade geocoding", get: "console.cloud.google.com → APIs → Maps Static API + Geocoding API" },
+                { env: "DIRECTREI_API_KEY", name: "Direct REI", powers: "contacts/campaigns/deals sync (calls stay CSV import)", get: "Direct REI → Settings → API & Zapier → + Create API key" },
+                { env: "RENTCAST_API_KEY", name: "RentCast comps", powers: "underwriting: 🔎 Pull comps & ARV button", get: "rentcast.io → API" },
+              ].map((k) => {
+                const on = !!process.env[k.env];
+                return (
+                  <div key={k.env} className={`flex items-start gap-2.5 rounded-xl p-2.5 ring-1 ${on ? "bg-emerald-50 ring-emerald-200" : "bg-slate-50 ring-slate-200"}`}>
+                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${on ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-800">{k.name} <span className="ml-1 rounded bg-white px-1.5 py-0.5 font-mono text-[10px] font-normal text-slate-400 ring-1 ring-slate-200">{k.env}</span></div>
+                      <div className="text-[11px] text-slate-500">{k.powers}</div>
+                      {!on && <div className="mt-0.5 text-[11px] font-semibold text-amber-700">Get it: {k.get}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-[11px] text-slate-400">Connection tests (open while signed in): <a href="/api/crm/check" className="underline">/api/crm/check</a> (REI Reply) · <a href="/api/directrei/check" className="underline">/api/directrei/check</a> (Direct REI). Keys are never shown here — only whether they exist.</p>
+          </Card>
+        </section>
+      )}
+
       {/* ════ SIDEBAR ORDER (owner) — reorder tabs for the whole team ════ */}
       {owner && (
         <section id="sidebar-order" className="scroll-mt-20">
