@@ -8,6 +8,7 @@ import { matchBuyersForDeal, type MatchBuyer, type BuyerMatch } from "./buyer-ma
 import { sendEmailTo, sendTeamChat } from "./notify";
 import { getChannelConfig } from "./notify";
 import { APP_URL } from "./site";
+import { logDealSend, openSendFor, setDealSendOutcome } from "./buyers/feedback";
 
 const CAT = "__cascade_auto__";
 const SECRET = process.env.CRON_SECRET || "cascade-dev-secret";
@@ -42,7 +43,7 @@ export function verify(dealId: string, buyerId: string, action: string, sig: str
 async function rankedForDeal(dealId: string): Promise<{ deal: { address: string; contractPrice: number | null; askingPrice: number | null; nextSteps: string } | null; ranked: BuyerMatch[] }> {
   const deal = await db.deal.findUnique({ where: { id: dealId }, select: { address: true, contractPrice: true, askingPrice: true, nextSteps: true } });
   if (!deal) return { deal: null, ranked: [] };
-  const rows = (await db.marketContact.findMany({ where: { archivedAt: null, vetStage: { in: ["vetted", "active"] } } })).filter((b) => b.type !== "jv_partner");
+  const rows = (await db.marketContact.findMany({ where: { archivedAt: null, blacklistedAt: null, vetStage: { in: ["vetted", "active"] } } })).filter((b) => b.type !== "jv_partner");
   const termsRow = await db.resource.findFirst({ where: { category: "__buyer_terms__" } });
   let terms: Record<string, { pof?: boolean; maxOfferPct?: number }> = {};
   try { terms = JSON.parse(termsRow?.description || "{}"); } catch {}
@@ -80,6 +81,8 @@ export async function sendRound(dealId: string): Promise<{ sent: number; done: b
     const pass = `${APP_URL}/api/cascade?d=${dealId}&b=${m.id}&a=pass&s=${sign(dealId, m.id, "pass")}`;
     await sendEmailTo([m.email], `Off-market deal — ${deal.address}`, offerHtml(deal, m.name, claim, pass));
     dc.sent[m.id] = "sent";
+    // Phase 7: every send is a DealSend row — the buyer's track record builds itself.
+    await logDealSend({ dealId, buyerId: m.id, channel: "email", wave: dc.round + 1, floorPrice: deal.contractPrice, askPrice: deal.askingPrice, actor: "cascade" }).catch(() => {});
   }
   dc.round += 1; dc.lastAt = new Date().toISOString(); dc.status = "armed";
   store[dealId] = dc; await writeAuto(store);
@@ -108,6 +111,8 @@ export async function claimDeal(dealId: string, buyerId: string): Promise<"claim
   if (dc.status === "claimed") return dc.claimedBy === buyerId ? "claimed" : "taken";
   dc.sent[buyerId] = "interested"; dc.status = "claimed"; dc.claimedBy = buyerId; dc.lastAt = new Date().toISOString();
   store[dealId] = dc; await writeAuto(store);
+  const sendId = await openSendFor(dealId, buyerId).catch(() => null);
+  if (sendId) await setDealSendOutcome(sendId, { outcome: "loi", note: "clicked “I want this deal”" }, "cascade-link").catch(() => {});
   const [buyer, deal] = await Promise.all([
     db.marketContact.findUnique({ where: { id: buyerId }, select: { name: true, phone: true, email: true } }),
     db.deal.findUnique({ where: { id: dealId }, select: { address: true, assignedTo: true } }),
@@ -126,6 +131,8 @@ export async function passDeal(dealId: string, buyerId: string): Promise<void> {
   if (!dc || dc.status === "claimed") return;
   dc.sent[buyerId] = "passed";
   store[dealId] = dc; await writeAuto(store);
+  const sendId = await openSendFor(dealId, buyerId).catch(() => null);
+  if (sendId) await setDealSendOutcome(sendId, { outcome: "pass", note: "clicked Pass" }, "cascade-link").catch(() => {});
 }
 
 /** Cron: advance any armed cascade whose last round is older than the window. */

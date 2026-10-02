@@ -38,11 +38,18 @@ export type ScorecardInput = {
   land?: BuyerLand;
   terms?: { pof?: boolean; maxOfferPct?: number };
   touches?: TouchLite[];
+  // Phase 7 feedback loop (MarketContact.buyerFlags / blacklistedAt)
+  flags?: { lowballer?: boolean; tireKicker?: boolean; sends?: number; offers?: number; avgOfferPct?: number | null; closes?: number } | null;
+  blacklisted?: boolean;
+  blacklistReason?: string;
 };
 
 export type Scorecard = {
   id: string;
   name: string;
+  blacklisted: boolean;
+  blacklistReason: string;
+  record: { sends: number; offers: number; closes: number; avgOfferPct: number | null } | null;
   checks: ScoreCheck[];
   score: number;          // 0–10
   pct: number;            // 0–100
@@ -156,6 +163,11 @@ export function buildScorecard(b: ScorecardInput, today: string): Scorecard {
   if (score >= 8 && cashOrPof && !paused && responsive) { tier = "A"; tierWhy = "complete box · cash/POF · active · responsive"; }
   else if (score >= 5 && !paused) { tier = "B"; tierWhy = `${score}/10 · ${cashOrPof ? "cash/POF" : "funding ?"} · ${responsive ? "responsive" : "quiet"}`; }
   else { tier = "C"; tierWhy = paused ? "buying paused" : `${score}/10 — fill the box`; }
+  // Phase 7 behavior caps: proven lowballers / tire-kickers never rank A;
+  // blacklisted drops to C (still visible, greyed — never deleted).
+  const f = b.flags ?? null;
+  if ((f?.lowballer || f?.tireKicker) && tier === "A") { tier = "B"; tierWhy = f.lowballer ? "capped: lowballer track record" : "capped: tire-kicker (never bids)"; }
+  if (b.blacklisted) { tier = "C"; tierWhy = `blacklisted${b.blacklistReason ? ` — ${b.blacklistReason}` : ""}`; }
 
   const chips: string[] = [];
   if (counties.size) chips.push(`📍 ${firstN([...counties], 2).join(" · ")}${counties.size > 2 ? ` +${counties.size - 2}` : ""}`);
@@ -167,9 +179,15 @@ export function buildScorecard(b: ScorecardInput, today: string): Scorecard {
   if (/cash/i.test(fundingRaw)) chips.push(`⚡ cash${closeDays ? ` · ≤${closeDays}d` : ""}`);
   else if (closeDays) chips.push(`⏱ ≤${closeDays}d`);
   if (paused) chips.push("⏸ paused");
+  if (f && f.sends ? f.sends > 0 : false) chips.push(`🎯 hit rate ${f!.offers ?? 0}/${f!.sends}`);
+  if (f?.lowballer) chips.push(`⚠️ lowballer${f.avgOfferPct != null ? ` (avg ${Math.round(f.avgOfferPct * 100)}%)` : ""}`);
+  if (f?.tireKicker) chips.push("💤 tire-kicker");
+  if (b.blacklisted) chips.push("⛔ blacklisted");
 
   return {
-    id: b.id, name: b.name, checks, score, pct: score * 10, tier, tierWhy, paused, responsive, daysSinceTouch, lastTouches,
+    id: b.id, name: b.name, blacklisted: !!b.blacklisted, blacklistReason: b.blacklistReason ?? "",
+    record: f ? { sends: f.sends ?? 0, offers: f.offers ?? 0, closes: f.closes ?? 0, avgOfferPct: f.avgOfferPct ?? null } : null,
+    checks, score, pct: score * 10, tier, tierWhy, paused, responsive, daysSinceTouch, lastTouches,
     counties: [...counties].sort(), cities: [...cities].sort(), states: [...states].sort(), nationwide, chips,
   };
 }

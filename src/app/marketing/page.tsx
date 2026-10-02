@@ -134,6 +134,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       lastContacted: r.lastContacted, outreachLog: r.outreachLog, phone: r.phone, email: r.email, igHandle: r.igHandle, contact: r.contact,
       buyBoxStruct: (r.buyBoxStruct as unknown as BuyBox | null) ?? null, geoPolygon: r.geoPolygon,
       land: buyerLand[r.id], terms: buyerTerms[r.id], touches: touchesBy.get(r.id) ?? [],
+      flags: (r.buyerFlags as { lowballer?: boolean; tireKicker?: boolean; sends?: number; offers?: number; avgOfferPct?: number | null; closes?: number } | null) ?? null,
+      blacklisted: !!r.blacklistedAt, blacklistReason: r.blacklistReason ?? "",
     }, today);
     return { ...sc, company: r.company, type: r.type, phone: r.phone, email: r.email, igHandle: r.igHandle, bestContact: r.bestContact, mapUrl: r.contact || undefined };
   });

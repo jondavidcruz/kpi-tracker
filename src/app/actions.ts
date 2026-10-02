@@ -2476,6 +2476,54 @@ export async function logBuyerOutreach(formData: FormData) {
   revalidatePath("/marketing");
 }
 
+/** Phase 7: log that a deal went to a buyer by hand (call/text/portal sends
+ *  the cascade didn't make). Managers + marketing. */
+export async function logDealSendAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const dealId = String(formData.get("dealId") ?? "");
+  const buyerId = String(formData.get("buyerId") ?? "");
+  if (!dealId || !buyerId) return;
+  const deal = await db.deal.findUnique({ where: { id: dealId }, select: { contractPrice: true, askingPrice: true } });
+  const { logDealSend } = await import("@/lib/buyers/feedback");
+  await logDealSend({
+    dealId, buyerId, channel: String(formData.get("channel") ?? "email"),
+    floorPrice: deal?.contractPrice ?? null, askPrice: deal?.askingPrice ?? null, actor: me?.name ?? "",
+  });
+  revalidatePath("/deals");
+}
+
+/** Phase 7: record a buyer's response to a send (outcome · offer $ · pass reason). */
+export async function updateDealSendAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const id = String(formData.get("sendId") ?? "");
+  if (!id) return;
+  const offerRaw = String(formData.get("offerAmount") ?? "").replace(/[^0-9.]/g, "");
+  const { setDealSendOutcome } = await import("@/lib/buyers/feedback");
+  await setDealSendOutcome(id, {
+    outcome: String(formData.get("outcome") ?? ""),
+    offerAmount: offerRaw ? Number(offerRaw) : null,
+    passReason: String(formData.get("passReason") ?? ""),
+    note: String(formData.get("note") ?? "").slice(0, 300),
+  }, me?.name ?? "");
+  revalidatePath("/deals");
+  revalidatePath("/marketing");
+}
+
+/** Phase 7: blacklist / un-blacklist a buyer (managers only; archive-style — never deleted). */
+export async function toggleBlacklistAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const buyerId = String(formData.get("buyerId") ?? "");
+  if (!buyerId) return;
+  const { setBlacklist, clearBlacklist } = await import("@/lib/buyers/feedback");
+  if (String(formData.get("off") ?? "") === "1") await clearBlacklist(buyerId, me!.name);
+  else await setBlacklist(buyerId, String(formData.get("reason") ?? "").trim(), me!.name);
+  revalidatePath("/deals");
+  revalidatePath("/marketing");
+}
+
 /** Phase 3 cascade: geocode a deal, rank every active buyer against it, and
  *  remember the search (last 20) for the demand board. Read-only on buyers. */
 export async function cascadeRank(formData: FormData): Promise<{
@@ -2487,6 +2535,7 @@ export async function cascadeRank(formData: FormData): Promise<{
     score: number; tier: 1 | 2 | 3; why: Array<{ ok: boolean | "warn"; label: string }>; geoBasis: string;
   }>;
   nearest?: { name: string; miles: number } | null;
+  excluded?: Array<{ name: string; reason: string }>;
 }> {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) return { ok: false, error: "no access" };
@@ -2505,6 +2554,7 @@ export async function cascadeRank(formData: FormData): Promise<{
     select: {
       id: true, name: true, company: true, type: true, phone: true, email: true,
       buyBoxStruct: true, geoPolygon: true, geoCentroidLat: true, geoCentroidLng: true,
+      buyerFlags: true, blacklistedAt: true, blacklistReason: true,
       touches: { orderBy: { at: "desc" }, take: 1, select: { at: true } },
     },
   });
@@ -2512,7 +2562,9 @@ export async function cascadeRank(formData: FormData): Promise<{
   const buyers = rows.map((r) => ({
     id: r.id, name: r.name, buyBox: (r.buyBoxStruct as never) ?? null, geoPolygon: (r.geoPolygon as never) ?? null,
     geoCentroidLat: r.geoCentroidLat, geoCentroidLng: r.geoCentroidLng, lastTouchAt: r.touches[0]?.at ?? null,
+    flags: (r.buyerFlags as { lowballer?: boolean; tireKicker?: boolean } | null) ?? null, blacklistedAt: r.blacklistedAt,
   }));
+  const excluded = rows.filter((r) => r.blacklistedAt).map((r) => ({ name: r.name, reason: r.blacklistReason ?? "" }));
   const deal = { lat: g.lat, lng: g.lng, county: g.county || undefined, city: g.city || undefined, state: g.state || undefined, zip: g.zip || undefined, price, acres, assetType };
   const ranked = rankBuyers(deal, buyers);
   const byId = new Map(rows.map((r) => [r.id, r]));
@@ -2530,6 +2582,7 @@ export async function cascadeRank(formData: FormData): Promise<{
   return {
     ok: true,
     geocode: g,
+    excluded,
     nearest: ranked.length ? null : nearestMiss(deal, buyers),
     ranked: ranked.map((r) => {
       const c = byId.get(r.buyer.id);

@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 // This client-level guard throws on any delete/deleteMany against buyer tables,
 // belt-and-braces on top of the archive-only server actions and the RESTRICT
 // foreign keys in the migration.
-const NO_DELETE = new Set(["MarketContact", "BuyerHistory", "BuyerContact", "BuyerTouch"]);
+const NO_DELETE = new Set(["MarketContact", "BuyerHistory", "BuyerContact", "BuyerTouch", "DealSend"]);
 
 function makeClient() {
   return new PrismaClient().$extends({

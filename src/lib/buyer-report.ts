@@ -107,6 +107,24 @@ export async function buildBuyerBoxReport(today: string): Promise<{ subject: str
     </div>`;
   }).join("");
 
+  // Phase 7: weekly feedback digest — who actually responds, who's gone dark,
+  // new lowballers, and deals where EVERY send came back a pass.
+  let digestHtml = "";
+  try {
+    const { feedbackDigest } = await import("./buyers/feedback");
+    const dg = await feedbackDigest(7);
+    const li = (rows: string[]) => rows.map((r) => `<div style="font-size:12px;color:#334155;padding:1px 0">${r}</div>`).join("");
+    if (dg.responsive.length || dg.dark.length || dg.newLowballers.length || dg.allPassCounties.length) {
+      digestHtml = `<div style="margin-top:16px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:11px 13px">
+        <div style="font-size:13px;font-weight:800;color:#5b21b6">📨 Buyer feedback this week</div>
+        ${dg.responsive.length ? `<div style="font-size:11px;font-weight:800;color:#5b21b6;margin-top:6px">MOST RESPONSIVE</div>${li(dg.responsive.map((b) => `<b>${esc(b.name)}</b> — ${b.offers} offer${b.offers === 1 ? "" : "s"} on ${b.sends} send${b.sends === 1 ? "" : "s"}`))}` : ""}
+        ${dg.dark.length ? `<div style="font-size:11px;font-weight:800;color:#5b21b6;margin-top:6px">GONE DARK (2+ sends, zero replies)</div>${li(dg.dark.map((b) => `${esc(b.name)} — ${b.sends} sends ignored`))}` : ""}
+        ${dg.newLowballers.length ? `<div style="font-size:11px;font-weight:800;color:#b45309;margin-top:6px">⚠️ NEW LOWBALLERS</div>${li(dg.newLowballers.map((b) => `${esc(b.name)} — avg offer ${b.avgPct}% of floor`))}` : ""}
+        ${dg.allPassCounties.length ? `<div style="font-size:11px;font-weight:800;color:#b91c1c;margin-top:6px">🧊 EVERY BUYER PASSED</div>${li(dg.allPassCounties.map((a) => `${esc(a)} — wrong buyer list or wrong price for that area`))}` : ""}
+      </div>`;
+    }
+  } catch { /* digest is additive — never sink the report */ }
+
   const html = `
   <div style="font-family:system-ui,Arial,sans-serif;color:#0f172a;max-width:720px;margin:0 auto;padding:4px 2px">
     <div style="border-bottom:3px solid #0b1f3a;padding-bottom:8px;margin-bottom:12px">
@@ -125,6 +143,8 @@ export async function buildBuyerBoxReport(today: string): Promise<{ subject: str
       <div style="font-size:13px;font-weight:800;color:#92400e">🆕 New markets to add this weekend</div>
       <div style="font-size:12px;color:#92400e;margin-top:3px">You have buyers waiting in <b>${newMarkets.slice(0, 3).map((r) => esc(r.label)).join(", ")}</b>${newMarkets.length > 3 ? ` +${newMarkets.length - 3} more` : ""} but you're not pulling there yet. Start with <b>${esc(newMarkets[0].label)}</b> (${newMarkets[0].count} buyer${newMarkets[0].count === 1 ? "" : "s"} waiting).</div>
     </div>` : `<div style="margin-top:14px;font-size:12px;color:#059669">🎉 Every market your buyers want is already in your Target Markets — no new markets needed this weekend.</div>`}
+
+    ${digestHtml}
 
     <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#0b1f3a;margin:20px 0 6px">🏗️ The exact buy boxes</div>
     ${cards}

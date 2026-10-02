@@ -1,4 +1,4 @@
-import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand } from "@/app/actions";
+import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction } from "@/app/actions";
 import { readAuto, type DealCascade } from "@/lib/cascade";
 import { LAND_FIELDS, LAND_FALLOUT_REASONS, landFlags, type DealLand } from "@/lib/deal-land";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
@@ -44,6 +44,20 @@ export default async function DealsPage({
   // Vetted buyers only — JV partners (type "jv_partner") are managed separately on /marketing, not matched here.
   const buyers = mktAccess ? (await db.marketContact.findMany({ where: { archivedAt: null }, orderBy: { sortOrder: "asc" } })).filter((b) => b.type !== "jv_partner") : [];
   const cascade = mktAccess ? await readCascade() : {};
+  // Phase 7: every send + response per deal (feeds the buyer track record)
+  const sendRows = mktAccess && deals.length
+    ? await db.dealSend.findMany({
+        where: { dealId: { in: deals.map((d) => d.id) } },
+        orderBy: { sentAt: "desc" },
+        include: { buyer: { select: { name: true, blacklistedAt: true } } },
+      })
+    : [];
+  const sendsByDeal = new Map<string, typeof sendRows>();
+  for (const r of sendRows) {
+    const arr = sendsByDeal.get(r.dealId) ?? [];
+    arr.push(r);
+    sendsByDeal.set(r.dealId, arr);
+  }
   const terms = mktAccess ? await readBuyerTerms() : {};
   const buyerLand = mktAccess ? await readBuyerLand() : {};
   const buyersWithTerms = buyers.map((b) => ({ ...b, proofOfFunds: terms[b.id]?.pof, maxOfferPct: terms[b.id]?.maxOfferPct, isLandBuyer: buyerLand[b.id]?.isLandBuyer, targetZips: buyerLand[b.id]?.targetZips }));
@@ -145,6 +159,8 @@ export default async function DealsPage({
             auto={auto[d.id]}
             claimedName={auto[d.id]?.claimedBy ? buyerNameById.get(auto[d.id]!.claimedBy!) ?? null : null}
             land={landMap[d.id]}
+            sends={sendsByDeal.get(d.id) ?? []}
+            canBlacklist={canClose}
           />
         ))}
       </div>
@@ -152,7 +168,13 @@ export default async function DealsPage({
   );
 }
 
-function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand }) {
+type SendRow = {
+  id: string; buyerId: string; wave: number; channel: string; sentAt: Date;
+  outcome: string; offerAmount: number | null; passReason: string; note: string;
+  buyer: { name: string; blacklistedAt: Date | null };
+};
+
+function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land, sends = [], canBlacklist = false }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand; sends?: SendRow[]; canBlacklist?: boolean }) {
   const lFlags = landFlags(land);
   // The next buyer to send to = highest-ranked one not already sent or passed.
   const nextId = matches.find((m) => cascadeStatus[m.id] !== "sent" && cascadeStatus[m.id] !== "passed")?.id ?? null;
@@ -188,6 +210,74 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
         <div className={`mb-3 rounded-lg px-3 py-2 text-sm font-medium ${agingClasses(aging.level)}`}>
           💡 {aging.recommendation}
         </div>
+      )}
+
+      {/* Phase 7 — Sends & responses: the buyer feedback loop. Two clicks to log an outcome. */}
+      {(sends.length > 0 || matches.length > 0) && (
+        <details className="mb-3 rounded-lg bg-violet-50 p-3 ring-1 ring-violet-200" open={sends.length > 0}>
+          <summary className="cursor-pointer text-sm font-bold text-violet-800">📨 Sends &amp; responses ({sends.length})</summary>
+          <p className="mt-1 text-[11px] text-violet-700">Every blast lands here automatically. When a buyer answers, set the outcome — offers + passes build each buyer&apos;s track record (lowballer / tire-kicker flags, hit rate).</p>
+          <div className="mt-2 space-y-1.5">
+            {sends.map((sd) => (
+              <form key={sd.id} action={updateDealSendAction} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-white p-1.5 text-xs ring-1 ring-violet-100">
+                <input type="hidden" name="sendId" value={sd.id} />
+                <span className="font-semibold text-slate-800">{sd.buyer.name}</span>
+                {sd.buyer.blacklistedAt && <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-white">⛔</span>}
+                <span className="text-[10px] text-slate-400">w{sd.wave} · {sd.channel} · {new Date(sd.sentAt).toLocaleDateString()}</span>
+                <select name="outcome" defaultValue={sd.outcome} className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]">
+                  <option value="">— outcome —</option>
+                  <option value="no_reply">no reply</option>
+                  <option value="pass">pass</option>
+                  <option value="offer">offer</option>
+                  <option value="loi">LOI</option>
+                  <option value="closed">closed ✅</option>
+                </select>
+                <input name="offerAmount" defaultValue={sd.offerAmount ?? ""} placeholder="offer $" className="w-20 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
+                <select name="passReason" defaultValue={sd.passReason} className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]">
+                  <option value="">pass reason…</option>
+                  <option value="price">price</option>
+                  <option value="acres">acres</option>
+                  <option value="area">area</option>
+                  <option value="timing">timing</option>
+                  <option value="type">type</option>
+                  <option value="other">other</option>
+                </select>
+                <input name="note" defaultValue={sd.note} placeholder="note" className="w-28 flex-1 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
+                <button className="rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-violet-700">Save</button>
+              </form>
+            ))}
+            {sends.length > 0 && canBlacklist && (
+              <form action={toggleBlacklistAction} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-1.5 text-xs ring-1 ring-violet-100">
+                <span className="text-[11px] font-bold text-slate-500">⛔ Blacklist a buyer on this deal:</span>
+                <select name="buyerId" className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]">
+                  {[...new Map(sends.map((sd) => [sd.buyerId, sd])).values()].map((sd) => (
+                    <option key={sd.buyerId} value={sd.buyerId}>{sd.buyer.name}{sd.buyer.blacklistedAt ? " (blacklisted)" : ""}</option>
+                  ))}
+                </select>
+                <input name="reason" placeholder="reason (kept on record)" className="w-44 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
+                <button className="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-slate-700">Blacklist</button>
+                <button name="off" value="1" className="rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-600 hover:bg-slate-300">Un-blacklist</button>
+              </form>
+            )}
+            {/* Log a send the cascade didn't make (call / text / portal) */}
+            {matches.length > 0 && (
+              <form action={logDealSendAction} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-1.5 text-xs ring-1 ring-violet-100">
+                <input type="hidden" name="dealId" value={deal.id} />
+                <span className="text-[11px] font-bold text-slate-500">+ Log a manual send:</span>
+                <select name="buyerId" className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]">
+                  {matches.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                <select name="channel" className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]">
+                  <option value="email">email</option>
+                  <option value="text">text</option>
+                  <option value="call">call</option>
+                  <option value="portal">portal</option>
+                </select>
+                <button className="rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-violet-700">Log send</button>
+              </form>
+            )}
+          </div>
+        </details>
       )}
 
       {/* Matching buyers from Markets & Buyers (read-only; full CRM lives in REI Reply) */}

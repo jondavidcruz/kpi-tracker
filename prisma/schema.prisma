@@ -616,6 +616,11 @@ model MarketContact {
   history  BuyerHistory[]
   contacts BuyerContact[]
   touches  BuyerTouch[]
+  dealSends DealSend[]
+  // Phase 7 feedback loop: computed response cache + blacklist (archive-style — never deleted)
+  buyerFlags      Json? // {lowballer,tireKicker,blacklisted,blacklistReason,sends,offers,avgOfferPct,closes,computedAt}
+  blacklistedAt   DateTime?
+  blacklistReason String?
 
   @@index([category])
 }
@@ -1264,6 +1269,32 @@ model CascadeSearch {
   topIds    Json? // top 10 ranked buyer ids
 
   @@index([at])
+}
+
+// Phase 7: every time a deal goes out to a buyer — and what came back.
+// Feeds lowball/tire-kicker detection and the buyer track record. Rule zero:
+// never deleted (db guard), outcomes only ever updated.
+model DealSend {
+  id        String        @id @default(cuid())
+  dealId    String
+  buyerId   String
+  buyer     MarketContact @relation(fields: [buyerId], references: [id])
+  sentAt    DateTime      @default(now())
+  channel   String        @default("email") // email | text | call | portal
+  wave      Int           @default(1) // cascade round
+  packetUrl String        @default("")
+  floorPrice Float? // our contract/floor at send time
+  askPrice   Float? // what we marketed it at (if any)
+  // response
+  respondedAt DateTime?
+  outcome     String  @default("") // "" | no_reply | pass | offer | loi | closed
+  offerAmount Float?
+  passReason  String  @default("") // price | acres | area | timing | type | other
+  note        String  @default("")
+  actor       String  @default("")
+
+  @@index([buyerId, sentAt])
+  @@index([dealId])
 }
 
 model GeoCache {

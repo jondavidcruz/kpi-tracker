@@ -36,6 +36,9 @@ export type BuyerLite = {
   geoCentroidLng?: number | null;
   lastTouchAt?: Date | string | null;
   archivedAt?: Date | string | null;
+  // Phase 7 feedback loop
+  flags?: { lowballer?: boolean; tireKicker?: boolean } | null;
+  blacklistedAt?: Date | string | null;
 };
 
 export type Ranked = {
@@ -121,6 +124,7 @@ export function rankBuyers(deal: Deal, buyers: BuyerLite[]): Ranked[] {
   const out: Ranked[] = [];
   for (const b of buyers) {
     if (b.archivedAt) continue;
+    if (b.blacklistedAt) continue; // excluded — callers list these separately with the reason
     const bb: Partial<BuyBox> = b.buyBox ?? {};
     let hardSizeMiss = false; // acreage far below the buyer's min → near-miss, not match
     const geo = geoGate(deal, b);
@@ -169,6 +173,9 @@ export function rankBuyers(deal: Deal, buyers: BuyerLite[]): Ranked[] {
     // Buying now
     if (bb.status?.buying_now === true) score += 10;
     if (bb.status?.buying_now === false) { score -= 10; why.push({ ok: "warn", label: "❌ buying paused — still send" }); }
+    // Phase 7 track record (spec: lowballer −20, tire-kicker −15)
+    if (b.flags?.lowballer) { score -= 20; why.push({ ok: "warn", label: "⚠️ lowballer history" }); }
+    if (b.flags?.tireKicker) { score -= 15; why.push({ ok: "warn", label: "💤 tire-kicker — never bids" }); }
     // Relationship recency
     if (b.lastTouchAt) {
       const days = (Date.now() - new Date(b.lastTouchAt).getTime()) / 864e5;

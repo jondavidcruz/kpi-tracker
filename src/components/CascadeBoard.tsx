@@ -8,6 +8,7 @@ import { cascadeRank, logBuyerOutreach } from "@/app/actions";
 type Chip = { ok: boolean | "warn"; label: string };
 type Card = { id: string; name: string; company: string; type: string; phone: string; email: string; score: number; tier: 1 | 2 | 3; why: Chip[]; geoBasis: string };
 type Geo = { lat: number; lng: number; formatted: string; county: string; city: string; state: string; zip: string };
+type Excluded = { name: string; reason: string };
 
 const TIER_LABEL: Record<1 | 2 | 3, { text: string; cls: string }> = {
   1: { text: "Send first", cls: "bg-emerald-100 text-emerald-800 ring-emerald-200" },
@@ -36,6 +37,8 @@ export default function CascadeBoard() {
   const [cards, setCards] = useState<Card[] | null>(null);
   const [geo, setGeo] = useState<Geo | null>(null);
   const [nearest, setNearest] = useState<{ name: string; miles: number } | null>(null);
+  const [excluded, setExcluded] = useState<Excluded[]>([]);
+  const [showExcluded, setShowExcluded] = useState(false);
   const [error, setError] = useState("");
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState("");
@@ -51,6 +54,7 @@ export default function CascadeBoard() {
       setCards(res.ranked ?? []);
       setGeo(res.geocode ?? null);
       setNearest(res.nearest ?? null);
+      setExcluded(res.excluded ?? []);
     });
   };
 
@@ -152,6 +156,19 @@ export default function CascadeBoard() {
           </div>
         ))}
       </div>
+
+      {cards && excluded.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+          <button onClick={() => setShowExcluded((v) => !v)} className="font-bold text-slate-600 hover:text-slate-800">
+            ⛔ {excluded.length} blacklisted buyer{excluded.length === 1 ? "" : "s"} excluded {showExcluded ? "▴" : "▾"}
+          </button>
+          {showExcluded && (
+            <ul className="mt-1.5 space-y-0.5">
+              {excluded.map((e, i) => <li key={i}><b>{e.name}</b>{e.reason ? ` — ${e.reason}` : ""}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
