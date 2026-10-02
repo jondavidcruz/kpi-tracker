@@ -66,15 +66,13 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
     : null;
   const creditsToScorecard = me?.position === "dispositions";
 
+  // Follow-ups-due list REMOVED (Jon 2026-10-02 — the girls never used it;
+  // outreach is driven by the vetting table + cold list on Vetted Buyers).
   const inPipeline = (s: string) => s === "to_vet" || s === "hold";
-  const dueRows = rows
-    .filter((r) => r.nextFollowUp && r.nextFollowUp <= today && r.vetStage !== "dead")
-    .sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp));
   const stats = {
     pipeline: rows.filter((r) => inPipeline(r.vetStage)).length,
     contacted7: rows.filter((r) => r.lastContacted && r.lastContacted >= weekAgo).length,
     vetted: vettedCount,
-    dueToday: rows.filter((r) => r.nextFollowUp && r.nextFollowUp <= today && inPipeline(r.vetStage)).length,
   };
 
   return (
@@ -83,9 +81,8 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
         right={<Link href="/marketing" className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-200">→ Vetted buyers</Link>} />
 
       {/* KPI tie-in */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-3 gap-3">
         <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-slate-800">{stats.pipeline}</div><div className="text-[11px] font-semibold text-slate-500">In pipeline</div></Card>
-        <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-rose-600">{stats.dueToday}</div><div className="text-[11px] font-semibold text-slate-500">Follow-ups due</div></Card>
         <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-sky-700">{stats.contacted7}</div><div className="text-[11px] font-semibold text-slate-500">Contacted (7d) → 📇 Buyers Contacted</div></Card>
         <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-emerald-700">{stats.vetted}</div><div className="text-[11px] font-semibold text-slate-500">Vetted → ➕ New Buyers Added</div></Card>
       </div>
@@ -114,24 +111,6 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
         <p className="mt-2 mb-3 text-xs text-slate-500">Upload or paste any CSV. We&apos;ll auto-guess the columns; you pick which heading maps to each field, preview it, then import. New buyers land in the research pool as &quot;to contact.&quot;</p>
         <CsvMapImport />
       </details>
-
-      {/* Follow-ups due — the daily driver, moved here from Markets */}
-      {dueRows.length > 0 && (
-        <Card className="border-l-4 border-red-400 bg-red-50/50 p-4">
-          <h3 className="mb-2 text-sm font-bold text-red-800">⏰ Follow-ups due ({dueRows.length}) — reach out today</h3>
-          <div className="space-y-1.5">
-            {dueRows.map((r) => (
-              <div key={r.id} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-semibold text-slate-800">{r.name}</span>
-                {r.vetArea && <span className="text-xs text-slate-400">🏗 {r.vetArea}</span>}
-                {r.bestContact && <span className="text-xs text-violet-700">📣 {r.bestContact}</span>}
-                {[r.phone, r.email, r.igHandle].filter(Boolean).length > 0 && <span className="text-xs text-brand-navy">{[r.phone, r.email, r.igHandle].filter(Boolean).join(" · ")}</span>}
-                <span className={`ml-auto text-[11px] font-semibold ${r.nextFollowUp < today ? "text-red-600" : "text-amber-600"}`}>{r.nextFollowUp < today ? "overdue" : "today"} · {r.nextFollowUp}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
 
       <VettingTable areas={areas} canEdit={canAccessMarketing(me)} today={today} />
 

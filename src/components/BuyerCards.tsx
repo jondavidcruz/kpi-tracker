@@ -7,7 +7,8 @@ import type { Scorecard, Tier } from "@/lib/buyers/scorecard";
 
 export type CardBuyer = Scorecard & {
   company?: string; type?: string; phone?: string; email?: string; igHandle?: string; bestContact?: string;
-  mapUrl?: string;
+  mapUrl?: string; // Sharyn's hand-made area map (always wins)
+  autoMapUrl?: string; // 🤖 generated from the buy box — blue counties, red city pins
 };
 
 const TIER_CLS: Record<Tier, string> = {
@@ -121,6 +122,13 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
                       </ul>
                     )}
                     {b.mapUrl && <a href={b.mapUrl} target="_blank" rel="noreferrer" className="inline-block text-[11px] font-semibold text-indigo-600">🗺️ open area map</a>}
+                    {!b.mapUrl && b.autoMapUrl && (
+                      <a href={b.autoMapUrl} target="_blank" rel="noreferrer" className="block" title="Auto-generated from this buyer's buy box — blue = counties they buy, red pins = cities. Updates whenever the buy box changes.">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={b.autoMapUrl} alt={`${b.name} coverage map`} loading="lazy" className="w-full rounded-lg ring-1 ring-slate-200" />
+                        <span className="mt-0.5 inline-block text-[10px] font-semibold text-slate-400">🤖 auto coverage map — where they buy (click to enlarge)</span>
+                      </a>
+                    )}
                   </div>
                 )}
               </div>

@@ -136,6 +136,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, keys: out });
   }
 
+  // Auto buy-box coverage maps — rebuild a few stale ones per run (daily cron
+  // + fire-and-forget after every interview save).
+  if (url.searchParams.get("automaps") === "1") {
+    const { refreshAutoMaps } = await import("@/lib/geo/automaps");
+    const res = await refreshAutoMaps({ limit: Math.min(12, Number(url.searchParams.get("n")) || 6) });
+    return NextResponse.json({ ok: true, automaps: res });
+  }
+
   // Storage audit (Jon 2026-10-02: cut Supabase/Vercel usage, prefer Drive).
   // Reports every Supabase bucket's object count+bytes and the biggest DB tables.
   if (url.searchParams.get("storagereport") === "1") {

@@ -14,6 +14,7 @@
     { "path": "/api/cron?cascade=1", "schedule": "0 1 * * *" },
     { "path": "/api/cron?ethan=1", "schedule": "30 20 * * 1-5" },
     { "path": "/api/cron?backup=1", "schedule": "0 9 * * *" },
+    { "path": "/api/cron?automaps=1", "schedule": "30 9 * * *" },
     { "path": "/api/cron?payroll=1", "schedule": "0 3 * * *" },
     { "path": "/api/cron?breaknudge=am", "schedule": "30 17 * * 1-5" },
     { "path": "/api/cron?breaknudge=lunch", "schedule": "0 19 * * 1-5" },

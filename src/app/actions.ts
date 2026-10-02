@@ -1393,6 +1393,9 @@ export async function saveBuyerLand(formData: FormData) {
   const row = await db.resource.findFirst({ where: { category: BUYER_LAND_CAT } });
   if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(map) } });
   else await db.resource.create({ data: { title: "buyer-land", category: BUYER_LAND_CAT, url: "", description: JSON.stringify(map) } });
+  // Keep the auto coverage map in sync with what was just saved (after the
+  // response, so the save stays snappy — same pattern as recording moves).
+  after(() => import("@/lib/geo/automaps").then(({ refreshAutoMaps }) => refreshAutoMaps({ onlyBuyerId: buyerId, limit: 1 })).catch(() => {}));
   revalidatePath("/marketing");
   revalidatePath("/deals");
   redirect("/marketing?saved=1#interviews");

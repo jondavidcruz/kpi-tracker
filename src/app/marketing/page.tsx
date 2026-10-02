@@ -13,6 +13,7 @@ import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
 import VettingTable, { type Prospect } from "@/components/VettingTable";
 import CascadeBoard from "@/components/CascadeBoard";
 import PageTabs from "@/components/PageTabs";
+import { readAutoMaps } from "@/lib/geo/automaps";
 import { buildScorecard, coverageByCounty } from "@/lib/buyers/scorecard";
 import type { BuyBox } from "@/lib/buybox/types";
 import VettedBuyersBoard from "@/components/VettedBuyersBoard";
@@ -115,6 +116,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     .sort((a, b) => (b.days ?? 9999) - (a.days ?? 9999))
     .slice(0, 24);
 
+  const autoMaps = await readAutoMaps(); // 🤖 generated coverage maps (sig-cached)
   // ── Section 3: vetting scorecard / tier / coverage (derived, read-only) ──
   const touchRows = await db.buyerTouch.findMany({
     where: { buyerId: { in: vettedRows.map((r) => r.id) } },
@@ -138,7 +140,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       flags: (r.buyerFlags as { lowballer?: boolean; tireKicker?: boolean; sends?: number; offers?: number; avgOfferPct?: number | null; closes?: number } | null) ?? null,
       blacklisted: !!r.blacklistedAt, blacklistReason: r.blacklistReason ?? "",
     }, today);
-    return { ...sc, company: r.company, type: r.type, phone: r.phone, email: r.email, igHandle: r.igHandle, bestContact: r.bestContact, mapUrl: r.contact || undefined };
+    return { ...sc, company: r.company, type: r.type, phone: r.phone, email: r.email, igHandle: r.igHandle, bestContact: r.bestContact, mapUrl: r.contact || undefined, autoMapUrl: autoMaps[r.id]?.url };
   });
   const coverage = coverageByCounty(cards);
 
