@@ -12,6 +12,7 @@ import { Card, SectionTitle } from "@/components/ui";
 import MarketsMap, { type Buyer, type Market } from "@/components/MarketsMap";
 import VettingTable, { type Prospect } from "@/components/VettingTable";
 import CascadeBoard from "@/components/CascadeBoard";
+import PageTabs from "@/components/PageTabs";
 import { buildScorecard, coverageByCounty } from "@/lib/buyers/scorecard";
 import type { BuyBox } from "@/lib/buybox/types";
 import VettedBuyersBoard from "@/components/VettedBuyersBoard";
@@ -162,15 +163,67 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
       {sp.imp === "noname" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Your CSV needs a header row with a &ldquo;name&rdquo; column.</div>}
 
+      <PageTabs
+        id="vetted-buyers"
+        tabs={[
+          { key: "cascade", label: "🎯 Cascade" },
+          { key: "buyers", label: "🃏 Buyers", badge: vettedRows.length },
+          { key: "interviews", label: "📥 Interviews" },
+          { key: "markets", label: "🗺 Map & Markets" },
+          { key: "jv", label: "🤝 JV Partners", badge: jvPartners.length },
+        ]}
+      >
+        {[
+          <div key="cascade" className="space-y-6">
       {/* Buyer cascade — geocoded ranking (Phase 3). Deal in → ranked call list out. */}
       <div>
         <h2 className="mb-2 text-sm font-bold text-slate-800">🎯 Buyer cascade — who to send a deal to first</h2>
         <CascadeBoard />
       </div>
 
+          </div>,
+          <div key="buyers" className="space-y-6">
       {/* Section 3 — KPI strip · coverage heat board · buyer trading cards */}
       <VettedBuyersBoard buyers={cards} coverage={coverage} coldCount={cold.length} />
 
+      {/* Buyers going cold — vetted buyers not touched in 30+ days */}
+      {cold.length > 0 && (
+        <Card className="p-4">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-slate-700">🧊 Buyers going cold</span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">{cold.length} need a touch</span>
+          </div>
+          <p className="mb-2 text-xs text-slate-500">Vetted buyers we haven&apos;t contacted in 30+ days. Reach out to keep the relationship warm — log the touch in <Link href="/vetting" className="underline">Buyer Research</Link>.</p>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+            {cold.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-xs ring-1 ring-slate-200">
+                <span className="flex-1 truncate font-semibold text-slate-700">{c.name}</span>
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${c.days === null ? "bg-slate-200 text-slate-600" : c.days >= 60 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                  {c.days === null ? "never" : `${c.days}d`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* The spreadsheet is the EDIT view now — the cards above are the daily view (Jon: no duplicate lists). */}
+      <details className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+        <summary className="cursor-pointer text-sm font-bold text-slate-700">📋 Edit as spreadsheet <span className="font-normal text-slate-400">— click any cell · ⊕ opens the buy box · Status back to a working stage returns a buyer to Buyer Research</span></summary>
+        <div className="mt-3 space-y-3">
+          <Card className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-emerald-300 bg-emerald-50/40 p-3">
+            <span className="text-xs text-slate-600">{devs.length + flips.length} vetted {devs.length + flips.length === 1 ? "buyer" : "buyers"}. Click any cell to edit · ⊕ opens the buy box · set Status back to a working stage to send one to Buyer Research.</span>
+            <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700">🔎 Go to Buyer Research</Link>
+          </Card>
+          {buyerGroups.length === 0
+            ? <Card className="p-6 text-center text-sm text-slate-400">No vetted buyers yet — vet developers in Buyer Research and they&apos;ll show here.</Card>
+            : <VettingTable areas={buyerGroups} canEdit={canAccessMarketing(me)} today={today} allowAdd={false} />}
+        </div>
+      </details>
+
+      <ArchivedBuyers rows={archivedRows} />
+          </div>,
+          <div key="interviews" className="space-y-6">
       {/* Where developers buy (demand board) + the standard buy-box interviews */}
       <DevInterviews
         rows={vettedRows.filter((r) => isDevRow(r) || buyerLand[r.id]?.isLandBuyer).map((r) => ({
@@ -207,6 +260,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         </div>
       </details>
 
+          </div>,
+          <div key="markets" className="space-y-6">
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">
         <MarketsMap buyers={buyers} markets={marketsForMap} />
@@ -324,27 +379,6 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         </Card>
       </div>
 
-      {/* Buyers going cold — vetted buyers not touched in 30+ days */}
-      {cold.length > 0 && (
-        <Card className="p-4">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="text-sm font-bold text-slate-700">🧊 Buyers going cold</span>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">{cold.length} need a touch</span>
-          </div>
-          <p className="mb-2 text-xs text-slate-500">Vetted buyers we haven&apos;t contacted in 30+ days. Reach out to keep the relationship warm — log the touch in <Link href="/vetting" className="underline">Buyer Research</Link>.</p>
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-            {cold.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-xs ring-1 ring-slate-200">
-                <span className="flex-1 truncate font-semibold text-slate-700">{c.name}</span>
-                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${c.days === null ? "bg-slate-200 text-slate-600" : c.days >= 60 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
-                  {c.days === null ? "never" : `${c.days}d`}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
       {/* Markets + research */}
       <Card className="p-5">
         <h3 className="mb-3 text-sm font-bold text-slate-700">🗺 Markets we&apos;re in &amp; research</h3>
@@ -360,18 +394,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         </details>
       </Card>
 
-      {/* Vetted buyers — same spreadsheet view as Buyer Research, grouped by type.
-          New buyers start in Buyer Research and graduate here once vetted. */}
-      <Card className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-emerald-300 bg-emerald-50/40 p-3">
-        <span className="text-xs text-slate-600">{devs.length + flips.length} vetted {devs.length + flips.length === 1 ? "buyer" : "buyers"}. Click any cell to edit · ⊕ opens the buy box · set Status back to a working stage to send one to Buyer Research.</span>
-        <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700">🔎 Go to Buyer Research</Link>
-      </Card>
-      {buyerGroups.length === 0
-        ? <Card className="p-6 text-center text-sm text-slate-400">No vetted buyers yet — vet developers in Buyer Research and they&apos;ll show here.</Card>
-        : <VettingTable areas={buyerGroups} canEdit={canAccessMarketing(me)} today={today} allowAdd={false} />}
-
-      <ArchivedBuyers rows={archivedRows} />
-
+          </div>,
+          <div key="jv" className="space-y-6">
       {/* ───────── JV PARTNERS — deliberately separate from our vetted buyers ───────── */}
       <div className="mt-8 border-t-4 border-dashed border-indigo-200 pt-6">
         <SectionTitle title="🤝 JV Partners" subtitle="NOT our buyers or developers — partners who hold buy boxes we don't have. We send them a deal, they take it to their buyers, and we split 50/50." accent="bg-indigo-500" />
@@ -445,6 +469,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           </details>
         </Card>
       </div>
+          </div>,
+        ]}
+      </PageTabs>
 
     </div>
   );
