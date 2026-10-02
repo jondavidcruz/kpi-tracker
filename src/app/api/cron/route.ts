@@ -104,6 +104,38 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, crmUsers: users.users, msgScanned, callsByUser });
   }
 
+  // Live key check — proves each newly-added API key actually works (never
+  // echoes a key). Run after adding env vars + redeploying.
+  if (url.searchParams.get("keycheck") === "1") {
+    const out: Record<string, { set: boolean; works?: boolean; detail?: string }> = {};
+    out.REGRID_API_KEY = { set: !!process.env.REGRID_API_KEY };
+    if (out.REGRID_API_KEY.set) {
+      try {
+        const { parcelByApn } = await import("@/lib/geo/parcels");
+        const pc = await parcelByApn("402116252014", "FL", "Charlotte"); // Port Charlotte sample APN
+        out.REGRID_API_KEY.works = !!pc;
+        out.REGRID_API_KEY.detail = pc ? `${pc.address || "parcel found"} · ${pc.acres ?? "?"} ac · zone ${pc.zoning || "?"}` : "key accepted but APN lookup empty — check plan includes API";
+      } catch (e) { out.REGRID_API_KEY.works = false; out.REGRID_API_KEY.detail = String(e).slice(0, 120); }
+    }
+    out.GOOGLE_MAPS_API_KEY = { set: !!process.env.GOOGLE_MAPS_API_KEY };
+    if (out.GOOGLE_MAPS_API_KEY.set) {
+      try {
+        const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=Murfreesboro%2C+TN&key=${process.env.GOOGLE_MAPS_API_KEY}`, { cache: "no-store" });
+        const j = (await r.json()) as { status?: string; error_message?: string };
+        out.GOOGLE_MAPS_API_KEY.works = j.status === "OK";
+        out.GOOGLE_MAPS_API_KEY.detail = j.status === "OK" ? "geocoding OK" : `${j.status}: ${j.error_message ?? ""}`.slice(0, 140);
+      } catch (e) { out.GOOGLE_MAPS_API_KEY.works = false; out.GOOGLE_MAPS_API_KEY.detail = String(e).slice(0, 120); }
+    }
+    out.DIRECTREI_API_KEY = { set: !!process.env.DIRECTREI_API_KEY };
+    if (out.DIRECTREI_API_KEY.set) {
+      const { directReiWhoami } = await import("@/lib/directrei");
+      const r = await directReiWhoami();
+      out.DIRECTREI_API_KEY.works = r.ok;
+      out.DIRECTREI_API_KEY.detail = r.ok ? `connected: ${JSON.stringify(r.body).slice(0, 120)}` : `status ${r.status}: ${JSON.stringify(r.body).slice(0, 120)}`;
+    }
+    return NextResponse.json({ ok: true, keys: out });
+  }
+
   // Storage audit (Jon 2026-10-02: cut Supabase/Vercel usage, prefer Drive).
   // Reports every Supabase bucket's object count+bytes and the biggest DB tables.
   if (url.searchParams.get("storagereport") === "1") {
