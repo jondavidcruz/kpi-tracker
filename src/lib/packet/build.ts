@@ -92,11 +92,25 @@ export async function buildPacketModel(input: BuildInput): Promise<{ model: Pack
       utilitiesWater: input.manual?.utilitiesWater ?? "", utilitiesSewer: input.manual?.utilitiesSewer ?? "",
       electric: input.manual?.electric ?? "", setbacks: input.manual?.setbacks ?? "",
       species: input.manual?.species ?? "", notes: input.manual?.notes ?? "",
-      sellerNotes: (input.manual?.sellerNotes ?? "").slice(0, 2000),
     },
+    sellerSourced: [],
+    highlights: [],
     countyPhone: COUNTY_PHONES[countyKey] ?? "",
     toVerify: [],
   };
+  // Seller-call notes (deal.notes) are analyzed — never printed. Explicit facts
+  // fill blank diligence rows as "Per seller — verify" + short site highlights.
+  try {
+    const dealNotes = (await db.deal.findUnique({ where: { id: input.dealId }, select: { notes: true } }))?.notes ?? "";
+    if (dealNotes.trim()) {
+      const { extractSellerFacts } = await import("./extract");
+      const fx = await extractSellerFacts(dealNotes);
+      model.highlights = fx.highlights;
+      for (const k of ["utilitiesWater", "utilitiesSewer", "electric", "setbacks", "species"] as const) {
+        if (!model.manual[k] && fx[k]) { model.manual[k] = fx[k]; model.sellerSourced.push(k); }
+      }
+    }
+  } catch { warnings.push("Seller-notes analysis unavailable — fill the 🟡 items by hand"); }
   const man = model.manual;
   model.toVerify = [
     ...(!man.utilitiesWater ? ["Water"] : []), ...(!man.utilitiesSewer ? ["Sewer"] : []),
@@ -182,7 +196,7 @@ export async function generatePacket(input: BuildInput): Promise<BuildResult> {
     if (az !== bz) changed.push(`flood zones ${az || "?"} → ${bz || "?"}`);
     const aw = a.parcels.map((p) => p.wetlands?.pctOfParcel).join(","), bw = b.parcels.map((p) => p.wetlands?.pctOfParcel).join(",");
     if (aw !== bw) changed.push("wetlands coverage changed");
-    for (const k of ["utilitiesWater", "utilitiesSewer", "electric", "setbacks", "species", "sellerNotes"] as const) {
+    for (const k of ["utilitiesWater", "utilitiesSewer", "electric", "setbacks", "species"] as const) {
       if ((a.manual?.[k] ?? "") !== b.manual[k]) changed.push(`${k} updated`);
     }
   }

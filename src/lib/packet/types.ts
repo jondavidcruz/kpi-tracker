@@ -58,7 +58,9 @@ export type PacketModel = {
   parcels: ParcelDiligence[];
   totals: { parcels: number; acres: number | null };
   // human-entered overrides / to-verify items (water/sewer/electric/setbacks/species)
-  manual: { utilitiesWater: string; utilitiesSewer: string; electric: string; setbacks: string; species: string; notes: string; sellerNotes: string };
+  manual: { utilitiesWater: string; utilitiesSewer: string; electric: string; setbacks: string; species: string; notes: string };
+  sellerSourced: string[]; // which manual fields came from analyzed seller notes → "Per seller — verify"
+  highlights: string[]; // short factual site highlights distilled from seller notes
   countyPhone: string;
   toVerify: string[]; // rendered as 🟡 pills + checklist
 };

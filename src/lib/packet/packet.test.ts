@@ -46,11 +46,13 @@ describe("packet template", () => {
       parcels: [{ parcel: { apn: "0000", address: "", county: "Charlotte, FL", state: "FL", acres: null, zoning: "", lat: 0, lng: 0, polygon: null, source: "manual" }, flood: null, wetlands: null, soils: [], elevation: null, satUrl: "", warnings: [] }],
       totals: { parcels: 1, acres: null },
       manual: { utilitiesWater: "", utilitiesSewer: "", electric: "", setbacks: "", species: "", notes: "" },
-      countyPhone: "(941) 743-1201", toVerify: ["Water", "Sewer"],
+      countyPhone: "(941) 743-1201", toVerify: ["Water", "Sewer"], sellerSourced: [], highlights: ["Cleared + filled 2023"],
     });
     expect(html).toContain("TO BE VERIFIED");
     expect(html).toContain("Offering Summary");
     expect(html).toContain("(941) 743-1201");
+    expect(html).toContain("Cleared + filled 2023"); // highlights render
+    expect(html).toContain("Site highlights");
     expect(html).not.toContain("undefined");
   });
 });

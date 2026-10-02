@@ -42,6 +42,15 @@ export function renderPacketHtml(m: PacketModel): string {
   </tr>${note ? `<tr><td></td><td colspan="2" style="padding:0 10px 8px;font-size:10px;color:${LIGHT}">${esc(note)}</td></tr>` : ""}`;
 
   const manual = m.manual;
+  // Manual diligence row: team-entered = CONFIRMED; distilled from the seller
+  // call = shown but stays 🟡 ("Per seller — verify"); blank = 🟡 TBV.
+  const mrow = (k: keyof typeof manual, label: string, note = "") => {
+    const v = manual[k];
+    const fromSeller = m.sellerSourced?.includes(k);
+    if (!v) return dd(label, tbv(), null, note);
+    if (fromSeller) return dd(label, `${esc(v)} <span style="font-size:10px;color:#a16207;font-weight:700">· per seller — verify</span>`, null, note);
+    return dd(label, esc(v), true, note);
+  };
   const page = (inner: string) => `<div style="page-break-after:always;padding:34px 40px">${inner}</div>`;
   const tabHeader = (tab: string, title: string, caption: string) => `
     <div style="border-bottom:3px solid ${GOLD};padding-bottom:8px;margin-bottom:14px">
@@ -80,6 +89,9 @@ export function renderPacketHtml(m: PacketModel): string {
         <th style="padding:8px 9px;text-align:left">Flood</th><th style="padding:8px 9px;text-align:left">Wetlands</th></tr>
       ${schedule}
     </table>
+    ${m.highlights?.length ? `<div style="margin-top:14px"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:${GOLD};margin-bottom:5px">Site highlights</div>
+      ${m.highlights.map((h) => `<span style="display:inline-block;margin:0 6px 6px 0;padding:5px 12px;border:1px solid #e2e8f0;border-radius:999px;font-size:12px;font-weight:600;color:${SLATE}">${esc(h)}</span>`).join("")}
+      <div style="font-size:9px;color:${LIGHT}">Site details per owner interview &amp; public records — buyer to verify.</div></div>` : ""}
     <div style="margin-top:16px;font-size:12px;color:${SLATE};line-height:1.6">
       <b style="color:${NAVY}">Terms:</b> Sold as-is, where-is. Buyer to verify all information independently. Assignment of contract or double close.
       Pricing on request — contact us to discuss. EMD due within 48 hours of acceptance. Close on or before the date in the assignment agreement.
@@ -95,17 +107,12 @@ export function renderPacketHtml(m: PacketModel): string {
       ${dd("Wetlands (NWI)", p0?.wetlands ? (p0.wetlands.classes.length ? p0.wetlands.classes.map((c) => esc(c.attribute)).join(", ") + (p0.wetlands.pctOfParcel != null ? ` · ~${p0.wetlands.pctOfParcel}% of parcel` : "") : "none mapped on parcel") : tbv(), p0?.wetlands ? p0.wetlands.classes.length === 0 : null, "USFWS National Wetlands Inventory — not a jurisdictional determination")}
       ${dd("Soils (USDA)", p0?.soils.length ? esc(p0.soils.map((s) => `${s.name} ${s.pct}%`).slice(0, 2).join(" · ")) : tbv(), p0?.soils.length ? true : null, "Full table in Tab D")}
       ${dd("Elevation / slope", p0?.elevation?.minFt != null ? `${p0.elevation.minFt}–${p0.elevation.maxFt} ft · ~${p0.elevation.slopePct}% slope` : tbv(), p0?.elevation?.minFt != null ? true : null, "USGS 3DEP spot checks")}
-      ${dd("Water", manual.utilitiesWater ? esc(manual.utilitiesWater) : tbv(), manual.utilitiesWater ? true : null)}
-      ${dd("Sewer / septic", manual.utilitiesSewer ? esc(manual.utilitiesSewer) : tbv(), manual.utilitiesSewer ? true : null)}
-      ${dd("Electric", manual.electric ? esc(manual.electric) : tbv(), manual.electric ? true : null)}
-      ${dd("Setbacks / buildable", manual.setbacks ? esc(manual.setbacks) : tbv(), manual.setbacks ? true : null)}
-      ${dd("Listed species", manual.species ? esc(manual.species) : tbv(), manual.species ? true : null, m.state === "FL" ? "FL: confirm scrub-jay review zone with county" : "")}
+      ${mrow("utilitiesWater", "Water")}
+      ${mrow("utilitiesSewer", "Sewer / septic")}
+      ${mrow("electric", "Electric")}
+      ${mrow("setbacks", "Setbacks / buildable")}
+      ${mrow("species", "Listed species", m.state === "FL" ? "FL: confirm scrub-jay review zone with county" : "")}
     </table>
-    ${m.manual.sellerNotes ? `<div style="margin-top:14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:11px 13px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#92400e">📞 Seller-reported details (unverified)</div>
-      <div style="font-size:12px;color:#78350f;margin-top:4px;white-space:pre-wrap;line-height:1.6">${esc(m.manual.sellerNotes)}</div>
-      <div style="font-size:10px;color:#b45309;margin-top:5px">Stated by the seller on our calls — utilities, improvements, access. Buyer to verify independently.</div>
-    </div>` : ""}
     ${m.countyPhone ? `<div style="margin-top:12px;font-size:11px;color:${SLATE}">☎️ County planning/utilities: <b>${esc(m.countyPhone)}</b> — fastest way to clear the 🟡 items.</div>` : ""}
     <div style="margin-top:18px">
       <div style="font-size:12px;font-weight:800;color:${NAVY};margin-bottom:6px">ATTACHED DOCUMENTATION</div>

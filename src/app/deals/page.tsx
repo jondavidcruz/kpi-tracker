@@ -234,7 +234,7 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
         <summary className="cursor-pointer text-sm font-bold text-amber-800">📦 Offering packet ({packets.length ? `v${packets[0].version}${packets[0].approvedAt ? " ✅" : " draft"}` : "none yet"})</summary>
         <p className="mt-1 text-[11px] text-amber-700">Enter the APNs → one draft packet with parcel, FEMA flood, wetlands, and soils pulled automatically. Fill the 🟡 items after your county call, regenerate, then Approve — the approved version is what goes to buyers.</p>
         <div className="mt-2">
-          <PacketPanel dealId={deal.id} packets={packets} canApprove={canClose} sellerNotesDefault={deal.notes || ""} />
+          <PacketPanel dealId={deal.id} packets={packets} canApprove={canClose} />
         </div>
       </details>
 
