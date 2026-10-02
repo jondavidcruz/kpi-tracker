@@ -10,6 +10,7 @@ import { NAV_GROUPS } from "@/lib/navItems";
 import { NAV_ORDER_CAT, parseNavOrder, applyOrder } from "@/lib/nav-order";
 import type { User } from "@prisma/client";
 import { Card, SectionTitle } from "@/components/ui";
+import PageTabs from "@/components/PageTabs";
 import { getCurrentUser, isManager, isAdmin, isOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -65,28 +66,12 @@ export default async function AdminPage({
     items: applyOrder([...g.items], navOrder?.items[g.group], (i) => i.href),
   }));
   const openOffboardings = await db.offboarding.findMany({ where: { completedAt: null }, include: { tasks: { orderBy: { sortOrder: "asc" } } }, orderBy: { createdAt: "desc" } });
-  const cats = [
-    { id: "people", emoji: "👥", label: "People", show: true },
-    { id: "access", emoji: "🔑", label: "Logins & passwords", show: true },
-    { id: "pay", emoji: "💵", label: "Pay", show: owner },
-    { id: "kpis", emoji: "🎯", label: "KPIs & goals", show: true },
-    { id: "alerts", emoji: "🔔", label: "Notifications", show: true },
-    { id: "reviews", emoji: "📋", label: "Reviews", show: owner },
-    { id: "data", emoji: "🗄️", label: "Data & security", show: owner },
-  ].filter((c) => c.show);
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight">Admin &amp; Settings</h1>
       </div>
-
-      {/* Quick category nav */}
-      <nav className="sticky top-0 z-10 -mx-2 flex flex-wrap gap-1.5 border-b border-slate-200 bg-white/90 px-2 py-2 backdrop-blur">
-        {cats.map((c) => (
-          <a key={c.id} href={`#${c.id}`} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200">{c.emoji} {c.label}</a>
-        ))}
-      </nav>
 
       {sp.saved && (
         <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
@@ -122,69 +107,17 @@ export default async function AdminPage({
         );
       })}
 
-      {/* ════ INTEGRATIONS (owner) — which API keys are live; where to get each ════ */}
-      {owner && (
-        <section id="integrations" className="scroll-mt-20">
-          <SectionTitle title="🔑 Integrations" subtitle="Green = the key is set in Vercel and this feature is live. To add one: get the key at the link, paste it in Vercel → kpi-tracker → Settings → Environment Variables, then redeploy (push any commit)." accent="bg-emerald-400" />
-          <Card className="p-4">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {[
-                { env: "REIREPLY_API_KEY", name: "REI Reply (GoHighLevel)", powers: "talk time · dials · stage-move KPIs · CRM activity", get: "already connected" },
-                { env: "ANTHROPIC_API_KEY", name: "Anthropic (Claude)", powers: "call scoring · underwrite bot · packet context analysis", get: "console.anthropic.com" },
-                { env: "GEMINI_API_KEY", name: "Google Gemini", powers: "call-recording transcription", get: "aistudio.google.com" },
-                { env: "GOOGLE_SERVICE_ACCOUNT_JSON", name: "Google Drive (service account)", powers: "nightly backups · offering-packet storage · recordings", get: "already connected" },
-                { env: "REGRID_API_KEY", name: "Regrid parcels", powers: "packet builder: parcel polygon · acreage · zoning by APN", get: "regrid.com → account → API token" },
-                { env: "GOOGLE_MAPS_API_KEY", name: "Google Maps (Static + Geocoding)", powers: "packet aerials w/ parcel outline · faster cascade geocoding", get: "console.cloud.google.com → APIs → Maps Static API + Geocoding API" },
-                { env: "DIRECTREI_API_KEY", name: "Direct REI", powers: "contacts/campaigns/deals sync (calls stay CSV import)", get: "Direct REI → Settings → API & Zapier → + Create API key" },
-                { env: "RENTCAST_API_KEY", name: "RentCast comps", powers: "underwriting: 🔎 Pull comps & ARV button", get: "rentcast.io → API" },
-              ].map((k) => {
-                const on = !!process.env[k.env];
-                return (
-                  <div key={k.env} className={`flex items-start gap-2.5 rounded-xl p-2.5 ring-1 ${on ? "bg-emerald-50 ring-emerald-200" : "bg-slate-50 ring-slate-200"}`}>
-                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${on ? "bg-emerald-500" : "bg-slate-300"}`} />
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-slate-800">{k.name} <span className="ml-1 rounded bg-white px-1.5 py-0.5 font-mono text-[10px] font-normal text-slate-400 ring-1 ring-slate-200">{k.env}</span></div>
-                      <div className="text-[11px] text-slate-500">{k.powers}</div>
-                      {!on && <div className="mt-0.5 text-[11px] font-semibold text-amber-700">Get it: {k.get}</div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="mt-3 text-[11px] text-slate-400">Connection tests (open while signed in): <a href="/api/crm/check" className="underline">/api/crm/check</a> (REI Reply) · <a href="/api/directrei/check" className="underline">/api/directrei/check</a> (Direct REI). Keys are never shown here — only whether they exist.</p>
-          </Card>
-        </section>
-      )}
-
-      {/* ════ SIDEBAR ORDER (owner) — reorder tabs for the whole team ════ */}
-      {owner && (
-        <section id="sidebar-order" className="scroll-mt-20">
-          <SectionTitle title="🧭 Sidebar order" subtitle="Move groups and tabs — everyone's sidebar follows this order instantly. New pages appear in their coded spot until you move them." accent="bg-indigo-400" />
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {orderedNavGroups.map((g, gi) => (
-              <Card key={g.group} className="p-3.5">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-700">{g.group}</span>
-                  <div className="ml-auto flex gap-1">
-                    <form action={moveNavGroup}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="dir" value="up" /><button disabled={gi === 0} className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 hover:bg-slate-200 disabled:opacity-30" title="Move group up">↑</button></form>
-                    <form action={moveNavGroup}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="dir" value="down" /><button disabled={gi === orderedNavGroups.length - 1} className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 hover:bg-slate-200 disabled:opacity-30" title="Move group down">↓</button></form>
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  {g.items.map((it, ii) => (
-                    <div key={it.href} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1 text-[13px] text-slate-700">
-                      <span className="flex-1">{it.label}</span>
-                      <form action={moveNavItem}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="href" value={it.href} /><input type="hidden" name="dir" value="up" /><button disabled={ii === 0} className="rounded bg-white px-1.5 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-700 disabled:opacity-30">↑</button></form>
-                      <form action={moveNavItem}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="href" value={it.href} /><input type="hidden" name="dir" value="down" /><button disabled={ii === g.items.length - 1} className="rounded bg-white px-1.5 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-700 disabled:opacity-30">↓</button></form>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            ))}
-          </div>
-        </section>
-      )}
-
+      <PageTabs
+        id="admin"
+        tabs={[
+          { key: "team", label: "👥 Team" },
+          { key: "pay", label: "💵 Pay & Reviews" },
+          { key: "kpis", label: "🎯 KPIs & Alerts" },
+          { key: "system", label: "⚙️ System" },
+        ]}
+      >
+        {[
+          <div key="team" className="space-y-8">
       {/* ════ PEOPLE ════ */}
       <section id="people" className="scroll-mt-20">
         <SectionTitle title="👥 People" subtitle={`${activeUsers.length} active · position decides which scorecard a rep sees`} accent="bg-sky-400" />
@@ -304,6 +237,8 @@ export default async function AdminPage({
         )}
       </section>
 
+          </div>,
+          <div key="pay" className="space-y-8">
       {/* ════ PAY ════ */}
       {owner && (
         <section id="pay" className="scroll-mt-20">
@@ -320,58 +255,6 @@ export default async function AdminPage({
           </Card>
         </section>
       )}
-
-      {/* ════ NOTIFICATIONS & SCHEDULE ════ */}
-      <section id="alerts" className="scroll-mt-20">
-        <SectionTitle title="🔔 Notifications & schedule" subtitle="Where off-target alerts go, and when missing-entry checks fire" accent="bg-red-400" />
-        <Card className="p-6">
-          <form action={saveSettings} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Google Chat webhook URL — alerts &amp; digests (main space)</span>
-              <input name="googleChatWebhook" defaultValue={settings.googleChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…" className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Time-card status webhook — clock-in / break / lunch posts (Timecard space)</span>
-              <input name="timecardChatWebhook" defaultValue={settings.timecardChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/AAQAEZsNlXQ/messages?key=…&token=…" className={inputCls} />
-              <span className="mt-1 block text-[11px] text-slate-400">Create an incoming webhook in the <strong>Timecard</strong> space (⋮ → Apps &amp; integrations → Webhooks → Add). Leave blank to use the main space.</span>
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Call-audit webhook — scored-call audit posts (Call Audit space)</span>
-              <input name="callAuditChatWebhook" defaultValue={settings.callAuditChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…/messages?key=…&token=…" className={inputCls} />
-              <span className="mt-1 block text-[11px] text-slate-400">Scored calls (with recordings) post here instead of the KPI space. Leave blank to use the main space.</span>
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Alert email recipients (comma-separated)</span>
-              <input name="alertEmailRecipients" defaultValue={settings.alertEmailRecipients} placeholder="manager@co.com, owner@co.com" className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Weekly report email recipients (Monday AM team KPIs)</span>
-              <input name="weeklyEmailRecipients" defaultValue={settings.weeklyEmailRecipients} placeholder="you@gmail.com, marie@gmail.com" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Email from address</span>
-              <input name="emailFromAddress" defaultValue={settings.emailFromAddress} placeholder="kpi-alerts@co.com" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Workday cutoff (missing-entry check)</span>
-              <input type="time" name="workdayCutoff" defaultValue={settings.workdayCutoff} className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Org timezone</span>
-              <select name="orgTimezone" defaultValue={settings.orgTimezone} className={inputCls}>
-                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className={labelCls}>Annual revenue goal ($) for the weekly report</span>
-              <input name="annualRevenueGoal" defaultValue={settings.annualRevenueGoal || ""} placeholder="e.g. 1000000" className={inputCls} />
-            </label>
-            <div className="sm:col-span-2">
-              <SaveBtn>Save settings</SaveBtn>
-            </div>
-          </form>
-        </Card>
-      </section>
 
       {/* ════ REVIEWS ════ */}
       {owner && (
@@ -395,6 +278,8 @@ export default async function AdminPage({
         </section>
       )}
 
+          </div>,
+          <div key="kpis" className="space-y-8">
       {/* ════ KPIs & GOALS ════ */}
       <section id="kpis" className="scroll-mt-20">
         <SectionTitle title="🎯 KPIs & goals" subtitle="Category drives alert urgency · duration goals are in minutes" accent="bg-emerald-400" />
@@ -482,6 +367,123 @@ export default async function AdminPage({
         </Card>
       </section>
 
+      {/* ════ NOTIFICATIONS & SCHEDULE ════ */}
+      <section id="alerts" className="scroll-mt-20">
+        <SectionTitle title="🔔 Notifications & schedule" subtitle="Where off-target alerts go, and when missing-entry checks fire" accent="bg-red-400" />
+        <Card className="p-6">
+          <form action={saveSettings} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Google Chat webhook URL — alerts &amp; digests (main space)</span>
+              <input name="googleChatWebhook" defaultValue={settings.googleChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…" className={inputCls} />
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Time-card status webhook — clock-in / break / lunch posts (Timecard space)</span>
+              <input name="timecardChatWebhook" defaultValue={settings.timecardChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/AAQAEZsNlXQ/messages?key=…&token=…" className={inputCls} />
+              <span className="mt-1 block text-[11px] text-slate-400">Create an incoming webhook in the <strong>Timecard</strong> space (⋮ → Apps &amp; integrations → Webhooks → Add). Leave blank to use the main space.</span>
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Call-audit webhook — scored-call audit posts (Call Audit space)</span>
+              <input name="callAuditChatWebhook" defaultValue={settings.callAuditChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…/messages?key=…&token=…" className={inputCls} />
+              <span className="mt-1 block text-[11px] text-slate-400">Scored calls (with recordings) post here instead of the KPI space. Leave blank to use the main space.</span>
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Alert email recipients (comma-separated)</span>
+              <input name="alertEmailRecipients" defaultValue={settings.alertEmailRecipients} placeholder="manager@co.com, owner@co.com" className={inputCls} />
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Weekly report email recipients (Monday AM team KPIs)</span>
+              <input name="weeklyEmailRecipients" defaultValue={settings.weeklyEmailRecipients} placeholder="you@gmail.com, marie@gmail.com" className={inputCls} />
+            </label>
+            <label>
+              <span className={labelCls}>Email from address</span>
+              <input name="emailFromAddress" defaultValue={settings.emailFromAddress} placeholder="kpi-alerts@co.com" className={inputCls} />
+            </label>
+            <label>
+              <span className={labelCls}>Workday cutoff (missing-entry check)</span>
+              <input type="time" name="workdayCutoff" defaultValue={settings.workdayCutoff} className={inputCls} />
+            </label>
+            <label>
+              <span className={labelCls}>Org timezone</span>
+              <select name="orgTimezone" defaultValue={settings.orgTimezone} className={inputCls}>
+                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className={labelCls}>Annual revenue goal ($) for the weekly report</span>
+              <input name="annualRevenueGoal" defaultValue={settings.annualRevenueGoal || ""} placeholder="e.g. 1000000" className={inputCls} />
+            </label>
+            <div className="sm:col-span-2">
+              <SaveBtn>Save settings</SaveBtn>
+            </div>
+          </form>
+        </Card>
+      </section>
+
+          </div>,
+          <div key="system" className="space-y-8">
+      {/* ════ INTEGRATIONS (owner) — which API keys are live; where to get each ════ */}
+      {owner && (
+        <section id="integrations" className="scroll-mt-20">
+          <SectionTitle title="🔑 Integrations" subtitle="Green = the key is set in Vercel and this feature is live. To add one: get the key at the link, paste it in Vercel → kpi-tracker → Settings → Environment Variables, then redeploy (push any commit)." accent="bg-emerald-400" />
+          <Card className="p-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {[
+                { env: "REIREPLY_API_KEY", name: "REI Reply (GoHighLevel)", powers: "talk time · dials · stage-move KPIs · CRM activity", get: "already connected" },
+                { env: "ANTHROPIC_API_KEY", name: "Anthropic (Claude)", powers: "call scoring · underwrite bot · packet context analysis", get: "console.anthropic.com" },
+                { env: "GEMINI_API_KEY", name: "Google Gemini", powers: "call-recording transcription", get: "aistudio.google.com" },
+                { env: "GOOGLE_SERVICE_ACCOUNT_JSON", name: "Google Drive (service account)", powers: "nightly backups · offering-packet storage · recordings", get: "already connected" },
+                { env: "REGRID_API_KEY", name: "Regrid parcels", powers: "packet builder: parcel polygon · acreage · zoning by APN", get: "regrid.com → account → API token" },
+                { env: "GOOGLE_MAPS_API_KEY", name: "Google Maps (Static + Geocoding)", powers: "packet aerials w/ parcel outline · faster cascade geocoding", get: "console.cloud.google.com → APIs → Maps Static API + Geocoding API" },
+                { env: "DIRECTREI_API_KEY", name: "Direct REI", powers: "contacts/campaigns/deals sync (calls stay CSV import)", get: "Direct REI → Settings → API & Zapier → + Create API key" },
+                { env: "RENTCAST_API_KEY", name: "RentCast comps", powers: "underwriting: 🔎 Pull comps & ARV button", get: "rentcast.io → API" },
+              ].map((k) => {
+                const on = !!process.env[k.env];
+                return (
+                  <div key={k.env} className={`flex items-start gap-2.5 rounded-xl p-2.5 ring-1 ${on ? "bg-emerald-50 ring-emerald-200" : "bg-slate-50 ring-slate-200"}`}>
+                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${on ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-800">{k.name} <span className="ml-1 rounded bg-white px-1.5 py-0.5 font-mono text-[10px] font-normal text-slate-400 ring-1 ring-slate-200">{k.env}</span></div>
+                      <div className="text-[11px] text-slate-500">{k.powers}</div>
+                      {!on && <div className="mt-0.5 text-[11px] font-semibold text-amber-700">Get it: {k.get}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-[11px] text-slate-400">Connection tests (open while signed in): <a href="/api/crm/check" className="underline">/api/crm/check</a> (REI Reply) · <a href="/api/directrei/check" className="underline">/api/directrei/check</a> (Direct REI). Keys are never shown here — only whether they exist.</p>
+          </Card>
+        </section>
+      )}
+
+      {/* ════ SIDEBAR ORDER (owner) — reorder tabs for the whole team ════ */}
+      {owner && (
+        <section id="sidebar-order" className="scroll-mt-20">
+          <SectionTitle title="🧭 Sidebar order" subtitle="Move groups and tabs — everyone's sidebar follows this order instantly. New pages appear in their coded spot until you move them." accent="bg-indigo-400" />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {orderedNavGroups.map((g, gi) => (
+              <Card key={g.group} className="p-3.5">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-700">{g.group}</span>
+                  <div className="ml-auto flex gap-1">
+                    <form action={moveNavGroup}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="dir" value="up" /><button disabled={gi === 0} className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 hover:bg-slate-200 disabled:opacity-30" title="Move group up">↑</button></form>
+                    <form action={moveNavGroup}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="dir" value="down" /><button disabled={gi === orderedNavGroups.length - 1} className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 hover:bg-slate-200 disabled:opacity-30" title="Move group down">↓</button></form>
+                  </div>
+                </div>
+                <div className="space-y-0.5">
+                  {g.items.map((it, ii) => (
+                    <div key={it.href} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1 text-[13px] text-slate-700">
+                      <span className="flex-1">{it.label}</span>
+                      <form action={moveNavItem}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="href" value={it.href} /><input type="hidden" name="dir" value="up" /><button disabled={ii === 0} className="rounded bg-white px-1.5 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-700 disabled:opacity-30">↑</button></form>
+                      <form action={moveNavItem}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="href" value={it.href} /><input type="hidden" name="dir" value="down" /><button disabled={ii === g.items.length - 1} className="rounded bg-white px-1.5 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-700 disabled:opacity-30">↓</button></form>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ════ DATA & SECURITY ════ */}
       {owner && (
         <section id="data" className="scroll-mt-20">
@@ -520,7 +522,10 @@ export default async function AdminPage({
             )}
           </Card>
         </section>
-      )}
+      )}          </div>,
+        ]}
+      </PageTabs>
+
     </div>
   );
 }

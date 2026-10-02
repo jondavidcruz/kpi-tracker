@@ -466,7 +466,11 @@ export async function GET(request: Request) {
   // Nightly: move call recordings off Supabase Storage into Google Drive (free).
   if (url.searchParams.get("recordings") === "1") {
     const res = await migrateRecordingsToDrive();
-    return NextResponse.json({ ok: true, recordings: res });
+    // Orphan files (never scored / pre-Drive era) get archived to Drive too —
+    // they were 90% of Supabase storage (692MB found 2026-10-02).
+    const { sweepOrphanRecordings } = await import("@/lib/recording-migrate");
+    const orphans = await sweepOrphanRecordings();
+    return NextResponse.json({ ok: true, recordings: res, orphans });
   }
 
   // Live CRM sync — pulls TODAY's calls + offer/contract stage moves every ~15 min
