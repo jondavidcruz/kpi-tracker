@@ -1140,6 +1140,25 @@ async function writeNavOrder(order: NavOrder, rowId?: string) {
   revalidatePath("/admin");
   redirect("/admin?saved=Sidebar%20order#sidebar-order");
 }
+/** Drag-and-drop save: replaces a whole order list in one write (owner only). */
+export async function saveNavOrderAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const kind = String(formData.get("kind") ?? "");
+  let order: string[] = [];
+  try { order = JSON.parse(String(formData.get("order") ?? "[]")); } catch { return; }
+  if (!Array.isArray(order) || order.some((x) => typeof x !== "string") || order.length > 100) return;
+  const { row, order: current } = await readNavOrderRow();
+  if (kind === "groups") current.groups = order;
+  else if (kind === "items") {
+    const group = String(formData.get("group") ?? "");
+    if (!group) return;
+    current.items[group] = order;
+  } else return;
+  await writeNavOrder(current, row?.id);
+  revalidatePath("/admin");
+}
+
 export async function moveNavGroup(formData: FormData) {
   const me = await getCurrentUser();
   if (!isOwner(me)) return;

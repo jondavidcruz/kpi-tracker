@@ -115,7 +115,7 @@ export async function GET(request: Request) {
         const pc = await parcelByApn("402116252014", "FL", "Charlotte"); // Port Charlotte sample APN
         out.REGRID_API_KEY.works = !!pc;
         out.REGRID_API_KEY.detail = pc ? `${pc.address || "parcel found"} · ${pc.acres ?? "?"} ac · zone ${pc.zoning || "?"}` : "key accepted but APN lookup empty — check plan includes API";
-      } catch (e) { out.REGRID_API_KEY.works = false; out.REGRID_API_KEY.detail = String(e).slice(0, 120); }
+      } catch (e) { out.REGRID_API_KEY.works = false; out.REGRID_API_KEY.detail = String(e).slice(0, 320); }
     }
     out.GOOGLE_MAPS_API_KEY = { set: !!process.env.GOOGLE_MAPS_API_KEY };
     if (out.GOOGLE_MAPS_API_KEY.set) {

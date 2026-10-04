@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess, toggleOffboardingTask, installLandKpis, installLeadsGeneratedKpi, moveNavGroup, moveNavItem } from "@/app/actions";
+import { createKpi, saveKpi, saveSettings, saveUser, deleteUser, setTeamPassword, setMyPassword, savePayrollSettings, createTeamLogin, revokeTeamAccess, toggleOffboardingTask, installLandKpis, installLeadsGeneratedKpi } from "@/app/actions";
 import { adminConfigured } from "@/lib/supabase/admin";
 import { getAllUsers, getKpis, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -11,6 +11,7 @@ import { NAV_ORDER_CAT, parseNavOrder, applyOrder } from "@/lib/nav-order";
 import type { User } from "@prisma/client";
 import { Card, SectionTitle } from "@/components/ui";
 import PageTabs from "@/components/PageTabs";
+import NavOrderBoard from "@/components/NavOrderBoard";
 import { getCurrentUser, isManager, isAdmin, isOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -459,28 +460,7 @@ export default async function AdminPage({
       {owner && (
         <section id="sidebar-order" className="scroll-mt-20">
           <SectionTitle title="🧭 Sidebar order" subtitle="Move groups and tabs — everyone's sidebar follows this order instantly. New pages appear in their coded spot until you move them." accent="bg-indigo-400" />
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {orderedNavGroups.map((g, gi) => (
-              <Card key={g.group} className="p-3.5">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-700">{g.group}</span>
-                  <div className="ml-auto flex gap-1">
-                    <form action={moveNavGroup}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="dir" value="up" /><button disabled={gi === 0} className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 hover:bg-slate-200 disabled:opacity-30" title="Move group up">↑</button></form>
-                    <form action={moveNavGroup}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="dir" value="down" /><button disabled={gi === orderedNavGroups.length - 1} className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 hover:bg-slate-200 disabled:opacity-30" title="Move group down">↓</button></form>
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  {g.items.map((it, ii) => (
-                    <div key={it.href} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1 text-[13px] text-slate-700">
-                      <span className="flex-1">{it.label}</span>
-                      <form action={moveNavItem}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="href" value={it.href} /><input type="hidden" name="dir" value="up" /><button disabled={ii === 0} className="rounded bg-white px-1.5 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-700 disabled:opacity-30">↑</button></form>
-                      <form action={moveNavItem}><input type="hidden" name="group" value={g.group} /><input type="hidden" name="href" value={it.href} /><input type="hidden" name="dir" value="down" /><button disabled={ii === g.items.length - 1} className="rounded bg-white px-1.5 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-700 disabled:opacity-30">↓</button></form>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            ))}
-          </div>
+          <NavOrderBoard groups={orderedNavGroups.map((g) => ({ group: g.group, items: g.items.map((i) => ({ href: i.href, label: i.label })) }))} />
         </section>
       )}
 
