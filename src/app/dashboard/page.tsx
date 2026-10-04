@@ -63,10 +63,6 @@ export default async function DashboardPage({
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayStr(settings.orgTimezone);
   const month = monthOf(date);
   const drei = await readDreiFeed().catch(() => null);
-  // Per-user widget layout (Resource __dash_layout__ keyed by user id)
-  const layoutRow = await db.resource.findFirst({ where: { category: "__dash_layout__" } }).catch(() => null);
-  let dashLayout = { hidden: [] as string[], order: [] as string[] };
-  try { const lm = JSON.parse(layoutRow?.description || "{}"); if (me && lm[me.id]) dashLayout = lm[me.id]; } catch { /* default */ }
   const fraction = paceFraction(date);
 
   // One parallel batch — everything here is independent of each other's results, so
@@ -103,6 +99,11 @@ export default async function DashboardPage({
     db.closedDeal.findMany({ where: { year: Number(year) }, select: { profit: true, month: true, address: true } }), // HUD-backed ledger
     db.expenseLine.aggregate({ where: { month: { startsWith: year } }, _sum: { actual: true } }), // YTD operating expenses (P&L)
   ]);
+  // Per-user widget layout (Resource __dash_layout__ keyed by user id)
+  const layoutRow = await db.resource.findFirst({ where: { category: "__dash_layout__" } }).catch(() => null);
+  let dashLayout = { hidden: [] as string[], order: [] as string[] };
+  try { const lm = JSON.parse(layoutRow?.description || "{}"); if (me && lm[me.id]) dashLayout = lm[me.id]; } catch { /* default */ }
+
   const sentId = acqKpis.find((k) => k.key === "acq_contracts_sent")?.id;
   const signedIds = acqKpis.filter((k) => k.key.startsWith("acq_signed_")).map((k) => k.id);
   const sumEntries = async (kpiIds: string[]) => {

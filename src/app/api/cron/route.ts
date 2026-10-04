@@ -139,7 +139,16 @@ export async function GET(request: Request) {
     out.DIRECTREI_API_KEY = { set: !!process.env.DIRECTREI_API_KEY };
     // Env-name discovery (names ONLY, never values) — finds what Jon called a
     // freshly added key, e.g. the REI AI one.
-    (out as Record<string, unknown>).envNamesMatchingREI = Object.keys(process.env).filter((k) => /REI|RENTCAST|REGRID/i.test(k)).sort();
+    (out as Record<string, unknown>).envNamesMatchingREI = Object.keys(process.env).filter((k) => /REI|RENTCAST|REGRID|TWILIO|TELNYX/i.test(k)).sort();
+    // Phone providers (feed /phone-health + /compliance): live round-trips.
+    try {
+      const { telcoEnvStatus, twilioHealth, telnyxHealth } = await import("@/lib/telco");
+      const env = telcoEnvStatus();
+      out.TWILIO = { set: env.twilioSid && env.twilioToken };
+      if (out.TWILIO.set) { const h = await twilioHealth(); out.TWILIO.works = !h.error; out.TWILIO.detail = h.error ? String(h.error).slice(0, 140) : `${h.numbers?.length ?? 0} numbers monitored`; }
+      out.TELNYX = { set: env.telnyx };
+      if (out.TELNYX.set) { const h = await telnyxHealth(); out.TELNYX.works = !h.error; out.TELNYX.detail = h.error ? String(h.error).slice(0, 140) : `${h.numbers?.length ?? 0} numbers monitored`; }
+    } catch (e) { (out as Record<string, unknown>).telcoError = String(e).slice(0, 120); }
     if (out.DIRECTREI_API_KEY.set) {
       const { directReiWhoami } = await import("@/lib/directrei");
       const r = await directReiWhoami();
