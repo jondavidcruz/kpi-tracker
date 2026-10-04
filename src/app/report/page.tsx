@@ -1,4 +1,5 @@
 import {
+import { readDreiFeed } from "@/lib/directrei-sync";
   getActiveReps,
   getKpis,
   getRangeSums,
@@ -70,6 +71,7 @@ export default async function ReportPage({
   // Working days in the week → turns each rep's per-day goal into a weekly target,
   // so the scoreboard shows % against each person's OWN goal (fair across hours).
   const month = wk.start.slice(0, 7);
+  const drei = await readDreiFeed().catch(() => null);
   const workdays = Math.max(1, datesInRange(wk.start, wk.end).filter((d) => {
     const dow = new Date(d + "T00:00:00Z").getUTCDay();
     return dow >= 1 && dow <= 5;
@@ -154,22 +156,31 @@ export default async function ReportPage({
             const roleReps = reps.filter((r) => r.position === pos.key);
             const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
             if (roleReps.length === 0) return null;
+            const dreiSide = drei && pos.key === "acquisitions" ? drei.seller : drei && pos.key === "dispositions" ? drei.buyer : null;
             return (
-              <RepRoleBars
-                key={pos.key}
-                emoji={pos.emoji}
-                label={pos.label}
-                reps={roleReps}
-                kpis={roleKpis}
-                cell={(repId, k) => {
-                  const val = sums.get(`${k.id}|${repId}`) ?? 0;
-                  const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;
-                  const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdays : null;
-                  const pct = weeklyGoal ? Math.min(100, (val / weeklyGoal) * 100) : null;
-                  const status = weeklyGoal ? (val >= weeklyGoal ? "hit" : val >= weeklyGoal * 0.7 ? "close" : "miss") : "tracked";
-                  return { value: val, pct, status, goalText: weeklyGoal ? `/ ${formatValue(k.unit as Unit, weeklyGoal)} ${rangeNoun === "day" ? "day" : rangeNoun}` : undefined };
-                }}
-              />
+              <div key={pos.key}>
+                <RepRoleBars
+                  emoji={pos.emoji}
+                  label={pos.label}
+                  reps={roleReps}
+                  kpis={roleKpis}
+                  cell={(repId, k) => {
+                    const val = sums.get(`${k.id}|${repId}`) ?? 0;
+                    const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;
+                    const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdays : null;
+                    const pct = weeklyGoal ? Math.min(100, (val / weeklyGoal) * 100) : null;
+                    const status = weeklyGoal ? (val >= weeklyGoal ? "hit" : val >= weeklyGoal * 0.7 ? "close" : "miss") : "tracked";
+                    return { value: val, pct, status, goalText: weeklyGoal ? `/ ${formatValue(k.unit as Unit, weeklyGoal)} ${rangeNoun === "day" ? "day" : rangeNoun}` : undefined };
+                  }}
+                />
+                {dreiSide && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-indigo-50/60 px-3 py-1.5 text-[11px] text-slate-600 ring-1 ring-indigo-100">
+                    <span className="font-bold text-indigo-700">📨 Direct REI {pos.key === "acquisitions" ? "seller campaigns (Michelle)" : "buyer campaigns (dispo combined)"}</span>
+                    <span><b>{dreiSide.new7d}</b> new contacts · <b>{dreiSide.replies7d}</b> replies (💬{dreiSide.smsReplies7d} ✉️{dreiSide.emailReplies7d})</span>
+                    <span className="text-slate-400">last 7 days · machine-counted — the typed KPIs above stay the official numbers</span>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
