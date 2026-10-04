@@ -126,6 +126,16 @@ export async function GET(request: Request) {
         out.GOOGLE_MAPS_API_KEY.detail = j.status === "OK" ? "geocoding OK" : `${j.status}: ${j.error_message ?? ""}`.slice(0, 140);
       } catch (e) { out.GOOGLE_MAPS_API_KEY.works = false; out.GOOGLE_MAPS_API_KEY.detail = String(e).slice(0, 120); }
     }
+    out.RENTCAST_API_KEY = { set: !!process.env.RENTCAST_API_KEY };
+    if (out.RENTCAST_API_KEY.set) {
+      try {
+        const { rentcastValue, rentcastUsage } = await import("@/lib/rentcast");
+        const est = await rentcastValue("2118 Old Fort Pkwy, Murfreesboro, TN 37129", "keycheck");
+        const u = await rentcastUsage();
+        out.RENTCAST_API_KEY.works = est.value != null || est.comps.length > 0;
+        out.RENTCAST_API_KEY.detail = `value $${est.value?.toLocaleString() ?? "?"} · ${est.comps.length} comps · usage ${u.used}/${u.cap} this month`;
+      } catch (e) { out.RENTCAST_API_KEY.works = false; out.RENTCAST_API_KEY.detail = String(e).slice(0, 200); }
+    }
     out.DIRECTREI_API_KEY = { set: !!process.env.DIRECTREI_API_KEY };
     if (out.DIRECTREI_API_KEY.set) {
       const { directReiWhoami } = await import("@/lib/directrei");
@@ -146,7 +156,32 @@ export async function GET(request: Request) {
       if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as object).map(([k, x]) => [k, Array.isArray(x) ? `array(${x.length})${x[0] && typeof x[0] === "object" ? ":" + Object.keys(x[0] as object).join(",") : ""}` : typeof x]));
       return typeof v;
     };
-    const [me2, contacts, campaigns, dealsR] = await Promise.all([directReiWhoami(), directReiContacts({ limit: "3" }), directReiCampaigns(), directReiDeals()]);
+    const [me2, contacts, campaigns, dealsR] = await Promise.all([directReiWhoami(), directReiContacts({ limit: "200" }), directReiCampaigns(), directReiDeals()]);
+    if (url.searchParams.get("deep") === "1") {
+      // Classification probe: campaign names/channels + distinct contact status
+      // values + reply-field coverage. No names/emails/phones returned.
+      const camps = ((campaigns.body as { rows?: Array<{ id: string; name: string; channel: string; paused: boolean }> })?.rows ?? []);
+      const rows = ((contacts.body as { rows?: Array<Record<string, unknown>> })?.rows ?? []);
+      const statuses: Record<string, number> = {};
+      const types: Record<string, number> = {};
+      let withReply = 0, optedOut = 0;
+      const byCampaign: Record<string, { contacts: number; replied: number }> = {};
+      for (const c of rows) {
+        statuses[String(c.status ?? "")] = (statuses[String(c.status ?? "")] ?? 0) + 1;
+        types[String(c.contact_type ?? "")] = (types[String(c.contact_type ?? "")] ?? 0) + 1;
+        if (c.last_reply_at) withReply++;
+        if (c.sms_opted_out_at || c.email_opted_out_at) optedOut++;
+        const cid = String(c.campaign_id ?? "");
+        const e = (byCampaign[cid] ??= { contacts: 0, replied: 0 });
+        e.contacts++; if (c.last_reply_at) e.replied++;
+      }
+      return NextResponse.json({
+        ok: true,
+        campaigns: camps.map((c) => ({ name: c.name, channel: c.channel, paused: c.paused, seller: /seller/i.test(c.name), buyer: /buyer/i.test(c.name), ...byCampaign[c.id] })),
+        contactSample: { count: rows.length, statuses, types, withReply, optedOut },
+        contactFieldSample: rows[0] ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) => ["status", "contact_type", "role", "needs_attention", "last_reply_at", "last_sent", "emails_sent", "added_date", "source", "market"].includes(k)) ) : null,
+      });
+    }
     return NextResponse.json({ ok: true, me: { status: me2.status, body: me2.ok ? me2.body : shape(me2.body) }, contacts: { status: contacts.status, shape: shape(contacts.body) }, campaigns: { status: campaigns.status, shape: shape(campaigns.body) }, deals: { status: dealsR.status, shape: shape(dealsR.body) } });
   }
 
