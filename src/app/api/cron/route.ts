@@ -587,6 +587,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, recordings: res, orphans, secs: Math.round((Date.now() - t0) / 1000) });
   }
 
+  // Direct REI → GoHighLevel push. The rep's "button" = mark Qualified (or tag
+  // send-to-ghl) in Direct REI; this pushes each such contact once. Armed only
+  // when GHL_PUSH_WEBHOOK_URL is set. ?dry=1 lists who WOULD be pushed.
+  if (url.searchParams.get("ghlpush") === "1") {
+    const { pushQualifiedToGhl } = await import("@/lib/directrei-ghl-push");
+    const res = await pushQualifiedToGhl(url.searchParams.get("dry") === "1");
+    return NextResponse.json({ ok: true, ...res });
+  }
+
   // Direct REI feed only — 7 days/week (Jon: outreach runs Sat/Sun too), 1700 PT.
   // Sellers = Michelle (acquisitions), Buyers = Sharyn + Marie (dispo, shared).
   if (url.searchParams.get("dreifeed") === "1") {

@@ -437,6 +437,7 @@ export default async function AdminPage({
                 { env: "REGRID_API_KEY", name: "Regrid parcels", powers: "packet builder: parcel polygon · acreage · zoning by APN", get: "regrid.com → account → API token" },
                 { env: "GOOGLE_MAPS_API_KEY", name: "Google Maps (Static + Geocoding)", powers: "packet aerials w/ parcel outline · faster cascade geocoding", get: "console.cloud.google.com → APIs → Maps Static API + Geocoding API" },
                 { env: "DIRECTREI_API_KEY", name: "Direct REI", powers: "contacts/campaigns/deals sync (calls stay CSV import)", get: "Direct REI → Settings → API & Zapier → + Create API key" },
+                { env: "GHL_PUSH_WEBHOOK_URL", name: "GoHighLevel push", powers: "Direct REI Qualified / send-to-ghl → GHL (polled every 15 min, each contact once)", get: "GHL → Automation → workflow → Inbound Webhook trigger → copy URL" },
                 { env: "RENTCAST_API_KEY", name: "RentCast comps", powers: "underwriting: 🔎 Pull comps & ARV button", get: "rentcast.io → API" },
               ].map((k) => {
                 const on = !!process.env[k.env];
