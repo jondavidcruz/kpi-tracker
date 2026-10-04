@@ -2513,6 +2513,17 @@ export async function logBuyerOutreach(formData: FormData) {
   revalidatePath("/marketing");
 }
 
+/** Refresh the Direct REI outreach pulse on demand (any signed-in teammate). */
+export async function refreshDreiFeedAction() {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const settings = await getSettings();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
+  const { refreshDreiFeed } = await import("@/lib/directrei-sync");
+  await refreshDreiFeed(today).catch(() => {});
+  revalidatePath("/dashboard");
+}
+
 /** Phase 8: generate a draft offering packet for a deal (APNs → diligence → PDF). */
 export async function generatePacketAction(formData: FormData): Promise<import("@/lib/packet/build").BuildResult> {
   const me = await getCurrentUser();

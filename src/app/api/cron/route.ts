@@ -573,7 +573,10 @@ export async function GET(request: Request) {
     const calls = await writeDay(today, tz);
     const opps = await writeOpps(today, tz);
     const activity = await writeActivity(today, calls.wrote, opps);
-    return NextResponse.json({ ok: true, date: today, calls: calls.wrote, offersContracts: opps.counts, activity });
+    // Direct REI pulse rides the same 5×/day schedule (best-effort).
+    let drei: unknown = null;
+    try { const { refreshDreiFeed } = await import("@/lib/directrei-sync"); drei = await refreshDreiFeed(today); } catch { /* feed is additive */ }
+    return NextResponse.json({ ok: true, date: today, calls: calls.wrote, offersContracts: opps.counts, activity, dreiFeed: drei ? "refreshed" : "skipped" });
   }
 
   // Nightly REI Reply CRM sync — pulls YESTERDAY's calls + offer/contract stage

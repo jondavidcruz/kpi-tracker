@@ -24,6 +24,7 @@ import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
 import DealFunnel from "@/components/DealFunnel";
 import CrmActivityStrip from "@/components/CrmActivityStrip";
+import DirectReiPulse from "@/components/DirectReiPulse";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canAccessPayroll, tracksSpeedTest } from "@/lib/auth";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
@@ -317,6 +318,7 @@ export default async function DashboardPage({
 
       {/* CRM activity — managers only: who's actually working the CRM today */}
       {isManager(me) && <CrmActivityStrip />}
+      <DirectReiPulse />
 
       {/* Company scoreboard — acquisitions output (this month) + closings (this year) */}
       <section>
