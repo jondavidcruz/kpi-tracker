@@ -18,6 +18,7 @@ export type DreiFeed = {
   at: string;
   totalContacts: number;
   scanned: number;
+  smsRepliesToday: number; // all campaigns — feeds the team "Text Responses" KPI
   seller: DreiSide; buyer: DreiSide;
   recentReplies: DreiReply[]; // newest first, max 12
   campaigns: Array<{ name: string; channel: string; side: "seller" | "buyer" | "other"; paused: boolean }>;
@@ -54,7 +55,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
   const weekAgo = new Date(Date.parse(todayYmd) - 7 * 86400000).toISOString().slice(0, 10);
   const sides = { seller: empty(), buyer: empty(), other: empty() };
   const replies: DreiReply[] = [];
-  let total = 0, scanned = 0;
+  let total = 0, scanned = 0, smsRepliesToday = 0;
 
   for (let page = 0; page < 20; page++) {
     const res = await directReiContacts({ limit: "200", offset: String(page * 200) });
@@ -73,7 +74,10 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
       const optedOut = !!(c.sms_opted_out_at || c.email_opted_out_at);
       const replyDay = (c.last_reply_at ?? "").slice(0, 10);
       if (replyDay && !optedOut) {
-        if (replyDay === todayYmd) bucket.repliesToday++;
+        if (replyDay === todayYmd) {
+          bucket.repliesToday++;
+          if (/sms|text/i.test(camp?.channel ?? "")) smsRepliesToday++;
+        }
         if (replyDay >= weekAgo) {
           bucket.replies7d++;
           const ch = camp?.channel ?? "";
@@ -93,6 +97,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
     at: new Date().toISOString(),
     totalContacts: total,
     scanned,
+    smsRepliesToday,
     seller: sides.seller,
     buyer: sides.buyer,
     recentReplies: replies.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12),
@@ -113,5 +118,17 @@ export async function refreshDreiFeed(todayYmd: string): Promise<DreiFeed | null
   const row = await db.resource.findFirst({ where: { category: DREI_FEED_CAT } });
   if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
   else await db.resource.create({ data: { title: "directrei-feed", category: DREI_FEED_CAT, url: "", description } });
+
+  // Jon 2026-10-04: the team "Text Responses" KPI = today's Direct REI text
+  // replies, written as a machine entry (team scope → userId null). A manual
+  // entry for the day always wins — we only touch rows we created.
+  try {
+    const kpi = await db.kpi.findFirst({ where: { name: "Text Responses", scope: "team" }, select: { id: true } });
+    if (kpi) {
+      const existing = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: null, date: todayYmd } });
+      if (existing) { if (existing.enteredBy === "crm") await db.entry.update({ where: { id: existing.id }, data: { value: feed.smsRepliesToday } }); }
+      else if (feed.smsRepliesToday > 0) await db.entry.create({ data: { kpiId: kpi.id, userId: null, date: todayYmd, value: feed.smsRepliesToday, enteredBy: "crm" } });
+    }
+  } catch { /* KPI feed is additive */ }
   return feed;
 }

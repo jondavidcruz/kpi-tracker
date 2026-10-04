@@ -185,6 +185,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, me: { status: me2.status, body: me2.ok ? me2.body : shape(me2.body) }, contacts: { status: contacts.status, shape: shape(contacts.body) }, campaigns: { status: campaigns.status, shape: shape(campaigns.body) }, deals: { status: dealsR.status, shape: shape(dealsR.body) } });
   }
 
+  // One-shot glance cleanup (Jon 2026-10-04): refunds trio joins PPL Leads on
+  // row one, Text Responses heads its own row, Land Offers/Contracts retire
+  // (the offer trail lives in the per-rep rollups now).
+  if (url.searchParams.get("glancefix") === "1") {
+    const order = [
+      "PPL Leads (Purchased/Inbound)", "Lead Refunds Requested", "Lead Refunds Approved", "Lead Refunds Rejected",
+      "Text Responses", "Mailers Sent", "Mail Responses", "SMS Conversations (Land)",
+    ];
+    const results: Record<string, string> = {};
+    for (let i = 0; i < order.length; i++) {
+      const r = await db.kpi.updateMany({ where: { name: order[i], scope: "team" }, data: { sortOrder: 10 + i } });
+      results[order[i]] = r.count ? `sortOrder ${10 + i}` : "NOT FOUND";
+    }
+    for (const key of ["land_offers_made", "land_contracts_signed"]) {
+      const r = await db.kpi.updateMany({ where: { key }, data: { active: false } });
+      results[key] = r.count ? "deactivated" : "NOT FOUND";
+    }
+    const textKpi = await db.kpi.findFirst({ where: { name: "Text Responses", scope: "team" }, select: { key: true, id: true } });
+    return NextResponse.json({ ok: true, results, textResponsesKey: textKpi?.key ?? null });
+  }
+
   // Auto buy-box coverage maps — rebuild a few stale ones per run (daily cron
   // + fire-and-forget after every interview save).
   if (url.searchParams.get("automaps") === "1") {

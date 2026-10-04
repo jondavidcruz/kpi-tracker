@@ -93,9 +93,11 @@ export default async function ReportPage({
       value: formatValue(k.unit as Unit, sums.get(`${k.id}|`) ?? 0),
     });
   }
-  // Roll up notable per-rep green KPIs to a team number.
-  const rollupKeys = ["appts_set", "appts_taken", "offers_made", "deals_sold", "new_buyers"];
-  for (const k of perRepKpis.filter((x) => rollupKeys.includes(x.key) && x.category === "green")) {
+  // Roll up notable per-rep KPIs to a team number (Jon 2026-10-04: the glance
+  // must show the full offer trail — Verbal Offers Made · Contracts Sent ·
+  // Contracts Signed).
+  const rollupKeys = ["appts_set", "appts_taken", "offers_made", "deals_sold", "new_buyers", "acq_contracts_sent", "contracts_signed"];
+  for (const k of perRepKpis.filter((x) => rollupKeys.includes(x.key))) {
     let total = 0;
     for (const r of reps) total += sums.get(`${k.id}|${r.id}`) ?? 0;
     glance.push({ key: k.key, emoji: k.emoji, name: k.name, value: formatValue(k.unit as Unit, total) });
