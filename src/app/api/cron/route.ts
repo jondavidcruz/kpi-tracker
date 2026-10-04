@@ -587,6 +587,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, recordings: res, orphans, secs: Math.round((Date.now() - t0) / 1000) });
   }
 
+  // Direct REI feed only — 7 days/week (Jon: outreach runs Sat/Sun too), 1700 PT.
+  // Sellers = Michelle (acquisitions), Buyers = Sharyn + Marie (dispo, shared).
+  if (url.searchParams.get("dreifeed") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const { refreshDreiFeed } = await import("@/lib/directrei-sync");
+    const feed = await refreshDreiFeed(today);
+    return NextResponse.json({ ok: true, date: today, dreiFeed: feed ? { seller: feed.seller, buyer: feed.buyer, scanned: feed.scanned } : "skipped (DIRECTREI_API_KEY not set)" });
+  }
+
   // Live CRM sync — pulls TODAY's calls + offer/contract stage moves every ~15 min
   // so the scorecard is current throughout the day, not just at night.
   if (url.searchParams.get("crmtoday") === "1") {
