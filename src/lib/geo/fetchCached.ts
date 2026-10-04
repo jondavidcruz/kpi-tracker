@@ -37,6 +37,9 @@ export async function getJson<T>(url: string, init?: RequestInit, timeoutMs = 20
     cache: "no-store",
   });
   // Redact credentials from error text — URLs can carry ?token=/&key= params.
-  if (!res.ok) throw new Error(`${res.status} ${url.replace(/([?&](token|key|secret)=)[^&]+/gi, "$1***").slice(0, 120)}`);
+  if (!res.ok) {
+    const body = (await res.text().catch(() => "")).replace(/eyJ[A-Za-z0-9_.-]+/g, "***").slice(0, 160);
+    throw new Error(`${res.status} ${url.replace(/([?&](token|key|secret)=)[^&]+/gi, "$1***").slice(0, 100)} :: ${body}`);
+  }
   return (await res.json()) as T;
 }

@@ -136,6 +136,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, keys: out });
   }
 
+  // Direct REI shape probe — object KEYS + counts only (no contact PII), so we
+  // can build the real sync against their actual response format.
+  if (url.searchParams.get("dreidiag") === "1") {
+    const { directReiConfigured, directReiWhoami, directReiContacts, directReiCampaigns, directReiDeals } = await import("@/lib/directrei");
+    if (!directReiConfigured()) return NextResponse.json({ ok: false, hint: "DIRECTREI_API_KEY not set in Vercel yet" });
+    const shape = (v: unknown): unknown => {
+      if (Array.isArray(v)) return { array: v.length, itemKeys: v[0] && typeof v[0] === "object" ? Object.keys(v[0] as object) : typeof v[0] };
+      if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as object).map(([k, x]) => [k, Array.isArray(x) ? `array(${x.length})${x[0] && typeof x[0] === "object" ? ":" + Object.keys(x[0] as object).join(",") : ""}` : typeof x]));
+      return typeof v;
+    };
+    const [me2, contacts, campaigns, dealsR] = await Promise.all([directReiWhoami(), directReiContacts({ limit: "3" }), directReiCampaigns(), directReiDeals()]);
+    return NextResponse.json({ ok: true, me: { status: me2.status, body: me2.ok ? me2.body : shape(me2.body) }, contacts: { status: contacts.status, shape: shape(contacts.body) }, campaigns: { status: campaigns.status, shape: shape(campaigns.body) }, deals: { status: dealsR.status, shape: shape(dealsR.body) } });
+  }
+
   // Auto buy-box coverage maps — rebuild a few stale ones per run (daily cron
   // + fire-and-forget after every interview save).
   if (url.searchParams.get("automaps") === "1") {
