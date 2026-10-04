@@ -119,11 +119,13 @@ export default async function ReportPage({
   const trailNames = new Set(["Deals Sent to Buyers"]);
   const econCards = glance.filter((g) => econNames.has(g.name));
   const marketingCards = glance.filter((g) => !econNames.has(g.name) && !trailNames.has(g.name));
+  // Jon 2026-10-04: the trail reads in deal order — we sign it FIRST, THEN
+  // dispo sends it to buyers.
   const trail = [
-    { name: "Deals Sent to Buyers", value: teamByKey("deals_sent") ?? sumPerRep("deals_sent") },
     { name: "Verbal Offers Made", value: sumPerRep("offers_made") },
     { name: "Contracts Sent", value: sumPerRep("acq_contracts_sent") },
     { name: "Contracts Signed", value: sumPerRep("contracts_signed") + sumPerRep("acq_signed_assignment") + sumPerRep("acq_signed_novation") + sumPerRep("acq_signed_creative") + sumPerRep("acq_signed_listing") },
+    { name: "Deals Sent to Buyers", value: teamByKey("deals_sent") ?? sumPerRep("deals_sent") },
   ];
 
   return (
@@ -236,9 +238,10 @@ export default async function ReportPage({
                 />
                 {dreiSide && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-indigo-50/60 px-3 py-1.5 text-[11px] text-slate-600 ring-1 ring-indigo-100">
-                    <span className="font-bold text-indigo-700">📨 Direct REI {pos.key === "acquisitions" ? "seller campaigns (Michelle)" : "buyer campaigns (dispo combined)"}</span>
-                    <span><b>{dreiSide.new7d}</b> new contacts · <b>{dreiSide.replies7d}</b> replies (💬{dreiSide.smsReplies7d} ✉️{dreiSide.emailReplies7d})</span>
-                    <span className="text-slate-400">last 7 days · machine-counted — the typed KPIs above stay the official numbers</span>
+                    <span className="font-bold text-indigo-700">📨 Direct REI auto-outreach ({pos.key === "acquisitions" ? "sellers" : "buyers"})</span>
+                    <span><b>{dreiSide.new7d}</b> leads loaded this wk <span className="text-slate-400">(the AI texts/emails/calls them for us)</span></span>
+                    <span><b>{dreiSide.replies7d}</b> wrote back <span className="text-slate-400">(💬{dreiSide.smsReplies7d} text · ✉️{dreiSide.emailReplies7d} email · 📞{Math.max(0, dreiSide.replies7d - dreiSide.smsReplies7d - dreiSide.emailReplies7d)} call campaigns)</span></span>
+                    <span className="font-semibold text-amber-600">→ warm — work these first</span>
                   </div>
                 )}
               </div>

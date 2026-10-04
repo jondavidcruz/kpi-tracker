@@ -23,7 +23,6 @@ import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
 import DealFunnel from "@/components/DealFunnel";
-import CrmActivityStrip from "@/components/CrmActivityStrip";
 import { readDreiFeed } from "@/lib/directrei-sync";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canAccessPayroll, tracksSpeedTest } from "@/lib/auth";
@@ -141,35 +140,47 @@ export default async function DashboardPage({
 
   // --- Deal funnel + money pace + internet speed: batch the independent reads into
   // one parallel wave (was 3 sequential DB round-trips) to speed up the dashboard. ---
-  const FUNNEL_KEYS = ["ppl_leads", "text_responses", "direct_mail_responses", "quality_convos", "offers_made", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"];
+  const FUNNEL_KEYS = ["ppl_leads", "text_responses", "leads_generated", "quality_convos", "offers_made", "acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative", "dev_conversations", "deals_sent", "buyer_offers_received", "contracts_assigned"];
   const internetSpeedKpi = perRepKpis.find((k) => k.roleKey === "internet") ?? null;
   const [isy, ism, isd] = date.split("-").map(Number);
   const speedWinStart = new Date(Date.UTC(isy, ism - 1, isd));
   speedWinStart.setUTCDate(speedWinStart.getUTCDate() - 13);
   const speedDays = datesInRange(speedWinStart.toISOString().slice(0, 10), date); // 14 days incl. today
-  const [funnelKpis, monthExp, speedEntries] = await Promise.all([
+  const [funnelKpis, followUpsKpi, monthExp, speedEntries] = await Promise.all([
     db.kpi.findMany({ where: { key: { in: FUNNEL_KEYS } }, select: { id: true, key: true } }),
+    db.kpi.findFirst({ where: { name: "Follow Ups" }, select: { id: true } }), // hand-created, no code key
     db.expenseLine.findMany({ where: { month }, select: { category: true, actual: true, label: true } }),
     internetSpeedKpi
       ? db.entry.findMany({ where: { kpiId: internetSpeedKpi.id, date: { gte: speedDays[0], lte: date } }, select: { userId: true, date: true, value: true } })
       : Promise.resolve([] as { userId: string | null; date: string; value: number }[]),
   ]);
   const fIdToKey = new Map(funnelKpis.map((k) => [k.id, k.key]));
-  const fEntries = await db.entry.findMany({ where: { kpiId: { in: funnelKpis.map((k) => k.id) }, date: { gte: monthStart, lte: date } }, select: { kpiId: true, value: true } });
+  if (followUpsKpi) fIdToKey.set(followUpsKpi.id, "follow_ups_lookup");
+  const fEntries = await db.entry.findMany({ where: { kpiId: { in: [...fIdToKey.keys()] }, date: { gte: monthStart, lte: date } }, select: { kpiId: true, value: true } });
   const byKey: Record<string, number> = {};
   for (const e of fEntries) { const key = fIdToKey.get(e.kpiId); if (key) byKey[key] = (byKey[key] ?? 0) + e.value; }
   const kv = (key: string) => byKey[key] ?? 0;
   const moNum = Number(month.slice(5, 7));
   const closedThisMonth = closedDeals.filter((c) => c.month === moNum).length
     + escrowClosed.filter((c) => Number(c.closeDate.slice(5, 7)) === moNum).length;
-  const funnelStages = [
-    { label: "Leads", count: kv("ppl_leads") + kv("text_responses") + kv("direct_mail_responses"), source: "PPL + SMS + mail" },
-    { label: "Opportunities", count: kv("quality_convos"), source: "quality conversations" },
-    { label: "Offers", count: kv("offers_made"), source: "verbal offers" },
-    { label: "Contracts", count: kv("acq_signed_assignment") + kv("acq_signed_novation") + kv("acq_signed_listing") + kv("acq_signed_creative"), source: "signed" },
+  // Two funnels (Jon 2026-10-04): acquisitions (seller side) and dispositions
+  // (buyer side) tell different stories — one giant funnel hid both.
+  const acqFunnel = [
+    { label: "Generated", count: kv("ppl_leads") + kv("text_responses") + kv("leads_generated"), source: "PPL + SMS replies + manual" },
+    { label: "Qualified", count: kv("text_responses"), source: "replied by text = interested" },
+    { label: "Conversations", count: kv("quality_convos"), source: "quality conversations" },
+    { label: "Follow-ups", count: kv("follow_ups_lookup"), source: "follow-ups worked" },
+    { label: "Verbal offers", count: kv("offers_made"), source: "offers made" },
+    { label: "Signed", count: kv("acq_signed_assignment") + kv("acq_signed_novation") + kv("acq_signed_listing") + kv("acq_signed_creative"), source: "contracts signed" },
+  ];
+  const dispoFunnel = [
+    { label: "Buyer convos", count: kv("dev_conversations"), source: "real buyer calls" },
+    { label: "Deals sent", count: kv("deals_sent"), source: "blasted to buyers" },
+    { label: "Offers in", count: kv("buyer_offers_received"), source: "buyer offers received" },
+    { label: "Assigned", count: kv("contracts_assigned"), source: "contracts assigned" },
     { label: "Closed", count: closedThisMonth, source: "escrow → closed" },
   ];
-  const funnelHasData = funnelStages.some((s) => s.count > 0);
+  const funnelHasData = [...acqFunnel, ...dispoFunnel].some((s) => s.count > 0);
 
   // Wire the money pace rows to REAL data — these team-monthly KPIs (deals closed,
   // revenue, spend) aren't entered by hand, so they sat at $0. Pull them live from
@@ -308,18 +319,6 @@ export default async function DashboardPage({
         </Link>
       )}
 
-      {/* Headline metrics */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="On goal today" value={onGoal} icon={<CircleCheck size={18} />} spark={onGoalSeries} delta={wkDelta(onGoalSeries)} deltaTone={wkDelta(onGoalSeries) >= 0 ? "good" : "bad"} />
-        <MetricCard label="Behind" value={gaps.length} icon={<TrendingDown size={18} />} spark={behindSeries} delta={wkDelta(behindSeries)} deltaTone={wkDelta(behindSeries) <= 0 ? "good" : "bad"} />
-        <MetricCard label="Open alerts" value={openAlerts} icon={<Bell size={18} />} spark={alertSeries} hint={openAlerts ? "needs review" : "all clear"} hintTone={openAlerts ? "bad" : "good"} />
-        <MetricCard label="Logged today" value={repsLoggedToday} icon={<Users size={18} />} spark={loggedSeries} delta={wkDelta(loggedSeries)} deltaTone={wkDelta(loggedSeries) >= 0 ? "good" : "neutral"} />
-      </div>
-      <p className="-mt-2 text-[11px] text-slate-400">Today&apos;s snapshot: <b>On goal</b> = KPIs hitting target · <b>Behind</b> = KPIs below target · <b>Open alerts</b> = misses needing review · <b>Logged today</b> = reps who entered KPIs. The mini graph on each card is that metric&apos;s last 14 days; ▲/▼ compares to last week.</p>
-
-      {/* CRM activity — managers only: who's actually working the CRM today */}
-      {isManager(me) && <CrmActivityStrip />}
-
       {/* Company scoreboard — acquisitions output (this month) + closings (this year) */}
       <section>
         <SectionTitle title="📊 Company scoreboard" subtitle={`Acquisitions output this month · closings year-to-date (${year})`} accent="bg-brand-gold" />
@@ -339,17 +338,22 @@ export default async function DashboardPage({
         )}
       </section>
 
-      {/* Deal funnel — this month */}
+      {/* Deal funnels — this month, one per side of the business */}
       <section>
-        <SectionTitle title="🫙 Deal funnel" subtitle="This month: leads → opportunities → offers → contracts → closed (% = conversion from the stage above)" accent="bg-brand-navy" />
-        <Card className="p-5">
-          <DealFunnel stages={funnelStages} />
-          {funnelHasData ? (
-            <p className="mt-3 text-[11px] text-slate-400">Each stage is logged separately, so a stage can read over 100% of the one above it — e.g. conversations from leads generated in earlier months still count this month. <strong>Contracts</strong> here = contracts <em>signed</em>; <strong>Contracts sent (mo)</strong> above counts contracts <em>sent</em>, so the two differ. <strong>Closed</strong> fills in from Escrow &amp; Closing.</p>
-          ) : (
-            <p className="mt-3 text-[11px] text-slate-400">Nothing logged this month yet. The funnel fills in as the team logs leads, conversations, offers and contracts on <Link href="/entry" className="font-semibold text-slate-500 underline">Enter KPIs</Link>, and as deals are closed in Escrow &amp; Closing.</p>
-          )}
-        </Card>
+        <SectionTitle title="🫙 Deal funnels" subtitle="This month · acquisitions turns leads into signed contracts; dispositions turns signed contracts into closings (% = conversion from the stage above)" accent="bg-brand-navy" />
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <Card className="p-5">
+            <div className="mb-2 text-sm font-bold text-slate-700">🎯 Acquisitions — seller side</div>
+            <DealFunnel stages={acqFunnel} />
+          </Card>
+          <Card className="p-5">
+            <div className="mb-2 text-sm font-bold text-slate-700">🤝 Dispositions — buyer side</div>
+            <DealFunnel stages={dispoFunnel} />
+          </Card>
+        </div>
+        {!funnelHasData && (
+          <p className="mt-2 text-[11px] text-slate-400">Nothing logged this month yet — the funnels fill in as the team logs KPIs and deals close in Escrow &amp; Closing.</p>
+        )}
       </section>
 
       {/* Gamified recognition */}
@@ -433,25 +437,41 @@ export default async function DashboardPage({
         </Card>
       </section>
 
-      {/* Lead sources */}
-      {teamDaily.length > 0 && (
-        <section>
-          <SectionTitle title="Lead Sources: Today" accent="bg-sky-400" />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {teamDaily.map((k) => {
-              const value = dailyValues.get(`${k.id}|`) ?? null;
-              return (
-                <Card key={k.id} className="p-4">
-                  <div className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={k.key} name={k.name} /></div>
-                  <div className="mt-1 text-3xl font-extrabold tabular-nums text-slate-800">
-                    {value === null ? "—" : formatValue(k.unit as Unit, value)}
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      {/* Lead sources — same two bands as KPI Reports (Jon: dashboard and
+          reports must read identically) */}
+      {teamDaily.length > 0 && (() => {
+        const econNames = new Set(["PPL Leads (Purchased/Inbound)", "Lead Refunds Requested", "Lead Refunds Approved", "Lead Refunds Rejected"]);
+        const econ = teamDaily.filter((k) => econNames.has(k.name));
+        const marketing = teamDaily.filter((k) => !econNames.has(k.name));
+        const card = (k: (typeof teamDaily)[number], accent: string) => {
+          const value = dailyValues.get(`${k.id}|`) ?? null;
+          return (
+            <Card key={k.id} className={`border-t-2 ${accent} p-4`}>
+              <div className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={k.key} name={k.name} /></div>
+              <div className="mt-1 text-3xl font-extrabold tabular-nums text-slate-800">{value === null ? "—" : formatValue(k.unit as Unit, value)}</div>
+            </Card>
+          );
+        };
+        return (
+          <section>
+            <SectionTitle title="Lead Sources: Today" accent="bg-sky-400" />
+            <div className="space-y-4">
+              {econ.length > 0 && (
+                <div>
+                  <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-600">💰 Lead economics</div>
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{econ.map((k) => card(k, "border-amber-300"))}</div>
+                </div>
+              )}
+              {marketing.length > 0 && (
+                <div>
+                  <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-600">📣 Marketing responses</div>
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{marketing.map((k) => card(k, "border-sky-300"))}</div>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Internet speed — today's reading + 2-week history & trend per rep */}
       <InternetSpeedSection
@@ -482,10 +502,10 @@ export default async function DashboardPage({
             />
             {dreiSide && (
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
-                <span className="font-bold text-slate-600">📨 Direct REI {pos.key === "acquisitions" ? "seller campaigns (Michelle)" : "buyer campaigns (team combined)"}:</span>
-                <span><b className="text-slate-700">{dreiSide.newToday}</b> new today · <b className="text-slate-700">{dreiSide.new7d}</b> this week</span>
-                <span><b className="text-slate-700">{dreiSide.repliesToday}</b> replies today · <b className="text-slate-700">{dreiSide.replies7d}</b> this week (💬{dreiSide.smsReplies7d} ✉️{dreiSide.emailReplies7d})</span>
-                <span className="text-slate-400">context only — leads are typed in manually</span>
+                <span className="font-bold text-slate-600">📨 Direct REI auto-outreach ({pos.key === "acquisitions" ? "sellers" : "buyers"}):</span>
+                <span><b className="text-slate-700">{dreiSide.new7d}</b> leads loaded this wk <span className="text-slate-400">(the AI texts/emails/calls them for us)</span></span>
+                <span><b className="text-slate-700">{dreiSide.replies7d}</b> wrote back <span className="text-slate-400">(💬{dreiSide.smsReplies7d} text · ✉️{dreiSide.emailReplies7d} email · 📞{Math.max(0, dreiSide.replies7d - dreiSide.smsReplies7d - dreiSide.emailReplies7d)} call campaigns)</span></span>
+                <span className="font-semibold text-amber-600">→ these are the warm ones to work</span>
               </div>
             )}
           </div>
