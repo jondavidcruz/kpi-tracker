@@ -281,9 +281,15 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           {vettedRows.map((r) => (
             <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-slate-800">{r.name}{r.contact ? " 🗺️" : ""}</div>
+                <div className="truncate text-sm font-semibold text-slate-800">{r.name}{r.contact ? " 🗺️" : autoMaps[r.id]?.url ? " 🤖" : ""}</div>
                 <div className="truncate text-[11px] text-slate-500">{[r.market, r.region].filter(Boolean).join(" · ") || "—"}</div>
               </div>
+              {!r.contact && autoMaps[r.id]?.url && (
+                <a href={autoMaps[r.id].url} target="_blank" rel="noreferrer" title="Auto coverage map from the buy box — upload Sharyn's detailed map to replace it">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={autoMaps[r.id].url} alt="auto coverage" loading="lazy" className="h-10 w-16 rounded object-cover ring-1 ring-slate-200" />
+                </a>
+              )}
               <form action={saveBuyBoxMap} className="flex items-center gap-2">
                 <input type="hidden" name="id" value={r.id} />
                 <ImageUpload name="mapUrl" current={r.contact} label="Upload area map" endpoint="/api/buybox-map-upload" bucket="buybox-maps" />

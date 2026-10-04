@@ -109,6 +109,14 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
                   </span>
                 </div>
                 {reach && <div className="mt-1.5 truncate text-[11px] text-brand-navy" title={reach}>{reach}</div>}
+                {/* Coverage map, right on the card (Jon: "physically see where they buy"). Sharyn's upload wins; 🤖 fills the rest. */}
+                {(b.mapUrl || b.autoMapUrl) && (
+                  <a href={b.mapUrl || b.autoMapUrl} target="_blank" rel="noreferrer" className="group mt-2 block" title={b.mapUrl ? "Sharyn's area map — click to open full size" : "Auto-generated from the buy box — blue = counties they buy, red pins = cities. Click to enlarge."}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={b.mapUrl || b.autoMapUrl} alt={`${b.name} coverage map`} loading="lazy" className="h-24 w-full rounded-lg object-cover ring-1 ring-slate-200 transition group-hover:ring-brand-navy" />
+                    <span className="mt-0.5 block text-[10px] font-semibold text-slate-400">{b.mapUrl ? "🗺️ area map" : "🤖 auto coverage — where they buy"}</span>
+                  </a>
+                )}
                 <button onClick={() => setOpen(isOpen ? null : b.id)} className="mt-1.5 text-[11px] font-semibold text-slate-400 hover:text-brand-navy">{isOpen ? "▴ less" : "▾ scorecard & last touches"}</button>
                 {isOpen && (
                   <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
@@ -122,13 +130,7 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
                       </ul>
                     )}
                     {b.mapUrl && <a href={b.mapUrl} target="_blank" rel="noreferrer" className="inline-block text-[11px] font-semibold text-indigo-600">🗺️ open area map</a>}
-                    {!b.mapUrl && b.autoMapUrl && (
-                      <a href={b.autoMapUrl} target="_blank" rel="noreferrer" className="block" title="Auto-generated from this buyer's buy box — blue = counties they buy, red pins = cities. Updates whenever the buy box changes.">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={b.autoMapUrl} alt={`${b.name} coverage map`} loading="lazy" className="w-full rounded-lg ring-1 ring-slate-200" />
-                        <span className="mt-0.5 inline-block text-[10px] font-semibold text-slate-400">🤖 auto coverage map — where they buy (click to enlarge)</span>
-                      </a>
-                    )}
+
                   </div>
                 )}
               </div>
