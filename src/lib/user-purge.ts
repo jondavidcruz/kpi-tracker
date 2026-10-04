@@ -44,6 +44,12 @@ export async function purgeUser(id: string): Promise<{ ok: boolean; name?: strin
   ];
   for (const j of jobs) await j.catch(() => {}); // a missing/renamed table never blocks the erase
 
+  // WeeklyAward stores repName as TEXT (no userId) — the Hall of Fame kept
+  // showing erased people until this (Jon spotted Austin there, 2026-10-04).
+  if (u?.name) {
+    const first = u.name.trim().split(/\s+/)[0];
+    await db.weeklyAward.deleteMany({ where: { repName: { startsWith: first } } }).catch(() => {});
+  }
   await db.user.delete({ where: { id } });
 
   // Ban the Supabase login so a saved password can't come back (best-effort).

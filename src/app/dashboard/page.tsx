@@ -24,6 +24,7 @@ import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
 import DealFunnel from "@/components/DealFunnel";
 import { readDreiFeed } from "@/lib/directrei-sync";
+import DashWidgets, { DashSection } from "@/components/DashWidgets";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canAccessPayroll, tracksSpeedTest } from "@/lib/auth";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
@@ -62,6 +63,10 @@ export default async function DashboardPage({
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayStr(settings.orgTimezone);
   const month = monthOf(date);
   const drei = await readDreiFeed().catch(() => null);
+  // Per-user widget layout (Resource __dash_layout__ keyed by user id)
+  const layoutRow = await db.resource.findFirst({ where: { category: "__dash_layout__" } }).catch(() => null);
+  let dashLayout = { hidden: [] as string[], order: [] as string[] };
+  try { const lm = JSON.parse(layoutRow?.description || "{}"); if (me && lm[me.id]) dashLayout = lm[me.id]; } catch { /* default */ }
   const fraction = paceFraction(date);
 
   // One parallel batch — everything here is independent of each other's results, so
@@ -319,14 +324,17 @@ export default async function DashboardPage({
         </Link>
       )}
 
+      <DashWidgets layout={dashLayout}>
+      <DashSection id="scoreboard" label="📊 Company scoreboard">
       {/* Company scoreboard — acquisitions output (this month) + closings (this year) */}
       <section>
-        <SectionTitle title="📊 Company scoreboard" subtitle={`Acquisitions output this month · closings year-to-date (${year})`} accent="bg-brand-gold" />
+        <SectionTitle title="📊 Company scoreboard" subtitle={`Closings & money year-to-date (${year}) · expenses this month`} accent="bg-brand-gold" />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <Link href="/monthly" className="block"><MetricCard label="Contracts sent (mo)" value={Math.round(contractsSentMonth)} icon={<FileSignature size={18} />} hint="acquisitions" /></Link>
-          <Link href="/monthly" className="block"><MetricCard label="Contracts signed (mo)" value={Math.round(contractsSignedMonth)} icon={<FileSignature size={18} />} hint="acquisitions" /></Link>
           <Link href="/closing" className="block"><MetricCard label={`Deals closed (${year})`} value={closedCount} icon={<Building2 size={18} />} hint={falloutYTD ? `${falloutYTD} fell through` : "dispositions"} hintTone={falloutYTD ? "bad" : "neutral"} /></Link>
           {showMoney && <Link href="/closing" className="block"><MetricCard label="Gross revenue (YTD)" value={usd(grossRevenue)} icon={<Banknote size={18} />} /></Link>}
+          {cSuite && (
+            <Link href="/expenses" className="block"><MetricCard label="Expenses (mo)" value={usd(monthExp.reduce((a, b) => a + (b.actual ?? 0), 0))} icon={<Banknote size={18} />} hint="salaries + software + marketing" /></Link>
+          )}
           {cSuite ? (
             <Link href="/expenses" className="block"><MetricCard label="Net profit (YTD)" value={usd(netProfit)} icon={<Banknote size={18} />} hint="after expenses · C-suite" hintTone={netProfit >= 0 ? "good" : "bad"} /></Link>
           ) : !showMoney ? (
@@ -338,6 +346,9 @@ export default async function DashboardPage({
         )}
       </section>
 
+
+      </DashSection>
+      <DashSection id="funnels" label="🫙 Deal funnels">
       {/* Deal funnels — this month, one per side of the business */}
       <section>
         <SectionTitle title="🫙 Deal funnels" subtitle="This month · acquisitions turns leads into signed contracts; dispositions turns signed contracts into closings (% = conversion from the stage above)" accent="bg-brand-navy" />
@@ -357,6 +368,9 @@ export default async function DashboardPage({
       </section>
 
       {/* Gamified recognition */}
+
+      </DashSection>
+      <DashSection id="recognition" label="🏆 Recognition boards">
       <RecognitionBoards champions={awardBoard.champions} aiChampions={aiChampions} variant="light" />
 
       {/* Today's priorities — the short list worth acting on now */}
@@ -437,6 +451,9 @@ export default async function DashboardPage({
         </Card>
       </section>
 
+
+      </DashSection>
+      <DashSection id="leadsources" label="📣 Lead sources">
       {/* Lead sources — same two bands as KPI Reports (Jon: dashboard and
           reports must read identically) */}
       {teamDaily.length > 0 && (() => {
@@ -473,6 +490,9 @@ export default async function DashboardPage({
         );
       })()}
 
+
+      </DashSection>
+      <DashSection id="internet" label="🌐 Internet speed">
       {/* Internet speed — today's reading + 2-week history & trend per rep */}
       <InternetSpeedSection
         kpi={internetSpeedKpi}
@@ -482,6 +502,9 @@ export default async function DashboardPage({
         goalFor={(uid) => (internetSpeedKpi ? resolveGoalWith(targets, internetSpeedKpi, uid, month) : null)}
       />
 
+
+      </DashSection>
+      <DashSection id="rolecards" label="👥 Team scorecards">
       {/* Role scorecards (+ Direct REI context strip per side — Jon 2026-10-04:
           no separate section, fold the numbers into the scorecards they belong to) */}
       {POSITIONS.map((pos) => {
@@ -512,6 +535,9 @@ export default async function DashboardPage({
         );
       })}
 
+
+      </DashSection>
+      <DashSection id="pace" label="📈 This month: pace">
       {/* Monthly pace */}
       <section>
         <SectionTitle title={`This Month: Pace (${month})`} accent="bg-emerald-400" />
@@ -542,6 +568,9 @@ export default async function DashboardPage({
           })}
         </Card>
       </section>
+      </DashSection>
+      </DashWidgets>
+
     </div>
   );
 }

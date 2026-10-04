@@ -2541,6 +2541,23 @@ export async function pullCompsAction(formData: FormData): Promise<{
   } catch (e) { return { ok: false, error: String(e).slice(0, 220) }; }
 }
 
+/** Save the caller's personal dashboard widget layout (hidden + order). */
+export async function saveDashLayoutAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  let hidden: string[] = [], order: string[] = [];
+  try { hidden = JSON.parse(String(formData.get("hidden") ?? "[]")); order = JSON.parse(String(formData.get("order") ?? "[]")); } catch { return; }
+  if (!Array.isArray(hidden) || !Array.isArray(order) || hidden.length > 40 || order.length > 40) return;
+  const CAT = "__dash_layout__";
+  const row = await db.resource.findFirst({ where: { category: CAT } });
+  let map: Record<string, { hidden: string[]; order: string[] }> = {};
+  try { map = JSON.parse(row?.description || "{}"); } catch { /* fresh */ }
+  map[me.id] = { hidden: hidden.map(String), order: order.map(String) };
+  const description = JSON.stringify(map);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { title: "dash-layout", category: CAT, url: "", description } });
+}
+
 /** Refresh the Direct REI outreach pulse on demand (any signed-in teammate). */
 export async function refreshDreiFeedAction() {
   const me = await getCurrentUser();

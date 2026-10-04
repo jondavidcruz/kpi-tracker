@@ -224,6 +224,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, results });
   }
 
+  // Scrub a name from the Hall of Fame (WeeklyAward stores plain names, so
+  // erased people lingered there). ?hof=1&name=Austin
+  if (url.searchParams.get("hof") === "1") {
+    const nm = (url.searchParams.get("name") ?? "").trim();
+    if (!nm) return NextResponse.json({ ok: false, error: "name required" });
+    const r = await db.weeklyAward.deleteMany({ where: { repName: { startsWith: nm } } });
+    return NextResponse.json({ ok: true, removed: r.count, name: nm });
+  }
+
   // Auto buy-box coverage maps — rebuild a few stale ones per run (daily cron
   // + fire-and-forget after every interview save).
   if (url.searchParams.get("automaps") === "1") {
