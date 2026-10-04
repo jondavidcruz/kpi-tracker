@@ -93,15 +93,38 @@ export default async function ReportPage({
       value: formatValue(k.unit as Unit, sums.get(`${k.id}|`) ?? 0),
     });
   }
-  // Roll up notable per-rep KPIs to a team number (Jon 2026-10-04: the glance
-  // must show the full offer trail — Verbal Offers Made · Contracts Sent ·
-  // Contracts Signed).
-  const rollupKeys = ["appts_set", "appts_taken", "offers_made", "deals_sold", "new_buyers", "acq_contracts_sent", "contracts_signed"];
+  // Roll up notable per-rep KPIs to a team number.
+  const rollupKeys = ["appts_set", "appts_taken", "deals_sold", "new_buyers"];
   for (const k of perRepKpis.filter((x) => rollupKeys.includes(x.key))) {
     let total = 0;
     for (const r of reps) total += sums.get(`${k.id}|${r.id}`) ?? 0;
     glance.push({ key: k.key, emoji: k.emoji, name: k.name, value: formatValue(k.unit as Unit, total) });
   }
+
+  // The glance reads as a story in three bands (Jon 2026-10-04 — "cleaner,
+  // more visual, like the Apple layout"): lead economics → marketing
+  // responses → the offer trail, each trail step summed across the team.
+  const sumPerRep = (key: string) => {
+    const k = perRepKpis.find((x) => x.key === key);
+    if (!k) return 0;
+    let t = 0;
+    for (const r of reps) t += sums.get(`${k.id}|${r.id}`) ?? 0;
+    return t;
+  };
+  const teamByKey = (key: string) => {
+    const k = teamKpis.find((x) => x.key === key);
+    return k ? sums.get(`${k.id}|`) ?? 0 : null;
+  };
+  const econNames = new Set(["PPL Leads (Purchased/Inbound)", "Lead Refunds Requested", "Lead Refunds Approved", "Lead Refunds Rejected"]);
+  const trailNames = new Set(["Deals Sent to Buyers"]);
+  const econCards = glance.filter((g) => econNames.has(g.name));
+  const marketingCards = glance.filter((g) => !econNames.has(g.name) && !trailNames.has(g.name));
+  const trail = [
+    { name: "Deals Sent to Buyers", value: teamByKey("deals_sent") ?? sumPerRep("deals_sent") },
+    { name: "Verbal Offers Made", value: sumPerRep("offers_made") },
+    { name: "Contracts Sent", value: sumPerRep("acq_contracts_sent") },
+    { name: "Contracts Signed", value: sumPerRep("contracts_signed") + sumPerRep("acq_signed_assignment") + sumPerRep("acq_signed_novation") + sumPerRep("acq_signed_creative") + sumPerRep("acq_signed_listing") },
+  ];
 
   return (
     <div className="space-y-8">
@@ -137,16 +160,52 @@ export default async function ReportPage({
       {/* CRM activity — auto-pulled through the day; managers only */}
       {manager && <CrmActivityStrip />}
 
-      {/* ===== KPIs at a glance — team totals (everyone) ===== */}
+      {/* ===== KPIs at a glance — three story bands (lead $ → responses → offer trail) ===== */}
       <section>
         <SectionTitle title="① KPIs at a Glance" subtitle={`Team totals for ${wk.label}`} accent="bg-brand-gold" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {glance.map((g, i) => (
-            <Card key={i} className="p-4">
-              <div className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={g.key} name={g.name} /></div>
-              <div className="mt-1 text-3xl font-extrabold tabular-nums text-slate-800">{g.value}</div>
+        <div className="space-y-4">
+          {econCards.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-600">💰 Lead economics</div>
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {econCards.map((g, i) => (
+                  <Card key={i} className="border-t-2 border-amber-300 p-4">
+                    <div className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={g.key} name={g.name} /></div>
+                    <div className="mt-1 text-3xl font-extrabold tabular-nums text-slate-800">{g.value}</div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+          {marketingCards.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-600">📣 Marketing responses</div>
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {marketingCards.map((g, i) => (
+                  <Card key={i} className="border-t-2 border-sky-300 p-4">
+                    <div className="text-xs font-medium text-slate-500"><KpiLabel kpiKey={g.key} name={g.name} /></div>
+                    <div className="mt-1 text-3xl font-extrabold tabular-nums text-slate-800">{g.value}</div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-600">🤝 Offer trail</div>
+            <Card className="border-t-2 border-emerald-300 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-y-3">
+                {trail.map((t, i) => (
+                  <div key={t.name} className="flex items-center">
+                    {i > 0 && <span className="mx-3 hidden text-xl text-slate-300 sm:block">→</span>}
+                    <div className="min-w-[7.5rem] text-center sm:text-left">
+                      <div className="text-3xl font-extrabold tabular-nums text-slate-800">{t.value}</div>
+                      <div className="text-xs font-medium text-slate-500">{t.name}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </Card>
-          ))}
+          </div>
         </div>
       </section>
 

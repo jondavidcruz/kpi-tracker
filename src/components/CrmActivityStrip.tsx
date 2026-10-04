@@ -23,6 +23,9 @@ export default async function CrmActivityStrip() {
   const nameById = new Map(users.map((u) => [u.id, u.name]));
   const ranked = rows
     .map((r) => ({ ...r, name: nameById.get(r.userId) ?? "—" }))
+    // Jon 2026-10-04: the strip is for coaching the PH team — hide Jon (and
+    // anyone else) so only Michelle, Sharyn, and Marie show.
+    .filter((r) => ["michelle", "sharyn", "marie"].includes(r.name.trim().split(/\s+/)[0]?.toLowerCase() ?? ""))
     .sort((a, b) => b.total - a.total);
   const top = Math.max(...ranked.map((r) => r.total), 1);
 
@@ -30,7 +33,7 @@ export default async function CrmActivityStrip() {
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="text-sm font-bold text-slate-700">📋 CRM activity today</div>
-        <div className="text-[11px] text-slate-400">dials · texts · emails · pipeline moves</div>
+        <div className="text-[11px] text-slate-400">REI Reply (GoHighLevel) · auto-synced 5×/day · dials · texts · emails · moves</div>
       </div>
       <div className="space-y-3">
         {ranked.map((r) => (

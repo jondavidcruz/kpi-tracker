@@ -206,6 +206,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, results, textResponsesKey: textKpi?.key ?? null });
   }
 
+  // Glance round 2 (Jon 2026-10-04): land SMS KPI retired; Text Responses
+  // splits into Seller/Buyer SMS replies, both machine-fed from Direct REI.
+  if (url.searchParams.get("glancefix2") === "1") {
+    const results: Record<string, string> = {};
+    const r1 = await db.kpi.updateMany({ where: { key: "land_sms_convos" }, data: { active: false } });
+    results.land_sms_convos = r1.count ? "deactivated" : "NOT FOUND";
+    const r2 = await db.kpi.updateMany({ where: { key: "text_responses" }, data: { name: "Seller SMS Replies", emoji: "💬", sortOrder: 14, definition: "Auto-counted: replies to Direct REI SELLER text campaigns today (opt-outs excluded)." } });
+    results.text_responses = r2.count ? "renamed Seller SMS Replies" : "NOT FOUND";
+    const existing = await db.kpi.findUnique({ where: { key: "buyer_sms_replies" } });
+    if (!existing) {
+      await db.kpi.create({ data: { key: "buyer_sms_replies", name: "Buyer SMS Replies", emoji: "💬", category: "blue", unit: "count", scope: "team", roleKey: "", cadence: "daily", goalKind: "tracked", sortOrder: 15, definition: "Auto-counted: replies to Direct REI BUYER text campaigns today (opt-outs excluded)." } });
+      results.buyer_sms_replies = "created";
+    } else results.buyer_sms_replies = "already exists";
+    await db.kpi.updateMany({ where: { name: "Mailers Sent", scope: "team" }, data: { sortOrder: 16 } });
+    await db.kpi.updateMany({ where: { name: "Mail Responses", scope: "team" }, data: { sortOrder: 17 } });
+    return NextResponse.json({ ok: true, results });
+  }
+
   // Auto buy-box coverage maps — rebuild a few stale ones per run (daily cron
   // + fire-and-forget after every interview save).
   if (url.searchParams.get("automaps") === "1") {
