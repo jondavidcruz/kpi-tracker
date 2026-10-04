@@ -137,6 +137,9 @@ export async function GET(request: Request) {
       } catch (e) { out.RENTCAST_API_KEY.works = false; out.RENTCAST_API_KEY.detail = String(e).slice(0, 200); }
     }
     out.DIRECTREI_API_KEY = { set: !!process.env.DIRECTREI_API_KEY };
+    // Env-name discovery (names ONLY, never values) — finds what Jon called a
+    // freshly added key, e.g. the REI AI one.
+    (out as Record<string, unknown>).envNamesMatchingREI = Object.keys(process.env).filter((k) => /REI|RENTCAST|REGRID/i.test(k)).sort();
     if (out.DIRECTREI_API_KEY.set) {
       const { directReiWhoami } = await import("@/lib/directrei");
       const r = await directReiWhoami();
