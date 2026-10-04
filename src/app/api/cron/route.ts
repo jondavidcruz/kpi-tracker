@@ -145,9 +145,9 @@ export async function GET(request: Request) {
       const { telcoEnvStatus, twilioHealth, telnyxHealth } = await import("@/lib/telco");
       const env = telcoEnvStatus();
       out.TWILIO = { set: env.twilioSid && env.twilioToken };
-      if (out.TWILIO.set) { const h = await twilioHealth(); out.TWILIO.works = !h.error; out.TWILIO.detail = h.error ? String(h.error).slice(0, 140) : `${h.numbers?.length ?? 0} numbers monitored`; }
+      if (out.TWILIO.set) { const h = await twilioHealth(); out.TWILIO.works = h.connected; out.TWILIO.detail = h.connected ? `${h.numbers ?? 0} numbers · ${h.issues.length ? h.issues.length + " issues" : "healthy"}` : (h.reason ?? "").slice(0, 140); }
       out.TELNYX = { set: env.telnyx };
-      if (out.TELNYX.set) { const h = await telnyxHealth(); out.TELNYX.works = !h.error; out.TELNYX.detail = h.error ? String(h.error).slice(0, 140) : `${h.numbers?.length ?? 0} numbers monitored`; }
+      if (out.TELNYX.set) { const h = await telnyxHealth(); out.TELNYX.works = h.connected; out.TELNYX.detail = h.connected ? `${h.numbers ?? 0} numbers · ${h.issues.length ? h.issues.length + " issues" : "healthy"}` : (h.reason ?? "").slice(0, 140); }
     } catch (e) { (out as Record<string, unknown>).telcoError = String(e).slice(0, 120); }
     if (out.DIRECTREI_API_KEY.set) {
       const { directReiWhoami } = await import("@/lib/directrei");
