@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { readDreiFeed } from "@/lib/directrei-sync";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { Card } from "@/components/ui";
@@ -9,6 +10,7 @@ export default async function CrmActivityStrip() {
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
   const rows = await db.crmActivity.findMany({ where: { date: today } });
+  const drei = await readDreiFeed().catch(() => null);
   if (rows.length === 0) {
     return (
       <Card className="p-4">
@@ -50,6 +52,14 @@ export default async function CrmActivityStrip() {
         ))}
       </div>
       <p className="mt-3 text-[11px] text-slate-400">From REI Reply. The full click-by-click audit log lives in REI Reply → Settings → Audit Logs.</p>
+          {drei && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+          <span className="font-bold text-indigo-700">📨 Direct REI today</span>
+          <span>🏠 sellers: <b className="text-slate-700">{drei.seller.newToday}</b> new · <b className="text-slate-700">{drei.seller.repliesToday}</b> replies</span>
+          <span>🏗 buyers: <b className="text-slate-700">{drei.buyer.newToday}</b> new · <b className="text-slate-700">{drei.buyer.repliesToday}</b> replies</span>
+          <span className="text-slate-400">7d: {drei.seller.new7d + drei.buyer.new7d} new · {drei.seller.replies7d + drei.buyer.replies7d} replies</span>
+        </div>
+      )}
     </Card>
   );
 }

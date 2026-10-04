@@ -13,11 +13,31 @@ async function recordingsFolder(sub: string): Promise<string> {
 
 /** Move one recording: download from Supabase → upload to Drive → rewrite the
  *  score's audioUrl → delete from Supabase. Returns true if moved. */
+const SKIPS_CAT = "__recording_migrate_skips__";
+async function readSkips(): Promise<string[]> {
+  const row = await db.resource.findFirst({ where: { category: SKIPS_CAT } }).catch(() => null);
+  try { return JSON.parse(row?.description || "[]"); } catch { return []; }
+}
+async function addSkip(id: string): Promise<void> {
+  const skips = await readSkips();
+  if (skips.includes(id)) return;
+  const description = JSON.stringify([...skips, id]);
+  const row = await db.resource.findFirst({ where: { category: SKIPS_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { title: "recording-migrate-skips", category: SKIPS_CAT, url: "", description } });
+}
+
 async function moveOne(id: string, audioUrl: string): Promise<boolean> {
   const path = audioUrl.slice(audioUrl.indexOf(MARKER) + MARKER.length);
   const admin = createAdminClient();
   const { data, error } = await admin.storage.from("call-recordings").download(path);
-  if (error || !data) return false;
+  if (error || !data) {
+    // The DB row points at a file that's no longer in the bucket — skip-list it
+    // so it can't block the queue forever (the pointer is already dead; we
+    // never delete the row itself).
+    await addSkip(id).catch(() => {});
+    return false;
+  }
   const bytes = new Uint8Array(await data.arrayBuffer());
   const month = path.match(/(\d{4}-\d{2})/)?.[1] ?? "misc";
   const folder = await recordingsFolder(month);
@@ -79,7 +99,8 @@ export async function migrateScoreById(id: string): Promise<boolean> {
 /** Batched fallback sweep (nightly) for any recordings still on Supabase. */
 export async function migrateRecordingsToDrive(limit = 3, deadlineMs = Date.now() + 20000): Promise<{ moved: number; errors: string[]; pending: number }> {
   if (!gdriveConfigured() || !adminConfigured()) return { moved: 0, errors: ["not configured"], pending: 0 };
-  const where = { audioUrl: { contains: MARKER } };
+  const skips = await readSkips();
+  const where = { audioUrl: { contains: MARKER }, id: { notIn: skips } };
   const pending = await db.callScore.count({ where });
   const scores = await db.callScore.findMany({ where, take: limit, orderBy: { createdAt: "asc" } });
   let moved = 0;

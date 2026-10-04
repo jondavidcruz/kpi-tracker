@@ -37,8 +37,12 @@ export const AGENTS: AgentCfg[] = [
   // auto — the CRM can't tell which buyer type a call was with — so reps log those manually.
   // Sharyn's CRM account was recreated — old id vFYB3vWFG2o0VOVwwEYd went dead and
   // her talk time silently stopped feeding (found via ?crmdiag=1, 2026-10-01).
-  { crm: "cBEywYYmuWQ4u5LE6Guj", first: "sharyn", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls" },
-  { crm: "IqYEt2UrQ6gVToOzsaaw", first: "marie", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls" },
+  // Buyer Conversations auto-feed (2026-10-04): the conversations KPIs merged
+  // into ONE key (dev_conversations = "Buyer Conversations"), and dispo only
+  // talks to buyers — so a completed call ≥60s IS a buyer conversation.
+  // Hand-typed entries still win (upsertEntry never overwrites manual rows).
+  { crm: "cBEywYYmuWQ4u5LE6Guj", first: "sharyn", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls", conv: "dev_conversations", convMin: 60 },
+  { crm: "IqYEt2UrQ6gVToOzsaaw", first: "marie", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls", conv: "dev_conversations", convMin: 60 },
 ];
 
 // UTC ms bounds of a calendar day in `tz` (DST-safe).
