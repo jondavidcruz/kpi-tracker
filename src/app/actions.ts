@@ -1154,6 +1154,21 @@ export async function saveNavOrderAction(formData: FormData) {
     const group = String(formData.get("group") ?? "");
     if (!group) return;
     current.items[group] = order;
+  } else if (kind === "move") {
+    // A tab dragged into ANOTHER group: record the membership move + the target
+    // group's new order, and scrub the href from every other group's order list.
+    const href = String(formData.get("href") ?? "");
+    const toGroup = String(formData.get("group") ?? "");
+    if (!href || !toGroup) return;
+    const { NAV_GROUPS } = await import("@/lib/navItems");
+    const codedGroup = NAV_GROUPS.find((g) => g.items.some((i) => i.href === href))?.group;
+    current.moves = current.moves ?? {};
+    if (toGroup === codedGroup) delete current.moves[href]; // dragged home again
+    else current.moves[href] = toGroup;
+    current.items[toGroup] = order;
+    for (const g of Object.keys(current.items)) {
+      if (g !== toGroup) current.items[g] = current.items[g].filter((h) => h !== href);
+    }
   } else return;
   await writeNavOrder(current, row?.id);
   revalidatePath("/admin");

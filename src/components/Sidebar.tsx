@@ -62,7 +62,7 @@ export default function Sidebar({
   newSuggestions: number;
   officeMeetLink?: string;
   mondayMeetLink?: string;
-  navOrder?: { groups: string[]; items: Record<string, string[]> } | null;
+  navOrder?: { groups: string[]; items: Record<string, string[]>; moves?: Record<string, string> } | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -134,9 +134,26 @@ export default function Sidebar({
   const orderedGroups = (() => {
     if (!navOrder) return groups;
     // (plain objects, not Map — the lucide "Map" icon import shadows the global here)
+    // Cross-group moves first: a dragged tab renders in its new group.
+    let base = groups;
+    const moves = navOrder.moves ?? {};
+    if (Object.keys(moves).length) {
+      const labels = new Set(groups.map((g) => g.label));
+      const relocated: Record<string, typeof groups[number]["items"]> = {};
+      base = groups.map((g) => ({
+        ...g,
+        items: g.items.filter((it) => {
+          const to = moves[it.href];
+          if (!to || to === g.label || !labels.has(to)) return true;
+          (relocated[to] ??= []).push(it);
+          return false;
+        }),
+      }));
+      base = base.map((g) => (relocated[g.label] ? { ...g, items: [...g.items, ...relocated[g.label]] } : g));
+    }
     const pos: Record<string, number> = {};
     navOrder.groups.forEach((g, i) => { pos[g] = i; });
-    const gs = [...groups].sort((a, b) => (pos[a.label] ?? 999) - (pos[b.label] ?? 999));
+    const gs = [...base].sort((a, b) => (pos[a.label] ?? 999) - (pos[b.label] ?? 999));
     return gs.map((g) => {
       const ord = navOrder.items[g.label];
       if (!ord || !ord.length) return g;

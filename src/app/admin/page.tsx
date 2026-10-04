@@ -7,7 +7,7 @@ import { toInputNumber, type Unit } from "@/lib/format";
 import { categoryMeta } from "@/lib/kpi";
 import { POSITIONS, positionLabel } from "@/lib/roles";
 import { NAV_GROUPS } from "@/lib/navItems";
-import { NAV_ORDER_CAT, parseNavOrder, applyOrder } from "@/lib/nav-order";
+import { NAV_ORDER_CAT, parseNavOrder, applyOrder, applyMoves } from "@/lib/nav-order";
 import type { User } from "@prisma/client";
 import { Card, SectionTitle } from "@/components/ui";
 import PageTabs from "@/components/PageTabs";
@@ -62,9 +62,10 @@ export default async function AdminPage({
   const aiLog = owner ? await db.assistantLog.findMany({ orderBy: { createdAt: "desc" }, take: 40 }) : [];
   const navOrderRow = owner ? await db.resource.findFirst({ where: { category: NAV_ORDER_CAT } }).catch(() => null) : null;
   const navOrder = parseNavOrder(navOrderRow?.description);
-  const orderedNavGroups = applyOrder(NAV_GROUPS, navOrder?.groups, (g) => g.group).map((g) => ({
-    group: g.group,
-    items: applyOrder([...g.items], navOrder?.items[g.group], (i) => i.href),
+  const movedNavGroups = applyMoves(NAV_GROUPS.map((g) => ({ label: g.group, items: [...g.items] })), navOrder?.moves, (i) => i.href);
+  const orderedNavGroups = applyOrder(movedNavGroups, navOrder?.groups, (g) => g.label).map((g) => ({
+    group: g.label,
+    items: applyOrder([...g.items], navOrder?.items[g.label], (i) => i.href),
   }));
   const openOffboardings = await db.offboarding.findMany({ where: { completedAt: null }, include: { tasks: { orderBy: { sortOrder: "asc" } } }, orderBy: { createdAt: "desc" } });
 

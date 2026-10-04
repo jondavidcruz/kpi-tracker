@@ -5,7 +5,9 @@
 // so new pages never vanish just because the saved order predates them.
 export const NAV_ORDER_CAT = "__nav_order__";
 
-export type NavOrder = { groups: string[]; items: Record<string, string[]> };
+// moves: href → group label, for tabs the owner dragged OUT of their coded
+// group (Jon 2026-10-04). Absent href = stays in its coded group.
+export type NavOrder = { groups: string[]; items: Record<string, string[]>; moves?: Record<string, string> };
 
 export function parseNavOrder(raw: string | null | undefined): NavOrder | null {
   if (!raw) return null;
@@ -14,6 +16,24 @@ export function parseNavOrder(raw: string | null | undefined): NavOrder | null {
     if (v && Array.isArray(v.groups) && v.items && typeof v.items === "object") return v as NavOrder;
   } catch { /* corrupted order = coded order */ }
   return null;
+}
+
+/** Relocate moved items across groups BEFORE per-group ordering. Items moved to
+ *  a group label that doesn't exist stay put (safe when a group is renamed). */
+export function applyMoves<T>(groups: Array<{ label: string; items: T[] }>, moves: Record<string, string> | undefined, key: (t: T) => string): Array<{ label: string; items: T[] }> {
+  if (!moves || Object.keys(moves).length === 0) return groups;
+  const labels = new Set(groups.map((g) => g.label));
+  const relocated: Record<string, T[]> = {};
+  const gs = groups.map((g) => ({
+    label: g.label,
+    items: g.items.filter((it) => {
+      const to = moves[key(it)];
+      if (!to || to === g.label || !labels.has(to)) return true;
+      (relocated[to] ??= []).push(it);
+      return false;
+    }),
+  }));
+  return gs.map((g) => (relocated[g.label] ? { ...g, items: [...g.items, ...relocated[g.label]] } : g));
 }
 
 /** Reorder `list` by `order` (matching on `key(item)`); unknowns keep relative order at the end. */
