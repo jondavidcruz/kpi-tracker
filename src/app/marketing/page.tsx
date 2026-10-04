@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { saveMarketingNotes, saveTargetMarket, deleteTargetMarket, saveJvPartner, deleteJvPartner, saveBuyBoxMap, saveBuyerTerms, readBuyerTerms, readBuyerLand, installLandMarkets } from "@/app/actions";
 import DevInterviews from "@/components/DevInterviews";
 import ArchivedBuyers from "@/components/ArchivedBuyers";
@@ -286,8 +287,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
               </div>
               {!r.contact && autoMaps[r.id]?.url && (
                 <a href={autoMaps[r.id].url} target="_blank" rel="noreferrer" title="Auto coverage map from the buy box — upload Sharyn's detailed map to replace it">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={autoMaps[r.id].url} alt="auto coverage" loading="lazy" className="h-10 w-16 rounded object-cover ring-1 ring-slate-200" />
+                  <Image src={autoMaps[r.id].url} alt="auto coverage" width={128} height={80} className="h-10 w-16 rounded object-cover ring-1 ring-slate-200" />
                 </a>
               )}
               <form action={saveBuyBoxMap} className="flex items-center gap-2">

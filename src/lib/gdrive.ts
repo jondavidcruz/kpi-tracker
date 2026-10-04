@@ -1,4 +1,5 @@
 // Google Drive storage for call recordings (so files don't sit in paid Supabase
+import { db } from "./db";
 // Storage). Uses a service-account JSON (GOOGLE_SERVICE_ACCOUNT_JSON) uploading
 // into a Shared Drive folder (GDRIVE_FOLDER_ID) — Shared Drive so the bytes count
 // against the Workspace pool, not the quota-less service account.
@@ -37,6 +38,46 @@ async function getAccessToken(): Promise<string> {
 }
 
 /** Verify creds + that the target folder is reachable. Returns folder name on success. */
+// Runtime Drive root: a Shared Drive id saved in Resource __drive_root__ wins
+// (service accounts can't OWN files in a personal My Drive — Google returns
+// "Service Accounts do not have storage quota"); falls back to the legacy
+// shared folder. Backups, packets, and recordings all resolve through this.
+const DRIVE_ROOT_CAT = "__drive_root__";
+export async function driveRootId(): Promise<string> {
+  try {
+    const row = await db.resource.findFirst({ where: { category: DRIVE_ROOT_CAT } });
+    if (row?.url) return row.url;
+  } catch { /* fall through */ }
+  return process.env.BUYER_BACKUP_FOLDER_ID || "18d9kIHwiQHTp54dZcUU53UqczBotrgUB";
+}
+export async function setDriveRoot(id: string): Promise<void> {
+  const row = await db.resource.findFirst({ where: { category: DRIVE_ROOT_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { url: id } });
+  else await db.resource.create({ data: { title: "drive-root", category: DRIVE_ROOT_CAT, url: id, description: "Shared Drive id used as the War Room's Drive root" } });
+}
+
+/** Try to create a Shared Drive as the service account (works on some Workspace
+ *  setups, 403s on others) and hand Jon organizer access. */
+export async function createSharedDrive(name: string): Promise<{ id?: string; error?: string }> {
+  try {
+    const token = await getAccessToken();
+    const requestId = crypto.randomBytes(16).toString("hex");
+    const res = await fetch(`https://www.googleapis.com/drive/v3/drives?requestId=${requestId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const j = await res.json();
+    if (!j.id) return { error: JSON.stringify(j).slice(0, 300) };
+    await fetch(`https://www.googleapis.com/drive/v3/files/${j.id}/permissions?supportsAllDrives=true&sendNotificationEmail=true`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ role: "organizer", type: "user", emailAddress: "info@freedom-offers.com" }),
+    }).catch(() => {});
+    return { id: j.id };
+  } catch (e) { return { error: String(e).slice(0, 200) }; }
+}
+
 export async function driveCheck(): Promise<{ ok: boolean; folder?: string; error?: string }> {
   try {
     const token = await getAccessToken();

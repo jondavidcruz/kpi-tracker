@@ -3,6 +3,7 @@
 // score ring (10-point vetting scorecard), tier badge, 3–4 chips, last 3 touches,
 // contact line. Filters by tier / county / text. Toggle with the spreadsheet.
 import { useMemo, useState, useSyncExternalStore } from "react";
+import Image from "next/image";
 import type { Scorecard, Tier } from "@/lib/buyers/scorecard";
 
 export type CardBuyer = Scorecard & {
@@ -112,8 +113,7 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
                 {/* Coverage map, right on the card (Jon: "physically see where they buy"). Sharyn's upload wins; 🤖 fills the rest. */}
                 {(b.mapUrl || b.autoMapUrl) && (
                   <a href={b.mapUrl || b.autoMapUrl} target="_blank" rel="noreferrer" className="group mt-2 block" title={b.mapUrl ? "Sharyn's area map — click to open full size" : "Auto-generated from the buy box — blue = counties they buy, red pins = cities. Click to enlarge."}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={b.mapUrl || b.autoMapUrl} alt={`${b.name} coverage map`} loading="lazy" className="h-24 w-full rounded-lg object-cover ring-1 ring-slate-200 transition group-hover:ring-brand-navy" />
+                    <Image src={(b.mapUrl || b.autoMapUrl)!} alt={`${b.name} coverage map`} width={480} height={192} className="h-24 w-full rounded-lg object-cover ring-1 ring-slate-200 transition group-hover:ring-brand-navy" />
                     <span className="mt-0.5 block text-[10px] font-semibold text-slate-400">{b.mapUrl ? "🗺️ area map" : "🤖 auto coverage — where they buy"}</span>
                   </a>
                 )}

@@ -2513,6 +2513,34 @@ export async function logBuyerOutreach(formData: FormData) {
   revalidatePath("/marketing");
 }
 
+/** RentCast pull — HARD-restricted to Dispositions (Sharyn & Marie): the final
+ *  value check on land/other property. Acquisitions underwrites by hand (Jon:
+ *  "they make offers daily and I don't want them to become lazy"). Every call
+ *  burns one of the 50/month — the cap lives in lib/rentcast. */
+export async function pullCompsAction(formData: FormData): Promise<{
+  ok: boolean; error?: string; value?: number | null; low?: number | null; high?: number | null;
+  comps?: Array<{ address: string; price: number | null; acres: number | null; dom: number | null }>;
+  used?: number; cap?: number;
+}> {
+  const me = await getCurrentUser();
+  const first = (me?.name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  if (first !== "sharyn" && first !== "marie") {
+    return { ok: false, error: "RentCast pulls are reserved for Dispositions (Sharyn & Marie) — acquisitions underwrites by hand." };
+  }
+  const address = String(formData.get("address") ?? "").trim();
+  if (!address) return { ok: false, error: "Enter the subject address first." };
+  const land = String(formData.get("land") ?? "") === "1";
+  try {
+    const { rentcastValue, rentcastUsage } = await import("@/lib/rentcast");
+    const est = await rentcastValue(address, me!.name, land ? "Land" : undefined);
+    const u = await rentcastUsage();
+    return {
+      ok: true, value: est.value, low: est.low, high: est.high, used: u.used, cap: u.cap,
+      comps: est.comps.map((c) => ({ address: c.address, price: c.price, acres: c.lotSize != null ? Math.round((c.lotSize / 43560) * 100) / 100 : null, dom: c.daysOnMarket })),
+    };
+  } catch (e) { return { ok: false, error: String(e).slice(0, 220) }; }
+}
+
 /** Refresh the Direct REI outreach pulse on demand (any signed-in teammate). */
 export async function refreshDreiFeedAction() {
   const me = await getCurrentUser();

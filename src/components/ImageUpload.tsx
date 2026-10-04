@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -37,7 +38,7 @@ export default function ImageUpload({ name, current = "", label = "Upload image"
   return (
     <div className="flex flex-wrap items-center gap-2">
       <input type="hidden" name={name} value={url} />
-      {url && <img src={url} alt="" className="h-12 w-20 rounded object-cover ring-1 ring-slate-200" />}
+      {url && <Image src={url} alt="" width={160} height={96} className="h-12 w-20 rounded object-cover ring-1 ring-slate-200" />}
       <button type="button" disabled={busy} onClick={() => fileRef.current?.click()}
         className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50">
         {busy ? "Uploading…" : url ? "🔁 Replace image" : `🖼️ ${label}`}

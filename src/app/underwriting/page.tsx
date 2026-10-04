@@ -20,7 +20,7 @@ export default async function UnderwritingPage() {
         subtitle="Analyze a deal five ways — Assignment, Novation, Creative, Listing, or Flip — with market-tier pricing, ARV-tiered fees, ROI, and a color PDF for offer calls."
         accent="bg-brand-gold"
       />
-      <UnderwritingCalculator defaultCloseCost={defaultCloseCost} closeCostN={totals.length} repName={me?.name ?? ""} />
+      <UnderwritingCalculator defaultCloseCost={defaultCloseCost} closeCostN={totals.length} repName={me?.name ?? ""} canPullComps={["sharyn", "marie"].includes((me?.name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "")} />
 
       <UnderwriteBot />
     </div>

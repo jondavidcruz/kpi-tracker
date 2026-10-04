@@ -5,9 +5,9 @@ import { gdriveConfigured, ensureSubfolder, uploadToFolder } from "./gdrive";
 const MARKER = "/call-recordings/";
 // Land in Jon's shared Drive (War Room Backups / Call Recordings / <month>) —
 // uploads to the service account's OWN drive are invisible to the team.
-const DRIVE_ROOT = process.env.BUYER_BACKUP_FOLDER_ID || "18d9kIHwiQHTp54dZcUU53UqczBotrgUB";
 async function recordingsFolder(sub: string): Promise<string> {
-  const root = await ensureSubfolder(DRIVE_ROOT, "Call Recordings");
+  const { driveRootId } = await import("./gdrive");
+  const root = await ensureSubfolder(await driveRootId(), "Call Recordings");
   return ensureSubfolder(root, sub);
 }
 

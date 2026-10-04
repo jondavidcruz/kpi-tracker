@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, createContext, useContext } from "react";
-import { saveUnderwrite } from "@/app/actions";
+import { saveUnderwrite, pullCompsAction } from "@/app/actions";
 
 // Ordered LAND-first for the land pivot, then the home strategies. `group` drives
 // the grouped tab bar so the sheet leads with what the team uses most now.
@@ -357,7 +357,7 @@ function AcreQuickRef() {
   );
 }
 
-export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeCostN = 0, repName = "" }: { defaultCloseCost?: number; closeCostN?: number; repName?: string }) {
+export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeCostN = 0, repName = "", canPullComps = false }: { defaultCloseCost?: number; closeCostN?: number; repName?: string; canPullComps?: boolean }) {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("cash_land");
   // clCloseCost starts PRE-FILLED with the average of our ACTUAL logged closings
   // (from the Closing Calculator) — no more "$1,500 example" (Jon 2026-09-25).
@@ -369,6 +369,9 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerStart, setTimerStart] = useState<number | null>(null);
   const [timerNow, setTimerNow] = useState(0);
+  // RentCast pull (dispo-only; hard 50/month cap server-side)
+  const [rcBusy, setRcBusy] = useState(false);
+  const [rcMsg, setRcMsg] = useState("");
   const [timerFinal, setTimerFinal] = useState<number | null>(null); // frozen seconds after export
   useEffect(() => {
     if (!timerRunning) return;
@@ -945,6 +948,28 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
     }
   }
 
+  async function pullRentcast(landMode: boolean) {
+    const addr = v("subject");
+    if (!addr.trim()) { setRcMsg("Enter the property address at the top first."); return; }
+    setRcBusy(true); setRcMsg("Pulling value + comps… (counts 1 of the 50/month)");
+    try {
+      const fd = new FormData();
+      fd.set("address", addr);
+      if (landMode) fd.set("land", "1");
+      const r = await pullCompsAction(fd);
+      if (!r.ok) { setRcMsg(`⚠️ ${r.error}`); return; }
+      if (landMode) {
+        if (r.value != null) setV("clEmv", String(r.value));
+        const withAcres = (r.comps ?? []).filter((c) => c.price != null && c.acres != null).slice(0, 3);
+        withAcres.forEach((c, i) => { setV(`clC${i + 1}`, String(c.price)); setV(`clC${i + 1}A`, String(c.acres)); });
+        setRcMsg(`✅ Value $${r.value?.toLocaleString() ?? "—"} (range $${r.low?.toLocaleString() ?? "—"}–$${r.high?.toLocaleString() ?? "—"}) · ${withAcres.length} land comps filled · RentCast ${r.used}/${r.cap} used`);
+      } else {
+        if (r.value != null) setV("arv", String(r.value));
+        setRcMsg(`✅ ARV $${r.value?.toLocaleString() ?? "—"} (range $${r.low?.toLocaleString() ?? "—"}–$${r.high?.toLocaleString() ?? "—"}) · comps: ${(r.comps ?? []).map((c) => `${c.address.split(",")[0]} $${c.price?.toLocaleString()}`).slice(0, 3).join(" · ") || "none"} · RentCast ${r.used}/${r.cap} used`);
+      }
+    } finally { setRcBusy(false); }
+  }
+
   function exportPdf() {
     // Capture the comp time NOW (state from stopTimer won't have flushed yet this tick).
     const compSeconds = timerRunning && timerStart != null ? Math.max(0, Math.round((Date.now() - timerStart) / 1000)) : timerFinal;
@@ -1291,6 +1316,12 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
                 </div>
               </details>
               <Field k="arv" label="ARV" prefix="$" placeholder="350,000" req="need" />
+              {canPullComps && (
+                <div className="sm:col-span-2">
+                  <button type="button" disabled={rcBusy} onClick={() => pullRentcast(false)} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-50">🔎 RentCast: pull ARV &amp; comps</button>
+                  {rcMsg && <p className="mt-1 text-[11px] text-slate-500">{rcMsg}</p>}
+                </div>
+              )}
               <div className="flex items-end gap-2">
                 <div className="flex-1"><Field k="aFee" label="Assignment fee" prefix="$" placeholder={suggestedFee ? suggestedFee.toLocaleString() : "15,000"} req="need" /></div>
                 {suggestedFee > 0 && <button type="button" onClick={() => setV("aFee", String(suggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(arv)} ARV`}>Use {money(suggestedFee)}</button>}
@@ -1428,6 +1459,12 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
               {stepDiv(1, "The parcel", "What the seller wants and how big it is. Get their number FIRST — never comp blind.")}
               <Field k="clAsk" label="Seller's asking price ($)" prefix="$" placeholder="120,000" req="opt" />
               <Field k="clLot" label="Lot size (e.g. 0.25 ac / 10,000 sf)" span={2} req="opt" />
+              {canPullComps && (
+                <div className="sm:col-span-2">
+                  <button type="button" disabled={rcBusy} onClick={() => pullRentcast(true)} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-50">🔎 RentCast: pull land value &amp; comps</button>
+                  {rcMsg && <p className="mt-1 text-[11px] text-slate-500">{rcMsg}</p>}
+                </div>
+              )}
 
               {stepDiv(2, "Are there SOLD land comps nearby?", "Sales in the area → comp them. Nothing sold nearby → go BLIND off the assessed value / EMV.")}
               <div className="sm:col-span-2 flex gap-2">

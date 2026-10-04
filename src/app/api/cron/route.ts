@@ -193,6 +193,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, automaps: res });
   }
 
+  // One-shot: create the "War Room Vault" Shared Drive as the service account,
+  // save it as the Drive root, and prove it with a test upload. If Google
+  // refuses (some Workspace policies block SA-created drives), the response
+  // says so and Jon creates it by hand instead.
+  if (url.searchParams.get("drivesetup") === "1") {
+    const { createSharedDrive, setDriveRoot, uploadToFolder, driveRootId } = await import("@/lib/gdrive");
+    const existing = url.searchParams.get("driveid"); // Jon can also hand us an id directly
+    let id = existing || "";
+    let created = false, error = "";
+    if (!id) {
+      const r = await createSharedDrive("War Room Vault");
+      if (r.id) { id = r.id; created = true; } else error = r.error ?? "unknown";
+    }
+    if (!id) return NextResponse.json({ ok: false, created, error, hint: "Google refused SA drive creation — create a Shared Drive named 'War Room Vault' at drive.google.com, add war-room@war-room-499719.iam.gserviceaccount.com as Content manager, then call ?drivesetup=1&driveid=<ID>." });
+    await setDriveRoot(id);
+    let testUpload = "";
+    try {
+      const up = await uploadToFolder(id, `warroom-test-${Date.now()}.txt`, Buffer.from("War Room storage check — safe to delete."), "text/plain");
+      testUpload = up.id ? "ok" : "failed";
+    } catch (e) { testUpload = String(e).slice(0, 160); }
+    return NextResponse.json({ ok: testUpload === "ok", created, driveId: id, root: await driveRootId(), testUpload });
+  }
+
   // Storage audit (Jon 2026-10-02: cut Supabase/Vercel usage, prefer Drive).
   // Reports every Supabase bucket's object count+bytes and the biggest DB tables.
   if (url.searchParams.get("storagereport") === "1") {

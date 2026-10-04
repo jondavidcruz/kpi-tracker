@@ -24,7 +24,7 @@ import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
 import DealFunnel from "@/components/DealFunnel";
 import CrmActivityStrip from "@/components/CrmActivityStrip";
-import DirectReiPulse from "@/components/DirectReiPulse";
+import { readDreiFeed } from "@/lib/directrei-sync";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canAccessPayroll, tracksSpeedTest } from "@/lib/auth";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
@@ -62,6 +62,7 @@ export default async function DashboardPage({
   // into date math and blank/crash sections. Fall back to today when it's not YYYY-MM-DD.
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayStr(settings.orgTimezone);
   const month = monthOf(date);
+  const drei = await readDreiFeed().catch(() => null);
   const fraction = paceFraction(date);
 
   // One parallel batch — everything here is independent of each other's results, so
@@ -318,7 +319,6 @@ export default async function DashboardPage({
 
       {/* CRM activity — managers only: who's actually working the CRM today */}
       {isManager(me) && <CrmActivityStrip />}
-      <DirectReiPulse />
 
       {/* Company scoreboard — acquisitions output (this month) + closings (this year) */}
       <section>
@@ -462,22 +462,33 @@ export default async function DashboardPage({
         goalFor={(uid) => (internetSpeedKpi ? resolveGoalWith(targets, internetSpeedKpi, uid, month) : null)}
       />
 
-      {/* Role scorecards */}
+      {/* Role scorecards (+ Direct REI context strip per side — Jon 2026-10-04:
+          no separate section, fold the numbers into the scorecards they belong to) */}
       {POSITIONS.map((pos) => {
         const roleReps = reps.filter((r) => r.position === pos.key);
         const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
         if (roleReps.length === 0 && roleKpis.length === 0) return null;
+        const dreiSide = drei && pos.key === "acquisitions" ? drei.seller : drei && pos.key === "dispositions" ? drei.buyer : null;
         return (
-          <RoleScorecard
-            key={pos.key}
-            title={`${pos.emoji} ${pos.label}`}
-            blurb={pos.blurb}
-            reps={roleReps}
-            kpis={roleKpis}
-            dailyValues={dailyValues}
-            targets={targets}
-            month={month}
-          />
+          <div key={pos.key}>
+            <RoleScorecard
+              title={`${pos.emoji} ${pos.label}`}
+              blurb={pos.blurb}
+              reps={roleReps}
+              kpis={roleKpis}
+              dailyValues={dailyValues}
+              targets={targets}
+              month={month}
+            />
+            {dreiSide && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
+                <span className="font-bold text-slate-600">📨 Direct REI {pos.key === "acquisitions" ? "seller campaigns (Michelle)" : "buyer campaigns (team combined)"}:</span>
+                <span><b className="text-slate-700">{dreiSide.newToday}</b> new today · <b className="text-slate-700">{dreiSide.new7d}</b> this week</span>
+                <span><b className="text-slate-700">{dreiSide.repliesToday}</b> replies today · <b className="text-slate-700">{dreiSide.replies7d}</b> this week (💬{dreiSide.smsReplies7d} ✉️{dreiSide.emailReplies7d})</span>
+                <span className="text-slate-400">context only — leads are typed in manually</span>
+              </div>
+            )}
+          </div>
         );
       })}
 

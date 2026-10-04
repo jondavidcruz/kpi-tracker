@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { gdriveConfigured, uploadToFolder, listFolder, ensureSubfolder, moveToFolder } from "@/lib/gdrive";
 import { adminConfigured, createAdminClient } from "@/lib/supabase/admin";
 
-const DRIVE_FOLDER = process.env.BUYER_BACKUP_FOLDER_ID || "18d9kIHwiQHTp54dZcUU53UqczBotrgUB";
+// Drive root resolves at runtime (Shared Drive override in Resource __drive_root__).
 const META_CAT = "__buyer_backup__"; // Resource row holding last-run metadata (drives the status pill)
 
 // ── Minimal ZIP writer (store method, no compression — images are already compressed) ──
@@ -116,20 +116,20 @@ export async function runBuyerBackup(): Promise<BuyerBackupResult> {
 
   if (gdriveConfigured()) {
     try {
-      const up1 = await uploadToFolder(DRIVE_FOLDER, names.json, json, "application/json");
-      await uploadToFolder(DRIVE_FOLDER, names.csv, csv, "text/csv");
-      if (zip) await uploadToFolder(DRIVE_FOLDER, names.zip, zip, "application/zip");
+      const up1 = await uploadToFolder((await (await import("../gdrive")).driveRootId()), names.json, json, "application/json");
+      await uploadToFolder((await (await import("../gdrive")).driveRootId()), names.csv, csv, "text/csv");
+      if (zip) await uploadToFolder((await (await import("../gdrive")).driveRootId()), names.zip, zip, "application/zip");
       // Retention: snapshots older than 90 days move to _archive (never deleted).
       try {
         const cutoff = Date.now() - 90 * 86400000;
-        const files = await listFolder(DRIVE_FOLDER);
+        const files = await listFolder((await (await import("../gdrive")).driveRootId()));
         const old = files.filter((f) => f.mimeType !== "application/vnd.google-apps.folder" && Date.parse(f.createdTime) < cutoff);
         if (old.length) {
-          const arch = await ensureSubfolder(DRIVE_FOLDER, "_archive");
-          for (const f of old) await moveToFolder(f.id, DRIVE_FOLDER, arch);
+          const arch = await ensureSubfolder((await (await import("../gdrive")).driveRootId()), "_archive");
+          for (const f of old) await moveToFolder(f.id, (await (await import("../gdrive")).driveRootId()), arch);
         }
       } catch { /* retention is best-effort */ }
-      result = { ...result, ok: true, target: "drive", link: `https://drive.google.com/drive/folders/${DRIVE_FOLDER}`, warning: undefined };
+      result = { ...result, ok: true, target: "drive", link: `https://drive.google.com/drive/folders/${(await (await import("../gdrive")).driveRootId())}`, warning: undefined };
       void up1;
     } catch (e) {
       // Surface the service-account email so Jon can share the Drive folder with it

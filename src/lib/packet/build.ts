@@ -157,7 +157,8 @@ export async function generatePacket(input: BuildInput): Promise<BuildResult> {
   if (!pdf) warnings.push("PDF engine unavailable here — open the HTML version and print to PDF");
   // Primary store = Google Drive (Jon 2026-10-02: save Supabase storage). Folder:
   // <War Room Backups>/Packets/<deal> — same service account as the buyer backup.
-  const DRIVE_ROOT = process.env.PACKET_DRIVE_FOLDER_ID || process.env.BUYER_BACKUP_FOLDER_ID || "18d9kIHwiQHTp54dZcUU53UqczBotrgUB";
+  const { driveRootId } = await import("@/lib/gdrive");
+  const DRIVE_ROOT = process.env.PACKET_DRIVE_FOLDER_ID || (await driveRootId());
   if (gdriveConfigured()) {
     try {
       const dealLabel = ((await db.deal.findUnique({ where: { id: input.dealId }, select: { address: true } }))?.address || input.dealId).replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 80);
