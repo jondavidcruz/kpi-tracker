@@ -136,10 +136,20 @@ export async function GET(request: Request) {
         out.RENTCAST_API_KEY.detail = `value $${est.value?.toLocaleString() ?? "?"} · ${est.comps.length} comps · usage ${u.used}/${u.cap} this month`;
       } catch (e) { out.RENTCAST_API_KEY.works = false; out.RENTCAST_API_KEY.detail = String(e).slice(0, 200); }
     }
+    out.REIAI_API_KEY = { set: !!process.env.REIAI_API_KEY, detail: process.env.REIAI_API_KEY ? "key saved — waiting on their API docs to wire comps" : undefined };
+    out.DEALMACHINE_API_KEY = { set: !!process.env.DEALMACHINE_API_KEY };
+    if (out.DEALMACHINE_API_KEY.set) {
+      try {
+        const r = await fetch("https://api.dealmachine.com/public/v1/leads/?limit=1", { headers: { Authorization: `Bearer ${process.env.DEALMACHINE_API_KEY}` }, cache: "no-store", signal: AbortSignal.timeout(15000) });
+        const j = (await r.json().catch(() => ({}))) as { data?: unknown[]; total?: number; error?: unknown };
+        out.DEALMACHINE_API_KEY.works = r.ok;
+        out.DEALMACHINE_API_KEY.detail = r.ok ? `connected · ${Array.isArray(j.data) ? `${j.total ?? j.data.length}+ leads visible` : "ok"}` : `status ${r.status}: ${JSON.stringify(j).slice(0, 120)}`;
+      } catch (e) { out.DEALMACHINE_API_KEY.works = false; out.DEALMACHINE_API_KEY.detail = String(e).slice(0, 120); }
+    }
     out.DIRECTREI_API_KEY = { set: !!process.env.DIRECTREI_API_KEY };
     // Env-name discovery (names ONLY, never values) — finds what Jon called a
     // freshly added key, e.g. the REI AI one.
-    (out as Record<string, unknown>).envNamesMatchingREI = Object.keys(process.env).filter((k) => /REI|RENTCAST|REGRID|TWILIO|TELNYX/i.test(k)).sort();
+    (out as Record<string, unknown>).envNamesMatchingREI = Object.keys(process.env).filter((k) => /REI|RENTCAST|REGRID|TWILIO|TELNYX|DEALMACHINE|MAPS|GEMINI|ANTHROPIC/i.test(k)).sort();
     // Phone providers (feed /phone-health + /compliance): live round-trips.
     try {
       const { telcoEnvStatus, twilioHealth, telnyxHealth } = await import("@/lib/telco");

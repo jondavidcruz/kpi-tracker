@@ -7,7 +7,7 @@ import { workedMinutes, paidMinutes } from "@/lib/presence";
 import { workCapAt, shiftStartAt, shiftEndAt } from "@/lib/shift";
 import { parseHourly, parseFlatDailyHours, fmtHours } from "@/lib/payroll";
 import { positionLabel } from "@/lib/roles";
-import { saveTimeAdjustment, saveBonus, deleteBonus, savePayHours, savePayDiscrepancy, deleteOutage } from "@/app/actions";
+import { editPunchAction, addPunchAction, deletePunchAction, saveTimeAdjustment, saveBonus, deleteBonus, savePayHours, savePayDiscrepancy, deleteOutage } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ const mdShort = (d: string) => { const [, m, dd] = d.split("-").map(Number); ret
 const hhmmAP = (m: number) => { const h = Math.floor(m / 60), mm = m % 60; const ap = h >= 12 ? "PM" : "AM"; return `${h % 12 || 12}:${String(mm).padStart(2, "0")} ${ap}`; };
 const PAID_BREAK_MIN = 15; // team policy: one paid break up to 15 min/day; the rest is unpaid
 
-export default async function TimecardPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
+export default async function TimecardPage({ searchParams }: { searchParams: Promise<{ p?: string; edit?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessCSuite(me)) {
     return (
@@ -48,7 +48,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
   const [users, profiles, punches, adjustments, timeOff, bonuses, payEntries, outages] = await Promise.all([
     getAllUsers(),
     db.teamProfile.findMany(),
-    db.punch.findMany({ where: { date: { gte: period.start, lte: period.end } }, orderBy: { at: "asc" }, select: { userId: true, date: true, kind: true, at: true } }),
+    db.punch.findMany({ where: { date: { gte: period.start, lte: period.end } }, orderBy: { at: "asc" }, select: { id: true, userId: true, date: true, kind: true, at: true } }),
     db.timeAdjustment.findMany({ where: { date: { gte: period.start, lte: period.end } } }),
     db.timeOff.findMany({ where: { status: "approved", startDate: { lte: period.end }, endDate: { gte: period.start } }, select: { userId: true, type: true, startDate: true, endDate: true } }),
     db.bonus.findMany({ where: { periodKey: period.key }, orderBy: { createdAt: "asc" } }),
@@ -101,6 +101,13 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
   const punchByDay = new Map<string, { kind: string; at: Date }[]>();
   for (const p of punches) { const k = punchKey(p.userId, p.date); const a = punchByDay.get(k) ?? []; a.push({ kind: p.kind, at: p.at }); punchByDay.set(k, a); }
   const adjByDay = new Map(adjustments.map((a) => [punchKey(a.userId, a.date), a]));
+  // ✎ Edit-day editor target: ?edit=<userId>|<date> (managers fix punches inline)
+  const editTarget = typeof sp.edit === "string" && sp.edit.includes("|") ? sp.edit : "";
+  const [editUserId, editDate] = editTarget ? editTarget.split("|") : ["", ""];
+  const editPunches = editTarget ? punches.filter((x) => x.userId === editUserId && x.date === editDate).sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()) : [];
+  const editOutages = editTarget ? outages.filter((o) => o.userId === editUserId && o.date === editDate) : [];
+  const hhmmOf = (at: Date) => new Intl.DateTimeFormat("en-GB", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(at));
+
   const bonusByUser = new Map<string, typeof bonuses>();
   for (const b of bonuses) { const a = bonusByUser.get(b.userId) ?? []; a.push(b); bonusByUser.set(b.userId, a); }
   const offCovers = (uid: string, d: string) => timeOff.find((t) => t.userId === uid && t.startDate <= d && t.endDate >= d);
@@ -255,7 +262,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                   <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-400">
                     <th className="py-1.5 pr-3">Day</th><th className="px-2">In</th><th className="px-2">Out</th>
                     <th className="px-2 text-right">Worked</th><th className="px-2 text-right">Deduct</th><th className="px-2 text-right">Paid</th><th className="px-2 text-right">Dec</th>
-                    <th className="px-2">Status</th><th className="px-2">Note</th>
+                    <th className="px-2">Status</th><th className="px-2">Note</th><th className="px-2" />
                   </tr>
                 </thead>
                 <tbody>
@@ -275,12 +282,62 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
                         ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">▼ under {flatH != null ? fmtHours(flatH) : ""}</span>
                         : <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${r.status === "Working" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{r.status}</span>}</td>
                       <td className="px-2 text-xs text-slate-500">{r.note}</td>
+                      <td className="px-2 text-right"><Link href={`/timecard?p=${off}&edit=${u.id}|${r.d}`} className="text-xs font-bold text-slate-300 hover:text-brand-navy" title="Edit this day's punches">✎</Link></td>
                     </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
+
+            {/* ✎ Day editor — managers fix a day's punches in place */}
+            {editUserId === u.id && editDate && (
+              <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold text-indigo-900">
+                  ✎ Editing {u.name.split(" ")[0]} · {editDate}
+                  <span className="text-[11px] font-normal text-indigo-700">Fix a time and Save, 🗑 a stray punch, or add a missing one — worked &amp; paid hours recalculate instantly.</span>
+                  <Link href={`/timecard?p=${off}`} className="ml-auto rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-slate-500 ring-1 ring-slate-200 hover:text-slate-700">✕ Close</Link>
+                </div>
+                <div className="space-y-1.5">
+                  {editPunches.length === 0 && <p className="text-xs text-slate-500">No punches this day yet — add the pair below.</p>}
+                  {editPunches.map((pch) => (
+                    <div key={pch.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs ring-1 ring-indigo-100">
+                      <span className="w-24 font-semibold text-slate-700">{({ in: "🟢 Clock in", out: "🔴 Clock out", break_start: "☕ Break start", break_end: "☕ Break end", lunch_start: "🍽 Lunch start", lunch_end: "🍽 Lunch end" } as Record<string, string>)[pch.kind] ?? pch.kind}</span>
+                      <form action={editPunchAction} className="flex items-center gap-1.5">
+                        <input type="hidden" name="id" value={pch.id} />
+                        <input type="time" name="time" defaultValue={hhmmOf(pch.at)} className="rounded-md border border-slate-200 px-1.5 py-0.5" />
+                        <button className="rounded-md bg-indigo-600 px-2 py-0.5 font-bold text-white hover:bg-indigo-700">Save</button>
+                      </form>
+                      <form action={deletePunchAction} className="ml-auto">
+                        <input type="hidden" name="id" value={pch.id} />
+                        <button className="rounded-md bg-red-50 px-2 py-0.5 font-bold text-red-600 ring-1 ring-red-200 hover:bg-red-100">🗑</button>
+                      </form>
+                    </div>
+                  ))}
+                  <form action={addPunchAction} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs ring-1 ring-dashed ring-indigo-200">
+                    <input type="hidden" name="userId" value={u.id} />
+                    <input type="hidden" name="date" value={editDate} />
+                    <span className="font-bold text-slate-500">+ Add punch:</span>
+                    <select name="kind" className="rounded-md border border-slate-200 px-1.5 py-0.5">
+                      <option value="in">Clock in</option><option value="out">Clock out</option>
+                      <option value="break_start">Break start</option><option value="break_end">Break end</option>
+                      <option value="lunch_start">Lunch start</option><option value="lunch_end">Lunch end</option>
+                    </select>
+                    <input type="time" name="time" required className="rounded-md border border-slate-200 px-1.5 py-0.5" />
+                    <button className="rounded-md bg-indigo-600 px-2 py-0.5 font-bold text-white hover:bg-indigo-700">Add</button>
+                  </form>
+                  {editOutages.map((o) => (
+                    <div key={o.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs ring-1 ring-amber-200">
+                      <span>⚡ {o.kind} outage · {Math.max(0, (o.ongoing ? o.startMin : o.endMin) - o.startMin)}m deducted</span>
+                      <form action={deleteOutage} className="ml-auto">
+                        <input type="hidden" name="id" value={o.id} />
+                        <button className="rounded-md bg-red-50 px-2 py-0.5 font-bold text-red-600 ring-1 ring-red-200 hover:bg-red-100">🗑 Remove outage</button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Weekly subtotals — read the period week by week */}
             {(() => {

@@ -438,7 +438,11 @@ export default async function AdminPage({
                 { env: "GOOGLE_MAPS_API_KEY", name: "Google Maps (Static + Geocoding)", powers: "packet aerials w/ parcel outline · faster cascade geocoding", get: "console.cloud.google.com → APIs → Maps Static API + Geocoding API" },
                 { env: "DIRECTREI_API_KEY", name: "Direct REI", powers: "contacts/campaigns/deals sync (calls stay CSV import)", get: "Direct REI → Settings → API & Zapier → + Create API key" },
                 { env: "GHL_PUSH_WEBHOOK_URL", name: "GoHighLevel push", powers: "Direct REI Qualified / send-to-ghl → GHL (polled every 15 min, each contact once)", get: "GHL → Automation → workflow → Inbound Webhook trigger → copy URL" },
-                { env: "RENTCAST_API_KEY", name: "RentCast comps", powers: "underwriting: 🔎 Pull comps & ARV button", get: "rentcast.io → API" },
+                { env: "RENTCAST_API_KEY", name: "RentCast comps", powers: "LIVE: 🔎 pull value & comps on the calculator (Sharyn+Marie, hard-capped 50/mo)", get: "rentcast.io → API" },
+                { env: "REIAI_API_KEY", name: "REI AI comps", powers: "NEXT: comps into the calculator — waiting on their API docs (paste the support email)", get: "REI AI → support" },
+                { env: "DEALMACHINE_API_KEY", name: "DealMachine", powers: "NEXT: property autofill (sqft · year · lot · est. value · owner equity) + mail sequences for the Mailers KPI", get: "DealMachine → Automation → API Docs" },
+                { env: "TWILIO_ACCOUNT_SID", name: "Twilio (GHL ops lines)", powers: "LIVE: phone health + A2P checks on your 8 acq/dispo numbers", get: "twilio.com console" },
+                { env: "TELNYX_API_KEY", name: "Telnyx (Direct REI lines)", powers: "LIVE: phone health on the 15 outbound marketing numbers", get: "telnyx.com portal" },
               ].map((k) => {
                 const on = !!process.env[k.env];
                 return (

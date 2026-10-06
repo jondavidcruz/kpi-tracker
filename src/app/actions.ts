@@ -2611,6 +2611,54 @@ export async function toggleDispoStepAction(formData: FormData) {
   revalidatePath("/deals");
 }
 
+// ── Manager time-card day editing (Jon 2026-10-06: "an easier method for
+// editing the day") — fix a wrong clock-in/out, add a missed punch, remove a
+// stray one. Timestamps are built in the org timezone for that date.
+function orgTzDate(date: string, hhmm: string, tz: string): Date {
+  const [h, m] = hhmm.split(":").map(Number);
+  const naive = Date.parse(`${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`);
+  const dtf = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const parts: Record<string, string> = {};
+  for (const pt of dtf.formatToParts(new Date(naive))) parts[pt.type] = pt.value;
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour === 24 ? 0 : +parts.hour, +parts.minute);
+  return new Date(naive - (asUtc - naive));
+}
+
+export async function editPunchAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  const hhmm = String(formData.get("time") ?? "");
+  if (!id || !/^\d{2}:\d{2}$/.test(hhmm)) return;
+  const punch = await db.punch.findUnique({ where: { id } });
+  if (!punch) return;
+  const settings = await getSettings();
+  await db.punch.update({ where: { id }, data: { at: orgTzDate(punch.date, hhmm, settings.orgTimezone) } });
+  revalidatePath("/timecard");
+}
+
+export async function addPunchAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  const kind = String(formData.get("kind") ?? "");
+  const hhmm = String(formData.get("time") ?? "");
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(hhmm)) return;
+  if (!["in", "out", "break_start", "break_end", "lunch_start", "lunch_end"].includes(kind)) return;
+  const settings = await getSettings();
+  await db.punch.create({ data: { userId, date, kind, at: orgTzDate(date, hhmm, settings.orgTimezone) } });
+  revalidatePath("/timecard");
+}
+
+export async function deletePunchAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (id) await db.punch.delete({ where: { id } }).catch(() => {});
+  revalidatePath("/timecard");
+}
+
 /** Managers: remove a mistakenly logged outage (Jon 2026-10-06 — marked Sharyn
  *  out by accident with no way to undo; the deducted time comes back). */
 export async function deleteOutageAction(formData: FormData) {
