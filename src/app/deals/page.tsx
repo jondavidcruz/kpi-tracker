@@ -1,6 +1,7 @@
-import { archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction } from "@/app/actions";
+import { toggleDispoStepAction, archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction } from "@/app/actions";
 import { readAuto, type DealCascade } from "@/lib/cascade";
 import PacketPanel, { type PacketRow } from "@/components/PacketPanel";
+import { DISPO_STEPS, readDispoChecklists } from "@/lib/dispo-checklist";
 import { LAND_FIELDS, LAND_FALLOUT_REASONS, landFlags, type DealLand } from "@/lib/deal-land";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getActiveDeals, getActiveReps, getSettings } from "@/lib/data";
@@ -68,6 +69,7 @@ export default async function DealsPage({
     arr.push({ id: r.id, version: r.version, url: r.url, htmlUrl: r.htmlUrl, createdAt: r.createdAt.toISOString(), generatedBy: r.generatedBy, approvedAt: r.approvedAt?.toISOString() ?? null, approvedBy: r.approvedBy, toVerify: m?.toVerify ?? [], warnings: [] });
     packetsByDeal.set(r.dealId, arr);
   }
+  const dispoChecklists = mktAccess ? await readDispoChecklists() : {};
   const sendsByDeal = new Map<string, typeof sendRows>();
   for (const r of sendRows) {
     const arr = sendsByDeal.get(r.dealId) ?? [];
@@ -178,6 +180,7 @@ export default async function DealsPage({
             sends={sendsByDeal.get(d.id) ?? []}
             canBlacklist={canClose}
             packets={packetsByDeal.get(d.id) ?? []}
+            checklist={dispoChecklists[d.id] ?? {}}
           />
         ))}
       </div>
@@ -191,7 +194,7 @@ type SendRow = {
   buyer: { name: string; blacklistedAt: Date | null };
 };
 
-function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land, sends = [], canBlacklist = false, packets = [] }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand; sends?: SendRow[]; canBlacklist?: boolean; packets?: PacketRow[] }) {
+function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land, sends = [], canBlacklist = false, packets = [], checklist = {} }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand; sends?: SendRow[]; canBlacklist?: boolean; packets?: PacketRow[]; checklist?: Record<string, { by: string; at: string }> }) {
   const lFlags = landFlags(land);
   // The next buyer to send to = highest-ranked one not already sent or passed.
   const nextId = matches.find((m) => cascadeStatus[m.id] !== "sent" && cascadeStatus[m.id] !== "passed")?.id ?? null;
@@ -228,6 +231,45 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
           💡 {aging.recommendation}
         </div>
       )}
+
+      {/* 📣 Dispo marketing checklist (from Jon's Property Disposition doc, upgraded
+          to point at the tools that automate each step). Done = name + timestamp. */}
+      {(() => {
+        const doneCount = DISPO_STEPS.filter((st) => checklist[st.key]).length;
+        const pct = Math.round((doneCount / DISPO_STEPS.length) * 100);
+        const phases = [...new Set(DISPO_STEPS.map((st) => st.phase))];
+        return (
+          <details className="mb-3 rounded-lg bg-emerald-50/70 p-3 ring-1 ring-emerald-200" open={doneCount > 0 && doneCount < DISPO_STEPS.length}>
+            <summary className="cursor-pointer text-sm font-bold text-emerald-900">
+              📣 Marketing checklist — {doneCount}/{DISPO_STEPS.length} done
+              <span className="ml-2 inline-block h-1.5 w-28 overflow-hidden rounded-full bg-emerald-100 align-middle"><span className="block h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} /></span>
+            </summary>
+            <p className="mt-1 text-[11px] text-emerald-800">Sell it in a week: blast everything Day 0, work the ranked list Days 1–3, escalate by Day 7. Check steps as you go — each shows who did it.</p>
+            <div className="mt-2 space-y-2.5">
+              {phases.map((ph) => (
+                <div key={ph}>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">{ph}</div>
+                  <div className="mt-1 space-y-1">
+                    {DISPO_STEPS.filter((st) => st.phase === ph).map((st) => {
+                      const done = checklist[st.key];
+                      return (
+                        <form key={st.key} action={toggleDispoStepAction} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs ring-1 ring-emerald-100">
+                          <input type="hidden" name="dealId" value={deal.id} />
+                          <input type="hidden" name="stepKey" value={st.key} />
+                          <button className={`grid h-5 w-5 shrink-0 place-items-center rounded-md text-[11px] font-bold ring-1 ${done ? "bg-emerald-500 text-white ring-emerald-600" : "bg-white text-transparent ring-slate-300 hover:ring-emerald-400"}`}>✓</button>
+                          <span className={`font-semibold ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>{st.label}</span>
+                          <span className="hidden text-[11px] text-slate-400 sm:inline">{st.hint}</span>
+                          {done && <span className="ml-auto text-[10px] font-semibold text-emerald-600">✓ {done.by.split(" ")[0]} · {new Date(done.at).toLocaleDateString()}</span>}
+                        </form>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        );
+      })()}
 
       {/* Phase 8 — Offering packet: APNs in, versioned diligence PDF out. */}
       <details className="mb-3 rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200" open={packets.length > 0}>

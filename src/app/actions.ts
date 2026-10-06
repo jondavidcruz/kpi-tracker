@@ -2599,6 +2599,30 @@ export async function approvePacketAction(formData: FormData) {
   revalidatePath("/deals");
 }
 
+/** Dispo marketing checklist: toggle a step on a deal (dispo/managers). */
+export async function toggleDispoStepAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  const dealId = String(formData.get("dealId") ?? "");
+  const stepKey = String(formData.get("stepKey") ?? "");
+  if (!dealId || !stepKey) return;
+  const { toggleDispoStep } = await import("@/lib/dispo-checklist");
+  await toggleDispoStep(dealId, stepKey, me!.name);
+  revalidatePath("/deals");
+}
+
+/** Managers: remove a mistakenly logged outage (Jon 2026-10-06 — marked Sharyn
+ *  out by accident with no way to undo; the deducted time comes back). */
+export async function deleteOutageAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db.outage.delete({ where: { id } }).catch(() => {});
+  revalidatePath("/schedule");
+  revalidatePath("/timecard");
+}
+
 /** Phase 7: log that a deal went to a buyer by hand (call/text/portal sends
  *  the cascade didn't make). Managers + marketing. */
 export async function logDealSendAction(formData: FormData) {

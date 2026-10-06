@@ -236,6 +236,28 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, results });
   }
 
+  // Retire the Developer Outreach KPI (Jon 2026-10-06: redundant — Direct REI
+  // runs the outreach now; research touches keep logging underneath).
+  if (url.searchParams.get("dispokpis2") === "1") {
+    const r = await db.kpi.updateMany({ where: { key: "developers_contacted" }, data: { active: false } });
+    return NextResponse.json({ ok: true, developers_contacted: r.count ? "deactivated" : "NOT FOUND" });
+  }
+
+  // Direct REI phone-endpoint probe: does their API expose numbers/calls at all?
+  if (url.searchParams.get("dreiphones") === "1") {
+    const { directReiConfigured } = await import("@/lib/directrei");
+    if (!directReiConfigured()) return NextResponse.json({ ok: false, hint: "key not set" });
+    const BASE = process.env.DIRECTREI_API_BASE || "https://vrgnjfatqasljgzrhyub.supabase.co/functions/v1/api/v1";
+    const probe = async (path: string) => {
+      try {
+        const r = await fetch(`${BASE}${path}`, { headers: { Authorization: `Bearer ${process.env.DIRECTREI_API_KEY}` }, cache: "no-store", signal: AbortSignal.timeout(12000) });
+        return { path, status: r.status, keys: r.ok ? Object.keys((await r.json().catch(() => ({}))) as object).slice(0, 10) : undefined };
+      } catch (e) { return { path, status: 0, err: String(e).slice(0, 60) }; }
+    };
+    const results = await Promise.all(["/numbers", "/phone_numbers", "/phones", "/calls", "/call_logs", "/messages", "/health/phones"].map(probe));
+    return NextResponse.json({ ok: true, results });
+  }
+
   // Twilio number hunt — which (sub)account actually owns the phone numbers.
   if (url.searchParams.get("twiliohunt") === "1") {
     const { twilioNumberHunt } = await import("@/lib/telco");

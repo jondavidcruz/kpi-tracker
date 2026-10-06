@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, monthBounds, friendlyDate } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser, daySegments, dayBar, type PresenceState } from "@/lib/presence";
 import { workCapAt, shiftEndLabel } from "@/lib/shift";
-import { requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage, startBreakFor, endBreakFor, endShiftFor, logCompletedBreak, punch } from "@/app/actions";
+import { deleteOutageAction, requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage, startBreakFor, endBreakFor, endShiftFor, logCompletedBreak, punch } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
@@ -214,6 +214,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   // shows when someone lost power/internet and when they came back.
   const nowMinTz = (() => { const pp = new Intl.DateTimeFormat("en-US", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now); return (+(pp.find((x) => x.type === "hour")?.value ?? "0") % 24) * 60 + +(pp.find((x) => x.type === "minute")?.value ?? "0"); })();
   // allOutagesToday fetched in the batch above.
+  // Managers: last 7 days of outages across the team, for the fix-a-mistake list
+  const weekAgoYmd = new Date(Date.parse(today) - 7 * 86400000).toISOString().slice(0, 10);
+  const recentOutages = isManager(me) ? await db.outage.findMany({ where: { date: { gte: weekAgoYmd } }, orderBy: [{ date: "desc" }, { startMin: "asc" }] }) : [];
+  const outageUserName = new Map(users.map((u) => [u.id, u.name]));
   const outagesByUser = new Map<string, OutageView[]>();
   const rawOutagesByUser = new Map<string, { startMin: number; endMin: number; ongoing: boolean }[]>();
   for (const o of allOutagesToday) {
@@ -645,6 +649,31 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           })}
         </Card>
       </section>
+      {/* Managers: recent outages — remove a mistaken entry and the deducted time comes back */}
+      {isManager(me) && recentOutages.length > 0 && (
+        <section>
+          <SectionTitle title="🛠 Outage log (7 days)" subtitle="Logged power/internet outages are unpaid time. Marked one by mistake? Remove it here and the minutes go back on the time card." accent="bg-amber-400" />
+          <div className="space-y-1.5">
+            {recentOutages.map((o) => {
+              const fmt = (min: number) => `${((Math.floor(min / 60) + 11) % 12) + 1}:${String(min % 60).padStart(2, "0")}${min < 720 ? "am" : "pm"}`;
+              return (
+                <div key={o.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm ring-1 ring-slate-200">
+                  <span className="font-semibold text-slate-800">{(outageUserName.get(o.userId) ?? "—").split(" ")[0]}</span>
+                  <span>{o.kind === "power" ? "⚡ power" : o.kind === "internet" ? "📶 internet" : "❓ other"}</span>
+                  <span className="text-slate-500">{o.date} · {fmt(o.startMin)}–{o.ongoing ? "ongoing" : fmt(o.endMin)} ({Math.max(0, (o.ongoing ? o.startMin : o.endMin) - o.startMin)}m)</span>
+                  {o.reportedBy && <span className="text-[11px] text-slate-400">flagged by {o.reportedBy.split(" ")[0]}</span>}
+                  {o.note && <span className="truncate text-[11px] text-slate-400">· {o.note}</span>}
+                  <form action={deleteOutageAction} className="ml-auto">
+                    <input type="hidden" name="id" value={o.id} />
+                    <button className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600 ring-1 ring-red-200 hover:bg-red-100">🗑 Remove</button>
+                  </form>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
     </div>
   );
 }
