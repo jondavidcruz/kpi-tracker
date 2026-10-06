@@ -131,11 +131,58 @@ export default async function DealsPage({
   const money = (n: number | null | undefined) =>
     n == null ? "" : n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M` : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`;
 
+  // 🔥 Buyer heat — reply rate + speed across EVERY send ever logged (Jon
+  // 2026-10-06: wave 1 should go to whoever actually answers). Excel-import
+  // rows count too: history is history.
+  const allSends = mktAccess
+    ? await db.dealSend.findMany({ select: { buyerId: true, sentAt: true, respondedAt: true, outcome: true, offerAmount: true } })
+    : [];
+  const heat = new Map<string, { sent: number; replied: number; offers: number; hoursSum: number; hoursN: number }>();
+  for (const s of allSends) {
+    const h = heat.get(s.buyerId) ?? { sent: 0, replied: 0, offers: 0, hoursSum: 0, hoursN: 0 };
+    h.sent++;
+    const replied = !!s.respondedAt || (s.outcome !== "" && s.outcome !== "no_reply");
+    if (replied) h.replied++;
+    if (["offer", "loi", "closed"].includes(s.outcome) || s.offerAmount != null) h.offers++;
+    if (s.respondedAt) { h.hoursSum += (s.respondedAt.getTime() - s.sentAt.getTime()) / 3_600_000; h.hoursN++; }
+    heat.set(s.buyerId, h);
+  }
+  const heatBadges: Record<string, { pct: number; fast: boolean; offers: number }> = {};
+  for (const [id, h] of heat) {
+    if (h.sent < 1 || h.replied < 1) continue;
+    heatBadges[id] = { pct: Math.round((100 * h.replied) / h.sent), fast: h.hoursN > 0 && h.hoursSum / h.hoursN <= 24, offers: h.offers };
+  }
+
+  // ⏱ First-24-hours race per deal: hours since added, hours to first send.
+  const nowMs = Date.now();
+  const fmtH = (h: number) => (h < 48 ? `${Math.max(0, Math.round(h))}h` : `${Math.round(h / 24)}d`);
+  const t24ByDeal = new Map<string, { ageH: number; firstSendH: number | null }>();
+  for (const d of deals) {
+    const ageH = (nowMs - d.createdAt.getTime()) / 3_600_000;
+    const first = (sendsByDeal.get(d.id) ?? []).reduce<Date | null>((m, s) => (!m || s.sentAt < m ? s.sentAt : m), null);
+    t24ByDeal.set(d.id, { ageH, firstSendH: first ? (first.getTime() - d.createdAt.getTime()) / 3_600_000 : null });
+  }
+  const speedSamples = deals.map((d) => t24ByDeal.get(d.id)!.firstSendH).filter((h): h is number => h != null && h >= 0);
+  const avgSpeedH = speedSamples.length ? speedSamples.reduce((a, b) => a + b, 0) / speedSamples.length : null;
+
+  // 🚫 Pass-reason rollup per deal
+  const passLineFor = (dealId: string) => {
+    const passes = (sendsByDeal.get(dealId) ?? []).filter((s) => s.outcome === "pass");
+    if (passes.length < 2) return "";
+    const counts = new Map<string, number>();
+    for (const p of passes) counts.set(p.passReason || "other", (counts.get(p.passReason || "other") ?? 0) + 1);
+    const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+    return `🚫 ${passes.length} passed · ${top[1]}× ${top[0]}`;
+  };
+
   // Kanban cards: compact view of every deal, best buyer offer pulled from sends.
   const kanbanDeals: KanbanDeal[] = deals.map((d) => {
     const a = analyzeDeal(d, today);
     const offers = (sendsByDeal.get(d.id) ?? []).map((s) => s.offerAmount).filter((n): n is number => n != null);
     const price = d.askingPrice ?? d.contractPrice;
+    const live = !["closed", "dead"].includes(d.status);
+    const t = t24ByDeal.get(d.id)!;
+    const clock = !live ? "" : t.firstSendH != null ? `🚀 first send in ${fmtH(t.firstSendH)}` : `🕐 ${fmtH(t.ageH)} — no send yet`;
     return {
       id: d.id,
       address: d.address,
@@ -144,8 +191,11 @@ export default async function DealsPage({
       buyerName: d.buyerName,
       money: price != null ? `${money(price)}${d.askingPrice != null ? " asking" : " contract"}` : "",
       topOffer: offers.length ? money(Math.max(...offers)) : "",
-      agingLabel: a.days != null && !["closed", "dead"].includes(d.status) ? `⏱ ${a.days}d on market` : "",
+      agingLabel: a.days != null && live ? `⏱ ${a.days}d on market` : "",
       agingLevel: a.level,
+      clock,
+      clockWarn: live && t.firstSendH == null && t.ageH >= 24,
+      passLine: live ? passLineFor(d.id) : "",
     };
   });
 
@@ -156,7 +206,7 @@ export default async function DealsPage({
         title="🤝 Deals Board"
         subtitle="Dispositions pipeline with real-time aging & next-step tracking."
         accent="bg-brand-gold"
-        right={<span className="text-sm font-semibold text-slate-500">{openCount} active</span>}
+        right={<span className="text-sm font-semibold text-slate-500">{openCount} active{avgSpeedH != null ? ` · ⚡ avg first send ${fmtH(avgSpeedH)}` : ""}</span>}
       />
 
       {sp.saved && (
@@ -273,6 +323,8 @@ export default async function DealsPage({
             canBlacklist={canClose}
             packets={packetsByDeal.get(d.id) ?? []}
             checklist={dispoChecklists[d.id] ?? {}}
+            t24={t24ByDeal.get(d.id)}
+            heatBadges={heatBadges}
           />
           </div>
         ))}
@@ -287,7 +339,7 @@ type SendRow = {
   buyer: { name: string; blacklistedAt: Date | null };
 };
 
-function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land, sends = [], canBlacklist = false, packets = [], checklist = {} }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand; sends?: SendRow[]; canBlacklist?: boolean; packets?: PacketRow[]; checklist?: Record<string, { by: string; at: string }> }) {
+function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land, sends = [], canBlacklist = false, packets = [], checklist = {}, t24, heatBadges = {} }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand; sends?: SendRow[]; canBlacklist?: boolean; packets?: PacketRow[]; checklist?: Record<string, { by: string; at: string }>; t24?: { ageH: number; firstSendH: number | null }; heatBadges?: Record<string, { pct: number; fast: boolean; offers: number }> }) {
   const lFlags = landFlags(land);
   // The next buyer to send to = highest-ranked one not already sent or passed.
   const nextId = matches.find((m) => cascadeStatus[m.id] !== "sent" && cascadeStatus[m.id] !== "passed")?.id ?? null;
@@ -306,6 +358,18 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${agingClasses(aging.level)}`}>
             {aging.days}d on market
           </span>
+        )}
+        {/* ⏱ first-24-hours race: sold-in-24h is the goal — show the clock */}
+        {isLive && t24 && (
+          t24.firstSendH != null ? (
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${t24.firstSendH <= 24 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+              🚀 first send in {t24.firstSendH < 48 ? `${Math.max(0, Math.round(t24.firstSendH))}h` : `${Math.round(t24.firstSendH / 24)}d`}
+            </span>
+          ) : (
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${t24.ageH >= 24 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+              🕐 {t24.ageH < 48 ? `${Math.max(0, Math.round(t24.ageH))}h` : `${Math.round(t24.ageH / 24)}d`} — no send yet
+            </span>
+          )
         )}
       </div>
 
@@ -376,7 +440,18 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
       {/* Phase 7 — Sends & responses: the buyer feedback loop. Two clicks to log an outcome. */}
       {(sends.length > 0 || matches.length > 0) && (
         <details className="mb-3 rounded-lg bg-violet-50 p-3 ring-1 ring-violet-200" open={sends.length > 0}>
-          <summary className="cursor-pointer text-sm font-bold text-violet-800">📨 Sends &amp; responses ({sends.length})</summary>
+          <summary className="cursor-pointer text-sm font-bold text-violet-800">
+            📨 Sends &amp; responses ({sends.length})
+            {(() => {
+              // 🚫 pass-reason rollup: "4 of 6 passes said price" = cut the price
+              const passes = sends.filter((s) => s.outcome === "pass");
+              if (passes.length < 2) return null;
+              const counts = new Map<string, number>();
+              for (const p of passes) counts.set(p.passReason || "other", (counts.get(p.passReason || "other") ?? 0) + 1);
+              const parts = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([r, n]) => `${n}× ${r}`).join(", ");
+              return <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-bold text-orange-700">🚫 {passes.length} passed — {parts}</span>;
+            })()}
+          </summary>
           <p className="mt-1 text-[11px] text-violet-700">Every blast lands here automatically. When a buyer answers, set the outcome — offers + passes build each buyer&apos;s track record (lowballer / tire-kicker flags, hit rate).</p>
           <div className="mt-2 space-y-1.5">
             {sends.map((sd) => (
@@ -481,6 +556,11 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
                 <div key={m.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg p-1.5 text-xs ${isNext ? "bg-white ring-1 ring-emerald-300" : status === "passed" ? "opacity-50" : ""}`}>
                   <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${isNext ? "bg-emerald-600 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}>{m.rank}</span>
                   <span className="font-semibold text-slate-800">{m.name}</span>
+                  {heatBadges[m.id] && (
+                    <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700" title={`${heatBadges[m.id].pct}% of our sends got a response${heatBadges[m.id].fast ? ", usually within 24h" : ""}${heatBadges[m.id].offers ? ` · ${heatBadges[m.id].offers} offer${heatBadges[m.id].offers > 1 ? "s" : ""} made` : ""}`}>
+                      🔥 {heatBadges[m.id].pct}%{heatBadges[m.id].fast ? " ⚡" : ""}{heatBadges[m.id].offers ? ` · ${heatBadges[m.id].offers} offer${heatBadges[m.id].offers > 1 ? "s" : ""}` : ""}
+                    </span>
+                  )}
                   {isNext && <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">👑 Send next</span>}
                   {status === "sent" && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">✓ sent</span>}
                   {status === "passed" && <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">passed</span>}

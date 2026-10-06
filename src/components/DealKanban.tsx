@@ -18,6 +18,9 @@ export type KanbanDeal = {
   topOffer: string; // pre-formatted best offer, "" if none
   agingLabel: string; // "12d on market", "" if unknown
   agingLevel: "fresh" | "watch" | "reduce" | "stale";
+  clock: string; // first-24h race: "🚀 sent in 5h" / "🕐 30h — no send yet"
+  clockWarn: boolean; // true = past 24h with no send (render red)
+  passLine: string; // "🚫 3 passed · price", "" if < 2 passes
 };
 
 export type KanbanColumn = { key: string; label: string; cls: string };
@@ -103,6 +106,8 @@ export default function DealKanban({ columns, deals: initial, canMove }: { colum
                     {(d.topOffer || d.buyerName) && (
                       <div className="mt-0.5 text-[10px] font-semibold text-emerald-700">{d.topOffer ? `💵 best offer ${d.topOffer}` : `🤝 ${d.buyerName}`}</div>
                     )}
+                    {d.clock && <div className={`mt-0.5 text-[10px] font-bold ${d.clockWarn ? "text-red-600" : "text-slate-500"}`}>{d.clock}</div>}
+                    {d.passLine && <div className="mt-0.5 text-[10px] font-bold text-orange-600">{d.passLine}</div>}
                     {d.agingLabel && <div className={`mt-0.5 text-[10px] font-bold ${AGING_CLS[d.agingLevel]}`}>{d.agingLabel}</div>}
                   </div>
                 ))}
