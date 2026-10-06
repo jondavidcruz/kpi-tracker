@@ -392,6 +392,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", wouldCreate: report.created.length, wouldMatch: report.matched.length, touches: report.touches, dealSends: report.dealSends, newArchivedDeals: createdDealByAddr.size, dealLinks, created: report.created, matched: report.matched, skipped: report.skipped });
   }
 
+  // Google Sheet hybrid sync — pull the girls' typed cells in, push fresh
+  // truth out. Also runs 3×/day via cron (Jon 2026-10-07).
+  if (url.searchParams.get("sheetsync") === "1") {
+    try {
+      const { syncDispoSheet } = await import("@/lib/gsheets");
+      return NextResponse.json(await syncDispoSheet());
+    } catch (e) { return NextResponse.json({ ok: false, error: String(e).slice(0, 300) }); }
+  }
+
   // 4pm dispo huddle auto-agenda (Jon's SOP: Viktoriia's daily overwatch).
   // Posts every live deal's 24h clock, follow-ups due, and pass rollups to the
   // huddle Chat space — the agenda writes itself.

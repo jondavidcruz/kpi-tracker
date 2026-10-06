@@ -148,9 +148,9 @@ export default function CascadeBoard() {
                 <div className="mt-1 text-[12px] text-slate-500">{c.phone && <span className="font-semibold">{c.phone}</span>}{c.phone && c.email && " · "}{c.email}</div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-1.5">
-                <button onClick={() => logTouchFor(c.id)} disabled={touched.has(c.id)} className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100 disabled:opacity-60">{touched.has(c.id) ? "✅ Logged" : "📇 Log touch"}</button>
-                {c.email && <a href={mailto(c)} className="rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">✉ Draft email</a>}
-                <button onClick={() => copy(rowText(c), c.id)} className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">{copied === c.id ? "✅" : "📋"}</button>
+                <button onClick={() => logTouchFor(c.id)} disabled={touched.has(c.id)} title="I called/texted this buyer — logs the touch to your KPIs and sets their next follow-up 3 days out" className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100 disabled:opacity-60">{touched.has(c.id) ? "✅ Logged" : "📇 Log touch"}</button>
+                {c.email && <a href={mailto(c)} title="Opens your email app with the offer message pre-written to this buyer" className="rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">✉ Draft email</a>}
+                <button onClick={() => copy(rowText(c), c.id)} title="Copy this buyer's name, phone & email — paste into a text message" className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">{copied === c.id ? "✅ Copied" : "📋 Copy"}</button>
               </div>
             </div>
           </div>

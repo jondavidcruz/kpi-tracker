@@ -2600,6 +2600,22 @@ export async function generatePacketAction(formData: FormData): Promise<import("
   return res;
 }
 
+/** Google Sheet hybrid sync — the ↻ button on /deals. */
+export async function syncDispoSheetAction() {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return;
+  try {
+    const { syncDispoSheet } = await import("@/lib/gsheets");
+    await syncDispoSheet();
+  } catch (e) {
+    console.error("[sheet] sync failed:", e);
+    revalidatePath("/deals");
+    redirect(`/deals?sheet=${String(e).includes("SHEETS_API_DISABLED") ? "disabled" : "err"}`);
+  }
+  revalidatePath("/deals");
+  redirect("/deals?sheet=ok");
+}
+
 /** Phase 8: approve a packet version — this is the one the cascade sends. */
 export async function approvePacketAction(formData: FormData) {
   const me = await getCurrentUser();

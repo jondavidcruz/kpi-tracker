@@ -1,4 +1,5 @@
-import { logBuyerOutreach, toggleDispoStepAction, archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction } from "@/app/actions";
+import { logBuyerOutreach, toggleDispoStepAction, archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction, syncDispoSheetAction } from "@/app/actions";
+import { readSheetInfo } from "@/lib/gsheets";
 import { readAuto, type DealCascade } from "@/lib/cascade";
 import PacketPanel, { type PacketRow } from "@/components/PacketPanel";
 import { DISPO_STEPS, readDispoChecklists } from "@/lib/dispo-checklist";
@@ -34,7 +35,7 @@ const lblCls = "block text-[11px] font-semibold text-slate-500 mb-0.5";
 export default async function DealsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; closed?: string; err?: string; cascade?: string }>;
+  searchParams: Promise<{ saved?: string; closed?: string; err?: string; cascade?: string; sheet?: string }>;
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
@@ -73,6 +74,7 @@ export default async function DealsPage({
     packetsByDeal.set(r.dealId, arr);
   }
   const dispoChecklists = mktAccess ? await readDispoChecklists() : {};
+  const sheetInfo = mktAccess ? await readSheetInfo() : null;
   // 📞 Follow-ups due — developers/agents we sent deals to (moved here from
   // Vetted Buyers, Jon 2026-10-06: the follow-up IS about the deals they sent).
   const dueFollowUps = mktAccess
@@ -233,6 +235,23 @@ export default async function DealsPage({
       )}
 
       <DealKanban columns={STATUSES} deals={kanbanDeals} canMove={canClose} />
+
+      {sp.sheet === "ok" && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">📊 Sheet synced — the girls&apos; typed cells were pulled in, fresh data pushed out.</div>}
+      {sp.sheet === "disabled" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">⚠️ The Google Sheets API isn&apos;t enabled yet — one click at <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" className="underline">console.cloud.google.com</a> (free), then hit Sync again.</div>}
+      {sp.sheet === "err" && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">⚠️ Sheet sync failed — try again, or tell Jon.</div>}
+
+      {/* 📊 Excel-style board: the synced Google Sheet (hybrid — typed cells flow back in) */}
+      {mktAccess && (
+        <Card className="flex flex-wrap items-center gap-3 p-3.5">
+          <span className="text-sm font-bold text-slate-800">📊 Excel-style board</span>
+          <span className="text-xs text-slate-500">A Google Sheet in the War Room Vault — sort &amp; filter like Excel; type in the 💬 / 📅 / ✍️ columns and it flows back into the War Room (with KPI credit when you add your name).</span>
+          <span className="ml-auto flex items-center gap-2">
+            {sheetInfo?.lastSync && <span className="text-[11px] text-slate-400">synced {new Date(sheetInfo.lastSync).toLocaleString()}</span>}
+            {sheetInfo?.url && <a href={sheetInfo.url} target="_blank" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Open the sheet ↗</a>}
+            <form action={syncDispoSheetAction}><button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700">{sheetInfo ? "↻ Sync now" : "✨ Create the sheet"}</button></form>
+          </span>
+        </Card>
+      )}
 
       {/* 📞 Follow-ups due — the retired Excel's job, on the page where deals live */}
       {dueFollowUps.length > 0 && (
