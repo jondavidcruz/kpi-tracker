@@ -240,16 +240,30 @@ export default async function DealsPage({
       {sp.sheet === "disabled" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">⚠️ The Google Sheets API isn&apos;t enabled yet — one click at <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" className="underline">console.cloud.google.com</a> (free), then hit Sync again.</div>}
       {sp.sheet === "err" && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">⚠️ Sheet sync failed — try again, or tell Jon.</div>}
 
-      {/* 📊 Excel-style board: the synced Google Sheet (hybrid — typed cells flow back in) */}
+      {/* 📊 THE Google Sheet, embedded (Jon 2026-10-07: "use the Google Sheet
+          internally" — the real sheet lives right here, edits sync back in). */}
       {mktAccess && (
-        <Card className="flex flex-wrap items-center gap-3 p-3.5">
-          <span className="text-sm font-bold text-slate-800">📊 Excel-style board</span>
-          <span className="text-xs text-slate-500">A Google Sheet in the War Room Vault — sort &amp; filter like Excel; type in the 💬 / 📅 / ✍️ columns and it flows back into the War Room (with KPI credit when you add your name).</span>
-          <span className="ml-auto flex items-center gap-2">
-            {sheetInfo?.lastSync && <span className="text-[11px] text-slate-400">synced {new Date(sheetInfo.lastSync).toLocaleString()}</span>}
-            {sheetInfo?.url && <a href={sheetInfo.url} target="_blank" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Open the sheet ↗</a>}
-            <form action={syncDispoSheetAction}><button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700">{sheetInfo ? "↻ Sync now" : "✨ Create the sheet"}</button></form>
-          </span>
+        <Card className="p-3.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-bold text-slate-800">📊 Excel-style board</span>
+            <span className="text-xs text-slate-500">The real Google Sheet, right here — sort &amp; filter like Excel. Type in the 💬 / 📅 / ✍️ columns (+ YOUR NAME for KPI credit) and Sync pulls it into the War Room.</span>
+            <span className="ml-auto flex items-center gap-2">
+              {sheetInfo?.lastSync && <span className="text-[11px] text-slate-400">synced {new Date(sheetInfo.lastSync).toLocaleString()}</span>}
+              {sheetInfo?.url && <a href={sheetInfo.url} target="_blank" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Open full screen ↗</a>}
+              <form action={syncDispoSheetAction}><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">{sheetInfo ? "↻ Sync now" : "✨ Create the sheet"}</button></form>
+            </span>
+          </div>
+          {sheetInfo?.url && (
+            <details open className="mt-2.5">
+              <summary className="cursor-pointer text-[11px] font-semibold text-slate-500">hide / show the sheet</summary>
+              <iframe
+                src={`https://docs.google.com/spreadsheets/d/${sheetInfo.id}/edit?widget=true&headers=false&rm=minimal`}
+                className="mt-2 h-[70vh] w-full rounded-xl border border-slate-200 bg-white"
+                title="War Room — Dispo Board (Google Sheet)"
+              />
+              <p className="mt-1 text-[10px] text-slate-400">Editing needs a Google account with access to the War Room Vault — if it shows &ldquo;request access&rdquo;, tell Jon and sign in with your work Google account via &ldquo;Open full screen&rdquo;.</p>
+            </details>
+          )}
         </Card>
       )}
 
