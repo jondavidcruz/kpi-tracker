@@ -191,8 +191,41 @@ const OTHER: Phase[] = [
     aiAssist: ["Re-underwrite the adjusted numbers"], aiAuto: [] },
 ];
 
+// ── Workflow: LAND dispo, the 24-hour sale (Jon's whiteboard SOP, 2026-10-06).
+// Off-market land — contracted, not yet contracted, or novated — find the buyer
+// who gets us our purchase price, inside 24 hours.
+const LAND_DISPO: Phase[] = [
+  { n: 1, title: "Land lead screened", dept: "Acquisitions", owner: "Michelle (Acquisitions)",
+    summary: "The 6-point land kill-check before dispo ever touches it. Fail any → nurture or pass, don't market.",
+    steps: ["No wetlands", "Flood zone acceptable", "Occupied / lived-on? → nurture track instead", "No scrub-jay / listed-species flag", "Pre-comped: sales in the last 1–3 years", "Not landlocked — legal access confirmed"],
+    branches: ["✅ Clean → Dispositions", "🌱 Issue → nurture", "❌ Dead"],
+    aiAssist: ["The 📦 packet pulls wetlands, flood zone, soils & species automatically from the APN"], aiAuto: [] },
+  { n: 2, title: "Offer packet — 3-5 minutes", dept: "Dispositions", owner: "Sharyn + Marie",
+    summary: "APNs in → branded diligence packet out. This is the thing buyers say yes to.",
+    steps: ["Deal on the board with ask + contract price", "APNs → 📦 Offering packet → Generate", "Fill the 🟡 county-call items (water/sewer/electric/setbacks)", "Approve — the approved version is what buyers get"],
+    aiAssist: [], aiAuto: ["Parcel, FEMA flood, wetlands, soils, elevation & maps pulled automatically", "Seller-call notes analyzed for utilities/improvements context"] },
+  { n: 3, title: "Active blast — vetted buyers", dept: "Dispositions", owner: "Sharyn + Marie",
+    summary: "The cascade works the ranked list for you — top 3 first, next 3 every ~3h until someone claims it.",
+    steps: ["🚀 Start auto-cascade on the deal card (heat-ranked)", "Call the Send-first tier top-down — don't wait for email", "Log every response in Sends & responses (offer $ / pass + reason)"],
+    branches: ["🎯 Claimed → Buyer Found", "Passes → next wave"],
+    aiAssist: ["🔥 heat badges show who actually replies fast"], aiAuto: ["Wave advance every ~3h, claim/pass links, team ping on claim"] },
+  { n: 4, title: "Active blast — LLCs & agents", dept: "Dispositions", owner: "Sharyn + Marie",
+    summary: "Beyond the vetted list: whoever bought land like this recently, plus the agents who move it.",
+    steps: ["Send to LLCs with recent land sales in the area", "Send to listing agents with new-construction listings", "Send to buyer agents with recent land sales", "📇 Touched on every contact — KPI credit + 3-day follow-up"],
+    aiAssist: ["🏘 Agents group on Vetted Buyers holds the imported agent list"], aiAuto: [] },
+  { n: 5, title: "Passive marketing — everywhere", dept: "Dispositions", owner: "Sharyn + Marie",
+    summary: "While the cascade runs, the listing works for you on every free channel.",
+    steps: ["Zillow / land pages (only if under contract)", "Craigslist", "Skool + paid communities", "Facebook Marketplace + land groups", "Property page on the website"],
+    aiAssist: [], aiAuto: [] },
+  { n: 6, title: "4pm daily dispo huddle", dept: "Dispositions", owner: "Viktoriia (overwatch)",
+    summary: "Daily accountability: every live deal races the 24-hour clock, nobody stalls silently.",
+    steps: ["Review each deal's ⏱ clock + 🚀 first-send time", "Work the 📞 Follow-ups due strip", "Read the 🚫 pass rollups — price cut or wider list?", "Pull fresh buyer-agent lists + seller leads for tomorrow"],
+    aiAssist: ["Kanban board = the huddle agenda, top to bottom"], aiAuto: [] },
+];
+
 type Process = { key: string; name: string; emoji: string; blurb: string; phases: Phase[] };
 const PROCESSES: Process[] = [
+  { key: "landdispo", name: "LAND Dispo — 24h Sale", emoji: "🏞️", blurb: "Jon's land SOP: Michelle screens it, Sharyn + Marie blitz it, Viktoriia overwatches. Goal: a buyer inside 24 hours.", phases: LAND_DISPO },
   { key: "standard", name: "Standard Closing", emoji: "✅", blurb: "Easy lead, no issues — fresh lead to recorded close, A→Z.", phases: STANDARD },
   { key: "rejected", name: "Rejected → List / Refer", emoji: "🏷️", blurb: "Seller rejected every offer → Ethan lists it; if he can't, he refers it out.", phases: REJECTED },
   { key: "cashkeys", name: "Cash for Keys", emoji: "🔑", blurb: "Occupied property — negotiate a clean, voluntary tenant move-out.", phases: CASHKEYS },
@@ -206,7 +239,7 @@ const STORE_KEY = "fo_process_checks";
 // `allowedDepts` scopes the whole map to a subset of departments — onboarding hires
 // only see the steps for their own lane (e.g. Acquisitions), never the full pipeline.
 export default function ProcessMap({ allowedDepts = null }: { allowedDepts?: string[] | null } = {}) {
-  const [procKey, setProcKey] = useState("standard");
+  const [procKey, setProcKey] = useState("landdispo"); // land is the business now — lead with Jon's land SOP
   const [sel, setSel] = useState(1);
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [checks, setChecks] = useState<Record<string, boolean>>({});

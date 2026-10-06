@@ -79,7 +79,8 @@ export async function sendRound(dealId: string): Promise<{ sent: number; done: b
   for (const m of next) {
     const claim = `${APP_URL}/api/cascade?d=${dealId}&b=${m.id}&a=claim&s=${sign(dealId, m.id, "claim")}`;
     const pass = `${APP_URL}/api/cascade?d=${dealId}&b=${m.id}&a=pass&s=${sign(dealId, m.id, "pass")}`;
-    await sendEmailTo([m.email], `Off-market deal — ${deal.address}`, offerHtml(deal, m.name, claim, pass));
+    // reply-to Jon's inbox so an interested buyer's reply reaches a human, not the robot sender
+    await sendEmailTo([m.email], `Off-market deal — ${deal.address}`, offerHtml(deal, m.name, claim, pass), undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com");
     dc.sent[m.id] = "sent";
     // Phase 7: every send is a DealSend row — the buyer's track record builds itself.
     await logDealSend({ dealId, buyerId: m.id, channel: "email", wave: dc.round + 1, floorPrice: deal.contractPrice, askPrice: deal.askingPrice, actor: "cascade" }).catch(() => {});

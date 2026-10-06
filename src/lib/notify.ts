@@ -139,6 +139,7 @@ export async function sendEmailTo(
   subject: string,
   html: string,
   cfg?: ChannelConfig,
+  replyTo?: string,
 ): Promise<boolean> {
   const c = cfg ?? (await getChannelConfig());
   if (!c.resendKey || to.length === 0 || !c.emailFrom) {
@@ -149,7 +150,7 @@ export async function sendEmailTo(
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${c.resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: c.emailFrom, to, subject, html }),
+      body: JSON.stringify({ from: c.emailFrom, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
     });
     if (!res.ok) { console.error("[notify] Email-to failed:", res.status, await res.text()); return false; }
     return true;

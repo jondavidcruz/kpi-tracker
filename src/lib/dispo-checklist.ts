@@ -14,7 +14,9 @@ export const DISPO_STEPS: DispoStep[] = [
   { key: "cascade", phase: "🚀 Day 0 — launch", label: "Run the Buyer Cascade", hint: "Vetted Buyers → 🎯 Cascade: type this address — call the Send-first tier top-down." },
   { key: "email", phase: "🚀 Day 0 — launch", label: "Email blast buyers", hint: "🚀 Start auto-cascade on this card — it emails the top 3, then the next 3 every ~3h." },
   { key: "text", phase: "🚀 Day 0 — launch", label: "Text blast buyers", hint: "Direct REI buyer campaign (Deal Blast) — replies land on the dashboard pulse." },
+  { key: "llcagents", phase: "🚀 Day 0 — launch", label: "Send to LLCs & agents", hint: "LLCs with recent land buys in the area + listing agents (new construction) + buyer agents (land sales) — the 🏘 Agents group." },
   // ── Day 1–3 — work it ──
+  { key: "passive", phase: "📞 Day 1–3 — work it", label: "Passive channels posted", hint: "Craigslist · FB Marketplace + land groups · Skool + paid communities · Zillow/land pages (only if under contract)." },
   { key: "coldcall", phase: "📞 Day 1–3 — work it", label: "Cold-call the top 10 ranked buyers", hint: "📇 Log each touch — it counts toward your KPIs and the buyer's track record." },
   { key: "skiptrace", phase: "📞 Day 1–3 — work it", label: "Skip-trace unresponsive priority buyers", hint: "Skipgenie the Send-first buyers who haven't picked up — new numbers, fresh dials." },
   { key: "outcomes", phase: "📞 Day 1–3 — work it", label: "Log every response in Sends & responses", hint: "Offers + passes (with reasons) — this builds the lowball/tire-kicker intel." },

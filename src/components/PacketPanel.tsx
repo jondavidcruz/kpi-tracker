@@ -21,7 +21,7 @@ const MANUAL: Array<[string, string]> = [
 
 export default function PacketPanel({ dealId, packets, canApprove }: { dealId: string; packets: PacketRow[]; canApprove: boolean }) {
   const [pending, start] = useTransition();
-  const [result, setResult] = useState<{ ok: boolean; error?: string; version?: number; url?: string; htmlUrl?: string; warnings?: string[]; changed?: string[] } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; error?: string; version?: number; url?: string; htmlUrl?: string; packetId?: string; warnings?: string[]; changed?: string[] } | null>(null);
   const [showManual, setShowManual] = useState(false);
 
   const generate = (fd: FormData) => {
@@ -68,7 +68,7 @@ export default function PacketPanel({ dealId, packets, canApprove }: { dealId: s
               <div className="font-bold text-emerald-800">✅ Draft v{result.version} generated</div>
               <div className="flex flex-wrap gap-2">
                 {result.url && <a href={result.url} target="_blank" className="rounded-md bg-emerald-600 px-2 py-1 font-bold text-white">⬇ PDF</a>}
-                {result.htmlUrl && <a href={result.htmlUrl} target="_blank" className="rounded-md bg-slate-700 px-2 py-1 font-bold text-white">🖨 Print view</a>}
+                {result.packetId && <a href={`/api/packet/view/${result.packetId}`} target="_blank" className="rounded-md bg-slate-700 px-2 py-1 font-bold text-white">🖨 View / print</a>}
               </div>
               {!!result.changed?.length && <div className="text-emerald-700">Changed vs v{(result.version ?? 1) - 1}: {result.changed.join(" · ")}</div>}
               {!!result.warnings?.length && (
@@ -91,7 +91,7 @@ export default function PacketPanel({ dealId, packets, canApprove }: { dealId: s
               {!!pk.toVerify?.length && <span className="text-amber-600">🟡 {pk.toVerify.join(" · ")}</span>}
               <span className="ml-auto flex items-center gap-1.5">
                 {pk.url && <a href={pk.url} target="_blank" className="rounded-md bg-slate-100 px-2 py-0.5 font-bold text-slate-600 hover:bg-slate-200">PDF</a>}
-                {pk.htmlUrl && <a href={pk.htmlUrl} target="_blank" className="rounded-md bg-slate-100 px-2 py-0.5 font-bold text-slate-600 hover:bg-slate-200">HTML</a>}
+                <a href={`/api/packet/view/${pk.id}`} target="_blank" className="rounded-md bg-slate-100 px-2 py-0.5 font-bold text-slate-600 hover:bg-slate-200">🖨 View / print</a>
                 {pk.url && <button onClick={() => navigator.clipboard.writeText(pk.url).catch(() => {})} className="rounded-md bg-slate-100 px-2 py-0.5 font-bold text-slate-600 hover:bg-slate-200">📋 link</button>}
                 {canApprove && !pk.approvedAt && (
                   <form action={approvePacketAction}><input type="hidden" name="packetId" value={pk.id} />
