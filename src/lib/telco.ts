@@ -47,6 +47,35 @@ async function fetchJson(url: string, init: RequestInit, timeoutMs = 8000): Prom
 }
 
 /** Twilio: account status + incoming number count. Basic auth (SID:AuthToken). */
+/** Where do the numbers actually live? Lists this account's subaccounts and
+ *  counts phone numbers in each (master creds can read subaccount resources).
+ *  Built 2026-10-06: Jon's main SID shows 0 numbers — GHL very likely
+ *  provisioned them in a subaccount, or in LeadConnector's own Twilio. */
+export async function twilioNumberHunt(): Promise<{ account: string; numbers: number; subaccounts: Array<{ name: string; sidTail: string; status: string; numbers: number }> } | { error: string }> {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  if (!sid || !token) return { error: "credentials not set" };
+  const auth = "Basic " + Buffer.from(`${sid}:${token}`).toString("base64");
+  const countNumbers = async (acctSid: string): Promise<number> => {
+    const r = await fetchJson(`https://api.twilio.com/2010-04-01/Accounts/${acctSid}/IncomingPhoneNumbers.json?PageSize=400`, { headers: { Authorization: auth } });
+    if (!r.ok) return -1;
+    const j = r.json as { incoming_phone_numbers?: unknown[]; total?: number };
+    return typeof j.total === "number" ? j.total : (j.incoming_phone_numbers?.length ?? 0);
+  };
+  try {
+    const mine = await countNumbers(sid);
+    const list = await fetchJson(`https://api.twilio.com/2010-04-01/Accounts.json?PageSize=50`, { headers: { Authorization: auth } });
+    const subs: Array<{ name: string; sidTail: string; status: string; numbers: number }> = [];
+    if (list.ok) {
+      const rows = ((list.json as { accounts?: Array<{ sid: string; friendly_name?: string; status?: string }> }).accounts ?? []).filter((a) => a.sid !== sid);
+      for (const a of rows.slice(0, 20)) {
+        subs.push({ name: a.friendly_name ?? "(unnamed)", sidTail: "…" + a.sid.slice(-6), status: a.status ?? "?", numbers: await countNumbers(a.sid) });
+      }
+    }
+    return { account: `this SID: ${mine} numbers`, numbers: mine, subaccounts: subs };
+  } catch (e) { return { error: String(e).slice(0, 160) }; }
+}
+
 export async function twilioHealth(): Promise<LineHealth> {
   const now = new Date().toISOString();
   const sid = process.env.TWILIO_ACCOUNT_SID;

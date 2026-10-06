@@ -236,6 +236,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, results });
   }
 
+  // Twilio number hunt — which (sub)account actually owns the phone numbers.
+  if (url.searchParams.get("twiliohunt") === "1") {
+    const { twilioNumberHunt } = await import("@/lib/telco");
+    return NextResponse.json({ ok: true, hunt: await twilioNumberHunt() });
+  }
+
   // Scrub a name from the Hall of Fame (WeeklyAward stores plain names, so
   // erased people lingered there). ?hof=1&name=Austin
   if (url.searchParams.get("hof") === "1") {
