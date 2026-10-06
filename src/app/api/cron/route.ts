@@ -268,6 +268,78 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, results });
   }
 
+  // One-time import of the dispo follow-up Excel (Agents & Buyers + Developer
+  // Lead Feedback sheets, parsed 2026-10-06). Dry-run by default; &commit=1
+  // writes. Dedupes against existing buyers by email → phone → name.
+  if (url.searchParams.get("dispoexcel") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const data = (await import("@/lib/dispo-excel-import.json")).default as {
+      contacts: Array<{ name: string; phone: string; email: string; status: string; feedback: string; followupStatus: string; results: string; rep: string; date: string }>;
+      feedback: Array<{ seller: string; address: string; ask: string; developer: string; feedback: string }>;
+    };
+    const existing = await db.marketContact.findMany({ select: { id: true, name: true, email: true, phone: true } });
+    const digits = (x: string) => x.replace(/\D/g, "");
+    const norm = (x: string) => x.trim().toLowerCase();
+    const byEmail = new Map(existing.filter((e) => e.email).map((e) => [norm(e.email), e]));
+    const byPhone = new Map(existing.filter((e) => digits(e.phone).length >= 10) .map((e) => [digits(e.phone).slice(-10), e]));
+    const byName = new Map(existing.map((e) => [norm(e.name), e]));
+    const typeMap: Record<string, string> = { Developer: "developer", Agent: "agent", "JV Partner": "jv_partner" };
+    const isIntent = (t: string) => /no answer|call |call$|follow|tomorrow|monday|thursday|sleeping/i.test(t);
+    const report = { created: [] as string[], matched: [] as string[], touches: 0, dealSends: 0, skipped: [] as string[] };
+    for (const c of data.contacts) {
+      if (!c.name || !typeMap[c.status]) { if (c.name) report.skipped.push(`${c.name} (status "${c.status}")`); continue; }
+      const match = (c.email && byEmail.get(norm(c.email))) || (digits(c.phone).length >= 10 && byPhone.get(digits(c.phone).slice(-10))) || byName.get(norm(c.name));
+      const intent = isIntent(c.followupStatus);
+      const nextFollowUp = intent ? new Date(Date.parse((c.date || new Date().toISOString().slice(0, 10)) + "T12:00:00Z") + 3 * 86400000).toISOString().slice(0, 10) : "";
+      const notes = [c.feedback, intent ? `follow-up: ${c.followupStatus}` : "", c.results].filter(Boolean).join(" · ");
+      if (match) {
+        report.matched.push(c.name);
+        if (commit) {
+          const { updateBuyer, logTouch } = await import("@/lib/buyers/write");
+          await updateBuyer(match.id, { ...(nextFollowUp ? { nextFollowUp } : {}), lastContacted: c.date || undefined }, c.rep || "excel-import", { action: "excel_import" });
+          if (notes) { await logTouch(match.id, { channel: "call", note: notes.slice(0, 300) }, c.rep || "excel-import"); report.touches++; }
+        }
+      } else {
+        report.created.push(`${c.name} (${typeMap[c.status]})`);
+        if (commit) {
+          const row = await db.marketContact.create({ data: {
+            name: c.name, phone: c.phone, email: c.email, type: typeMap[c.status],
+            vetStage: "vetted", vetStatus: c.followupStatus && !intent ? "" : "contacted",
+            market: !intent && c.followupStatus ? c.followupStatus.slice(0, 80) : "",
+            lastContacted: c.date || "", nextFollowUp, outreachLog: notes ? `${c.date || ""}: ${notes}`.slice(0, 1000) : "",
+          } });
+          if (notes) { const { logTouch } = await import("@/lib/buyers/write"); await logTouch(row.id, { channel: "call", note: notes.slice(0, 300) }, c.rep || "excel-import"); report.touches++; }
+        }
+      }
+    }
+    // Developer deal feedback → touches on the matched developer (+ DealSend when the deal exists)
+    const buyers2 = await db.marketContact.findMany({ select: { id: true, name: true } });
+    const byName2 = new Map(buyers2.map((b) => [norm(b.name), b]));
+    const deals = await db.deal.findMany({ select: { id: true, address: true, contractPrice: true } });
+    for (const f of data.feedback) {
+      if (!f.developer) continue;
+      const dev = byName2.get(norm(f.developer)) ?? [...byName2.entries()].find(([n]) => n.includes(norm(f.developer)) || norm(f.developer).includes(n))?.[1];
+      if (!dev) { report.skipped.push(`feedback: no buyer "${f.developer}"`); continue; }
+      const note = `${f.address}${f.ask ? ` (ask ${f.ask.slice(0, 40)})` : ""} — ${f.feedback}`.slice(0, 400);
+      const streetNum = (f.address.match(/\d{3,}/) ?? [""])[0];
+      const deal = streetNum ? deals.find((d) => d.address.includes(streetNum)) : undefined;
+      if (commit) {
+        const { logTouch } = await import("@/lib/buyers/write");
+        await logTouch(dev.id, { channel: "email", outcome: /not interested|no offer|pass/i.test(f.feedback) ? "pass" : "replied", note }, "excel-import");
+        report.touches++;
+        if (deal) {
+          const { logDealSend, setDealSendOutcome } = await import("@/lib/buyers/feedback");
+          const sendId = await logDealSend({ dealId: deal.id, buyerId: dev.id, channel: "email", floorPrice: deal.contractPrice, actor: "excel-import" });
+          const pass = /not interested|no offer|pass|full of/i.test(f.feedback);
+          const reason = /road|utilit|electric|flood|scrub|area|undevelop/i.test(f.feedback) ? "area" : /price|offer|\$/.test(f.feedback) ? "price" : "other";
+          await setDealSendOutcome(sendId, { outcome: pass ? "pass" : "", passReason: pass ? reason : "", note: f.feedback.slice(0, 300) }, "excel-import");
+          report.dealSends++;
+        }
+      } else if (deal) report.dealSends++;
+    }
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", wouldCreate: report.created.length, wouldMatch: report.matched.length, touches: report.touches, dealSends: report.dealSends, created: report.created, matched: report.matched, skipped: report.skipped });
+  }
+
   // Twilio number hunt — which (sub)account actually owns the phone numbers.
   if (url.searchParams.get("twiliohunt") === "1") {
     const { twilioNumberHunt } = await import("@/lib/telco");
