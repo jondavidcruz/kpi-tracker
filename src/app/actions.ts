@@ -2513,20 +2513,16 @@ export async function logBuyerOutreach(formData: FormData) {
   revalidatePath("/marketing");
 }
 
-/** RentCast pull — HARD-restricted to Dispositions (Sharyn & Marie): the final
- *  value check on land/other property. Acquisitions underwrites by hand (Jon:
- *  "they make offers daily and I don't want them to become lazy"). Every call
- *  burns one of the 50/month — the cap lives in lib/rentcast. */
+/** RentCast pull — open to the WHOLE team (Jon 2026-10-06: RentCast is the
+ *  comps engine, DealMachine credits are saved for pulling leads). Every call
+ *  still burns one of the hard-capped 50/month — lib/rentcast refuses #51. */
 export async function pullCompsAction(formData: FormData): Promise<{
   ok: boolean; error?: string; value?: number | null; low?: number | null; high?: number | null;
   comps?: Array<{ address: string; price: number | null; acres: number | null; dom: number | null }>;
   used?: number; cap?: number;
 }> {
   const me = await getCurrentUser();
-  const first = (me?.name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-  if (first !== "sharyn" && first !== "marie") {
-    return { ok: false, error: "RentCast pulls are reserved for Dispositions (Sharyn & Marie) — acquisitions underwrites by hand." };
-  }
+  if (!me) return { ok: false, error: "sign in first" };
   const address = String(formData.get("address") ?? "").trim();
   if (!address) return { ok: false, error: "Enter the subject address first." };
   const land = String(formData.get("land") ?? "") === "1";
