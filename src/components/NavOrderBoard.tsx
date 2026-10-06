@@ -86,13 +86,19 @@ export default function NavOrderBoard({ groups: initial }: { groups: NavGroupDef
         {groups.map((g) => (
           <div
             key={g.group}
-            onDragOver={(e) => { if (dragGroup || (dragItem && dragItem.group !== g.group)) { e.preventDefault(); setOverKey(`g:${g.group}`); } }}
+            onDragOver={(e) => { if (dragGroup || (dragItem && dragItem.group !== g.group)) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverKey(`g:${g.group}`); } }}
             onDrop={(e) => { e.preventDefault(); if (dragGroup) dropOnGroup(g.group); else if (dragItem && dragItem.group !== g.group) moveAcross(g.group); setOverKey(null); }}
             className={`rounded-2xl bg-white p-3.5 shadow-sm ring-1 transition ${overKey === `g:${g.group}` && ((dragGroup && dragGroup !== g.group) || (dragItem && dragItem.group !== g.group)) ? "ring-2 ring-indigo-400" : "ring-slate-200"} ${dragGroup === g.group ? "opacity-60" : ""}`}
           >
             <div
               draggable
-              onDragStart={() => setDragGroup(g.group)}
+              onDragStart={(e) => {
+                // Safari/Firefox abort a drag with no payload; Chrome aborts if
+                // the node re-renders during dragstart — so set data now, state later.
+                e.dataTransfer.setData("text/plain", g.group);
+                e.dataTransfer.effectAllowed = "move";
+                setTimeout(() => setDragGroup(g.group), 0);
+              }}
               onDragEnd={() => { setDragGroup(null); setOverKey(null); }}
               className="mb-2 flex cursor-grab items-center gap-2 active:cursor-grabbing"
               title="Drag to move this whole group"
@@ -105,9 +111,14 @@ export default function NavOrderBoard({ groups: initial }: { groups: NavGroupDef
                 <div
                   key={it.href}
                   draggable
-                  onDragStart={(e) => { e.stopPropagation(); setDragItem({ group: g.group, href: it.href }); }}
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    e.dataTransfer.setData("text/plain", it.href);
+                    e.dataTransfer.effectAllowed = "move";
+                    setTimeout(() => setDragItem({ group: g.group, href: it.href }), 0);
+                  }}
                   onDragEnd={() => { setDragItem(null); setOverKey(null); }}
-                  onDragOver={(e) => { if (dragItem) { e.preventDefault(); e.stopPropagation(); setOverKey(`i:${it.href}`); } }}
+                  onDragOver={(e) => { if (dragItem) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; setOverKey(`i:${it.href}`); } }}
                   onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dropOnItem(g.group, it.href); setOverKey(null); }}
                   className={`flex cursor-grab items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 transition active:cursor-grabbing ${
                     overKey === `i:${it.href}` && dragItem && dragItem.href !== it.href ? "bg-indigo-50 ring-1 ring-indigo-300" : "bg-slate-50"
