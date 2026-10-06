@@ -2064,6 +2064,19 @@ export async function saveDeal(formData: FormData) {
   redirect("/deals?saved=1");
 }
 
+/** Kanban drag: move a deal to a new pipeline stage. */
+export async function setDealStatusAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "");
+  const ALLOWED = ["under_contract", "marketing", "buyer_found", "in_escrow", "closed", "dead"];
+  if (!id || !ALLOWED.includes(status)) return;
+  await db.deal.update({ where: { id }, data: { status } });
+  revalidatePath("/deals");
+  revalidatePath("/report");
+}
+
 /** Archive a deal (soft-delete: hides from board, keeps history). */
 export async function archiveDeal(formData: FormData) {
   const id = String(formData.get("id") ?? "");

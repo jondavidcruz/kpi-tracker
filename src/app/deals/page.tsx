@@ -10,6 +10,7 @@ import { todayStr } from "@/lib/date";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { Card, SectionTitle } from "@/components/ui";
 import HubTabs from "@/components/HubTabs";
+import DealKanban, { type KanbanDeal } from "@/components/DealKanban";
 import { matchBuyersForDeal, type BuyerMatch } from "@/lib/buyer-match";
 import type { Deal } from "@prisma/client";
 
@@ -105,8 +106,48 @@ export default async function DealsPage({
   // include any names already on deals (e.g. legacy "Sharyn") so they still show.
   const repNames = Array.from(new Set([...dispoReps, ...deals.map((d) => d.assignedTo).filter(Boolean)]));
 
-  const byStatus = STATUSES.map((s) => ({ ...s, count: deals.filter((d) => d.status === s.key).length }));
   const openCount = deals.filter((d) => !["dead", "closed"].includes(d.status)).length;
+
+  // 📞 Which deals is each follow-up contact assigned to? Their DealSends —
+  // what we sent them and what they offered (Jon 2026-10-06).
+  const fuSendRows = dueFollowUps.length
+    ? await db.dealSend.findMany({
+        where: { buyerId: { in: dueFollowUps.map((r) => r.id) } },
+        orderBy: { sentAt: "desc" },
+        select: { buyerId: true, dealId: true, outcome: true, offerAmount: true, passReason: true },
+      })
+    : [];
+  const fuDealIds = Array.from(new Set(fuSendRows.map((r) => r.dealId)));
+  const fuDealAddr = new Map(
+    (fuDealIds.length ? await db.deal.findMany({ where: { id: { in: fuDealIds } }, select: { id: true, address: true } }) : []).map((d) => [d.id, d.address] as const)
+  );
+  // latest send per (contact, deal) only
+  const fuSendsByContact = new Map<string, typeof fuSendRows>();
+  for (const r of fuSendRows) {
+    const arr = fuSendsByContact.get(r.buyerId) ?? [];
+    if (!arr.some((x) => x.dealId === r.dealId)) arr.push(r);
+    fuSendsByContact.set(r.buyerId, arr);
+  }
+  const money = (n: number | null | undefined) =>
+    n == null ? "" : n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M` : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`;
+
+  // Kanban cards: compact view of every deal, best buyer offer pulled from sends.
+  const kanbanDeals: KanbanDeal[] = deals.map((d) => {
+    const a = analyzeDeal(d, today);
+    const offers = (sendsByDeal.get(d.id) ?? []).map((s) => s.offerAmount).filter((n): n is number => n != null);
+    const price = d.askingPrice ?? d.contractPrice;
+    return {
+      id: d.id,
+      address: d.address,
+      status: d.status,
+      assignedTo: d.assignedTo,
+      buyerName: d.buyerName,
+      money: price != null ? `${money(price)}${d.askingPrice != null ? " asking" : " contract"}` : "",
+      topOffer: offers.length ? money(Math.max(...offers)) : "",
+      agingLabel: a.days != null && !["closed", "dead"].includes(d.status) ? `⏱ ${a.days}d on market` : "",
+      agingLevel: a.level,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -139,14 +180,7 @@ export default async function DealsPage({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-        {byStatus.map((s) => (
-          <Card key={s.key} className="p-3 text-center">
-            <div className={`mx-auto mb-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${s.cls}`}>{s.label}</div>
-            <div className="text-2xl font-extrabold tabular-nums text-slate-800">{s.count}</div>
-          </Card>
-        ))}
-      </div>
+      <DealKanban columns={STATUSES} deals={kanbanDeals} canMove={canClose} />
 
       {/* 📞 Follow-ups due — the retired Excel's job, on the page where deals live */}
       {dueFollowUps.length > 0 && (
@@ -157,20 +191,41 @@ export default async function DealsPage({
             <span className="text-[11px] text-slate-400">developers &amp; agents we sent deals to — 📇 Touched logs it to your KPIs and pushes 3 days</span>
           </div>
           <div className="space-y-1.5">
-            {dueFollowUps.map((r) => (
-              <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50/60 px-2.5 py-1.5 text-xs ring-1 ring-amber-100">
-                <span className="font-semibold text-slate-800">{r.name}</span>
-                <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">{r.type === "agent" ? "🏘 agent" : r.type === "developer" || r.category === "luxury" ? "🏗 developer" : "🔨 buyer"}</span>
-                {[r.phone, r.email].filter(Boolean).length > 0 && <span className="text-brand-navy">{[r.phone, r.email].filter(Boolean).join(" · ")}</span>}
-                {r.outreachLog && <span className="hidden max-w-xs truncate text-[11px] text-slate-400 lg:inline" title={r.outreachLog}>💬 {r.outreachLog.split("\n")[0].slice(0, 70)}</span>}
-                <span className={`ml-auto text-[10px] font-bold ${r.nextFollowUp < today ? "text-red-600" : "text-amber-600"}`}>{r.nextFollowUp < today ? `overdue ${r.nextFollowUp}` : "today"}</span>
-                <form action={logBuyerOutreach} className="flex items-center gap-1">
-                  <input type="hidden" name="id" value={r.id} />
-                  <input name="note" placeholder="what they said…" className="w-36 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
-                  <button className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-emerald-700">📇 Touched</button>
-                </form>
-              </div>
-            ))}
+            {dueFollowUps.map((r) => {
+              const theirSends = fuSendsByContact.get(r.id) ?? [];
+              return (
+                <div key={r.id} className="rounded-lg bg-amber-50/60 px-2.5 py-1.5 text-xs ring-1 ring-amber-100">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-slate-800">{r.name}</span>
+                    <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">{r.type === "agent" ? "🏘 agent" : r.type === "developer" || r.category === "luxury" ? "🏗 developer" : "🔨 buyer"}</span>
+                    {[r.phone, r.email].filter(Boolean).length > 0 && <span className="text-brand-navy">{[r.phone, r.email].filter(Boolean).join(" · ")}</span>}
+                    {r.outreachLog && <span className="hidden max-w-xs truncate text-[11px] text-slate-400 lg:inline" title={r.outreachLog}>💬 {r.outreachLog.split("\n")[0].slice(0, 70)}</span>}
+                    <span className={`ml-auto text-[10px] font-bold ${r.nextFollowUp < today ? "text-red-600" : "text-amber-600"}`}>{r.nextFollowUp < today ? `overdue ${r.nextFollowUp}` : "today"}</span>
+                    <form action={logBuyerOutreach} className="flex items-center gap-1">
+                      <input type="hidden" name="id" value={r.id} />
+                      <input name="note" placeholder="what they said…" className="w-36 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
+                      <button className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-emerald-700">📇 Touched</button>
+                    </form>
+                  </div>
+                  {theirSends.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1.5 pl-0.5">
+                      {theirSends.slice(0, 4).map((s) => (
+                        <span key={s.dealId} className="inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                          📦 {fuDealAddr.get(s.dealId) ?? "deal"}
+                          {s.offerAmount != null ? (
+                            <span className="font-bold text-emerald-700">💵 offered {money(s.offerAmount)}</span>
+                          ) : s.outcome === "pass" ? (
+                            <span className="font-bold text-red-500">passed{s.passReason ? ` (${s.passReason})` : ""}</span>
+                          ) : (
+                            <span className="text-slate-400">sent — no offer yet</span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}
@@ -203,8 +258,8 @@ export default async function DealsPage({
           <Card className="p-10 text-center text-slate-400">No deals yet. Add your first one above.</Card>
         )}
         {deals.map((d) => (
+          <div key={d.id} id={`deal-${d.id}`} className="scroll-mt-4">
           <DealCard
-            key={d.id}
             deal={d}
             today={today}
             repNames={repNames}
@@ -219,6 +274,7 @@ export default async function DealsPage({
             packets={packetsByDeal.get(d.id) ?? []}
             checklist={dispoChecklists[d.id] ?? {}}
           />
+          </div>
         ))}
       </div>
     </div>
