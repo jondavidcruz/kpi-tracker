@@ -392,6 +392,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", wouldCreate: report.created.length, wouldMatch: report.matched.length, touches: report.touches, dealSends: report.dealSends, newArchivedDeals: createdDealByAddr.size, dealLinks, created: report.created, matched: report.matched, skipped: report.skipped });
   }
 
+  // One-time: no mailers in this business (Jon 2026-10-07) — repoint the two
+  // mail KPIs at Direct REI email replies, per side. Keys normalized so the
+  // feed binds; names are what the tiles show.
+  if (url.searchParams.get("mailkpifix") === "1") {
+    const out: string[] = [];
+    const seller = await db.kpi.findFirst({ where: { name: { in: ["Mailers Sent", "Direct Mail Sent"] } } });
+    if (seller) { await db.kpi.update({ where: { id: seller.id }, data: { key: "seller_email_replies", name: "Seller Email Replies", emoji: "✉️", definition: "Sellers who replied by email — auto-fed from Direct REI email campaigns." } }); out.push(`${seller.key} → seller_email_replies`); }
+    const buyer = await db.kpi.findFirst({ where: { name: { in: ["Mail Responses", "Direct Mail Responses"] } } });
+    if (buyer) { await db.kpi.update({ where: { id: buyer.id }, data: { key: "buyer_email_replies", name: "Buyer Email Replies", emoji: "📨", definition: "Buyers who replied by email — auto-fed from Direct REI email campaigns." } }); out.push(`${buyer.key} → buyer_email_replies`); }
+    const team = await db.kpi.findMany({ where: { scope: "team" }, select: { key: true, name: true }, orderBy: { name: "asc" } });
+    return NextResponse.json({ ok: true, renamed: out, teamKpis: team });
+  }
+
   // Google Sheet hybrid sync — pull the girls' typed cells in, push fresh
   // truth out. Also runs 3×/day via cron (Jon 2026-10-07).
   if (url.searchParams.get("sheetsync") === "1") {

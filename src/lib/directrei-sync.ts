@@ -13,7 +13,7 @@ export type DreiReply = {
   name: string; campaign: string; channel: string; side: "seller" | "buyer" | "other";
   at: string; needsAttention: boolean; phone: string; email: string;
 };
-export type DreiSide = { newToday: number; new7d: number; repliesToday: number; replies7d: number; smsRepliesToday: number; smsReplies7d: number; emailReplies7d: number };
+export type DreiSide = { newToday: number; new7d: number; repliesToday: number; replies7d: number; smsRepliesToday: number; smsReplies7d: number; emailRepliesToday?: number; emailReplies7d: number };
 export type DreiFeed = {
   at: string;
   totalContacts: number;
@@ -43,7 +43,7 @@ function sideOf(campaignName: string, c: Contact): "seller" | "buyer" | "other" 
   return "other";
 }
 
-const empty = (): DreiSide => ({ newToday: 0, new7d: 0, repliesToday: 0, replies7d: 0, smsRepliesToday: 0, smsReplies7d: 0, emailReplies7d: 0 });
+const empty = (): DreiSide => ({ newToday: 0, new7d: 0, repliesToday: 0, replies7d: 0, smsRepliesToday: 0, smsReplies7d: 0, emailRepliesToday: 0, emailReplies7d: 0 });
 
 /** Pull + aggregate (up to ~4,000 contacts/run). Pure read on Direct REI. */
 export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> {
@@ -77,6 +77,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
         if (replyDay === todayYmd) {
           bucket.repliesToday++;
           if (/sms|text/i.test(camp?.channel ?? "")) { smsRepliesToday++; bucket.smsRepliesToday++; }
+          else if (/email/i.test(camp?.channel ?? "")) bucket.emailRepliesToday = (bucket.emailRepliesToday ?? 0) + 1;
         }
         if (replyDay >= weekAgo) {
           bucket.replies7d++;
@@ -122,16 +123,20 @@ export async function refreshDreiFeed(todayYmd: string): Promise<DreiFeed | null
   // Machine-fed team KPIs (Jon 2026-10-04): Seller/Buyer SMS replies from
   // Direct REI text campaigns. Manual entries for a day always win — we only
   // ever touch rows we created (enteredBy "crm").
-  const feedTeamKpi = async (key: string, value: number) => {
-    const kpi = await db.kpi.findUnique({ where: { key }, select: { id: true } });
+  const feedTeamKpi2 = async (keys: string[], name: string, value: number) => {
+    const kpi = await db.kpi.findFirst({ where: { OR: [{ key: { in: keys } }, { name }] }, select: { id: true } });
     if (!kpi) return;
     const existing = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: null, date: todayYmd } });
     if (existing) { if (existing.enteredBy === "crm") await db.entry.update({ where: { id: existing.id }, data: { value } }); }
     else if (value > 0) await db.entry.create({ data: { kpiId: kpi.id, userId: null, date: todayYmd, value, enteredBy: "crm" } });
   };
   try {
-    await feedTeamKpi("text_responses", feed.seller.smsRepliesToday); // Seller SMS Replies
-    await feedTeamKpi("buyer_sms_replies", feed.buyer.smsRepliesToday); // Buyer SMS Replies
+    // Jon 2026-10-07: the four Marketing-responses tiles all auto-pull from
+    // Direct REI. Resolve by key OR display name so renamed KPI rows still bind.
+    await feedTeamKpi2(["seller_sms_replies", "text_responses"], "Seller SMS Replies", feed.seller.smsRepliesToday);
+    await feedTeamKpi2(["buyer_sms_replies"], "Buyer SMS Replies", feed.buyer.smsRepliesToday);
+    await feedTeamKpi2(["seller_email_replies"], "Seller Email Replies", feed.seller.emailRepliesToday ?? 0);
+    await feedTeamKpi2(["buyer_email_replies"], "Buyer Email Replies", feed.buyer.emailRepliesToday ?? 0);
   } catch { /* KPI feed is additive */ }
   return feed;
 }

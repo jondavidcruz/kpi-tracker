@@ -224,6 +224,10 @@ export async function writeActivity(date: string, callAgg: Record<string, Agg>, 
       update: { calls, texts, emails, stageMoves, total },
       create: { userId: uid, date, calls, texts, emails, stageMoves, total },
     });
+    // A recreated/duplicate user account with the same first name leaves a
+    // second row for the day (Sharyn showed twice, 2026-10-07) — remove it.
+    const staleIds = users.filter((u) => u.id !== uid && u.name.trim().split(/\s+/)[0].toLowerCase() === first).map((u) => u.id);
+    if (staleIds.length) await db.crmActivity.deleteMany({ where: { date, userId: { in: staleIds } } });
     totals[first] = total;
   }
   return totals;

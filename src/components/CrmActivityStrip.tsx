@@ -26,7 +26,13 @@ export default async function CrmActivityStrip() {
     // Jon 2026-10-04: the strip is for coaching the PH team — hide Jon (and
     // anyone else) so only Michelle, Sharyn, and Marie show.
     .filter((r) => ["michelle", "sharyn", "marie"].includes(r.name.trim().split(/\s+/)[0]?.toLowerCase() ?? ""))
-    .sort((a, b) => b.total - a.total);
+    .sort((a, b) => b.total - a.total)
+    // One row per person: a recreated user account can leave a stale duplicate
+    // row for the same day (Jon 2026-10-07: "why is Sharyn in here twice?").
+    .filter((r, _, arr) => {
+      const first = r.name.trim().split(/\s+/)[0].toLowerCase();
+      return r === arr.find((x) => x.name.trim().split(/\s+/)[0].toLowerCase() === first);
+    });
   const top = Math.max(...ranked.map((r) => r.total), 1);
 
   return (
