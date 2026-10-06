@@ -21,8 +21,8 @@ export interface LineHealth {
 
 // Twilio powers the ACQUISITIONS CRM (calls / dialer); Telnyx powers the MARKETING
 // CRM (outbound SMS / dialer / email / mail campaigns).
-export const TWILIO_ROLE = "Acquisitions CRM · calls & dialer";
-export const TELNYX_ROLE = "Marketing CRM · SMS, dialer & mail";
+export const TWILIO_ROLE = "REI Reply / GHL lines — acquisitions + dispo operations";
+export const TELNYX_ROLE = "Direct REI outbound marketing lines (their API has no phone endpoints — carrier-side monitoring here is the source of truth)";
 
 /** Which telco credentials the running server can actually see (never the values). */
 export function telcoEnvStatus(): { twilioSid: boolean; twilioToken: boolean; telnyx: boolean } {
