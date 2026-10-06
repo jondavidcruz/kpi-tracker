@@ -312,32 +312,84 @@ export async function GET(request: Request) {
         }
       }
     }
-    // Developer deal feedback → touches on the matched developer (+ DealSend when the deal exists)
+    // Developer deal feedback → touches + a DealSend per LAND deal each
+    // developer was sent (Jon 2026-10-06: the girls must see which developer
+    // got which deal). Historical deals missing from the board are created as
+    // archived (dead + inactive) anchor rows — invisible everywhere except as
+    // the deal the send points at.
     const buyers2 = await db.marketContact.findMany({ select: { id: true, name: true } });
     const byName2 = new Map(buyers2.map((b) => [norm(b.name), b]));
     const deals = await db.deal.findMany({ select: { id: true, address: true, contractPrice: true } });
+    // tiny edit-distance so "Adam Homes" still finds "Adams Homes"
+    const lev1 = (a: string, b: string) => {
+      if (a === b) return true;
+      if (Math.abs(a.length - b.length) > 1) return false;
+      for (let i = 0; i < Math.min(a.length, b.length); i++) {
+        if (a[i] !== b[i]) return a.slice(i + 1) === b.slice(i + 1) || a.slice(i) === b.slice(i + 1) || a.slice(i + 1) === b.slice(i);
+      }
+      return true;
+    };
+    const squash = (x: string) => norm(x).replace(/[^a-z0-9]/g, "");
+    const findDev = (name: string) => {
+      const first = norm(name.split("\n")[0]);
+      if (!first) return undefined;
+      return (
+        byName2.get(first) ??
+        [...byName2.entries()].find(([n]) => n.includes(first) || first.includes(n))?.[1] ??
+        [...byName2.entries()].find(([n]) => lev1(squash(n), squash(first)))?.[1]
+      );
+    };
+    // deal matcher: street number, else distinctive street-name token
+    const streetToken = (addr: string) => (addr.toLowerCase().match(/[a-z]{5,}/g) ?? []).filter((t) => !["north", "south", "street", "drive", "circle", "avenue", "court", "place", "charlotte", "springs", "coral", "beach", "valley", "county"].includes(t))[0] ?? "";
+    const matchDeal = (addr: string) => {
+      const num = (addr.match(/\d{3,}/) ?? [""])[0];
+      if (num) { const d = deals.find((d) => d.address.includes(num)); if (d) return d; }
+      const tok = streetToken(addr);
+      return tok ? deals.find((d) => d.address.toLowerCase().includes(tok)) : undefined;
+    };
+    const createdDealByAddr = new Map<string, { id: string; address: string; contractPrice: number | null }>();
+    const dealLinks: string[] = [];
     for (const f of data.feedback) {
       if (!f.developer) continue;
-      const dev = byName2.get(norm(f.developer)) ?? [...byName2.entries()].find(([n]) => n.includes(norm(f.developer)) || norm(f.developer).includes(n))?.[1];
-      if (!dev) { report.skipped.push(`feedback: no buyer "${f.developer}"`); continue; }
+      const dev = findDev(f.developer);
+      if (!dev) { report.skipped.push(`feedback: no buyer "${f.developer.split("\n")[0]}"`); continue; }
       const note = `${f.address}${f.ask ? ` (ask ${f.ask.slice(0, 40)})` : ""} — ${f.feedback}`.slice(0, 400);
-      const streetNum = (f.address.match(/\d{3,}/) ?? [""])[0];
-      const deal = streetNum ? deals.find((d) => d.address.includes(streetNum)) : undefined;
+      const pass = /not interested|no offer|pass|full of/i.test(f.feedback);
+      const reason = /road|utilit|electric|flood|scrub|area|undevelop/i.test(f.feedback) ? "area" : /price|offer|\$/.test(f.feedback) ? "price" : "other";
       if (commit) {
         const { logTouch } = await import("@/lib/buyers/write");
-        await logTouch(dev.id, { channel: "email", outcome: /not interested|no offer|pass/i.test(f.feedback) ? "pass" : "replied", note }, "excel-import");
+        await logTouch(dev.id, { channel: "email", outcome: pass ? "pass" : "replied", note }, "excel-import");
         report.touches++;
-        if (deal) {
+      }
+      // one DealSend per address line ("addr - Reason: Flood Zone" lines included)
+      const lines = f.address.split(/\n/).map((l) => l.replace(/\s*-\s*Reason:.*$/i, "").trim()).filter((l) => l.length > 5);
+      for (const line of lines) {
+        let deal = matchDeal(line) ?? createdDealByAddr.get(squash(line));
+        let createdHere = false;
+        if (!deal) {
+          createdHere = true;
+          const askNum = Number((f.ask ?? "").replace(/[^0-9.]/g, "")) || null;
+          if (commit) {
+            const row = await db.deal.create({ data: { address: line, status: "dead", active: false, askingPrice: askNum, notes: "Imported from dispo follow-up Excel — historical land-deal send record.", source: "excel-import" } });
+            deal = { id: row.id, address: row.address, contractPrice: null };
+          } else {
+            deal = { id: "would-create", address: line, contractPrice: null };
+          }
+          createdDealByAddr.set(squash(line), deal);
+        }
+        dealLinks.push(`${dev.name} ← ${deal.address}${createdHere ? " (new archived deal)" : ""}${pass ? ` [pass:${reason}]` : ""}`);
+        if (commit && deal.id !== "would-create") {
+          // idempotent: never duplicate an excel-import send for the same pair
+          const dup = await db.dealSend.findFirst({ where: { dealId: deal.id, buyerId: dev.id, actor: "excel-import" }, select: { id: true } });
+          if (dup) continue;
           const { logDealSend, setDealSendOutcome } = await import("@/lib/buyers/feedback");
           const sendId = await logDealSend({ dealId: deal.id, buyerId: dev.id, channel: "email", floorPrice: deal.contractPrice, actor: "excel-import" });
-          const pass = /not interested|no offer|pass|full of/i.test(f.feedback);
-          const reason = /road|utilit|electric|flood|scrub|area|undevelop/i.test(f.feedback) ? "area" : /price|offer|\$/.test(f.feedback) ? "price" : "other";
           await setDealSendOutcome(sendId, { outcome: pass ? "pass" : "", passReason: pass ? reason : "", note: f.feedback.slice(0, 300) }, "excel-import");
-          report.dealSends++;
         }
-      } else if (deal) report.dealSends++;
+        report.dealSends++;
+      }
     }
-    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", wouldCreate: report.created.length, wouldMatch: report.matched.length, touches: report.touches, dealSends: report.dealSends, created: report.created, matched: report.matched, skipped: report.skipped });
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", wouldCreate: report.created.length, wouldMatch: report.matched.length, touches: report.touches, dealSends: report.dealSends, newArchivedDeals: createdDealByAddr.size, dealLinks, created: report.created, matched: report.matched, skipped: report.skipped });
   }
 
   // Twilio number hunt — which (sub)account actually owns the phone numbers.
