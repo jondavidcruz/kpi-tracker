@@ -1,4 +1,4 @@
-import { toggleDispoStepAction, archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction } from "@/app/actions";
+import { logBuyerOutreach, toggleDispoStepAction, archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction } from "@/app/actions";
 import { readAuto, type DealCascade } from "@/lib/cascade";
 import PacketPanel, { type PacketRow } from "@/components/PacketPanel";
 import { DISPO_STEPS, readDispoChecklists } from "@/lib/dispo-checklist";
@@ -70,6 +70,16 @@ export default async function DealsPage({
     packetsByDeal.set(r.dealId, arr);
   }
   const dispoChecklists = mktAccess ? await readDispoChecklists() : {};
+  // 📞 Follow-ups due — developers/agents we sent deals to (moved here from
+  // Vetted Buyers, Jon 2026-10-06: the follow-up IS about the deals they sent).
+  const dueFollowUps = mktAccess
+    ? await db.marketContact.findMany({
+        where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, nextFollowUp: { not: "", lte: today } },
+        orderBy: { nextFollowUp: "asc" },
+        take: 30,
+        select: { id: true, name: true, type: true, phone: true, email: true, nextFollowUp: true, outreachLog: true, category: true },
+      })
+    : [];
   const sendsByDeal = new Map<string, typeof sendRows>();
   for (const r of sendRows) {
     const arr = sendsByDeal.get(r.dealId) ?? [];
@@ -137,6 +147,33 @@ export default async function DealsPage({
           </Card>
         ))}
       </div>
+
+      {/* 📞 Follow-ups due — the retired Excel's job, on the page where deals live */}
+      {dueFollowUps.length > 0 && (
+        <Card className="border-l-4 border-amber-400 p-4">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-slate-800">📞 Follow-ups due</span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">{dueFollowUps.length} to work today</span>
+            <span className="text-[11px] text-slate-400">developers &amp; agents we sent deals to — 📇 Touched logs it to your KPIs and pushes 3 days</span>
+          </div>
+          <div className="space-y-1.5">
+            {dueFollowUps.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50/60 px-2.5 py-1.5 text-xs ring-1 ring-amber-100">
+                <span className="font-semibold text-slate-800">{r.name}</span>
+                <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">{r.type === "agent" ? "🏘 agent" : r.type === "developer" || r.category === "luxury" ? "🏗 developer" : "🔨 buyer"}</span>
+                {[r.phone, r.email].filter(Boolean).length > 0 && <span className="text-brand-navy">{[r.phone, r.email].filter(Boolean).join(" · ")}</span>}
+                {r.outreachLog && <span className="hidden max-w-xs truncate text-[11px] text-slate-400 lg:inline" title={r.outreachLog}>💬 {r.outreachLog.split("\n")[0].slice(0, 70)}</span>}
+                <span className={`ml-auto text-[10px] font-bold ${r.nextFollowUp < today ? "text-red-600" : "text-amber-600"}`}>{r.nextFollowUp < today ? `overdue ${r.nextFollowUp}` : "today"}</span>
+                <form action={logBuyerOutreach} className="flex items-center gap-1">
+                  <input type="hidden" name="id" value={r.id} />
+                  <input name="note" placeholder="what they said…" className="w-36 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
+                  <button className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-emerald-700">📇 Touched</button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Add a deal (compact) */}
       <Card className="p-5">

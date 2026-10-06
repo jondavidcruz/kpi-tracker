@@ -70,17 +70,26 @@ export default function Sidebar({
   const [query, setQuery] = useState("");
 
   const groups: { label: string; items: Item[] }[] = [
-    { label: "Overview", items: [
+    // Department columns (Jon 2026-10-06) — defaults only; every tab drags
+    // between groups in Admin → System → Sidebar order.
+    { label: "Team Overview", items: [
       { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
-      { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/process", label: "Process Map", Icon: Workflow },
-      { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
-      { href: "/closing-calc", label: "Closing Calculator", Icon: Receipt, managerOnly: true },
-      { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
-      { href: "/vetting", label: "Buyer Research", Icon: Search, marketingOnly: true },
       { href: "/rewards", label: "Rewards", Icon: Gift },
       { href: "/culture", label: "Culture", Icon: PartyPopper },
+    ] },
+    { label: "Acquisitions", items: [
+      { href: "/underwriting", label: "Underwriting", Icon: Calculator },
+    ] },
+    { label: "Dispositions", items: [
+      { href: "/deals", label: "Deals", Icon: Building2 },
+      { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
+      { href: "/vetting", label: "Buyer Research", Icon: Search, marketingOnly: true },
+      { href: "/closing-calc", label: "Closing Calculator", Icon: Receipt, managerOnly: true },
+    ] },
+    { label: "Marketing", items: [
+      { href: "/lead-sourcing", label: "Lead Sourcing", Icon: TrendingUp, marketingOnly: true },
     ] },
     { label: "Business Heartbeat", items: [
       { href: "/compliance", label: "Compliance", Icon: ShieldCheck },

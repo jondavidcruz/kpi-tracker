@@ -5,18 +5,26 @@ export type NavItem = { href: string; label: string; gate: NavGate };
 export type NavGroup = { group: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
-  { group: "Overview", items: [
+  // Department columns (Jon 2026-10-06) — every tab is draggable between
+  // groups in Admin → System → Sidebar order, so this is just the default.
+  { group: "Team Overview", items: [
     { href: "/dashboard", label: "Dashboard", gate: "all" },
-    { href: "/deals", label: "Deals", gate: "all" },
     { href: "/process", label: "Process Map", gate: "all" },
-    { href: "/underwriting", label: "Underwriting", gate: "all" },
     { href: "/schedule", label: "Schedule & Time", gate: "all" },
-    { href: "/closing-calc", label: "Closing Calculator", gate: "manager" },
-    { href: "/marketing", label: "Vetted Buyers", gate: "marketing" },
-    { href: "/lead-sourcing", label: "Lead Sourcing", gate: "marketing" },
-    { href: "/vetting", label: "Buyer Research", gate: "marketing" },
     { href: "/rewards", label: "Rewards", gate: "all" },
     { href: "/culture", label: "Culture", gate: "all" },
+  ] },
+  { group: "Acquisitions", items: [
+    { href: "/underwriting", label: "Underwriting", gate: "all" },
+  ] },
+  { group: "Dispositions", items: [
+    { href: "/deals", label: "Deals", gate: "all" },
+    { href: "/marketing", label: "Vetted Buyers", gate: "marketing" },
+    { href: "/vetting", label: "Buyer Research", gate: "marketing" },
+    { href: "/closing-calc", label: "Closing Calculator", gate: "manager" },
+  ] },
+  { group: "Marketing", items: [
+    { href: "/lead-sourcing", label: "Lead Sourcing", gate: "marketing" },
   ] },
   { group: "Business Heartbeat", items: [
     { href: "/compliance", label: "Compliance", gate: "all" },

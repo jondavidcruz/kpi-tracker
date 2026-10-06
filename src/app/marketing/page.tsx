@@ -189,38 +189,6 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
 
           </div>,
           <div key="buyers" className="space-y-6">
-      {(() => {
-        const due = vettedRows
-          .filter((r) => r.nextFollowUp && r.nextFollowUp <= today)
-          .sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp))
-          .slice(0, 30);
-        if (due.length === 0) return null;
-        return (
-          <Card className="border-l-4 border-amber-400 p-4">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-bold text-slate-800">📞 Follow-ups due</span>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">{due.length} to work today</span>
-              <span className="text-[11px] text-slate-400">replaces the follow-up Excel — 📇 Touched logs it to your KPIs and pushes 3 days</span>
-            </div>
-            <div className="space-y-1.5">
-              {due.map((r) => (
-                <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50/60 px-2.5 py-1.5 text-xs ring-1 ring-amber-100">
-                  <span className="font-semibold text-slate-800">{r.name}</span>
-                  <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">{r.type === "agent" ? "🏘 agent" : isDevRow(r) ? "🏗 developer" : "🔨 buyer"}</span>
-                  {[r.phone, r.email].filter(Boolean).length > 0 && <span className="text-brand-navy">{[r.phone, r.email].filter(Boolean).join(" · ")}</span>}
-                  {r.outreachLog && <span className="hidden max-w-xs truncate text-[11px] text-slate-400 lg:inline" title={r.outreachLog}>💬 {r.outreachLog.split("\n")[0].slice(0, 70)}</span>}
-                  <span className={`ml-auto text-[10px] font-bold ${r.nextFollowUp < today ? "text-red-600" : "text-amber-600"}`}>{r.nextFollowUp < today ? `overdue ${r.nextFollowUp}` : "today"}</span>
-                  <form action={logBuyerOutreach} className="flex items-center gap-1">
-                    <input type="hidden" name="id" value={r.id} />
-                    <input name="note" placeholder="what they said…" className="w-36 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
-                    <button className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-emerald-700">📇 Touched</button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          </Card>
-        );
-      })()}
       {/* Section 3 — KPI strip · coverage heat board · buyer trading cards */}
       <VettedBuyersBoard buyers={cards} coverage={coverage} coldCount={cold.length} />
 
