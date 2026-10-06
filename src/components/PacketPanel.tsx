@@ -42,6 +42,11 @@ export default function PacketPanel({ dealId, packets, canApprove }: { dealId: s
             <input name="state" placeholder="FL" maxLength={2} className="w-full rounded-md border border-slate-200 px-2 py-1.5 uppercase" required /></label>
           <label className="w-32"><span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">County</span>
             <input name="county" placeholder="Charlotte" className="w-full rounded-md border border-slate-200 px-2 py-1.5" required /></label>
+          <label className="w-52"><span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">Deal status (sets the wording)</span>
+            <select name="engagement" className="w-full rounded-md border border-slate-200 px-2 py-1.5">
+              <option value="contract">✓ Under contract — escrow opened</option>
+              <option value="seller">◷ Working with the seller (pre-contract)</option>
+            </select></label>
           <button disabled={pending} className="rounded-md bg-brand-navy px-3 py-1.5 text-[11px] font-bold text-white hover:opacity-90 disabled:opacity-50">
             {pending ? "⏳ Pulling Regrid · FEMA · Wetlands · Soils…" : latest ? "↻ Regenerate draft" : "📦 Generate draft"}
           </button>
@@ -49,6 +54,17 @@ export default function PacketPanel({ dealId, packets, canApprove }: { dealId: s
         <button type="button" onClick={() => setShowManual((v) => !v)} className="text-[11px] font-semibold text-slate-500 hover:text-slate-700">
           {showManual ? "▴ hide" : "▾ fill the 🟡 items"} (water · sewer · electric · setbacks · species)
         </button>
+        <details className="rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
+          <summary className="cursor-pointer text-[11px] font-bold text-slate-600">🧭 If the auto-pull fails — manual sources (pull these yourself, then paste into the 🟡 items)</summary>
+          <div className="mt-1.5 grid grid-cols-1 gap-1 text-[11px] text-slate-600 sm:grid-cols-2">
+            <span>🗺 <b>Parcel / building envelope:</b> <a href="https://app.regrid.com" target="_blank" className="font-bold text-sky-700 underline">app.regrid.com</a> — search the APN, screenshot the boundary</span>
+            <span>🌊 <b>FEMA flood zone:</b> <a href="https://msc.fema.gov/portal/search" target="_blank" className="font-bold text-sky-700 underline">msc.fema.gov</a> — address search → print map</span>
+            <span>💧 <b>Wetlands:</b> <a href="https://www.fws.gov/program/national-wetlands-inventory/wetlands-mapper" target="_blank" className="font-bold text-sky-700 underline">NWI Wetlands Mapper</a> — zoom to parcel</span>
+            <span>🌱 <b>Soils:</b> <a href="https://websoilsurvey.nrcs.usda.gov/app/WebSoilSurvey.aspx" target="_blank" className="font-bold text-sky-700 underline">USDA Web Soil Survey</a> — draw AOI → soil report</span>
+            <span>⛰ <b>Elevation / slope:</b> <a href="https://apps.nationalmap.gov/viewer/" target="_blank" className="font-bold text-sky-700 underline">USGS National Map</a></span>
+            <span>☎️ <b>Water / sewer / electric / setbacks:</b> call county planning &amp; utilities — number prints on the packet</span>
+          </div>
+        </details>
         {showManual && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {MANUAL.map(([k, label]) => (

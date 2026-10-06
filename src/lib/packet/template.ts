@@ -63,12 +63,19 @@ export function renderPacketHtml(m: PacketModel): string {
     : `<div style="border:1px dashed #cbd5e1;border-radius:10px;padding:60px;text-align:center;color:${LIGHT}">map unavailable — ${tbv()}</div>`;
 
   // ── COVER ──
+  // Verbiage fork (Jon 2026-10-06): under contract = we control it, escrow
+  // opened; pre-contract = we're working directly with the seller.
+  const underContract = (m.engagement ?? "contract") === "contract";
+  const ribbon = underContract
+    ? `<span style="display:inline-block;margin-top:10px;padding:5px 14px;border-radius:999px;background:#d1fae5;color:#065f46;font-size:11px;font-weight:800;letter-spacing:.5px">✓ UNDER CONTRACT — ESCROW OPENED</span>`
+    : `<span style="display:inline-block;margin-top:10px;padding:5px 14px;border-radius:999px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:800;letter-spacing:.5px">◷ WORKING WITH THE SELLER — PRE-CONTRACT</span>`;
   const cover = page(`
     <div style="height:72px"></div>
     <div style="border-left:6px solid ${GOLD};padding-left:22px">
-      <div style="font-size:12px;font-weight:800;letter-spacing:2px;color:${GOLD}">FREEDOM OFFERS · OFF-MARKET OFFERING</div>
+      <div style="font-size:12px;font-weight:800;letter-spacing:2px;color:${GOLD}">FREEDOM OFFERS · ${underContract ? "OFF-MARKET OFFERING" : "OFF-MARKET OPPORTUNITY"}</div>
       <div style="font-size:34px;font-weight:800;color:${NAVY};line-height:1.15;margin-top:8px">${esc(m.title)}</div>
       <div style="font-size:15px;color:${SLATE};margin-top:6px">${esc(m.county)} County, ${esc(m.state)} · ${esc(m.totals.parcels)} parcel${m.totals.parcels === 1 ? "" : "s"} · ${esc(acresTotal)}</div>
+      ${ribbon}
     </div>
     <div style="margin:26px 0">${img(p0?.satUrl ?? "", "site aerial")}</div>
     <table width="100%" cellpadding="0" cellspacing="0"><tr>
@@ -93,8 +100,9 @@ export function renderPacketHtml(m: PacketModel): string {
       ${m.highlights.map((h) => `<span style="display:inline-block;margin:0 6px 6px 0;padding:5px 12px;border:1px solid #e2e8f0;border-radius:999px;font-size:12px;font-weight:600;color:${SLATE}">${esc(h)}</span>`).join("")}
       <div style="font-size:9px;color:${LIGHT}">Site details per owner interview &amp; public records — buyer to verify.</div></div>` : ""}
     <div style="margin-top:16px;font-size:12px;color:${SLATE};line-height:1.6">
-      <b style="color:${NAVY}">Terms:</b> Sold as-is, where-is. Buyer to verify all information independently. Assignment of contract or double close.
-      Pricing on request — contact us to discuss. EMD due within 48 hours of acceptance. Close on or before the date in the assignment agreement.
+      ${underContract
+        ? `<b style="color:${NAVY}">Terms:</b> Property is under exclusive contract — escrow has been opened. Sold as-is, where-is; buyer to verify all information independently. Assignment of contract or double close. Pricing on request — contact us to discuss. EMD due within 48 hours of acceptance. Close on or before the date in the assignment agreement.`
+        : `<b style="color:${NAVY}">Status:</b> We are working directly with the seller to secure this property and expect to control it shortly. Sold as-is, where-is; buyer to verify all information independently. Register your interest now — the first committed buyer sets the terms conversation, and this packet converts to a contracted offering the moment we open escrow.`}
     </div>
     ${m.manual.notes ? `<div style="margin-top:10px;font-size:12px;color:${SLATE}"><b style="color:${NAVY}">Notes:</b> ${esc(m.manual.notes)}</div>` : ""}`);
 

@@ -65,6 +65,8 @@ export type PacketModel = {
   toVerify: string[]; // rendered as 🟡 pills + checklist
   // public record pulled from RentCast (cap-guarded, best-effort)
   record?: { apn: string; lotSqFt: number | null; zoning: string; lastSalePrice: number | null; lastSaleDate: string; owner: string } | null;
+  // "contract" = under contract / escrow opened · "seller" = pre-contract, working with the seller (verbiage shifts)
+  engagement?: "contract" | "seller";
 };
 
 export const MANUAL_FIELDS = [

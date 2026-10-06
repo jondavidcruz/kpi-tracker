@@ -1455,7 +1455,7 @@ export async function saveDealLand(formData: FormData) {
     apn: g("apn"), county: g("county"), acreage: g("acreage"), lotSqFt: g("lotSqFt"), zoning: g("zoning"),
     legalAccess: g("legalAccess"), physicalAccess: g("physicalAccess"), water: g("water"), sewer: g("sewer"), power: g("power"),
     floodZone: g("floodZone"), wetlandsPct: g("wetlandsPct"), slope: g("slope"), hoa: g("hoa"), backTaxes: g("backTaxes"),
-    occupied: g("occupied"), species: g("species"), preComped: g("preComped"),
+    occupied: g("occupied"), species: g("species"), preComped: g("preComped"), priced: g("priced"),
     falloutReason: g("falloutReason"),
   };
   // Drop empty fields so the blob stays lean; delete the key entirely if all blank.
@@ -2594,7 +2594,8 @@ export async function generatePacketAction(formData: FormData): Promise<import("
     species: String(formData.get("species") ?? ""), notes: String(formData.get("notes") ?? ""),
   };
   const { generatePacket } = await import("@/lib/packet/build");
-  const res = await generatePacket({ dealId, apns, state, county, manual, generatedBy: me?.name ?? "" });
+  const engagement = String(formData.get("engagement") ?? "") === "seller" ? "seller" as const : "contract" as const;
+  const res = await generatePacket({ dealId, apns, state, county, manual, engagement, generatedBy: me?.name ?? "" });
   revalidatePath("/deals");
   return res;
 }

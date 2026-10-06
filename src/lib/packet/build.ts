@@ -29,6 +29,7 @@ export type BuildInput = {
   county: string; // "Charlotte"
   manual?: Partial<PacketModel["manual"]>;
   generatedBy?: string;
+  engagement?: "contract" | "seller"; // verbiage: escrow opened vs working with the seller
 };
 
 export type BuildResult = {
@@ -146,6 +147,7 @@ async function htmlToPdf(html: string): Promise<Buffer | null> {
 export async function generatePacket(input: BuildInput): Promise<BuildResult> {
   if (!input.apns.length) return { ok: false, error: "enter at least one APN" };
   const { model, warnings } = await buildPacketModel(input);
+  model.engagement = input.engagement ?? "contract";
   // Public record via RentCast (Jon 2026-10-06: use the paid APIs for the
   // notes). Best-effort: a cap hit or thin land record just skips the row.
   try {

@@ -384,9 +384,9 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
             screen.fails.length > 0 ? (
               <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white" title={`Failed: ${screen.fails.join(", ")}`}>🧪 Screen FAILED — {screen.fails.join(" · ")}</span>
             ) : screen.unknowns.length > 0 ? (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800" title={`Unchecked: ${screen.unknowns.join(", ")}`}>🧪 Land screen {screen.pass}/6 — check: {screen.unknowns.join(" · ")}</span>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800" title={`Unchecked: ${screen.unknowns.join(", ")}`}>🧪 Land screen {screen.pass}/7 — check: {screen.unknowns.join(" · ")}</span>
             ) : (
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">🧪 Land screen 6/6 ✅</span>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">🧪 Land screen 7/7 ✅</span>
             )
           )}
           {lFlags.map((f, i) => (

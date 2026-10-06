@@ -12,6 +12,7 @@ type Phase = {
   branches?: string[];
   aiAssist: string[];
   aiAuto: string[];
+  visual?: "triage" | "packet" | "cascade"; // rendered mock/diagram under the steps (visual learners)
 };
 
 const DEPT = {
@@ -196,19 +197,22 @@ const OTHER: Phase[] = [
 // who gets us our purchase price, inside 24 hours.
 const LAND_DISPO: Phase[] = [
   { n: 1, title: "Land lead screened", dept: "Acquisitions", owner: "Michelle (Acquisitions)",
-    summary: "The 6-point land kill-check before dispo ever touches it. Fail any → nurture or pass, don't market.",
-    steps: ["No wetlands", "Flood zone acceptable", "Occupied / lived-on? → nurture track instead", "No scrub-jay / listed-species flag", "Pre-comped: sales in the last 1–3 years", "Not landlocked — legal access confirmed"],
-    branches: ["✅ Clean → Dispositions", "🌱 Issue → nurture", "❌ Dead"],
-    aiAssist: ["The 📦 packet pulls wetlands, flood zone, soils & species automatically from the APN"], aiAuto: [] },
+    summary: "The 7-point land kill-check before dispo ever touches it. The board below removes all doubt: green goes to dispo, amber gets nurtured, red dies with a reason.",
+    steps: ["No wetlands", "Flood zone acceptable", "Occupied / lived-on? → nurture track instead", "No scrub-jay / listed-species flag", "Pre-comped: sales in the last 1–3 years", "Not landlocked — legal access confirmed", "Seller price at/below comps within 1 mi / 1 yr — overpriced → nurture"],
+    branches: ["✅ Clean → Dispositions", "🌱 Issue / overpriced → nurture", "❌ Dead"],
+    aiAssist: ["The 📦 packet pulls wetlands, flood zone, soils & species automatically from the APN"], aiAuto: [],
+    visual: "triage" },
   { n: 2, title: "Offer packet — 3-5 minutes", dept: "Dispositions", owner: "Sharyn + Marie",
     summary: "APNs in → branded diligence packet out. This is the thing buyers say yes to.",
-    steps: ["Deal on the board with ask + contract price", "APNs → 📦 Offering packet → Generate", "Fill the 🟡 county-call items (water/sewer/electric/setbacks)", "Approve — the approved version is what buyers get"],
-    aiAssist: [], aiAuto: ["Parcel, FEMA flood, wetlands, soils, elevation & maps pulled automatically", "Seller-call notes analyzed for utilities/improvements context"] },
+    steps: ["Deal on the board with ask + contract price", "APNs → 📦 Offering packet → pick the status (Under contract / Working with seller — the wording changes) → Generate", "If the auto-pull fails: 🧭 manual sources inside the packet panel (Regrid envelope, FEMA, NWI wetlands, soils) — pull, then paste into the 🟡 items", "Fill the 🟡 county-call items (water/sewer/electric/setbacks)", "Approve — the approved version is what buyers get"],
+    aiAssist: [], aiAuto: ["Parcel, FEMA flood, wetlands, soils, elevation & maps pulled automatically", "RentCast county record (APN, lot, zoning, last sale) added automatically", "Seller-call notes analyzed for utilities/improvements context"],
+    visual: "packet" },
   { n: 3, title: "Active blast — vetted buyers", dept: "Dispositions", owner: "Sharyn + Marie",
-    summary: "The cascade works the ranked list for you — top 3 first, next 3 every ~3h until someone claims it.",
-    steps: ["🚀 Start auto-cascade on the deal card (heat-ranked)", "Call the Send-first tier top-down — don't wait for email", "Log every response in Sends & responses (offer $ / pass + reason)"],
+    summary: "The cascade works the ranked list for you — top 3 first, next 3 every ~3h until someone claims it. The mock below is exactly what the button looks like on the deal card.",
+    steps: ["🚀 Start auto-cascade on the deal card (heat-ranked)", "Vetted buyers = Dispositions → Vetted Buyers: 🎯 Send-first tier of interviewed developers/investors + the 🏘 Agents group", "Call the Send-first tier top-down — don't wait for email", "Log every response in Sends & responses (offer $ / pass + reason)"],
     branches: ["🎯 Claimed → Buyer Found", "Passes → next wave"],
-    aiAssist: ["🔥 heat badges show who actually replies fast"], aiAuto: ["Wave advance every ~3h, claim/pass links, team ping on claim"] },
+    aiAssist: ["🔥 heat badges show who actually replies fast"], aiAuto: ["Wave advance every ~3h, claim/pass links, team ping on claim"],
+    visual: "cascade" },
   { n: 4, title: "Active blast — LLCs & agents", dept: "Dispositions", owner: "Sharyn + Marie",
     summary: "Beyond the vetted list: whoever bought land like this recently, plus the agents who move it.",
     steps: ["Send to LLCs with recent land sales in the area", "Send to listing agents with new-construction listings", "Send to buyer agents with recent land sales", "📇 Touched on every contact — KPI credit + 3-day follow-up"],
@@ -233,6 +237,117 @@ const PROCESSES: Process[] = [
   { key: "probate", name: "Probate", emoji: "⚖️", blurb: "Estate sale — confirm authority, work the court + attorney, then close.", phases: PROBATE },
   { key: "other", name: "Other Issues", emoji: "🧩", blurb: "Title, liens, code, disputes — identify, loop in the expert, resolve or refer.", phases: OTHER },
 ];
+
+// ── Visual SOP blocks (Jon 2026-10-06: "show them literally what it looks
+// like"). Live-styled mockups of the real screens — always current, no stale
+// screenshots.
+
+/** CLEAN / NURTURE / DEAD — the crystal-clear lead triage board. */
+function TriageBoard() {
+  const col = (tone: string, head: string, sub: string, items: string[]) => (
+    <div className={`flex-1 rounded-2xl p-3 ring-2 ${tone}`}>
+      <div className="text-sm font-extrabold">{head}</div>
+      <div className="mb-2 text-[10px] font-semibold opacity-70">{sub}</div>
+      <ul className="space-y-1 text-[11px] font-medium leading-snug">{items.map((x, i) => <li key={i}>• {x}</li>)}</ul>
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-2.5 lg:flex-row">
+      {col("bg-emerald-50 ring-emerald-300 text-emerald-900", "🟢 CLEAN → send to Dispo", "ALL 7 must be true", [
+        "No wetlands on the parcel",
+        "Flood zone acceptable (not building-killing)",
+        "Vacant — nobody living on it",
+        "No scrub-jay / listed-species flag",
+        "Pre-comped: land sales within 1–3 years",
+        "Legal + physical access (not landlocked)",
+        "Seller price at/below comps (1 mi / 1 yr)",
+      ])}
+      {col("bg-amber-50 ring-amber-300 text-amber-900", "🟡 NURTURE → follow-up track", "Fixable or not-yet — ANY of these", [
+        "Seller overpriced vs comps 1 mi / 1 yr (price can come down)",
+        "Occupied / lived-on (timing problem, not a land problem)",
+        "Seller motivated but timeline 3+ months out",
+        "Probate / title issue that IS being worked",
+        "Small back taxes or HOA — curable at close",
+        "Went quiet but engaged before — keep the drip",
+      ])}
+      {col("bg-red-50 ring-red-300 text-red-900", "🔴 DEAD → archive with reason", "Unfixable — ANY of these", [
+        "Landlocked with no path to access",
+        "Mostly wetlands / won't perc",
+        "Listed-species flag confirmed (scrub-jay zone)",
+        "No comps within 1 mi / 1–3 yrs — market won't prove value",
+        "Title defect with no cure",
+        "Seller refuses a realistic price after 2 real attempts",
+      ])}
+    </div>
+  );
+}
+
+/** What the finished offer packet looks like — mini cover + tab index. */
+function PacketMock() {
+  return (
+    <div className="flex flex-col gap-3 lg:flex-row">
+      <div className="w-full max-w-[260px] rounded-xl bg-[#0b1f3a] p-4 shadow-lg">
+        <div className="border-l-4 border-[#c8a24b] pl-2.5">
+          <div className="text-[8px] font-extrabold tracking-[2px] text-[#c8a24b]">FREEDOM OFFERS · OFF-MARKET OFFERING</div>
+          <div className="mt-1 text-[15px] font-extrabold leading-tight text-white">7 Infill Lots — Port Charlotte, FL</div>
+          <div className="mt-0.5 text-[9px] text-slate-300">Charlotte County, FL · 7 parcels · 1.74 ac</div>
+          <span className="mt-1.5 inline-block rounded-full bg-emerald-200 px-2 py-0.5 text-[7px] font-extrabold text-emerald-900">✓ UNDER CONTRACT — ESCROW OPENED</span>
+        </div>
+        <div className="mt-3 grid h-20 place-items-center rounded-lg bg-slate-700 text-[9px] text-slate-400">satellite aerial</div>
+        <div className="mt-2 grid grid-cols-4 gap-1 text-center">
+          {[["Parcels", "7"], ["Acres", "1.74"], ["Flood", "X"], ["Wetlands", "none"]].map(([k, v]) => (
+            <div key={k} className="rounded bg-slate-800 py-1"><div className="text-[9px] font-extrabold text-[#e6c878]">{v}</div><div className="text-[6px] uppercase text-slate-400">{k}</div></div>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 space-y-1 text-[11px] text-slate-700">
+        <div className="text-xs font-extrabold text-slate-800">What&apos;s inside, in order:</div>
+        {[
+          ["📄", "Cover — site aerial, parcel count, flood + wetlands verdict, UNDER CONTRACT or WORKING WITH SELLER ribbon"],
+          ["💰", "Offering Summary & Terms — APN schedule, site highlights, how to proceed"],
+          ["🔍", "Site & Due Diligence Summary — flood / wetlands / soils / utilities, 🟡 = verify with county"],
+          ["🅰️", "Tab A — parcel aerials & boundaries (building envelope)"],
+          ["🅱️", "Tab B — FEMA flood maps"],
+          ["🅲", "Tab C — NWI wetlands maps"],
+          ["🅳", "Tab D — USDA soils report"],
+        ].map(([e, t], i) => <div key={i} className="flex gap-2 rounded-lg bg-white px-2.5 py-1.5 ring-1 ring-slate-200"><span>{e}</span><span>{t}</span></div>)}
+        <div className="pt-1 text-[10px] font-semibold text-slate-500">See a real one: any deal card → 📦 Offering packet → 🖨 View / print.</div>
+      </div>
+    </div>
+  );
+}
+
+/** Replica of the deal card's cascade strip — what to actually click. */
+function CascadeMock() {
+  return (
+    <div className="space-y-2">
+      <div className="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200">
+        <div className="mb-1.5 text-[11px] font-extrabold text-emerald-800">📤 Buyer cascade — this lives on every deal card on the Deals page</div>
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-2 ring-1 ring-emerald-200">
+          <span className="text-[11px] text-slate-600">Let it run itself — auto-emails the top 3, then the next 3 every ~3h until a buyer claims it.</span>
+          <span className="ml-auto rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white shadow">🚀 Start auto-cascade</span>
+          <span className="text-[10px] font-bold text-emerald-700">← CLICK THIS</span>
+        </div>
+        <div className="mt-1.5 space-y-1">
+          <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-white p-1.5 text-[10px] ring-1 ring-emerald-300">
+            <span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-600 font-bold text-white">1</span>
+            <span className="font-bold text-slate-800">Sunlife Homes</span>
+            <span className="rounded bg-orange-100 px-1 font-bold text-orange-700">🔥 72% ⚡</span>
+            <span className="rounded bg-emerald-600 px-1 font-bold text-white">👑 Send next</span>
+            <span className="ml-auto rounded bg-emerald-600 px-1.5 py-0.5 font-bold text-white">📧 Send offer</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-white/60 p-1.5 text-[10px]">
+            <span className="grid h-4 w-4 place-items-center rounded-full bg-white font-bold text-slate-500 ring-1 ring-slate-200">2</span>
+            <span className="font-bold text-slate-700">Adams Homes</span><span className="text-slate-400">waits until #1 answers or ~3h passes</span>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-xl bg-white p-2.5 text-[11px] text-slate-700 ring-1 ring-slate-200">
+        <b>Who are &ldquo;the vetted buyers&rdquo;?</b> Dispositions → <b>Vetted Buyers</b>: the developers &amp; investors we interviewed and scored (🎯 Send-first tier at the top = call these humans first), plus the <b>🏘 Agents</b> group (listing agents with new-construction + buyer agents with land sales). The cascade emails them in rank order automatically — your job is the phone: Send-first tier top-down, then 📇 Touched on every call.
+      </div>
+    </div>
+  );
+}
 
 const STORE_KEY = "fo_process_checks";
 
@@ -363,6 +478,14 @@ export default function ProcessMap({ allowedDepts = null }: { allowedDepts?: str
               </div>
             )}
             <p className="mt-2 text-[10px] text-slate-400">This checklist is the working SOP for {phase.owner}. Your checks save on this device.</p>
+            {phase.visual && (
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">👀 What it looks like</div>
+                {phase.visual === "triage" && <TriageBoard />}
+                {phase.visual === "packet" && <PacketMock />}
+                {phase.visual === "cascade" && <CascadeMock />}
+              </div>
+            )}
           </div>
 
           {/* AI */}
