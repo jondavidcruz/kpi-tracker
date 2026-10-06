@@ -5,6 +5,7 @@ export type DealLand = {
   apn?: string; county?: string; acreage?: string; lotSqFt?: string; zoning?: string;
   legalAccess?: string; physicalAccess?: string; water?: string; sewer?: string; power?: string;
   floodZone?: string; wetlandsPct?: string; slope?: string; hoa?: string; backTaxes?: string;
+  occupied?: string; species?: string; preComped?: string; // Jon's 6-point screen (2026-10-06)
   falloutReason?: string;
 };
 
@@ -34,7 +35,32 @@ export const LAND_FIELDS: { key: keyof DealLand; label: string; type: "text" | "
   { key: "slope", label: "Slope", type: "select", options: ["", "Flat", "Gentle", "Steep", "Unknown"] },
   { key: "hoa", label: "HOA", type: "select", options: YNU },
   { key: "backTaxes", label: "Back taxes owed", type: "number", ph: "$" },
+  { key: "occupied", label: "Occupied / lived-on", type: "select", options: YNU },
+  { key: "species", label: "Listed species (scrub-jay…)", type: "select", options: ["", "None found", "Flagged", "Unknown"] },
+  { key: "preComped", label: "Pre-comped (sales 1–3 yrs)", type: "select", options: ["", "Yes", "No", "Unknown"] },
 ];
+
+// ── Jon's 6-point land screen (whiteboard SOP, 2026-10-06) ──────────────────
+// Michelle's kill-check before a land deal is marketed: wetlands, flood,
+// occupied→nurture, listed species, pre-comped 1–3 yrs, not landlocked.
+export type LandScreen = { pass: number; fails: string[]; unknowns: string[] };
+
+export function landScreen(l: DealLand | undefined): LandScreen {
+  const fails: string[] = [];
+  const unknowns: string[] = [];
+  const check = (label: string, state: "pass" | "fail" | "unknown") => {
+    if (state === "fail") fails.push(label);
+    else if (state === "unknown") unknowns.push(label);
+  };
+  if (!l) return { pass: 0, fails, unknowns: ["No wetlands", "Flood zone OK", "Not occupied", "No listed species", "Pre-comped 1–3 yrs", "Not landlocked"] };
+  check("No wetlands", l.wetlandsPct === "" || l.wetlandsPct == null ? "unknown" : Number(l.wetlandsPct) > 0 ? "fail" : "pass");
+  check("Flood zone OK", l.floodZone === "Yes" ? "fail" : l.floodZone === "No" ? "pass" : "unknown");
+  check("Not occupied", l.occupied === "Yes" ? "fail" : l.occupied === "No" ? "pass" : "unknown");
+  check("No listed species", l.species === "Flagged" ? "fail" : l.species === "None found" ? "pass" : "unknown");
+  check("Pre-comped 1–3 yrs", l.preComped === "No" ? "fail" : l.preComped === "Yes" ? "pass" : "unknown");
+  check("Not landlocked", l.legalAccess === "No" || l.physicalAccess === "No" ? "fail" : l.legalAccess === "Yes" && l.physicalAccess === "Yes" ? "pass" : "unknown");
+  return { pass: 6 - fails.length - unknowns.length, fails, unknowns };
+}
 
 /** Red-flag chips for the card header (diligence killers worth seeing at a glance). */
 export function landFlags(l: DealLand | undefined): string[] {

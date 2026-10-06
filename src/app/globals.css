@@ -106,3 +106,31 @@ html.dark .hover\:bg-slate-100:hover { background-color: #1c2b46 !important; }
 
 /* refined scrollbars for the portal feel */
 * { scrollbar-width: thin; scrollbar-color: #cbd2dc transparent; }
+
+/* ── 2026-10-06 Apple-feel facelift v1 ──────────────────────────
+   Calm canvas, soft depth, fluid motion. Applies app-wide via the
+   shared primitives — no per-page changes needed. */
+body {
+  background:
+    radial-gradient(1100px 420px at 85% -140px, rgba(11, 31, 58, 0.055), transparent 60%),
+    radial-gradient(900px 380px at -10% -120px, rgba(200, 162, 75, 0.05), transparent 55%),
+    var(--background);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+html.dark body { background: var(--background); }
+
+/* buttons + interactive chips: gentle press feedback everywhere */
+button, a[class*="rounded"] { transition: transform 0.12s ease, box-shadow 0.15s ease, background-color 0.15s ease; }
+button:active { transform: scale(0.97); }
+
+/* details blocks open like panels, not form widgets */
+details > summary { list-style: none; user-select: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::after { content: "›"; float: right; font-weight: 800; color: #94a3b8; transition: transform 0.18s ease; }
+details[open] > summary::after { transform: rotate(90deg); }
+
+/* focus states that look designed, not default */
+input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(11, 31, 58, 0.08); }
+
+::selection { background: rgba(200, 162, 75, 0.25); }

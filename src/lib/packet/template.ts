@@ -113,6 +113,7 @@ export function renderPacketHtml(m: PacketModel): string {
       ${mrow("setbacks", "Setbacks / buildable")}
       ${mrow("species", "Listed species", m.state === "FL" ? "FL: confirm scrub-jay review zone with county" : "")}
     </table>
+    ${m.record ? `<div style="margin-top:12px;font-size:11px;color:${SLATE}">🗂 County record: ${[m.record.apn ? `APN ${esc(m.record.apn)}` : "", m.record.lotSqFt ? `${m.record.lotSqFt.toLocaleString()} sq ft lot` : "", m.record.zoning ? `zoned ${esc(m.record.zoning)}` : "", m.record.lastSalePrice ? `last sale $${m.record.lastSalePrice.toLocaleString()}${m.record.lastSaleDate ? ` (${esc(m.record.lastSaleDate)})` : ""}` : ""].filter(Boolean).join(" · ")}</div>` : ""}
     ${m.countyPhone ? `<div style="margin-top:12px;font-size:11px;color:${SLATE}">☎️ County planning/utilities: <b>${esc(m.countyPhone)}</b> — fastest way to clear the 🟡 items.</div>` : ""}
     <div style="margin-top:18px">
       <div style="font-size:12px;font-weight:800;color:${NAVY};margin-bottom:6px">ATTACHED DOCUMENTATION</div>

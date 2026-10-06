@@ -146,6 +146,15 @@ async function htmlToPdf(html: string): Promise<Buffer | null> {
 export async function generatePacket(input: BuildInput): Promise<BuildResult> {
   if (!input.apns.length) return { ok: false, error: "enter at least one APN" };
   const { model, warnings } = await buildPacketModel(input);
+  // Public record via RentCast (Jon 2026-10-06: use the paid APIs for the
+  // notes). Best-effort: a cap hit or thin land record just skips the row.
+  try {
+    const addr = (await db.deal.findUnique({ where: { id: input.dealId }, select: { address: true } }))?.address;
+    if (addr) {
+      const { rentcastPropertyRecord } = await import("@/lib/rentcast");
+      model.record = await rentcastPropertyRecord(addr, "packet-builder");
+    }
+  } catch (e) { warnings.push(`RentCast record: ${String(e).slice(0, 100)}`); }
   const html = renderPacketHtml(model);
 
   const prev = await db.dealPacket.findFirst({ where: { dealId: input.dealId }, orderBy: { version: "desc" } });

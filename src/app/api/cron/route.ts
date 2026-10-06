@@ -392,6 +392,36 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", wouldCreate: report.created.length, wouldMatch: report.matched.length, touches: report.touches, dealSends: report.dealSends, newArchivedDeals: createdDealByAddr.size, dealLinks, created: report.created, matched: report.matched, skipped: report.skipped });
   }
 
+  // 4pm dispo huddle auto-agenda (Jon's SOP: Viktoriia's daily overwatch).
+  // Posts every live deal's 24h clock, follow-ups due, and pass rollups to the
+  // huddle Chat space — the agenda writes itself.
+  if (url.searchParams.get("dispohuddle") === "1") {
+    const { sendHuddleChat } = await import("@/lib/notify");
+    const deals = await db.deal.findMany({ where: { active: true, status: { in: ["under_contract", "marketing", "buyer_found"] } } });
+    const sends = deals.length ? await db.dealSend.findMany({ where: { dealId: { in: deals.map((d) => d.id) } }, select: { dealId: true, sentAt: true, outcome: true, passReason: true, offerAmount: true } }) : [];
+    const today = new Date().toISOString().slice(0, 10);
+    const fuCount = await db.marketContact.count({ where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, nextFollowUp: { not: "", lte: today } } });
+    const lines: string[] = [`📋 *Dispo huddle — ${deals.length} live deal${deals.length === 1 ? "" : "s"}, ${fuCount} follow-ups due*`];
+    for (const d of deals) {
+      const ds = sends.filter((s) => s.dealId === d.id);
+      const first = ds.reduce<Date | null>((m, s) => (!m || s.sentAt < m ? s.sentAt : m), null);
+      const ageH = Math.round((Date.now() - d.createdAt.getTime()) / 3_600_000);
+      const clock = first ? `🚀 first send ${Math.round((first.getTime() - d.createdAt.getTime()) / 3_600_000)}h in` : ageH >= 24 ? `🔴 ${ageH}h — NO SEND YET` : `🕐 ${ageH}h, no send`;
+      const passes = ds.filter((s) => s.outcome === "pass");
+      const offers = ds.map((s) => s.offerAmount).filter((n): n is number => n != null);
+      const bits = [clock, `${ds.length} sent`];
+      if (offers.length) bits.push(`best offer $${Math.max(...offers).toLocaleString()}`);
+      if (passes.length >= 2) {
+        const top = [...passes.reduce((m, p) => m.set(p.passReason || "other", (m.get(p.passReason || "other") ?? 0) + 1), new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1])[0];
+        bits.push(`🚫 ${passes.length} passed (${top[1]}× ${top[0]})`);
+      }
+      lines.push(`• *${d.address}* (${d.assignedTo || "unassigned"}) — ${bits.join(" · ")}`);
+    }
+    lines.push("Full board: https://kpi-tracker-lovat.vercel.app/deals");
+    const sent = await sendHuddleChat(lines.join("\n"));
+    return NextResponse.json({ ok: true, sent, deals: deals.length, followUps: fuCount });
+  }
+
   // Twilio number hunt — which (sub)account actually owns the phone numbers.
   if (url.searchParams.get("twiliohunt") === "1") {
     const { twilioNumberHunt } = await import("@/lib/telco");

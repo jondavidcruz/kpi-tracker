@@ -1455,6 +1455,7 @@ export async function saveDealLand(formData: FormData) {
     apn: g("apn"), county: g("county"), acreage: g("acreage"), lotSqFt: g("lotSqFt"), zoning: g("zoning"),
     legalAccess: g("legalAccess"), physicalAccess: g("physicalAccess"), water: g("water"), sewer: g("sewer"), power: g("power"),
     floodZone: g("floodZone"), wetlandsPct: g("wetlandsPct"), slope: g("slope"), hoa: g("hoa"), backTaxes: g("backTaxes"),
+    occupied: g("occupied"), species: g("species"), preComped: g("preComped"),
     falloutReason: g("falloutReason"),
   };
   // Drop empty fields so the blob stays lean; delete the key entirely if all blank.

@@ -2,7 +2,9 @@ import { logBuyerOutreach, toggleDispoStepAction, archiveDeal, saveDeal, closeDe
 import { readAuto, type DealCascade } from "@/lib/cascade";
 import PacketPanel, { type PacketRow } from "@/components/PacketPanel";
 import { DISPO_STEPS, readDispoChecklists } from "@/lib/dispo-checklist";
-import { LAND_FIELDS, LAND_FALLOUT_REASONS, landFlags, type DealLand } from "@/lib/deal-land";
+import { LAND_FIELDS, LAND_FALLOUT_REASONS, landFlags, landScreen, type DealLand } from "@/lib/deal-land";
+import { buildAdCopy } from "@/lib/ad-copy";
+import AdCopyBox from "@/components/AdCopyBox";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getActiveDeals, getActiveReps, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
@@ -341,6 +343,8 @@ type SendRow = {
 
 function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, auto, claimedName, land, sends = [], canBlacklist = false, packets = [], checklist = {}, t24, heatBadges = {} }: { deal: Deal; today: string; repNames: string[]; canClose: boolean; matches: BuyerMatch[]; cascadeStatus: Record<string, string>; auto?: DealCascade; claimedName?: string | null; land?: DealLand; sends?: SendRow[]; canBlacklist?: boolean; packets?: PacketRow[]; checklist?: Record<string, { by: string; at: string }>; t24?: { ageH: number; firstSendH: number | null }; heatBadges?: Record<string, { pct: number; fast: boolean; offers: number }> }) {
   const lFlags = landFlags(land);
+  // Jon's 6-point screen — only scored once any land diligence exists
+  const screen = land ? landScreen(land) : null;
   // The next buyer to send to = highest-ranked one not already sent or passed.
   const nextId = matches.find((m) => cascadeStatus[m.id] !== "sent" && cascadeStatus[m.id] !== "passed")?.id ?? null;
   const st = STATUSES.find((s) => s.key === deal.status) ?? STATUSES[0];
@@ -374,8 +378,17 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
       </div>
 
       {/* Land diligence flags — the killers, at a glance */}
-      {lFlags.length > 0 && (
+      {(lFlags.length > 0 || screen) && (
         <div className="mb-3 flex flex-wrap gap-1.5">
+          {screen && (
+            screen.fails.length > 0 ? (
+              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white" title={`Failed: ${screen.fails.join(", ")}`}>🧪 Screen FAILED — {screen.fails.join(" · ")}</span>
+            ) : screen.unknowns.length > 0 ? (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800" title={`Unchecked: ${screen.unknowns.join(", ")}`}>🧪 Land screen {screen.pass}/6 — check: {screen.unknowns.join(" · ")}</span>
+            ) : (
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">🧪 Land screen 6/6 ✅</span>
+            )
+          )}
           {lFlags.map((f, i) => (
             <span key={i} className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">{f}</span>
           ))}
@@ -436,6 +449,15 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
           <PacketPanel dealId={deal.id} packets={packets} canApprove={canClose} />
         </div>
       </details>
+
+      {/* 📝 Passive-marketing paste kit — Craigslist / FB / Skool copy, one click each */}
+      {!["closed", "dead"].includes(deal.status) && (
+        <details className="mb-3 rounded-lg bg-sky-50 p-3 ring-1 ring-sky-200">
+          <summary className="cursor-pointer text-sm font-bold text-sky-800">📝 Ad copy — paste to Craigslist / FB / Skool</summary>
+          <p className="mt-1 text-[11px] text-sky-700">Written from this deal&apos;s numbers + diligence. Copy, paste, post — passive marketing in 5 minutes, not 45.</p>
+          <div className="mt-2"><AdCopyBox ads={buildAdCopy(deal, land)} /></div>
+        </details>
+      )}
 
       {/* Phase 7 — Sends & responses: the buyer feedback loop. Two clicks to log an outcome. */}
       {(sends.length > 0 || matches.length > 0) && (
@@ -539,9 +561,14 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
                 <span className="text-xs font-semibold text-slate-500">Cascade finished — no buyer claimed it.</span>
                 <form action={armCascade} className="ml-auto"><input type="hidden" name="dealId" value={deal.id} /><button className="rounded-md bg-emerald-600 px-2.5 py-0.5 text-[11px] font-bold text-white hover:bg-emerald-700">↻ Re-run</button></form>
               </>
+            ) : screen && screen.fails.length > 0 ? (
+              // Hard gate (Jon 2026-10-06): a deal that fails the 6-point land
+              // screen doesn't get blasted to buyers — fix the screen or kill it.
+              <span className="text-xs font-bold text-red-700">🛑 Blocked by the land screen ({screen.fails.join(" · ")}) — fix the Land diligence fields below or move this deal to Dead.</span>
             ) : (
               <>
                 <span className="text-xs text-slate-600">Let it run itself — auto-emails the top 3, then the next 3 every ~3h until a buyer claims it.</span>
+                {screen && screen.unknowns.length > 0 && <span className="text-[11px] font-bold text-amber-600">⚠️ {screen.unknowns.length} screen item{screen.unknowns.length > 1 ? "s" : ""} unchecked</span>}
                 <form action={armCascade} className="ml-auto"><input type="hidden" name="dealId" value={deal.id} /><button className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700">🚀 Start auto-cascade</button></form>
               </>
             )}

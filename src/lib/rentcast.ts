@@ -76,6 +76,20 @@ export type RcEstimate = { value: number | null; low: number | null; high: numbe
 
 /** Value estimate + comparables for an address (1 API call). propertyType
  *  "Land" steers comps to parcels for the land tabs. */
+// Public-record lookup for the packet builder — one cap-counted call.
+export type RcRecord = { apn: string; lotSqFt: number | null; zoning: string; lastSalePrice: number | null; lastSaleDate: string; owner: string };
+export async function rentcastPropertyRecord(address: string, by: string): Promise<RcRecord | null> {
+  type Row = { assessorID?: string; lotSize?: number; zoning?: string; lastSalePrice?: number; lastSaleDate?: string; owner?: { names?: string[] } };
+  const rows = await rentcastGet<Row[]>("/properties", { address }, by);
+  const r = rows?.[0];
+  if (!r) return null;
+  return {
+    apn: r.assessorID ?? "", lotSqFt: r.lotSize ?? null, zoning: r.zoning ?? "",
+    lastSalePrice: r.lastSalePrice ?? null, lastSaleDate: (r.lastSaleDate ?? "").slice(0, 10),
+    owner: r.owner?.names?.join(", ") ?? "",
+  };
+}
+
 export async function rentcastValue(address: string, by: string, propertyType?: string): Promise<RcEstimate> {
   type Resp = {
     price?: number; priceRangeLow?: number; priceRangeHigh?: number;

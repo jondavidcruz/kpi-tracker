@@ -63,6 +63,8 @@ export type PacketModel = {
   highlights: string[]; // short factual site highlights distilled from seller notes
   countyPhone: string;
   toVerify: string[]; // rendered as 🟡 pills + checklist
+  // public record pulled from RentCast (cap-guarded, best-effort)
+  record?: { apn: string; lotSqFt: number | null; zoning: string; lastSalePrice: number | null; lastSaleDate: string; owner: string } | null;
 };
 
 export const MANUAL_FIELDS = [

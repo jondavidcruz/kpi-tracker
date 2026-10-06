@@ -103,7 +103,7 @@ export function Card({
   return (
     <div
       id={id}
-      className={`rounded-xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${className}`}
+      className={`rounded-2xl border border-slate-200/60 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-16px_rgba(15,23,42,0.12)] transition-shadow duration-200 hover:shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-16px_rgba(15,23,42,0.18)] ${className}`}
     >
       {children}
     </div>
@@ -124,10 +124,10 @@ export function SectionTitle({
   return (
     <div className="mb-3 flex items-end justify-between gap-3">
       <div className="flex items-center gap-2.5">
-        <span className={`h-5 w-1 rounded-full ${accent}`} />
+        <span className={`h-6 w-1 rounded-full ${accent}`} />
         <div>
-          <h2 className="text-base font-semibold leading-tight tracking-tight text-slate-900">{stripEmoji(title)}</h2>
-          {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+          <h2 className="text-lg font-bold leading-tight tracking-tight text-slate-900">{stripEmoji(title)}</h2>
+          {subtitle && <p className="text-[13px] text-slate-500">{subtitle}</p>}
         </div>
       </div>
       {right}
