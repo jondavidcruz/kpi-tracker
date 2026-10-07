@@ -540,6 +540,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // ☎️ Inbound setup: point TELNYX_CALLER_ID at the WebRTC credential
+  // connection (so browsers ring) + aim its webhooks at /api/telnyx/call
+  // (so missed calls trigger the text-back). Idempotent.
+  if (url.searchParams.get("inboundsetup") === "1") {
+    const key = process.env.TELNYX_API_KEY;
+    const num = process.env.TELNYX_CALLER_ID;
+    if (!key || !num) return NextResponse.json({ ok: false, error: "TELNYX_API_KEY / TELNYX_CALLER_ID missing" });
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+    let cfg: { connId?: string } = {};
+    try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
+    if (!cfg.connId) return NextResponse.json({ ok: false, error: "WebRTC not provisioned yet — run ?telnyxprobe=1 first" });
+    const tx = async (path: string, init?: RequestInit) => {
+      const res = await fetch(`https://api.telnyx.com/v2${path}`, { ...init, headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" } });
+      return { ok: res.ok, status: res.status, text: (await res.text()).slice(0, 300) };
+    };
+    // find the number's id
+    const look = await fetch(`https://api.telnyx.com/v2/phone_numbers?filter[phone_number]=${encodeURIComponent(num)}`, { headers: { Authorization: `Bearer ${key}` } });
+    const lb = (await look.json()) as { data?: Array<{ id?: string; connection_id?: string }> };
+    const pn = lb.data?.[0];
+    if (!pn?.id) return NextResponse.json({ ok: false, error: `number ${num} not found on this Telnyx account` });
+    const steps: string[] = [`number found (was connection ${pn.connection_id ?? "none"})`];
+    const assign = await tx(`/phone_numbers/${pn.id}`, { method: "PATCH", body: JSON.stringify({ connection_id: cfg.connId }) });
+    steps.push(assign.ok ? "number → WebRTC connection (browsers will ring)" : `assign failed ${assign.status}: ${assign.text}`);
+    const hook = await tx(`/credential_connections/${cfg.connId}`, { method: "PATCH", body: JSON.stringify({ webhook_event_url: "https://kpi-tracker-lovat.vercel.app/api/telnyx/call" }) });
+    steps.push(hook.ok ? "webhooks → /api/telnyx/call (missed-call text-back armed)" : `webhook failed ${hook.status}: ${hook.text}`);
+    return NextResponse.json({ ok: assign.ok && hook.ok, steps, inboundNumber: num });
+  }
+
   // 🧪 Telnyx browser-dialer probe: provisioning + token mint, headless.
   if (url.searchParams.get("telnyxprobe") === "1") {
     const { provisionAndToken } = await import("@/lib/telnyx-webrtc");

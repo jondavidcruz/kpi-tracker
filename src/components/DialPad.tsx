@@ -33,6 +33,10 @@ export default function DialPad() {
   const [qi, setQi] = useState(0);
   const [onCall, setOnCall] = useState<Ctx | null>(null);
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
+  const [incoming, setIncoming] = useState<{ number: string } | null>(null);
+  const incomingCallRef = useRef<{ answer: () => void; hangup: () => void } | null>(null);
+  const readyRef = useRef(false);
+  const connectingRef = useRef<Promise<unknown> | null>(null);
   const clientRef = useRef<{ disconnect: () => void } | null>(null);
   const callRef = useRef<{ hangup: () => void; muteAudio: () => void; unmuteAudio: () => void } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -54,7 +58,7 @@ export default function DialPad() {
       try { ringCtx.current.ctx.close(); } catch { /* done */ }
       ringCtx.current = null;
     };
-    if (state === "ringing" || state === "connecting") {
+    if (state === "ringing" || state === "connecting" || incoming) {
       if (ringCtx.current) return;
       try {
         const ctx = new AudioContext();
@@ -78,7 +82,7 @@ export default function DialPad() {
       } catch { /* no audio context — silent ring */ }
     } else stop();
     return stop;
-  }, [state]);
+  }, [state, incoming]);
 
   const load = async (q = "") => {
     try {
@@ -114,7 +118,6 @@ export default function DialPad() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     const dur = startRef.current ? Math.round((Date.now() - startRef.current) / 1000) : 0;
     startRef.current = 0;
-    try { clientRef.current?.disconnect(); } catch { /* gone */ }
     setState("idle"); setMuted(false); setSecs(0); setOnCall(null);
     if (ctx?.oppId) setLastCall(ctx);
     if (ctx?.contactId) {
@@ -138,36 +141,69 @@ export default function DialPad() {
     }
   };
 
+  // One persistent connection: dialing uses it AND it keeps listening for
+  // INBOUND calls (sellers calling our number ring right here in the browser).
+  const ensureClient = async (): Promise<unknown> => {
+    if (clientRef.current && readyRef.current) return clientRef.current;
+    if (connectingRef.current) return connectingRef.current;
+    connectingRef.current = (async () => {
+      const tr = await fetch("/api/telnyx/token", { method: "POST" });
+      const tj = (await tr.json()) as { token?: string; error?: string };
+      if (!tr.ok || !tj.token) throw new Error(tj.error ?? "token failed");
+      const { TelnyxRTC } = await import("@telnyx/webrtc");
+      const client = new TelnyxRTC({ login_token: tj.token });
+      clientRef.current = client as never;
+      await new Promise<void>((resolve, reject) => {
+        const to = setTimeout(() => reject(new Error("connect timeout")), 12000);
+        client.on("telnyx.ready", () => { clearTimeout(to); readyRef.current = true; resolve(); });
+        client.on("telnyx.error", (e: unknown) => { setMsg(String((e as { message?: string })?.message ?? e).slice(0, 120)); });
+        client.on("telnyx.socket.close", () => { readyRef.current = false; connectingRef.current = null; });
+        client.on("telnyx.notification", (n: { type: string; call?: { state?: string; direction?: string; remoteStream?: MediaStream; options?: { remoteCallerNumber?: string }; answer?: () => void; hangup?: () => void } }) => {
+          if (n.type !== "callUpdate" || !n.call) return;
+          const cs = n.call.state ?? "";
+          const inbound = n.call.direction === "inbound";
+          if (inbound && cs === "ringing") {
+            incomingCallRef.current = n.call as never;
+            setIncoming({ number: n.call.options?.remoteCallerNumber ?? "unknown" });
+            setOpen(true);
+            return;
+          }
+          if (cs === "active") {
+            setIncoming(null);
+            if (!startRef.current) {
+              startRef.current = Date.now();
+              timerRef.current = setInterval(() => setSecs(Math.round((Date.now() - startRef.current) / 1000)), 1000);
+            }
+            setState("active"); setMsg("");
+            if (audioRef.current && n.call.remoteStream) { audioRef.current.srcObject = n.call.remoteStream; audioRef.current.play().catch(() => {}); }
+          }
+          if (["hangup", "destroy"].includes(cs)) {
+            if (inbound && incomingCallRef.current) { incomingCallRef.current = null; setIncoming(null); }
+            finish(onCallRef.current);
+          }
+        });
+        client.connect();
+      });
+      return client;
+    })();
+    try { return await connectingRef.current; } finally { if (!readyRef.current) connectingRef.current = null; }
+  };
+  const onCallRef = useRef<Ctx | null>(null);
+  useEffect(() => { onCallRef.current = onCall; }, [onCall]);
+  // connect in the background so inbound calls ring even before first use
+  useEffect(() => { ensureClient().catch(() => { /* connects on first dial instead */ }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const answerIncoming = () => { try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "" }); } catch { /* gone */ } };
+  const declineIncoming = () => { try { incomingCallRef.current?.hangup(); } catch { /* gone */ } incomingCallRef.current = null; setIncoming(null); };
+
   const call = async (ctx: Ctx) => {
     const to = ctx.phone.replace(/[^+\d]/g, "");
     if (to.replace(/\D/g, "").length < 10) { setMsg("enter a full number"); return; }
     setOnCall(ctx); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     try {
-      const tr = await fetch("/api/telnyx/token", { method: "POST" });
-      const tj = (await tr.json()) as { token?: string; error?: string };
-      if (!tr.ok || !tj.token) { setState("error"); setMsg(tj.error ?? "token failed"); return; }
-      const { TelnyxRTC } = await import("@telnyx/webrtc");
-      const client = new TelnyxRTC({ login_token: tj.token });
-      clientRef.current = client as never;
-      client.on("telnyx.ready", () => {
-        setState("ringing");
-        callRef.current = client.newCall({ destinationNumber: to, callerNumber: pickFrom(to), audio: true, video: false }) as never;
-      });
-      client.on("telnyx.error", (e: unknown) => { setState("error"); setMsg(String((e as { message?: string })?.message ?? e).slice(0, 120)); });
-      client.on("telnyx.notification", (n: { type: string; call?: { state?: string; remoteStream?: MediaStream } }) => {
-        if (n.type !== "callUpdate") return;
-        const cs = n.call?.state ?? "";
-        if (cs === "active") {
-          if (!startRef.current) {
-            startRef.current = Date.now();
-            timerRef.current = setInterval(() => setSecs(Math.round((Date.now() - startRef.current) / 1000)), 1000);
-          }
-          setState("active"); setMsg("");
-          if (audioRef.current && n.call?.remoteStream) { audioRef.current.srcObject = n.call.remoteStream; audioRef.current.play().catch(() => {}); }
-        }
-        if (["hangup", "destroy"].includes(cs)) finish(ctx);
-      });
-      client.connect();
+      const client = (await ensureClient()) as { newCall: (o: object) => unknown };
+      setState("ringing");
+      callRef.current = client.newCall({ destinationNumber: to, callerNumber: pickFrom(to), audio: true, video: false }) as never;
     } catch (e) { setState("error"); setMsg(String(e).slice(0, 120)); }
   };
 
@@ -206,6 +242,16 @@ export default function DialPad() {
             <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-slate-500">✕</button>
           </span>
 
+          {incoming && (
+            <span className="flex items-center gap-2 bg-emerald-600 px-3.5 py-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-emerald-100">📲 Incoming call</span>
+                <span className="block truncate text-sm font-extrabold text-white">{incoming.number}</span>
+              </span>
+              <button onClick={answerIncoming} className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg text-emerald-700 shadow hover:bg-emerald-50" title="Answer">📞</button>
+              <button onClick={declineIncoming} className="grid h-10 w-10 place-items-center rounded-full bg-red-600 text-lg text-white shadow hover:bg-red-700" title="Decline">⏹</button>
+            </span>
+          )}
           {/* live call bar */}
           {state !== "idle" && (
             <span className="flex items-center gap-2 bg-emerald-50 px-3.5 py-2 ring-1 ring-emerald-200">

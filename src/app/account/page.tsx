@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
+import { readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
+import { saveSignatureAction } from "@/app/crm/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   if (!me) return null;
   const sp = await searchParams;
   const profile = await db.teamProfile.findUnique({ where: { userId: me.id }, select: { address: true } });
+  const mySig = (await readSignatures())[firstOf(me.name)] || defaultSignature(me.name);
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
@@ -58,6 +61,15 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <textarea name="address" rows={3} defaultValue={profile?.address ?? ""} placeholder="Jane Dela Cruz&#10;123 Mabini St, Barangay …&#10;Cebu City, Cebu 6000&#10;Philippines" className={inputCls} />
           </label>
           <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save address</button>
+        </form>
+      </Card>
+
+      <Card className="p-5">
+        <h3 className="mb-1 text-sm font-bold text-slate-700">✍️ My email signature</h3>
+        <p className="mb-3 text-xs text-slate-500">Goes at the bottom of every email you send from the Seller CRM. Sent as <b>you</b> — replies come straight to your inbox.</p>
+        <form action={saveSignatureAction} className="space-y-3">
+          <textarea name="signature" rows={4} defaultValue={mySig} className={inputCls} />
+          <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save signature</button>
         </form>
       </Card>
 

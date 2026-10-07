@@ -33,3 +33,21 @@ export async function commsFor(user: User | null): Promise<CommsPerm> {
   const map = await readCommsMap();
   return map[firstOf(user.name)] ?? { call: false, sms: false, email: false };
 }
+
+// ── Per-agent email signatures (GHL-style "From" identity) ─────────────────
+const SIG_CAT = "__crm_signatures__";
+export type SigMap = Record<string, string>; // firstNameLower → plain-text signature
+
+export async function readSignatures(): Promise<SigMap> {
+  const row = await db.resource.findFirst({ where: { category: SIG_CAT } }).catch(() => null);
+  try { return row?.description ? JSON.parse(row.description) : {}; } catch { return {}; }
+}
+export async function writeSignatures(map: SigMap): Promise<void> {
+  const row = await db.resource.findFirst({ where: { category: SIG_CAT } });
+  const description = JSON.stringify(map);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { title: "crm-signatures", category: SIG_CAT, url: "", description } });
+}
+export function defaultSignature(name: string): string {
+  return `${name}\nFreedom Offers\n📞 1-877-652-8991 · freedom-offers.com`;
+}

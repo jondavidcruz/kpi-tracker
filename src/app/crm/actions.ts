@@ -201,6 +201,17 @@ export async function saveCommsPermsAction(formData: FormData) {
   revalidatePath("/crm");
 }
 
+/** Anyone: save their own email signature (used on every CRM email they send). */
+export async function saveSignatureAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const { readSignatures, writeSignatures, firstOf } = await import("@/lib/crm-comms");
+  const map = await readSignatures();
+  map[firstOf(me.name)] = String(formData.get("signature") ?? "").trim().slice(0, 600);
+  await writeSignatures(map);
+  revalidatePath("/account");
+}
+
 /** ✉️ Send a real email to the seller from the card (Resend, reply-to us). */
 export async function sendCrmEmailAction(formData: FormData) {
   const me = await crmUser();
@@ -213,8 +224,16 @@ export async function sendCrmEmailAction(formData: FormData) {
   const subject = String(formData.get("subject") ?? "").trim().slice(0, 150);
   const body = String(formData.get("body") ?? "").trim().slice(0, 4000);
   if (!to || !subject || !body) return;
-  const { sendEmailTo } = await import("@/lib/notify");
-  const ok = await sendEmailTo([to], subject, `<p>${body.replace(/\n/g, "<br>")}</p><p>— ${me.name}, Freedom Offers</p>`, undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com");
+  // GHL-style agent identity: From = the rep (on our domain), reply-to their
+  // real inbox, their own signature appended.
+  const { readSignatures, firstOf, defaultSignature } = await import("@/lib/crm-comms");
+  const sig = (await readSignatures())[firstOf(me.name)] || defaultSignature(me.name);
+  const domain = (process.env.ALERT_EMAIL_FROM ?? "info@freedom-offers.com").split("@")[1] ?? "freedom-offers.com";
+  const fromAddr = `${me.name} <${firstOf(me.name)}@${domain}>`;
+  const html = `<p>${body.replace(/\n/g, "<br>")}</p><p style="color:#64748b;font-size:13px;white-space:pre-line">${sig.replace(/</g, "&lt;")}</p>`;
+  const { getChannelConfig, sendEmailTo } = await import("@/lib/notify");
+  const cfg = { ...(await getChannelConfig()), emailFrom: fromAddr };
+  const ok = await sendEmailTo([to], subject, html, cfg, me.email || process.env.CASCADE_REPLY_TO || "info@freedom-offers.com");
   await logCrmEvent({ contactId, oppId, kind: "email", body: `➡️ Us: ${subject} — ${body.slice(0, 300)}${ok ? "" : " (SEND FAILED)"}`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
 }
