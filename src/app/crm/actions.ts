@@ -248,7 +248,19 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   const contactId = String(formData.get("contactId") ?? "");
   const to = String(formData.get("to") ?? "").replace(/[^+\d]/g, "");
   const text = String(formData.get("text") ?? "").trim().slice(0, 900);
-  const from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
+  let from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
+  // rep picked a From number — honor it only if it's one of OUR lines
+  const reqFrom = String(formData.get("from") ?? "").replace(/[^+\d]/g, "");
+  if (reqFrom && reqFrom !== from && process.env.TELNYX_API_KEY) {
+    try {
+      const cfgRow = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+      const cfg = (cfgRow?.description ? JSON.parse(cfgRow.description) : {}) as { connId?: string; ccAppId?: string };
+      const ours = new Set([cfg.connId, cfg.ccAppId].filter(Boolean));
+      const res = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=250", { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store" });
+      const body = (await res.json()) as { data?: Array<{ phone_number?: string; connection_id?: string }> };
+      if ((body.data ?? []).some((n) => n.phone_number === reqFrom && ours.has(String(n.connection_id ?? "")))) from = reqFrom;
+    } catch { /* fall back to the default line */ }
+  }
   if (!to || !text) return;
   if (!process.env.TELNYX_API_KEY || !from) {
     await logCrmEvent({ contactId, oppId, kind: "sms", body: `SMS NOT SENT — set TELNYX_SMS_FROM (a Telnyx number on a messaging profile) in Vercel. Message was: ${text.slice(0, 200)}`, actor: me.name });
