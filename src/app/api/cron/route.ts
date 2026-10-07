@@ -490,6 +490,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, sent });
   }
 
+  // 📝 GHL notes backfill — contacts imported without notes get them here
+  // (time-guarded; run repeatedly until done=0 remaining).
+  if (url.searchParams.get("ghlnotes") === "1") {
+    const { ghlGet } = await import("@/lib/reireply");
+    const deadline = Date.now() + 45_000;
+    const candidates = await db.crmContact.findMany({ where: { ghlId: { not: "" }, archivedAt: null }, select: { id: true, ghlId: true }, orderBy: { createdAt: "desc" }, take: 400 });
+    let checked = 0, notes = 0, withNotes = 0;
+    for (const c of candidates) {
+      if (Date.now() > deadline) break;
+      const has = await db.crmEvent.findFirst({ where: { contactId: c.id, actor: "GHL import" }, select: { id: true } });
+      if (has) { withNotes++; continue; }
+      checked++;
+      const nres = await ghlGet(`/contacts/${c.ghlId}/notes`);
+      const nbody = nres.body as { notes?: Array<{ body?: string; dateAdded?: string }> };
+      const list = (nbody.notes ?? []).slice(0, 50);
+      if (!list.length) {
+        await db.crmEvent.create({ data: { contactId: c.id, kind: "system", body: "GHL: no notes on file", actor: "GHL import", at: new Date() } }).catch(() => {});
+        continue;
+      }
+      for (const n of list) {
+        if (!n.body) continue;
+        await db.crmEvent.create({ data: { contactId: c.id, kind: "note", body: String(n.body).slice(0, 2000), actor: "GHL import", at: n.dateAdded ? new Date(n.dateAdded) : new Date() } }).catch(() => {});
+        notes++;
+      }
+    }
+    return NextResponse.json({ ok: true, checkedThisRun: checked, notesImported: notes, alreadyDone: withNotes, remaining: Math.max(0, candidates.length - withNotes - checked) });
+  }
+
   // 💬 Sync GHL texts + emails onto each CRM lead's timeline (Jon 2026-10-07:
   // "all emails and texts synced to each lead"). Dedupes by GHL message id;
   // time-guarded for the 60s cap; cron runs it 4×/day while GHL stays live.
@@ -670,7 +698,9 @@ export async function GET(request: Request) {
     const APPROVED = [/signed/i, /sell\s*land/i, /jon\s*&\s*mitch/i, /jraq.*nick|nick/i];
     const pls = await getPipelines();
     const plBody = pls.body as { pipelines?: Array<{ id: string; name: string; stages?: Array<{ id: string; name: string }> }> };
-    const pipelines = (plBody.pipelines ?? []).filter((p) => APPROVED.some((rx) => rx.test(p.name)));
+    let pipelines = (plBody.pipelines ?? []).filter((p) => APPROVED.some((rx) => rx.test(p.name)));
+    const pipeIdx = url.searchParams.get("pipe");
+    if (pipeIdx != null) pipelines = pipelines.filter((_, i) => i === Number(pipeIdx));
     const stageName = new Map<string, string>();
     for (const p of plBody.pipelines ?? []) for (const st of p.stages ?? []) stageName.set(st.id, st.name);
     // GHL parity: keep the EXACT pipeline + stage (slug of GHL's stage name)
@@ -711,15 +741,6 @@ export async function GET(request: Request) {
           else {
             const created = await db.crmContact.create({ data: { name: r.name, phone: r.phone, email: r.email, source: "GHL import", assignedTo: r.rep, ghlId: r.ghlContactId } });
             contactId = created.id; contacts++;
-            if (r.ghlContactId) {
-              const nres = await ghlGet(`/contacts/${r.ghlContactId}/notes`);
-              const nbody = nres.body as { notes?: Array<{ body?: string; dateAdded?: string }> };
-              for (const n of (nbody.notes ?? []).slice(0, 50)) {
-                if (!n.body) continue;
-                await db.crmEvent.create({ data: { contactId, kind: "note", body: String(n.body).slice(0, 2000), actor: "GHL import", at: n.dateAdded ? new Date(n.dateAdded) : new Date() } }).catch(() => {});
-                notes++;
-              }
-            }
           }
           if (r.ghlContactId) byGhlContact.set(r.ghlContactId, contactId);
         }
@@ -735,6 +756,7 @@ export async function GET(request: Request) {
       }
       // archive earlier imports that came from pipelines Jon excluded
       const keep = new Set(rows.map((r) => r.ghlOppId));
+      if (pipeIdx != null) { /* partial run — skip stray sweep */ } else
       const stray = await db.crmOpportunity.findMany({ where: { ghlId: { not: "" }, archivedAt: null, tags: { contains: "ghl-import" } }, select: { id: true, ghlId: true } });
       for (const s2 of stray) {
         if (keep.has(s2.ghlId)) continue;
