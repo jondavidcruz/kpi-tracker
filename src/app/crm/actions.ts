@@ -608,12 +608,17 @@ async function draftContract(oppId: string, kind: string, actor: string): Promis
   if (!opp) return { ok: false, msg: "lead not found" };
   const c = opp.contact;
   const price = opp.value ?? opp.askPrice;
+  // Jon's 5 essentials: address, APN (from the discovery forms), seller net
+  // (underwriting-approved number = deal value), seller full name.
+  const fd = (opp.formData ?? {}) as Record<string, Record<string, string>>;
+  const apn = fd.property?.apn || fd.land?.apn || "";
+  const net = price != null ? `$${price.toLocaleString()}` : "";
   const r = await createOfferDraft({
     name: `${kind === "novation" ? "Novation" : "Cash"} offer — ${c.name}${c.address ? ` — ${c.address}` : ""}`,
     recipientEmail: c.email, recipientName: c.name, templateId: tpl.id,
     tokens: {
-      "Seller.Name": c.name, "Property.Address": c.address,
-      "Offer.Price": price != null ? `$${price.toLocaleString()}` : "", "Rep.Name": opp.assignedTo || actor,
+      "Seller.Name": c.name, "Property.Address": c.address, "APN": apn,
+      "Seller.Net": net, "Offer.Price": net, "Rep.Name": opp.assignedTo || actor,
     },
     metadata: { oppId: opp.id, contactId: c.id, kind },
   });

@@ -583,6 +583,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 📝 PandaDoc template probe (?pdtplprobe=1): dump both offer templates'
+  // field names + signer roles so draft pre-fill maps Jon's 5 essentials
+  // exactly (address, APN, seller net, seller name).
+  if (url.searchParams.get("pdtplprobe") === "1") {
+    const { pandadocConfigured, getTemplateDetails, PANDADOC_TEMPLATES } = await import("@/lib/pandadoc");
+    if (!pandadocConfigured()) return NextResponse.json({ ok: false, error: "PANDADOC_API_KEY not set in Vercel" });
+    const out: Record<string, unknown> = {};
+    for (const [kind, tpl] of Object.entries(PANDADOC_TEMPLATES)) {
+      const det = await getTemplateDetails(tpl.id);
+      const b = det.body as { name?: string; roles?: Array<{ name?: string }>; fields?: Array<{ field_id?: string; merge_field?: string; name?: string; type?: string; assigned_to?: { name?: string } }>; tokens?: Array<{ name?: string }> };
+      out[kind] = det.ok ? {
+        template: b.name,
+        roles: (b.roles ?? []).map((r) => r.name),
+        fields: (b.fields ?? []).map((f) => ({ id: f.field_id, merge: f.merge_field, label: f.name, type: f.type })),
+        tokens: (b.tokens ?? []).map((t) => t.name),
+      } : { error: `${det.status}: ${JSON.stringify(det.body).slice(0, 200)}` };
+    }
+    return NextResponse.json({ ok: true, templates: out });
+  }
+
   // 💾 Off-site backup (?fullbackup=1, daily cron): the ENTIRE database as
   // gzipped JSON into a private "War Room Backups" folder on the Google
   // Shared Drive — survives Vercel/Supabase dying, costs none of our server

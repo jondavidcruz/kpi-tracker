@@ -52,11 +52,31 @@ export async function createOfferDraft(o: { name: string; recipientEmail: string
   const tpl = o.templateId || process.env.PANDADOC_TEMPLATE_ID || PANDADOC_TEMPLATES.cash.id;
   if (!tpl) return { error: "no PandaDoc template configured" };
   const [first, ...rest] = o.recipientName.trim().split(/\s+/);
+  // The templates use fillable FIELDS (not {{tokens}}), so pre-fill both ways:
+  // read the template's field names once and fuzzy-match Jon's 5 essentials.
+  const fields: Record<string, { value: string }> = {};
+  try {
+    const det = await getTemplateDetails(tpl);
+    const db2 = det.body as { fields?: Array<{ field_id?: string; merge_field?: string; name?: string }> };
+    const want: Array<[RegExp, string]> = [
+      [/apn/i, o.tokens["APN"] ?? ""],
+      [/address|property/i, o.tokens["Property.Address"] ?? ""],
+      [/net|amount|price|sum/i, o.tokens["Seller.Net"] ?? ""],
+      [/name|seller|printed/i, o.tokens["Seller.Name"] ?? ""],
+    ];
+    for (const f of db2.fields ?? []) {
+      const key = f.merge_field || f.field_id || "";
+      const label = `${f.name ?? ""} ${key}`;
+      if (!key || fields[key]) continue;
+      for (const [rx, val] of want) if (val && rx.test(label)) { fields[key] = { value: val }; break; }
+    }
+  } catch { /* fields stay empty — tokens still apply */ }
   const r = await pdPost("/documents", {
     name: o.name.slice(0, 120),
     template_uuid: tpl,
-    recipients: [{ email: o.recipientEmail || "unknown@freedom-offers.com", first_name: first || "Seller", last_name: rest.join(" ") || "-", role: "Client" }],
+    recipients: [{ email: o.recipientEmail || "unknown@freedom-offers.com", first_name: first || "Seller", last_name: rest.join(" ") || "-", role: "Seller" }],
     tokens: Object.entries(o.tokens).map(([name, value]) => ({ name, value })),
+    ...(Object.keys(fields).length ? { fields } : {}),
     metadata: o.metadata ?? {},
   });
   if (!r.ok) return { error: `PandaDoc ${r.status}: ${JSON.stringify(r.body).slice(0, 160)}` };
@@ -70,6 +90,12 @@ export async function listCompletedDocs(fromISO: string, toISO: string) {
 
 export async function getDocDetails(id: string) {
   return pd(`/documents/${id}/details`);
+}
+
+/** Template details — shows the fillable fields' names/merge-fields so the
+ * draft call can pre-fill Jon's 5 (address, APN, net amount, seller name). */
+export async function getTemplateDetails(id: string) {
+  return pd(`/templates/${id}/details`);
 }
 
 /** Probe recent completed docs so we can map template → contract type + creator → rep. */
