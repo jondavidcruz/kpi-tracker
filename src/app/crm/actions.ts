@@ -71,28 +71,9 @@ export async function setOppStageAction(formData: FormData) {
   // 📝 GHL-parity (Jon 2026-10-07): hitting an offer/contract stage auto-drafts
   // the PandaDoc contract so the rep just reviews and sends. Never blocks.
   if (full && /offer|contract/i.test(stage) && !/rejected|sent/i.test(stage)) {
-    (async () => {
-      const { pandadocConfigured, createOfferDraft } = await import("@/lib/pandadoc");
-      if (!pandadocConfigured()) return;
-      const contact = await db.crmContact.findUnique({ where: { id: full.contactId } });
-      if (!contact) return;
-      const price = full.value ?? full.askPrice;
-      const r = await createOfferDraft({
-        name: `Offer — ${contact.name}${contact.address ? ` — ${contact.address}` : ""}`,
-        recipientEmail: contact.email, recipientName: contact.name,
-        tokens: {
-          "Seller.Name": contact.name, "Property.Address": contact.address,
-          "Offer.Price": price != null ? `$${price.toLocaleString()}` : "", "Rep.Name": full.assignedTo || me.name,
-        },
-        metadata: { oppId: full.id, contactId: contact.id },
-      });
-      if (r.id) {
-        await logCrmEvent({ contactId: contact.id, oppId: full.id, kind: "system", body: `📝 PandaDoc contract DRAFTED — review & send: https://app.pandadoc.com/a/#/documents/${r.id}`, actor: "pandadoc" });
-        await db.crmTask.create({ data: { oppId: full.id, contactId: contact.id, title: `📝 Review & send the drafted offer contract (PandaDoc)`, due: new Date().toISOString().slice(0, 10), assignedTo: full.assignedTo || me.name, createdBy: "pandadoc" } }).catch(() => {});
-      } else if (r.error && r.error !== "PANDADOC_TEMPLATE_ID not set") {
-        await logCrmEvent({ contactId: contact.id, oppId: full.id, kind: "system", body: `PandaDoc draft failed: ${r.error}`, actor: "pandadoc" });
-      }
-    })().catch(() => {});
+    // cash unless the lead is tagged novation (buttons on the card override)
+    const kind = /novation/i.test((await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } }))?.tags ?? "") ? "novation" : "cash";
+    draftContract(full.id, kind, me.name).catch(() => {});
   }
   revalidatePath("/crm");
   revalidatePath(`/crm/${id}`);
@@ -616,4 +597,43 @@ export async function telnyxCallAction(formData: FormData): Promise<{ ok: boolea
     if (contactId) await logCrmEvent({ contactId, oppId, kind: "call", body: `Click-to-call started → ${to}`, actor: me.name });
     return { ok: true, msg: "📞 Your phone is ringing — answer and we bridge the seller in." };
   } catch (e) { return { ok: false, msg: String(e).slice(0, 140) }; }
+}
+
+/** Shared PandaDoc drafter: cash vs novation template, timeline log + task. */
+async function draftContract(oppId: string, kind: string, actor: string): Promise<{ ok: boolean; msg: string }> {
+  const { pandadocConfigured, createOfferDraft, PANDADOC_TEMPLATES } = await import("@/lib/pandadoc");
+  if (!pandadocConfigured()) return { ok: false, msg: "PandaDoc key missing" };
+  const tpl = PANDADOC_TEMPLATES[kind] ?? PANDADOC_TEMPLATES.cash;
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, include: { contact: true } });
+  if (!opp) return { ok: false, msg: "lead not found" };
+  const c = opp.contact;
+  const price = opp.value ?? opp.askPrice;
+  const r = await createOfferDraft({
+    name: `${kind === "novation" ? "Novation" : "Cash"} offer — ${c.name}${c.address ? ` — ${c.address}` : ""}`,
+    recipientEmail: c.email, recipientName: c.name, templateId: tpl.id,
+    tokens: {
+      "Seller.Name": c.name, "Property.Address": c.address,
+      "Offer.Price": price != null ? `$${price.toLocaleString()}` : "", "Rep.Name": opp.assignedTo || actor,
+    },
+    metadata: { oppId: opp.id, contactId: c.id, kind },
+  });
+  if (r.id) {
+    await logCrmEvent({ contactId: c.id, oppId: opp.id, kind: "system", body: `📝 ${kind === "novation" ? "NOVATION" : "CASH"} contract DRAFTED (${tpl.label}) — review & send: https://app.pandadoc.com/a/#/documents/${r.id}`, actor: "pandadoc" });
+    await db.crmTask.create({ data: { oppId: opp.id, contactId: c.id, title: `📝 Review & send the drafted ${kind} contract (PandaDoc)`, due: new Date().toISOString().slice(0, 10), assignedTo: opp.assignedTo || actor, createdBy: "pandadoc" } }).catch(() => {});
+    revalidatePath(`/crm/${opp.id}`);
+    return { ok: true, msg: "drafted" };
+  }
+  await logCrmEvent({ contactId: c.id, oppId: opp.id, kind: "system", body: `PandaDoc ${kind} draft failed: ${r.error}`, actor: "pandadoc" });
+  revalidatePath(`/crm/${opp.id}`);
+  return { ok: false, msg: r.error ?? "failed" };
+}
+
+/** Card buttons: 📝 Draft cash / novation contract on demand. */
+export async function draftContractAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const kind = String(formData.get("kind") ?? "cash") === "novation" ? "novation" : "cash";
+  if (!oppId) return;
+  await draftContract(oppId, kind, me.name);
 }

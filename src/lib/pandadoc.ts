@@ -39,12 +39,18 @@ async function pdPost(path: string, payload: object): Promise<Res> {
   }
 }
 
-/** Draft a contract from the offer template (GHL-parity: auto-draft when a
- * lead hits the offer stage). Doc stays a DRAFT — the rep reviews and sends
- * from PandaDoc. Returns {id} on success. */
-export async function createOfferDraft(o: { name: string; recipientEmail: string; recipientName: string; tokens: Record<string, string>; metadata?: Record<string, string> }): Promise<{ id?: string; error?: string }> {
-  const tpl = process.env.PANDADOC_TEMPLATE_ID;
-  if (!tpl) return { error: "PANDADOC_TEMPLATE_ID not set" };
+// Jon's two offer contracts (2026-10-07). Overridable via env without a deploy.
+export const PANDADOC_TEMPLATES: Record<string, { id: string; label: string }> = {
+  cash: { id: process.env.PANDADOC_TEMPLATE_CASH || "bwoowbYKoRiKecHdhWYZyJ", label: "Cash offer (quick close, 30–60 days)" },
+  novation: { id: process.env.PANDADOC_TEMPLATE_NOVATION || "TeYMu3S3BYrzLbtX5dXiLA", label: "Novation offer (disclosures to list, 90–180 days)" },
+};
+
+/** Draft a contract from a template (GHL-parity: auto-draft when a lead hits
+ * the offer stage — cash vs novation chosen by tag or button). Doc stays a
+ * DRAFT — the rep reviews and sends from PandaDoc. Returns {id} on success. */
+export async function createOfferDraft(o: { name: string; recipientEmail: string; recipientName: string; tokens: Record<string, string>; metadata?: Record<string, string>; templateId?: string }): Promise<{ id?: string; error?: string }> {
+  const tpl = o.templateId || process.env.PANDADOC_TEMPLATE_ID || PANDADOC_TEMPLATES.cash.id;
+  if (!tpl) return { error: "no PandaDoc template configured" };
   const [first, ...rest] = o.recipientName.trim().split(/\s+/);
   const r = await pdPost("/documents", {
     name: o.name.slice(0, 120),
