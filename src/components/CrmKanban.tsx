@@ -27,7 +27,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial }: { columns: CrmColumn[]; cards: CrmCard[] }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, listHref = "/crm?view=list" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; listHref?: string }) {
   const [cards, setCards] = useState(initial);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
@@ -87,7 +87,7 @@ export default function CrmKanban({ columns, cards: initial }: { columns: CrmCol
             >
               <div className="mb-1.5 flex items-center justify-between px-1">
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${col.cls}`}>{col.label}</span>
-                <span className="text-xs font-extrabold tabular-nums text-slate-500">{colCards.length}</span>
+                <span className="text-xs font-extrabold tabular-nums text-slate-500">{(counts[col.key] ?? colCards.length).toLocaleString()}</span>
               </div>
               <div className="space-y-1.5">
                 {colCards.map((c) => (
@@ -118,6 +118,11 @@ export default function CrmKanban({ columns, cards: initial }: { columns: CrmCol
                   </div>
                 ))}
                 {colCards.length === 0 && <div className="rounded-xl border border-dashed border-slate-200 px-2 py-3 text-center text-[10px] text-slate-300">empty</div>}
+                {(counts[col.key] ?? 0) > colCards.length && (
+                  <a href={`${listHref}&stage=${col.key}`} className="block rounded-xl bg-white/70 px-2 py-2 text-center text-[10px] font-bold text-slate-500 ring-1 ring-slate-200 hover:bg-white">
+                    + {((counts[col.key] ?? 0) - colCards.length).toLocaleString()} more — open in List
+                  </a>
+                )}
               </div>
             </div>
           );

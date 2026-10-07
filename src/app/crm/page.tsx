@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 
-export default async function CrmPage({ searchParams }: { searchParams: Promise<{ view?: string; who?: string; q?: string; stage?: string; tag?: string; due?: string }> }) {
+export default async function CrmPage({ searchParams }: { searchParams: Promise<{ view?: string; who?: string; q?: string; stage?: string; tag?: string; due?: string; p?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
@@ -30,31 +30,38 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const fTag = (sp.tag ?? "").trim();
   const fDue = sp.due === "1";
 
-  const [stages, reps, opps, tasks, appts] = await Promise.all([
+  // Scale plan (35k+ leads): the board never loads everything — true counts
+  // come from an indexed groupBy, each column renders its freshest 60, and
+  // the List view paginates. Payload stays ~constant no matter the lead count.
+  const whereBase = {
+    archivedAt: null,
+    ...(who ? { assignedTo: { equals: who.trim(), mode: "insensitive" as const } } : {}),
+    ...(fStage ? { stage: fStage } : {}),
+    ...(fTag ? { OR: [{ tags: { contains: fTag, mode: "insensitive" as const } }, { contact: { tags: { contains: fTag, mode: "insensitive" as const } } }] } : {}),
+    ...(fDue ? { nextFollowUp: { not: "", lte: today } } : {}),
+    ...(q ? { OR: [
+      { title: { contains: q, mode: "insensitive" as const } },
+      { tags: { contains: q, mode: "insensitive" as const } },
+      { contact: { name: { contains: q, mode: "insensitive" as const } } },
+      { contact: { phone: { contains: q.replace(/\D/g, "") || q } } },
+      { contact: { email: { contains: q, mode: "insensitive" as const } } },
+    ] } : {}),
+  };
+  const page = Math.max(1, Number(sp.p) || 1);
+  const PER_COL = 60, PER_PAGE = 50;
+  const [stages, reps, grouped, totalCount, tasks, appts] = await Promise.all([
     crmStages(),
     getActiveReps(),
-    db.crmOpportunity.findMany({
-      where: {
-        archivedAt: null,
-        ...(who ? { assignedTo: { equals: who.trim(), mode: "insensitive" } } : {}),
-        ...(fStage ? { stage: fStage } : {}),
-        ...(fTag ? { OR: [{ tags: { contains: fTag, mode: "insensitive" } }, { contact: { tags: { contains: fTag, mode: "insensitive" } } }] } : {}),
-        ...(fDue ? { nextFollowUp: { not: "", lte: today } } : {}),
-        ...(q ? { OR: [
-          { title: { contains: q, mode: "insensitive" } },
-          { tags: { contains: q, mode: "insensitive" } },
-          { contact: { name: { contains: q, mode: "insensitive" } } },
-          { contact: { phone: { contains: q.replace(/\D/g, "") || q } } },
-          { contact: { email: { contains: q, mode: "insensitive" } } },
-        ] } : {}),
-      },
-      include: { contact: { select: { name: true, phone: true } } },
-      orderBy: { updatedAt: "desc" },
-      take: 400,
-    }),
-    db.crmTask.findMany({ where: { doneAt: null }, select: { oppId: true, due: true, title: true, assignedTo: true } }),
+    db.crmOpportunity.groupBy({ by: ["stage"], where: whereBase, _count: { _all: true } }),
+    db.crmOpportunity.count({ where: whereBase }),
+    db.crmTask.findMany({ where: { doneAt: null }, select: { oppId: true, due: true, title: true, assignedTo: true }, take: 2000 }),
     db.crmAppointment.findMany({ where: { at: { gte: new Date() } }, orderBy: { at: "asc" }, take: 10 }),
   ]);
+  const stageCounts: Record<string, number> = {};
+  for (const g of grouped) stageCounts[g.stage] = g._count._all;
+  const opps = view === "list"
+    ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
+    : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
   const qs = (over: Record<string, string>) => {
     const p = new URLSearchParams({ view, ...(manager && who ? { who } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...over });
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
@@ -130,7 +137,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           ) : (
             <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">👤 Your pipeline — {me!.name.split(" ")[0]}&apos;s leads only</span>
           )}
-          <span className="ml-auto text-[11px] text-slate-400">{opps.length} showing · 💀 {deadOpps} archived — never deleted</span>
+          <span className="ml-auto text-[11px] text-slate-400">{totalCount.toLocaleString()} leads · 💀 {deadOpps} archived — never deleted</span>
         </div>
       </Card>
 
@@ -160,7 +167,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       </Card>
 
       {view === "kanban" ? (
-        <CrmKanban columns={stages} cards={cards} />
+        <CrmKanban columns={stages} cards={cards} counts={stageCounts} listHref={`/crm?view=list${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} />
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>
@@ -226,6 +233,15 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
             </tbody>
           </table>
           </form>
+          {totalCount > PER_PAGE && (
+            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs font-semibold text-slate-500">
+              <span>page {page} of {Math.ceil(totalCount / PER_PAGE)} · {totalCount.toLocaleString()} leads</span>
+              <span className="flex gap-2">
+                {page > 1 && <Link href={qs({ p: String(page - 1) })} className="rounded-lg bg-slate-100 px-3 py-1 hover:bg-slate-200">← prev</Link>}
+                {page * PER_PAGE < totalCount && <Link href={qs({ p: String(page + 1) })} className="rounded-lg bg-slate-100 px-3 py-1 hover:bg-slate-200">next →</Link>}
+              </span>
+            </div>
+          )}
         </Card>
       )}
 
