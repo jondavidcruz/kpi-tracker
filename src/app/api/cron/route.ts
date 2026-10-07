@@ -477,39 +477,57 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
-  // One-time: pull GHL's OPEN opportunities + contacts (+ their notes) into
-  // the Seller CRM. ?ghlimport=1 dry / &commit=1 writes. Idempotent by ghlId.
+  // GHL → Seller CRM import v2 (Jon 2026-10-07: ONLY DS: Signed, DS: Sell
+  // Land, AQM Jon & Mitch, JrAQ: Nick — per respective user, GHL-like stages).
+  // ?ghlimport=1 dry / &commit=1. Idempotent: existing opps UPDATE stage/rep;
+  // previously-imported opps from non-approved pipelines get archived.
   if (url.searchParams.get("ghlimport") === "1") {
     const commit = url.searchParams.get("commit") === "1";
-    const { searchOpportunities, ghlGet } = await import("@/lib/reireply");
+    const { searchOpportunities, ghlGet, getPipelines } = await import("@/lib/reireply");
     const { AGENTS } = await import("@/lib/crm-sync");
     const { logCrmEvent } = await import("@/lib/crm");
-    const PIPELINES = ["KkdpJx35dU4cLtYY9vXP", "8R4HDQD1nUGOUxGCxuCe", "Jm90sKZNvl8e5fKparhv"];
+    const APPROVED = [/signed/i, /sell\s*land/i, /jon\s*&\s*mitch/i, /jraq.*nick|nick/i];
+    const pls = await getPipelines();
+    const plBody = pls.body as { pipelines?: Array<{ id: string; name: string; stages?: Array<{ id: string; name: string }> }> };
+    const pipelines = (plBody.pipelines ?? []).filter((p) => APPROVED.some((rx) => rx.test(p.name)));
+    const stageName = new Map<string, string>();
+    for (const p of plBody.pipelines ?? []) for (const st of p.stages ?? []) stageName.set(st.id, st.name);
+    // GHL stage name → our CRM stage
+    const mapStage = (n: string) => /offer/i.test(n) ? "offer_made"
+      : /contract|sign|agreement|escrow|clos/i.test(n) ? "contract_sent"
+      : /market|photo|reduction|delay|lien|comp|dev/i.test(n) ? "at_developers"
+      : /process|discovery|appoint/i.test(n) ? "process_call"
+      : /new|fresh|lead/i.test(n) ? "new"
+      : /nurture|cold|dead|revive/i.test(n) ? "nurture"
+      : "contacted";
     const repByCrm = new Map(AGENTS.map((a) => [a.crm, a.first]));
     const users = await db.user.findMany({ where: { active: true }, select: { name: true } });
     const fullName = (first: string) => users.find((u) => u.name.toLowerCase().startsWith(first))?.name ?? "";
-    type Row = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; value: number | null; rep: string; createdAt: string };
+    type Row = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; value: number | null; rep: string; stage: string; pipeline: string };
     const rows: Row[] = [];
-    for (const pid of PIPELINES) {
-      const res = await searchOpportunities(pid);
+    for (const p of pipelines) {
+      const res = await searchOpportunities(p.id);
       if (!res.ok) continue;
       const body = res.body as { opportunities?: Array<Record<string, unknown>> };
       for (const o of body.opportunities ?? []) {
         if (String(o.status ?? "") !== "open") continue;
         const contact = (o.contact ?? {}) as { id?: string; name?: string; phone?: string; email?: string };
+        const ghlStage = stageName.get(String(o.pipelineStageId ?? "")) ?? "";
+        // "respective user": GHL owner wins; JrAQ: Nick pipeline defaults to Nicholas
+        const owner = fullName(repByCrm.get(String(o.assignedTo ?? "")) ?? "");
+        const rep = owner || (/nick/i.test(p.name) ? (fullName("nicholas") || fullName("nick") || "Nicholas Fair") : "");
         rows.push({
           ghlOppId: String(o.id ?? ""), ghlContactId: String(contact.id ?? o.contactId ?? ""),
           name: String(contact.name ?? o.name ?? "—"), phone: String(contact.phone ?? ""), email: String(contact.email ?? ""),
           title: String(o.name ?? contact.name ?? "Imported opportunity"),
           value: o.monetaryValue != null ? Number(o.monetaryValue) : null,
-          rep: fullName(repByCrm.get(String(o.assignedTo ?? "")) ?? ""),
-          createdAt: String(o.createdAt ?? ""),
+          rep, stage: mapStage(ghlStage), pipeline: p.name,
         });
       }
     }
-    let contacts = 0, opps = 0, notes = 0;
+    let contacts = 0, opps = 0, notes = 0, updated = 0, archived = 0;
     if (commit) {
-      const byGhlContact = new Map<string, string>(); // ghl contact id -> CrmContact id
+      const byGhlContact = new Map<string, string>();
       for (const r of rows) {
         if (!r.ghlOppId) continue;
         let contactId = r.ghlContactId ? byGhlContact.get(r.ghlContactId) : undefined;
@@ -519,7 +537,6 @@ export async function GET(request: Request) {
           else {
             const created = await db.crmContact.create({ data: { name: r.name, phone: r.phone, email: r.email, source: "GHL import", assignedTo: r.rep, ghlId: r.ghlContactId } });
             contactId = created.id; contacts++;
-            // pull that contact's GHL notes onto the timeline (best effort)
             if (r.ghlContactId) {
               const nres = await ghlGet(`/contacts/${r.ghlContactId}/notes`);
               const nbody = nres.body as { notes?: Array<{ body?: string; dateAdded?: string }> };
@@ -533,13 +550,63 @@ export async function GET(request: Request) {
           if (r.ghlContactId) byGhlContact.set(r.ghlContactId, contactId);
         }
         const dupOpp = await db.crmOpportunity.findFirst({ where: { ghlId: r.ghlOppId } });
-        if (dupOpp) continue;
-        const opp = await db.crmOpportunity.create({ data: { contactId, title: r.title.slice(0, 160), stage: "contacted", value: r.value, assignedTo: r.rep, ghlId: r.ghlOppId, tags: "ghl-import" } });
-        await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: "Imported from GoHighLevel (open opportunity)", actor: "ghl-import" });
+        if (dupOpp) {
+          await db.crmOpportunity.update({ where: { id: dupOpp.id }, data: { stage: r.stage, assignedTo: r.rep || dupOpp.assignedTo, tags: `ghl-import, ${r.pipeline}`.slice(0, 300), archivedAt: null } });
+          updated++;
+          continue;
+        }
+        const opp = await db.crmOpportunity.create({ data: { contactId, title: r.title.slice(0, 160), stage: r.stage, value: r.value, assignedTo: r.rep, ghlId: r.ghlOppId, tags: `ghl-import, ${r.pipeline}`.slice(0, 300) } });
+        await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `Imported from GHL — ${r.pipeline}`, actor: "ghl-import" });
         opps++;
       }
+      // archive earlier imports that came from pipelines Jon excluded
+      const keep = new Set(rows.map((r) => r.ghlOppId));
+      const stray = await db.crmOpportunity.findMany({ where: { ghlId: { not: "" }, archivedAt: null, tags: { contains: "ghl-import" } }, select: { id: true, ghlId: true } });
+      for (const s2 of stray) {
+        if (keep.has(s2.ghlId)) continue;
+        await db.crmOpportunity.update({ where: { id: s2.id }, data: { archivedAt: new Date(), stage: "nurture" } });
+        archived++;
+      }
     }
-    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", openOpps: rows.length, contactsCreated: contacts, oppsCreated: opps, notesImported: notes, sample: rows.slice(0, 12) });
+    const perRep: Record<string, number> = {};
+    for (const r of rows) perRep[r.rep || "unassigned"] = (perRep[r.rep || "unassigned"] ?? 0) + 1;
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pipelinesMatched: pipelines.map((p) => p.name), openOpps: rows.length, perRep, contactsCreated: contacts, oppsCreated: opps, oppsUpdated: updated, strayArchived: archived, notesImported: notes, sample: rows.slice(0, 10) });
+  }
+
+  // 💰 GHL DEAL WON → the Deals board (Jon 2026-10-07: closed deals with
+  // value per lead belong in the deals CRM). ?ghlwonimport=1 dry / &commit=1.
+  if (url.searchParams.get("ghlwonimport") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const { searchOpportunities, getPipelines } = await import("@/lib/reireply");
+    const pls = await getPipelines();
+    const plBody = pls.body as { pipelines?: Array<{ id: string; name: string }> };
+    const rows: Array<{ ghlId: string; name: string; value: number; wonAt: string; pipeline: string }> = [];
+    for (const p of plBody.pipelines ?? []) {
+      const res = await searchOpportunities(p.id);
+      if (!res.ok) continue;
+      const body = res.body as { opportunities?: Array<Record<string, unknown>> };
+      for (const o of body.opportunities ?? []) {
+        if (String(o.status ?? "") !== "won") continue;
+        const raw = (o.lastStatusChangeAt ?? o.updatedAt) as string | number | undefined;
+        const ms = typeof raw === "number" ? raw : Date.parse(String(raw ?? 0));
+        rows.push({ ghlId: String(o.id ?? ""), name: String(o.name ?? "—"), value: Number(o.monetaryValue ?? 0), wonAt: Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString().slice(0, 10) : "", pipeline: p.name });
+      }
+    }
+    let created = 0;
+    if (commit) {
+      for (const r of rows) {
+        const marker = `ghl:${r.ghlId}`;
+        const dup = await db.deal.findFirst({ where: { source: marker }, select: { id: true } });
+        if (dup) continue;
+        await db.deal.create({ data: {
+          address: `${r.name} (GHL won)`.slice(0, 160), status: "closed", active: true,
+          soldPrice: r.value || null, assignmentFee: r.value || null, soldDate: r.wonAt,
+          source: marker, notes: `Imported from GoHighLevel — DEAL WON in "${r.pipeline}"${r.value ? ` · $${r.value.toLocaleString()}` : ""}`,
+        } });
+        created++;
+      }
+    }
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", won: rows.length, totalValue: rows.reduce((a, b) => a + b.value, 0), created, rows: rows.slice(0, 20) });
   }
 
   // Read-only: GHL WON opportunities with the credited rep + value (Jon

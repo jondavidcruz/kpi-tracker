@@ -36,7 +36,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     db.crmOpportunity.findMany({
       where: {
         archivedAt: null,
-        ...(who ? { assignedTo: who } : {}),
+        ...(who ? { assignedTo: { equals: who.trim(), mode: "insensitive" } } : {}),
         ...(fStage ? { stage: fStage } : {}),
         ...(fTag ? { OR: [{ tags: { contains: fTag, mode: "insensitive" } }, { contact: { tags: { contains: fTag, mode: "insensitive" } } }] } : {}),
         ...(fDue ? { nextFollowUp: { not: "", lte: today } } : {}),
@@ -122,9 +122,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           {manager ? (
             <>
               <span className="text-[11px] font-bold text-slate-500">Pipeline:</span>
-              <Link href={qs({ who: "" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
+              <Link prefetch={false} href={qs({ who: "" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
               {reps.map((r) => (
-                <Link key={r.id} href={qs({ who: r.name })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>{r.name.split(" ")[0]}</Link>
+                <Link key={r.id} prefetch={false} href={qs({ who: r.name })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>{r.name.split(" ")[0]}</Link>
               ))}
             </>
           ) : (
