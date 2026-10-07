@@ -16,6 +16,7 @@ export const NAV_GROUPS: NavGroup[] = [
   ] },
   { group: "Acquisitions", items: [
     { href: "/crm", label: "Seller CRM", gate: "all" },
+    { href: "/crm/conversations", label: "Conversations", gate: "all" },
     { href: "/underwriting", label: "Underwriting", gate: "all" },
   ] },
   { group: "Dispositions", items: [

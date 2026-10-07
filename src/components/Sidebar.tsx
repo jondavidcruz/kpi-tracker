@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -81,6 +81,7 @@ export default function Sidebar({
     ] },
     { label: "Acquisitions", items: [
       { href: "/crm", label: "Seller CRM", Icon: Phone },
+      { href: "/crm/conversations", label: "Conversations", Icon: MessagesSquare },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
     ] },
     { label: "Dispositions", items: [

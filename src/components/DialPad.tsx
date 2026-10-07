@@ -38,7 +38,8 @@ export default function DialPad() {
   const readyRef = useRef(false);
   const connectingRef = useRef<Promise<unknown> | null>(null);
   const clientRef = useRef<{ disconnect: () => void } | null>(null);
-  const callRef = useRef<{ hangup: () => void; muteAudio: () => void; unmuteAudio: () => void } | null>(null);
+  const callRef = useRef<{ hangup: () => void; muteAudio: () => void; unmuteAudio: () => void; dtmf?: (digit: string) => void } | null>(null);
+  const [dtmfTrail, setDtmfTrail] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -118,7 +119,7 @@ export default function DialPad() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     const dur = startRef.current ? Math.round((Date.now() - startRef.current) / 1000) : 0;
     startRef.current = 0;
-    setState("idle"); setMuted(false); setSecs(0); setOnCall(null);
+    setState("idle"); setMuted(false); setSecs(0); setOnCall(null); setDtmfTrail("");
     if (ctx?.oppId) setLastCall(ctx);
     if (ctx?.contactId) {
       const fd = new FormData();
@@ -221,7 +222,14 @@ export default function DialPad() {
     if (!callRef.current && (stateRef.current === "connecting" || stateRef.current === "error")) finish(onCall);
   };
   const toggleMute = () => { if (!callRef.current) return; if (muted) callRef.current.unmuteAudio(); else callRef.current.muteAudio(); setMuted(!muted); };
-  const key = (k: string) => setNum((v) => v + k);
+  // Mid-call, keypad presses must be TOUCH-TONES (phone trees, extensions,
+  // "press 1" voicemail menus) — not edits to the dial box.
+  const key = (k: string) => {
+    if (callRef.current && (stateRef.current === "active" || stateRef.current === "ringing")) {
+      try { callRef.current.dtmf?.(k); } catch { /* tone lost, keep UI honest anyway */ }
+      setDtmfTrail((v) => (v + k).slice(-20));
+    } else setNum((v) => v + k);
+  };
 
   const TabBtn = ({ id, icon, label }: { id: typeof tab; icon: string; label: string }) => (
     <button onClick={() => { setTab(id); if (id === "contacts" || id === "recents" || id === "queue") load(search); }} className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[9px] font-bold ${tab === id ? "bg-slate-100 text-slate-800" : "text-slate-400 hover:text-slate-600"}`}>
@@ -262,6 +270,7 @@ export default function DialPad() {
             <span className="flex items-center gap-2 bg-emerald-50 px-3.5 py-2 ring-1 ring-emerald-200">
               <span className="min-w-0 flex-1 truncate text-xs font-bold text-emerald-800">
                 {state === "active" ? `🟢 ${onCall?.name ?? onCall?.phone} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `📡 ${state} — ${onCall?.name ?? onCall?.phone ?? ""}`}
+                {dtmfTrail && <span className="ml-1 rounded bg-white px-1 py-0.5 font-mono text-[10px] text-slate-500 ring-1 ring-slate-200">⌨ {dtmfTrail}</span>}
               </span>
               {state === "active" && <button onClick={toggleMute} className={`rounded-md px-2 py-1 text-[10px] font-bold ${muted ? "bg-amber-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>}
               <button onClick={hangup} title="End the call" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-600 text-base text-white shadow hover:bg-red-700">⏹</button>
