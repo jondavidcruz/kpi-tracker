@@ -14,6 +14,7 @@ export interface EntryItem {
   name: string;
   definition?: string;
   noteLabel?: string; // renders a small note box next to the number (e.g. contract type)
+  noteOptions?: string[]; // when set, the note is a dropdown instead of free text
   initialNote?: string;
   emoji: string;
   unit: Unit;
@@ -156,7 +157,16 @@ function Field({ item, date, enteredBy, onSaving, onDone }: { item: EntryItem; d
           {item.definition && (
             <div className="mt-0.5 max-w-md text-[11px] leading-snug text-slate-400">{item.definition}</div>
           )}
-          {item.noteLabel && (
+          {item.noteLabel && (item.noteOptions?.length ? (
+            <select
+              value={note}
+              onChange={(e) => { setNote(e.target.value); if (raw.trim() !== "") setTimeout(() => flushSave(raw), 0); }}
+              className="mt-1 w-full max-w-md rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
+            >
+              <option value="">— {item.noteLabel} —</option>
+              {item.noteOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ) : (
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -164,7 +174,7 @@ function Field({ item, date, enteredBy, onSaving, onDone }: { item: EntryItem; d
               placeholder={item.noteLabel}
               className="mt-1 w-full max-w-md rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
             />
-          )}
+          ))}
         </div>
         <div
           className={`flex w-36 shrink-0 items-center rounded-lg border-2 px-2.5 focus-within:ring-2 ${boxCls}`}
