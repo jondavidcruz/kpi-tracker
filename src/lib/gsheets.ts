@@ -67,28 +67,34 @@ async function saveSheetInfo(info: SheetInfo): Promise<void> {
 async function ensureSheet(): Promise<SheetInfo> {
   const existing = await readSheetInfo();
   if (existing) return existing;
-  type CreateResp = { spreadsheetId: string; spreadsheetUrl: string; sheets: Array<{ properties: { sheetId: number; title: string } }> };
-  const created = await api<CreateResp>(SHEETS, {
+  // Create via DRIVE, inside the Shared Drive — spreadsheets.create would land
+  // in the service account's own My Drive, and SAs have no storage quota there
+  // (same Google rule that forced the recordings into the War Room Vault).
+  const root = await driveRootId();
+  if (!root) throw new Error("No Drive root configured — set the War Room Vault first");
+  const file = await api<{ id: string }>(`https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id`, {
     method: "POST",
-    body: JSON.stringify({
-      properties: { title: "War Room — Dispo Board (synced)" },
-      sheets: [
-        { properties: { title: "Follow-ups", gridProperties: { frozenRowCount: 1 } } },
-        { properties: { title: "Deals", gridProperties: { frozenRowCount: 1 } } },
-      ],
-    }),
+    body: JSON.stringify({ name: "War Room — Dispo Board (synced)", mimeType: "application/vnd.google-apps.spreadsheet", parents: [root] }),
   });
-  // bold headers
-  const bold = created.sheets.map((s) => ({
-    repeatCell: { range: { sheetId: s.properties.sheetId, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: "userEnteredFormat.textFormat.bold" },
-  }));
-  await api(`${SHEETS}/${created.spreadsheetId}:batchUpdate`, { method: "POST", body: JSON.stringify({ requests: bold }) }).catch(() => {});
-  // move into the War Room Vault so the whole team can open it
-  try {
-    const root = await driveRootId();
-    if (root) await api(`https://www.googleapis.com/drive/v3/files/${created.spreadsheetId}?addParents=${root}&supportsAllDrives=true&fields=id`, { method: "PATCH", body: "{}" });
-  } catch { /* stays in SA drive; link still shareable */ }
-  const info = { id: created.spreadsheetId, url: created.spreadsheetUrl };
+  const id = file.id;
+  // shape it: first tab → Follow-ups, add Deals, freeze + bold headers
+  const meta = await api<{ sheets: Array<{ properties: { sheetId: number } }> }>(`${SHEETS}/${id}?fields=sheets.properties`);
+  const firstId = meta.sheets[0]?.properties.sheetId ?? 0;
+  const resp = await api<{ replies: Array<{ addSheet?: { properties: { sheetId: number } } }> }>(`${SHEETS}/${id}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({ requests: [
+      { updateSheetProperties: { properties: { sheetId: firstId, title: "Follow-ups", gridProperties: { frozenRowCount: 1 } }, fields: "title,gridProperties.frozenRowCount" } },
+      { addSheet: { properties: { title: "Deals", gridProperties: { frozenRowCount: 1 } } } },
+    ] }),
+  });
+  const dealsId = resp.replies.find((r) => r.addSheet)?.addSheet?.properties.sheetId;
+  await api(`${SHEETS}/${id}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({ requests: [firstId, dealsId].filter((x): x is number => x != null).map((sheetId) => ({
+      repeatCell: { range: { sheetId, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: "userEnteredFormat.textFormat.bold" },
+    })) }),
+  }).catch(() => {});
+  const info = { id, url: `https://docs.google.com/spreadsheets/d/${id}/edit` };
   await saveSheetInfo(info);
   return info;
 }
