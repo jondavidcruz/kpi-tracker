@@ -545,11 +545,11 @@ export async function GET(request: Request) {
   // (so missed calls trigger the text-back). Idempotent.
   if (url.searchParams.get("inboundsetup") === "1") {
     const key = process.env.TELNYX_API_KEY;
-    const num = process.env.TELNYX_CALLER_ID;
-    if (!key || !num) return NextResponse.json({ ok: false, error: "TELNYX_API_KEY / TELNYX_CALLER_ID missing" });
     const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
-    let cfg: { connId?: string } = {};
+    let cfg: { connId?: string; callerId?: string } = {};
     try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
+    const num = process.env.TELNYX_CALLER_ID || cfg.callerId;
+    if (!key || !num) return NextResponse.json({ ok: false, error: "TELNYX_API_KEY missing or no caller number known" });
     if (!cfg.connId) return NextResponse.json({ ok: false, error: "WebRTC not provisioned yet — run ?telnyxprobe=1 first" });
     const tx = async (path: string, init?: RequestInit) => {
       const res = await fetch(`https://api.telnyx.com/v2${path}`, { ...init, headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" } });
