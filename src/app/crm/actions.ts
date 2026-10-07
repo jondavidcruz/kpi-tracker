@@ -181,6 +181,85 @@ export async function deleteCrmApptAction(formData: FormData) {
   revalidatePath(`/crm/${a.oppId}`);
 }
 
+/** Owner/managers: set who gets the paid channels (call / SMS / email). */
+export async function saveCommsPermsAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const { readCommsMap, writeCommsMap } = await import("@/lib/crm-comms");
+  const map = await readCommsMap();
+  const first = String(formData.get("first") ?? "").toLowerCase().trim();
+  if (!first) return;
+  map[first] = { call: formData.get("call") === "on", sms: formData.get("sms") === "on", email: formData.get("email") === "on" };
+  await writeCommsMap(map);
+  revalidatePath("/crm");
+}
+
+/** ✉️ Send a real email to the seller from the card (Resend, reply-to us). */
+export async function sendCrmEmailAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const { commsFor } = await import("@/lib/crm-comms");
+  if (!(await commsFor(me)).email) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const to = String(formData.get("to") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim().slice(0, 150);
+  const body = String(formData.get("body") ?? "").trim().slice(0, 4000);
+  if (!to || !subject || !body) return;
+  const { sendEmailTo } = await import("@/lib/notify");
+  const ok = await sendEmailTo([to], subject, `<p>${body.replace(/\n/g, "<br>")}</p><p>— ${me.name}, Freedom Offers</p>`, undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com");
+  await logCrmEvent({ contactId, oppId, kind: "email", body: `➡️ Us: ${subject} — ${body.slice(0, 300)}${ok ? "" : " (SEND FAILED)"}`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** 💬 Send a real SMS via Telnyx from the card. */
+export async function sendCrmSmsAction(formData: FormData): Promise<void> {
+  const me = await crmUser();
+  if (!me) return;
+  const { commsFor } = await import("@/lib/crm-comms");
+  if (!(await commsFor(me)).sms) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const to = String(formData.get("to") ?? "").replace(/[^+\d]/g, "");
+  const text = String(formData.get("text") ?? "").trim().slice(0, 900);
+  const from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
+  if (!to || !text) return;
+  if (!process.env.TELNYX_API_KEY || !from) {
+    await logCrmEvent({ contactId, oppId, kind: "sms", body: `SMS NOT SENT — set TELNYX_SMS_FROM (a Telnyx number on a messaging profile) in Vercel. Message was: ${text.slice(0, 200)}`, actor: me.name });
+    revalidatePath(`/crm/${oppId}`);
+    return;
+  }
+  const res = await fetch("https://api.telnyx.com/v2/messages", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to, text }),
+  });
+  const ok = res.ok;
+  const err = ok ? "" : (await res.text()).slice(0, 140);
+  await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: ${text}${ok ? "" : ` (SEND FAILED: ${err})`}`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** List-view bulk actions: reassign / add tag / move stage for many at once. */
+export async function bulkOppAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const ids = formData.getAll("ids").map(String).filter(Boolean).slice(0, 200);
+  const op = String(formData.get("op") ?? "");
+  const val = String(formData.get("val") ?? "").trim();
+  if (!ids.length || !val) return;
+  if (op === "assign") await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { assignedTo: val } });
+  else if (op === "stage" && CRM_STAGES.some((s) => s.key === val)) {
+    await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { stage: val, ...(val === "dead" ? { archivedAt: new Date() } : {}) } });
+  } else if (op === "tag") {
+    for (const id of ids) {
+      const o = await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } });
+      if (o && !o.tags.toLowerCase().includes(val.toLowerCase())) await db.crmOpportunity.update({ where: { id }, data: { tags: o.tags ? `${o.tags}, ${val}` : val } });
+    }
+  } else return;
+  revalidatePath("/crm");
+}
+
 /** Browser-dialer call ended → one timeline row with the duration. */
 export async function logBrowserCallAction(formData: FormData) {
   const me = await crmUser();
@@ -232,6 +311,8 @@ export async function deleteCrmPartyAction(formData: FormData) {
 export async function telnyxCallAction(formData: FormData): Promise<{ ok: boolean; msg: string }> {
   const me = await crmUser();
   if (!me) return { ok: false, msg: "no access" };
+  const { commsFor } = await import("@/lib/crm-comms");
+  if (!(await commsFor(me)).call) return { ok: false, msg: "Calling isn't enabled for you — ask Jon." };
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
   const to = String(formData.get("to") ?? "").replace(/[^+\d]/g, "");

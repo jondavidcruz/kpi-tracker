@@ -406,6 +406,27 @@ export async function GET(request: Request) {
     }
   } catch { /* alarms never break a cron */ }
 
+  // 🧾 Daily CRM digest per rep → huddle chat (stale leads can't hide).
+  if (url.searchParams.get("crmdigest") === "1") {
+    const { sendHuddleChat } = await import("@/lib/notify");
+    const today = new Date().toISOString().slice(0, 10);
+    const reps = await db.user.findMany({ where: { active: true, position: { in: ["acquisitions", "cc_lm", "dispositions"] } }, select: { name: true } });
+    const lines = ["🧲 *Seller CRM — morning digest*"];
+    for (const r of reps) {
+      const [open, fuDue, tasksDue, quiet] = await Promise.all([
+        db.crmOpportunity.count({ where: { assignedTo: r.name, archivedAt: null } }),
+        db.crmOpportunity.count({ where: { assignedTo: r.name, archivedAt: null, nextFollowUp: { not: "", lte: today } } }),
+        db.crmTask.count({ where: { assignedTo: r.name, doneAt: null, due: { not: "", lte: today } } }),
+        db.crmOpportunity.count({ where: { assignedTo: r.name, archivedAt: null, stage: { notIn: ["nurture", "dead", "signed"] }, updatedAt: { lte: new Date(Date.now() - 3 * 86400000) } } }),
+      ]);
+      if (!open) continue;
+      lines.push(`• *${r.name.split(" ")[0]}*: ${open} leads · 📞 ${fuDue} follow-ups due · ⏰ ${tasksDue} tasks due${quiet ? ` · 🕸 ${quiet} quiet 3d+` : ""}`);
+    }
+    lines.push("https://kpi-tracker-lovat.vercel.app/crm");
+    const sent = await sendHuddleChat(lines.join("\n"));
+    return NextResponse.json({ ok: true, sent });
+  }
+
   // 💬 Sync GHL texts + emails onto each CRM lead's timeline (Jon 2026-10-07:
   // "all emails and texts synced to each lead"). Dedupes by GHL message id;
   // time-guarded for the 60s cap; cron runs it 4×/day while GHL stays live.

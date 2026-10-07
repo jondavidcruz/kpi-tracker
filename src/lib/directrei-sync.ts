@@ -16,6 +16,7 @@ export type DreiReply = {
 export type DreiSide = { newToday: number; new7d: number; repliesToday: number; replies7d: number; smsRepliesToday: number; smsReplies7d: number; emailRepliesToday?: number; emailReplies7d: number };
 export type DreiFeed = {
   at: string;
+  newSellersToday?: Array<{ name: string; phone: string; email: string }>;
   totalContacts: number;
   scanned: number;
   smsRepliesToday: number; // all campaigns — feeds the team "Text Responses" KPI
@@ -54,6 +55,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
 
   const weekAgo = new Date(Date.parse(todayYmd) - 7 * 86400000).toISOString().slice(0, 10);
   const sides = { seller: empty(), buyer: empty(), other: empty() };
+  const newSellers: Array<{ name: string; phone: string; email: string }> = [];
   const replies: DreiReply[] = [];
   let total = 0, scanned = 0, smsRepliesToday = 0;
 
@@ -69,7 +71,10 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
       const side = sideOf(camp?.name ?? "", c);
       const bucket = sides[side];
       const added = (c.added_date ?? "").slice(0, 10);
-      if (added === todayYmd) bucket.newToday++;
+      if (added === todayYmd) {
+        bucket.newToday++;
+        if (side === "seller" && newSellers.length < 25) newSellers.push({ name: c.name ?? "Seller lead", phone: c.phone ?? "", email: c.email ?? "" });
+      }
       if (added >= weekAgo) bucket.new7d++;
       const optedOut = !!(c.sms_opted_out_at || c.email_opted_out_at);
       const replyDay = (c.last_reply_at ?? "").slice(0, 10);
@@ -96,6 +101,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
 
   return {
     at: new Date().toISOString(),
+    newSellersToday: newSellers,
     totalContacts: total,
     scanned,
     smsRepliesToday,
@@ -138,5 +144,28 @@ export async function refreshDreiFeed(todayYmd: string): Promise<DreiFeed | null
     await feedTeamKpi2(["seller_email_replies"], "Seller Email Replies", feed.seller.emailRepliesToday ?? 0);
     await feedTeamKpi2(["buyer_email_replies"], "Buyer Email Replies", feed.buyer.emailRepliesToday ?? 0);
   } catch { /* KPI feed is additive */ }
+
+  // 🤖 New-lead automation (Jon 2026-10-07): today's NEW Direct REI seller
+  // leads walk themselves into the Seller CRM — round-robin assigned across
+  // acquisitions, with a "first call" task due today. Dedupe by phone/name.
+  try {
+    const { logCrmEvent } = await import("@/lib/crm");
+    const reps = await db.user.findMany({ where: { active: true, position: { in: ["acquisitions", "cc_lm"] } }, select: { name: true } });
+    if (reps.length && feed.newSellersToday?.length) {
+      const counts = await Promise.all(reps.map((r) => db.crmOpportunity.count({ where: { assignedTo: r.name, archivedAt: null } })));
+      for (const lead of feed.newSellersToday) {
+        const last10 = lead.phone.replace(/\D/g, "").slice(-10);
+        const dup = await db.crmContact.findFirst({ where: { OR: [...(last10.length === 10 ? [{ phone: { contains: last10 } }] : []), { name: { equals: lead.name, mode: "insensitive" as const } }] }, select: { id: true } });
+        if (dup) continue;
+        const i = counts.indexOf(Math.min(...counts));
+        counts[i]++;
+        const rep = reps[i].name;
+        const contact = await db.crmContact.create({ data: { name: lead.name, phone: lead.phone, email: lead.email, source: "Direct REI", assignedTo: rep } });
+        const opp = await db.crmOpportunity.create({ data: { contactId: contact.id, title: `${lead.name} — Direct REI seller lead`, stage: "new", assignedTo: rep, nextFollowUp: todayYmd } });
+        await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: "📞 First call — new Direct REI seller lead", due: todayYmd, assignedTo: rep, createdBy: "automation" } });
+        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `Auto-created from Direct REI (new seller lead) · assigned ${rep}`, actor: "automation" });
+      }
+    }
+  } catch { /* lead automation never breaks the feed */ }
   return feed;
 }

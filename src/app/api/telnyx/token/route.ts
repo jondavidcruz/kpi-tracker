@@ -22,6 +22,8 @@ export async function POST() {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return NextResponse.json({ error: "no access" }, { status: 403 });
+  const { commsFor } = await import("@/lib/crm-comms");
+  if (!(await commsFor(me!)).call) return NextResponse.json({ error: "Calling isn't enabled for you — ask Jon (Admin: Comms access on /crm)." }, { status: 403 });
   if (!process.env.TELNYX_API_KEY) return NextResponse.json({ error: "TELNYX_API_KEY missing in Vercel" }, { status: 500 });
 
   const row = await db.resource.findFirst({ where: { category: CAT } });

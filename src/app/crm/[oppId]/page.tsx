@@ -6,7 +6,8 @@ import { crmStages, parseTags, KIND_EMOJI } from "@/lib/crm";
 import { Card } from "@/components/ui";
 import TelnyxCallButton from "@/components/TelnyxCallButton";
 import BrowserDialer from "@/components/BrowserDialer";
-import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction } from "../actions";
+import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, sendCrmEmailAction, sendCrmSmsAction } from "../actions";
+import { commsFor } from "@/lib/crm-comms";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
     db.crmParty.findMany({ where: { oppId }, orderBy: { createdAt: "asc" } }),
   ]);
   const st = stages.find((s) => s.key === opp.stage);
+  const comms = await commsFor(me!);
   const fmtAt = (d: Date) => d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const devH = opp.devPricingSentAt ? Math.round((Date.now() - opp.devPricingSentAt.getTime()) / 3_600_000) : null;
 
@@ -63,10 +65,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${devH >= 36 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>⏳ {devH}h at developers</span>
           )}
           <span className="ml-auto flex flex-wrap items-center gap-1.5">
-            <BrowserDialer oppId={opp.id} contactId={c.id} phone={c.phone} />
-            <TelnyxCallButton oppId={opp.id} contactId={c.id} phone={c.phone} />
-            {c.phone && <a href={`sms:${c.phone}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">💬 SMS</a>}
-            {c.email && <a href={`mailto:${c.email}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">✉️ Email</a>}
+            {comms.call && <BrowserDialer oppId={opp.id} contactId={c.id} phone={c.phone} />}
+            {comms.call && <TelnyxCallButton oppId={opp.id} contactId={c.id} phone={c.phone} />}
+            {!comms.call && !comms.sms && !comms.email && <span className="rounded-lg bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-400" title="Notes, tasks, stages & appointments are all yours — paid channels are off for your account">📝 notes-only access</span>}
             <a href={`/underwriting?address=${encodeURIComponent(opp.title)}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">🧮 Underwrite</a>
           </span>
         </div>
@@ -248,6 +249,34 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <input name="body" placeholder="optional note" className="min-w-[120px] flex-1 rounded-lg border border-slate-200 px-2 py-1" />
             </form>
           </Card>
+
+          {(comms.sms || comms.email) && (
+            <Card className="p-3">
+              <div className="flex flex-wrap gap-3">
+                {comms.sms && c.phone && (
+                  <form action={sendCrmSmsAction} className="min-w-[240px] flex-1 space-y-1.5">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">💬 Text the seller (Telnyx — sends for real)</div>
+                    <input type="hidden" name="oppId" value={opp.id} />
+                    <input type="hidden" name="contactId" value={c.id} />
+                    <input type="hidden" name="to" value={c.phone} />
+                    <textarea name="text" rows={2} required placeholder={`Text ${c.name.split(" ")[0]}…`} className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+                    <button className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700">Send SMS</button>
+                  </form>
+                )}
+                {comms.email && c.email && (
+                  <form action={sendCrmEmailAction} className="min-w-[240px] flex-1 space-y-1.5">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">✉️ Email the seller (replies land in Jon&apos;s inbox)</div>
+                    <input type="hidden" name="oppId" value={opp.id} />
+                    <input type="hidden" name="contactId" value={c.id} />
+                    <input type="hidden" name="to" value={c.email} />
+                    <input name="subject" required placeholder="Subject" className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+                    <textarea name="body" rows={2} required placeholder="Message…" className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+                    <button className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">Send email</button>
+                  </form>
+                )}
+              </div>
+            </Card>
+          )}
 
           <div className="pl-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline — everything, newest first</div>
           {events.map((e) => (

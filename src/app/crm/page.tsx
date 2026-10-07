@@ -6,7 +6,8 @@ import { todayStr } from "@/lib/date";
 import { crmStages, parseTags } from "@/lib/crm";
 import { Card, SectionTitle } from "@/components/ui";
 import CrmKanban, { type CrmCard } from "@/components/CrmKanban";
-import { createCrmLeadAction } from "./actions";
+import { createCrmLeadAction, saveCommsPermsAction, bulkOppAction } from "./actions";
+import { readCommsMap, firstOf } from "@/lib/crm-comms";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   if (!allowed) return <Card className="p-10 text-center text-slate-400">The Seller CRM is for acquisitions + managers.</Card>;
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
-  const view = sp.view === "list" ? "list" : "kanban";
+  const view = sp.view === "list" ? "list" : sp.view === "cal" ? "cal" : "kanban";
   // Permissions (Jon 2026-10-07: "Nick gets his own pipeline"): managers see
   // everyone; a rep's board is scoped to THEIR leads — their own pipeline.
   const manager = isManager(me!);
@@ -61,6 +62,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   };
   // dead/nurture live on the board too but collapse visually at the end
   const deadOpps = await db.crmOpportunity.count({ where: { archivedAt: { not: null } } });
+  const commsMap = manager ? await readCommsMap() : {};
+  const weekAppts = view === "cal" ? await db.crmAppointment.findMany({ where: { at: { gte: new Date(Date.now() - 86400000), lte: new Date(Date.now() + 8 * 86400000) }, ...(who ? { withWho: { contains: who.split(" ")[0] } } : {}) }, orderBy: { at: "asc" } }) : [];
 
   const tasksByOpp = new Map<string, { due: string; title: string }[]>();
   for (const t of tasks) { const a = tasksByOpp.get(t.oppId) ?? []; a.push(t); tasksByOpp.set(t.oppId, a); }
@@ -75,6 +78,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     const due = (tasksByOpp.get(o.id) ?? []).filter((t) => t.due && t.due.slice(0, 10) <= today);
     if (due.length) badges.push(`⏰ ${due.length} task${due.length > 1 ? "s" : ""} due`);
     if (o.nextFollowUp && o.nextFollowUp <= today) badges.push("📞 follow-up due");
+    if (!["nurture", "dead", "signed"].includes(o.stage) && Date.now() - o.updatedAt.getTime() > 3 * 86400000) badges.push("🕸 quiet 3d+");
     return {
       id: o.id, title: o.title, contactName: o.contact.name, stage: o.stage,
       assignedTo: o.assignedTo, tags: parseTags(o.tags), badges,
@@ -94,6 +98,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           <div className="flex items-center gap-2">
             <Link href={`/crm?view=kanban${who ? `&who=${who}` : ""}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "kanban" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>🗂 Board</Link>
             <Link href={`/crm?view=list${who ? `&who=${who}` : ""}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "list" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📋 List</Link>
+            <Link href={`/crm?view=cal${who ? `&who=${who}` : ""}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "cal" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📅 Week</Link>
           </div>
         }
       />
@@ -156,29 +161,97 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       {view === "kanban" ? (
         <CrmKanban columns={stages} cards={cards} />
+      ) : view === "cal" ? (
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 8 }, (_, i) => {
+              const day = new Date(Date.now() + (i - 1) * 86400000);
+              const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(day);
+              const dayAppts = weekAppts.filter((a) => new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(a.at) === ymd);
+              const dayFu = cards.filter((c) => c.badges.includes("📞 follow-up due") && ymd === today);
+              if (i === 0 && dayAppts.length === 0) return null;
+              return (
+                <div key={ymd} className={`rounded-xl p-2.5 ring-1 ${ymd === today ? "bg-amber-50 ring-amber-200" : "bg-slate-50 ring-slate-100"}`}>
+                  <div className="mb-1 text-[11px] font-extrabold text-slate-600">{day.toLocaleDateString("en-US", { timeZone: settings.orgTimezone, weekday: "short", month: "short", day: "numeric" })}{ymd === today ? " · today" : ""}</div>
+                  {dayAppts.map((a) => (
+                    <Link key={a.id} href={a.oppId ? `/crm/${a.oppId}` : "/crm"} className="mb-1 block rounded-lg bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-800 ring-1 ring-indigo-100 hover:bg-indigo-100">
+                      {a.at.toLocaleTimeString("en-US", { timeZone: settings.orgTimezone, hour: "numeric", minute: "2-digit" })} — {a.title} <span className="text-indigo-400">({a.withWho.split(" ")[0]})</span>
+                    </Link>
+                  ))}
+                  {ymd === today && dayFu.slice(0, 8).map((c) => (
+                    <Link key={c.id} href={`/crm/${c.id}`} className="mb-1 block rounded-lg bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">📞 {c.contactName}</Link>
+                  ))}
+                  {dayAppts.length === 0 && ymd !== today && <div className="text-[10px] text-slate-300">—</div>}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       ) : (
         <Card className="overflow-x-auto p-0">
+          <form action={bulkOppAction}>
+          {manager && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 text-xs">
+              <span className="font-bold text-slate-500">Bulk (ticked rows):</span>
+              <select name="op" className="rounded-lg border border-slate-200 px-2 py-1 font-semibold">
+                <option value="assign">→ reassign to</option>
+                <option value="stage">→ move to stage</option>
+                <option value="tag">→ add tag</option>
+              </select>
+              <input name="val" placeholder="rep name / stage key / tag" className="w-44 rounded-lg border border-slate-200 px-2 py-1" />
+              <button className="rounded-lg bg-slate-900 px-3 py-1 font-bold text-white hover:bg-slate-700">Apply</button>
+              <span className="text-[10px] text-slate-400">stage keys: new · contacted · process_call · at_developers · offer_made · contract_sent · signed · nurture · dead</span>
+            </div>
+          )}
           <table className="w-full text-sm">
             <thead><tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400">
-              <th className="px-4 py-2.5">Contact</th><th className="px-3 py-2.5">Opportunity</th><th className="px-3 py-2.5">Stage</th><th className="px-3 py-2.5">Rep</th><th className="px-3 py-2.5">Value</th><th className="px-3 py-2.5">Follow-up</th><th className="px-3 py-2.5">Flags</th>
+              {manager && <th className="px-3 py-2.5"></th>}<th className="px-4 py-2.5">Contact</th><th className="px-3 py-2.5">Opportunity</th><th className="px-3 py-2.5">Stage</th><th className="px-3 py-2.5">Rep</th><th className="px-3 py-2.5">Value</th><th className="px-3 py-2.5">Flags</th>
             </tr></thead>
             <tbody>
               {cards.map((c) => {
                 const st = stages.find((s) => s.key === c.stage);
                 return (
                   <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50">
+                    {manager && <td className="px-3 py-2"><input type="checkbox" name="ids" value={c.id} /></td>}
                     <td className="px-4 py-2 font-bold text-slate-800"><Link href={`/crm/${c.id}`} className="hover:underline">{c.contactName}</Link></td>
                     <td className="px-3 py-2 text-slate-600">{c.title}</td>
                     <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${st?.cls ?? ""}`}>{st?.label ?? c.stage}</span></td>
                     <td className="px-3 py-2 text-slate-500">{c.assignedTo}</td>
                     <td className="px-3 py-2 font-semibold text-emerald-700">{c.money}</td>
-                    <td className="px-3 py-2 text-slate-500"></td>
                     <td className="px-3 py-2 text-[10px]">{c.badges.join(" · ")}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          </form>
+        </Card>
+      )}
+
+      {/* 📡 Comms access — who gets the PAID channels (managers only) */}
+      {manager && (
+        <Card className="p-4">
+          <details>
+            <summary className="cursor-pointer text-sm font-bold text-slate-700">📡 Comms access — who can call / text / email (paid channels)</summary>
+            <p className="mt-1 text-xs text-slate-500">Unticked = that agent still gets every free feature (notes, tasks, stages, appointments) but the paid buttons are hidden and blocked server-side. Managers always have everything.</p>
+            <div className="mt-2 space-y-1.5">
+              {reps.map((r) => {
+                const first = firstOf(r.name);
+                const p = commsMap[first] ?? { call: false, sms: false, email: false };
+                return (
+                  <form key={r.id} action={saveCommsPermsAction} className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 px-3 py-1.5 text-xs ring-1 ring-slate-100">
+                    <input type="hidden" name="first" value={first} />
+                    <span className="w-28 font-bold text-slate-700">{r.name.split(" ")[0]}</span>
+                    <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="call" defaultChecked={p.call} /> 📞 call</label>
+                    <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="sms" defaultChecked={p.sms} /> 💬 SMS</label>
+                    <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="email" defaultChecked={p.email} /> ✉️ email</label>
+                    <button className="ml-auto rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-700">Save</button>
+                  </form>
+                );
+              })}
+            </div>
+          </details>
         </Card>
       )}
     </div>

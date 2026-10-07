@@ -37,6 +37,7 @@
     { "path": "/api/cron?culture=1", "schedule": "0 16 * * 1-5" },
     { "path": "/api/cron?dispohuddle=1", "schedule": "0 21 * * 1-5" },
     { "path": "/api/cron?crmmsgsync=1", "schedule": "15 17 * * 1-5" },
+    { "path": "/api/cron?crmdigest=1", "schedule": "5 16 * * 1-5" },
     { "path": "/api/cron?crmmsgsync=1", "schedule": "15 19 * * 1-5" },
     { "path": "/api/cron?crmmsgsync=1", "schedule": "15 21 * * 1-5" },
     { "path": "/api/cron?crmmsgsync=1", "schedule": "15 23 * * 1-5" },
