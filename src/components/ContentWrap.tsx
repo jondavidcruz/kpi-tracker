@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 // The main content is capped at a readable width on most pages, but the wide
 // spreadsheet pages (Buyer Research / Vetted Buyers) use the full screen so there's
 // far less left-right scrolling.
-const FULL_WIDTH = ["/vetting", "/marketing"];
+const FULL_WIDTH = ["/vetting", "/marketing", "/crm", "/deals"];
 
 export default function ContentWrap({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";

@@ -741,6 +741,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, won: rows.length, totalValue: rows.reduce((a, r) => a + r.value, 0), perRep, rows });
   }
 
+  // Move the phone KPIs (dials/connections/quality convos) onto the
+  // ACQUISITIONS scorecard — Michelle & Nick are acquisitions, not cc_lm,
+  // so the auto-fed numbers never showed on their pages (Jon 2026-10-07).
+  if (url.searchParams.get("kpirolefix") === "1") {
+    const out: string[] = [];
+    for (const key of ["outbound_calls", "connected_calls", "quality_convos"]) {
+      const k = await db.kpi.findFirst({ where: { key } });
+      if (k) { await db.kpi.update({ where: { id: k.id }, data: { roleKey: "acquisitions" } }); out.push(`${k.name} → acquisitions`); }
+    }
+    return NextResponse.json({ ok: true, moved: out });
+  }
+
   // Goal raise round 2 (Jon 2026-10-07): apply offers/contracts floors, stamp
   // the WHY into each KPI's definition, pro-rate Marie & Nick to 5h shifts
   // via standing per-rep Target overrides. Idempotent.

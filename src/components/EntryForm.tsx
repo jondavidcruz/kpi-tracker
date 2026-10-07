@@ -12,6 +12,7 @@ export interface EntryItem {
   kpiId: string;
   kpiKey: string; // stable slug, used to enable special inputs (e.g. speed test)
   name: string;
+  definition?: string;
   emoji: string;
   unit: Unit;
   goalValue: number | null;
@@ -147,6 +148,9 @@ function Field({ item, date, enteredBy, onSaving, onDone }: { item: EntryItem; d
           </div>
           {item.goalValue !== null && (
             <div className="text-xs text-slate-400">goal {formatValue(item.unit, item.goalValue)}</div>
+          )}
+          {item.definition && (
+            <div className="mt-0.5 max-w-md text-[11px] leading-snug text-slate-400">{item.definition}</div>
           )}
         </div>
         <div

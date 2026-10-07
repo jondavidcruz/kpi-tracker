@@ -120,6 +120,7 @@ export default async function EntryPage({
     kpiId: k.id,
     kpiKey: k.key,
     name: k.name,
+    definition: k.definition || undefined,
     emoji: k.emoji,
     unit: k.unit as Unit,
     goalValue: rep ? resolveGoalWith(targets, k, rep.id, month) : null,

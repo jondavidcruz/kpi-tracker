@@ -108,7 +108,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     if (o.nextFollowUp && o.nextFollowUp <= today) badges.push("📞 follow-up due");
     if (!["nurture", "dead", "signed"].includes(o.stage) && Date.now() - o.updatedAt.getTime() > 3 * 86400000) badges.push("🕸 quiet 3d+");
     return {
-      id: o.id, title: o.title, contactName: o.contact.name, phone: o.contact.phone, stage: o.stage,
+      id: o.id, title: o.title, contactName: o.contact.name, contactId: o.contactId, phone: o.contact.phone, stage: o.stage,
       assignedTo: o.assignedTo, tags: parseTags(o.tags), badges,
       money: money(o.value) || (o.askPrice != null ? `ask ${money(o.askPrice)}` : ""),
     };

@@ -1,89 +1,252 @@
 "use client";
-// GHL-style phone (top right): type any number, call it from the browser.
-import { useRef, useState } from "react";
+// GHL-style softphone (Jon 2026-10-07: "make it as similar to GoHighLevel").
+// Keypad · Recents · Contacts · Queue tabs, a "Calling From" selector with
+// automatic local presence (dials from our Telnyx number closest to the
+// contact's area code), and it answers "fo-call" events from opportunity
+// cards so every 📞 in the CRM rings through the browser — never tel:.
+import { useEffect, useRef, useState } from "react";
+import { logBrowserCallAction } from "@/app/crm/actions";
 
 type CallState = "idle" | "connecting" | "ringing" | "active" | "error";
+type PhoneData = {
+  numbers: string[]; defaultFrom: string;
+  recents: Array<{ name: string; phone: string; contactId: string; when: string; body: string }>;
+  contacts: Array<{ id: string; name: string; phone: string }>;
+  queue: Array<{ oppId: string; contactId: string; name: string; phone: string; title: string; due: string }>;
+};
+type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string };
+
+const areaCode = (e164: string) => e164.replace(/\D/g, "").replace(/^1/, "").slice(0, 3);
 
 export default function DialPad() {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"keypad" | "recents" | "contacts" | "queue">("keypad");
   const [num, setNum] = useState("");
+  const [from, setFrom] = useState<string>("auto");
+  const [data, setData] = useState<PhoneData | null>(null);
+  const [search, setSearch] = useState("");
   const [state, setState] = useState<CallState>("idle");
   const [msg, setMsg] = useState("");
   const [secs, setSecs] = useState(0);
+  const [muted, setMuted] = useState(false);
+  const [autoNext, setAutoNext] = useState(false);
+  const [qi, setQi] = useState(0);
+  const [onCall, setOnCall] = useState<Ctx | null>(null);
   const clientRef = useRef<{ disconnect: () => void } | null>(null);
-  const callRef = useRef<{ hangup: () => void } | null>(null);
+  const callRef = useRef<{ hangup: () => void; muteAudio: () => void; unmuteAudio: () => void } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const autoNextRef = useRef(false);
+  const qiRef = useRef(0);
+  const dataRef = useRef<PhoneData | null>(null);
+  autoNextRef.current = autoNext; qiRef.current = qi; dataRef.current = data;
 
-  const hangup = () => { try { callRef.current?.hangup(); } catch { /* gone */ } finish(); };
-  const finish = () => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    try { clientRef.current?.disconnect(); } catch { /* gone */ }
-    setState("idle");
-    startRef.current = 0;
+  const load = async (q = "") => {
+    try {
+      const r = await fetch(`/api/crm/phone${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+      if (r.ok) setData(await r.json());
+    } catch { /* panel still dials */ }
+  };
+  useEffect(() => { if (open && !data) load(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // opportunity-card 📞 buttons land here
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail as Ctx;
+      setOpen(true);
+      setTab("keypad");
+      setNum(d.phone);
+      if (!dataRef.current) load();
+      setTimeout(() => call(d), 350);
+    };
+    window.addEventListener("fo-call", h);
+    return () => window.removeEventListener("fo-call", h);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickFrom = (to: string): string | undefined => {
+    const d = dataRef.current;
+    if (from !== "auto") return from;
+    if (!d) return undefined;
+    const ac = areaCode(to);
+    return d.numbers.find((n) => areaCode(n) === ac) ?? d.defaultFrom ?? d.numbers[0];
   };
 
-  const call = async () => {
-    const to = num.replace(/[^+\d]/g, "");
-    if (to.length < 10) { setMsg("enter a full number"); return; }
-    setState("connecting");
-    setMsg("Connecting…");
+  const finish = (ctx: Ctx | null) => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    const dur = startRef.current ? Math.round((Date.now() - startRef.current) / 1000) : 0;
+    startRef.current = 0;
+    try { clientRef.current?.disconnect(); } catch { /* gone */ }
+    setState("idle"); setMuted(false); setSecs(0); setOnCall(null);
+    if (ctx?.contactId) {
+      const fd = new FormData();
+      fd.set("oppId", ctx.oppId ?? "");
+      fd.set("contactId", ctx.contactId);
+      fd.set("secs", String(dur));
+      fd.set("to", ctx.phone);
+      logBrowserCallAction(fd).catch(() => {});
+    }
+    setMsg(dur ? `Ended · ${Math.floor(dur / 60)}m ${dur % 60}s` : "Call ended");
+    // power mode: auto-advance the queue
+    if (autoNextRef.current && dataRef.current?.queue.length) {
+      const next = qiRef.current + 1;
+      if (next < dataRef.current.queue.length) {
+        setQi(next);
+        const t = dataRef.current.queue[next];
+        setMsg(`Next: ${t.name} in 3s…`);
+        setTimeout(() => { if (autoNextRef.current) call({ phone: t.phone, name: t.name, oppId: t.oppId, contactId: t.contactId }); }, 3000);
+      } else { setAutoNext(false); setMsg("🎉 Queue finished"); }
+    }
+  };
+
+  const call = async (ctx: Ctx) => {
+    const to = ctx.phone.replace(/[^+\d]/g, "");
+    if (to.replace(/\D/g, "").length < 10) { setMsg("enter a full number"); return; }
+    setOnCall(ctx); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     try {
       const tr = await fetch("/api/telnyx/token", { method: "POST" });
-      const tj = (await tr.json()) as { token?: string; callerId?: string; error?: string };
+      const tj = (await tr.json()) as { token?: string; error?: string };
       if (!tr.ok || !tj.token) { setState("error"); setMsg(tj.error ?? "token failed"); return; }
       const { TelnyxRTC } = await import("@telnyx/webrtc");
       const client = new TelnyxRTC({ login_token: tj.token });
       clientRef.current = client as never;
       client.on("telnyx.ready", () => {
         setState("ringing");
-        setMsg("Ringing…");
-        callRef.current = client.newCall({ destinationNumber: to, callerNumber: tj.callerId || undefined, audio: true, video: false }) as never;
+        callRef.current = client.newCall({ destinationNumber: to, callerNumber: pickFrom(to), audio: true, video: false }) as never;
       });
       client.on("telnyx.error", (e: unknown) => { setState("error"); setMsg(String((e as { message?: string })?.message ?? e).slice(0, 120)); });
       client.on("telnyx.notification", (n: { type: string; call?: { state?: string; remoteStream?: MediaStream } }) => {
-        const cs = n.call?.state ?? "";
         if (n.type !== "callUpdate") return;
+        const cs = n.call?.state ?? "";
         if (cs === "active") {
           if (!startRef.current) {
             startRef.current = Date.now();
             timerRef.current = setInterval(() => setSecs(Math.round((Date.now() - startRef.current) / 1000)), 1000);
           }
-          setState("active");
-          setMsg("");
+          setState("active"); setMsg("");
           if (audioRef.current && n.call?.remoteStream) { audioRef.current.srcObject = n.call.remoteStream; audioRef.current.play().catch(() => {}); }
         }
-        if (["hangup", "destroy"].includes(cs)) { setMsg("Call ended"); finish(); }
+        if (["hangup", "destroy"].includes(cs)) finish(ctx);
       });
       client.connect();
     } catch (e) { setState("error"); setMsg(String(e).slice(0, 120)); }
   };
 
+  const hangup = () => { try { callRef.current?.hangup(); } catch { finish(onCall); } };
+  const toggleMute = () => { if (!callRef.current) return; if (muted) callRef.current.unmuteAudio(); else callRef.current.muteAudio(); setMuted(!muted); };
+  const key = (k: string) => setNum((v) => v + k);
+
+  const TabBtn = ({ id, icon, label }: { id: typeof tab; icon: string; label: string }) => (
+    <button onClick={() => { setTab(id); if (id === "contacts" || id === "recents" || id === "queue") load(search); }} className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[9px] font-bold ${tab === id ? "bg-slate-100 text-slate-800" : "text-slate-400 hover:text-slate-600"}`}>
+      <span className="text-[15px]">{icon}</span>{label}
+    </button>
+  );
+
   return (
     <span className="relative">
       <audio ref={audioRef} autoPlay style={{ display: "none" }} />
-      <button onClick={() => setOpen((v) => !v)} title="Phone — dial any number from your browser" className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700">📞 Phone</button>
+      <button onClick={() => setOpen((v) => !v)} title="Phone — call from your browser" className={`grid h-8 w-8 place-items-center rounded-full text-sm ${state === "active" ? "bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>📞</button>
       {open && (
-        <span className="absolute right-0 top-9 z-30 flex w-64 flex-col gap-2 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-200">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Dial from the browser</span>
-          <input
-            value={num}
-            onChange={(e) => setNum(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && state === "idle") call(); }}
-            placeholder="+1 (555) 123-4567"
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold tracking-wide"
-          />
-          {state === "idle" || state === "error" ? (
-            <button onClick={call} className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700">📞 Call</button>
-          ) : (
-            <span className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 ring-1 ring-emerald-300">
-              <span className="text-sm font-bold text-emerald-800">{state === "active" ? `🟢 ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `📡 ${state}`}</span>
-              <button onClick={hangup} className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-red-700">⏹ end</button>
+        <span className="absolute right-0 top-10 z-40 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+          {/* header: Calling From */}
+          <span className="flex items-center justify-between gap-2 border-b border-slate-100 px-3.5 py-2.5">
+            <span>
+              <span className="block text-[13px] font-extrabold text-slate-800">Calling From</span>
+              <select value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 w-44 rounded-md border border-slate-200 px-1 py-0.5 text-[10px] font-semibold text-slate-600">
+                <option value="auto">📍 Closest to the contact (auto)</option>
+                {(data?.numbers ?? []).map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </span>
+            <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-slate-500">✕</button>
+          </span>
+
+          {/* live call bar */}
+          {state !== "idle" && (
+            <span className="flex items-center gap-2 bg-emerald-50 px-3.5 py-2 ring-1 ring-emerald-200">
+              <span className="min-w-0 flex-1 truncate text-xs font-bold text-emerald-800">
+                {state === "active" ? `🟢 ${onCall?.name ?? onCall?.phone} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `📡 ${state} — ${onCall?.name ?? onCall?.phone ?? ""}`}
+              </span>
+              {state === "active" && <button onClick={toggleMute} className={`rounded-md px-2 py-1 text-[10px] font-bold ${muted ? "bg-amber-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>}
+              <button onClick={hangup} className="rounded-md bg-red-600 px-2.5 py-1 text-[10px] font-bold text-white">⏹</button>
             </span>
           )}
-          {msg && <span className="text-[10px] font-semibold text-amber-700">{msg}</span>}
-          <span className="text-[9px] text-slate-400">Calls from a lead&apos;s card log to its timeline — this pad is for one-off dials.</span>
+          {msg && state === "idle" && <span className="px-3.5 py-1 text-[10px] font-semibold text-amber-700">{msg}</span>}
+
+          {/* body */}
+          <span className="max-h-[360px] min-h-[280px] overflow-y-auto px-3.5 py-2.5">
+            {tab === "keypad" && (
+              <span className="flex flex-col items-center gap-2">
+                <input value={num} onChange={(e) => setNum(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && state === "idle") call({ phone: num }); }} placeholder="+1 (555) 123-4567" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-center text-base font-bold tracking-wider" />
+                <span className="grid w-full grid-cols-3 gap-2">
+                  {["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map((k) => (
+                    <button key={k} onClick={() => key(k)} className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">{k}</button>
+                  ))}
+                </span>
+                <span className="flex w-full items-center justify-center gap-4 pt-1">
+                  <button onClick={() => (state === "idle" ? call({ phone: num }) : undefined)} disabled={state !== "idle"} className="grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-xl text-white hover:bg-emerald-600 disabled:opacity-50">📞</button>
+                  <button onClick={() => setNum((v) => v.slice(0, -1))} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">⌫</button>
+                </span>
+              </span>
+            )}
+            {tab === "recents" && (
+              <span className="flex flex-col gap-1">
+                {(data?.recents ?? []).map((r, i) => (
+                  <button key={i} onClick={() => r.phone && call({ phone: r.phone, name: r.name, contactId: r.contactId })} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-indigo-50 text-[10px] font-extrabold text-indigo-600">{r.name.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold text-slate-800">{r.name}</span>
+                      <span className="block text-[10px] text-slate-400">{r.phone} · {new Date(r.when).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                    </span>
+                    <span className="text-emerald-500">📞</span>
+                  </button>
+                ))}
+                {!data?.recents.length && <span className="py-8 text-center text-xs text-slate-400">No calls yet today.</span>}
+              </span>
+            )}
+            {tab === "contacts" && (
+              <span className="flex flex-col gap-1">
+                <input value={search} onChange={(e) => { setSearch(e.target.value); load(e.target.value); }} placeholder="🔎 Search for contacts" className="mb-1 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs" />
+                {(data?.contacts ?? []).map((c) => (
+                  <button key={c.id} onClick={() => call({ phone: c.phone, name: c.name, contactId: c.id })} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-50 text-[10px] font-extrabold text-violet-600">{c.name.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold text-slate-800">{c.name}</span>
+                      <span className="block text-[10px] text-slate-400">{c.phone}</span>
+                    </span>
+                    <span className="text-emerald-500">📞</span>
+                  </button>
+                ))}
+              </span>
+            )}
+            {tab === "queue" && (
+              <span className="flex flex-col gap-1">
+                <span className="mb-1 flex items-center justify-between rounded-xl bg-emerald-50 px-2.5 py-1.5 ring-1 ring-emerald-200">
+                  <span className="text-[10px] font-bold text-emerald-800">⚡ Power mode: auto-dials the next lead when you hang up</span>
+                  <button onClick={() => { const on = !autoNext; setAutoNext(on); if (on && data?.queue[qi] && state === "idle") { const t = data.queue[qi]; call({ phone: t.phone, name: t.name, oppId: t.oppId, contactId: t.contactId }); } }} className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${autoNext ? "bg-emerald-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{autoNext ? "ON" : "OFF"}</button>
+                </span>
+                {(data?.queue ?? []).map((t, i) => (
+                  <button key={t.oppId} onClick={() => { setQi(i); call({ phone: t.phone, name: t.name, oppId: t.oppId, contactId: t.contactId }); }} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50 ${i === qi && autoNext ? "bg-emerald-50 ring-1 ring-emerald-200" : ""}`}>
+                    <span className="w-4 text-[10px] font-extrabold text-slate-400">{i + 1}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold text-slate-800">{t.name}</span>
+                      <span className="block truncate text-[10px] text-slate-400">{t.title} · due {t.due}</span>
+                    </span>
+                    <span className="text-emerald-500">📞</span>
+                  </button>
+                ))}
+                {!data?.queue.length && <span className="py-8 text-center text-xs text-slate-400">Queue clear 🎉 Follow-ups land here when due.</span>}
+                <span className="pt-1 text-center text-[9px] text-slate-400">One line at a time. Mass triple-line dialing stays in Direct REI (carrier compliance).</span>
+              </span>
+            )}
+          </span>
+
+          {/* bottom tabs — GHL style */}
+          <span className="flex gap-1 border-t border-slate-100 px-2 py-1.5">
+            <TabBtn id="recents" icon="🕐" label="Recents" />
+            <TabBtn id="contacts" icon="👤" label="Contacts" />
+            <TabBtn id="keypad" icon="🔢" label="Keypad" />
+            <TabBtn id="queue" icon="⏭" label="Queue" />
+          </span>
         </span>
       )}
     </span>
