@@ -392,6 +392,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", wouldCreate: report.created.length, wouldMatch: report.matched.length, touches: report.touches, dealSends: report.dealSends, newArchivedDeals: createdDealByAddr.size, dealLinks, created: report.created, matched: report.matched, skipped: report.skipped });
   }
 
+  // Read-only: every KPI's goal + scope — feeds goal-raise planning.
+  if (url.searchParams.get("kpigoals") === "1") {
+    const kpis = await db.kpi.findMany({
+      select: { key: true, name: true, scope: true, roleKey: true, cadence: true, unit: true, goalValue: true, goalKind: true, active: true },
+      orderBy: [{ roleKey: "asc" }, { name: "asc" }],
+    });
+    return NextResponse.json({ ok: true, kpis });
+  }
+
   // One-time: no mailers in this business (Jon 2026-10-07) — repoint the two
   // mail KPIs at Direct REI email replies, per side. Keys normalized so the
   // feed binds; names are what the tiles show.
