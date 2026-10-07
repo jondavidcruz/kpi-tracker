@@ -412,10 +412,14 @@ export async function GET(request: Request) {
   if (url.searchParams.get("crmmsgsync") === "1") {
     const { searchConversations, getMessages } = await import("@/lib/reireply");
     const deadline = Date.now() + 45_000;
-    const contacts = await db.crmContact.findMany({ where: { ghlId: { not: "" }, archivedAt: null }, orderBy: { updatedAt: "desc" }, take: Number(url.searchParams.get("n")) || 40, select: { id: true, ghlId: true } });
+    // round-robin: least-recently-synced first; touching updatedAt after a
+    // sync sends the contact to the back of the queue, so every lead gets
+    // covered across the day's runs.
+    const contacts = await db.crmContact.findMany({ where: { ghlId: { not: "" }, archivedAt: null }, orderBy: { updatedAt: "asc" }, take: Number(url.searchParams.get("n")) || 40, select: { id: true, ghlId: true } });
     let scanned = 0, inserted = 0;
     for (const c of contacts) {
       if (Date.now() > deadline) break;
+      await db.crmContact.update({ where: { id: c.id }, data: { updatedAt: new Date() } }).catch(() => {});
       const convs = await searchConversations({ contactId: c.ghlId });
       const cb = convs.body as { conversations?: Array<{ id?: string }> };
       const convIds = (cb.conversations ?? []).map((x) => String(x.id ?? "")).filter(Boolean).slice(0, 3);
