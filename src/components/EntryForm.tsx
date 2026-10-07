@@ -13,6 +13,8 @@ export interface EntryItem {
   kpiKey: string; // stable slug, used to enable special inputs (e.g. speed test)
   name: string;
   definition?: string;
+  noteLabel?: string; // renders a small note box next to the number (e.g. contract type)
+  initialNote?: string;
   emoji: string;
   unit: Unit;
   goalValue: number | null;
@@ -72,6 +74,7 @@ export default function EntryForm({
 
 function Field({ item, date, enteredBy, onSaving, onDone }: { item: EntryItem; date: string; enteredBy: string; onSaving: () => void; onDone: (ok: boolean) => void }) {
   const [raw, setRaw] = useState(item.initial);
+  const [note, setNote] = useState(item.initialNote ?? "");
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState("");
   const saved = useRef(item.initial);              // last value we persisted
@@ -86,6 +89,7 @@ function Field({ item, date, enteredBy, onSaving, onDone }: { item: EntryItem; d
       const fd = new FormData();
       fd.set("date", date); fd.set("enteredBy", enteredBy);
       fd.set("kpiId", item.kpiId); fd.set("userId", item.userId); fd.set("value", val);
+      if (item.noteLabel) fd.set("note", note);
       await autoSaveEntry(fd);
       onDone(true);
     } catch {
@@ -151,6 +155,15 @@ function Field({ item, date, enteredBy, onSaving, onDone }: { item: EntryItem; d
           )}
           {item.definition && (
             <div className="mt-0.5 max-w-md text-[11px] leading-snug text-slate-400">{item.definition}</div>
+          )}
+          {item.noteLabel && (
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onBlur={() => { if (raw.trim() !== "") flushSave(raw); }}
+              placeholder={item.noteLabel}
+              className="mt-1 w-full max-w-md rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
+            />
           )}
         </div>
         <div

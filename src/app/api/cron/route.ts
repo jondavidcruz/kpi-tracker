@@ -741,6 +741,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, won: rows.length, totalValue: rows.reduce((a, r) => a + r.value, 0), perRep, rows });
   }
 
+  // One Signed Contract KPI (Jon 2026-10-07): retire the assignment/novation/
+  // creative/listing split — count goes in ONE field, the TYPE goes in a note.
+  if (url.searchParams.get("signedmerge") === "1") {
+    const out: string[] = [];
+    let k = await db.kpi.findFirst({ where: { key: "acq_signed" } });
+    if (!k) {
+      k = await db.kpi.create({ data: {
+        key: "acq_signed", name: "Signed Contract", emoji: "✍️", category: "green", unit: "count",
+        scope: "per_rep", roleKey: "acquisitions", cadence: "daily", goalKind: "tracked",
+        definition: "How many contracts got SIGNED today — one number. Put the TYPE in the note (assignment / novation / creative / listing) and it shows on the report.",
+      } });
+      out.push("created Signed Contract (acq_signed)");
+    }
+    for (const key of ["acq_signed_assignment", "acq_signed_novation", "acq_signed_creative", "acq_signed_listing"]) {
+      const old = await db.kpi.findFirst({ where: { key } });
+      if (old && old.active) { await db.kpi.update({ where: { id: old.id }, data: { active: false } }); out.push(`${old.name} retired (history kept)`); }
+    }
+    return NextResponse.json({ ok: true, done: out });
+  }
+
   // Move the phone KPIs (dials/connections/quality convos) onto the
   // ACQUISITIONS scorecard — Michelle & Nick are acquisitions, not cc_lm,
   // so the auto-fed numbers never showed on their pages (Jon 2026-10-07).

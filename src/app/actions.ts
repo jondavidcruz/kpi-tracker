@@ -251,13 +251,15 @@ export async function autoSaveEntry(formData: FormData) {
   const kpi = await db.kpi.findUnique({ where: { id: kpiId }, select: { unit: true } });
   if (!kpi) return;
   const value = fromInput(kpi.unit as Unit, String(formData.get("value") ?? ""));
+  const noteRaw = formData.get("note");
+  const note = noteRaw == null ? undefined : String(noteRaw).trim().slice(0, 200);
   const existing = await db.entry.findFirst({ where: { kpiId, userId, date } });
   if (value === null) {
     if (existing) await db.entry.delete({ where: { id: existing.id } }); // blank clears it
   } else if (existing) {
-    await db.entry.update({ where: { id: existing.id }, data: { value, enteredBy, enteredAt: new Date() } });
+    await db.entry.update({ where: { id: existing.id }, data: { value, enteredBy, enteredAt: new Date(), ...(note !== undefined ? { note } : {}) } });
   } else {
-    await db.entry.create({ data: { kpiId, userId, date, value, enteredBy } });
+    await db.entry.create({ data: { kpiId, userId, date, value, enteredBy, ...(note !== undefined ? { note } : {}) } });
   }
   revalidateKpiViews();
 }

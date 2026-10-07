@@ -1,4 +1,5 @@
 import { readDreiFeed } from "@/lib/directrei-sync";
+import { db } from "@/lib/db";
 import {
   getActiveReps,
   getKpis,
@@ -71,6 +72,12 @@ export default async function ReportPage({
   // Working days in the week → turns each rep's per-day goal into a weekly target,
   // so the scoreboard shows % against each person's OWN goal (fair across hours).
   const month = wk.start.slice(0, 7);
+  // ✍️ Signed Contract type notes for the period ("novation — Flores" chips)
+  const signedNotes = await db.entry.findMany({
+    where: { date: { gte: wk.start, lte: wk.end }, note: { not: "" }, kpi: { key: "acq_signed" } },
+    select: { date: true, note: true, user: { select: { name: true } } },
+    orderBy: { date: "desc" }, take: 20,
+  });
   const drei = await readDreiFeed().catch(() => null);
   const workdays = Math.max(1, datesInRange(wk.start, wk.end).filter((d) => {
     const dow = new Date(d + "T00:00:00Z").getUTCDay();
@@ -124,7 +131,7 @@ export default async function ReportPage({
   const trail = [
     { name: "Verbal Offers Made", value: sumPerRep("offers_made") },
     { name: "Contracts Sent", value: sumPerRep("acq_contracts_sent") },
-    { name: "Contracts Signed", value: sumPerRep("contracts_signed") + sumPerRep("acq_signed_assignment") + sumPerRep("acq_signed_novation") + sumPerRep("acq_signed_creative") + sumPerRep("acq_signed_listing") },
+    { name: "Contracts Signed", value: sumPerRep("contracts_signed") + sumPerRep("acq_signed") + sumPerRep("acq_signed_assignment") + sumPerRep("acq_signed_novation") + sumPerRep("acq_signed_creative") + sumPerRep("acq_signed_listing") },
     { name: "Deals Sent to Buyers", value: teamByKey("deals_sent") ?? sumPerRep("deals_sent") },
   ];
 
@@ -206,6 +213,14 @@ export default async function ReportPage({
                   </div>
                 ))}
               </div>
+              {signedNotes.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-emerald-100 pt-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">✍️ What got signed:</span>
+                  {signedNotes.map((n, i) => (
+                    <span key={i} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-emerald-200">{n.note}{n.user ? ` · ${n.user.name.split(" ")[0]}` : ""} · {n.date.slice(5)}</span>
+                  ))}
+                </div>
+              )}
             </Card>
           </div>
         </div>

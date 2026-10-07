@@ -70,6 +70,10 @@ export default async function EntryPage({
     getAllTargets(),
   ]);
 
+  // Saved notes for note-bearing KPIs (e.g. Signed Contract type)
+  const noteRows = await db.entry.findMany({ where: { date, note: { not: "" } }, select: { kpiId: true, userId: true, note: true } });
+  const notes = new Map(noteRows.map((n) => [`${n.kpiId}|${n.userId ?? ""}`, n.note] as const));
+
   // The rep's own open flags, so they can add context before a manager reviews.
   const myAlerts = rep
     ? await db.alert.findMany({
@@ -121,6 +125,8 @@ export default async function EntryPage({
     kpiKey: k.key,
     name: k.name,
     definition: k.definition || undefined,
+    noteLabel: k.key === "acq_signed" ? "What kind? e.g. novation — Flores · assignment — Reyes" : undefined,
+    initialNote: k.key === "acq_signed" ? (notes.get(`${k.id}|${rep?.id ?? ""}`) ?? "") : undefined,
     emoji: k.emoji,
     unit: k.unit as Unit,
     goalValue: rep ? resolveGoalWith(targets, k, rep.id, month) : null,
