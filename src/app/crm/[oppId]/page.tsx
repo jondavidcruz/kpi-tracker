@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getActiveReps, getSettings } from "@/lib/data";
-import { crmStages, parseTags, KIND_EMOJI } from "@/lib/crm";
+import { readPipelines, parseTags, KIND_EMOJI } from "@/lib/crm";
 import { Card } from "@/components/ui";
 import TelnyxCallButton from "@/components/TelnyxCallButton";
 import BrowserDialer from "@/components/BrowserDialer";
@@ -30,8 +30,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   }
   const c = opp.contact;
 
-  const [stages, reps, events, tasks, appts, siblingOpps, parties] = await Promise.all([
-    crmStages(),
+  const [pipelines, reps, events, tasks, appts, siblingOpps, parties] = await Promise.all([
+    readPipelines(),
     getActiveReps(),
     db.crmEvent.findMany({ where: { contactId: c.id }, orderBy: { at: "desc" }, take: 80 }),
     db.crmTask.findMany({ where: { oppId }, orderBy: [{ doneAt: "asc" }, { due: "asc" }] }),
@@ -39,6 +39,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
     db.crmOpportunity.findMany({ where: { contactId: c.id, id: { not: oppId } }, select: { id: true, title: true, stage: true } }),
     db.crmParty.findMany({ where: { oppId }, orderBy: { createdAt: "asc" } }),
   ]);
+  const pipe = pipelines.find((x) => x.name === (opp.pipeline || "War Room")) ?? pipelines[0];
+  const stages = pipe.stages;
   const st = stages.find((s) => s.key === opp.stage);
   const comms = await commsFor(me!);
   const fmtAt = (d: Date) => d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });

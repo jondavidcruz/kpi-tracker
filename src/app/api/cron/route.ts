@@ -406,6 +406,50 @@ export async function GET(request: Request) {
     }
   } catch { /* alarms never break a cron */ }
 
+  // 📧 Email-sequence runner (the in-house Direct REI drip). Daily: sends the
+  // step that's due, auto-stops the moment a lead has replied, logs everything.
+  if (url.searchParams.get("seqrun") === "1") {
+    const { readSequences, readSeqState, writeSeqState, fillTemplate } = await import("@/lib/crm-templates");
+    const { sendEmailTo } = await import("@/lib/notify");
+    const { logCrmEvent } = await import("@/lib/crm");
+    const today = new Date().toISOString().slice(0, 10);
+    const seqs = await readSequences();
+    const state = await readSeqState();
+    let sent = 0, stopped = 0, completed = 0;
+    for (const [oppId, st] of Object.entries(state)) {
+      if (st.nextYmd > today) continue;
+      const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, include: { contact: true } });
+      const seq = seqs.find((x) => x.id === st.seqId);
+      if (!opp || !seq || opp.archivedAt || ["dead", "signed", "contract_sent"].includes(opp.stage)) { delete state[oppId]; continue; }
+      // reply-stop: any inbound message since enrollment kills the drip
+      const replied = await db.crmEvent.findFirst({ where: { contactId: opp.contactId, kind: { in: ["sms", "email"] }, body: { startsWith: "⬅️" }, at: { gte: new Date(st.startedYmd + "T00:00:00Z") } }, select: { id: true } });
+      if (replied) {
+        delete state[oppId];
+        stopped++;
+        await db.crmTask.create({ data: { contactId: opp.contactId, oppId, title: "📬 They replied — sequence stopped, call them!", due: today, assignedTo: opp.assignedTo, createdBy: "sequence" } }).catch(() => {});
+        await logCrmEvent({ contactId: opp.contactId, oppId, kind: "system", body: "Sequence auto-stopped — the lead replied 🎉", actor: "sequence" });
+        continue;
+      }
+      const step = seq.steps[st.step];
+      if (!step) { delete state[oppId]; completed++; continue; }
+      const vars = { name: opp.contact.name, rep: opp.assignedTo || "Jon" };
+      const ok = await sendEmailTo([st.email], fillTemplate(step.subject, vars), `<p>${fillTemplate(step.body, vars).replace(/\n/g, "<br>")}</p>`, undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com");
+      await logCrmEvent({ contactId: opp.contactId, oppId, kind: "email", body: `➡️ Us (sequence ${st.step + 1}/${seq.steps.length}): ${fillTemplate(step.subject, vars)}${ok ? "" : " (SEND FAILED)"}`, actor: "sequence" });
+      if (ok) sent++;
+      const nextStep = seq.steps[st.step + 1];
+      if (nextStep) {
+        st.step += 1;
+        st.nextYmd = new Date(Date.parse(st.startedYmd + "T12:00:00Z") + nextStep.day * 86400000).toISOString().slice(0, 10);
+      } else {
+        delete state[oppId];
+        completed++;
+        await logCrmEvent({ contactId: opp.contactId, oppId, kind: "system", body: `Sequence "${seq.name}" completed — all ${seq.steps.length} emails sent`, actor: "sequence" });
+      }
+    }
+    await writeSeqState(state);
+    return NextResponse.json({ ok: true, enrolled: Object.keys(state).length, sent, stopped, completed });
+  }
+
   // 🧾 Daily CRM digest per rep → huddle chat (stale leads can't hide).
   if (url.searchParams.get("crmdigest") === "1") {
     const { sendHuddleChat } = await import("@/lib/notify");
@@ -477,6 +521,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 🔀 Sync the 4 approved GHL pipelines (names + exact stage order) into the
+  // CRM's pipeline definitions — the board renders THESE columns per pipeline.
+  if (url.searchParams.get("ghlpipesync") === "1") {
+    const { getPipelines } = await import("@/lib/reireply");
+    const { writeGhlPipelines, stageSlug } = await import("@/lib/crm");
+    const APPROVED = [/signed/i, /sell\s*land/i, /jon\s*&\s*mitch/i, /jraq.*nick|nick/i];
+    const pls = await getPipelines();
+    const plBody = pls.body as { pipelines?: Array<{ id: string; name: string; stages?: Array<{ id: string; name: string }> }> };
+    const list = (plBody.pipelines ?? []).filter((p) => APPROVED.some((rx) => rx.test(p.name)))
+      .map((p) => ({ name: p.name, stages: (p.stages ?? []).map((st) => ({ key: stageSlug(st.name), label: st.name })) }));
+    await writeGhlPipelines(list);
+    return NextResponse.json({ ok: true, pipelines: list.map((p) => ({ name: p.name, stages: p.stages.length })) });
+  }
+
   // GHL → Seller CRM import v2 (Jon 2026-10-07: ONLY DS: Signed, DS: Sell
   // Land, AQM Jon & Mitch, JrAQ: Nick — per respective user, GHL-like stages).
   // ?ghlimport=1 dry / &commit=1. Idempotent: existing opps UPDATE stage/rep;
@@ -492,14 +550,9 @@ export async function GET(request: Request) {
     const pipelines = (plBody.pipelines ?? []).filter((p) => APPROVED.some((rx) => rx.test(p.name)));
     const stageName = new Map<string, string>();
     for (const p of plBody.pipelines ?? []) for (const st of p.stages ?? []) stageName.set(st.id, st.name);
-    // GHL stage name → our CRM stage
-    const mapStage = (n: string) => /offer/i.test(n) ? "offer_made"
-      : /contract|sign|agreement|escrow|clos/i.test(n) ? "contract_sent"
-      : /market|photo|reduction|delay|lien|comp|dev/i.test(n) ? "at_developers"
-      : /process|discovery|appoint/i.test(n) ? "process_call"
-      : /new|fresh|lead/i.test(n) ? "new"
-      : /nurture|cold|dead|revive/i.test(n) ? "nurture"
-      : "contacted";
+    // GHL parity: keep the EXACT pipeline + stage (slug of GHL's stage name)
+    const { stageSlug } = await import("@/lib/crm");
+    const mapStage = (n: string) => (n ? stageSlug(n) : "contacted");
     const repByCrm = new Map(AGENTS.map((a) => [a.crm, a.first]));
     const users = await db.user.findMany({ where: { active: true }, select: { name: true } });
     const fullName = (first: string) => users.find((u) => u.name.toLowerCase().startsWith(first))?.name ?? "";
@@ -551,11 +604,11 @@ export async function GET(request: Request) {
         }
         const dupOpp = await db.crmOpportunity.findFirst({ where: { ghlId: r.ghlOppId } });
         if (dupOpp) {
-          await db.crmOpportunity.update({ where: { id: dupOpp.id }, data: { stage: r.stage, assignedTo: r.rep || dupOpp.assignedTo, tags: `ghl-import, ${r.pipeline}`.slice(0, 300), archivedAt: null } });
+          await db.crmOpportunity.update({ where: { id: dupOpp.id }, data: { pipeline: r.pipeline, stage: r.stage, assignedTo: r.rep || dupOpp.assignedTo, tags: "ghl-import", archivedAt: null } });
           updated++;
           continue;
         }
-        const opp = await db.crmOpportunity.create({ data: { contactId, title: r.title.slice(0, 160), stage: r.stage, value: r.value, assignedTo: r.rep, ghlId: r.ghlOppId, tags: `ghl-import, ${r.pipeline}`.slice(0, 300) } });
+        const opp = await db.crmOpportunity.create({ data: { contactId, title: r.title.slice(0, 160), pipeline: r.pipeline, stage: r.stage, value: r.value, assignedTo: r.rep, ghlId: r.ghlOppId, tags: "ghl-import" } });
         await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `Imported from GHL — ${r.pipeline}`, actor: "ghl-import" });
         opps++;
       }

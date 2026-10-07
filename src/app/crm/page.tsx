@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
-import { crmStages, parseTags } from "@/lib/crm";
+import { readPipelines, parseTags } from "@/lib/crm";
 import { Card, SectionTitle } from "@/components/ui";
 import CrmKanban, { type CrmCard } from "@/components/CrmKanban";
 import { createCrmLeadAction, saveCommsPermsAction, bulkOppAction } from "./actions";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 
-export default async function CrmPage({ searchParams }: { searchParams: Promise<{ view?: string; who?: string; q?: string; stage?: string; tag?: string; due?: string; p?: string }> }) {
+export default async function CrmPage({ searchParams }: { searchParams: Promise<{ view?: string; who?: string; q?: string; stage?: string; tag?: string; due?: string; p?: string; na?: string; quiet?: string; fresh?: string; pl?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
@@ -29,16 +29,27 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const fStage = sp.stage ?? "";
   const fTag = (sp.tag ?? "").trim();
   const fDue = sp.due === "1";
+  const fNa = sp.na === "1";      // no next action set
+  const fQuiet = sp.quiet === "1"; // no touch in 3+ days
+  const fFresh = sp.fresh === "1"; // created this week
 
   // Scale plan (35k+ leads): the board never loads everything — true counts
   // come from an indexed groupBy, each column renders its freshest 60, and
   // the List view paginates. Payload stays ~constant no matter the lead count.
+  const pipelines = await readPipelines();
+  const plName = sp.pl && pipelines.some((x) => x.name === sp.pl) ? sp.pl : pipelines[0].name;
+  const pipe = pipelines.find((x) => x.name === plName)!;
   const whereBase = {
     archivedAt: null,
+    // "War Room" = native leads (empty pipeline) · GHL pipelines match by name
+    ...(plName === "War Room" ? { pipeline: { in: ["", "War Room"] } } : { pipeline: plName }),
     ...(who ? { assignedTo: { equals: who.trim(), mode: "insensitive" as const } } : {}),
     ...(fStage ? { stage: fStage } : {}),
     ...(fTag ? { OR: [{ tags: { contains: fTag, mode: "insensitive" as const } }, { contact: { tags: { contains: fTag, mode: "insensitive" as const } } }] } : {}),
     ...(fDue ? { nextFollowUp: { not: "", lte: today } } : {}),
+    ...(fNa ? { nextFollowUp: "" } : {}),
+    ...(fQuiet ? { stage: { notIn: ["nurture", "dead", "signed"] }, updatedAt: { lte: new Date(Date.now() - 3 * 86400000) } } : {}),
+    ...(fFresh ? { createdAt: { gte: new Date(Date.now() - 7 * 86400000) } } : {}),
     ...(q ? { OR: [
       { title: { contains: q, mode: "insensitive" as const } },
       { tags: { contains: q, mode: "insensitive" as const } },
@@ -49,21 +60,22 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   };
   const page = Math.max(1, Number(sp.p) || 1);
   const PER_COL = 60, PER_PAGE = 50;
-  const [stages, reps, grouped, totalCount, tasks, appts] = await Promise.all([
-    crmStages(),
+  const stages = pipe.stages;
+  const [reps, grouped, totalCount, tasks, appts] = await Promise.all([
     getActiveReps(),
-    db.crmOpportunity.groupBy({ by: ["stage"], where: whereBase, _count: { _all: true } }),
+    db.crmOpportunity.groupBy({ by: ["stage"], where: whereBase, _count: { _all: true }, _sum: { value: true } }),
     db.crmOpportunity.count({ where: whereBase }),
     db.crmTask.findMany({ where: { doneAt: null }, select: { oppId: true, due: true, title: true, assignedTo: true }, take: 2000 }),
     db.crmAppointment.findMany({ where: { at: { gte: new Date() } }, orderBy: { at: "asc" }, take: 10 }),
   ]);
   const stageCounts: Record<string, number> = {};
-  for (const g of grouped) stageCounts[g.stage] = g._count._all;
+  const stageSums: Record<string, number> = {};
+  for (const g of grouped) { stageCounts[g.stage] = g._count._all; stageSums[g.stage] = g._sum.value ?? 0; }
   const opps = view === "list"
     ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
     : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
   const qs = (over: Record<string, string>) => {
-    const p = new URLSearchParams({ view, ...(manager && who ? { who } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...over });
+    const p = new URLSearchParams({ view, pl: plName, ...(manager && who ? { who } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
     return `/crm?${p.toString()}`;
   };
@@ -110,10 +122,20 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         }
       />
 
+      {/* 🔀 Pipeline selector — exactly like GHL's dropdown */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {pipelines.map((pp) => (
+          <Link key={pp.name} prefetch={false} href={qs({ pl: pp.name, stage: "", p: "" })} className={`rounded-xl px-3 py-1.5 text-xs font-bold ${pp.name === plName ? "bg-brand-navy text-white shadow" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
+            {pp.name}
+          </Link>
+        ))}
+      </div>
+
       {/* 🔎 search + GHL-style filters */}
       <Card className="space-y-2 p-3">
         <form action="/crm" className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="pl" value={plName} />
           {manager && who && <input type="hidden" name="who" value={who} />}
           <input name="q" defaultValue={q} placeholder="🔎 Search name, phone, email, property, tag…" className="min-w-[240px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
           <select name="stage" defaultValue={fStage} className="rounded-xl border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-600">
@@ -141,6 +163,21 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         </div>
       </Card>
 
+      {/* ⚡ Smart Views — one-click working lists */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-bold text-slate-400">⚡ Smart views:</span>
+        {([
+          ["📞 Due today", { due: "1", na: "", quiet: "", fresh: "", tag: "" }],
+          ["🔥 Hot", { tag: "hot", due: "", na: "", quiet: "", fresh: "" }],
+          ["🚫 No next action", { na: "1", due: "", quiet: "", fresh: "", tag: "" }],
+          ["🕸 Quiet 3d+", { quiet: "1", due: "", na: "", fresh: "", tag: "" }],
+          ["✨ New this week", { fresh: "1", due: "", na: "", quiet: "", tag: "" }],
+        ] as const).map(([label, over]) => {
+          const active = (over.due === "1" && fDue) || (over.na === "1" && fNa) || (over.quiet === "1" && fQuiet) || (over.fresh === "1" && fFresh) || (over.tag === "hot" && fTag === "hot");
+          return <Link key={label} prefetch={false} href={active ? qs({ due: "", na: "", quiet: "", fresh: "", tag: "" }) : qs(over as Record<string, string>)} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${active ? "bg-brand-gold text-brand-navy" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>{label}</Link>;
+        })}
+      </div>
+
       {upcoming.length > 0 && (
         <Card className="border-l-4 border-indigo-400 p-3">
           <span className="text-xs font-bold text-slate-700">📅 Next 24h: </span>
@@ -167,7 +204,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       </Card>
 
       {view === "kanban" ? (
-        <CrmKanban columns={stages} cards={cards} counts={stageCounts} listHref={`/crm?view=list${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} />
+        <CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} listHref={`/crm?view=list${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} />
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>

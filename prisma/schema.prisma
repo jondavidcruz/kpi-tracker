@@ -1368,7 +1368,8 @@ model CrmOpportunity {
   contactId        String
   contact          CrmContact @relation(fields: [contactId], references: [id])
   title            String // usually the property address
-  stage            String     @default("new") // lib/crm.ts CRM_STAGES
+  pipeline         String     @default("") // "" = War Room native; else the GHL pipeline name
+  stage            String     @default("new") // stage KEY within its pipeline (lib/crm.ts)
   value            Float? // est. assignment fee / deal value
   askPrice         Float? // what the seller wants
   assignedTo       String     @default("")

@@ -5,6 +5,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setOppStageAction } from "@/app/crm/actions";
+import { STAGE_PROB } from "@/lib/crm";
 
 export type CrmCard = {
   id: string;
@@ -27,7 +28,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, listHref = "/crm?view=list" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; listHref?: string }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string }) {
   const [cards, setCards] = useState(initial);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
@@ -85,10 +86,15 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, listHr
               onDrop={(e) => { e.preventDefault(); drop(col.key); setOverCol(null); }}
               className={`min-w-[210px] flex-1 rounded-2xl bg-slate-100/70 p-2 ring-1 transition ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : "ring-slate-200/60"} ${col.key === "at_developers" ? "bg-amber-50/70 ring-amber-200" : ""}`}
             >
-              <div className="mb-1.5 flex items-center justify-between px-1">
+              <div className="mb-0.5 flex items-center justify-between px-1">
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${col.cls}`}>{col.label}</span>
                 <span className="text-xs font-extrabold tabular-nums text-slate-500">{(counts[col.key] ?? colCards.length).toLocaleString()}</span>
               </div>
+              {(sums[col.key] ?? 0) > 0 && (
+                <div className="mb-1.5 px-1 text-[9px] font-bold text-slate-400" title="Total value in this stage · weighted by how likely this stage is to close">
+                  ${Math.round(sums[col.key]).toLocaleString()} · wtd ${Math.round((sums[col.key] ?? 0) * (STAGE_PROB[col.key] ?? 0)).toLocaleString()}
+                </div>
+              )}
               <div className="space-y-1.5">
                 {colCards.map((c) => (
                   <div

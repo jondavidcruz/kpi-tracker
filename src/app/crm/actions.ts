@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { logCrmEvent, CRM_STAGES } from "@/lib/crm";
+import { logCrmEvent, CRM_STAGES, readPipelines } from "@/lib/crm";
 
 async function crmUser() {
   const me = await getCurrentUser();
@@ -55,7 +55,8 @@ export async function setOppStageAction(formData: FormData) {
   if (!me) return;
   const id = String(formData.get("id") ?? "");
   const stage = String(formData.get("stage") ?? "");
-  if (!id || !CRM_STAGES.some((s) => s.key === stage)) return;
+  const valid = (await readPipelines()).some((p) => p.stages.some((st) => st.key === stage));
+  if (!id || !valid) return;
   const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, stage: true } });
   if (!opp || opp.stage === stage) return;
   await db.crmOpportunity.update({ where: { id }, data: {
@@ -257,6 +258,81 @@ export async function bulkOppAction(formData: FormData) {
       if (o && !o.tags.toLowerCase().includes(val.toLowerCase())) await db.crmOpportunity.update({ where: { id }, data: { tags: o.tags ? `${o.tags}, ${val}` : val } });
     }
   } else return;
+  revalidatePath("/crm");
+}
+
+/** Enroll a lead in an email sequence (needs email perm; stops on reply). */
+export async function enrollSequenceAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const { commsFor } = await import("@/lib/crm-comms");
+  if (!(await commsFor(me)).email) return;
+  const { readSequences, readSeqState, writeSeqState, ymdPlus } = await import("@/lib/crm-templates");
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const seqId = String(formData.get("seqId") ?? "");
+  const email = String(formData.get("email") ?? "").trim();
+  if (!oppId || !contactId || !email) return;
+  const seq = (await readSequences()).find((x) => x.id === seqId);
+  if (!seq) return;
+  const state = await readSeqState();
+  state[oppId] = { seqId, step: 0, nextYmd: ymdPlus(seq.steps[0]?.day ?? 0), email, enrolledBy: me.name, startedYmd: new Date().toISOString().slice(0, 10) };
+  await writeSeqState(state);
+  await logCrmEvent({ contactId, oppId, kind: "system", body: `Enrolled in email sequence "${seq.name}" (${seq.steps.length} steps) — auto-stops the moment they reply`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+export async function unenrollSequenceAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const { readSeqState, writeSeqState } = await import("@/lib/crm-templates");
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const state = await readSeqState();
+  if (state[oppId]) {
+    delete state[oppId];
+    await writeSeqState(state);
+    if (contactId) await logCrmEvent({ contactId, oppId, kind: "system", body: "Removed from email sequence", actor: me.name });
+  }
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** Power dialer: log the outcome of the current queue call and advance. */
+export async function dialerOutcomeAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const outcome = String(formData.get("outcome") ?? "");
+  const note = String(formData.get("note") ?? "").trim().slice(0, 300);
+  const next = Number(formData.get("next")) || 0;
+  if (!oppId || !contactId) return;
+  const NEXT_DAYS: Record<string, number> = { no_answer: 1, voicemail: 2, callback: 0, talked: 3, not_interested: 30 };
+  const label: Record<string, string> = { no_answer: "no answer", voicemail: "left voicemail", callback: "callback requested", talked: "talked — good convo", not_interested: "not interested (nurture)" };
+  if (outcome in NEXT_DAYS) {
+    const nf = new Date(Date.now() + NEXT_DAYS[outcome] * 86400000).toISOString().slice(0, 10);
+    await db.crmOpportunity.update({ where: { id: oppId }, data: { nextFollowUp: nf, ...(outcome === "not_interested" ? { stage: "nurture" } : {}) } });
+    await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer: ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`, actor: me.name });
+  }
+  revalidatePath("/crm");
+  redirect(`/crm/dialer?i=${next}`);
+}
+
+/** Managers: save the snippet library (one per line pipe format). */
+export async function saveSnippetsAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const { writeSnippets } = await import("@/lib/crm-templates");
+  type Snip = import("@/lib/crm-templates").Snippet;
+  const raw = String(formData.get("raw") ?? "");
+  const list: Snip[] = [];
+  for (const line of raw.split("\n")) {
+    const [kind, name, subject, ...rest] = line.split("|");
+    const body = rest.join("|").trim();
+    if (!["sms", "email"].includes((kind ?? "").trim()) || !name?.trim() || !body) continue;
+    list.push({ id: `${kind.trim()}-${list.length}`, kind: kind.trim() as Snip["kind"], name: name.trim().slice(0, 60), subject: subject?.trim() || undefined, body: body.replaceAll("\\n", "\n").slice(0, 2000) });
+  }
+  if (list.length) await writeSnippets(list);
   revalidatePath("/crm");
 }
 
