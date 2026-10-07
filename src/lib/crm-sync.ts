@@ -35,7 +35,8 @@ export const AGENTS: AgentCfg[] = [
   // Michelle auto-feed (Jon 2026-10-07: "whatever can be tracked with our APIs"):
   // dials → Outbound Dials, answered → Connections, and a completed call ≥2min
   // with a seller counts as a Quality Conversation. Manual entries still win.
-  { crm: "FT34Pug9AUHAG0Kpwg9j", first: "michelle", talk: "acq_talk_time", dials: "outbound_calls", answered: "connected_calls", conv: "quality_convos", convMin: 120 },
+  // Quality Convos retired 2026-10-07 (merged into Completed Process Calls — one human milestone, no double tracking)
+  { crm: "FT34Pug9AUHAG0Kpwg9j", first: "michelle", talk: "acq_talk_time", dials: "outbound_calls", answered: "connected_calls" },
   // Talk time + dials + answered are auto. Developer vs Fix/Flipper CONVERSATIONS are NOT
   // auto — the CRM can't tell which buyer type a call was with — so reps log those manually.
   // Sharyn's CRM account was recreated — old id vFYB3vWFG2o0VOVwwEYd went dead and

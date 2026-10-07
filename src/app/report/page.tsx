@@ -235,13 +235,31 @@ export default async function ReportPage({
             const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
             if (roleReps.length === 0) return null;
             const dreiSide = drei && pos.key === "acquisitions" ? drei.seller : drei && pos.key === "dispositions" ? drei.buyer : null;
+            const moneyKpis = roleKpis.filter((k) => k.category === "green");
+            const activityKpis = roleKpis.filter((k) => k.category !== "green");
             return (
-              <div key={pos.key}>
+              <div key={pos.key} className="space-y-2">
+                {moneyKpis.length > 0 && (
+                  <RepRoleBars
+                    emoji="💰"
+                    label={`${pos.label} — Money movers`}
+                    reps={roleReps}
+                    kpis={moneyKpis}
+                    cell={(repId, k) => {
+                      const val = sums.get(`${k.id}|${repId}`) ?? 0;
+                      const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;
+                      const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdays : null;
+                      const pct = weeklyGoal ? Math.min(100, (val / weeklyGoal) * 100) : null;
+                      const status = weeklyGoal ? (val >= weeklyGoal ? "hit" : val >= weeklyGoal * 0.7 ? "close" : "miss") : "tracked";
+                      return { value: val, pct, status, goalText: weeklyGoal ? `/ ${formatValue(k.unit as Unit, weeklyGoal)} ${rangeNoun === "day" ? "day" : rangeNoun}` : undefined };
+                    }}
+                  />
+                )}
                 <RepRoleBars
-                  emoji={pos.emoji}
-                  label={pos.label}
+                  emoji="⚡"
+                  label={`${pos.label} — Activity`}
                   reps={roleReps}
-                  kpis={roleKpis}
+                  kpis={activityKpis}
                   cell={(repId, k) => {
                     const val = sums.get(`${k.id}|${repId}`) ?? 0;
                     const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;

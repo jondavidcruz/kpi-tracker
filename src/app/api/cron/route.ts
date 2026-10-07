@@ -834,6 +834,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, won: rows.length, totalValue: rows.reduce((a, r) => a + r.value, 0), perRep, rows });
   }
 
+  // Scorecard order + merge (Jon 2026-10-07): Signed Contract lands after
+  // Offers Rejected; Quality Conversations retires into Completed Process
+  // Calls (one human milestone — simpler for the team).
+  if (url.searchParams.get("kpiorder") === "1") {
+    const ORDER: Record<string, number> = {
+      leads_generated: 10, outbound_calls: 20, connected_calls: 30, completed_process_calls: 40,
+      leads_worked: 50, acq_talk_time: 60, offers_made: 70, acq_contracts_sent: 80,
+      offers_rejected: 90, acq_signed: 100,
+    };
+    const out: string[] = [];
+    for (const [key, sortOrder] of Object.entries(ORDER)) {
+      const k = await db.kpi.findFirst({ where: { key } });
+      if (k) { await db.kpi.update({ where: { id: k.id }, data: { sortOrder } }); out.push(`${k.name} → ${sortOrder}`); }
+    }
+    const qc = await db.kpi.findFirst({ where: { key: "quality_convos" } });
+    if (qc && qc.active) { await db.kpi.update({ where: { id: qc.id }, data: { active: false } }); out.push("Quality Conversations retired (merged into Process Calls)"); }
+    const pc = await db.kpi.findFirst({ where: { key: "completed_process_calls" } });
+    if (pc) await db.kpi.update({ where: { id: pc.id }, data: { definition: "Goal 4/day (Nick 3): the FULL discovery call — condition, price they want, timeline — ending ready to underwrite. This IS the quality conversation; next stop is an offer. MANUAL." } });
+    return NextResponse.json({ ok: true, done: out });
+  }
+
   // One Signed Contract KPI (Jon 2026-10-07): retire the assignment/novation/
   // creative/listing split — count goes in ONE field, the TYPE goes in a note.
   if (url.searchParams.get("signedmerge") === "1") {
