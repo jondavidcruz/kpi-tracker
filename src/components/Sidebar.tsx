@@ -62,7 +62,7 @@ export default function Sidebar({
   newSuggestions: number;
   officeMeetLink?: string;
   mondayMeetLink?: string;
-  navOrder?: { groups: string[]; items: Record<string, string[]>; moves?: Record<string, string> } | null;
+  navOrder?: { groups: string[]; items: Record<string, string[]>; moves?: Record<string, string>; labels?: Record<string, string>; groupLabels?: Record<string, string> } | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -261,7 +261,7 @@ export default function Sidebar({
           if (items.length === 0) return null;
           return (
             <div key={g.label}>
-              <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-navy-300">{g.label}</div>
+              <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-navy-300">{navOrder?.groupLabels?.[g.label] ?? g.label}</div>
               <div className="space-y-0.5">
                 {items.map((it) => {
                   const active = isActive(it.href);
@@ -277,7 +277,7 @@ export default function Sidebar({
                       }`}
                     >
                       <it.Icon size={18} strokeWidth={1.75} className={active ? "text-brand-gold" : "text-brand-navy-300 group-hover:text-white"} />
-                      <span className="flex-1">{it.label}</span>
+                      <span className="flex-1">{navOrder?.labels?.[it.href] ?? it.label}</span>
                       {/* One lock only (Jon 2026-10-07): marks what the team can
                           never see — C-suite (Jon/Viktoriia/Enrico) or owner-only. */}
                       {csuite && (it.adminOnly || it.csuiteOnly) ? (

@@ -466,7 +466,7 @@ export default async function AdminPage({
       {owner && (
         <section id="sidebar-order" className="scroll-mt-20">
           <SectionTitle title="🧭 Sidebar order" subtitle="Move groups and tabs — everyone's sidebar follows this order instantly. New pages appear in their coded spot until you move them." accent="bg-indigo-400" />
-          <NavOrderBoard groups={orderedNavGroups.map((g) => ({ group: g.group, items: g.items.map((i) => ({ href: i.href, label: i.label })) }))} />
+          <NavOrderBoard groups={orderedNavGroups.map((g) => ({ group: g.group, display: navOrder?.groupLabels?.[g.group], items: g.items.map((i) => ({ href: i.href, label: navOrder?.labels?.[i.href] ?? i.label })) }))} />
         </section>
       )}
 

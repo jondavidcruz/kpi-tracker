@@ -7,7 +7,7 @@
 import { useState, useTransition } from "react";
 import { saveNavOrderAction } from "@/app/actions";
 
-export type NavGroupDef = { group: string; items: Array<{ href: string; label: string }> };
+export type NavGroupDef = { group: string; display?: string; items: Array<{ href: string; label: string }> };
 
 export default function NavOrderBoard({ groups: initial }: { groups: NavGroupDef[] }) {
   const [groups, setGroups] = useState(initial);
@@ -16,6 +16,22 @@ export default function NavOrderBoard({ groups: initial }: { groups: NavGroupDef
   const [overKey, setOverKey] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [savedAt, setSavedAt] = useState(0);
+  // ✏️ display-only renames (Jon 2026-10-07): editing = "g:<group>" | "i:<href>"
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editVal, setEditVal] = useState("");
+
+  const saveRename = (scope: "group" | "item", key: string) => {
+    const fd = new FormData();
+    fd.set("kind", "rename");
+    fd.set("scope", scope);
+    fd.set("key", key);
+    fd.set("label", editVal.trim());
+    setGroups(groups.map((g) => scope === "group" && g.group === key
+      ? { ...g, display: editVal.trim() || undefined }
+      : { ...g, items: g.items.map((i) => (scope === "item" && i.href === key ? { ...i, label: editVal.trim() || i.label } : i)) }));
+    setEditing(null);
+    start(async () => { await saveNavOrderAction(fd); setSavedAt(Date.now()); });
+  };
 
   const persist = (kind: "groups" | "items" | "move", next: NavGroupDef[], group?: string, href?: string) => {
     setGroups(next);
@@ -104,7 +120,23 @@ export default function NavOrderBoard({ groups: initial }: { groups: NavGroupDef
               title="Drag to move this whole group"
             >
               <span className="text-slate-300">⠿</span>
-              <span className="text-sm font-bold text-slate-700">{g.group}</span>
+              {editing === `g:${g.group}` ? (
+                <input
+                  autoFocus value={editVal} onChange={(e) => setEditVal(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveRename("group", g.group); if (e.key === "Escape") setEditing(null); }}
+                  onBlur={() => saveRename("group", g.group)}
+                  placeholder={g.group}
+                  className="rounded-md border border-indigo-300 px-1.5 py-0.5 text-sm font-bold text-slate-700"
+                  onDragStart={(e) => e.preventDefault()}
+                />
+              ) : (
+                <span className="text-sm font-bold text-slate-700">{g.display ?? g.group}</span>
+              )}
+              <button
+                type="button" title="Rename this group (blank = back to the original name)"
+                onClick={(e) => { e.stopPropagation(); setEditing(`g:${g.group}`); setEditVal(g.display ?? g.group); }}
+                className="text-slate-300 hover:text-indigo-500"
+              >✏️</button>
             </div>
             <div className="space-y-0.5">
               {g.items.map((it) => (
@@ -120,12 +152,27 @@ export default function NavOrderBoard({ groups: initial }: { groups: NavGroupDef
                   onDragEnd={() => { setDragItem(null); setOverKey(null); }}
                   onDragOver={(e) => { if (dragItem) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; setOverKey(`i:${it.href}`); } }}
                   onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dropOnItem(g.group, it.href); setOverKey(null); }}
-                  className={`flex cursor-grab items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 transition active:cursor-grabbing ${
+                  className={`group flex cursor-grab items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 transition active:cursor-grabbing ${
                     overKey === `i:${it.href}` && dragItem && dragItem.href !== it.href ? "bg-indigo-50 ring-1 ring-indigo-300" : "bg-slate-50"
                   } ${dragItem?.href === it.href ? "opacity-50" : ""}`}
                 >
                   <span className="text-slate-300">⠿</span>
-                  <span className="flex-1">{it.label}</span>
+                  {editing === `i:${it.href}` ? (
+                    <input
+                      autoFocus value={editVal} onChange={(e) => setEditVal(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") saveRename("item", it.href); if (e.key === "Escape") setEditing(null); }}
+                      onBlur={() => saveRename("item", it.href)}
+                      className="flex-1 rounded-md border border-indigo-300 px-1.5 py-0.5 text-[13px]"
+                      onDragStart={(e) => e.preventDefault()}
+                    />
+                  ) : (
+                    <span className="flex-1">{it.label}</span>
+                  )}
+                  <button
+                    type="button" title="Rename this tab for everyone (blank = back to the original name)"
+                    onClick={(e) => { e.stopPropagation(); setEditing(`i:${it.href}`); setEditVal(it.label); }}
+                    className="opacity-0 transition group-hover:opacity-100 text-slate-300 hover:text-indigo-500"
+                  >✏️</button>
                 </div>
               ))}
               {dragItem && dragItem.group !== g.group && <div className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/40 px-2.5 py-1 text-[11px] text-indigo-400">drop here to move into {g.group}</div>}

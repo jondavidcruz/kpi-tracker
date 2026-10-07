@@ -7,7 +7,10 @@ export const NAV_ORDER_CAT = "__nav_order__";
 
 // moves: href → group label, for tabs the owner dragged OUT of their coded
 // group (Jon 2026-10-04). Absent href = stays in its coded group.
-export type NavOrder = { groups: string[]; items: Record<string, string[]>; moves?: Record<string, string> };
+// labels: href → custom tab name; groupLabels: coded group → custom name
+// (Jon 2026-10-07: rename any sidebar field). Keys stay CODED everywhere —
+// renames are display-only, so orders/moves/gates never break.
+export type NavOrder = { groups: string[]; items: Record<string, string[]>; moves?: Record<string, string>; labels?: Record<string, string>; groupLabels?: Record<string, string> };
 
 export function parseNavOrder(raw: string | null | undefined): NavOrder | null {
   if (!raw) return null;

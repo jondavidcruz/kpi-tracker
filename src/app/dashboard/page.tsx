@@ -505,38 +505,21 @@ export default async function DashboardPage({
 
 
       </DashSection>
-      <DashSection id="rolecards" label="👥 Team scorecards">
-      {/* Role scorecards (+ Direct REI context strip per side — Jon 2026-10-04:
-          no separate section, fold the numbers into the scorecards they belong to) */}
-      {POSITIONS.map((pos) => {
-        const roleReps = reps.filter((r) => r.position === pos.key);
-        const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
-        if (roleReps.length === 0 && roleKpis.length === 0) return null;
-        const dreiSide = drei && pos.key === "acquisitions" ? drei.seller : drei && pos.key === "dispositions" ? drei.buyer : null;
+      {/* Per-rep KPI scorecards REMOVED (Jon 2026-10-07: "never in sync with
+          the actual KPI report" — /report is the one source of KPI truth).
+          The Direct REI pulse survives in its own slim section. */}
+      <DashSection id="dreipulse" label="📨 Direct REI outreach">
+      {drei && (["acquisitions", "dispositions"] as const).map((posKey) => {
+        const dreiSide = posKey === "acquisitions" ? drei.seller : drei.buyer;
         return (
-          <div key={pos.key}>
-            <RoleScorecard
-              title={`${pos.emoji} ${pos.label}`}
-              blurb={pos.blurb}
-              reps={roleReps}
-              kpis={roleKpis}
-              dailyValues={dailyValues}
-              targets={targets}
-              month={month}
-            />
-            {dreiSide && (
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
-                <span className="font-bold text-slate-600">📨 Direct REI auto-outreach ({pos.key === "acquisitions" ? "sellers" : "buyers"}):</span>
-                <span><b className="text-slate-700">{dreiSide.new7d}</b> leads loaded this wk <span className="text-slate-400">(the AI texts/emails/calls them for us)</span></span>
-                <span><b className="text-slate-700">{dreiSide.replies7d}</b> wrote back <span className="text-slate-400">(💬{dreiSide.smsReplies7d} text · ✉️{dreiSide.emailReplies7d} email · 📞{Math.max(0, dreiSide.replies7d - dreiSide.smsReplies7d - dreiSide.emailReplies7d)} call campaigns)</span></span>
-                <span className="font-semibold text-amber-600">→ these are the warm ones to work</span>
-              </div>
-            )}
+          <div key={posKey} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
+            <span className="font-bold text-slate-600">📨 Direct REI auto-outreach ({posKey === "acquisitions" ? "sellers → Michelle" : "buyers → dispo"}):</span>
+            <span><b className="text-slate-700">{dreiSide.new7d}</b> leads loaded this wk <span className="text-slate-400">(the AI texts/emails/calls them for us)</span></span>
+            <span><b className="text-slate-700">{dreiSide.replies7d}</b> wrote back <span className="text-slate-400">(💬{dreiSide.smsReplies7d} text · ✉️{dreiSide.emailReplies7d} email · 📞{Math.max(0, dreiSide.replies7d - dreiSide.smsReplies7d - dreiSide.emailReplies7d)} call campaigns)</span></span>
+            <span className="font-semibold text-amber-600">→ these are the warm ones to work</span>
           </div>
         );
       })}
-
-
       </DashSection>
       <DashSection id="pace" label="📈 This month: pace">
       {/* Monthly pace */}

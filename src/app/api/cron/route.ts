@@ -439,8 +439,9 @@ export async function GET(request: Request) {
       connected_calls: 100,
       cc_talk_time: 4500, // 75 min
       completed_process_calls: 4,
-      offers_made: 3, // Verbal Offers Made
-      acq_contracts_sent: 1, // New Contract Sent
+      // offers_made / acq_contracts_sent intentionally NOT raised (Jon
+      // 2026-10-07: land offers wait 24–48h on developer pricing — raising
+      // the offer floor would punish her for the developers' clock).
     };
     const out: string[] = [];
     for (const [key, goalValue] of Object.entries(RAISES)) {

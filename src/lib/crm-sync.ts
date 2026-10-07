@@ -32,7 +32,10 @@ const STAGE_FIXED_REP: Record<string, string> = {};
 type AgentCfg = { crm: string; first: string; talk: string; conv?: string; convMin?: number; dials?: string; answered?: string };
 export const AGENTS: AgentCfg[] = [
   { crm: "Up6W3UdNQ4tDkitQfUJq", first: "jon", talk: "acq_talk_time" },
-  { crm: "FT34Pug9AUHAG0Kpwg9j", first: "michelle", talk: "acq_talk_time" },
+  // Michelle auto-feed (Jon 2026-10-07: "whatever can be tracked with our APIs"):
+  // dials → Outbound Dials, answered → Connections, and a completed call ≥2min
+  // with a seller counts as a Quality Conversation. Manual entries still win.
+  { crm: "FT34Pug9AUHAG0Kpwg9j", first: "michelle", talk: "acq_talk_time", dials: "outbound_calls", answered: "connected_calls", conv: "quality_convos", convMin: 120 },
   // Talk time + dials + answered are auto. Developer vs Fix/Flipper CONVERSATIONS are NOT
   // auto — the CRM can't tell which buyer type a call was with — so reps log those manually.
   // Sharyn's CRM account was recreated — old id vFYB3vWFG2o0VOVwwEYd went dead and

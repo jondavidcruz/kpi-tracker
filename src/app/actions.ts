@@ -1169,6 +1169,20 @@ export async function saveNavOrderAction(formData: FormData) {
     for (const g of Object.keys(current.items)) {
       if (g !== toGroup) current.items[g] = current.items[g].filter((h) => h !== href);
     }
+  } else if (kind === "rename") {
+    // Display-only rename of a tab (key = href) or a group (key = coded label).
+    // Empty label resets to the coded name.
+    const scope = String(formData.get("scope") ?? "");
+    const key = String(formData.get("key") ?? "").trim();
+    const label = String(formData.get("label") ?? "").trim().slice(0, 40);
+    if (!key) return;
+    if (scope === "group") {
+      current.groupLabels = current.groupLabels ?? {};
+      if (label && label !== key) current.groupLabels[key] = label; else delete current.groupLabels[key];
+    } else if (scope === "item") {
+      current.labels = current.labels ?? {};
+      if (label) current.labels[key] = label; else delete current.labels[key];
+    } else return;
   } else return;
   await writeNavOrder(current, row?.id);
   revalidatePath("/admin");

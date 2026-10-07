@@ -65,7 +65,9 @@ export function shiftEndHour(dateStr: string, who?: string | null): { hour: numb
   const dow = dowOf(dateStr);
   if (dow < 1 || dow > 5) return null; //                  Sat/Sun → off
   if (dow === 5) return { hour: 14, min: 0 }; //            Fri     → 2:00 PM (whole team, no lunch — incl. Sharyn)
-  if (firstName(who) === "marie") return { hour: 18, min: 0 }; // Marie Mon–Thu → 6:00 PM
+  // Marie Mon–Thu: 6:00 PM through 2026-10-10; from Mon 2026-10-12 her shift
+  // moves to 10:00 AM–4:00 PM (Jon 2026-10-07). Fridays stay whole-team 8–2.
+  if (firstName(who) === "marie") return dateStr >= "2026-10-12" ? { hour: 16, min: 0 } : { hour: 18, min: 0 };
   return { hour: 17, min: 0 }; //                           Mon–Thu → 5:00 PM
 }
 
@@ -84,7 +86,8 @@ export function shiftStartHour(dateStr: string, who?: string | null): { hour: nu
   const dow = dowOf(dateStr);
   if (dow < 1 || dow > 5) return null; // Sat/Sun → off
   if (dow === 5) return { hour: 8, min: 0 }; // Fri → 8:00 AM (whole team)
-  if (firstName(who) === "marie") return { hour: 12, min: 0 }; // Marie Mon–Thu → 12:00 PM
+  // Marie Mon–Thu: noon start through 2026-10-10; 10:00 AM from 2026-10-12.
+  if (firstName(who) === "marie") return dateStr >= "2026-10-12" ? { hour: 10, min: 0 } : { hour: 12, min: 0 };
   return { hour: 8, min: 0 }; //                                 8:00 AM default
 }
 
