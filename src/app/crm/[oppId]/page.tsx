@@ -8,6 +8,9 @@ import TelnyxCallButton from "@/components/TelnyxCallButton";
 import BrowserDialer from "@/components/BrowserDialer";
 import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, sendCrmEmailAction, sendCrmSmsAction } from "../actions";
 import { commsFor } from "@/lib/crm-comms";
+import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
+import SnippetPicker from "@/components/SnippetPicker";
+import { enrollSequenceAction, unenrollSequenceAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +42,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
     db.crmOpportunity.findMany({ where: { contactId: c.id, id: { not: oppId } }, select: { id: true, title: true, stage: true } }),
     db.crmParty.findMany({ where: { oppId }, orderBy: { createdAt: "asc" } }),
   ]);
+  const [snippets, sequences, seqState] = await Promise.all([readSnippets(), readSequences(), readSeqState()]);
+  const enrolled = seqState[opp.id];
   const pipe = pipelines.find((x) => x.name === (opp.pipeline || "War Room")) ?? pipelines[0];
   const stages = pipe.stages;
   const st = stages.find((s) => s.key === opp.stage);
@@ -261,8 +266,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                     <input type="hidden" name="oppId" value={opp.id} />
                     <input type="hidden" name="contactId" value={c.id} />
                     <input type="hidden" name="to" value={c.phone} />
-                    <textarea name="text" rows={2} required placeholder={`Text ${c.name.split(" ")[0]}…`} className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
-                    <button className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700">Send SMS</button>
+                    <textarea id="smsbody" name="text" rows={2} required placeholder={`Text ${c.name.split(" ")[0]}…`} className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+                    <div className="flex items-center gap-1.5"><SnippetPicker snippets={snippets.filter((x) => x.kind === "sms")} targetId="smsbody" lead={c.name} rep={me!.name} />
+                    <button className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700">Send SMS</button></div>
                   </form>
                 )}
                 {comms.email && c.email && (
@@ -271,12 +277,43 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                     <input type="hidden" name="oppId" value={opp.id} />
                     <input type="hidden" name="contactId" value={c.id} />
                     <input type="hidden" name="to" value={c.email} />
-                    <input name="subject" required placeholder="Subject" className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
-                    <textarea name="body" rows={2} required placeholder="Message…" className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
-                    <button className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">Send email</button>
+                    <input id="emsubject" name="subject" required placeholder="Subject" className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+                    <textarea id="embody" name="body" rows={2} required placeholder="Message…" className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+                    <div className="flex items-center gap-1.5"><SnippetPicker snippets={snippets.filter((x) => x.kind === "email")} targetId="embody" subjectId="emsubject" lead={c.name} rep={me!.name} />
+                    <button className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">Send email</button></div>
                   </form>
                 )}
               </div>
+            </Card>
+          )}
+
+          {comms.email && c.email && (
+            <Card className="flex flex-wrap items-center gap-2 p-3">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📧 Email sequence</span>
+              {enrolled ? (
+                <>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">
+                    ▶ {sequences.find((x) => x.id === enrolled.seqId)?.name ?? enrolled.seqId} — step {enrolled.step + 1}, next {enrolled.nextYmd}
+                  </span>
+                  <span className="text-[10px] text-slate-400">auto-stops the moment they reply</span>
+                  <form action={unenrollSequenceAction} className="ml-auto">
+                    <input type="hidden" name="oppId" value={opp.id} />
+                    <input type="hidden" name="contactId" value={c.id} />
+                    <button className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200">⏹ stop</button>
+                  </form>
+                </>
+              ) : (
+                <form action={enrollSequenceAction} className="flex flex-1 flex-wrap items-center gap-1.5">
+                  <input type="hidden" name="oppId" value={opp.id} />
+                  <input type="hidden" name="contactId" value={c.id} />
+                  <input type="hidden" name="email" value={c.email} />
+                  <select name="seqId" className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold">
+                    {sequences.map((sq) => <option key={sq.id} value={sq.id}>{sq.name} ({sq.steps.length} emails)</option>)}
+                  </select>
+                  <button className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700">▶ Enroll</button>
+                  <span className="text-[10px] text-slate-400">like Direct REI's drip — ours, free, stops on reply</span>
+                </form>
+              )}
             </Card>
           )}
 
