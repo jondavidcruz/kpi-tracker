@@ -319,6 +319,22 @@ export async function dialerOutcomeAction(formData: FormData) {
   redirect(`/crm/dialer?i=${next}`);
 }
 
+/** Softphone outcome quick-log (no redirect — stays in the panel). */
+export async function dialerOutcomeQuickAction(formData: FormData): Promise<void> {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const outcome = String(formData.get("outcome") ?? "");
+  const NEXT_DAYS: Record<string, number> = { no_answer: 1, voicemail: 2, callback: 0, talked: 3, not_interested: 30 };
+  const label: Record<string, string> = { no_answer: "no answer", voicemail: "left voicemail", callback: "callback requested", talked: "talked — good convo", not_interested: "not interested (nurture)" };
+  if (!oppId || !contactId || !(outcome in NEXT_DAYS)) return;
+  const nf = new Date(Date.now() + NEXT_DAYS[outcome] * 86400000).toISOString().slice(0, 10);
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { nextFollowUp: nf, ...(outcome === "not_interested" ? { stage: "nurture" } : {}) } });
+  await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer: ${label[outcome]} · next follow-up ${nf}`, actor: me.name });
+  revalidatePath("/crm");
+}
+
 /** Managers: save the snippet library (one per line pipe format). */
 export async function saveSnippetsAction(formData: FormData) {
   const me = await getCurrentUser();

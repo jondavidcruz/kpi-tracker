@@ -5,7 +5,7 @@
 // contact's area code), and it answers "fo-call" events from opportunity
 // cards so every 📞 in the CRM rings through the browser — never tel:.
 import { useEffect, useRef, useState } from "react";
-import { logBrowserCallAction } from "@/app/crm/actions";
+import { logBrowserCallAction, dialerOutcomeQuickAction } from "@/app/crm/actions";
 
 type CallState = "idle" | "connecting" | "ringing" | "active" | "error";
 type PhoneData = {
@@ -32,6 +32,7 @@ export default function DialPad() {
   const [autoNext, setAutoNext] = useState(false);
   const [qi, setQi] = useState(0);
   const [onCall, setOnCall] = useState<Ctx | null>(null);
+  const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
   const clientRef = useRef<{ disconnect: () => void } | null>(null);
   const callRef = useRef<{ hangup: () => void; muteAudio: () => void; unmuteAudio: () => void } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -114,6 +115,7 @@ export default function DialPad() {
     startRef.current = 0;
     try { clientRef.current?.disconnect(); } catch { /* gone */ }
     setState("idle"); setMuted(false); setSecs(0); setOnCall(null);
+    if (ctx?.oppId) setLastCall(ctx);
     if (ctx?.contactId) {
       const fd = new FormData();
       fd.set("oppId", ctx.oppId ?? "");
@@ -256,6 +258,25 @@ export default function DialPad() {
             )}
             {tab === "queue" && (
               <span className="flex flex-col gap-1">
+                {lastCall && state === "idle" && (
+                  <span className="mb-1 flex flex-col gap-1 rounded-xl bg-amber-50 px-2.5 py-2 ring-1 ring-amber-200">
+                    <span className="text-[10px] font-bold text-amber-800">How did it go with {lastCall.name ?? lastCall.phone}?</span>
+                    <span className="flex flex-wrap gap-1">
+                      {([["no_answer", "📵 No answer"], ["voicemail", "📼 VM"], ["callback", "📞 Callback"], ["talked", "✅ Talked"], ["not_interested", "🌱 Nurture"]] as const).map(([k, l]) => (
+                        <button key={k} onClick={() => {
+                          const fd = new FormData();
+                          fd.set("oppId", lastCall.oppId ?? "");
+                          fd.set("contactId", lastCall.contactId ?? "");
+                          fd.set("outcome", k);
+                          dialerOutcomeQuickAction(fd).catch(() => {});
+                          setLastCall(null);
+                          setTimeout(() => load(), 800);
+                        }} className="rounded-md bg-white px-2 py-1 text-[10px] font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100">{l}</button>
+                      ))}
+                      <button onClick={() => setLastCall(null)} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600">skip</button>
+                    </span>
+                  </span>
+                )}
                 <span className="mb-1 flex items-center justify-between rounded-xl bg-emerald-50 px-2.5 py-1.5 ring-1 ring-emerald-200">
                   <span className="text-[10px] font-bold text-emerald-800">⚡ Power mode: auto-dials the next lead when you hang up</span>
                   <button onClick={() => { const on = !autoNext; setAutoNext(on); if (on && data?.queue[qi] && state === "idle") { const t = data.queue[qi]; call({ phone: t.phone, name: t.name, oppId: t.oppId, contactId: t.contactId }); } }} className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${autoNext ? "bg-emerald-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{autoNext ? "ON" : "OFF"}</button>
@@ -281,7 +302,7 @@ export default function DialPad() {
             <TabBtn id="recents" icon="🕐" label="Recents" />
             <TabBtn id="contacts" icon="👤" label="Contacts" />
             <TabBtn id="keypad" icon="🔢" label="Keypad" />
-            <TabBtn id="queue" icon="⏭" label="Queue" />
+            <TabBtn id="queue" icon="⚡" label="Dialer" />
           </span>
         </span>
       )}
