@@ -410,8 +410,42 @@ export async function GET(request: Request) {
     if (seller) { await db.kpi.update({ where: { id: seller.id }, data: { key: "seller_email_replies", name: "Seller Email Replies", emoji: "✉️", definition: "Sellers who replied by email — auto-fed from Direct REI email campaigns." } }); out.push(`${seller.key} → seller_email_replies`); }
     const buyer = await db.kpi.findFirst({ where: { name: { in: ["Mail Responses", "Direct Mail Responses"] } } });
     if (buyer) { await db.kpi.update({ where: { id: buyer.id }, data: { key: "buyer_email_replies", name: "Buyer Email Replies", emoji: "📨", definition: "Buyers who replied by email — auto-fed from Direct REI email campaigns." } }); out.push(`${buyer.key} → buyer_email_replies`); }
+    // the old land mail tile duplicates the repointed one — retire it
+    const leftover = await db.kpi.findFirst({ where: { key: "land_mail_responses" } });
+    if (leftover) { await db.kpi.update({ where: { id: leftover.id }, data: { active: false } }); out.push("land_mail_responses retired"); }
     const team = await db.kpi.findMany({ where: { scope: "team" }, select: { key: true, name: true }, orderBy: { name: "asc" } });
     return NextResponse.json({ ok: true, renamed: out, teamKpis: team });
+  }
+
+  // Goal raises (Jon 2026-10-07: lists are pulled for dispo + Michelle has
+  // leads — raise the daily minimums). Runs only when Jon says go.
+  if (url.searchParams.get("goalraise") === "1") {
+    const RAISES: Record<string, number> = {
+      // dispositions (Sharyn + Marie)
+      dev_conversations: 8, // Buyer Conversations — Jon: "8 to 10", goal 8, stretch beyond
+      buyers_contacted: 40, // Dials / Attempts — what it takes to land 8 convos
+      answered_calls: 12,
+      ds_talk_time: 5400, // 90 min on the phone
+      deals_sold: 5, // Deals Sent to Buyers — cascade makes sends cheap
+      buyers_vetted: 2,
+      buy_boxes_captured: 3,
+      // Michelle (cc_lm + acquisitions)
+      quality_convos: 12,
+      outbound_calls: 140,
+      connected_calls: 100,
+      cc_talk_time: 4500, // 75 min
+      completed_process_calls: 4,
+      offers_made: 3, // Verbal Offers Made
+      acq_contracts_sent: 1, // New Contract Sent
+    };
+    const out: string[] = [];
+    for (const [key, goalValue] of Object.entries(RAISES)) {
+      const k = await db.kpi.findFirst({ where: { key } });
+      if (!k) { out.push(`${key}: NOT FOUND`); continue; }
+      await db.kpi.update({ where: { id: k.id }, data: { goalValue, goalKind: "at_least" } });
+      out.push(`${k.name}: ${k.goalValue ?? "tracked"} → ${goalValue}`);
+    }
+    return NextResponse.json({ ok: true, raised: out });
   }
 
   // Google Sheet hybrid sync — pull the girls' typed cells in, push fresh
