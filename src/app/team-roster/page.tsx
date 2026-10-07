@@ -3,6 +3,7 @@ import { saveTeamProfile, uploadTeamDoc, deleteTeamDoc } from "@/app/actions";
 import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { getRevenueByUser, tierFor, REVENUE_LADDER } from "@/lib/roster-revenue";
+import { saveRevAdjustAction } from "@/app/actions";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
 import { db } from "@/lib/db";
 import { todayStr } from "@/lib/date";
@@ -49,9 +50,9 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
   const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
-  const { byUserId: revByUser, unattributed } = owner
+  const { byUserId: revByUser, unattributed, adjustments } = owner
     ? await getRevenueByUser(Number(today.slice(0, 4)))
-    : { byUserId: new Map(), unattributed: 0 };
+    : { byUserId: new Map(), unattributed: 0, adjustments: {} as Record<string, number> };
   const [users, profiles, board, ai, seats, docs] = await Promise.all([
     getAllUsers(),
     db.teamProfile.findMany(),
@@ -115,15 +116,22 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
           const tenure = p?.startDate ? yearsBetween(p.startDate, today) : "—";
           const sincePromo = p?.lastPromotion ? yearsBetween(p.lastPromotion, today) : (p?.startDate ? yearsBetween(p.startDate, today) : "—");
           const dueReview = (wins >= 2 || aiProven >= 1) && (sincePromo !== "—" && !sincePromo.startsWith("0y") && sincePromo !== "0m");
+          const rev0 = revByUser.get(u.id) ?? { revenue: 0, revenueYtd: 0, deals: 0 };
           return (
-            <Card key={u.id} className="p-5">
+            <details key={u.id} className="group rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition hover:shadow-md">
+              <summary className="flex cursor-pointer flex-wrap items-center gap-3 px-5 py-4">
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-brand-navy text-xs font-bold text-brand-gold-soft">{u.name.split(" ").map((x) => x[0]).slice(0, 2).join("")}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold text-slate-800">{u.name}</span>
+                  <span className="block text-xs text-slate-400">{positionLabel(u.position)} · {u.role}</span>
+                </span>
+                {owner && <span className="hidden text-sm font-extrabold text-violet-700 sm:block">{usd(rev0.revenue)} <span className="text-[10px] font-semibold text-violet-400">{tierFor(rev0.revenue).current.tier}</span></span>}
+                {dueReview && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">⭐️ Review</span>}
+                <span className="text-slate-300 transition group-open:rotate-90">›</span>
+              </summary>
+              <div className="border-t border-slate-100 p-5">
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-navy text-xs font-bold text-brand-gold-soft">{u.name.split(" ").map((x) => x[0]).slice(0, 2).join("")}</span>
-                <div className="flex-1">
-                  <div className="font-bold text-slate-800">{u.name} {p?.birthday && <span className="text-xs font-normal text-slate-400">· {ageFrom(p.birthday, today)} yrs</span>}</div>
-                  <div className="text-xs text-slate-400">{positionLabel(u.position)} · {u.role}</div>
-                </div>
-                {dueReview && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">⭐️ Review for promotion</span>}
+                {p?.birthday && <span className="text-xs text-slate-400">🎂 {ageFrom(p.birthday, today)} yrs</span>}
               </div>
 
               {/* Performance snapshot */}
@@ -144,6 +152,12 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                       <div>
                         <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Revenue generated for the company</div>
                         <div className="text-2xl font-extrabold text-violet-900">{usd(rev.revenue)} <span className="text-xs font-semibold text-violet-500">lifetime · {usd(rev.revenueYtd)} this year · {rev.deals} deal{rev.deals === 1 ? "" : "s"}</span></div>
+                        <form action={saveRevAdjustAction} className="mt-1 flex items-center gap-1.5">
+                          <input type="hidden" name="first" value={u.name.trim().split(/\s+/)[0].toLowerCase()} />
+                          <span className="text-[10px] font-semibold text-violet-500">± manual adjustment $</span>
+                          <input name="amount" defaultValue={adjustments[u.name.trim().split(/\s+/)[0].toLowerCase()] ?? ""} placeholder="0" className="w-24 rounded-md border border-violet-200 px-2 py-0.5 text-xs" />
+                          <button className="rounded-md bg-violet-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-violet-700">Save</button>
+                        </form>
                       </div>
                       <div className="text-right">
                         <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Current level</div>
@@ -218,7 +232,8 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                   <button className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Upload</button>
                 </form>
               </div>
-            </Card>
+              </div>
+            </details>
           );
         })}
       </div>

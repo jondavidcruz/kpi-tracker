@@ -2616,6 +2616,23 @@ export async function generatePacketAction(formData: FormData): Promise<import("
   return res;
 }
 
+/** Owner: manual revenue adjustment on the roster (± lifetime credit). */
+export async function saveRevAdjustAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const first = String(formData.get("first") ?? "").toLowerCase().trim();
+  const amount = Number(String(formData.get("amount") ?? "").replace(/[$,\s]/g, "")) || 0;
+  if (!first) return;
+  const row = await db.resource.findFirst({ where: { category: "__roster_rev_adjust__" } });
+  let map: Record<string, number> = {};
+  try { map = row?.description ? JSON.parse(row.description) : {}; } catch { /* fresh */ }
+  if (amount === 0) delete map[first]; else map[first] = amount;
+  const description = JSON.stringify(map);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { title: "roster-rev-adjust", category: "__roster_rev_adjust__", url: "", description } });
+  revalidatePath("/team-roster");
+}
+
 /** Google Sheet hybrid sync — the ↻ button on /deals. */
 export async function syncDispoSheetAction() {
   const me = await getCurrentUser();
