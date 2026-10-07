@@ -1030,10 +1030,21 @@ export async function GET(request: Request) {
 
   // Direct REI feed only — 7 days/week (Jon: outreach runs Sat/Sun too), 1700 PT.
   // Sellers = Michelle (acquisitions), Buyers = Sharyn + Marie (dispo, shared).
+  // Direct REI → War Room deal hand-off (Jon 2026-10-06): mirrors Under
+  // Contract-and-later Direct REI deals onto the dispo board. ?dreideals=1
+  if (url.searchParams.get("dreideals") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const { syncDreiDeals } = await import("@/lib/directrei-deals-sync");
+    const r = await syncDreiDeals(today);
+    return NextResponse.json({ ok: true, date: today, dreiDeals: r });
+  }
+
   if (url.searchParams.get("dreifeed") === "1") {
     const settings = await getSettings();
     const today = date ?? todayStr(settings.orgTimezone);
     const { refreshDreiFeed } = await import("@/lib/directrei-sync");
+    try { const { syncDreiDeals } = await import("@/lib/directrei-deals-sync"); await syncDreiDeals(today); } catch { /* deal hand-off is additive */ }
     const feed = await refreshDreiFeed(today);
     return NextResponse.json({ ok: true, date: today, dreiFeed: feed ? { seller: feed.seller, buyer: feed.buyer, scanned: feed.scanned } : "skipped (DIRECTREI_API_KEY not set)" });
   }
@@ -1050,6 +1061,7 @@ export async function GET(request: Request) {
     // Direct REI pulse rides the same 5×/day schedule (best-effort).
     let drei: unknown = null;
     try { const { refreshDreiFeed } = await import("@/lib/directrei-sync"); drei = await refreshDreiFeed(today); } catch { /* feed is additive */ }
+    try { const { syncDreiDeals } = await import("@/lib/directrei-deals-sync"); await syncDreiDeals(today); } catch { /* deal hand-off is additive */ }
     return NextResponse.json({ ok: true, date: today, calls: calls.wrote, offersContracts: opps.counts, activity, dreiFeed: drei ? "refreshed" : "skipped" });
   }
 

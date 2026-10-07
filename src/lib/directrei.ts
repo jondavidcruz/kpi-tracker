@@ -34,4 +34,5 @@ export async function directReiWhoami() { return drei("/me"); }
 
 export async function directReiContacts(params?: Record<string, string>) { return drei("/contacts", params); }
 export async function directReiCampaigns() { return drei("/campaigns"); }
-export async function directReiDeals() { return drei("/deals"); }
+export async function directReiDeals(params?: Record<string, string>) { return drei("/deals", params); }
+export async function directReiProperty(id: string) { return drei(`/properties/${encodeURIComponent(id)}`); }
