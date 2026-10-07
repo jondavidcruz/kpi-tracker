@@ -406,6 +406,25 @@ export async function GET(request: Request) {
     }
   } catch { /* alarms never break a cron */ }
 
+  // One-time: register the Resend webhook so opens/clicks land on timelines.
+  if (url.searchParams.get("resendhook") === "1") {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, error: "RESEND_API_KEY missing" });
+    const res = await fetch("https://api.resend.com/webhooks", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: "https://kpi-tracker-lovat.vercel.app/api/resend/events", events: ["email.opened", "email.clicked", "email.bounced", "email.complained"] }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { id?: string; secret?: string; signing_secret?: string; message?: string };
+    if (res.ok && body.id) {
+      const row = await db.resource.findFirst({ where: { category: "__resend_hook__" } });
+      const description = JSON.stringify({ id: body.id, secret: body.secret ?? body.signing_secret ?? "" });
+      if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+      else await db.resource.create({ data: { title: "resend-hook", category: "__resend_hook__", url: "", description } });
+    }
+    return NextResponse.json({ ok: res.ok, status: res.status, id: body.id ?? null, hasSecret: !!(body.secret ?? body.signing_secret), note: res.ok ? "Enable open/click tracking on the domain in Resend → Domains for opens to fire." : (body.message ?? "register failed — can also be added by hand in Resend → Webhooks") });
+  }
+
   // 📧 Email-sequence runner (the in-house Direct REI drip). Daily: sends the
   // step that's due, auto-stops the moment a lead has replied, logs everything.
   if (url.searchParams.get("seqrun") === "1") {
