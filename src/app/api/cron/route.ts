@@ -583,6 +583,58 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 👤 Owner repair (?ghlownerfix=1 dry / &commit=1): re-read every imported
+  // lead's TRUE owner from GHL and fix assignedTo ONLY — stages/pipelines the
+  // team already moved in the War Room are left alone. Fixes the
+  // Enrico-owns-everything import bug (startsWith("") matched the first user).
+  if (url.searchParams.get("ghlownerfix") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const { searchOpportunities, getPipelines, listCrmUsers } = await import("@/lib/reireply");
+    const { AGENTS } = await import("@/lib/crm-sync");
+    const APPROVED = [/signed/i, /sell\s*land/i, /jon\s*&\s*mitch/i, /jraq.*nick|nick/i];
+    const pls = await getPipelines();
+    const plBody = pls.body as { pipelines?: Array<{ id: string; name: string }> };
+    const pipelines = (plBody.pipelines ?? []).filter((p) => APPROVED.some((rx) => rx.test(p.name)));
+    const repByCrm = new Map(AGENTS.map((a) => [a.crm, a.first]));
+    const users = await db.user.findMany({ where: { active: true }, select: { name: true } });
+    const fullName = (first: string) => (first ? users.find((u) => u.name.toLowerCase().startsWith(first))?.name ?? "" : "");
+    const ghlUsers = await listCrmUsers().catch(() => ({ users: [] as Array<{ id: string; name: string }> }));
+    const ghlName = new Map(ghlUsers.users.map((u) => [u.id, u.name]));
+    const resolveOwner = (ghlUserId: string, pipeName: string) => {
+      const mapped = fullName(repByCrm.get(ghlUserId) ?? "");
+      if (mapped) return mapped;
+      const gname = ghlName.get(ghlUserId) ?? "";
+      if (gname) {
+        const local = fullName(gname.trim().split(/\s+/)[0].toLowerCase());
+        return local || gname;
+      }
+      return /nick/i.test(pipeName) ? (fullName("nicholas") || fullName("nick") || "Nicholas Fair") : "";
+    };
+    let checked = 0, fixed = 0;
+    const byOwner: Record<string, number> = {};
+    const changes: string[] = [];
+    for (const p of pipelines) {
+      const opps = await fetchAllOpps(searchOpportunities, p.id);
+      for (const o of opps) {
+        const ghlOppId = String(o.id ?? "");
+        if (!ghlOppId) continue;
+        const rep = resolveOwner(String(o.assignedTo ?? ""), p.name);
+        byOwner[rep || "(unassigned)"] = (byOwner[rep || "(unassigned)"] ?? 0) + 1;
+        const local = await db.crmOpportunity.findFirst({ where: { ghlId: ghlOppId }, select: { id: true, assignedTo: true, contactId: true, title: true } });
+        if (!local) continue;
+        checked++;
+        if (local.assignedTo === rep) continue;
+        if (changes.length < 30) changes.push(`${local.title.slice(0, 30)}: ${local.assignedTo || "—"} → ${rep || "—"}`);
+        if (commit) {
+          await db.crmOpportunity.update({ where: { id: local.id }, data: { assignedTo: rep } });
+          await db.crmContact.update({ where: { id: local.contactId }, data: { assignedTo: rep } }).catch(() => {});
+        }
+        fixed++;
+      }
+    }
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", checked, wouldFix: fixed, ownersFromGhl: byOwner, sampleChanges: changes, ghlUsersFound: ghlUsers.users.length });
+  }
+
   // 📞 Number inventory: Direct REI lines stay put; UNASSIGNED numbers get
   // claimed for the War Room CRM (?claimnumbers=1 dry / &commit=1).
   if (url.searchParams.get("claimnumbers") === "1") {
@@ -855,7 +907,23 @@ export async function GET(request: Request) {
     const mapStage = (n: string) => (n ? stageSlug(n) : "contacted");
     const repByCrm = new Map(AGENTS.map((a) => [a.crm, a.first]));
     const users = await db.user.findMany({ where: { active: true }, select: { name: true } });
-    const fullName = (first: string) => users.find((u) => u.name.toLowerCase().startsWith(first))?.name ?? "";
+    // BUG FIX (Enrico-owns-everything): startsWith("") matches EVERYONE, so an
+    // unmapped GHL owner used to resolve to whatever user came first in the
+    // table. Guard the empty lookup and fall back to GHL's own user directory.
+    const fullName = (first: string) => (first ? users.find((u) => u.name.toLowerCase().startsWith(first))?.name ?? "" : "");
+    const { listCrmUsers } = await import("@/lib/reireply");
+    const ghlUsers = await listCrmUsers().catch(() => ({ users: [] as Array<{ id: string; name: string }> }));
+    const ghlName = new Map(ghlUsers.users.map((u) => [u.id, u.name]));
+    const resolveOwner = (ghlUserId: string, pipeName: string) => {
+      const mapped = fullName(repByCrm.get(ghlUserId) ?? "");
+      if (mapped) return mapped;
+      const gname = ghlName.get(ghlUserId) ?? "";
+      if (gname) {
+        const local = fullName(gname.trim().split(/\s+/)[0].toLowerCase());
+        return local || gname; // show the real GHL owner even without a War Room account
+      }
+      return /nick/i.test(pipeName) ? (fullName("nicholas") || fullName("nick") || "Nicholas Fair") : "";
+    };
     type Row = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; value: number | null; rep: string; stage: string; pipeline: string };
     const rows: Row[] = [];
     for (const p of pipelines) {
@@ -865,8 +933,7 @@ export async function GET(request: Request) {
         const contact = (o.contact ?? {}) as { id?: string; name?: string; phone?: string; email?: string };
         const ghlStage = stageName.get(String(o.pipelineStageId ?? "")) ?? "";
         // "respective user": GHL owner wins; JrAQ: Nick pipeline defaults to Nicholas
-        const owner = fullName(repByCrm.get(String(o.assignedTo ?? "")) ?? "");
-        const rep = owner || (/nick/i.test(p.name) ? (fullName("nicholas") || fullName("nick") || "Nicholas Fair") : "");
+        const rep = resolveOwner(String(o.assignedTo ?? ""), p.name);
         rows.push({
           ghlOppId: String(o.id ?? ""), ghlContactId: String(contact.id ?? o.contactId ?? ""),
           name: String(contact.name ?? o.name ?? "—"), phone: String(contact.phone ?? ""), email: String(contact.email ?? ""),

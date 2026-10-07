@@ -23,9 +23,31 @@ export async function POST(req: NextRequest) {
     if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
     else await db.resource.create({ data: { title: "telnyx-events", category: "__telnyx_events__", url: "", description } });
   } catch { /* logging never blocks call handling */ }
-  let st: { bridgeTo?: string; oppId?: string; contactId?: string; rep?: string } = {};
+  let st: { bridgeTo?: string; oppId?: string; contactId?: string; rep?: string; ring?: string } = {};
   try { st = p.client_state ? JSON.parse(Buffer.from(p.client_state, "base64").toString()) : {}; } catch { /* none */ }
   const key = process.env.TELNYX_API_KEY;
+  const txCall = (id: string, action: string, body?: object) =>
+    fetch(`https://api.telnyx.com/v2/calls/${id}/actions/${action}`, {
+      method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    }).catch(() => null);
+  // ring sessions: inbound call id → outstanding browser legs (ring-all state)
+  const SESS = "__ring_sessions__";
+  type Sess = Record<string, { legs: string[]; answered: boolean; at: string }>;
+  const readSess = async (): Promise<{ rowId: string | null; map: Sess }> => {
+    const row = await db.resource.findFirst({ where: { category: SESS } });
+    let map: Sess = {};
+    try { map = row?.description ? JSON.parse(row.description) : {}; } catch { /* fresh */ }
+    // prune anything older than 10 minutes (webhook loss shouldn't leak state)
+    const cutoff = Date.now() - 10 * 60_000;
+    for (const k of Object.keys(map)) if (Date.parse(map[k].at) < cutoff) delete map[k];
+    return { rowId: row?.id ?? null, map };
+  };
+  const writeSess = async (rowId: string | null, map: Sess) => {
+    const description = JSON.stringify(map);
+    if (rowId) await db.resource.update({ where: { id: rowId }, data: { description } }).catch(() => {});
+    else await db.resource.create({ data: { title: "ring-sessions", category: SESS, url: "", description } }).catch(() => {});
+  };
 
   if (ev === "call.answered" && st.bridgeTo && key && p.call_control_id) {
     // rep picked up → dial the seller and bridge
@@ -36,30 +58,93 @@ export async function POST(req: NextRequest) {
     }).catch(() => {});
   }
 
-  // ☎️ Inbound v2: ring the browsers — answer+transfer the PSTN leg to the
-  // WebRTC credential's SIP URI (25s), then the hangup handler below texts
-  // back if nobody picked up.
-  if (ev === "call.initiated" && !st.bridgeTo && key && p.call_control_id) {
-    const pay0 = p as { direction?: string; to?: string };
+  // ☎️ Inbound v3 — RING-ALL: dial every agent's own SIP identity at once
+  // (plus the legacy shared one); first browser to answer gets bridged, the
+  // rest are hung up. Nobody answers → every leg dies → caller hangup path
+  // sends the text-back.
+  if (ev === "call.initiated" && !st.bridgeTo && !st.ring && key && p.call_control_id) {
+    const pay0 = p as { direction?: string; to?: string; from?: string };
     if (pay0.direction === "incoming") {
       const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
-      let cfg: { sipUser?: string } = {};
+      let cfg: { sipUser?: string; ccAppId?: string; agents?: Record<string, { sipUser: string }> } = {};
       try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
-      if (cfg.sipUser) {
-        await fetch(`https://api.telnyx.com/v2/calls/${p.call_control_id}/actions/transfer`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ to: `sip:${cfg.sipUser}@sip.telnyx.com`, timeout_secs: 25 }),
-        }).catch(() => {});
+      const targets = [...new Set([
+        ...Object.values(cfg.agents ?? {}).map((a) => a.sipUser),
+        cfg.sipUser ?? "",
+      ].filter(Boolean))];
+      const inId = p.call_control_id;
+      const legs: string[] = [];
+      const clientState = Buffer.from(JSON.stringify({ ring: inId })).toString("base64");
+      for (const sip of targets) {
+        const r = await fetch("https://api.telnyx.com/v2/calls", {
+          method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            connection_id: cfg.ccAppId, to: `sip:${sip}@sip.telnyx.com`,
+            from: pay0.from ?? pay0.to, timeout_secs: 25, client_state: clientState,
+          }),
+        }).catch(() => null);
+        const rb = r ? ((await r.json().catch(() => ({}))) as { data?: { call_control_id?: string } }) : {};
+        if (rb.data?.call_control_id) legs.push(rb.data.call_control_id);
+      }
+      const { rowId, map } = await readSess();
+      map[inId] = { legs, answered: false, at: new Date().toISOString() };
+      await writeSess(rowId, map);
+      if (legs.length === 0 && cfg.sipUser) {
+        // dial-out refused entirely → old single transfer as a last resort
+        await txCall(inId, "transfer", { to: `sip:${cfg.sipUser}@sip.telnyx.com`, timeout_secs: 25 });
       }
       return NextResponse.json({ ok: true });
     }
+  }
+
+  // Ring leg ANSWERED → answer the seller's call and bridge the two; hang up
+  // every other still-ringing browser leg.
+  if (ev === "call.answered" && st.ring && key && p.call_control_id) {
+    const { rowId, map } = await readSess();
+    const sess = map[st.ring];
+    if (sess && !sess.answered) {
+      sess.answered = true;
+      await writeSess(rowId, map);
+      await txCall(st.ring, "answer");
+      await txCall(p.call_control_id, "bridge", { call_control_id: st.ring });
+      for (const leg of sess.legs) if (leg !== p.call_control_id) await txCall(leg, "hangup");
+    } else {
+      // raced: someone else already took it
+      await txCall(p.call_control_id, "hangup");
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // Ring leg died (timeout/decline/offline) → when the LAST leg dies with no
+  // answer, release the seller's call so the missed-call text-back fires.
+  if (ev === "call.hangup" && st.ring) {
+    const { rowId, map } = await readSess();
+    const sess = map[st.ring];
+    if (sess) {
+      sess.legs = sess.legs.filter((l) => l !== p.call_control_id);
+      if (!sess.answered && sess.legs.length === 0) {
+        delete map[st.ring];
+        await writeSess(rowId, map);
+        await txCall(st.ring, "hangup");
+      } else await writeSess(rowId, map);
+    }
+    return NextResponse.json({ ok: true });
   }
 
   // ☎️ Missed INBOUND call → instant text-back + a task for the lead's owner
   // (GHL's signature move). Inbound legs carry no client_state.
   const pay = p as { direction?: string; from?: string; to?: string; hangup_cause?: string; start_time?: string; answered_at?: string };
   if (ev === "call.hangup" && !st.contactId && (pay.direction === "incoming" || !pay.direction) && pay.from && pay.to) {
+    // caller hung up while browsers were still ringing → stop the ring legs
+    if (p.call_control_id) {
+      const { rowId, map } = await readSess();
+      const sess = map[p.call_control_id];
+      if (sess) {
+        for (const leg of sess.legs) await txCall(leg, "hangup");
+        delete map[p.call_control_id];
+        await writeSess(rowId, map);
+      }
+    }
     const missed = !pay.answered_at; // never answered = missed, whatever the cause
     if (missed && pay.from.replace(/\D/g, "").length >= 10) {
       const last10 = pay.from.replace(/\D/g, "").slice(-10);
