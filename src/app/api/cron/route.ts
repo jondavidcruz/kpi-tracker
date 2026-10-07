@@ -497,6 +497,7 @@ export async function GET(request: Request) {
     const rows = await db.crmEvent.findMany({ where: { body: { contains: "<" } }, select: { id: true, body: true }, take: 400 });
     let changed = 0;
     for (const r of rows) {
+      if (!/<[a-zA-Z!\/]/.test(r.body)) continue; // only HTML-tag-like text — never munch a literal "<"
       const clean = stripHtml(r.body).slice(0, 2000);
       if (clean !== r.body) { await db.crmEvent.update({ where: { id: r.id }, data: { body: clean } }); changed++; }
     }
