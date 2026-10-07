@@ -23,6 +23,40 @@ async function pd(path: string, params?: Record<string, string>): Promise<Res> {
   }
 }
 
+async function pdPost(path: string, payload: object): Promise<Res> {
+  try {
+    const res = await fetch(BASE + path, {
+      method: "POST",
+      headers: { Authorization: `API-Key ${process.env.PANDADOC_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    const text = await res.text();
+    let body: unknown; try { body = JSON.parse(text); } catch { body = text.slice(0, 400); }
+    return { ok: res.ok, status: res.status, body };
+  } catch (e) {
+    return { ok: false, status: 0, body: String(e) };
+  }
+}
+
+/** Draft a contract from the offer template (GHL-parity: auto-draft when a
+ * lead hits the offer stage). Doc stays a DRAFT — the rep reviews and sends
+ * from PandaDoc. Returns {id} on success. */
+export async function createOfferDraft(o: { name: string; recipientEmail: string; recipientName: string; tokens: Record<string, string>; metadata?: Record<string, string> }): Promise<{ id?: string; error?: string }> {
+  const tpl = process.env.PANDADOC_TEMPLATE_ID;
+  if (!tpl) return { error: "PANDADOC_TEMPLATE_ID not set" };
+  const [first, ...rest] = o.recipientName.trim().split(/\s+/);
+  const r = await pdPost("/documents", {
+    name: o.name.slice(0, 120),
+    template_uuid: tpl,
+    recipients: [{ email: o.recipientEmail || "unknown@freedom-offers.com", first_name: first || "Seller", last_name: rest.join(" ") || "-", role: "Client" }],
+    tokens: Object.entries(o.tokens).map(([name, value]) => ({ name, value })),
+    metadata: o.metadata ?? {},
+  });
+  if (!r.ok) return { error: `PandaDoc ${r.status}: ${JSON.stringify(r.body).slice(0, 160)}` };
+  return { id: (r.body as { id?: string }).id };
+}
+
 /** Completed documents in a date window (status=2 = document.completed). */
 export async function listCompletedDocs(fromISO: string, toISO: string) {
   return pd("/documents", { status: "2", completed_from: fromISO, completed_to: toISO, count: "50", order_by: "date_completed" });

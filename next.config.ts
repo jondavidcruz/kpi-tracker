@@ -14,6 +14,22 @@ const nextConfig: NextConfig = {
     // HUD statement uploads (PDF/image) on the deal-close flow.
     serverActions: { bodySizeLimit: "4mb" },
   },
+  // Security headers (Jon 2026-10-07 "protect our data"): no embedding in
+  // other sites (clickjacking), no MIME sniffing, no referrer leakage, and
+  // browsers are told not to cache gated pages on shared machines.
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "same-origin" },
+          { key: "Permissions-Policy", value: "camera=(), geolocation=(), payment=()" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

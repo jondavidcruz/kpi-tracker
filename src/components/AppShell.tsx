@@ -91,6 +91,19 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   return (
     <div className="md:flex md:min-h-screen">
+      {/* Deterrent watermark for nav-restricted users (Jon 2026-10-07): any
+          screenshot or photo of the screen carries WHO was logged in. It can't
+          technically stop a screenshot — nothing in a browser can — but it
+          makes leaks attributable, which is what actually deters them. */}
+      {allow && (
+        <div aria-hidden className="pointer-events-none fixed inset-0 z-[9999] grid select-none grid-cols-3 grid-rows-3 overflow-hidden">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <span key={i} className="grid -rotate-12 place-items-center font-mono text-[11px] font-bold text-slate-500/[0.07]">
+              {me.name} · {me.email} · Freedom Offers confidential
+            </span>
+          ))}
+        </div>
+      )}
       <ThemeToggle />
       <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} navOrder={navOrder} />
       <main className="min-w-0 flex-1">

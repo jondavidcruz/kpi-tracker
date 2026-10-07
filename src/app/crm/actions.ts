@@ -66,8 +66,34 @@ export async function setOppStageAction(formData: FormData) {
   } });
   await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "stage", body: `${opp.stage} → ${stage}`, actor: me.name });
   // ⚙️ fire matching automations (never blocks the move)
-  const full = await db.crmOpportunity.findUnique({ where: { id }, select: { id: true, contactId: true, pipeline: true, stage: true, assignedTo: true, title: true } });
+  const full = await db.crmOpportunity.findUnique({ where: { id }, select: { id: true, contactId: true, pipeline: true, stage: true, assignedTo: true, title: true, value: true, askPrice: true } });
   if (full) { const { runStageAutomations } = await import("@/lib/crm-automations"); runStageAutomations(full).catch(() => {}); }
+  // 📝 GHL-parity (Jon 2026-10-07): hitting an offer/contract stage auto-drafts
+  // the PandaDoc contract so the rep just reviews and sends. Never blocks.
+  if (full && /offer|contract/i.test(stage) && !/rejected|sent/i.test(stage)) {
+    (async () => {
+      const { pandadocConfigured, createOfferDraft } = await import("@/lib/pandadoc");
+      if (!pandadocConfigured()) return;
+      const contact = await db.crmContact.findUnique({ where: { id: full.contactId } });
+      if (!contact) return;
+      const price = full.value ?? full.askPrice;
+      const r = await createOfferDraft({
+        name: `Offer — ${contact.name}${contact.address ? ` — ${contact.address}` : ""}`,
+        recipientEmail: contact.email, recipientName: contact.name,
+        tokens: {
+          "Seller.Name": contact.name, "Property.Address": contact.address,
+          "Offer.Price": price != null ? `$${price.toLocaleString()}` : "", "Rep.Name": full.assignedTo || me.name,
+        },
+        metadata: { oppId: full.id, contactId: contact.id },
+      });
+      if (r.id) {
+        await logCrmEvent({ contactId: contact.id, oppId: full.id, kind: "system", body: `📝 PandaDoc contract DRAFTED — review & send: https://app.pandadoc.com/a/#/documents/${r.id}`, actor: "pandadoc" });
+        await db.crmTask.create({ data: { oppId: full.id, contactId: contact.id, title: `📝 Review & send the drafted offer contract (PandaDoc)`, due: new Date().toISOString().slice(0, 10), assignedTo: full.assignedTo || me.name, createdBy: "pandadoc" } }).catch(() => {});
+      } else if (r.error && r.error !== "PANDADOC_TEMPLATE_ID not set") {
+        await logCrmEvent({ contactId: contact.id, oppId: full.id, kind: "system", body: `PandaDoc draft failed: ${r.error}`, actor: "pandadoc" });
+      }
+    })().catch(() => {});
+  }
   revalidatePath("/crm");
   revalidatePath(`/crm/${id}`);
 }
@@ -149,6 +175,7 @@ export async function addCrmTaskAction(formData: FormData) {
   } });
   revalidatePath(`/crm/${oppId}`);
   revalidatePath("/crm");
+  revalidatePath("/crm/tasks");
 }
 
 export async function toggleCrmTaskAction(formData: FormData) {
@@ -161,6 +188,7 @@ export async function toggleCrmTaskAction(formData: FormData) {
   if (!t.doneAt && t.contactId) await logCrmEvent({ contactId: t.contactId, oppId: t.oppId, kind: "task", body: `Done: ${t.title}`, actor: me.name });
   revalidatePath(`/crm/${t.oppId}`);
   revalidatePath("/crm");
+  revalidatePath("/crm/tasks");
 }
 
 export async function addCrmApptAction(formData: FormData) {
@@ -176,6 +204,7 @@ export async function addCrmApptAction(formData: FormData) {
   if (contactId) await logCrmEvent({ contactId, oppId, kind: "appt", body: `Appointment set: ${title} — ${at.toLocaleString("en-US", { timeZone: "America/New_York" })}`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
   revalidatePath("/crm");
+  revalidatePath("/crm/calendar");
 }
 
 export async function deleteCrmApptAction(formData: FormData) {
@@ -186,6 +215,7 @@ export async function deleteCrmApptAction(formData: FormData) {
   if (!a) return;
   await db.crmAppointment.delete({ where: { id } }).catch(() => {});
   revalidatePath(`/crm/${a.oppId}`);
+  revalidatePath("/crm/calendar");
 }
 
 /** Owner/managers: set who gets the paid channels (call / SMS / email). */

@@ -1,51 +1,192 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["sfo1"],
+  "regions": [
+    "sfo1"
+  ],
   "crons": [
-    { "path": "/api/cron", "schedule": "30 15 * * 1-5" },
-    { "path": "/api/cron", "schedule": "0 2 * * 2-5" },
-    { "path": "/api/cron", "schedule": "30 22 * * 5" },
-    { "path": "/api/cron?buyerreport=1", "schedule": "30 22 * * 5" },
-    { "path": "/api/cron?buyerreport=1", "schedule": "0 14 * * 1" },
-    { "path": "/api/cron?compliance=1", "schedule": "0 16 * * 1-5" },
-    { "path": "/api/cron?cascade=1", "schedule": "0 16 * * *" },
-    { "path": "/api/cron?cascade=1", "schedule": "0 19 * * *" },
-    { "path": "/api/cron?cascade=1", "schedule": "0 22 * * *" },
-    { "path": "/api/cron?cascade=1", "schedule": "0 1 * * *" },
-    { "path": "/api/cron?ethan=1", "schedule": "30 20 * * 1-5" },
-    { "path": "/api/cron?backup=1", "schedule": "0 9 * * *" },
-    { "path": "/api/cron?automaps=1", "schedule": "30 9 * * *" },
-    { "path": "/api/cron?payroll=1", "schedule": "0 3 * * *" },
-    { "path": "/api/cron?breaknudge=am", "schedule": "30 17 * * 1-5" },
-    { "path": "/api/cron?breaknudge=lunch", "schedule": "0 19 * * 1-5" },
-    { "path": "/api/cron?breaknudge=pm", "schedule": "0 22 * * 1-5" },
-    { "path": "/api/cron?crm=1", "schedule": "0 9 * * *" },
-    { "path": "/api/cron?crmtoday=1", "schedule": "0 17 * * 1-5" },
-    { "path": "/api/cron?crmtoday=1", "schedule": "0 19 * * 1-5" },
-    { "path": "/api/cron?crmtoday=1", "schedule": "0 21 * * 1-5" },
-    { "path": "/api/cron?crmtoday=1", "schedule": "0 23 * * 1-5" },
-    { "path": "/api/cron?crmtoday=1", "schedule": "0 1 * * 2-6" },
-    { "path": "/api/cron?ghlpush=1", "schedule": "0 16 * * *" },
-    { "path": "/api/cron?ghlpush=1", "schedule": "0 18 * * *" },
-    { "path": "/api/cron?ghlpush=1", "schedule": "0 20 * * *" },
-    { "path": "/api/cron?ghlpush=1", "schedule": "0 22 * * *" },
-    { "path": "/api/cron?ghlpush=1", "schedule": "0 0 * * *" },
-    { "path": "/api/cron?dreifeed=1", "schedule": "0 0 * * *" },
-    { "path": "/api/cron?dreifeed=1", "schedule": "0 1 * * *" },
-    { "path": "/api/cron?callcheck=1", "schedule": "30 1 * * 2-6" },
-    { "path": "/api/cron?recordings=1", "schedule": "30 10 * * *" },
-    { "path": "/api/cron?culture=1", "schedule": "0 16 * * 1-5" },
-    { "path": "/api/cron?dispohuddle=1", "schedule": "0 21 * * 1-5" },
-    { "path": "/api/cron?crmmsgsync=1", "schedule": "15 17 * * 1-5" },
-    { "path": "/api/cron?crmdigest=1", "schedule": "5 16 * * 1-5" },
-    { "path": "/api/cron?seqrun=1", "schedule": "45 15 * * 1-5" },
-    { "path": "/api/cron?crmmsgsync=1", "schedule": "15 19 * * 1-5" },
-    { "path": "/api/cron?crmmsgsync=1", "schedule": "15 21 * * 1-5" },
-    { "path": "/api/cron?crmmsgsync=1", "schedule": "15 23 * * 1-5" },
-    { "path": "/api/cron?sheetsync=1", "schedule": "30 16 * * 1-5" },
-    { "path": "/api/cron?sheetsync=1", "schedule": "30 20 * * 1-5" },
-    { "path": "/api/cron?sheetsync=1", "schedule": "30 0 * * 2-6" },
-    { "path": "/api/cron?leaks=1", "schedule": "0 1 * * 6" },
-    { "path": "/api/cron?monthend=1", "schedule": "0 16 1 * *" }
+    {
+      "path": "/api/cron",
+      "schedule": "30 15 * * 1-5"
+    },
+    {
+      "path": "/api/cron",
+      "schedule": "0 2 * * 2-5"
+    },
+    {
+      "path": "/api/cron",
+      "schedule": "30 22 * * 5"
+    },
+    {
+      "path": "/api/cron?buyerreport=1",
+      "schedule": "30 22 * * 5"
+    },
+    {
+      "path": "/api/cron?buyerreport=1",
+      "schedule": "0 14 * * 1"
+    },
+    {
+      "path": "/api/cron?compliance=1",
+      "schedule": "0 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron?cascade=1",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron?cascade=1",
+      "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron?cascade=1",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron?cascade=1",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron?ethan=1",
+      "schedule": "30 20 * * 1-5"
+    },
+    {
+      "path": "/api/cron?backup=1",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron?automaps=1",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron?payroll=1",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron?breaknudge=am",
+      "schedule": "30 17 * * 1-5"
+    },
+    {
+      "path": "/api/cron?breaknudge=lunch",
+      "schedule": "0 19 * * 1-5"
+    },
+    {
+      "path": "/api/cron?breaknudge=pm",
+      "schedule": "0 22 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crm=1",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron?crmtoday=1",
+      "schedule": "0 17 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crmtoday=1",
+      "schedule": "0 19 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crmtoday=1",
+      "schedule": "0 21 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crmtoday=1",
+      "schedule": "0 23 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crmtoday=1",
+      "schedule": "0 1 * * 2-6"
+    },
+    {
+      "path": "/api/cron?ghlpush=1",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron?ghlpush=1",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron?ghlpush=1",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/cron?ghlpush=1",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron?ghlpush=1",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron?dreifeed=1",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron?dreifeed=1",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron?callcheck=1",
+      "schedule": "30 1 * * 2-6"
+    },
+    {
+      "path": "/api/cron?recordings=1",
+      "schedule": "30 10 * * *"
+    },
+    {
+      "path": "/api/cron?culture=1",
+      "schedule": "0 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron?dispohuddle=1",
+      "schedule": "0 21 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crmmsgsync=1",
+      "schedule": "15 17 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crmdigest=1",
+      "schedule": "5 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron?seqrun=1",
+      "schedule": "45 15 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crmmsgsync=1",
+      "schedule": "15 19 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crmmsgsync=1",
+      "schedule": "15 21 * * 1-5"
+    },
+    {
+      "path": "/api/cron?crmmsgsync=1",
+      "schedule": "15 23 * * 1-5"
+    },
+    {
+      "path": "/api/cron?sheetsync=1",
+      "schedule": "30 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron?sheetsync=1",
+      "schedule": "30 20 * * 1-5"
+    },
+    {
+      "path": "/api/cron?sheetsync=1",
+      "schedule": "30 0 * * 2-6"
+    },
+    {
+      "path": "/api/cron?leaks=1",
+      "schedule": "0 1 * * 6"
+    },
+    {
+      "path": "/api/cron?monthend=1",
+      "schedule": "0 16 1 * *"
+    },
+    {
+      "path": "/api/cron?fullbackup=1",
+      "schedule": "15 9 * * *"
+    }
   ]
 }

@@ -583,6 +583,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 💾 Off-site backup (?fullbackup=1, daily cron): the ENTIRE database as
+  // gzipped JSON into a private "War Room Backups" folder on the Google
+  // Shared Drive — survives Vercel/Supabase dying, costs none of our server
+  // space (it's the Workspace storage), readable only by the service account.
+  if (url.searchParams.get("fullbackup") === "1") {
+    const { gdriveConfigured, ensureSubfolder, uploadToFolder } = await import("@/lib/gdrive");
+    if (!gdriveConfigured()) return NextResponse.json({ ok: false, error: "Google Drive not configured" });
+    const { buildBackup } = await import("@/lib/backup");
+    const { gzipSync } = await import("zlib");
+    const backup = await buildBackup();
+    const json = JSON.stringify(backup);
+    const gz = gzipSync(Buffer.from(json));
+    const folder = await ensureSubfolder(process.env.GDRIVE_FOLDER_ID!, "War Room Backups");
+    const name = `war-room-${new Date().toISOString().slice(0, 10)}.json.gz`;
+    const up = await uploadToFolder(folder, name, new Uint8Array(gz), "application/gzip");
+    return NextResponse.json({ ok: true, file: name, bytes: gz.length, rawBytes: json.length, driveId: up.id });
+  }
+
   // 👤 Owner repair (?ghlownerfix=1 dry / &commit=1): re-read every imported
   // lead's TRUE owner from GHL and fix assignedTo ONLY — stages/pipelines the
   // team already moved in the War Room are left alone. Fixes the
