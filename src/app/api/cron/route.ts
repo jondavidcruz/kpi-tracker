@@ -406,6 +406,52 @@ export async function GET(request: Request) {
     }
   } catch { /* alarms never break a cron */ }
 
+  // 💬 Sync GHL texts + emails onto each CRM lead's timeline (Jon 2026-10-07:
+  // "all emails and texts synced to each lead"). Dedupes by GHL message id;
+  // time-guarded for the 60s cap; cron runs it 4×/day while GHL stays live.
+  if (url.searchParams.get("crmmsgsync") === "1") {
+    const { searchConversations, getMessages } = await import("@/lib/reireply");
+    const deadline = Date.now() + 45_000;
+    const contacts = await db.crmContact.findMany({ where: { ghlId: { not: "" }, archivedAt: null }, orderBy: { updatedAt: "desc" }, take: Number(url.searchParams.get("n")) || 40, select: { id: true, ghlId: true } });
+    let scanned = 0, inserted = 0;
+    for (const c of contacts) {
+      if (Date.now() > deadline) break;
+      const convs = await searchConversations({ contactId: c.ghlId });
+      const cb = convs.body as { conversations?: Array<{ id?: string }> };
+      const convIds = (cb.conversations ?? []).map((x) => String(x.id ?? "")).filter(Boolean).slice(0, 3);
+      if (!convIds.length) continue;
+      // existing message ids for this contact (cheap dedupe set)
+      const prior = await db.crmEvent.findMany({ where: { contactId: c.id, kind: { in: ["sms", "email"] } }, select: { meta: true }, take: 500 });
+      const seen = new Set(prior.map((e) => (e.meta as { msgId?: string } | null)?.msgId).filter(Boolean));
+      for (const convId of convIds) {
+        if (Date.now() > deadline) break;
+        const mres = await getMessages(convId);
+        const mb = mres.body as { messages?: { messages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>> };
+        const list = (Array.isArray(mb.messages) ? mb.messages : mb.messages?.messages) ?? [];
+        for (const m of list.slice(0, 25)) {
+          scanned++;
+          const type = String(m.messageType ?? m.type ?? "");
+          const isSms = /SMS|TYPE_SMS/i.test(type);
+          const isEmail = /EMAIL/i.test(type);
+          if (!isSms && !isEmail) continue;
+          const msgId = String(m.id ?? "");
+          if (!msgId || seen.has(msgId)) continue;
+          const dir = String(m.direction ?? "");
+          const bodyTxt = String(m.body ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 600);
+          if (!bodyTxt) continue;
+          await db.crmEvent.create({ data: {
+            contactId: c.id, kind: isSms ? "sms" : "email",
+            body: `${dir === "inbound" ? "⬅️ Seller" : "➡️ Us"}: ${bodyTxt}`,
+            meta: { msgId, dir, via: "ghl" } as never, actor: "ghl-sync",
+            at: m.dateAdded ? new Date(String(m.dateAdded)) : new Date(),
+          } }).catch(() => {});
+          seen.add(msgId); inserted++;
+        }
+      }
+    }
+    return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
+  }
+
   // One-time: pull GHL's OPEN opportunities + contacts (+ their notes) into
   // the Seller CRM. ?ghlimport=1 dry / &commit=1 writes. Idempotent by ghlId.
   if (url.searchParams.get("ghlimport") === "1") {

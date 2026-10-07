@@ -5,7 +5,8 @@ import { getActiveReps, getSettings } from "@/lib/data";
 import { crmStages, parseTags, KIND_EMOJI } from "@/lib/crm";
 import { Card } from "@/components/ui";
 import TelnyxCallButton from "@/components/TelnyxCallButton";
-import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction } from "../actions";
+import BrowserDialer from "@/components/BrowserDialer";
+import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +23,20 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
 
   const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, include: { contact: true } });
   if (!opp) return <Card className="p-10 text-center text-slate-400">Lead not found. <Link href="/crm" className="font-bold text-sky-700 underline">Back to the pipeline</Link></Card>;
+  // Reps open only leads in THEIR pipeline (managers see everything).
+  if (!isManager(me!) && opp.assignedTo && opp.assignedTo !== me!.name) {
+    return <Card className="p-10 text-center text-slate-400">This lead is in {opp.assignedTo.split(" ")[0]}&apos;s pipeline. <Link href="/crm" className="font-bold text-sky-700 underline">Back to yours</Link></Card>;
+  }
   const c = opp.contact;
 
-  const [stages, reps, events, tasks, appts, siblingOpps] = await Promise.all([
+  const [stages, reps, events, tasks, appts, siblingOpps, parties] = await Promise.all([
     crmStages(),
     getActiveReps(),
     db.crmEvent.findMany({ where: { contactId: c.id }, orderBy: { at: "desc" }, take: 80 }),
     db.crmTask.findMany({ where: { oppId }, orderBy: [{ doneAt: "asc" }, { due: "asc" }] }),
     db.crmAppointment.findMany({ where: { oppId }, orderBy: { at: "asc" } }),
     db.crmOpportunity.findMany({ where: { contactId: c.id, id: { not: oppId } }, select: { id: true, title: true, stage: true } }),
+    db.crmParty.findMany({ where: { oppId }, orderBy: { createdAt: "asc" } }),
   ]);
   const st = stages.find((s) => s.key === opp.stage);
   const fmtAt = (d: Date) => d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -57,6 +63,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${devH >= 36 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>⏳ {devH}h at developers</span>
           )}
           <span className="ml-auto flex flex-wrap items-center gap-1.5">
+            <BrowserDialer oppId={opp.id} contactId={c.id} phone={c.phone} />
             <TelnyxCallButton oppId={opp.id} contactId={c.id} phone={c.phone} />
             {c.phone && <a href={`sms:${c.phone}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">💬 SMS</a>}
             {c.email && <a href={`mailto:${c.email}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">✉️ Email</a>}
@@ -159,6 +166,42 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 {reps.map((r) => <option key={r.id} value={r.name}>{r.name.split(" ")[0]}</option>)}
               </select>
               <button className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-bold text-white">Add</button>
+            </form>
+          </Card>
+
+          {/* parties in the deal */}
+          <Card className="p-4">
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">🤝 Parties in this deal</div>
+            <div className="space-y-1.5">
+              {parties.map((p) => (
+                <div key={p.id} className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs ring-1 ring-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-500 ring-1 ring-slate-200">{p.role || "party"}</span>
+                    <span className="font-bold text-slate-800">{p.name}</span>
+                    <form action={deleteCrmPartyAction} className="ml-auto"><input type="hidden" name="id" value={p.id} /><button className="text-[10px] text-slate-300 hover:text-red-500">✕</button></form>
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-brand-navy">{[p.phone, p.email].filter(Boolean).join(" · ")}</div>
+                  {p.note && <div className="text-[10px] text-slate-400">{p.note}</div>}
+                </div>
+              ))}
+              {parties.length === 0 && <p className="text-xs text-slate-400">No one attached yet — listing agent, escrow, title, attorney…</p>}
+            </div>
+            <form action={addCrmPartyAction} className="mt-2 grid grid-cols-2 gap-1.5">
+              <input type="hidden" name="oppId" value={opp.id} />
+              <select name="role" className="rounded-lg border border-slate-200 px-2 py-1 text-xs">
+                <option value="listing agent">listing agent</option>
+                <option value="buyer agent">buyer agent</option>
+                <option value="escrow">escrow</option>
+                <option value="title">title</option>
+                <option value="attorney">attorney</option>
+                <option value="JV partner">JV partner</option>
+                <option value="other">other</option>
+              </select>
+              <input name="name" placeholder="Name *" required className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+              <input name="phone" placeholder="Phone" className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+              <input name="email" placeholder="Email" className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+              <input name="note" placeholder="Note (company, file #…)" className="col-span-2 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+              <button className="col-span-2 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-bold text-white">＋ Attach party</button>
             </form>
           </Card>
 

@@ -181,6 +181,51 @@ export async function deleteCrmApptAction(formData: FormData) {
   revalidatePath(`/crm/${a.oppId}`);
 }
 
+/** Browser-dialer call ended → one timeline row with the duration. */
+export async function logBrowserCallAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const contactId = String(formData.get("contactId") ?? "");
+  const oppId = String(formData.get("oppId") ?? "");
+  const secs = Number(formData.get("secs")) || 0;
+  const to = String(formData.get("to") ?? "");
+  if (!contactId) return;
+  await logCrmEvent({
+    contactId, oppId, kind: "call",
+    body: `Browser call → ${to}${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : " · no answer"}`,
+    meta: { secs, via: "telnyx-webrtc" }, actor: me.name,
+  });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** Attach a party to the deal — listing agent, escrow, title, attorney… */
+export async function addCrmPartyAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const name = String(formData.get("name") ?? "").trim().slice(0, 120);
+  if (!oppId || !name) return;
+  await db.crmParty.create({ data: {
+    oppId, name,
+    role: String(formData.get("role") ?? "").trim().slice(0, 40),
+    phone: String(formData.get("phone") ?? "").trim(),
+    email: String(formData.get("email") ?? "").trim(),
+    note: String(formData.get("note") ?? "").trim().slice(0, 200),
+    createdBy: me.name,
+  } });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+export async function deleteCrmPartyAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const p = await db.crmParty.findUnique({ where: { id } });
+  if (!p) return;
+  await db.crmParty.delete({ where: { id } }).catch(() => {});
+  revalidatePath(`/crm/${p.oppId}`);
+}
+
 /** Telnyx click-to-call: rings the rep's phone first, then bridges the lead.
  *  Needs TELNYX_CONNECTION_ID (Call Control app) + the rep's phone on file —
  *  until then the UI offers tel: dialing and manual logging. */

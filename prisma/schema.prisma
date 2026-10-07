@@ -1432,3 +1432,19 @@ model CrmAppointment {
   @@index([at])
   @@index([oppId])
 }
+
+// Parties attached to an opportunity — listing agent, escrow, title, attorney…
+// (Jon 2026-10-07: everyone needed to close, pinned on the lead card.)
+model CrmParty {
+  id        String   @id @default(cuid())
+  oppId     String
+  role      String   @default("") // listing agent | escrow | title | attorney | JV | other
+  name      String
+  phone     String   @default("")
+  email     String   @default("")
+  note      String   @default("")
+  createdBy String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([oppId])
+}

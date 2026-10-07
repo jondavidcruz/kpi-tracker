@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 
-export default async function CrmPage({ searchParams }: { searchParams: Promise<{ view?: string; who?: string }> }) {
+export default async function CrmPage({ searchParams }: { searchParams: Promise<{ view?: string; who?: string; q?: string; stage?: string; tag?: string; due?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
@@ -20,13 +20,33 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
   const view = sp.view === "list" ? "list" : "kanban";
-  const who = sp.who ?? "";
+  // Permissions (Jon 2026-10-07: "Nick gets his own pipeline"): managers see
+  // everyone; a rep's board is scoped to THEIR leads — their own pipeline.
+  const manager = isManager(me!);
+  const who = manager ? (sp.who ?? "") : me!.name;
+  const q = (sp.q ?? "").trim();
+  const fStage = sp.stage ?? "";
+  const fTag = (sp.tag ?? "").trim();
+  const fDue = sp.due === "1";
 
   const [stages, reps, opps, tasks, appts] = await Promise.all([
     crmStages(),
     getActiveReps(),
     db.crmOpportunity.findMany({
-      where: { archivedAt: null, ...(who ? { assignedTo: who } : {}) },
+      where: {
+        archivedAt: null,
+        ...(who ? { assignedTo: who } : {}),
+        ...(fStage ? { stage: fStage } : {}),
+        ...(fTag ? { OR: [{ tags: { contains: fTag, mode: "insensitive" } }, { contact: { tags: { contains: fTag, mode: "insensitive" } } }] } : {}),
+        ...(fDue ? { nextFollowUp: { not: "", lte: today } } : {}),
+        ...(q ? { OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { tags: { contains: q, mode: "insensitive" } },
+          { contact: { name: { contains: q, mode: "insensitive" } } },
+          { contact: { phone: { contains: q.replace(/\D/g, "") || q } } },
+          { contact: { email: { contains: q, mode: "insensitive" } } },
+        ] } : {}),
+      },
       include: { contact: { select: { name: true, phone: true } } },
       orderBy: { updatedAt: "desc" },
       take: 400,
@@ -34,6 +54,11 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     db.crmTask.findMany({ where: { doneAt: null }, select: { oppId: true, due: true, title: true, assignedTo: true } }),
     db.crmAppointment.findMany({ where: { at: { gte: new Date() } }, orderBy: { at: "asc" }, take: 10 }),
   ]);
+  const qs = (over: Record<string, string>) => {
+    const p = new URLSearchParams({ view, ...(manager && who ? { who } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...over });
+    for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
+    return `/crm?${p.toString()}`;
+  };
   // dead/nurture live on the board too but collapse visually at the end
   const deadOpps = await db.crmOpportunity.count({ where: { archivedAt: { not: null } } });
 
@@ -73,14 +98,35 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         }
       />
 
-      {/* who filter + quick add */}
-      <Card className="flex flex-wrap items-center gap-2 p-3">
-        <span className="text-[11px] font-bold text-slate-500">Show:</span>
-        <Link href={`/crm?view=${view}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
-        {reps.map((r) => (
-          <Link key={r.id} href={`/crm?view=${view}&who=${encodeURIComponent(r.name)}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>{r.name.split(" ")[0]}</Link>
-        ))}
-        <span className="ml-auto text-[11px] text-slate-400">💀 {deadOpps} archived (dead) — searchable, never deleted</span>
+      {/* 🔎 search + GHL-style filters */}
+      <Card className="space-y-2 p-3">
+        <form action="/crm" className="flex flex-wrap items-center gap-2">
+          <input type="hidden" name="view" value={view} />
+          {manager && who && <input type="hidden" name="who" value={who} />}
+          <input name="q" defaultValue={q} placeholder="🔎 Search name, phone, email, property, tag…" className="min-w-[240px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+          <select name="stage" defaultValue={fStage} className="rounded-xl border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-600">
+            <option value="">All stages</option>
+            {stages.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+          <input name="tag" defaultValue={fTag} placeholder="tag…" className="w-24 rounded-xl border border-slate-200 px-2 py-2 text-xs" />
+          <label className="flex items-center gap-1 text-xs font-semibold text-slate-600"><input type="checkbox" name="due" value="1" defaultChecked={fDue} /> 📞 follow-up due</label>
+          <button className="rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white hover:bg-slate-700">Filter</button>
+          {(q || fStage || fTag || fDue) && <Link href={`/crm?view=${view}${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} className="text-xs font-bold text-slate-400 hover:text-slate-600">✕ clear</Link>}
+        </form>
+        <div className="flex flex-wrap items-center gap-2">
+          {manager ? (
+            <>
+              <span className="text-[11px] font-bold text-slate-500">Pipeline:</span>
+              <Link href={qs({ who: "" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
+              {reps.map((r) => (
+                <Link key={r.id} href={qs({ who: r.name })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>{r.name.split(" ")[0]}</Link>
+              ))}
+            </>
+          ) : (
+            <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">👤 Your pipeline — {me!.name.split(" ")[0]}&apos;s leads only</span>
+          )}
+          <span className="ml-auto text-[11px] text-slate-400">{opps.length} showing · 💀 {deadOpps} archived — never deleted</span>
+        </div>
       </Card>
 
       {upcoming.length > 0 && (
