@@ -16,13 +16,18 @@ export async function GET(req: NextRequest) {
   if (!(await commsFor(me!)).call) return NextResponse.json({ error: "calling not enabled for you" }, { status: 403 });
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
 
-  // Telnyx numbers (10-min cache per instance)
+  // Telnyx numbers (10-min cache) — ONLY the ones on OUR connections; the
+  // Direct REI marketing lines never show here (Jon 2026-10-07).
   let numbers: string[] = numCache && Date.now() - numCache.at < 600_000 ? numCache.numbers : [];
   if (!numbers.length && process.env.TELNYX_API_KEY) {
     try {
-      const res = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=100", { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store" });
-      const body = (await res.json()) as { data?: Array<{ phone_number?: string }> };
-      numbers = (body.data ?? []).map((n) => n.phone_number ?? "").filter(Boolean);
+      const cfgRow = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+      let cfg: { connId?: string; ccAppId?: string } = {};
+      try { cfg = cfgRow?.description ? JSON.parse(cfgRow.description) : {}; } catch { /* none */ }
+      const ours = new Set([cfg.connId, cfg.ccAppId].filter(Boolean));
+      const res = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=250", { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store" });
+      const body = (await res.json()) as { data?: Array<{ phone_number?: string; connection_id?: string }> };
+      numbers = (body.data ?? []).filter((n) => ours.has(String(n.connection_id ?? ""))).map((n) => n.phone_number ?? "").filter(Boolean);
       numCache = { at: Date.now(), numbers };
     } catch { /* dial still works with the default caller id */ }
   }

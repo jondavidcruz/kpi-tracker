@@ -582,6 +582,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 📞 Number inventory: Direct REI lines stay put; UNASSIGNED numbers get
+  // claimed for the War Room CRM (?claimnumbers=1 dry / &commit=1).
+  if (url.searchParams.get("claimnumbers") === "1") {
+    const key = process.env.TELNYX_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, error: "no TELNYX_API_KEY" });
+    const commit = url.searchParams.get("commit") === "1";
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+    let cfg: { connId?: string; ccAppId?: string } = {};
+    try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
+    if (!cfg.ccAppId) return NextResponse.json({ ok: false, error: "run ?inboundsetup2=1 first" });
+    const res = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=250", { headers: { Authorization: `Bearer ${key}` } });
+    const body = (await res.json()) as { data?: Array<{ id?: string; phone_number?: string; connection_id?: string; connection_name?: string }> };
+    const ours = new Set([cfg.connId, cfg.ccAppId].filter(Boolean));
+    const report = { warRoom: [] as string[], directRei: [] as string[], claimed: [] as string[], wouldClaim: [] as string[] };
+    for (const n of body.data ?? []) {
+      const conn = String(n.connection_id ?? "");
+      const num = n.phone_number ?? "";
+      if (!num) continue;
+      if (ours.has(conn)) { report.warRoom.push(num); continue; }
+      if (conn) { report.directRei.push(`${num} (${n.connection_name ?? conn})`); continue; }
+      if (commit && n.id) {
+        const r = await fetch(`https://api.telnyx.com/v2/phone_numbers/${n.id}`, { method: "PATCH", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ connection_id: cfg.ccAppId }) });
+        if (r.ok) report.claimed.push(num); else report.wouldClaim.push(`${num} (claim failed ${r.status})`);
+      } else report.wouldClaim.push(num);
+    }
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", ...report });
+  }
+
   // 🔎 Inbound diagnostics: number status/capabilities + the last webhook
   // events Telnyx actually sent us (so "it didn't ring" becomes explainable).
   if (url.searchParams.get("inbounddiag") === "1") {
