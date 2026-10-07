@@ -425,6 +425,34 @@ export async function saveKpiOrderAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
+/** Save one discovery form's answers onto the opportunity. */
+export async function saveCrmFormAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const formKey = String(formData.get("formKey") ?? "");
+  const { CRM_FORMS } = await import("@/lib/crm-forms");
+  const form = CRM_FORMS.find((f) => f.key === formKey);
+  if (!oppId || !form) return;
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
+  if (!opp) return;
+  const answers: Record<string, string | string[]> = {};
+  for (const f of form.fields) {
+    if (f.type === "checks") {
+      const vals = formData.getAll(`f_${f.key}`).map(String).filter(Boolean);
+      if (vals.length) answers[f.key] = vals;
+    } else {
+      const v = String(formData.get(`f_${f.key}`) ?? "").trim().slice(0, 1000);
+      if (v) answers[f.key] = v;
+    }
+  }
+  const existing = (opp.formData ?? {}) as Record<string, unknown>;
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...existing, [formKey]: answers } as never } });
+  if (contactId) await logCrmEvent({ contactId, oppId, kind: "system", body: `${form.emoji} ${form.name} updated (${Object.keys(answers).length} answers)`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
 /** Card popover: slap a tag on an opportunity instantly. */
 export async function addOppTagAction(formData: FormData): Promise<void> {
   const me = await crmUser();

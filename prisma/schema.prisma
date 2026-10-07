@@ -1377,6 +1377,7 @@ model CrmOpportunity {
   tags             String     @default("")
   nextFollowUp     String     @default("") // YYYY-MM-DD
   devPricingSentAt DateTime? // starts the 24–48h developer clock
+  formData         Json? // structured discovery answers {formKey: {field: value}}
   ghlId            String     @default("")
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt

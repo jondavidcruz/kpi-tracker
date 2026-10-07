@@ -3,7 +3,6 @@
 // (set dataTransfer payload, defer state past dragstart). Click a card →
 // its opportunity page.
 import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction } from "@/app/crm/actions";
 import { STAGE_PROB } from "@/lib/crm-shared";
 
@@ -37,7 +36,6 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const router = useRouter();
   // ⚙ per-person card customization (saved on this device)
   const [show, setShow] = useState<Record<FieldKey, boolean>>({ money: true, badges: true, tags: true, rep: true, repTop: false, title: true });
   const [cfgOpen, setCfgOpen] = useState(false);
@@ -166,7 +164,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       setTimeout(() => setDragId(c.id), 0);
                     }}
                     onDragEnd={() => { setDragId(null); setOverCol(null); }}
-                    onClick={() => router.push(`/crm/${c.id}`)}
+                    onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id } }))}
                     className={`cursor-pointer rounded-xl bg-white p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${dragId === c.id ? "opacity-50" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-1">

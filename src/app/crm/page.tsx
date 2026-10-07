@@ -10,6 +10,7 @@ import DialPad from "@/components/DialPad";
 import PipelineSelect from "@/components/PipelineSelect";
 import SelectAllBox from "@/components/SelectAllBox";
 import CrmFilterBar from "@/components/CrmFilterBar";
+import CrmQuickView from "@/components/CrmQuickView";
 import { commsFor } from "@/lib/crm-comms";
 import { createCrmLeadAction, saveCommsPermsAction, bulkOppAction, saveAutomationAction, savePipelineAction } from "./actions";
 import { readRules } from "@/lib/crm-automations";
@@ -212,7 +213,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       </Card>
 
       {view === "kanban" ? (
-        <CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} listHref={`/crm?view=list${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} />
+        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} listHref={`/crm?view=list${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} /></>
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>
@@ -295,7 +296,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       {manager && (
         <Card className="p-4">
           <details>
-            <summary className="cursor-pointer text-sm font-bold text-slate-700">⚙️ Automations — when a lead hits a stage, do something ({rules.filter((r) => r.enabled).length} active)</summary>
+            <summary className="cursor-pointer text-sm font-bold text-slate-700">🤖 Automations — simple when → then, like Direct REI ({rules.filter((r) => r.enabled).length} active)</summary>
             <div className="mt-2 space-y-1.5">
               {rules.map((r) => (
                 <div key={r.id} className={`flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 text-xs ring-1 ${r.enabled ? "bg-emerald-50/60 ring-emerald-100" : "bg-slate-50 ring-slate-100 opacity-60"}`}>
