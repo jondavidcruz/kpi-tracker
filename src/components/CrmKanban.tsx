@@ -11,6 +11,7 @@ export type CrmCard = {
   id: string;
   title: string;
   contactName: string;
+  phone?: string;
   stage: string;
   assignedTo: string;
   tags: string[];
@@ -121,6 +122,14 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       ))}
                     </div>
                     {show.rep && c.assignedTo && <div className="mt-1 text-[9px] font-semibold text-slate-400">👤 {c.assignedTo}</div>}
+                    {/* GHL-style quick actions (bottom-left) */}
+                    <div className="mt-1.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      {c.phone && <a href={`tel:${c.phone}`} title={`Call ${c.contactName}`} className="grid h-6 w-6 place-items-center rounded-md bg-emerald-50 text-[11px] ring-1 ring-emerald-200 hover:bg-emerald-100">📞</a>}
+                      <a href={`/crm/${c.id}#tasks`} title="Add a task" className="grid h-6 w-6 place-items-center rounded-md bg-slate-50 text-[11px] ring-1 ring-slate-200 hover:bg-slate-100">✅</a>
+                      <a href={`/crm/${c.id}#appts`} title="Book an appointment" className="grid h-6 w-6 place-items-center rounded-md bg-slate-50 text-[11px] ring-1 ring-slate-200 hover:bg-slate-100">📅</a>
+                      <a href={`/crm/${c.id}#opp`} title="Edit tags" className="grid h-6 w-6 place-items-center rounded-md bg-slate-50 text-[11px] ring-1 ring-slate-200 hover:bg-slate-100">🏷</a>
+                      {c.phone && <a href={`sms:${c.phone}`} title="Text" className="grid h-6 w-6 place-items-center rounded-md bg-slate-50 text-[11px] ring-1 ring-slate-200 hover:bg-slate-100">💬</a>}
+                    </div>
                   </div>
                 ))}
                 {colCards.length === 0 && <div className="rounded-xl border border-dashed border-slate-200 px-2 py-3 text-center text-[10px] text-slate-300">empty</div>}

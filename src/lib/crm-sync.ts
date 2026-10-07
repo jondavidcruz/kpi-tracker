@@ -44,8 +44,10 @@ export const AGENTS: AgentCfg[] = [
   // into ONE key (dev_conversations = "Buyer Conversations"), and dispo only
   // talks to buyers — so a completed call ≥60s IS a buyer conversation.
   // Hand-typed entries still win (upsertEntry never overwrites manual rows).
-  { crm: "cBEywYYmuWQ4u5LE6Guj", first: "sharyn", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls", conv: "dev_conversations", convMin: 60 },
-  { crm: "IqYEt2UrQ6gVToOzsaaw", first: "marie", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls", conv: "dev_conversations", convMin: 60 },
+  // Buyer Conversations back to MANUAL (Jon 2026-10-07: it's on the girls'
+  // manual list) — dials/answered/talk stay automatic.
+  { crm: "cBEywYYmuWQ4u5LE6Guj", first: "sharyn", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls" },
+  { crm: "IqYEt2UrQ6gVToOzsaaw", first: "marie", talk: "ds_talk_time", dials: "buyers_contacted", answered: "answered_calls" },
 ];
 
 // UTC ms bounds of a calendar day in `tz` (DST-safe).
@@ -180,6 +182,28 @@ async function upsertEntry(kpiKey: string, userId: string, date: string, value: 
 }
 
 /** Pull a day and write the CRM-derived KPI entries (talk time, conversations, dials). */
+/** Talk time from OUR CRM's browser-dialer calls, for reps who aren't in
+ *  GHL (Nick): sums CrmEvent call durations into their role's talk-time KPI.
+ *  Manual entries still win (upsertEntry rule). */
+export async function feedCrmBrowserCalls(date: string, tz: string): Promise<Record<string, number>> {
+  const { start, end } = dayBounds(date, tz);
+  const ghlFirsts = new Set(AGENTS.map((a) => a.first));
+  const TALK_BY_ROLE: Record<string, string> = { acquisitions: "acq_talk_time", dispositions: "ds_talk_time", cc_lm: "cc_talk_time" };
+  const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, position: true } });
+  const out: Record<string, number> = {};
+  for (const u of users) {
+    const first = u.name.trim().split(/\s+/)[0].toLowerCase();
+    if (ghlFirsts.has(first)) continue; // GHL already covers them
+    const talkKey = TALK_BY_ROLE[u.position ?? ""];
+    if (!talkKey) continue;
+    const events = await db.crmEvent.findMany({ where: { actor: u.name, kind: "call", at: { gte: new Date(start), lt: new Date(end) } }, select: { meta: true } });
+    if (!events.length) continue;
+    const secs = events.reduce((a, e) => a + (Number((e.meta as { secs?: number } | null)?.secs) || 0), 0);
+    if (secs > 0) { await upsertEntry(talkKey, u.id, date, secs); out[first] = secs; }
+  }
+  return out;
+}
+
 export async function writeDay(date: string, tz: string): Promise<{ result: PullResult; wrote: Record<string, Agg> }> {
   const result = await pullDay(date, tz);
   const users = await db.user.findMany({ select: { id: true, name: true } });

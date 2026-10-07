@@ -370,6 +370,24 @@ export default async function EntryPage({
             </div>
           )}
           <EntryForm groups={groups} date={date} enteredBy={me?.name ?? rep?.name ?? "team"} action={saveDay} />
+
+          {/* 📖 Why these numbers — the reasoning behind every goal (Jon 2026-10-07) */}
+          {rep && shown.length > 0 && (
+            <details className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <summary className="cursor-pointer text-sm font-bold text-slate-700">📖 Why these numbers — what each KPI means &amp; your goal</summary>
+              <div className="mt-2 space-y-1.5">
+                {shown.filter((k) => k.definition).map((k) => {
+                  const g = resolveGoalWith(targets, k, rep.id, month);
+                  return (
+                    <div key={k.id} className="rounded-lg bg-white px-3 py-2 text-xs ring-1 ring-slate-100">
+                      <span className="font-bold text-slate-700">{k.emoji} {k.name}{g != null ? ` — goal ${k.unit === "duration" ? `${Math.round(g / 60)} min` : g}` : ""}:</span>{" "}
+                      <span className="text-slate-500">{k.definition}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          )}
         </>
       )}
 

@@ -6,6 +6,8 @@ import { todayStr } from "@/lib/date";
 import { readPipelines, parseTags } from "@/lib/crm";
 import { Card, SectionTitle } from "@/components/ui";
 import CrmKanban, { type CrmCard } from "@/components/CrmKanban";
+import DialPad from "@/components/DialPad";
+import { commsFor } from "@/lib/crm-comms";
 import { createCrmLeadAction, saveCommsPermsAction, bulkOppAction } from "./actions";
 import { readCommsMap, firstOf } from "@/lib/crm-comms";
 
@@ -37,7 +39,13 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // come from an indexed groupBy, each column renders its freshest 60, and
   // the List view paginates. Payload stays ~constant no matter the lead count.
   const pipelines = await readPipelines();
-  const plName = sp.pl && pipelines.some((x) => x.name === sp.pl) ? sp.pl : pipelines[0].name;
+  // Lead counts per pipeline (also powers the tab badges). Default tab =
+  // the busiest pipeline, so the board never opens on an empty view.
+  const plGroup = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null }, _count: { _all: true } });
+  const plCounts: Record<string, number> = {};
+  for (const g of plGroup) plCounts[g.pipeline === "" ? "War Room" : g.pipeline] = (plCounts[g.pipeline === "" ? "War Room" : g.pipeline] ?? 0) + g._count._all;
+  const busiest = [...pipelines].sort((a, b) => (plCounts[b.name] ?? 0) - (plCounts[a.name] ?? 0))[0]?.name ?? pipelines[0].name;
+  const plName = sp.pl && pipelines.some((x) => x.name === sp.pl) ? sp.pl : busiest;
   const pipe = pipelines.find((x) => x.name === plName)!;
   const whereBase = {
     archivedAt: null,
@@ -82,6 +90,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // dead/nurture live on the board too but collapse visually at the end
   const deadOpps = await db.crmOpportunity.count({ where: { archivedAt: { not: null } } });
   const commsMap = manager ? await readCommsMap() : {};
+  const comms = await commsFor(me!);
   const weekAppts = view === "cal" ? await db.crmAppointment.findMany({ where: { at: { gte: new Date(Date.now() - 86400000), lte: new Date(Date.now() + 8 * 86400000) }, ...(who ? { withWho: { contains: who.split(" ")[0] } } : {}) }, orderBy: { at: "asc" } }) : [];
 
   const tasksByOpp = new Map<string, { due: string; title: string }[]>();
@@ -99,7 +108,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     if (o.nextFollowUp && o.nextFollowUp <= today) badges.push("📞 follow-up due");
     if (!["nurture", "dead", "signed"].includes(o.stage) && Date.now() - o.updatedAt.getTime() > 3 * 86400000) badges.push("🕸 quiet 3d+");
     return {
-      id: o.id, title: o.title, contactName: o.contact.name, stage: o.stage,
+      id: o.id, title: o.title, contactName: o.contact.name, phone: o.contact.phone, stage: o.stage,
       assignedTo: o.assignedTo, tags: parseTags(o.tags), badges,
       money: money(o.value) || (o.askPrice != null ? `ask ${money(o.askPrice)}` : ""),
     };
@@ -115,6 +124,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         accent="bg-brand-gold"
         right={
           <div className="flex items-center gap-2">
+            {comms.call && <DialPad />}
             <Link href="/crm/dialer" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">☎️ Power dialer</Link>
             <Link href={`/crm?view=kanban${who ? `&who=${who}` : ""}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "kanban" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>🗂 Board</Link>
             <Link href={`/crm?view=list${who ? `&who=${who}` : ""}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "list" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📋 List</Link>
@@ -127,7 +137,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       <div className="flex flex-wrap items-center gap-1.5">
         {pipelines.map((pp) => (
           <Link key={pp.name} prefetch={false} href={qs({ pl: pp.name, stage: "", p: "" })} className={`rounded-xl px-3 py-1.5 text-xs font-bold ${pp.name === plName ? "bg-brand-navy text-white shadow" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
-            {pp.name}
+            {pp.name} <span className="ml-1 opacity-60">{(plCounts[pp.name] ?? 0).toLocaleString()}</span>
           </Link>
         ))}
       </div>

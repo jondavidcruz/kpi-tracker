@@ -741,6 +741,59 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, won: rows.length, totalValue: rows.reduce((a, r) => a + r.value, 0), perRep, rows });
   }
 
+  // Goal raise round 2 (Jon 2026-10-07): apply offers/contracts floors, stamp
+  // the WHY into each KPI's definition, pro-rate Marie & Nick to 5h shifts
+  // via standing per-rep Target overrides. Idempotent.
+  if (url.searchParams.get("goalraise2") === "1") {
+    const out: string[] = [];
+    const RAISES: Record<string, number> = { offers_made: 3, acq_contracts_sent: 1 };
+    for (const [key, goalValue] of Object.entries(RAISES)) {
+      const k = await db.kpi.findFirst({ where: { key } });
+      if (k) { await db.kpi.update({ where: { id: k.id }, data: { goalValue, goalKind: "at_least" } }); out.push(`${k.name} → ${goalValue}`); }
+    }
+    const WHY: Record<string, string> = {
+      dev_conversations: "Goal 8/day (Marie 5): real buyer conversations move deals — MANUAL entry; you know a real convo when you have one.",
+      buyers_contacted: "Goal 40 dials/day (Marie 25): ~20% connect rate is what produces 8 conversations. AUTO from the phone system.",
+      answered_calls: "Goal 12/day (Marie 8): the honest middle metric between dials and conversations. AUTO from the phone system.",
+      ds_talk_time: "Goal 90 min/day (Marie 60): 8 real conversations don't fit in less. AUTO from the phone system.",
+      deals_sold: "Goal 5 sends/day (Marie 3): the cascade + packet made sending nearly free. MANUAL.",
+      buyers_vetted: "Goal 2/day (Marie 1): 20 new agents + the lists mean no shortage. MANUAL.",
+      buy_boxes_captured: "Goal 3/day (Marie 2): every vetted buyer should leave a buy box behind. MANUAL.",
+      quality_convos: "Goal 12/day: more leads = more at-bats. AUTO — completed calls ≥2 min.",
+      outbound_calls: "Goal 140 dials/day: lead volume supports it. AUTO from the phone system.",
+      connected_calls: "Goal 100/day: scales with dials. AUTO from the phone system.",
+      cc_talk_time: "Goal 75 min/day: matches the conversation raise. AUTO from the phone system.",
+      completed_process_calls: "Goal 4/day (Nick 3): the land SOP's core motion — it deserves a floor. MANUAL.",
+      offers_made: "Goal 3/day (Nick 2): more process calls → more offers. Land offers can wait 24–48h on developer pricing — log when made. MANUAL.",
+      acq_contracts_sent: "Goal 1/day: one contract out the door every day. MANUAL (auto-counted when sent via CRM stage move).",
+      acq_talk_time: "Goal 90 min/day (Nick ~57): time on the phone with sellers. AUTO (GHL for Michelle, browser dialer for Nick).",
+    };
+    for (const [key, definition] of Object.entries(WHY)) {
+      const k = await db.kpi.findFirst({ where: { key } });
+      if (k) await db.kpi.update({ where: { id: k.id }, data: { definition } });
+    }
+    out.push("definitions stamped");
+    // 5-hour pro-rates (standing Target overrides; most-specific wins)
+    const OVERRIDES: Array<{ first: string; goals: Record<string, number> }> = [
+      { first: "marie", goals: { dev_conversations: 5, buyers_contacted: 25, answered_calls: 8, ds_talk_time: 3600, deals_sold: 3, buyers_vetted: 1, buy_boxes_captured: 2 } },
+      { first: "nicholas", goals: { acq_talk_time: 3400, completed_process_calls: 3, offers_made: 2 } },
+      { first: "nick", goals: { acq_talk_time: 3400, completed_process_calls: 3, offers_made: 2 } },
+    ];
+    for (const o of OVERRIDES) {
+      const u = await db.user.findFirst({ where: { active: true, name: { startsWith: o.first, mode: "insensitive" } }, select: { id: true, name: true } });
+      if (!u) { if (o.first === "marie") out.push("marie: USER NOT FOUND"); continue; }
+      for (const [key, goalValue] of Object.entries(o.goals)) {
+        const k = await db.kpi.findFirst({ where: { key }, select: { id: true } });
+        if (!k) continue;
+        const existing = await db.target.findFirst({ where: { kpiId: k.id, userId: u.id, period: null } });
+        if (existing) await db.target.update({ where: { id: existing.id }, data: { goalValue } });
+        else await db.target.create({ data: { kpiId: k.id, userId: u.id, period: null, goalValue } });
+      }
+      out.push(`${u.name}: ${Object.keys(o.goals).length} 5h-shift overrides`);
+    }
+    return NextResponse.json({ ok: true, done: out });
+  }
+
   // Read-only: every KPI's goal + scope — feeds goal-raise planning.
   if (url.searchParams.get("kpigoals") === "1") {
     const kpis = await db.kpi.findMany({
@@ -1297,6 +1350,7 @@ export async function GET(request: Request) {
     const calls = await writeDay(today, tz);
     const opps = await writeOpps(today, tz);
     const activity = await writeActivity(today, calls.wrote, opps);
+    try { const { feedCrmBrowserCalls } = await import("@/lib/crm-sync"); await feedCrmBrowserCalls(today, tz); } catch { /* additive */ }
     // Direct REI pulse rides the same 5×/day schedule (best-effort).
     let drei: unknown = null;
     try { const { refreshDreiFeed } = await import("@/lib/directrei-sync"); drei = await refreshDreiFeed(today); } catch { /* feed is additive */ }

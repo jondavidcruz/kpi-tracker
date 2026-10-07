@@ -131,7 +131,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
 
           {/* opportunity meta */}
           <Card className="p-4">
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">🎯 Opportunity</div>
+            <div id="opp" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">🎯 Opportunity</div>
             <form action={saveOppMetaAction} className="space-y-2">
               <input type="hidden" name="id" value={opp.id} />
               <label><span className={lbl}>Title / property</span><input name="title" defaultValue={opp.title} className={inputCls} /></label>
@@ -152,7 +152,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
 
           {/* tasks */}
           <Card className="p-4">
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">⏰ Tasks</div>
+            <div id="tasks" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">⏰ Tasks</div>
             <div className="space-y-1.5">
               {tasks.map((t) => (
                 <form key={t.id} action={toggleCrmTaskAction} className="flex items-center gap-2 text-sm">
@@ -215,7 +215,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
 
           {/* appointments */}
           <Card className="p-4">
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">📅 Appointments <span className="normal-case text-slate-300">(alarm posts to the huddle chat ~1h before)</span></div>
+            <div id="appts" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">📅 Appointments <span className="normal-case text-slate-300">(alarm posts to the huddle chat ~1h before)</span></div>
             <div className="space-y-1.5">
               {appts.map((a) => (
                 <div key={a.id} className="flex items-center gap-2 rounded-lg bg-indigo-50/70 px-2.5 py-1.5 text-xs ring-1 ring-indigo-100">
