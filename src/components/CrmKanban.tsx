@@ -5,7 +5,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setOppStageAction } from "@/app/crm/actions";
-import { STAGE_PROB } from "@/lib/crm";
+import { STAGE_PROB } from "@/lib/crm-shared";
 
 export type CrmCard = {
   id: string;

@@ -2,21 +2,9 @@
 // customizable: the coded defaults below can be overridden/renamed from a
 // Resource row (__crm_stages__) without a deploy.
 import { db } from "./db";
+import { CRM_STAGES, stageSlug, type CrmStage } from "./crm-shared";
 
-export type CrmStage = { key: string; label: string; cls: string };
-
-// Built around Jon's land SOP — including the 24–48h developer-pricing stage.
-export const CRM_STAGES: CrmStage[] = [
-  { key: "new", label: "New Lead", cls: "bg-sky-100 text-sky-800" },
-  { key: "contacted", label: "Contacted", cls: "bg-yellow-100 text-yellow-800" },
-  { key: "process_call", label: "Process Call ✓", cls: "bg-violet-100 text-violet-800" },
-  { key: "at_developers", label: "🏗 At Developers", cls: "bg-amber-100 text-amber-800" },
-  { key: "offer_made", label: "Offer Made", cls: "bg-blue-100 text-blue-800" },
-  { key: "contract_sent", label: "Contract Sent", cls: "bg-emerald-100 text-emerald-800" },
-  { key: "signed", label: "Signed 🎉", cls: "bg-emerald-200 text-emerald-900" },
-  { key: "nurture", label: "🌱 Nurture", cls: "bg-lime-100 text-lime-800" },
-  { key: "dead", label: "Dead", cls: "bg-slate-200 text-slate-600" },
-];
+export { CRM_STAGES, STAGE_PROB, KIND_EMOJI, parseTags, stageSlug, type CrmStage } from "./crm-shared";
 
 const STAGES_CAT = "__crm_stages__";
 
@@ -26,10 +14,6 @@ export async function crmStages(): Promise<CrmStage[]> {
   let renames: Record<string, string> = {};
   try { renames = row?.description ? JSON.parse(row.description) : {}; } catch { /* coded */ }
   return CRM_STAGES.map((s) => ({ ...s, label: renames[s.key] || s.label }));
-}
-
-export function parseTags(s: string): string[] {
-  return s.split(",").map((t) => t.trim()).filter(Boolean);
 }
 
 /** One timeline row. Fire-and-forget safe. */
@@ -43,10 +27,6 @@ export async function logCrmEvent(e: { contactId: string; oppId?: string; kind: 
 export type CrmPipeline = { name: string; stages: CrmStage[] };
 const PIPES_CAT = "__crm_pipelines__";
 const PALETTE = ["bg-sky-100 text-sky-800", "bg-yellow-100 text-yellow-800", "bg-violet-100 text-violet-800", "bg-amber-100 text-amber-800", "bg-blue-100 text-blue-800", "bg-emerald-100 text-emerald-800", "bg-rose-100 text-rose-800", "bg-indigo-100 text-indigo-800", "bg-teal-100 text-teal-800", "bg-slate-200 text-slate-600"];
-
-export function stageSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "stage";
-}
 
 export async function readPipelines(): Promise<CrmPipeline[]> {
   const row = await db.resource.findFirst({ where: { category: PIPES_CAT } }).catch(() => null);
@@ -63,12 +43,3 @@ export async function writeGhlPipelines(list: Array<{ name: string; stages: Arra
   else await db.resource.create({ data: { title: "crm-pipelines", category: PIPES_CAT, url: "", description } });
 }
 
-// Pipedrive-style stage probabilities → weighted pipeline value per column.
-export const STAGE_PROB: Record<string, number> = {
-  new: 0.05, contacted: 0.1, process_call: 0.25, at_developers: 0.4,
-  offer_made: 0.6, contract_sent: 0.8, signed: 1, nurture: 0.02, dead: 0,
-};
-
-export const KIND_EMOJI: Record<string, string> = {
-  note: "📝", call: "📞", sms: "💬", email: "✉️", stage: "🔀", task: "✅", appt: "📅", system: "✨",
-};

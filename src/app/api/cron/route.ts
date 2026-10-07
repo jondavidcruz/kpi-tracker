@@ -540,6 +540,35 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 🧪 CRM self-test: run every query the CRM pages run, report pass/fail.
+  if (url.searchParams.get("crmselftest") === "1") {
+    const out: Record<string, string> = {};
+    const t = async (name: string, fn: () => Promise<unknown>) => {
+      try { const v = await fn(); out[name] = `✅ ${typeof v === "number" ? v : Array.isArray(v) ? v.length : "ok"}`; }
+      catch (e) { out[name] = `❌ ${String(e).slice(0, 160)}`; }
+    };
+    const { readPipelines } = await import("@/lib/crm");
+    const { readSnippets, readSequences, readSeqState } = await import("@/lib/crm-templates");
+    await t("pipelines", async () => (await readPipelines()).length);
+    await t("groupBy", async () => (await db.crmOpportunity.groupBy({ by: ["stage"], where: { archivedAt: null, pipeline: "🔥 AQM: Jon & Mitch" }, _count: { _all: true }, _sum: { value: true } })).length);
+    await t("boardCols", async () => (await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: ["", "War Room"] }, stage: "new" }, include: { contact: { select: { name: true, phone: true } } }, take: 5 })).length);
+    await t("oppCard", async () => {
+      const o = await db.crmOpportunity.findFirst({ where: { archivedAt: null }, include: { contact: true } });
+      if (!o) return 0;
+      await db.crmEvent.findMany({ where: { contactId: o.contactId }, orderBy: { at: "desc" }, take: 5 });
+      await db.crmParty.findMany({ where: { oppId: o.id } });
+      return 1;
+    });
+    await t("dialerQueue", async () => (await db.crmOpportunity.findMany({ where: { archivedAt: null, nextFollowUp: { not: "", lte: new Date().toISOString().slice(0, 10) } }, include: { contact: true }, take: 5 })).length);
+    await t("tasks", async () => db.crmTask.count());
+    await t("appts", async () => db.crmAppointment.count());
+    await t("snippets", async () => (await readSnippets()).length);
+    await t("sequences", async () => (await readSequences()).length);
+    await t("seqState", async () => Object.keys(await readSeqState()).length);
+    await t("counts", async () => db.crmOpportunity.count({ where: { archivedAt: null } }));
+    return NextResponse.json({ ok: !Object.values(out).some((v) => v.startsWith("❌")), checks: out });
+  }
+
   // 🔀 Sync the 4 approved GHL pipelines (names + exact stage order) into the
   // CRM's pipeline definitions — the board renders THESE columns per pipeline.
   if (url.searchParams.get("ghlpipesync") === "1") {
