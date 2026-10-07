@@ -626,13 +626,73 @@ export async function GET(request: Request) {
     const evRow = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
     let events: unknown[] = [];
     try { events = evRow?.description ? JSON.parse(evRow.description) : []; } catch { /* none */ }
+    // What is the Call Control app actually configured to do?
+    const cfg2 = cfg as { ccAppId?: string };
+    let ccApp: unknown = null;
+    if (cfg2.ccAppId) {
+      const ares = await fetch(`https://api.telnyx.com/v2/call_control_applications/${cfg2.ccAppId}`, { headers: { Authorization: `Bearer ${key}` } });
+      const ab = (await ares.json()) as { data?: Record<string, unknown> };
+      const a = ab.data;
+      ccApp = a ? { name: a.application_name, webhook: a.webhook_event_url, active: a.active, api_version: a.webhook_api_version } : `lookup failed ${ares.status}`;
+    }
     return NextResponse.json({
       ok: true, number: num,
       numberInfo: pn ? { status: pn.status, connection_id: pn.connection_id, connection_name: pn.connection_name, messaging_profile_id: pn.messaging_profile_id ?? null, emergency: undefined } : "NOT FOUND",
       webrtcConnection: cfg.connId ?? null,
+      callControlApp: ccApp,
       recentWebhookEvents: events,
       hint: "Call the number with /crm open (hard refresh first), then run this again — the events list shows exactly what Telnyx did.",
     });
+  }
+
+  // 💬 SMS setup: create a "War Room SMS" messaging profile and attach every
+  // War-Room-connection number to it (text-back + CRM texting need this —
+  // numbers moved from Direct REI arrive with no messaging profile).
+  // ?smssetup=1 dry-run / &commit=1 applies.
+  if (url.searchParams.get("smssetup") === "1") {
+    const key = process.env.TELNYX_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, error: "no TELNYX_API_KEY" });
+    const commit = url.searchParams.get("commit") === "1";
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+    let cfg: { connId?: string; ccAppId?: string; msgProfileId?: string } = {};
+    try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
+    if (!cfg.ccAppId) return NextResponse.json({ ok: false, error: "run ?inboundsetup2=1 first" });
+    const tx = async (path: string, init?: RequestInit) => {
+      const res = await fetch(`https://api.telnyx.com/v2${path}`, { ...init, headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" } });
+      const text = await res.text();
+      let body: unknown; try { body = JSON.parse(text); } catch { body = text; }
+      return { ok: res.ok, status: res.status, body, text };
+    };
+    const steps: string[] = [];
+    // 1. ensure the profile exists
+    if (!cfg.msgProfileId) {
+      const list = await tx("/messaging_profiles?page[size]=50");
+      const lb = list.body as { data?: Array<{ id?: string; name?: string }> };
+      const existing = lb.data?.find((p) => p.name === "War Room SMS");
+      if (existing?.id) { cfg.msgProfileId = existing.id; steps.push("profile exists"); }
+      else if (commit) {
+        const mk = await tx("/messaging_profiles", { method: "POST", body: JSON.stringify({ name: "War Room SMS", enabled: true, whitelisted_destinations: ["US"] }) });
+        const mb = mk.body as { data?: { id?: string } };
+        if (!mk.ok || !mb.data?.id) return NextResponse.json({ ok: false, error: `profile create refused (${mk.status}): ${mk.text.slice(0, 180)}`, steps });
+        cfg.msgProfileId = mb.data.id; steps.push("profile created");
+      } else steps.push("would create profile 'War Room SMS'");
+    } else steps.push("profile known");
+    // 2. attach every number on our connections that lacks it
+    const nums = await tx("/phone_numbers?page[size]=250");
+    const nb = nums.body as { data?: Array<{ id?: string; phone_number?: string; connection_id?: string; messaging_profile_id?: string | null }> };
+    const ours = new Set([cfg.connId, cfg.ccAppId].filter(Boolean));
+    const report = { attached: [] as string[], already: [] as string[], wouldAttach: [] as string[], campaignNote: "US A2P SMS needs the number on a 10DLC campaign — check Telnyx → Messaging → 10DLC after attaching; texts may be carrier-blocked until then." };
+    for (const n of nb.data ?? []) {
+      if (!ours.has(String(n.connection_id ?? ""))) continue;
+      const num = n.phone_number ?? ""; if (!num || !n.id) continue;
+      if (n.messaging_profile_id && n.messaging_profile_id === cfg.msgProfileId) { report.already.push(num); continue; }
+      if (commit && cfg.msgProfileId) {
+        const r = await tx(`/phone_numbers/${n.id}/messaging`, { method: "PATCH", body: JSON.stringify({ messaging_profile_id: cfg.msgProfileId }) });
+        if (r.ok) report.attached.push(num); else report.wouldAttach.push(`${num} (failed ${r.status}: ${r.text.slice(0, 120)})`);
+      } else report.wouldAttach.push(num);
+    }
+    await db.resource.update({ where: { id: row!.id }, data: { description: JSON.stringify(cfg) } });
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", profileId: cfg.msgProfileId ?? null, steps, ...report });
   }
 
   // ☎️ Inbound v2 (the "call cannot be completed" fix): a Call Control app
