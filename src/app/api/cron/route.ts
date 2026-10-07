@@ -540,6 +540,30 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 🔎 Inbound diagnostics: number status/capabilities + the last webhook
+  // events Telnyx actually sent us (so "it didn't ring" becomes explainable).
+  if (url.searchParams.get("inbounddiag") === "1") {
+    const key = process.env.TELNYX_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, error: "no TELNYX_API_KEY" });
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+    let cfg: { connId?: string; callerId?: string } = {};
+    try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
+    const num = process.env.TELNYX_CALLER_ID || cfg.callerId || "";
+    const nres = await fetch(`https://api.telnyx.com/v2/phone_numbers?filter[phone_number]=${encodeURIComponent(num)}`, { headers: { Authorization: `Bearer ${key}` } });
+    const nb = (await nres.json()) as { data?: Array<Record<string, unknown>> };
+    const pn = nb.data?.[0] ?? null;
+    const evRow = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
+    let events: unknown[] = [];
+    try { events = evRow?.description ? JSON.parse(evRow.description) : []; } catch { /* none */ }
+    return NextResponse.json({
+      ok: true, number: num,
+      numberInfo: pn ? { status: pn.status, connection_id: pn.connection_id, connection_name: pn.connection_name, messaging_profile_id: pn.messaging_profile_id ?? null, emergency: undefined } : "NOT FOUND",
+      webrtcConnection: cfg.connId ?? null,
+      recentWebhookEvents: events,
+      hint: "Call the number with /crm open (hard refresh first), then run this again — the events list shows exactly what Telnyx did.",
+    });
+  }
+
   // ☎️ Inbound setup: point TELNYX_CALLER_ID at the WebRTC credential
   // connection (so browsers ring) + aim its webhooks at /api/telnyx/call
   // (so missed calls trigger the text-back). Idempotent.
@@ -618,6 +642,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, pipelines: list.map((p) => ({ name: p.name, stages: p.stages.length })) });
   }
 
+  // Paginated GHL opportunity fetch — the 100-row cap was silently dropping
+  // leads (DS: Signed looked wrong, AQM/JrAQ pinned at exactly 100).
+  async function fetchAllOpps(searchOpportunities: (pid: string, extra?: Record<string, string>) => Promise<{ ok: boolean; body: unknown }>, pid: string): Promise<Array<Record<string, unknown>>> {
+    const all: Array<Record<string, unknown>> = [];
+    for (let page = 1; page <= 10; page++) {
+      const res = await searchOpportunities(pid, { page: String(page) });
+      if (!res.ok) break;
+      const body = res.body as { opportunities?: Array<Record<string, unknown>>; meta?: { nextPage?: number | null } };
+      const batch = body.opportunities ?? [];
+      all.push(...batch);
+      if (batch.length < 100 || body.meta?.nextPage == null && batch.length < 100) break;
+      if (batch.length < 100) break;
+    }
+    return all;
+  }
+
   // GHL → Seller CRM import v2 (Jon 2026-10-07: ONLY DS: Signed, DS: Sell
   // Land, AQM Jon & Mitch, JrAQ: Nick — per respective user, GHL-like stages).
   // ?ghlimport=1 dry / &commit=1. Idempotent: existing opps UPDATE stage/rep;
@@ -642,10 +682,8 @@ export async function GET(request: Request) {
     type Row = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; value: number | null; rep: string; stage: string; pipeline: string };
     const rows: Row[] = [];
     for (const p of pipelines) {
-      const res = await searchOpportunities(p.id);
-      if (!res.ok) continue;
-      const body = res.body as { opportunities?: Array<Record<string, unknown>> };
-      for (const o of body.opportunities ?? []) {
+      const opps = await fetchAllOpps(searchOpportunities, p.id);
+      for (const o of opps) {
         if (String(o.status ?? "") !== "open") continue;
         const contact = (o.contact ?? {}) as { id?: string; name?: string; phone?: string; email?: string };
         const ghlStage = stageName.get(String(o.pipelineStageId ?? "")) ?? "";
@@ -718,10 +756,8 @@ export async function GET(request: Request) {
     const plBody = pls.body as { pipelines?: Array<{ id: string; name: string }> };
     const rows: Array<{ ghlId: string; name: string; value: number; wonAt: string; pipeline: string }> = [];
     for (const p of plBody.pipelines ?? []) {
-      const res = await searchOpportunities(p.id);
-      if (!res.ok) continue;
-      const body = res.body as { opportunities?: Array<Record<string, unknown>> };
-      for (const o of body.opportunities ?? []) {
+      const opps = await fetchAllOpps(searchOpportunities, p.id);
+      for (const o of opps) {
         if (String(o.status ?? "") !== "won") continue;
         const raw = (o.lastStatusChangeAt ?? o.updatedAt) as string | number | undefined;
         const ms = typeof raw === "number" ? raw : Date.parse(String(raw ?? 0));

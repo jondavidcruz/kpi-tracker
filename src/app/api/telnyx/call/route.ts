@@ -12,6 +12,17 @@ export async function POST(req: NextRequest) {
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false }, { status: 400 }); }
   const ev = body.data?.event_type ?? "";
   const p = body.data?.payload ?? {};
+  // breadcrumb log for ?inbounddiag=1 (last 25 events)
+  try {
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
+    let list: unknown[] = [];
+    try { list = row?.description ? JSON.parse(row.description) : []; } catch { /* fresh */ }
+    const pp = p as Record<string, unknown>;
+    list.unshift({ at: new Date().toISOString(), ev, from: pp.from, to: pp.to, direction: pp.direction, cause: pp.hangup_cause, answered: pp.answered_at ? true : false });
+    const description = JSON.stringify(list.slice(0, 25));
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "telnyx-events", category: "__telnyx_events__", url: "", description } });
+  } catch { /* logging never blocks call handling */ }
   let st: { bridgeTo?: string; oppId?: string; contactId?: string; rep?: string } = {};
   try { st = p.client_state ? JSON.parse(Buffer.from(p.client_state, "base64").toString()) : {}; } catch { /* none */ }
   const key = process.env.TELNYX_API_KEY;

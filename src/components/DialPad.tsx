@@ -190,8 +190,13 @@ export default function DialPad() {
   };
   const onCallRef = useRef<Ctx | null>(null);
   useEffect(() => { onCallRef.current = onCall; }, [onCall]);
-  // connect in the background so inbound calls ring even before first use
-  useEffect(() => { ensureClient().catch(() => { /* connects on first dial instead */ }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // connect in the background so inbound calls ring even before first use,
+  // and keep the registration alive (tokens/sockets expire quietly).
+  useEffect(() => {
+    ensureClient().catch(() => { /* connects on first dial instead */ });
+    const keep = setInterval(() => { if (!readyRef.current) ensureClient().catch(() => {}); }, 240_000);
+    return () => clearInterval(keep);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const answerIncoming = () => { try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "" }); } catch { /* gone */ } };
   const declineIncoming = () => { try { incomingCallRef.current?.hangup(); } catch { /* gone */ } incomingCallRef.current = null; setIncoming(null); };
