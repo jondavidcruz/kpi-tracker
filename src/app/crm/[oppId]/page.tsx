@@ -4,8 +4,8 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI } from "@/lib/crm";
 import { Card } from "@/components/ui";
-import TelnyxCallButton from "@/components/TelnyxCallButton";
-import BrowserDialer from "@/components/BrowserDialer";
+import DialPad from "@/components/DialPad";
+import CallButton from "@/components/CallButton";
 import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, sendCrmEmailAction, sendCrmSmsAction } from "../actions";
 import { commsFor } from "@/lib/crm-comms";
 import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
@@ -72,8 +72,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${devH >= 36 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>⏳ {devH}h at developers</span>
           )}
           <span className="ml-auto flex flex-wrap items-center gap-1.5">
-            {comms.call && <BrowserDialer oppId={opp.id} contactId={c.id} phone={c.phone} />}
-            {comms.call && <TelnyxCallButton oppId={opp.id} contactId={c.id} phone={c.phone} />}
+            {comms.call && c.phone && <CallButton phone={c.phone} name={c.name} oppId={opp.id} contactId={c.id} label="📞 Call" />}
+            {comms.call && c.altPhone && <CallButton phone={c.altPhone} name={c.name} oppId={opp.id} contactId={c.id} label="📞 Alt" subtle />}
+            {comms.call && <DialPad />}
             {!comms.call && !comms.sms && !comms.email && <span className="rounded-lg bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-400" title="Notes, tasks, stages & appointments are all yours — paid channels are off for your account">📝 notes-only access</span>}
             <a href={`/underwriting?address=${encodeURIComponent(opp.title)}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">🧮 Underwrite</a>
           </span>
@@ -86,16 +87,17 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
         <div className="flex w-full max-w-md flex-col gap-3 lg:w-[380px]">
           {/* contact card */}
           <Card className="p-4">
-            <details>
-              <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">👤 Contact — edit</summary>
+            <details open>
+              <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">👤 Contact — all phones &amp; emails (edit)</summary>
               <form action={saveCrmContactAction} className="mt-2 space-y-2">
                 <input type="hidden" name="id" value={c.id} />
                 <input type="hidden" name="oppId" value={opp.id} />
                 <div className="grid grid-cols-2 gap-2">
                   <label><span className={lbl}>Name</span><input name="name" defaultValue={c.name} className={inputCls} /></label>
                   <label><span className={lbl}>Phone</span><input name="phone" defaultValue={c.phone} className={inputCls} /></label>
-                  <label><span className={lbl}>Alt phone</span><input name="altPhone" defaultValue={c.altPhone} className={inputCls} /></label>
+                  <label><span className={lbl}>Phone 2</span><input name="altPhone" defaultValue={c.altPhone} className={inputCls} /></label>
                   <label><span className={lbl}>Email</span><input name="email" defaultValue={c.email} className={inputCls} /></label>
+                  <label><span className={lbl}>Email 2</span><input name="altEmail" defaultValue={c.altEmail} className={inputCls} /></label>
                 </div>
                 <label><span className={lbl}>Address</span><input name="address" defaultValue={c.address} className={inputCls} /></label>
                 <label><span className={lbl}>Contact tags</span><input name="ctags" defaultValue={c.tags} placeholder="motivated, probate…" className={inputCls} /></label>
@@ -105,7 +107,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             </details>
             <div className="mt-2 space-y-1 text-[13px] text-slate-700">
               {c.phone && <div>📱 {c.phone}{c.altPhone ? ` · ${c.altPhone}` : ""}</div>}
-              {c.email && <div>✉️ {c.email}</div>}
+              {c.email && <div>✉️ {c.email}{c.altEmail ? ` · ${c.altEmail}` : ""}</div>}
               {c.address && <div>🏠 {c.address}</div>}
               <div className="text-xs text-slate-400">Source: {c.source || "—"} · added {c.createdAt.toLocaleDateString()}</div>
               {parseTags(c.tags).length > 0 && (

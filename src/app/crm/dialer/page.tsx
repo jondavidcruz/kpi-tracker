@@ -5,8 +5,8 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { commsFor } from "@/lib/crm-comms";
 import { Card, SectionTitle } from "@/components/ui";
-import BrowserDialer from "@/components/BrowserDialer";
-import TelnyxCallButton from "@/components/TelnyxCallButton";
+import DialPad from "@/components/DialPad";
+import CallButton from "@/components/CallButton";
 import { dialerOutcomeAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
         title="☎️ Power Dialer"
         subtitle="Your call queue, priority-ordered: due follow-ups → quiet leads. Call, log the outcome, next."
         accent="bg-emerald-500"
-        right={<Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">← Pipeline</Link>}
+        right={<span className="flex items-center gap-2">{comms.call && <DialPad />}<Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">← Pipeline</Link></span>}
       />
 
       {!cur ? (
@@ -70,8 +70,7 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
                 <div className="mt-1 text-lg font-bold text-brand-navy">{cur.contact.phone}</div>
                 {cur.contact.pinnedNote && <div className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {cur.contact.pinnedNote}</div>}
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {comms.call && <BrowserDialer oppId={cur.id} contactId={cur.contactId} phone={cur.contact.phone} />}
-                  {comms.call && <TelnyxCallButton oppId={cur.id} contactId={cur.contactId} phone={cur.contact.phone} />}
+                  {comms.call && <CallButton phone={cur.contact.phone} name={cur.contact.name} oppId={cur.id} contactId={cur.contactId} label="📞 Call (browser)" />}
                   <Link href={`/crm/${cur.id}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200">📂 Full card</Link>
                 </div>
               </div>

@@ -42,6 +42,42 @@ export default function DialPad() {
   const dataRef = useRef<PhoneData | null>(null);
   autoNextRef.current = autoNext; qiRef.current = qi; dataRef.current = data;
 
+  // 🔔 Audible ringback while we wait (Telnyx early media often stays silent
+  // until answer): classic US dual-tone 440+480 Hz, 2s on / 4s off.
+  const ringCtx = useRef<{ ctx: AudioContext; gain: GainNode; timer: ReturnType<typeof setInterval> } | null>(null);
+  useEffect(() => {
+    const stop = () => {
+      if (!ringCtx.current) return;
+      clearInterval(ringCtx.current.timer);
+      try { ringCtx.current.ctx.close(); } catch { /* done */ }
+      ringCtx.current = null;
+    };
+    if (state === "ringing" || state === "connecting") {
+      if (ringCtx.current) return;
+      try {
+        const ctx = new AudioContext();
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        gain.connect(ctx.destination);
+        for (const f of [440, 480]) {
+          const o = ctx.createOscillator();
+          o.frequency.value = f;
+          o.connect(gain);
+          o.start();
+        }
+        const pulse = () => {
+          const t = ctx.currentTime;
+          gain.gain.setValueAtTime(0.08, t);
+          gain.gain.setValueAtTime(0, t + 2);
+        };
+        pulse();
+        const timer = setInterval(pulse, 6000);
+        ringCtx.current = { ctx, gain, timer };
+      } catch { /* no audio context — silent ring */ }
+    } else stop();
+    return stop;
+  }, [state]);
+
   const load = async (q = "") => {
     try {
       const r = await fetch(`/api/crm/phone${q ? `?q=${encodeURIComponent(q)}` : ""}`);

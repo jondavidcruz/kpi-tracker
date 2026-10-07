@@ -540,6 +540,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 🧪 Telnyx browser-dialer probe: provisioning + token mint, headless.
+  if (url.searchParams.get("telnyxprobe") === "1") {
+    const { provisionAndToken } = await import("@/lib/telnyx-webrtc");
+    const r = await provisionAndToken();
+    return NextResponse.json({ ok: !r.error, steps: r.steps, callerId: r.callerId ?? null, tokenMinted: !!r.token, error: r.error ?? null });
+  }
+
   // 🧪 CRM self-test: run every query the CRM pages run, report pass/fail.
   if (url.searchParams.get("crmselftest") === "1") {
     const out: Record<string, string> = {};

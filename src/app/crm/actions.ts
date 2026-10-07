@@ -121,6 +121,7 @@ export async function saveCrmContactAction(formData: FormData) {
     phone: String(formData.get("phone") ?? "").trim(),
     altPhone: String(formData.get("altPhone") ?? "").trim(),
     email: String(formData.get("email") ?? "").trim(),
+    altEmail: String(formData.get("altEmail") ?? "").trim(),
     address: String(formData.get("address") ?? "").trim(),
     tags: String(formData.get("ctags") ?? "").trim().slice(0, 300),
     pinnedNote: String(formData.get("pinnedNote") ?? "").trim().slice(0, 300),

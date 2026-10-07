@@ -1347,6 +1347,7 @@ model CrmContact {
   phone      String    @default("")
   altPhone   String    @default("")
   email      String    @default("")
+  altEmail   String    @default("")
   address    String    @default("") // mailing / home
   source     String    @default("") // PPL | Direct REI | GHL import | referral…
   tags       String    @default("") // comma-separated
