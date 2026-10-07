@@ -410,6 +410,21 @@ export async function savePipelineAction(formData: FormData) {
   revalidatePath("/crm");
 }
 
+/** Owner/managers: drag-ordered KPIs → sortOrder (10,20,30…). */
+export async function saveKpiOrderAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  let ids: string[] = [];
+  try { ids = JSON.parse(String(formData.get("order") ?? "[]")); } catch { return; }
+  if (!Array.isArray(ids) || ids.length > 60) return;
+  for (let i = 0; i < ids.length; i++) {
+    await db.kpi.update({ where: { id: String(ids[i]) }, data: { sortOrder: (i + 1) * 10 } }).catch(() => {});
+  }
+  revalidatePath("/entry");
+  revalidatePath("/report");
+  revalidatePath("/admin");
+}
+
 /** Card popover: slap a tag on an opportunity instantly. */
 export async function addOppTagAction(formData: FormData): Promise<void> {
   const me = await crmUser();

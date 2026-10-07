@@ -606,6 +606,50 @@ export async function GET(request: Request) {
     });
   }
 
+  // ☎️ Inbound v2 (the "call cannot be completed" fix): a Call Control app
+  // owns the number; our webhook answers and TRANSFERS to the WebRTC
+  // credential's SIP address — deterministic routing, missed-call text-back
+  // when the browser doesn't pick up. ?inboundsetup2=1
+  if (url.searchParams.get("inboundsetup2") === "1") {
+    const key = process.env.TELNYX_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, error: "no TELNYX_API_KEY" });
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+    let cfg: { connId?: string; credId?: string; callerId?: string; ccAppId?: string; sipUser?: string } = {};
+    try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
+    if (!cfg.connId) return NextResponse.json({ ok: false, error: "run ?telnyxprobe=1 first" });
+    const tx = async (path: string, init?: RequestInit) => {
+      const res = await fetch(`https://api.telnyx.com/v2${path}`, { ...init, headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" } });
+      const text = await res.text();
+      let body: unknown; try { body = JSON.parse(text); } catch { body = text; }
+      return { ok: res.ok, status: res.status, body, text };
+    };
+    const steps: string[] = [];
+    // the credential's SIP username (we didn't store it at creation)
+    if (!cfg.sipUser) {
+      const cc = await tx(`/credential_connections/${cfg.connId}`);
+      const cb = cc.body as { data?: { user_name?: string } };
+      cfg.sipUser = cb.data?.user_name ?? "";
+      steps.push(cfg.sipUser ? `sip user: ${cfg.sipUser}` : `sip user lookup failed ${cc.status}`);
+    }
+    if (!cfg.ccAppId) {
+      const app = await tx("/call_control_applications", { method: "POST", body: JSON.stringify({ application_name: "War Room Inbound", webhook_event_url: "https://kpi-tracker-lovat.vercel.app/api/telnyx/call" }) });
+      const ab = app.body as { data?: { id?: string } };
+      if (!app.ok || !ab.data?.id) return NextResponse.json({ ok: false, error: `call control app refused (${app.status}): ${app.text.slice(0, 180)}`, steps });
+      cfg.ccAppId = ab.data.id;
+      steps.push("call control app created");
+    } else steps.push("call control app exists");
+    const num = process.env.TELNYX_CALLER_ID || cfg.callerId || "";
+    const look = await tx(`/phone_numbers?filter[phone_number]=${encodeURIComponent(num)}`);
+    const lb = look.body as { data?: Array<{ id?: string }> };
+    const pn = lb.data?.[0];
+    if (!pn?.id) return NextResponse.json({ ok: false, error: `number ${num} not found`, steps });
+    const assign = await tx(`/phone_numbers/${pn.id}`, { method: "PATCH", body: JSON.stringify({ connection_id: cfg.ccAppId }) });
+    steps.push(assign.ok ? `number ${num} → call control app` : `assign failed ${assign.status}: ${assign.text.slice(0, 160)}`);
+    const description = JSON.stringify(cfg);
+    await db.resource.update({ where: { id: row!.id }, data: { description } });
+    return NextResponse.json({ ok: assign.ok && !!cfg.sipUser, steps, inboundNumber: num, sipUser: cfg.sipUser });
+  }
+
   // ☎️ Inbound setup: point TELNYX_CALLER_ID at the WebRTC credential
   // connection (so browsers ring) + aim its webhooks at /api/telnyx/call
   // (so missed calls trigger the text-back). Idempotent.

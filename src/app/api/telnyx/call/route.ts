@@ -36,6 +36,26 @@ export async function POST(req: NextRequest) {
     }).catch(() => {});
   }
 
+  // ☎️ Inbound v2: ring the browsers — answer+transfer the PSTN leg to the
+  // WebRTC credential's SIP URI (25s), then the hangup handler below texts
+  // back if nobody picked up.
+  if (ev === "call.initiated" && !st.bridgeTo && key && p.call_control_id) {
+    const pay0 = p as { direction?: string; to?: string };
+    if (pay0.direction === "incoming") {
+      const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+      let cfg: { sipUser?: string } = {};
+      try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
+      if (cfg.sipUser) {
+        await fetch(`https://api.telnyx.com/v2/calls/${p.call_control_id}/actions/transfer`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ to: `sip:${cfg.sipUser}@sip.telnyx.com`, timeout_secs: 25 }),
+        }).catch(() => {});
+      }
+      return NextResponse.json({ ok: true });
+    }
+  }
+
   // ☎️ Missed INBOUND call → instant text-back + a task for the lead's owner
   // (GHL's signature move). Inbound legs carry no client_state.
   const pay = p as { direction?: string; from?: string; to?: string; hangup_cause?: string; start_time?: string; answered_at?: string };

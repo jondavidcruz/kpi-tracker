@@ -12,6 +12,7 @@ import type { User } from "@prisma/client";
 import { Card, SectionTitle } from "@/components/ui";
 import PageTabs from "@/components/PageTabs";
 import NavOrderBoard from "@/components/NavOrderBoard";
+import KpiOrderBoard from "@/components/KpiOrderBoard";
 import { getCurrentUser, isManager, isAdmin, isOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -459,6 +460,22 @@ export default async function AdminPage({
             </div>
             <p className="mt-3 text-[11px] text-slate-400">Connection tests (open while signed in): <a href="/api/crm/check" className="underline">/api/crm/check</a> (REI Reply) · <a href="/api/directrei/check" className="underline">/api/directrei/check</a> (Direct REI). Keys are never shown here — only whether they exist.</p>
           </Card>
+        </section>
+      )}
+
+      {/* ════ KPI ORDER (owner) — drag the scorecards into shape ════ */}
+      {owner && (
+        <section id="kpi-order" className="scroll-mt-20">
+          <SectionTitle title="📊 KPI order" subtitle="Drag any KPI — Enter KPIs, reports and scorecards all follow this order instantly." accent="bg-emerald-400" />
+          <KpiOrderBoard groups={(() => {
+            const roles = [...new Set(kpis.filter((k) => k.active && k.scope === "per_rep" && !k.computed).map((k) => k.roleKey))].filter(Boolean);
+            const labelOf: Record<string, string> = { acquisitions: "🎯 Acquisitions", dispositions: "📞 Dispositions", cc_lm: "☎️ Cold Call / LM", internet: "🌐 Internet", listings: "🏷 Listings" };
+            return roles.map((rk) => ({
+              role: rk,
+              label: labelOf[rk] ?? rk,
+              kpis: kpis.filter((k) => k.active && k.scope === "per_rep" && !k.computed && k.roleKey === rk).sort((a, b) => a.sortOrder - b.sortOrder).map((k) => ({ id: k.id, key: k.key, name: k.name, emoji: k.emoji })),
+            }));
+          })()} />
         </section>
       )}
 

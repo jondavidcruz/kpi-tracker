@@ -9,6 +9,7 @@ import CrmKanban, { type CrmCard } from "@/components/CrmKanban";
 import DialPad from "@/components/DialPad";
 import PipelineSelect from "@/components/PipelineSelect";
 import SelectAllBox from "@/components/SelectAllBox";
+import CrmFilterBar from "@/components/CrmFilterBar";
 import { commsFor } from "@/lib/crm-comms";
 import { createCrmLeadAction, saveCommsPermsAction, bulkOppAction, saveAutomationAction, savePipelineAction } from "./actions";
 import { readRules } from "@/lib/crm-automations";
@@ -149,20 +150,11 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       {/* 🔎 search + GHL-style filters */}
       <Card className="space-y-2 p-3">
-        <form action="/crm" className="flex flex-wrap items-center gap-2">
-          <input type="hidden" name="view" value={view} />
-          <input type="hidden" name="pl" value={plName} />
-          {manager && who && <input type="hidden" name="who" value={who} />}
-          <input name="q" defaultValue={q} placeholder="🔎 Search name, phone, email, property, tag…" className="min-w-[240px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          <select name="stage" defaultValue={fStage} className="rounded-xl border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-600">
-            <option value="">All stages</option>
-            {stages.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <input name="tag" defaultValue={fTag} placeholder="tag…" className="w-24 rounded-xl border border-slate-200 px-2 py-2 text-xs" />
-          <label className="flex items-center gap-1 text-xs font-semibold text-slate-600"><input type="checkbox" name="due" value="1" defaultChecked={fDue} /> 📞 follow-up due</label>
-          <button className="rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white hover:bg-slate-700">Filter</button>
-          {(q || fStage || fTag || fDue) && <Link href={`/crm?view=${view}${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} className="text-xs font-bold text-slate-400 hover:text-slate-600">✕ clear</Link>}
-        </form>
+        <CrmFilterBar
+          base={{ view, pl: plName, ...(manager && who ? { who } : {}) }}
+          q={q} stage={fStage} tag={fTag} due={fDue}
+          stages={stages.map((st) => ({ key: st.key, label: st.label }))}
+        />
         <div className="flex flex-wrap items-center gap-2">
           {manager ? (
             <>
