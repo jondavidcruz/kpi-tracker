@@ -168,7 +168,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     className={`cursor-pointer rounded-xl bg-white p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${dragId === c.id ? "opacity-50" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-1">
-                      <div className="text-[14px] font-bold leading-snug text-slate-800">{c.contactName}</div>
+                      {/* name → FULL card page; anywhere else on the card → quick view */}
+                      <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{c.contactName}</a>
                       {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
                     </div>
                     {show.title && <div className="text-[11px] text-slate-500">{c.title}</div>}

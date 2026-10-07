@@ -10,11 +10,14 @@ import {
 } from "@/app/crm/actions";
 import { KIND_EMOJI } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
+import ConvComposerTabs from "@/components/ConvComposerTabs";
 
 type Payload = {
   id: string; title: string; stage: string; pipeline: string; assignedTo: string; tags: string;
   nextFollowUp: string; value: number | null; askPrice: number | null;
   formData: Record<string, Record<string, string | string[]>>;
+  me: { name: string; fromLabel: string; signature: string; canSms: boolean; canEmail: boolean };
+  snippets: Array<{ id: string; name: string; kind: string; subject?: string; body: string }>;
   contact: { id: string; name: string; phone: string; altPhone: string; email: string; altEmail: string; address: string; pinnedNote: string; tags: string };
   tasks: Array<{ id: string; title: string; due: string }>;
   appts: Array<{ id: string; title: string; at: string; withWho: string }>;
@@ -27,6 +30,7 @@ const TABS = [
   ...CRM_FORMS.map((f) => ({ key: `form:${f.key}`, label: f.name, emoji: f.emoji })),
   { key: "tasks", label: "Tasks", emoji: "✅" },
   { key: "appts", label: "Appointments", emoji: "📅" },
+  { key: "comms", label: "Text / Email", emoji: "💬" },
   { key: "notes", label: "Notes & activity", emoji: "📝" },
 ];
 
@@ -246,6 +250,16 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                         <form action={submit(deleteCrmApptAction, { id: a.id })}><button className="text-xs text-slate-400 hover:text-red-500" title="Delete">🗑</button></form>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {tab === "comms" && (
+                  <div className="-m-3">
+                    <ConvComposerTabs
+                      contactId={d.contact.id} oppId={d.id} phone={d.contact.phone} email={d.contact.email}
+                      leadName={d.contact.name} rep={d.me.name} fromLabel={d.me.fromLabel} signature={d.me.signature}
+                      canSms={d.me.canSms} canEmail={d.me.canEmail} snippets={d.snippets}
+                    />
                   </div>
                 )}
 

@@ -3,10 +3,11 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { stripHtml, KIND_EMOJI } from "@/lib/crm-shared";
-import { commsFor } from "@/lib/crm-comms";
+import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
+import { readSnippets } from "@/lib/crm-templates";
 import DialPad from "@/components/DialPad";
 import CallButton from "@/components/CallButton";
-import ConvComposer from "@/components/ConvComposer";
+import ConvComposerTabs from "@/components/ConvComposerTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,9 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const manager = isManager(me!);
   const sp = await searchParams;
   const comms = await commsFor(me!);
+  const snippets = await readSnippets();
+  const mySignature = (await readSignatures())[firstOf(me!.name)] || defaultSignature(me!.name);
+  const fromLabel = `${me!.name} <${firstOf(me!.name)}@freedom-offers.com>`;
 
   // thread list: latest comms event per contact
   const recent = await db.crmEvent.findMany({
@@ -133,7 +137,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     );
                   })}
                 </div>
-                <ConvComposer contactId={contact.id} oppId={opp?.id ?? ""} phone={contact.phone} email={contact.email} canSms={comms.sms} canEmail={comms.email} />
+                <ConvComposerTabs contactId={contact.id} oppId={opp?.id ?? ""} phone={contact.phone} email={contact.email} leadName={contact.name} rep={me!.name} fromLabel={fromLabel} signature={mySignature} canSms={comms.sms} canEmail={comms.email} snippets={snippets} />
               </>
             )}
           </div>
