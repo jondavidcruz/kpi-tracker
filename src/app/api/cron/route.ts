@@ -588,17 +588,22 @@ export async function GET(request: Request) {
   // Shared Drive — survives Vercel/Supabase dying, costs none of our server
   // space (it's the Workspace storage), readable only by the service account.
   if (url.searchParams.get("fullbackup") === "1") {
-    const { gdriveConfigured, ensureSubfolder, uploadToFolder } = await import("@/lib/gdrive");
+    const { gdriveConfigured, ensureSubfolder, uploadToFolder, driveRootId } = await import("@/lib/gdrive");
     if (!gdriveConfigured()) return NextResponse.json({ ok: false, error: "Google Drive not configured" });
-    const { buildBackup } = await import("@/lib/backup");
-    const { gzipSync } = await import("zlib");
-    const backup = await buildBackup();
-    const json = JSON.stringify(backup);
-    const gz = gzipSync(Buffer.from(json));
-    const folder = await ensureSubfolder(process.env.GDRIVE_FOLDER_ID!, "War Room Backups");
-    const name = `war-room-${new Date().toISOString().slice(0, 10)}.json.gz`;
-    const up = await uploadToFolder(folder, name, new Uint8Array(gz), "application/gzip");
-    return NextResponse.json({ ok: true, file: name, bytes: gz.length, rawBytes: json.length, driveId: up.id });
+    try {
+      const { buildBackup } = await import("@/lib/backup");
+      const { gzipSync } = await import("zlib");
+      const backup = await buildBackup();
+      const json = JSON.stringify(backup);
+      const gz = gzipSync(Buffer.from(json));
+      // Shared Drive root (service accounts have no My Drive quota)
+      const folder = await ensureSubfolder(await driveRootId(), "War Room Backups");
+      const name = `war-room-${new Date().toISOString().slice(0, 10)}.json.gz`;
+      const up = await uploadToFolder(folder, name, new Uint8Array(gz), "application/gzip");
+      return NextResponse.json({ ok: true, file: name, bytes: gz.length, rawBytes: json.length, driveId: up.id });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: String(e).slice(0, 300) }, { status: 500 });
+    }
   }
 
   // 👤 Owner repair (?ghlownerfix=1 dry / &commit=1): re-read every imported
