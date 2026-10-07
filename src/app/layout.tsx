@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Playfair_Display } from "next/font/google";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
 
@@ -8,12 +8,9 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-// Elegant serif for the Freedom Offers wordmark / logo lockup.
-const playfair = Playfair_Display({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "600"],
-});
+// Playfair (logo serif) loads via a plain <link> below instead of next/font:
+// Turbopack's build-time Google fetch for it is flaky on Vercel ("queries have
+// exactly one entry") and killed deploys. A runtime stylesheet can't.
 
 export const metadata: Metadata = {
   title: "Freedom Offers War Room",
@@ -32,8 +29,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${playfair.variable} h-full antialiased`}>
+    <html lang="en" className={`${geistSans.variable} h-full antialiased`} style={{ ["--font-display" as string]: `"Playfair Display"` }}>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet" />
         {/* Kill any leftover service worker + caches from the old PWA build so new
             deploys always show up (no more "I don't see the changes"). */}
         <script
