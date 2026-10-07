@@ -137,6 +137,10 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <form action={saveOppMetaAction} className="space-y-2">
               <input type="hidden" name="id" value={opp.id} />
               <label><span className={lbl}>Title / property</span><input name="title" defaultValue={opp.title} className={inputCls} /></label>
+              <label><span className={lbl}>Pipeline</span>
+                <select name="pipeline" defaultValue={opp.pipeline || "War Room"} className={inputCls}>
+                  {pipelines.map((pp) => <option key={pp.name} value={pp.name}>{pp.name}</option>)}
+                </select></label>
               <div className="grid grid-cols-2 gap-2">
                 <label><span className={lbl}>Seller wants $</span><input name="askPrice" defaultValue={opp.askPrice ?? ""} className={inputCls} /></label>
                 <label><span className={lbl}>Est. value / fee $</span><input name="value" defaultValue={opp.value ?? ""} className={inputCls} /></label>

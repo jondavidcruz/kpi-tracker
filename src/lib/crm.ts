@@ -36,6 +36,11 @@ export async function readPipelines(): Promise<CrmPipeline[]> {
   return [warroom, ...ghl.map((p) => ({ name: p.name, stages: p.stages.map((st, i) => ({ key: st.key, label: st.label, cls: PALETTE[i % PALETTE.length] })) }))];
 }
 
+export async function readGhlPipelinesRaw(): Promise<Array<{ name: string; stages: Array<{ key: string; label: string }> }>> {
+  const row = await db.resource.findFirst({ where: { category: PIPES_CAT } }).catch(() => null);
+  try { return row?.description ? JSON.parse(row.description) : []; } catch { return []; }
+}
+
 export async function writeGhlPipelines(list: Array<{ name: string; stages: Array<{ key: string; label: string }> }>): Promise<void> {
   const row = await db.resource.findFirst({ where: { category: PIPES_CAT } });
   const description = JSON.stringify(list);

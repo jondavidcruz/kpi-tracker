@@ -40,6 +40,15 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   // ⚙ per-person card customization (saved on this device)
   const [show, setShow] = useState<Record<FieldKey, boolean>>({ money: true, badges: true, tags: true, rep: true, title: true });
   const [cfgOpen, setCfgOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try { const raw = localStorage.getItem("fo_crm_collapsed"); if (raw) setCollapsed(JSON.parse(raw)); } catch { /* none */ }
+  }, []);
+  const toggleCollapse = (k: string) => {
+    const next = { ...collapsed, [k]: !collapsed[k] };
+    setCollapsed(next);
+    try { localStorage.setItem("fo_crm_collapsed", JSON.stringify(next)); } catch { /* fine */ }
+  };
   useEffect(() => {
     try { const raw = localStorage.getItem("fo_crm_card_fields"); if (raw) setShow({ ...{ money: true, badges: true, tags: true, rep: true, title: true }, ...JSON.parse(raw) }); } catch { /* defaults */ }
   }, []);
@@ -80,8 +89,24 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       </div>
       <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-2">
         {columns.map((col, colIdx) => {
-          const colCards = cards.filter((c) => c.stage === col.key);
+          const colCards = cards.filter((c) => c.stage === col.key || (colIdx === 0 && !columns.some((cc) => cc.key === c.stage)));
           const tint = LANE_TINTS[colIdx % LANE_TINTS.length];
+          if (collapsed[col.key]) {
+            return (
+              <button
+                key={col.key}
+                onClick={() => toggleCollapse(col.key)}
+                onDragOver={(e) => { if (dragId) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.key); } }}
+                onDrop={(e) => { e.preventDefault(); drop(col.key); setOverCol(null); }}
+                title={`${col.label} — click to expand`}
+                className={`flex w-11 shrink-0 flex-col items-center gap-2 rounded-2xl p-2 ring-1 transition hover:ring-slate-300 ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : tint}`}
+              >
+                <span className="text-xs font-extrabold text-slate-500">›</span>
+                <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-extrabold text-slate-600 ring-1 ring-slate-200">{(counts[col.key] ?? colCards.length).toLocaleString()}</span>
+                <span className="text-[10px] font-bold tracking-wide text-slate-500" style={{ writingMode: "vertical-rl" }}>{col.label}</span>
+              </button>
+            );
+          }
           return (
             <div
               key={col.key}
@@ -92,7 +117,10 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
             >
               <div className="mb-0.5 flex items-center justify-between px-1">
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${col.cls}`}>{col.label}</span>
-                <span className="text-xs font-extrabold tabular-nums text-slate-500">{(counts[col.key] ?? colCards.length).toLocaleString()}</span>
+                <span className="flex items-center gap-1">
+                  <span className="text-xs font-extrabold tabular-nums text-slate-500">{(counts[col.key] ?? colCards.length).toLocaleString()}</span>
+                  <button onClick={() => toggleCollapse(col.key)} title="Minimize this stage" className="grid h-5 w-5 place-items-center rounded text-[11px] font-extrabold text-slate-400 hover:bg-white/70 hover:text-slate-600">‹</button>
+                </span>
               </div>
               {(sums[col.key] ?? 0) > 0 && (
                 <div className="mb-1.5 px-1 text-[9px] font-bold text-slate-400" title="Total value in this stage · weighted by how likely this stage is to close">

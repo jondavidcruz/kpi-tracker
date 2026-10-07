@@ -65,6 +65,9 @@ export async function setOppStageAction(formData: FormData) {
     ...(stage === "dead" ? { archivedAt: new Date() } : { archivedAt: null }),
   } });
   await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "stage", body: `${opp.stage} → ${stage}`, actor: me.name });
+  // ⚙️ fire matching automations (never blocks the move)
+  const full = await db.crmOpportunity.findUnique({ where: { id }, select: { id: true, contactId: true, pipeline: true, stage: true, assignedTo: true, title: true } });
+  if (full) { const { runStageAutomations } = await import("@/lib/crm-automations"); runStageAutomations(full).catch(() => {}); }
   revalidatePath("/crm");
   revalidatePath(`/crm/${id}`);
 }
@@ -99,7 +102,9 @@ export async function saveOppMetaAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const num = (k: string) => { const s = String(formData.get(k) ?? "").replace(/[$,\s]/g, ""); return s === "" ? null : Number(s) || null; };
+  const plRaw = formData.get("pipeline");
   await db.crmOpportunity.update({ where: { id }, data: {
+    ...(plRaw != null ? { pipeline: String(plRaw) === "War Room" ? "" : String(plRaw) } : {}),
     title: String(formData.get("title") ?? "").trim() || undefined,
     assignedTo: String(formData.get("assignedTo") ?? "").trim(),
     tags: String(formData.get("tags") ?? "").trim().slice(0, 300),
@@ -317,6 +322,73 @@ export async function dialerOutcomeAction(formData: FormData) {
   }
   revalidatePath("/crm");
   redirect(`/crm/dialer?i=${next}`);
+}
+
+/** Managers: create / toggle / delete automation rules. */
+export async function saveAutomationAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const { readRules, writeRules } = await import("@/lib/crm-automations");
+  type Rule = import("@/lib/crm-automations").CrmRule;
+  const rules = await readRules();
+  const op = String(formData.get("op") ?? "add");
+  if (op === "toggle" || op === "delete") {
+    const id = String(formData.get("id") ?? "");
+    const i = rules.findIndex((r) => r.id === id);
+    if (i >= 0) { if (op === "delete") rules.splice(i, 1); else rules[i].enabled = !rules[i].enabled; await writeRules(rules); }
+    revalidatePath("/crm");
+    return;
+  }
+  const name = String(formData.get("name") ?? "").trim().slice(0, 80);
+  const trigger = String(formData.get("trigger") ?? ""); // "pipeline::stageKey" or "::stageKey"
+  const [pipeline, stage] = trigger.split("::");
+  const action = String(formData.get("action") ?? "task") as Rule["action"];
+  if (!name || !stage || !["task", "tag", "followup", "enroll"].includes(action)) return;
+  rules.push({
+    id: Math.random().toString(36).slice(2, 10), name, pipeline: pipeline ?? "", stage, action,
+    params: {
+      title: String(formData.get("p_title") ?? "").trim().slice(0, 120) || undefined,
+      dueDays: Number(formData.get("p_dueDays")) || 0,
+      tag: String(formData.get("p_tag") ?? "").trim().slice(0, 40) || undefined,
+      days: Number(formData.get("p_days")) || 1,
+      seqId: String(formData.get("p_seqId") ?? "") || undefined,
+    },
+    enabled: true, createdBy: me!.name,
+  });
+  await writeRules(rules);
+  revalidatePath("/crm");
+}
+
+/** Managers: create or edit a pipeline — name + its stages, free-typed. */
+export async function savePipelineAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const { readGhlPipelinesRaw, writeGhlPipelines, stageSlug } = await import("@/lib/crm");
+  const list = await readGhlPipelinesRaw();
+  const original = String(formData.get("original") ?? ""); // "" = create new
+  const del = formData.get("del") === "1";
+  const i = list.findIndex((p) => p.name === original);
+  if (del) {
+    if (i >= 0) {
+      const count = await db.crmOpportunity.count({ where: { pipeline: original, archivedAt: null } });
+      if (count > 0) return; // never orphan live leads
+      list.splice(i, 1);
+      await writeGhlPipelines(list);
+    }
+    revalidatePath("/crm");
+    return;
+  }
+  const name = String(formData.get("name") ?? "").trim().slice(0, 60);
+  const stageLines = String(formData.get("stages") ?? "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 25);
+  if (!name || !stageLines.length) return;
+  const stages = stageLines.map((label) => ({ key: stageSlug(label), label }));
+  const entry = { name, stages };
+  if (i >= 0) {
+    list[i] = entry;
+    if (original !== name) await db.crmOpportunity.updateMany({ where: { pipeline: original }, data: { pipeline: name } });
+  } else list.push(entry);
+  await writeGhlPipelines(list);
+  revalidatePath("/crm");
 }
 
 /** Softphone outcome quick-log (no redirect — stays in the panel). */

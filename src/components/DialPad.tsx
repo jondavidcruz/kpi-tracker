@@ -41,7 +41,8 @@ export default function DialPad() {
   const autoNextRef = useRef(false);
   const qiRef = useRef(0);
   const dataRef = useRef<PhoneData | null>(null);
-  autoNextRef.current = autoNext; qiRef.current = qi; dataRef.current = data;
+  const stateRef = useRef<CallState>("idle");
+  autoNextRef.current = autoNext; qiRef.current = qi; dataRef.current = data; stateRef.current = state;
 
   // 🔔 Audible ringback while we wait (Telnyx early media often stays silent
   // until answer): classic US dual-tone 440+480 Hz, 2s on / 4s off.
@@ -170,7 +171,14 @@ export default function DialPad() {
     } catch (e) { setState("error"); setMsg(String(e).slice(0, 120)); }
   };
 
-  const hangup = () => { try { callRef.current?.hangup(); } catch { finish(onCall); } };
+  const hangup = () => {
+    // Red stop must ALWAYS end it — even mid-connect before a call object
+    // exists (that was the dead button): hang up if we can, then force-finish.
+    try { callRef.current?.hangup(); } catch { /* already gone */ }
+    callRef.current = null;
+    setTimeout(() => { if (stateRef.current !== "idle") finish(onCall); }, 800);
+    if (!callRef.current && (stateRef.current === "connecting" || stateRef.current === "error")) finish(onCall);
+  };
   const toggleMute = () => { if (!callRef.current) return; if (muted) callRef.current.unmuteAudio(); else callRef.current.muteAudio(); setMuted(!muted); };
   const key = (k: string) => setNum((v) => v + k);
 
@@ -205,7 +213,7 @@ export default function DialPad() {
                 {state === "active" ? `🟢 ${onCall?.name ?? onCall?.phone} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `📡 ${state} — ${onCall?.name ?? onCall?.phone ?? ""}`}
               </span>
               {state === "active" && <button onClick={toggleMute} className={`rounded-md px-2 py-1 text-[10px] font-bold ${muted ? "bg-amber-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>}
-              <button onClick={hangup} className="rounded-md bg-red-600 px-2.5 py-1 text-[10px] font-bold text-white">⏹</button>
+              <button onClick={hangup} title="End the call" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-600 text-base text-white shadow hover:bg-red-700">⏹</button>
             </span>
           )}
           {msg && state === "idle" && <span className="px-3.5 py-1 text-[10px] font-semibold text-amber-700">{msg}</span>}
@@ -221,7 +229,11 @@ export default function DialPad() {
                   ))}
                 </span>
                 <span className="flex w-full items-center justify-center gap-4 pt-1">
-                  <button onClick={() => (state === "idle" ? call({ phone: num }) : undefined)} disabled={state !== "idle"} className="grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-xl text-white hover:bg-emerald-600 disabled:opacity-50">📞</button>
+                  {state === "idle" ? (
+                    <button onClick={() => call({ phone: num })} className="grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-xl text-white hover:bg-emerald-600">📞</button>
+                  ) : (
+                    <button onClick={hangup} title="End the call" className="grid h-12 w-12 place-items-center rounded-full bg-red-600 text-xl text-white shadow hover:bg-red-700">⏹</button>
+                  )}
                   <button onClick={() => setNum((v) => v.slice(0, -1))} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">⌫</button>
                 </span>
               </span>
