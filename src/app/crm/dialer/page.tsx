@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { commsFor } from "@/lib/crm-comms";
 import { Card, SectionTitle } from "@/components/ui";
+import { stripHtml } from "@/lib/crm-shared";
 import DialPad from "@/components/DialPad";
 import CallButton from "@/components/CallButton";
 import { dialerOutcomeAction } from "../actions";
@@ -105,7 +106,7 @@ async function LastNotes({ contactId }: { contactId: string }) {
       <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Last activity</div>
       {events.map((e) => (
         <div key={e.id} className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-600 ring-1 ring-slate-100">
-          <span className="font-bold">{e.kind}:</span> {e.body.slice(0, 110)}
+          <span className="font-bold">{e.kind}:</span> {stripHtml(e.body).slice(0, 110)}
           <span className="ml-1 text-[9px] text-slate-400">{e.at.toLocaleDateString()}</span>
         </div>
       ))}

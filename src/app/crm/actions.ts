@@ -410,6 +410,21 @@ export async function savePipelineAction(formData: FormData) {
   revalidatePath("/crm");
 }
 
+/** Card popover: slap a tag on an opportunity instantly. */
+export async function addOppTagAction(formData: FormData): Promise<void> {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const tag = String(formData.get("tag") ?? "").trim().slice(0, 40);
+  if (!id || !tag) return;
+  const o = await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } });
+  if (!o) return;
+  if (!o.tags.toLowerCase().split(",").map((t) => t.trim()).includes(tag.toLowerCase())) {
+    await db.crmOpportunity.update({ where: { id }, data: { tags: o.tags ? `${o.tags}, ${tag}` : tag } });
+  }
+  revalidatePath("/crm");
+}
+
 /** Softphone outcome quick-log (no redirect — stays in the panel). */
 export async function dialerOutcomeQuickAction(formData: FormData): Promise<void> {
   const me = await crmUser();

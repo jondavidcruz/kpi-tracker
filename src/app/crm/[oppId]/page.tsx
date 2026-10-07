@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI } from "@/lib/crm";
+import { stripHtml } from "@/lib/crm-shared";
 import { Card } from "@/components/ui";
 import DialPad from "@/components/DialPad";
 import CallButton from "@/components/CallButton";
@@ -83,11 +84,17 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
       </Card>
 
       <div className="flex flex-wrap items-start gap-4">
+        {/* GHL-style section nav */}
+        <nav className="sticky top-4 hidden w-44 shrink-0 flex-col gap-0.5 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200 xl:flex">
+          {[["#opp", "Opportunity details"], ["#contact", "Contact details"], ["#parties", "Parties (DS)"], ["#tasks", "Tasks"], ["#appts", "Appointments"], ["#compose", "Email / SMS"], ["#timeline", "Notes & timeline"]].map(([h, l]) => (
+            <a key={h} href={h} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900">{l}</a>
+          ))}
+        </nav>
         {/* ── Left column ── */}
         <div className="flex w-full max-w-md flex-col gap-3 lg:w-[380px]">
           {/* contact card */}
           <Card className="p-4">
-            <details open>
+            <details open id="contact" className="scroll-mt-4">
               <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">👤 Contact — all phones &amp; emails (edit)</summary>
               <form action={saveCrmContactAction} className="mt-2 space-y-2">
                 <input type="hidden" name="id" value={c.id} />
@@ -185,7 +192,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
 
           {/* parties in the deal */}
           <Card className="p-4">
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">🤝 Parties in this deal</div>
+            <div id="parties" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">🤝 Parties in this deal</div>
             <div className="space-y-1.5">
               {parties.map((p) => (
                 <div key={p.id} className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs ring-1 ring-slate-100">
@@ -264,11 +271,12 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           </Card>
 
           {(comms.sms || comms.email) && (
-            <Card className="p-3">
+            <Card id="compose" className="scroll-mt-4 p-3">
               <div className="flex flex-wrap gap-3">
                 {comms.sms && c.phone && (
                   <form action={sendCrmSmsAction} className="min-w-[240px] flex-1 space-y-1.5">
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">💬 Text the seller (Telnyx — sends for real)</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">💬 SMS</div>
+                    <div className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] text-slate-500 ring-1 ring-slate-100"><b>From:</b> our Telnyx line · <b>To:</b> {c.phone}</div>
                     <input type="hidden" name="oppId" value={opp.id} />
                     <input type="hidden" name="contactId" value={c.id} />
                     <input type="hidden" name="to" value={c.phone} />
@@ -279,7 +287,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 )}
                 {comms.email && c.email && (
                   <form action={sendCrmEmailAction} className="min-w-[240px] flex-1 space-y-1.5">
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">✉️ Email the seller (replies land in Jon&apos;s inbox)</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">✉️ Email</div>
+                    <div className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] text-slate-500 ring-1 ring-slate-100"><b>From:</b> {me!.name} &lt;{me!.name.split(" ")[0].toLowerCase()}@freedom-offers.com&gt; · <b>To:</b> {c.email} · your signature is added automatically</div>
                     <input type="hidden" name="oppId" value={opp.id} />
                     <input type="hidden" name="contactId" value={c.id} />
                     <input type="hidden" name="to" value={c.email} />
@@ -323,12 +332,12 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             </Card>
           )}
 
-          <div className="pl-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline — everything, newest first</div>
+          <div id="timeline" className="scroll-mt-4 pl-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline — everything, newest first</div>
           {events.map((e) => (
             <Card key={e.id} className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""}`}>
               <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] text-slate-800">{e.kind === "note" ? <><b>{e.actor}:</b> {e.body}</> : <><b className="capitalize">{e.kind}</b> — {e.body}</>}</div>
+                <div className="whitespace-pre-line text-[13px] text-slate-800">{e.kind === "note" ? <><b>{e.actor}:</b> {stripHtml(e.body)}</> : <><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</>}</div>
                 <div className="mt-0.5 text-[10px] text-slate-400">{fmtAt(e.at)}{e.actor && e.kind !== "note" ? ` · ${e.actor}` : ""}{e.oppId && e.oppId !== opp.id ? " · other opportunity" : ""}</div>
               </div>
             </Card>

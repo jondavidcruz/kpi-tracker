@@ -490,6 +490,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, sent });
   }
 
+  // 🧽 Strip HTML out of already-imported notes (display is clean either way;
+  // this fixes the stored text). Run until changed=0.
+  if (url.searchParams.get("notesclean") === "1") {
+    const { stripHtml } = await import("@/lib/crm-shared");
+    const rows = await db.crmEvent.findMany({ where: { body: { contains: "<" } }, select: { id: true, body: true }, take: 400 });
+    let changed = 0;
+    for (const r of rows) {
+      const clean = stripHtml(r.body).slice(0, 2000);
+      if (clean !== r.body) { await db.crmEvent.update({ where: { id: r.id }, data: { body: clean } }); changed++; }
+    }
+    return NextResponse.json({ ok: true, scanned: rows.length, changed });
+  }
+
   // 📝 GHL notes backfill — contacts imported without notes get them here
   // (time-guarded; run repeatedly until done=0 remaining).
   if (url.searchParams.get("ghlnotes") === "1") {
@@ -509,9 +522,10 @@ export async function GET(request: Request) {
         await db.crmEvent.create({ data: { contactId: c.id, kind: "system", body: "GHL: no notes on file", actor: "GHL import", at: new Date() } }).catch(() => {});
         continue;
       }
+      const { stripHtml } = await import("@/lib/crm-shared");
       for (const n of list) {
         if (!n.body) continue;
-        await db.crmEvent.create({ data: { contactId: c.id, kind: "note", body: String(n.body).slice(0, 2000), actor: "GHL import", at: n.dateAdded ? new Date(n.dateAdded) : new Date() } }).catch(() => {});
+        await db.crmEvent.create({ data: { contactId: c.id, kind: "note", body: stripHtml(String(n.body)).slice(0, 2000), actor: "GHL import", at: n.dateAdded ? new Date(n.dateAdded) : new Date() } }).catch(() => {});
         notes++;
       }
     }

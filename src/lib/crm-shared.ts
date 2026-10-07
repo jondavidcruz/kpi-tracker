@@ -34,3 +34,14 @@ export function parseTags(s: string): string[] {
 export function stageSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "stage";
 }
+
+/** GHL notes arrive as HTML — render them as clean text with line breaks. */
+export function stripHtml(s: string): string {
+  return s
+    .replace(/<(br|\/p|\/div|\/li)[^>]*>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}

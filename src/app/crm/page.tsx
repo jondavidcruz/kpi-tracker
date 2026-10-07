@@ -7,6 +7,8 @@ import { readPipelines, parseTags } from "@/lib/crm";
 import { Card, SectionTitle } from "@/components/ui";
 import CrmKanban, { type CrmCard } from "@/components/CrmKanban";
 import DialPad from "@/components/DialPad";
+import PipelineSelect from "@/components/PipelineSelect";
+import SelectAllBox from "@/components/SelectAllBox";
 import { commsFor } from "@/lib/crm-comms";
 import { createCrmLeadAction, saveCommsPermsAction, bulkOppAction, saveAutomationAction, savePipelineAction } from "./actions";
 import { readRules } from "@/lib/crm-automations";
@@ -135,13 +137,14 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         }
       />
 
-      {/* 🔀 Pipeline selector — exactly like GHL's dropdown */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {pipelines.map((pp) => (
-          <Link key={pp.name} prefetch={false} href={qs({ pl: pp.name, stage: "", p: "" })} className={`rounded-xl px-3 py-1.5 text-xs font-bold ${pp.name === plName ? "bg-brand-navy text-white shadow" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
-            {pp.name} <span className="ml-1 opacity-60">{(plCounts[pp.name] ?? 0).toLocaleString()}</span>
-          </Link>
-        ))}
+      {/* 🔀 Pipeline dropdown — exactly like GHL's */}
+      <div className="flex flex-wrap items-center gap-2">
+        <PipelineSelect
+          pipelines={pipelines.map((pp) => ({ name: pp.name, count: plCounts[pp.name] ?? 0 }))}
+          current={plName}
+          baseQs={`view=${view}${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`}
+        />
+        <span className="text-[11px] text-slate-400">{(plCounts[plName] ?? 0).toLocaleString()} opportunities in this pipeline</span>
       </div>
 
       {/* 🔎 search + GHL-style filters */}
@@ -217,7 +220,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       </Card>
 
       {view === "kanban" ? (
-        <CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} listHref={`/crm?view=list${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} />
+        <CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} listHref={`/crm?view=list${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} />
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>
@@ -251,6 +254,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           {manager && (
             <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 text-xs">
               <span className="font-bold text-slate-500">Bulk (ticked rows):</span>
+              <SelectAllBox />
               <select name="op" className="rounded-lg border border-slate-200 px-2 py-1 font-semibold">
                 <option value="assign">→ reassign to</option>
                 <option value="stage">→ move to stage</option>

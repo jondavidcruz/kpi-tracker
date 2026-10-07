@@ -4,7 +4,7 @@
 // its opportunity page.
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setOppStageAction } from "@/app/crm/actions";
+import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction } from "@/app/crm/actions";
 import { STAGE_PROB } from "@/lib/crm-shared";
 
 export type CrmCard = {
@@ -27,19 +27,47 @@ const FIELDS = [
   ["badges", "⏳ status badges"],
   ["tags", "# tags"],
   ["rep", "👤 rep"],
+  ["repTop", "👤 owner top-right (GHL style)"],
   ["title", "🏠 property line"],
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean }) {
   const [cards, setCards] = useState(initial);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
   // ⚙ per-person card customization (saved on this device)
-  const [show, setShow] = useState<Record<FieldKey, boolean>>({ money: true, badges: true, tags: true, rep: true, title: true });
+  const [show, setShow] = useState<Record<FieldKey, boolean>>({ money: true, badges: true, tags: true, rep: true, repTop: false, title: true });
   const [cfgOpen, setCfgOpen] = useState(false);
+  // quick-add popover: {cardId, kind} — one open at a time
+  const [quick, setQuick] = useState<{ id: string; contactId?: string; kind: "task" | "appt" | "tag" | "sms"; phone?: string } | null>(null);
+  const [qa, setQa] = useState({ title: "", due: "", when: "", tag: "", sms: "" });
+  const [, startQuick] = useTransition();
+  const submitQuick = () => {
+    if (!quick) return;
+    const fd = new FormData();
+    if (quick.kind === "task") {
+      if (!qa.title.trim()) return;
+      fd.set("oppId", quick.id); fd.set("contactId", quick.contactId ?? ""); fd.set("title", qa.title); fd.set("due", qa.due);
+      startQuick(async () => { await addCrmTaskAction(fd); });
+    } else if (quick.kind === "appt") {
+      if (!qa.title.trim() || !qa.when) return;
+      fd.set("oppId", quick.id); fd.set("contactId", quick.contactId ?? ""); fd.set("title", qa.title); fd.set("at", qa.when);
+      startQuick(async () => { await addCrmApptAction(fd); });
+    } else if (quick.kind === "tag") {
+      if (!qa.tag.trim()) return;
+      fd.set("id", quick.id); fd.set("tag", qa.tag);
+      startQuick(async () => { await addOppTagAction(fd); });
+      setCards((cs) => cs.map((c) => (c.id === quick.id ? { ...c, tags: [...c.tags, qa.tag.trim()] } : c)));
+    } else if (quick.kind === "sms") {
+      if (!qa.sms.trim() || !quick.phone) return;
+      fd.set("oppId", quick.id); fd.set("contactId", quick.contactId ?? ""); fd.set("to", quick.phone); fd.set("text", qa.sms);
+      startQuick(async () => { await sendCrmSmsAction(fd); });
+    }
+    setQuick(null); setQa({ title: "", due: "", when: "", tag: "", sms: "" });
+  };
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   useEffect(() => {
     try { const raw = localStorage.getItem("fo_crm_collapsed"); if (raw) setCollapsed(JSON.parse(raw)); } catch { /* none */ }
@@ -50,7 +78,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     try { localStorage.setItem("fo_crm_collapsed", JSON.stringify(next)); } catch { /* fine */ }
   };
   useEffect(() => {
-    try { const raw = localStorage.getItem("fo_crm_card_fields"); if (raw) setShow({ ...{ money: true, badges: true, tags: true, rep: true, title: true }, ...JSON.parse(raw) }); } catch { /* defaults */ }
+    try { const raw = localStorage.getItem("fo_crm_card_fields"); if (raw) setShow({ ...{ money: true, badges: true, tags: true, rep: true, repTop: false, title: true }, ...JSON.parse(raw) }); } catch { /* defaults */ }
   }, []);
   const toggleField = (k: FieldKey) => {
     const next = { ...show, [k]: !show[k] };
@@ -141,7 +169,10 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     onClick={() => router.push(`/crm/${c.id}`)}
                     className={`cursor-pointer rounded-xl bg-white p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${dragId === c.id ? "opacity-50" : ""}`}
                   >
-                    <div className="text-[14px] font-bold leading-snug text-slate-800">{c.contactName}</div>
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="text-[14px] font-bold leading-snug text-slate-800">{c.contactName}</div>
+                      {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
+                    </div>
                     {show.title && <div className="text-[11px] text-slate-500">{c.title}</div>}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {show.money && c.money && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{c.money}</span>}
@@ -153,8 +184,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       ))}
                     </div>
                     {show.rep && c.assignedTo && <div className="mt-1 text-[9px] font-semibold text-slate-400">👤 {c.assignedTo}</div>}
-                    {/* GHL-style quick actions (bottom-left) */}
-                    <div className="mt-1.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {/* GHL-style quick actions — popovers, zero page hops */}
+                    <div className="relative mt-1.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       {c.phone && (
                         <button
                           type="button"
@@ -163,10 +194,32 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                           className="grid h-7 w-7 place-items-center rounded-md bg-emerald-50 text-[12px] ring-1 ring-emerald-200 hover:bg-emerald-100"
                         >📞</button>
                       )}
-                      <a href={`/crm/${c.id}#tasks`} title="Add a task" className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">✅</a>
-                      <a href={`/crm/${c.id}#appts`} title="Book an appointment" className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">📅</a>
-                      <a href={`/crm/${c.id}#opp`} title="Edit tags" className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">🏷</a>
-                      {c.phone && <a href={`sms:${c.phone}`} title="Text" className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">💬</a>}
+                      <button type="button" title="Add a task" onClick={() => setQuick(quick?.id === c.id && quick.kind === "task" ? null : { id: c.id, contactId: c.contactId, kind: "task" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">✅</button>
+                      <button type="button" title="Book an appointment" onClick={() => setQuick(quick?.id === c.id && quick.kind === "appt" ? null : { id: c.id, contactId: c.contactId, kind: "appt" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">📅</button>
+                      <button type="button" title="Add a tag" onClick={() => setQuick(quick?.id === c.id && quick.kind === "tag" ? null : { id: c.id, kind: "tag" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">🏷</button>
+                      {canSms && c.phone && <button type="button" title="Text via our Telnyx number" onClick={() => setQuick(quick?.id === c.id && quick.kind === "sms" ? null : { id: c.id, contactId: c.contactId, kind: "sms", phone: c.phone })} className="grid h-7 w-7 place-items-center rounded-md bg-sky-50 text-[12px] ring-1 ring-sky-200 hover:bg-sky-100">💬</button>}
+                      {quick?.id === c.id && (
+                        <span className="absolute left-0 top-9 z-30 flex w-60 flex-col gap-1.5 rounded-xl bg-white p-2.5 shadow-xl ring-1 ring-slate-200">
+                          {quick.kind === "task" && (<>
+                            <input autoFocus value={qa.title} onChange={(e) => setQa({ ...qa, title: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submitQuick()} placeholder="Task…" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                            <input type="date" value={qa.due} onChange={(e) => setQa({ ...qa, due: e.target.value })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                          </>)}
+                          {quick.kind === "appt" && (<>
+                            <input autoFocus value={qa.title} onChange={(e) => setQa({ ...qa, title: e.target.value })} placeholder="Appointment…" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                            <input type="datetime-local" value={qa.when} onChange={(e) => setQa({ ...qa, when: e.target.value })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                          </>)}
+                          {quick.kind === "tag" && (
+                            <input autoFocus value={qa.tag} onChange={(e) => setQa({ ...qa, tag: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submitQuick()} placeholder="Tag… (Enter)" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                          )}
+                          {quick.kind === "sms" && (
+                            <textarea autoFocus value={qa.sms} onChange={(e) => setQa({ ...qa, sms: e.target.value })} rows={3} placeholder={`Text ${c.contactName.split(" ")[0]} from our Telnyx line…`} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                          )}
+                          <span className="flex gap-1.5">
+                            <button type="button" onClick={submitQuick} className="flex-1 rounded-lg bg-slate-900 px-2 py-1.5 text-xs font-bold text-white hover:bg-slate-700">{quick.kind === "sms" ? "Send SMS" : "Add"}</button>
+                            <button type="button" onClick={() => setQuick(null)} className="rounded-lg bg-slate-100 px-2 py-1.5 text-xs font-bold text-slate-500">✕</button>
+                          </span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
