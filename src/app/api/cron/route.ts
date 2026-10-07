@@ -406,10 +406,14 @@ export async function GET(request: Request) {
   // feed binds; names are what the tiles show.
   if (url.searchParams.get("mailkpifix") === "1") {
     const out: string[] = [];
+    const taken = async (key: string) => !!(await db.kpi.findFirst({ where: { key }, select: { id: true } }));
     const seller = await db.kpi.findFirst({ where: { name: { in: ["Mailers Sent", "Direct Mail Sent"] } } });
-    if (seller) { await db.kpi.update({ where: { id: seller.id }, data: { key: "seller_email_replies", name: "Seller Email Replies", emoji: "✉️", definition: "Sellers who replied by email — auto-fed from Direct REI email campaigns." } }); out.push(`${seller.key} → seller_email_replies`); }
-    const buyer = await db.kpi.findFirst({ where: { name: { in: ["Mail Responses", "Direct Mail Responses"] } } });
-    if (buyer) { await db.kpi.update({ where: { id: buyer.id }, data: { key: "buyer_email_replies", name: "Buyer Email Replies", emoji: "📨", definition: "Buyers who replied by email — auto-fed from Direct REI email campaigns." } }); out.push(`${buyer.key} → buyer_email_replies`); }
+    if (seller && !(await taken("seller_email_replies"))) { await db.kpi.update({ where: { id: seller.id }, data: { key: "seller_email_replies", name: "Seller Email Replies", emoji: "✉️", definition: "Sellers who replied by email — auto-fed from Direct REI email campaigns." } }); out.push(`${seller.key} → seller_email_replies`); }
+    const buyer = await db.kpi.findFirst({ where: { name: { in: ["Mail Responses", "Direct Mail Responses"] }, key: { notIn: ["seller_email_replies", "buyer_email_replies"] } } });
+    if (buyer) {
+      if (await taken("buyer_email_replies")) { await db.kpi.update({ where: { id: buyer.id }, data: { active: false } }); out.push(`${buyer.key} retired (duplicate mail tile)`); }
+      else { await db.kpi.update({ where: { id: buyer.id }, data: { key: "buyer_email_replies", name: "Buyer Email Replies", emoji: "📨", definition: "Buyers who replied by email — auto-fed from Direct REI email campaigns." } }); out.push(`${buyer.key} → buyer_email_replies`); }
+    }
     // the old land mail tile duplicates the repointed one — retire it
     const leftover = await db.kpi.findFirst({ where: { key: "land_mail_responses" } });
     if (leftover) { await db.kpi.update({ where: { id: leftover.id }, data: { active: false } }); out.push("land_mail_responses retired"); }
