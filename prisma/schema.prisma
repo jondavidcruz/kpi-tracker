@@ -1336,3 +1336,99 @@ model GeoCache {
   provider  String   @default("") // google | mapbox | nominatim
   createdAt DateTime @default(now())
 }
+
+// ════ Acquisitions CRM (Jon 2026-10-07: GHL replacement — sellers side) ════
+// Contacts hold PEOPLE; a contact can carry several opportunities (properties).
+// Everything that happens lands in CrmEvent — the GHL-style timeline.
+
+model CrmContact {
+  id         String    @id @default(cuid())
+  name       String
+  phone      String    @default("")
+  altPhone   String    @default("")
+  email      String    @default("")
+  address    String    @default("") // mailing / home
+  source     String    @default("") // PPL | Direct REI | GHL import | referral…
+  tags       String    @default("") // comma-separated
+  assignedTo String    @default("")
+  ghlId      String    @default("") // GoHighLevel contact id (import dedupe)
+  pinnedNote String    @default("") // always-visible summary line
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  opportunities CrmOpportunity[]
+
+  @@index([ghlId])
+  @@index([assignedTo])
+}
+
+model CrmOpportunity {
+  id               String     @id @default(cuid())
+  contactId        String
+  contact          CrmContact @relation(fields: [contactId], references: [id])
+  title            String // usually the property address
+  stage            String     @default("new") // lib/crm.ts CRM_STAGES
+  value            Float? // est. assignment fee / deal value
+  askPrice         Float? // what the seller wants
+  assignedTo       String     @default("")
+  tags             String     @default("")
+  nextFollowUp     String     @default("") // YYYY-MM-DD
+  devPricingSentAt DateTime? // starts the 24–48h developer clock
+  ghlId            String     @default("")
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  archivedAt       DateTime?
+
+  @@index([stage])
+  @@index([contactId])
+  @@index([ghlId])
+  @@index([assignedTo, nextFollowUp])
+}
+
+// Timeline rows: notes typed by the team + auto-logged calls/SMS/stage moves.
+model CrmEvent {
+  id        String   @id @default(cuid())
+  contactId String
+  oppId     String   @default("")
+  kind      String // note | call | sms | email | stage | task | appt | system
+  body      String   @default("")
+  meta      Json?
+  actor     String   @default("")
+  at        DateTime @default(now())
+
+  @@index([contactId, at])
+  @@index([oppId, at])
+}
+
+model CrmTask {
+  id         String    @id @default(cuid())
+  contactId  String    @default("")
+  oppId      String    @default("")
+  title      String
+  due        String    @default("") // YYYY-MM-DD (or YYYY-MM-DDTHH:mm)
+  assignedTo String    @default("")
+  doneAt     DateTime?
+  doneBy     String    @default("")
+  createdBy  String    @default("")
+  createdAt  DateTime  @default(now())
+
+  @@index([assignedTo, doneAt])
+  @@index([oppId])
+}
+
+model CrmAppointment {
+  id         String    @id @default(cuid())
+  contactId  String    @default("")
+  oppId      String    @default("")
+  title      String
+  at         DateTime
+  withWho    String    @default("")
+  note       String    @default("")
+  remindedAt DateTime? // the ~1h-before alarm already fired
+  createdBy  String    @default("")
+  createdAt  DateTime  @default(now())
+
+  @@index([at])
+  @@index([oppId])
+}

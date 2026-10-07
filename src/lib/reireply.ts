@@ -96,3 +96,8 @@ export async function listCrmUsers(): Promise<{ ok: boolean; status: number; use
   });
   return { ok: r.ok, status: r.status, users, raw: r.ok ? undefined : r.body };
 }
+
+/** Generic GET for migration jobs (e.g. pulling contact notes into the CRM). */
+export async function ghlGet(path: string, params?: Record<string, string>): Promise<GhlResult> {
+  return ghl(path, params);
+}

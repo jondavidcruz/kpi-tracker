@@ -80,6 +80,7 @@ export default function Sidebar({
       { href: "/culture", label: "Culture", Icon: PartyPopper },
     ] },
     { label: "Acquisitions", items: [
+      { href: "/crm", label: "Seller CRM", Icon: Phone },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
     ] },
     { label: "Dispositions", items: [

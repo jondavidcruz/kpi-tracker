@@ -392,6 +392,85 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", wouldCreate: report.created.length, wouldMatch: report.matched.length, touches: report.touches, dealSends: report.dealSends, newArchivedDeals: createdDealByAddr.size, dealLinks, created: report.created, matched: report.matched, skipped: report.skipped });
   }
 
+  // 📅 CRM appointment alarms — piggybacks on EVERY cron hit (≈20/day), so a
+  // reminder lands in the huddle chat within the hour before the appointment.
+  try {
+    const soon = await db.crmAppointment.findMany({ where: { remindedAt: null, at: { gte: new Date(), lte: new Date(Date.now() + 75 * 60_000) } }, take: 10 });
+    if (soon.length) {
+      const { sendHuddleChat } = await import("@/lib/notify");
+      for (const a of soon) {
+        const mins = Math.max(1, Math.round((a.at.getTime() - Date.now()) / 60_000));
+        await sendHuddleChat(`⏰ *Appointment in ${mins}m* — ${a.title} (${a.withWho})${a.note ? ` · ${a.note}` : ""}\nhttps://kpi-tracker-lovat.vercel.app/crm/${a.oppId}`);
+        await db.crmAppointment.update({ where: { id: a.id }, data: { remindedAt: new Date() } });
+      }
+    }
+  } catch { /* alarms never break a cron */ }
+
+  // One-time: pull GHL's OPEN opportunities + contacts (+ their notes) into
+  // the Seller CRM. ?ghlimport=1 dry / &commit=1 writes. Idempotent by ghlId.
+  if (url.searchParams.get("ghlimport") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const { searchOpportunities, ghlGet } = await import("@/lib/reireply");
+    const { AGENTS } = await import("@/lib/crm-sync");
+    const { logCrmEvent } = await import("@/lib/crm");
+    const PIPELINES = ["KkdpJx35dU4cLtYY9vXP", "8R4HDQD1nUGOUxGCxuCe", "Jm90sKZNvl8e5fKparhv"];
+    const repByCrm = new Map(AGENTS.map((a) => [a.crm, a.first]));
+    const users = await db.user.findMany({ where: { active: true }, select: { name: true } });
+    const fullName = (first: string) => users.find((u) => u.name.toLowerCase().startsWith(first))?.name ?? "";
+    type Row = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; value: number | null; rep: string; createdAt: string };
+    const rows: Row[] = [];
+    for (const pid of PIPELINES) {
+      const res = await searchOpportunities(pid);
+      if (!res.ok) continue;
+      const body = res.body as { opportunities?: Array<Record<string, unknown>> };
+      for (const o of body.opportunities ?? []) {
+        if (String(o.status ?? "") !== "open") continue;
+        const contact = (o.contact ?? {}) as { id?: string; name?: string; phone?: string; email?: string };
+        rows.push({
+          ghlOppId: String(o.id ?? ""), ghlContactId: String(contact.id ?? o.contactId ?? ""),
+          name: String(contact.name ?? o.name ?? "—"), phone: String(contact.phone ?? ""), email: String(contact.email ?? ""),
+          title: String(o.name ?? contact.name ?? "Imported opportunity"),
+          value: o.monetaryValue != null ? Number(o.monetaryValue) : null,
+          rep: fullName(repByCrm.get(String(o.assignedTo ?? "")) ?? ""),
+          createdAt: String(o.createdAt ?? ""),
+        });
+      }
+    }
+    let contacts = 0, opps = 0, notes = 0;
+    if (commit) {
+      const byGhlContact = new Map<string, string>(); // ghl contact id -> CrmContact id
+      for (const r of rows) {
+        if (!r.ghlOppId) continue;
+        let contactId = r.ghlContactId ? byGhlContact.get(r.ghlContactId) : undefined;
+        if (!contactId) {
+          const existing = r.ghlContactId ? await db.crmContact.findFirst({ where: { ghlId: r.ghlContactId } }) : null;
+          if (existing) contactId = existing.id;
+          else {
+            const created = await db.crmContact.create({ data: { name: r.name, phone: r.phone, email: r.email, source: "GHL import", assignedTo: r.rep, ghlId: r.ghlContactId } });
+            contactId = created.id; contacts++;
+            // pull that contact's GHL notes onto the timeline (best effort)
+            if (r.ghlContactId) {
+              const nres = await ghlGet(`/contacts/${r.ghlContactId}/notes`);
+              const nbody = nres.body as { notes?: Array<{ body?: string; dateAdded?: string }> };
+              for (const n of (nbody.notes ?? []).slice(0, 50)) {
+                if (!n.body) continue;
+                await db.crmEvent.create({ data: { contactId, kind: "note", body: String(n.body).slice(0, 2000), actor: "GHL import", at: n.dateAdded ? new Date(n.dateAdded) : new Date() } }).catch(() => {});
+                notes++;
+              }
+            }
+          }
+          if (r.ghlContactId) byGhlContact.set(r.ghlContactId, contactId);
+        }
+        const dupOpp = await db.crmOpportunity.findFirst({ where: { ghlId: r.ghlOppId } });
+        if (dupOpp) continue;
+        const opp = await db.crmOpportunity.create({ data: { contactId, title: r.title.slice(0, 160), stage: "contacted", value: r.value, assignedTo: r.rep, ghlId: r.ghlOppId, tags: "ghl-import" } });
+        await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: "Imported from GoHighLevel (open opportunity)", actor: "ghl-import" });
+        opps++;
+      }
+    }
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", openOpps: rows.length, contactsCreated: contacts, oppsCreated: opps, notesImported: notes, sample: rows.slice(0, 12) });
+  }
+
   // Read-only: GHL WON opportunities with the credited rep + value (Jon
   // 2026-10-07: see how much profit each rep has generated). ?ghlwon=1
   if (url.searchParams.get("ghlwon") === "1") {
