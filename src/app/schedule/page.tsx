@@ -508,6 +508,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             })}
           </Card>
           <p className="mt-1.5 text-[11px] text-slate-400">Green = working · amber = break · orange = lunch · red = power/internet outage · grey = not yet / done. The dark line marks now. Michelle &amp; Sharyn work 8–5 Mon–Thu (lunch 1–2) and 8–2 Fri; Marie takes one 15-min break.</p>
+          <p className="mt-1 text-[11px] font-semibold text-emerald-700">💻 Come in 5–10 minutes early for your systems check — log in, run your internet speed test, open your tools — so you&apos;re dialing at shift start. Early minutes are welcome but never counted toward pay (pay always starts at shift start).</p>
         </section>
       )}
 

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, canAccessCSuite, isOwner } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite, isOwner, isCSuitePerson } from "@/lib/auth";
+import { readTimecardEdits } from "@/lib/timecard-edits";
+import { verifyTimecardEditAction } from "@/app/actions";
 import { getAllUsers, getSettings } from "@/lib/data";
 import { todayStr, payPeriod, datesInRange } from "@/lib/date";
 import { workedMinutes, paidMinutes } from "@/lib/presence";
@@ -108,6 +110,11 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
   const editOutages = editTarget ? outages.filter((o) => o.userId === editUserId && o.date === editDate) : [];
   const hhmmOf = (at: Date) => new Intl.DateTimeFormat("en-GB", { timeZone: settings.orgTimezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(at));
 
+  // Non-C-suite edits (Marie) wait here for Jon/Viktoriia sign-off.
+  const meCsuite = isCSuitePerson(me);
+  const editLog = meCsuite ? await readTimecardEdits() : [];
+  const pendingEdits = editLog.filter((e) => !e.verifiedBy).slice(0, 20);
+
   const bonusByUser = new Map<string, typeof bonuses>();
   for (const b of bonuses) { const a = bonusByUser.get(b.userId) ?? []; a.push(b); bonusByUser.set(b.userId, a); }
   const offCovers = (uid: string, d: string) => timeOff.find((t) => t.userId === uid && t.startDate <= d && t.endDate >= d);
@@ -122,6 +129,28 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             <Link href={`/timecard?p=${off + 1}`} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-200">→</Link>
           </div>
         } />
+
+      {/* 🔍 Time edits awaiting C-suite sign-off (Marie can edit; leaders verify) */}
+      {meCsuite && pendingEdits.length > 0 && (
+        <Card className="border-l-4 border-indigo-400 p-4">
+          <div className="mb-1.5 text-sm font-bold text-slate-800">🔍 Time edits awaiting your sign-off ({pendingEdits.length})</div>
+          <div className="space-y-1">
+            {pendingEdits.map((e) => (
+              <div key={e.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-indigo-50/60 px-2.5 py-1.5 text-xs ring-1 ring-indigo-100">
+                <span className="font-bold text-slate-700">{e.by}</span>
+                <span className="text-slate-500">{e.action}:</span>
+                <span className="font-semibold text-slate-700">{e.detail}</span>
+                <span className="text-[10px] text-slate-400">{new Date(e.at).toLocaleString()}</span>
+                <form action={verifyTimecardEditAction} className="ml-auto">
+                  <input type="hidden" name="id" value={e.id} />
+                  <button className="rounded-md bg-indigo-600 px-2.5 py-0.5 text-[11px] font-bold text-white hover:bg-indigo-700">✓ Verify</button>
+                </form>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-slate-400">The change is already applied — verifying confirms a leader reviewed it. If one looks wrong, open that person&apos;s day (✎) and correct it.</p>
+        </Card>
+      )}
 
       {/* After-hours audit — pay already caps at shift end +15m; this shows WHO keeps
           staying past and whether the system saw any actual work in that time. */}

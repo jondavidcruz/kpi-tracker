@@ -392,6 +392,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", wouldCreate: report.created.length, wouldMatch: report.matched.length, touches: report.touches, dealSends: report.dealSends, newArchivedDeals: createdDealByAddr.size, dealLinks, created: report.created, matched: report.matched, skipped: report.skipped });
   }
 
+  // Read-only: GHL WON opportunities with the credited rep + value (Jon
+  // 2026-10-07: see how much profit each rep has generated). ?ghlwon=1
+  if (url.searchParams.get("ghlwon") === "1") {
+    const { searchOpportunities } = await import("@/lib/reireply");
+    const { AGENTS } = await import("@/lib/crm-sync");
+    const PIPELINES = ["KkdpJx35dU4cLtYY9vXP", "8R4HDQD1nUGOUxGCxuCe", "Jm90sKZNvl8e5fKparhv"];
+    const repByCrm = new Map(AGENTS.map((a) => [a.crm, a.first]));
+    const rows: Array<{ name: string; value: number; rep: string; wonAt: string; pipeline: string }> = [];
+    for (const pid of PIPELINES) {
+      const res = await searchOpportunities(pid);
+      if (!res.ok) continue;
+      const body = res.body as { opportunities?: Array<Record<string, unknown>> };
+      for (const o of body.opportunities ?? []) {
+        if (String(o.status ?? "") !== "won") continue;
+        const raw = (o.lastStatusChangeAt ?? o.lastStageChangeAt ?? o.updatedAt) as string | number | undefined;
+        const ms = typeof raw === "number" ? raw : Date.parse(String(raw ?? 0));
+        rows.push({
+          name: String(o.name ?? "—"),
+          value: Number(o.monetaryValue ?? 0),
+          rep: repByCrm.get(String(o.assignedTo ?? "")) ?? String(o.assignedTo ?? "unassigned"),
+          wonAt: Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString().slice(0, 10) : "",
+          pipeline: pid.slice(0, 6),
+        });
+      }
+    }
+    rows.sort((a, b) => b.value - a.value);
+    const perRep: Record<string, { deals: number; value: number }> = {};
+    for (const r of rows) { const p = (perRep[r.rep] ??= { deals: 0, value: 0 }); p.deals++; p.value += r.value; }
+    return NextResponse.json({ ok: true, won: rows.length, totalValue: rows.reduce((a, r) => a + r.value, 0), perRep, rows });
+  }
+
   // Read-only: every KPI's goal + scope — feeds goal-raise planning.
   if (url.searchParams.get("kpigoals") === "1") {
     const kpis = await db.kpi.findMany({

@@ -9,7 +9,7 @@ import { evaluateAndRecordAlerts } from "@/lib/alerts";
 import { buildPipDraft } from "@/lib/pip";
 import { getChannelConfig, sendEmail, sendEmailTo, alertEmailHtml, sendTeamChat, sendTimecardChat, sendCallAuditChat, postChatWebhook } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, isManager, isAdmin, isOwner, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, isOwner, isCSuitePerson, canCurateSoftware, canAccessMarketing, canAccessPayroll, canTrackTime } from "@/lib/auth";
 import { isExcusedReason } from "@/lib/alert-resolution";
 import type { DealLand } from "@/lib/deal-land";
 import type { BuyerLand } from "@/lib/buyer-land";
@@ -2665,6 +2665,40 @@ function orgTzDate(date: string, hhmm: string, tz: string): Date {
   return new Date(naive - (asUtc - naive));
 }
 
+// Non-C-suite time edits (e.g. Marie) land here for Jon/Viktoriia to verify
+// (Jon 2026-10-07: Marie can edit, but her edits need leader sign-off).
+async function logTimecardEdit(me: { name: string } | null, action: string, detail: string) {
+  const { TIMECARD_EDITS_CAT } = await import("@/lib/timecard-edits");
+  type TimecardEdit = import("@/lib/timecard-edits").TimecardEdit;
+  if (!me || isCSuitePerson(me as never)) return; // C-suite edits need no verification
+  const row = await db.resource.findFirst({ where: { category: TIMECARD_EDITS_CAT } });
+  let list: TimecardEdit[] = [];
+  try { list = JSON.parse(row?.description || "[]"); } catch { /* fresh */ }
+  list.unshift({ id: Math.random().toString(36).slice(2, 10), at: new Date().toISOString(), by: me.name, action, detail });
+  const description = JSON.stringify(list.slice(0, 200));
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { title: "timecard-edits", category: TIMECARD_EDITS_CAT, url: "", description } });
+}
+
+/** C-suite: sign off on a logged time edit. */
+export async function verifyTimecardEditAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isCSuitePerson(me)) return;
+  const { TIMECARD_EDITS_CAT } = await import("@/lib/timecard-edits");
+  type TimecardEdit = import("@/lib/timecard-edits").TimecardEdit;
+  const id = String(formData.get("id") ?? "");
+  const row = await db.resource.findFirst({ where: { category: TIMECARD_EDITS_CAT } });
+  if (!row || !id) return;
+  let list: TimecardEdit[] = [];
+  try { list = JSON.parse(row.description || "[]"); } catch { return; }
+  const e = list.find((x) => x.id === id);
+  if (!e) return;
+  e.verifiedBy = me.name;
+  e.verifiedAt = new Date().toISOString();
+  await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(list) } });
+  revalidatePath("/timecard");
+}
+
 export async function editPunchAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
@@ -2675,6 +2709,8 @@ export async function editPunchAction(formData: FormData) {
   if (!punch) return;
   const settings = await getSettings();
   await db.punch.update({ where: { id }, data: { at: orgTzDate(punch.date, hhmm, settings.orgTimezone) } });
+  const who = await db.user.findUnique({ where: { id: punch.userId }, select: { name: true } });
+  await logTimecardEdit(me, "edit punch", `${who?.name ?? punch.userId} · ${punch.date} · ${punch.kind} → ${hhmm}`);
   revalidatePath("/timecard");
 }
 
@@ -2689,6 +2725,8 @@ export async function addPunchAction(formData: FormData) {
   if (!["in", "out", "break_start", "break_end", "lunch_start", "lunch_end"].includes(kind)) return;
   const settings = await getSettings();
   await db.punch.create({ data: { userId, date, kind, at: orgTzDate(date, hhmm, settings.orgTimezone) } });
+  const addWho = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
+  await logTimecardEdit(me, "add punch", `${addWho?.name ?? userId} · ${date} · ${kind} @ ${hhmm}`);
   revalidatePath("/timecard");
 }
 
@@ -2696,7 +2734,13 @@ export async function deletePunchAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
   const id = String(formData.get("id") ?? "");
-  if (id) await db.punch.delete({ where: { id } }).catch(() => {});
+  if (!id) return;
+  const punch = await db.punch.findUnique({ where: { id } });
+  await db.punch.delete({ where: { id } }).catch(() => {});
+  if (punch) {
+    const who = await db.user.findUnique({ where: { id: punch.userId }, select: { name: true } });
+    await logTimecardEdit(me, "delete punch", `${who?.name ?? punch.userId} · ${punch.date} · ${punch.kind}`);
+  }
   revalidatePath("/timecard");
 }
 
