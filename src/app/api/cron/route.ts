@@ -813,13 +813,15 @@ export async function GET(request: Request) {
         opps++;
       }
       // archive earlier imports that came from pipelines Jon excluded
-      const keep = new Set(rows.map((r) => r.ghlOppId));
-      if (pipeIdx != null) { /* partial run — skip stray sweep */ } else
-      const stray = await db.crmOpportunity.findMany({ where: { ghlId: { not: "" }, archivedAt: null, tags: { contains: "ghl-import" } }, select: { id: true, ghlId: true } });
-      for (const s2 of stray) {
-        if (keep.has(s2.ghlId)) continue;
-        await db.crmOpportunity.update({ where: { id: s2.id }, data: { archivedAt: new Date(), stage: "nurture" } });
-        archived++;
+      // (skipped on partial &pipe=N runs — only a full sweep can judge strays)
+      if (pipeIdx == null) {
+        const keep = new Set(rows.map((r) => r.ghlOppId));
+        const stray = await db.crmOpportunity.findMany({ where: { ghlId: { not: "" }, archivedAt: null, tags: { contains: "ghl-import" } }, select: { id: true, ghlId: true } });
+        for (const s2 of stray) {
+          if (keep.has(s2.ghlId)) continue;
+          await db.crmOpportunity.update({ where: { id: s2.id }, data: { archivedAt: new Date(), stage: "nurture" } });
+          archived++;
+        }
       }
     }
     const perRep: Record<string, number> = {};
