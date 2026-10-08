@@ -211,6 +211,15 @@ export async function feedCrmBrowserCalls(date: string, tz: string): Promise<Rec
     if (!events.length) continue;
     const secs = events.reduce((a, e) => a + (Number((e.meta as { secs?: number } | null)?.secs) || 0), 0);
     if (secs > 0) { await upsertEntry(talkKey, u.id, date, secs); out[first] = secs; }
+    // War Room softphone also counts DIALS + CONNECTIONS for non-GHL reps
+    // (Nick dials here, not Direct REI — this is his only auto-tracking).
+    if (u.position === "acquisitions") {
+      const dials = events.length;
+      const connected = events.filter((e) => (Number((e.meta as { secs?: number } | null)?.secs) || 0) >= 60).length;
+      if (dials > 0) await upsertEntry("outbound_calls", u.id, date, dials);
+      if (connected > 0) await upsertEntry("connected_calls", u.id, date, connected);
+      out[`${first}|dials`] = dials;
+    }
   }
   return out;
 }

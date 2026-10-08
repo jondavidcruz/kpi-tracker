@@ -801,6 +801,25 @@ export async function GET(request: Request) {
     }
   }
 
+  // 📱 Nick's manual-dial targets (?nicktargets=1): he's 5h on an iPhone with
+  // no dialer (new acq members don't get system licenses) — the 140/100
+  // auto-dialer goals were impossible. Standing per-rep overrides.
+  if (url.searchParams.get("nicktargets") === "1") {
+    const nick = await db.user.findFirst({ where: { active: true, OR: [{ name: { startsWith: "Nick", mode: "insensitive" } }, { name: { startsWith: "Nicholas", mode: "insensitive" } }] }, select: { id: true, name: true } });
+    if (!nick) return NextResponse.json({ ok: false, error: "no Nick user" });
+    const GOALS: Record<string, number> = { outbound_calls: 60, connected_calls: 15 };
+    const set: Record<string, number> = {};
+    for (const [key, goalValue] of Object.entries(GOALS)) {
+      const kpi = await db.kpi.findUnique({ where: { key }, select: { id: true } });
+      if (!kpi) continue;
+      const existing = await db.target.findFirst({ where: { kpiId: kpi.id, userId: nick.id, period: null } });
+      if (existing) await db.target.update({ where: { id: existing.id }, data: { goalValue } });
+      else await db.target.create({ data: { kpiId: kpi.id, userId: nick.id, period: null, goalValue } });
+      set[key] = goalValue;
+    }
+    return NextResponse.json({ ok: true, user: nick.name, set });
+  }
+
   // 📎 Signed-doc puller (?pdpull=1, daily cron): PandaDoc completed docs from
   // the last 7 days → signed PDF saved to the Shared Drive "Deal Files"
   // folder → 📎 file event on the matching OPPORTUNITY (metadata.oppId from
