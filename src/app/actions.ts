@@ -395,9 +395,14 @@ export async function submitTicket(formData: FormData) {
     redirect("/tickets?empty=1");
   }
 
-  await db.ticket.create({
+  const ticket = await db.ticket.create({
     data: { submittedBy: me.name, userId: me.id, title, body, area, severity, status: "new" },
   });
+  // instant auto-acknowledgement in the ticket's chat thread (iSpeed-style)
+  try {
+    const { appendTicketMsg, AUTO_ACK } = await import("@/lib/ticket-chat");
+    await appendTicketMsg(ticket.id, { ...AUTO_ACK, at: new Date().toISOString() });
+  } catch { /* chat is best-effort */ }
 
   // Ping the admins so the queue gets watched. Best-effort; never blocks the save.
   try {
@@ -442,6 +447,37 @@ export async function setTicketStatus(formData: FormData) {
     where: { id },
     data: { status, ...(adminNote ? { adminNote } : {}) },
   });
+  revalidatePath("/tickets");
+}
+
+/** Reply inside a ticket's chat thread (iSpeed-style). Owner of the ticket or a manager. */
+export async function ticketReplyAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const text = String(formData.get("text") ?? "").trim().slice(0, 1500);
+  if (!id || !text) return;
+  const t = await db.ticket.findUnique({ where: { id }, select: { userId: true } });
+  if (!t || (t.userId !== me.id && !isManager(me))) return;
+  const { appendTicketMsg } = await import("@/lib/ticket-chat");
+  await appendTicketMsg(id, { by: me.name, at: new Date().toISOString(), text });
+  revalidatePath("/tickets");
+}
+
+/** Escalate a ticket for senior review (max 3 times) — pings the admin chat. */
+export async function ticketEscalateAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 300);
+  if (!id || !reason) return;
+  const t = await db.ticket.findUnique({ where: { id }, select: { userId: true, title: true } });
+  if (!t || (t.userId !== me.id && !isManager(me))) return;
+  const { appendTicketMsg, readTicketChats, escalationCount } = await import("@/lib/ticket-chat");
+  const msgs = (await readTicketChats())[id] ?? [];
+  if (escalationCount(msgs) >= 3) return;
+  await appendTicketMsg(id, { by: me.name, at: new Date().toISOString(), text: `⚠️ ESCALATED: ${reason}`, kind: "escalation" });
+  try { await sendEmail(`⚠️ Ticket ESCALATED by ${me.name}: ${t.title}`, `<p><strong>${me.name}</strong> escalated their ticket for senior review.</p><p><strong>Reason:</strong> ${reason}</p><p>Open the triage queue: https://kpi-tracker-lovat.vercel.app/tickets</p>`); } catch { /* best-effort */ }
   revalidatePath("/tickets");
 }
 

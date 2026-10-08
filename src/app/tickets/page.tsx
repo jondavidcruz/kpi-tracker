@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { submitTicket, setTicketStatus, deleteTicket } from "@/app/actions";
+import { submitTicket, setTicketStatus, deleteTicket, ticketReplyAction, ticketEscalateAction } from "@/app/actions";
+import { readTicketChats, escalationCount, type TicketMsg } from "@/lib/ticket-chat";
 import { Card, SectionTitle } from "@/components/ui";
 import HubTabs from "@/components/HubTabs";
 import TicketSubmitButton from "@/components/TicketSubmitButton";
@@ -11,13 +12,16 @@ const AREAS = ["Enter KPIs", "Dashboard", "Alerts", "Speed test", "Deals", "Logi
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lbl = "mb-0.5 block text-[11px] font-semibold text-slate-500";
 
+// iSpeedToLead-style status pills (Jon 2026-10-08)
 const STATUS_META: Record<string, { label: string; cls: string }> = {
-  new: { label: "Awaiting your approval", cls: "bg-amber-100 text-amber-800" },
-  approved: { label: "Approved — queued", cls: "bg-sky-100 text-sky-800" },
-  in_progress: { label: "Being worked on", cls: "bg-violet-100 text-violet-800" },
-  resolved: { label: "Resolved", cls: "bg-emerald-100 text-emerald-700" },
-  declined: { label: "Declined", cls: "bg-slate-200 text-slate-600" },
+  new: { label: "VIEWED BY SUPPORT", cls: "bg-indigo-100 text-indigo-700" },
+  approved: { label: "APPROVED — QUEUED", cls: "bg-sky-100 text-sky-800" },
+  in_progress: { label: "IN PROGRESS", cls: "bg-violet-100 text-violet-800" },
+  resolved: { label: "SOLVED", cls: "bg-emerald-100 text-emerald-700" },
+  declined: { label: "DECLINED", cls: "bg-rose-100 text-rose-700" },
 };
+
+const fmtD = (d: Date) => d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 export default async function TicketsPage({ searchParams }: { searchParams: Promise<{ sent?: string; empty?: string }> }) {
   const me = await getCurrentUser();
@@ -33,6 +37,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
   const allTickets = manager
     ? await db.ticket.findMany({ orderBy: [{ status: "asc" }, { createdAt: "desc" }], include: { user: true }, take: 100 })
     : [];
+  const chats = await readTicketChats();
 
   // The diagnose queue = approved + in_progress; "new" awaits approval.
   const queue = { new: [] as typeof allTickets, active: [] as typeof allTickets, done: [] as typeof allTickets };
@@ -93,16 +98,16 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
           <SectionTitle title="Triage queue" subtitle="You approve what gets worked on. Reps can&apos;t move tickets — only you can." accent="bg-violet-400" />
 
           <TicketGroup title={`⏳ Awaiting approval (${queue.new.length})`} empty="Nothing waiting.">
-            {queue.new.map((t) => <AdminTicket key={t.id} t={t} stage="new" />)}
+            {queue.new.map((t) => <AdminTicket key={t.id} t={t} stage="new" thread={<TicketThread id={t.id} msgs={chats[t.id] ?? []} meName={me.name} status={t.status} />} />)}
           </TicketGroup>
 
           <TicketGroup title={`🔧 Approved / in progress (${queue.active.length})`} empty="Queue is clear.">
-            {queue.active.map((t) => <AdminTicket key={t.id} t={t} stage="active" />)}
+            {queue.active.map((t) => <AdminTicket key={t.id} t={t} stage="active" thread={<TicketThread id={t.id} msgs={chats[t.id] ?? []} meName={me.name} status={t.status} />} />)}
           </TicketGroup>
 
           {queue.done.length > 0 && (
             <TicketGroup title="✅ Resolved / declined" empty="">
-              {queue.done.map((t) => <AdminTicket key={t.id} t={t} stage="done" />)}
+              {queue.done.map((t) => <AdminTicket key={t.id} t={t} stage="done" thread={<TicketThread id={t.id} msgs={chats[t.id] ?? []} meName={me.name} status={t.status} />} />)}
             </TicketGroup>
           )}
         </section>
@@ -115,22 +120,85 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
           <Card className="p-8 text-center text-slate-400">You haven&apos;t filed any tickets yet.</Card>
         ) : (
           <div className="space-y-2">
+            {/* iSpeed-style header row */}
+            <div className="hidden grid-cols-[90px_1fr_120px_150px_150px_150px] gap-2 px-4 text-[10px] font-extrabold uppercase tracking-wide text-slate-400 sm:grid">
+              <span>Ticket ID</span><span>Subject</span><span>Category</span><span>Submitted</span><span>Last message</span><span>Status</span>
+            </div>
             {myTickets.map((t) => {
               const m = STATUS_META[t.status] ?? STATUS_META.new;
+              const msgs = chats[t.id] ?? [];
               return (
-                <Card key={t.id} className="p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-800">{t.title}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${m.cls}`}>{m.label}</span>
-                  </div>
-                  {t.body && <p className="mt-1 whitespace-pre-line text-sm text-slate-500">{t.body}</p>}
-                  {t.adminNote && <p className="mt-2 rounded-md bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 ring-1 ring-slate-100"><strong>Note from Jon:</strong> {t.adminNote}</p>}
+                <Card key={t.id} className="p-0">
+                  <details>
+                    <summary className="cursor-pointer list-none px-4 py-3 hover:bg-slate-50">
+                      <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[90px_1fr_120px_150px_150px_150px]">
+                        <span className="font-mono text-xs font-bold text-slate-500">#{t.id.slice(-6).toUpperCase()}</span>
+                        <span className="truncate font-semibold text-slate-800">{t.title}</span>
+                        <span className="text-xs text-slate-500">{t.area || "—"}</span>
+                        <span className="text-xs text-slate-400">{fmtD(t.createdAt)}</span>
+                        <span className="text-xs text-slate-400">{fmtD(t.updatedAt)}</span>
+                        <span className={`w-fit rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${m.cls}`}>{m.label}{t.status === "resolved" ? ` · ${t.updatedAt.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })}` : ""}</span>
+                      </div>
+                    </summary>
+                    <div className="space-y-3 border-t border-slate-100 px-4 py-3">
+                      {t.body && <p className="whitespace-pre-line text-sm text-slate-600">{t.body}</p>}
+                      {t.adminNote && <p className="rounded-md bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 ring-1 ring-slate-100"><strong>Resolution note:</strong> {t.adminNote}</p>}
+                      <TicketThread id={t.id} msgs={msgs} meName={me.name} status={t.status} />
+                    </div>
+                  </details>
                 </Card>
               );
             })}
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+// 💬 Support-chat thread (iSpeedToLead-style): gray support bubbles, your
+// messages to the right, reply box, and an escalation panel (max 3).
+function TicketThread({ id, msgs, meName, status }: { id: string; msgs: TicketMsg[]; meName: string; status: string }) {
+  const escalations = escalationCount(msgs);
+  return (
+    <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
+      <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
+        <div className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">💬 Chat with support</div>
+        <div className="max-h-72 space-y-2 overflow-y-auto">
+          {msgs.length === 0 && <p className="text-xs text-slate-400">No messages yet.</p>}
+          {msgs.map((msg, i) => {
+            const mine = msg.by === meName;
+            return (
+              <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs ${msg.kind === "escalation" ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200" : mine ? "bg-brand-navy text-white" : "bg-white text-slate-700 ring-1 ring-slate-200"}`}>
+                  <div className={`mb-0.5 text-[9px] font-bold ${mine ? "text-white/70" : "text-slate-400"}`}>{msg.by} · {new Date(msg.at).toLocaleString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+                  <div className="whitespace-pre-line">{msg.text}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <form action={ticketReplyAction} className="mt-2 flex gap-2">
+          <input type="hidden" name="id" value={id} />
+          <input name="text" placeholder="Type here…" className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs" />
+          <button className="rounded-lg bg-red-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-red-700">Send</button>
+        </form>
+      </div>
+      {status !== "resolved" && (
+        <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+          <div className="text-xs font-extrabold text-slate-800">Not happy with the progress?</div>
+          <p className="mt-1 text-[11px] text-slate-500">Escalate for a senior review — Jon gets pinged directly. Each ticket can be escalated up to 3 times ({3 - escalations} left).</p>
+          {escalations < 3 ? (
+            <form action={ticketEscalateAction} className="mt-2 space-y-2">
+              <input type="hidden" name="id" value={id} />
+              <textarea name="reason" required rows={2} maxLength={300} placeholder="Enter your reason for escalation *" className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+              <button className="w-full rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-300">Escalate my ticket</button>
+            </form>
+          ) : (
+            <p className="mt-2 text-[11px] font-semibold text-amber-600">Escalation limit reached — Jon has been pinged 3 times.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -146,7 +214,7 @@ function TicketGroup({ title, empty, children }: { title: string; empty: string;
   );
 }
 
-function AdminTicket({ t, stage }: { t: { id: string; title: string; body: string; area: string; severity: string; submittedBy: string; status: string; adminNote: string; createdAt: Date }; stage: "new" | "active" | "done" }) {
+function AdminTicket({ t, stage, thread }: { t: { id: string; title: string; body: string; area: string; severity: string; submittedBy: string; status: string; adminNote: string; createdAt: Date }; stage: "new" | "active" | "done"; thread?: React.ReactNode }) {
   const sevCls = t.severity === "blocking" ? "bg-red-100 text-red-700" : t.severity === "minor" ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700";
   return (
     <Card className="p-4">
@@ -166,6 +234,8 @@ function AdminTicket({ t, stage }: { t: { id: string; title: string; body: strin
           <button className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 ring-1 ring-slate-200 hover:bg-red-50 hover:text-red-600 hover:ring-red-200" title="Permanently delete this ticket">🗑 Delete</button>
         </form>
       </div>
+
+      {thread && <details className="mt-3 border-t border-slate-100 pt-3"><summary className="cursor-pointer text-xs font-bold text-slate-500">💬 Chat with {t.submittedBy}</summary><div className="mt-2">{thread}</div></details>}
 
       <form action={setTicketStatus} className="mt-3 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
         <input type="hidden" name="id" value={t.id} />

@@ -18,7 +18,7 @@ type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string };
 
 const areaCode = (e164: string) => e164.replace(/\D/g, "").replace(/^1/, "").slice(0, 3);
 
-export default function DialPad() {
+export default function DialPad({ floating = false }: { floating?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"keypad" | "recents" | "contacts" | "queue">("keypad");
   const [num, setNum] = useState("");
@@ -255,11 +255,11 @@ export default function DialPad() {
   );
 
   return (
-    <span className="relative">
+    <span className={floating ? "fixed bottom-5 left-5 z-40" : "relative"}>
       <audio ref={audioRef} autoPlay style={{ display: "none" }} />
-      <button onClick={() => setOpen((v) => !v)} title="Phone — call from your browser" className={`grid h-8 w-8 place-items-center rounded-full text-sm ${state === "active" ? "bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>📞</button>
+      <button onClick={() => setOpen((v) => !v)} title="Phone — call from your browser" className={`grid place-items-center rounded-full ${floating ? "h-12 w-12 text-lg shadow-xl ring-2 ring-white/70" : "h-8 w-8 text-sm"} ${state === "active" ? "bg-emerald-500 text-white" : incoming ? "animate-pulse bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>📞</button>
       {open && (
-        <span className="absolute right-0 top-10 z-40 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+        <span className={`absolute z-40 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 ${floating ? "bottom-14 left-0" : "right-0 top-10"}`}>
           {/* header: Calling From */}
           <span className="flex items-center justify-between gap-2 border-b border-slate-100 px-3.5 py-2.5">
             <span>

@@ -877,6 +877,17 @@ export async function GET(request: Request) {
     } catch { return NextResponse.json({ ok: false, error: "bad SA json" }); }
   }
 
+  // 💵 Offer capture (?offerscan=1, daily cron — live now that Gmail API is
+  // enabled): scans the dispo inboxes for buyer emails with $ amounts, matches
+  // them to live DS deals by address, racks the offer on the opportunity
+  // (formData.__offers) + rack-&-stack task + stamps the vetted buyer's log.
+  if (url.searchParams.get("offerscan") === "1") {
+    const { scanOffers } = await import("@/lib/gmail-offers");
+    const boxes = (url.searchParams.get("as") ?? "info@freedom-offers.com,sharyn@freedom-offers.com,marie@freedom-offers.com").split(",").map((s) => s.trim()).filter(Boolean);
+    const out = await scanOffers(boxes);
+    return NextResponse.json({ ok: true, ...out });
+  }
+
   // 📬 Gmail DWD test (?gmailtest=1&as=info@freedom-offers.com): mints a
   // delegated token and reads the mailbox profile — proves the Admin-console
   // delegation entry is correct before the offer-scan ships.
@@ -1148,6 +1159,49 @@ export async function GET(request: Request) {
     }
     if (commit) await db.resource.update({ where: { id: plRow.id }, data: { description: JSON.stringify(defs) } });
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", moved, newDefs: defs.map((d) => ({ name: d.name, stages: d.stages.length })) });
+  }
+
+  // 🤖 Flag auto-reasons (?flagreasons=1, daily cron — Jon 2026-10-08: "Marie
+  // isn't filling reasons; can the system see why?"): open flags from the last
+  // 3 days with no rep reason get a system analysis from real signals — hours
+  // actually worked (punches), dev-day focus, internet-speed logs, entry gaps.
+  // Prefixed 🤖 so the rep can overwrite it with the human story anytime.
+  if (url.searchParams.get("flagreasons") === "1") {
+    const since = new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10);
+    const open = await db.alert.findMany({
+      where: { status: "open", date: { gte: since }, OR: [{ repReason: null }, { repReason: "" }] },
+      include: { user: { select: { id: true, name: true } }, kpi: { select: { name: true, key: true } } },
+      take: 60,
+    });
+    let filled = 0;
+    const notes: string[] = [];
+    for (const a of open) {
+      if (!a.user) continue;
+      const bits: string[] = [];
+      // hours actually worked that day
+      const punches = await db.punch.findMany({ where: { userId: a.user.id, date: a.date }, orderBy: { at: "asc" } });
+      const ins = punches.filter((p) => p.kind === "in");
+      const outs = punches.filter((p) => p.kind === "out");
+      if (punches.length === 0) bits.push("no time-card punches that day (possibly absent or forgot to clock in)");
+      else if (ins.length && outs.length) {
+        const worked = (outs[outs.length - 1].at.getTime() - ins[0].at.getTime()) / 3_600_000;
+        if (worked < 4) bits.push(`short day — ~${worked.toFixed(1)}h on the clock`);
+        else bits.push(`~${worked.toFixed(1)}h on the clock`);
+      } else if (ins.length && !outs.length) bits.push("clocked in but never clocked out — time card incomplete");
+      // developer-day focus flips the scorecard
+      const standup = await db.standup.findUnique({ where: { userId_date: { userId: a.user.id, date: a.date } } }).catch(() => null);
+      if (standup?.focus === "developer") bits.push("developer/luxury outreach day — dialer KPIs weren't the focus");
+      // internet-speed context for the speed KPI
+      if (/internet|speed/i.test(a.kpi.name) && a.actual > 0) bits.push(`measured ${a.actual} Mbps vs ${a.expected} expected — connection problem, not effort`);
+      // zero vs partial
+      if (a.actual === 0 && punches.length > 0) bits.push(`worked but logged 0 — likely forgot to enter this KPI`);
+      else if (a.actual > 0 && a.actual < a.expected) bits.push(`partial: ${a.actual} of ${a.expected}`);
+      const reason = `🤖 auto-analysis: ${bits.length ? bits.join(" · ") : `${a.actual} vs ${a.expected} expected — no obvious system cause (time card + focus look normal)`}`;
+      await db.alert.update({ where: { id: a.id }, data: { repReason: reason.slice(0, 500) } });
+      filled++;
+      notes.push(`${a.user.name.split(" ")[0]} ${a.kpi.name} ${a.date}`);
+    }
+    return NextResponse.json({ ok: true, filled, flags: notes });
   }
 
   // 🧹 One-time Direct REI flood rollback (?dreicleanup=1, Jon 2026-10-08):

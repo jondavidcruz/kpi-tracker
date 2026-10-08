@@ -6,7 +6,6 @@ import { todayStr } from "@/lib/date";
 import { readPipelines, parseTags } from "@/lib/crm";
 import { Card, SectionTitle } from "@/components/ui";
 import CrmKanban, { type CrmCard } from "@/components/CrmKanban";
-import DialPad from "@/components/DialPad";
 import PipelineSelect from "@/components/PipelineSelect";
 import SelectAllBox from "@/components/SelectAllBox";
 import CrmFilterBar from "@/components/CrmFilterBar";
@@ -139,7 +138,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         accent="bg-brand-gold"
         right={
           <div className="flex items-center gap-2">
-            {comms.call && <DialPad />}
+            
             <Link href="/crm/conversations" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">💬 Conversations</Link>
             <Link href={`/crm?view=kanban${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "kanban" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>🗂 Board</Link>
             <Link href={`/crm?view=list${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "list" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📋 List</Link>

@@ -153,6 +153,21 @@ export default async function AppShell({ children }: { children: React.ReactNode
       {/* Non-critical client widgets (Cortana, team availability, heartbeat) — lazy-loaded
           after first paint. Everyone sees the availability window. */}
       <ClientWidgets showPresence />
+      {/* ☎️ App-wide softphone (Jon 2026-10-08: "make it ring into the entire
+          war room") — ONE registered Telnyx client, mounted globally so inbound
+          calls ring on every page, not just the CRM tab. Bottom-left (Cortana
+          owns bottom-right). */}
+      <GlobalPhone me={me} />
     </div>
   );
+}
+
+async function GlobalPhone({ me }: { me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }) {
+  try {
+    const { commsFor } = await import("@/lib/crm-comms");
+    const comms = await commsFor(me);
+    if (!comms.call) return null;
+    const { default: DialPad } = await import("./DialPad");
+    return <DialPad floating />;
+  } catch { return null; }
 }

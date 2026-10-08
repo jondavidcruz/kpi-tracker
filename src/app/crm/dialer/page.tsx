@@ -6,7 +6,6 @@ import { todayStr } from "@/lib/date";
 import { commsFor } from "@/lib/crm-comms";
 import { Card, SectionTitle } from "@/components/ui";
 import { stripHtml } from "@/lib/crm-shared";
-import DialPad from "@/components/DialPad";
 import CallButton from "@/components/CallButton";
 import { dialerOutcomeAction } from "../actions";
 
@@ -47,7 +46,7 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
         title="☎️ Power Dialer"
         subtitle="Your call queue, priority-ordered: due follow-ups → quiet leads. Call, log the outcome, next."
         accent="bg-emerald-500"
-        right={<span className="flex items-center gap-2">{comms.call && <DialPad />}<Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">← Pipeline</Link></span>}
+        right={<span className="flex items-center gap-2"><Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">← Pipeline</Link></span>}
       />
 
       {!cur ? (

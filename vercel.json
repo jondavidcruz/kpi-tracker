@@ -203,6 +203,14 @@
     {
       "path": "/api/cron?perfsnap=1",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron?flagreasons=1",
+      "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron?offerscan=1",
+      "schedule": "0 18 * * *"
     }
   ]
 }

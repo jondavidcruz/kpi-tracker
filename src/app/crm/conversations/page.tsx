@@ -5,7 +5,6 @@ import { Card, SectionTitle } from "@/components/ui";
 import { stripHtml, KIND_EMOJI } from "@/lib/crm-shared";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets } from "@/lib/crm-templates";
-import DialPad from "@/components/DialPad";
 import CallButton from "@/components/CallButton";
 import ConvComposerTabs from "@/components/ConvComposerTabs";
 
@@ -77,7 +76,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
         accent="bg-brand-gold"
         right={
           <div className="flex items-center gap-2">
-            {comms.call && <DialPad />}
+            
             <Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Back to pipeline</Link>
           </div>
         }

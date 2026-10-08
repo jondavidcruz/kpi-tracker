@@ -25,6 +25,7 @@ type Payload = {
   smsHistory: Array<{ body: string; inbound: boolean; at: string }>;
   emailHistory: Array<{ body: string; inbound: boolean; at: string; actor?: string }>;
   underwrites: Array<{ tab: string; mao: number; fee: number; confidence: number; by: string; at: string }>;
+  offers?: Array<{ at: string; from: string; amount: number; subject: string }>;
   contact: { id: string; name: string; phone: string; altPhone: string; email: string; altEmail: string; address: string; pinnedNote: string; tags: string };
   tasks: Array<{ id: string; title: string; due: string }>;
   appts: Array<{ id: string; title: string; at: string; withWho: string }>;
@@ -410,6 +411,20 @@ function UnderwriteBlock({ d }: { d: Payload }) {
               <div className="text-[10px] text-slate-400">fee {money(u.fee)} · {u.confidence}% conf · {u.by.split(" ")[0]} {new Date(u.at).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}</div>
             </a>
           ))}
+        </div>
+      )}
+      {(d.offers ?? []).length > 0 && (
+        <div className="rounded-lg bg-white p-2.5 ring-1 ring-emerald-200">
+          <div className="text-[11px] font-extrabold text-emerald-800">💵 Buyer offers received (auto-captured from email)</div>
+          <div className="mt-1 space-y-1">
+            {(d.offers ?? []).slice(0, 6).map((o, i) => (
+              <div key={i} className="flex items-baseline gap-2 text-[11px]">
+                <span className="font-extrabold text-slate-900">{money(o.amount)}</span>
+                <span className="min-w-0 flex-1 truncate text-slate-500">{o.from}</span>
+                <span className="text-slate-400">{new Date(o.at).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {(ourOffer > 0 || sellerNum > 0 || resp) && (

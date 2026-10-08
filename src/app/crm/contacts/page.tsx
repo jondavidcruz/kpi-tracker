@@ -5,7 +5,6 @@ import { Card, SectionTitle } from "@/components/ui";
 import { parseTags, CRM_STAGES } from "@/lib/crm-shared";
 import SelectAllBox from "@/components/SelectAllBox";
 import { bulkContactsAction } from "../actions";
-import DialPad from "@/components/DialPad";
 import CallButton from "@/components/CallButton";
 import { commsFor } from "@/lib/crm-comms";
 import { readPipelines } from "@/lib/crm";
@@ -53,7 +52,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-4">
       <SectionTitle title="👤 Contacts" subtitle={`${total.toLocaleString()} sellers — search by name, phone, email, property or tag.`} accent="bg-brand-gold"
-        right={<span className="flex items-center gap-2">{comms.call && <DialPad />}<Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link></span>} />
+        right={<span className="flex items-center gap-2"><Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link></span>} />
 
       <Card className="space-y-2 p-3">
         <form className="flex flex-wrap items-center gap-2" action="/crm/contacts" method="get">

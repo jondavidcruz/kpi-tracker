@@ -72,12 +72,18 @@ export async function createWebsiteLead(lead: WebsiteLead) {
 
   const formKey = lead.propertyType === "land" ? "land" : "property";
   const priceNum = Number(lead.priceWanted.replace(/[^\d.]/g, "")) || null;
+  // Land in the OWNER'S pipeline (Jon 2026-10-08: "I don't see the test leads
+  // sent to Michelle") — a lead assigned to Michelle belongs on HER board's
+  // first stage, not the generic War Room tab.
+  const { readPipelines } = await import("@/lib/crm");
+  const repFirst = (existing?.assignedTo || owner).trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const repPipe = repFirst ? (await readPipelines()).find((p) => p.name.toLowerCase().includes(repFirst)) : undefined;
   const opp = await db.crmOpportunity.create({
     data: {
       contactId: contact.id,
       title: lead.address,
-      pipeline: "",
-      stage: "new",
+      pipeline: repPipe?.name ?? "",
+      stage: repPipe?.stages[0]?.key ?? "new",
       tags: "website",
       assignedTo: existing?.assignedTo || owner,
       askPrice: priceNum,
@@ -88,6 +94,22 @@ export async function createWebsiteLead(lead: WebsiteLead) {
     data: { oppId: opp.id, contactId: contact.id, title: `🌐 WEBSITE LEAD — call ${lead.name} NOW (they asked for an offer)`, due: new Date().toISOString().slice(0, 10), assignedTo: existing?.assignedTo || owner, createdBy: "website" },
   }).catch(() => {});
   if (lead.smsConsent) sendWelcomeText({ contactId: contact.id, oppId: opp.id, phone: lead.phone, name: lead.name, repName: existing?.assignedTo || owner || "our team" }).catch(() => {});
+  // ✉️ Welcome email (Jon 2026-10-08: "is there an email automation?" — now
+  // there is): consent-gated, mirrors the text, logged on the lead's thread.
+  if (lead.contactConsent && lead.email) {
+    (async () => {
+      const { sendEmailTo } = await import("@/lib/notify");
+      const rep = (existing?.assignedTo || owner || "our team").split(" ")[0];
+      const first = lead.name.trim().split(/\s+/)[0] || "there";
+      const ok = await sendEmailTo(
+        [lead.email],
+        "We got your request — your private offer is in motion",
+        `<p>Hi ${first},</p><p>Thanks for reaching out to <b>Freedom Offers</b> about <b>${lead.address}</b>. We received your request and ${rep} from our team will call you within the next few minutes from our number — please save it when the call comes in.</p><p>We'll prepare your private offer within 24 hours. No listings, no showings, no fees — and if you ever prefer email, just reply here.</p><p>— The Freedom Offers Team<br/>freedom-offers.com</p>`,
+      );
+      const { logCrmEvent } = await import("@/lib/crm");
+      await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "email", body: `➡️ Us: welcome email (we got your request — offer within 24h)${ok ? "" : " (SEND FAILED)"}`, actor: "auto-welcome" }).catch(() => {});
+    })().catch(() => {});
+  }
 
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: "Website lead — private offer requested", actor: "website" });
   await logCrmEvent({

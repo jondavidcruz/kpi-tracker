@@ -150,7 +150,8 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                   <span className="block text-xs text-slate-400">{positionLabel(u.position)} · {u.role}</span>
                 </span>
                 {owner && <span className="hidden text-sm font-extrabold text-violet-700 sm:block">{usd(rev0.revenue)} <span className="text-[10px] font-semibold text-violet-400">{tierFor(rev0.revenue).current.tier}</span></span>}
-                {dueReview && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">⭐️ Review</span>}
+                <Link href={`/team-roster/review?u=${u.id}`} className="rounded-full bg-violet-100 px-2.5 py-0.5 text-[11px] font-bold text-violet-700 hover:bg-violet-200">📋 Review</Link>
+                {dueReview && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">⭐️ Due</span>}
                 <span className="text-slate-300 transition group-open:rotate-90">›</span>
               </summary>
               <div className="border-t border-slate-100 p-5">
