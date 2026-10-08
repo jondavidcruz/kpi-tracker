@@ -2,7 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
-import { addCrmTaskAction, toggleCrmTaskAction, setTaskPriorityAction, linkTaskAction, readTaskPriorities } from "../actions";
+import { addCrmTaskAction, toggleCrmTaskAction, setTaskPriorityAction, linkTaskAction, readTaskPriorities, saveTaskNoteAction } from "../actions";
+import { readTaskNotes } from "@/lib/task-notes";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
   const cname = new Map(contacts.map((c) => [c.id, c]));
   // priority colors (Jon 2026-10-08): 🔴 urgent · 🟡 pending (default) · ⚪ low
   const prios = await readTaskPriorities();
+  const notes = await readTaskNotes();
   const prioOrder = (id: string) => (prios[id] === "urgent" ? 0 : prios[id] === "low" ? 2 : 1);
   if (v !== "done") tasks.sort((a, b) => prioOrder(a.id) - prioOrder(b.id) || (a.due || "9999").localeCompare(b.due || "9999"));
   const reps = manager ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
@@ -65,6 +67,7 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
           <input type="hidden" name="oppId" value="" />
           <input type="hidden" name="contactId" value="" />
           <input name="title" required placeholder="➕ New task — what needs doing?" className="min-w-[220px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+          <input name="note" placeholder="description / steps (optional)" className="min-w-[220px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
           <input name="due" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" />
           {manager ? (
             <select name="assignedTo" className="rounded-lg border border-slate-200 px-2 py-2 text-sm font-semibold">
@@ -83,14 +86,16 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
           const p = prios[t.id] ?? "normal";
           const edge = t.doneAt ? "border-l-emerald-400" : p === "urgent" ? "border-l-red-500" : p === "low" ? "border-l-slate-200" : "border-l-amber-400";
           const c = t.contactId ? cname.get(t.contactId) : undefined;
+          const note = notes[t.id] ?? "";
           return (
-            <div key={t.id} className={`flex items-center gap-3 border-b border-l-4 border-slate-50 px-4 py-2.5 hover:bg-slate-50/60 ${edge} ${p === "urgent" && !t.doneAt ? "bg-red-50/40" : ""}`}>
+            <details key={t.id} className={`border-b border-l-4 border-slate-50 ${edge} ${p === "urgent" && !t.doneAt ? "bg-red-50/40" : ""}`}>
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-2.5 hover:bg-slate-50/60">
               <form action={toggleCrmTaskAction}>
                 <input type="hidden" name="id" value={t.id} />
                 <button title={t.doneAt ? "Re-open" : "Mark done"} className={`grid h-5 w-5 place-items-center rounded-full border text-[10px] ${t.doneAt ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white text-transparent hover:text-emerald-600"}`}>✓</button>
               </form>
               <div className="min-w-0 flex-1">
-                <div className={`truncate text-sm ${t.doneAt ? "text-slate-400 line-through" : "font-semibold text-slate-800"}`}>{t.title}</div>
+                <div className={`truncate text-sm ${t.doneAt ? "text-slate-400 line-through" : "font-semibold text-slate-800"}`}>{note && "📝 "}{t.title}</div>
                 <div className="flex flex-wrap items-center gap-2">
                   {c ? (
                     <Link href={t.oppId ? `/crm/${t.oppId}` : "/crm/contacts"} className="text-[11px] font-semibold text-indigo-500 hover:underline">👤 {c.name}{t.oppId ? " → open lead" : ""}</Link>
@@ -117,7 +122,23 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
               )}
               <span className="text-[11px] font-bold text-slate-500">{t.assignedTo.split(" ")[0] || "—"}</span>
               <span className={`w-24 text-right text-[11px] font-bold ${overdue ? "text-red-600" : "text-slate-400"}`}>{t.due || "no date"}</span>
+              <span className="text-slate-300">›</span>
+            </summary>
+            {/* 📖 GHL-style detail: full title, description / step-by-step, meta */}
+            <div className="space-y-2 border-t border-slate-100 bg-slate-50/40 px-12 py-3">
+              <div className="text-sm font-bold text-slate-800">{t.title}</div>
+              {note && <div className="whitespace-pre-wrap rounded-xl bg-white p-3 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-200">{note}</div>}
+              <details>
+                <summary className="cursor-pointer text-[11px] font-bold text-indigo-600">{note ? "✎ Edit description" : "＋ Add description / steps"}</summary>
+                <form action={saveTaskNoteAction} className="mt-1.5 space-y-1.5">
+                  <input type="hidden" name="id" value={t.id} />
+                  <textarea name="note" rows={5} defaultValue={note} placeholder={"What needs to happen, step by step…\n1.\n2.\n3."} className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+                  <button className="rounded-lg bg-brand-navy px-3 py-1.5 text-[11px] font-bold text-white">Save description</button>
+                </form>
+              </details>
+              <div className="text-[10px] text-slate-400">created {t.createdAt.toLocaleDateString("en-US")} by {t.createdBy || "—"}{t.doneAt ? ` · ✓ completed ${t.doneAt.toLocaleString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}${t.doneBy ? ` by ${t.doneBy}` : ""}` : ""}</div>
             </div>
+            </details>
           );
         })}
       </Card>

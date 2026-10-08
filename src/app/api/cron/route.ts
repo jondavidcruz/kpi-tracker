@@ -1315,6 +1315,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, filled, jonTasks });
   }
 
+  // 📝 Seed step-by-step instructions onto the OPEN owner tasks
+  // (?tasknotes=1, one-time — Jon 2026-10-08: "how else do we complete these?").
+  if (url.searchParams.get("tasknotes") === "1") {
+    const { writeTaskNote } = await import("@/lib/task-notes");
+    const GUIDES: Array<[string, string]> = [
+      ["chat.memberships", "1. Go to admin.google.com → Security → Access and data control → API controls → Domain-wide delegation.\n2. Find client ID 101075455444766833051 (the same row you edited for Gmail).\n3. Click Edit, and ADD this scope to the list (comma-separated): https://www.googleapis.com/auth/chat.memberships\n4. Save. Tell Claude 'chat scope added' — auto add/remove of team members in all 8 Chat rooms goes live the same day."],
+      ["subscription due dates", "1. Open each provider's billing page: DealSpeed/iSpeedToLead, Direct REI, Claude (console.anthropic.com), PostKing, InvestorLift if active.\n2. Note the renewal DATE and AMOUNT for each.\n3. Paste them to Claude in chat — the renewals tracker + receipts room get wired to those dates."],
+      ["P&L is 5 months behind", "1. Open /expenses in the War Room.\n2. For June through October: enter each month's actuals per category (or forward the bank/card statements to Claude and say 'pre-fill P&L' — Claude drafts, you approve).\n3. Viktoriia gets the auto-email on the 1st — once these 5 months are in, the monthly rhythm takes over."],
+      ["iSpeedToLead/DealSpeed API key", "1. Log into app.ispeedtolead.com → Account → API (or reply to their support ticket #161273 — they owe you an answer on full API access since you're on the annual plan).\n2. Copy the API key.\n3. Paste it to Claude — deals auto-list and their 5M buyer network opens up."],
+      ["share Google Calendars", "Each person (Michelle, Sharyn, Marie, Nick when he's in):\n1. Google Calendar → Settings → their calendar → 'Share with specific people'.\n2. Add war-room@war-room-499719.iam.gserviceaccount.com with 'Make changes to events'.\n3. Done — War Room /crm/calendar syncs both ways after the next pull."],
+      ["PandaDoc: rename 4 fields", "1. PandaDoc → Templates → open the CASH purchase template.\n2. Click each of these 4 fields and rename (Field settings → Field ID / merge name): PropertyAddress, APN, SellerNet, SellerName.\n3. Repeat in the NOVATION template.\n4. Back in the War Room, move any lead to an offer stage and check the draft arrives pre-filled."],
+      ["Nick softphone access", "1. Open /crm/access in the War Room.\n2. Find Nick's row and tick 📞 Call (and 💬 SMS if you want him texting).\n3. His dials, connections and talk time then auto-track from the softphone — no manual KPI entry."],
+      ["Michelle add her cell", "1. Michelle logs into the War Room → /account.\n2. Fills 'My phone number' with her cell and saves.\n3. That number instantly becomes the inbound-call fallback when no browser answers. Test: call a War Room number with all tabs closed — her cell should ring after ~25s."],
+      ["Systemic KPI miss: Michelle's Talk Time", "Decide at the leadership call — three possible causes, in order of likelihood:\n1. GOAL TOO HIGH: her 28-day median is far below 1:30h — run /admin/recalibrate to reset to reality.\n2. LEAD VOLUME: check /report lead counts — if she has nobody to dial, it's a marketing problem, not a Michelle problem.\n3. TRACKING GAP: talk time auto-feeds from the dialer — if she calls outside the War Room softphone, the system can't see it. Confirm she dials in-app."],
+      ["Systemic KPI miss: Michelle's Verbal Offers", "Same leadership-call framework:\n1. Is the 3/day goal realistic at her current connect rate? (/admin/recalibrate shows the median.)\n2. Are enough leads reaching the offer stages? Check her pipeline's COMP → OFFER column.\n3. Is she making offers but not logging them? Verbal offers are manual entry — one line in the huddle fixes that."],
+      ["Gmail API", "DONE when you enabled it on Oct 8 — if this task is still open, just mark it complete."],
+    ];
+    const open2 = await db.crmTask.findMany({ where: { doneAt: null }, select: { id: true, title: true } });
+    let seeded = 0;
+    for (const t of open2) {
+      const g = GUIDES.find(([k]) => t.title.toLowerCase().includes(k.toLowerCase()));
+      if (g) { await writeTaskNote(t.id, g[1]); seeded++; }
+    }
+    return NextResponse.json({ ok: true, seeded });
+  }
+
   // 🧹 One-time Direct REI flood rollback (?dreicleanup=1, Jon 2026-10-08):
   // closes the auto-created "first call" tasks and archives the untouched
   // auto-imported seller opps (archive, never delete — contacts stay). The
@@ -1345,7 +1371,9 @@ export async function GET(request: Request) {
     const jon = await db.user.findFirst({ where: { active: true, name: { startsWith: "Jon", mode: "insensitive" } }, select: { name: true } });
     const dup = await db.crmTask.findFirst({ where: { title: `🛠 ${title}`, doneAt: null } });
     if (dup) return NextResponse.json({ ok: true, existed: true });
-    await db.crmTask.create({ data: { oppId: "", contactId: "", title: `🛠 ${title}`, due: new Date().toISOString().slice(0, 10), assignedTo: jon?.name ?? "Jon Cruz", createdBy: "warroom-updates" } });
+    const createdTask = await db.crmTask.create({ data: { oppId: "", contactId: "", title: `🛠 ${title}`, due: new Date().toISOString().slice(0, 10), assignedTo: jon?.name ?? "Jon Cruz", createdBy: "warroom-updates" } });
+    const body2 = (url.searchParams.get("body") ?? "").slice(0, 4000);
+    if (body2) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(createdTask.id, body2); }
     // mirror into Jon's Cortana app (Supabase tasks table) ONLY for business
     // tasks (&biz=1) when the bridge key is set: CORTANA_SERVICE_KEY in Vercel
     // (service_role of project tcfsjfymkxlxvzeljwoj). Business area, Q2, pre-triaged.

@@ -7,7 +7,7 @@ import { stripHtml } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
-import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, draftContractAction } from "../actions";
+import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, draftContractAction, toggleDndAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
@@ -164,6 +164,47 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 <button className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200">Add</button>
               </form>
             </div>
+          </Card>
+
+          {/* 🔕 DND by channel (GHL-style, Jon 2026-10-08) — blocks senders cold */}
+          <Card className="p-4">
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">🔕 DND — Do Not Disturb</div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {([["all", "🚫 ALL channels"], ["sms", "💬 Text messages"], ["email", "✉️ Email"], ["call", "📞 Calls"]] as const).map(([ch, label]) => {
+                const on = new RegExp(`\\bdnd_${ch}\\b`).test(c.tags) || (ch !== "all" && /\bdnd_all\b|\bdnc\b/.test(c.tags));
+                return (
+                  <form key={ch} action={toggleDndAction}>
+                    <input type="hidden" name="contactId" value={c.id} />
+                    <input type="hidden" name="channel" value={ch} />
+                    <button className={`w-full rounded-lg px-2 py-1.5 text-left text-[11px] font-bold ring-1 ${on ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-500 ring-slate-200 hover:bg-slate-100"}`}>
+                      {on ? "⛔ " : ""}{label}
+                    </button>
+                  </form>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-[10px] text-slate-400">Red = blocked. Texts/emails are refused server-side and logged; incoming STOP replies set this automatically.</p>
+          </Card>
+
+          {/* 📎 Documents — every file saved on this lead (PandaDoc, Drive, uploads) */}
+          <Card className="p-4">
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">📎 Documents</div>
+            {events.filter((e) => e.kind === "file").length === 0 ? (
+              <p className="text-xs text-slate-400">No documents yet — signed PandaDocs and Drive files attach here automatically.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {events.filter((e) => e.kind === "file").map((e) => {
+                  const link = (e.meta as { link?: string } | null)?.link;
+                  const name = stripHtml(e.body).replace(/^📎\s*/, "").slice(0, 90);
+                  return (
+                    <a key={e.id} href={link ?? "#"} target="_blank" rel="noreferrer" className={`block rounded-lg px-2.5 py-1.5 text-xs ring-1 ${link ? "bg-indigo-50/50 text-indigo-800 ring-indigo-100 hover:bg-indigo-50" : "bg-slate-50 text-slate-500 ring-slate-100"}`}>
+                      📄 {name}
+                      <span className="block text-[9px] text-slate-400">{e.at.toLocaleDateString("en-US")} · {e.actor}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </Card>
 
           {/* opportunity meta */}

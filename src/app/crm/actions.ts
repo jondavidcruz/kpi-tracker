@@ -208,12 +208,14 @@ export async function addCrmTaskAction(formData: FormData) {
   const contactId = String(formData.get("contactId") ?? "");
   const title = String(formData.get("title") ?? "").trim().slice(0, 200);
   if (!title) return;
-  await db.crmTask.create({ data: {
+  const created = await db.crmTask.create({ data: {
     oppId, contactId, title,
     due: String(formData.get("due") ?? "").trim(),
     assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name,
     createdBy: me.name,
   } });
+  const note = String(formData.get("note") ?? "").trim();
+  if (note) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(created.id, note); }
   revalidatePath(`/crm/${oppId}`);
   revalidatePath("/crm");
   revalidatePath("/crm/tasks");
@@ -309,6 +311,11 @@ export async function sendCrmEmailAction(formData: FormData) {
   const subject = String(formData.get("subject") ?? "").trim().slice(0, 150);
   const body = String(formData.get("body") ?? "").trim().slice(0, 4000);
   if (!to || !subject || !body) return;
+  if (contactId && await isDnd(contactId, "email")) {
+    await logCrmEvent({ contactId, oppId, kind: "email", body: `🔕 EMAIL NOT SENT — this contact is DND for email.`, actor: me.name });
+    revalidatePath(`/crm/${oppId}`);
+    return;
+  }
   // GHL-style agent identity: From = the rep (on our domain), reply-to their
   // real inbox, their own signature appended.
   const { readSignatures, firstOf, defaultSignature } = await import("@/lib/crm-comms");
@@ -358,6 +365,11 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
       return;
     }
   }
+  if (contactId && await isDnd(contactId, "sms")) {
+    await logCrmEvent({ contactId, oppId, kind: "sms", body: `🔕 SMS NOT SENT — this contact is DND for texts.`, actor: me.name });
+    revalidatePath(`/crm/${oppId}`);
+    return;
+  }
   if (!process.env.TELNYX_API_KEY || !from) {
     await logCrmEvent({ contactId, oppId, kind: "sms", body: `SMS NOT SENT — set TELNYX_SMS_FROM (a Telnyx number on a messaging profile) in Vercel. Message was: ${text.slice(0, 200)}`, actor: me.name });
     revalidatePath(`/crm/${oppId}`);
@@ -394,6 +406,43 @@ export async function setTaskPriorityAction(formData: FormData) {
   const description = JSON.stringify(map);
   if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
   else await db.resource.create({ data: { title: "task-priority", category: "__task_priority__", url: "", description } });
+  revalidatePath("/crm/tasks");
+}
+
+/** 🔕 DND by channel (GHL-style, Jon 2026-10-08): toggles dnd_all / dnd_sms /
+ *  dnd_email / dnd_call tags on the contact — every sender checks them. */
+export async function toggleDndAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const contactId = String(formData.get("contactId") ?? "");
+  const ch = String(formData.get("channel") ?? "");
+  if (!contactId || !["all", "sms", "email", "call"].includes(ch)) return;
+  const tag = `dnd_${ch}`;
+  const c = await db.crmContact.findUnique({ where: { id: contactId }, select: { tags: true } });
+  if (!c) return;
+  const tags = c.tags.split(",").map((t) => t.trim()).filter(Boolean);
+  const on = tags.includes(tag);
+  const next = on ? tags.filter((t) => t !== tag) : [...tags, tag];
+  await db.crmContact.update({ where: { id: contactId }, data: { tags: next.join(",") } });
+  await logCrmEvent({ contactId, oppId: "", kind: "system", body: `${on ? "🔔 DND removed" : "🔕 DND set"} — ${ch === "all" ? "ALL channels" : ch} by ${me.name}`, actor: me.name }).catch(() => {});
+  revalidatePath("/crm");
+}
+
+/** DND check used by every outbound sender. */
+export async function isDnd(contactId: string, channel: "sms" | "email" | "call"): Promise<boolean> {
+  const c = await db.crmContact.findUnique({ where: { id: contactId }, select: { tags: true } });
+  if (!c) return false;
+  return /\bdnc\b|\bdnd_all\b/i.test(c.tags) || new RegExp(`\\bdnd_${channel}\\b`, "i").test(c.tags);
+}
+
+/** 📝 Save/edit a task's description (GHL-style details). */
+export async function saveTaskNoteAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const { writeTaskNote } = await import("@/lib/task-notes");
+  await writeTaskNote(id, String(formData.get("note") ?? ""));
   revalidatePath("/crm/tasks");
 }
 
