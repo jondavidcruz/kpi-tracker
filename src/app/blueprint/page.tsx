@@ -1,4 +1,5 @@
 import { getCurrentUser, isCSuitePerson } from "@/lib/auth";
+import BlueprintMap from "@/components/BlueprintMap";
 import { Card, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -91,24 +92,7 @@ export default async function BlueprintPage() {
       <Card className="p-4 text-sm leading-relaxed text-slate-600">
         <b className="text-slate-800">Productization thesis:</b> one login replaces GHL (CRM+phones) + spreadsheet scorecards + Direct REI drips + separate schedulers. The sellable unit is a <b>vertical operating system for land/wholesale teams</b>: KPIs with WHY, a seller CRM with built-in telephony, 24-hour dispo workflow, and a team OS — pre-wired to Telnyx, Resend, Google, PandaDoc. Multi-tenant work needed later: org table + per-org env + billing. Everything below already runs in production for Freedom Offers.
       </Card>
-      {SECTIONS.map((s) => (
-        <div key={s.title} className="space-y-2">
-          <div className="pl-1">
-            <div className="text-sm font-extrabold text-slate-800">{s.emoji} {s.title}</div>
-            <div className="text-xs text-slate-500">{s.pitch}</div>
-          </div>
-          <Card className="divide-y divide-slate-50 p-0">
-            {s.rooms.map((r) => (
-              <div key={r.path + r.name} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5">
-                <span className="w-44 shrink-0 text-sm font-bold text-slate-800">{r.name}</span>
-                <span className="min-w-[180px] flex-1 text-[13px] text-slate-600">{r.what}</span>
-                <span className="shrink-0 font-mono text-[10px] text-slate-400">{r.path}</span>
-                <span className="w-full pl-44 text-[10px] text-indigo-400 max-sm:pl-0">⚙ {r.data}</span>
-              </div>
-            ))}
-          </Card>
-        </div>
-      ))}
+      <BlueprintMap sections={SECTIONS} />
     </div>
   );
 }
