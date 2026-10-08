@@ -7,6 +7,7 @@ import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-c
 import { readSnippets } from "@/lib/crm-templates";
 import CallButton from "@/components/CallButton";
 import ConvComposerTabs from "@/components/ConvComposerTabs";
+import { startConversationAction } from "@/app/crm/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -76,11 +77,23 @@ export default async function ConversationsPage({ searchParams }: { searchParams
         accent="bg-brand-gold"
         right={
           <div className="flex items-center gap-2">
-            
             <Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Back to pipeline</Link>
           </div>
         }
       />
+
+      {/* ➕ New message to ANYONE — no contact required (Jon 2026-10-08).
+          Enter a number and/or email; we find-or-create the contact and open
+          their thread, so you can text yourself or any brand-new number. */}
+      <details className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+        <summary className="cursor-pointer text-xs font-bold text-slate-700">➕ New message — text or email any number, even if they&apos;re not a contact yet</summary>
+        <form action={startConversationAction} className="mt-2 flex flex-wrap items-end gap-2">
+          <label className="text-[10px] font-bold text-slate-500">Name (optional)<input name="name" placeholder="Jon test" className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" /></label>
+          <label className="text-[10px] font-bold text-slate-500">Phone<input name="phone" placeholder="909-395-6195" className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" /></label>
+          <label className="text-[10px] font-bold text-slate-500">Email<input name="email" type="email" placeholder="name@example.com" className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" /></label>
+          <button className="rounded-lg bg-brand-navy px-4 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">Open thread →</button>
+        </form>
+      </details>
 
       <Card className="overflow-hidden p-0">
         <div className="flex h-[74vh]">

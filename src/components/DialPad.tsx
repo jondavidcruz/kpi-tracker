@@ -123,12 +123,14 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     startRef.current = 0;
     setState("idle"); setMuted(false); setSecs(0); setOnCall(null); setDtmfTrail("");
     if (ctx?.oppId) setLastCall(ctx);
-    if (ctx?.contactId) {
+    if (ctx?.phone || ctx?.contactId) {
+      // log EVERY call — keypad dials included; the server find-or-creates the
+      // contact so it shows in Conversations recents (Jon 2026-10-08)
       const fd = new FormData();
       fd.set("oppId", ctx.oppId ?? "");
-      fd.set("contactId", ctx.contactId);
+      fd.set("contactId", ctx.contactId ?? "");
       fd.set("secs", String(dur));
-      fd.set("to", ctx.phone);
+      fd.set("to", ctx.phone ?? "");
       logBrowserCallAction(fd).catch(() => {});
     }
     setMsg(dur ? `Ended · ${Math.floor(dur / 60)}m ${dur % 60}s` : "Call ended");
@@ -154,7 +156,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       const tj = (await tr.json()) as { token?: string; error?: string };
       if (!tr.ok || !tj.token) throw new Error(tj.error ?? "token failed");
       const { TelnyxRTC } = await import("@telnyx/webrtc");
-      const client = new TelnyxRTC({ login_token: tj.token });
+      // prefetchIceCandidates: without it some networks sit in ICE gathering
+      // for ~30s before the INVITE leaves the browser — Jon's "didn't ring on
+      // my phone until 30 seconds later" (2026-10-08).
+      const client = new TelnyxRTC({ login_token: tj.token, prefetchIceCandidates: true } as ConstructorParameters<typeof TelnyxRTC>[0]);
       clientRef.current = client as never;
       await new Promise<void>((resolve, reject) => {
         const to = setTimeout(() => reject(new Error("connect timeout")), 12000);

@@ -48,7 +48,8 @@ export default function BrowserDialer({ oppId, contactId, phone }: { oppId: stri
       const tj = (await tr.json()) as { token?: string; callerId?: string; error?: string };
       if (!tr.ok || !tj.token) { setState("error"); setMsg(tj.error ?? "Token failed"); return; }
       const { TelnyxRTC } = await import("@telnyx/webrtc");
-      const client = new TelnyxRTC({ login_token: tj.token });
+      // prefetchIceCandidates — avoids the ~30s ICE-gathering stall before dialing
+      const client = new TelnyxRTC({ login_token: tj.token, prefetchIceCandidates: true } as ConstructorParameters<typeof TelnyxRTC>[0]);
       clientRef.current = client as never;
       client.on("telnyx.ready", () => {
         setMsg("Dialing seller…");

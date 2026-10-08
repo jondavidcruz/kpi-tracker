@@ -981,6 +981,8 @@ export async function GET(request: Request) {
       if (!up) { results.push({ doc: doc.name ?? doc.id, status: "drive upload failed" }); continue; }
       if (opp) {
         await logCrmEvent({ contactId: opp.contactId, oppId: opp.id, kind: "file", body: `📎 Signed doc saved to Drive: ${doc.name ?? doc.id} — ${up.link}`, meta: { pdId: doc.id, driveId: up.id, link: up.link }, actor: "pandadoc" });
+        // 🖊 ring the Contracts Signed room (Jon 2026-10-08)
+        try { const { postToSpace } = await import("@/lib/chat-spaces"); await postToSpace("contracts", `🖊 Document SIGNED via PandaDoc: ${doc.name ?? doc.id} → filed on ${opp.title.slice(0, 60)} · ${up.link}`); } catch { /* bell only */ }
         results.push({ doc: doc.name ?? doc.id, status: `attached → ${opp.title.slice(0, 40)}` });
       } else {
         const jon = await db.user.findFirst({ where: { active: true, name: { startsWith: "Jon", mode: "insensitive" } }, select: { name: true } });
@@ -1123,6 +1125,17 @@ export async function GET(request: Request) {
       out[pl][r.assignedTo || "(unassigned)"] = r._count._all;
     }
     return NextResponse.json({ ok: true, byPipeline: out });
+  }
+
+  // 🏷 Pipeline-name fix (?pipefix=1): today's GHL import stamped GHL's own
+  // pipeline names onto the rows — walk them back to the War Room names.
+  if (url.searchParams.get("pipefix") === "1") {
+    const { PIPELINE_ALIASES } = await import("@/lib/stage-aliases");
+    const out: Record<string, number> = {};
+    for (const [from, to] of Object.entries(PIPELINE_ALIASES)) {
+      out[`${from}→${to}`] = (await db.crmOpportunity.updateMany({ where: { pipeline: from }, data: { pipeline: to } })).count;
+    }
+    return NextResponse.json({ ok: true, renamed: out });
   }
 
   // 🔀 Pipeline streamlining migration (?stagemigrate=1 dry / &commit=1 —
@@ -1580,7 +1593,7 @@ export async function GET(request: Request) {
     // then run the streamlining aliases so a re-import can't resurrect retired
     // stages (Jon's 2026-10-08 pipeline merge).
     const { stageSlug } = await import("@/lib/crm");
-    const { ACQ_STAGE_ALIASES: acqAlias, DS_STAGE_ALIASES: dsAlias } = await import("@/lib/stage-aliases");
+    const { ACQ_STAGE_ALIASES: acqAlias, DS_STAGE_ALIASES: dsAlias, PIPELINE_ALIASES: plAlias } = await import("@/lib/stage-aliases");
     const mapStage = (n: string, pipeName: string) => {
       const slug = n ? stageSlug(n) : "contacted";
       if (/AQ/i.test(pipeName) && acqAlias[slug]) return acqAlias[slug];
@@ -1624,7 +1637,7 @@ export async function GET(request: Request) {
           name: String(contact.name ?? o.name ?? "—"), phone: String(contact.phone ?? ""), email: String(contact.email ?? ""),
           title: String(o.name ?? contact.name ?? "Imported opportunity"),
           value: o.monetaryValue != null ? Number(o.monetaryValue) : null,
-          rep, stage: mapStage(ghlStage, p.name), pipeline: p.name,
+          rep, stage: mapStage(ghlStage, p.name), pipeline: plAlias[p.name] ?? p.name,
           closedAt: ["won", "lost", "abandoned"].includes(status) ? String((o as { updatedAt?: string }).updatedAt ?? "") : "",
         });
       }

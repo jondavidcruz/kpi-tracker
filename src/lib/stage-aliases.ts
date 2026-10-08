@@ -38,6 +38,15 @@ export const ACQ_STAGES = [
   { key: "nurture", label: "⏳ NURTURE" },
 ];
 
+// GHL's pipeline names → the War Room's renamed ones. The importer writes the
+// WR name so a sync can never clobber Jon's renames again (2026-10-08).
+export const PIPELINE_ALIASES: Record<string, string> = {
+  "🏆 DS: Signed > Close": "🏆 DS: Signed Go Close",
+  "🎯 DS: Sell Land > Sign": "🎯 DS: Sell Land Then Sign",
+  "🔥 AQM: Jon & Mitch": "🔥 AQM: Michelle Lagudas",
+  "🎓 JrAQ: Nick": "🎓 JrAQ: Nick Fair",
+};
+
 export const DS_STAGES = [
   { key: "new_photos_day_1_4", label: "📸 NEW / PHOTOS (Day 1-4)" },
   { key: "delayed_lien", label: "🛑 DELAYED/LIEN" },

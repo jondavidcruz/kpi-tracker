@@ -90,7 +90,19 @@ export async function setOppStageAction(formData: FormData) {
         const dispo = await db.user.findFirst({ where: { active: true, position: "dispositions" }, select: { name: true } });
         await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `💰 PRICE CHECK w/ developers — ${contact?.name ?? "lead"}${addr ? ` (${addr})` : ""} → tell ${(full.assignedTo || me.name).split(" ")[0]} the number`, due: today, assignedTo: dispo?.name ?? "", createdBy: "comp-flow" } }).catch(() => {});
         await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `🧮 Comp → Offer (24h clock): underwrite now (/underwriting${addr ? `?address=${encodeURIComponent(addr)}` : ""}) · dispo pricing task created`, actor: "comp-flow" });
-      } else if (/sign/i.test(stage) && !/missed|dead/i.test(stage)) {
+      }
+      // 📣 Chat-space bells (Jon 2026-10-08): signed → Contracts Signed room;
+      // deal won → whole-team room; offer stages → acquisitions room.
+      try {
+        const { postToSpace } = await import("@/lib/chat-spaces");
+        if (/contract_signed/i.test(stage)) postToSpace("contracts", `🖊 CONTRACT SIGNED — ${contact?.name ?? "seller"}${addr ? ` · ${addr}` : ""} · by ${(full.assignedTo || me.name)}${full.value != null ? ` · $${full.value.toLocaleString()}` : ""} 🎉`).catch(() => {});
+        if (/deal_won/i.test(stage)) {
+          postToSpace("contracts", `💰 DEAL WON (escrow closed) — ${contact?.name ?? "deal"}${addr ? ` · ${addr}` : ""}${full.value != null ? ` · $${full.value.toLocaleString()}` : ""}`).catch(() => {});
+          postToSpace("team", `💰🎉 WE CLOSED A DEAL! ${addr || contact?.name || ""}${full.value != null ? ` — $${full.value.toLocaleString()}` : ""} — congrats team!`).catch(() => {});
+        }
+        if (/offer_call|verbal_offer/i.test(stage)) postToSpace("acquisitions", `💬 Offer in motion — ${(full.assignedTo || me.name).split(" ")[0]} ${stage.includes("verbal") ? "is negotiating a verbal offer" : "is making the offer call"} on ${addr || contact?.name || "a lead"}`).catch(() => {});
+      } catch { /* chat bells never block */ }
+      if (/sign/i.test(stage) && !/missed|dead/i.test(stage)) {
         // 💰 iSpeedToLead Closer Program (Jon 2026-10-08): they PAY us for
         // reporting closings on their leads — never let one slip.
         const src = `${contact?.name ?? ""} ${(await db.crmContact.findUnique({ where: { id: full.contactId }, select: { source: true, tags: true } }).then((x) => `${x?.source ?? ""} ${x?.tags ?? ""}`))}`;
@@ -331,6 +343,27 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   const err = ok ? "" : (await res.text()).slice(0, 140);
   await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: ${text}${ok ? "" : ` (SEND FAILED: ${err})`}`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
+}
+
+/** 📲 Start a conversation with ANY number/email (Jon 2026-10-08: "text myself
+ *  without them being in contacts") — finds or creates the contact, then opens
+ *  their thread in Conversations. */
+export async function startConversationAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const phone = String(formData.get("phone") ?? "").replace(/[^+\d]/g, "");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const name = String(formData.get("name") ?? "").trim() || phone || email;
+  if (!phone && !email) return;
+  const last10 = phone.replace(/\D/g, "").slice(-10);
+  let contact = await db.crmContact.findFirst({
+    where: { OR: [...(last10.length === 10 ? [{ phone: { contains: last10 } }] : []), ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : [])] },
+  });
+  if (!contact) {
+    contact = await db.crmContact.create({ data: { name, phone: phone ? (phone.startsWith("+") ? phone : `+1${last10}`) : "", email, source: "Manual (new conversation)", assignedTo: me.name } });
+    await logCrmEvent({ contactId: contact.id, oppId: "", kind: "system", body: `Contact created from New Message by ${me.name}`, actor: me.name }).catch(() => {});
+  }
+  redirect(`/crm/conversations?c=${contact.id}`);
 }
 
 /** List-view bulk actions: reassign / add tag / move stage for many at once. */
@@ -577,13 +610,25 @@ export async function logBrowserCallAction(formData: FormData) {
   const oppId = String(formData.get("oppId") ?? "");
   const secs = Number(formData.get("secs")) || 0;
   const to = String(formData.get("to") ?? "");
-  if (!contactId) return;
+  // Keypad dials to numbers NOT in contacts used to vanish (Jon 2026-10-08:
+  // "I called myself and have nowhere to see it") — find-or-create the
+  // contact so EVERY call lands in Conversations like a phone's recents.
+  let cId = contactId;
+  if (!cId && to) {
+    const last10 = to.replace(/\D/g, "").slice(-10);
+    if (last10.length === 10) {
+      const found = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true } });
+      cId = found?.id ?? (await db.crmContact.create({ data: { name: to, phone: `+1${last10}`, source: "Dialed from keypad", assignedTo: me.name } })).id;
+    }
+  }
+  if (!cId) return;
   await logCrmEvent({
-    contactId, oppId, kind: "call",
+    contactId: cId, oppId, kind: "call",
     body: `Browser call → ${to}${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : " · no answer"}`,
     meta: { secs, via: "telnyx-webrtc" }, actor: me.name,
   });
   revalidatePath(`/crm/${oppId}`);
+  revalidatePath("/crm/conversations");
 }
 
 /** Attach a party to the deal — listing agent, escrow, title, attorney… */

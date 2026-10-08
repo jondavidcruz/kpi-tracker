@@ -83,6 +83,8 @@ export async function scanOffers(mailboxes: string[]): Promise<{ scanned: number
           if (buyer) await db.marketContact.update({ where: { id: buyer.id }, data: { outreachLog: `${new Date().toISOString().slice(0, 10)} — emailed offer $${amount.toLocaleString()} on ${hit.addr.slice(0, 50)}\n${buyer.outreachLog}`.slice(0, 4000), lastContacted: new Date().toISOString().slice(0, 10) } });
         }
         results.push({ ...offer, opp: hit.addr });
+        const { postToSpace } = await import("@/lib/chat-spaces");
+        postToSpace("acquisitions", `💵 Buyer offer captured from email: $${amount.toLocaleString()} on ${hit.addr.slice(0, 60)} (${from.slice(0, 60)}) — racked on the lead, dispo task created`).catch(() => {});
       }
     } catch (e) { mailboxErrors[mb] = String(e).slice(0, 150); }
   }
