@@ -26,7 +26,7 @@ function timeAgo(d: Date) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ c?: string }> }) {
+export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ c?: string; who?: string }> }) {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return <Card className="p-10 text-center text-slate-400">Conversations live inside the Seller CRM (acquisitions + managers).</Card>;
@@ -46,8 +46,9 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const latestByContact = new Map<string, { kind: string; body: string; at: Date }>();
   for (const e of recent) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
   const contactIds = [...latestByContact.keys()].slice(0, 120);
+  const mineOnly = manager && sp.who === "me";
   const contacts = await db.crmContact.findMany({
-    where: { id: { in: contactIds }, ...(manager ? {} : { assignedTo: { in: ["", me!.name] } }) },
+    where: { id: { in: contactIds }, ...(manager ? (mineOnly ? { assignedTo: { equals: me!.name, mode: "insensitive" } } : {}) : { assignedTo: { in: ["", me!.name] } }) },
     select: { id: true, name: true, phone: true, assignedTo: true },
   });
   const threads = contacts
@@ -83,7 +84,15 @@ export default async function ConversationsPage({ searchParams }: { searchParams
         <div className="flex h-[74vh]">
           {/* left: thread list */}
           <div className="w-72 shrink-0 overflow-y-auto border-r border-slate-100 bg-slate-50/50">
-            <div className="sticky top-0 border-b border-slate-100 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">Team inbox · {threads.length}</div>
+            <div className="sticky top-0 flex items-center gap-2 border-b border-slate-100 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">
+              <span>Team inbox · {threads.length}</span>
+              {manager && (
+                <span className="ml-auto flex gap-1 normal-case tracking-normal">
+                  <Link prefetch={false} href="/crm/conversations" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${!mineOnly ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>All</Link>
+                  <Link prefetch={false} href="/crm/conversations?who=me" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${mineOnly ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>Mine</Link>
+                </span>
+              )}
+            </div>
             {threads.length === 0 && <div className="p-4 text-xs text-slate-400">No conversations yet — texts, emails and calls will appear here.</div>}
             {threads.map((t) => (
               <Link key={t.id} prefetch={false} href={`/crm/conversations?c=${t.id}`}

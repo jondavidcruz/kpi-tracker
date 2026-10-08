@@ -88,6 +88,26 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
               <button onClick={() => setOppId(null)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600">✕</button>
             </div>
 
+            {/* Salesforce-style path — same one as the full card */}
+            <div className="flex gap-[3px] overflow-x-auto border-b border-slate-100 px-5 py-2">
+              {stages.map((s, i) => {
+                const curIdx = stages.findIndex((x) => x.key === d.stage);
+                const done = i < curIdx, current = i === curIdx;
+                return (
+                  <button
+                    key={s.key}
+                    disabled={current || pending}
+                    title={current ? `Current: ${s.label}` : `Move to ${s.label}`}
+                    onClick={() => { setData({ ...d, stage: s.key }); const fd = new FormData(); fd.set("id", d.id); fd.set("stage", s.key); start(async () => { await setOppStageAction(fd); }); }}
+                    className={`min-w-[80px] flex-1 truncate px-2 py-1 text-center text-[9px] font-bold transition first:rounded-l-full last:rounded-r-full ${
+                      current ? "bg-brand-navy text-white" : done ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    }`}
+                    style={{ clipPath: i === stages.length - 1 ? undefined : "polygon(0 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 0 100%, 7px 50%)" }}
+                  >{s.label}</button>
+                );
+              })}
+            </div>
+
             <div className="flex min-h-0 flex-1">
               {/* left section nav, GHL-style */}
               <nav className="w-48 shrink-0 space-y-0.5 overflow-y-auto border-r border-slate-100 bg-slate-50/60 p-2">
