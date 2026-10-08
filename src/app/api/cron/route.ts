@@ -583,6 +583,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 📬 Resend tracking (?resendtrack=1): flip open+click tracking ON for our
+  // sending domain via API (the punch-list toggle Jon never had to click) —
+  // opens/clicks then land on lead timelines through /api/resend/events.
+  if (url.searchParams.get("resendtrack") === "1") {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, error: "no RESEND_API_KEY" });
+    const H = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+    const list = await fetch("https://api.resend.com/domains", { headers: H, cache: "no-store" }).then((r) => r.json()).catch(() => ({}));
+    const domains = ((list as { data?: Array<{ id: string; name: string }> }).data ?? []);
+    const results: Record<string, string> = {};
+    for (const d of domains) {
+      const r = await fetch(`https://api.resend.com/domains/${d.id}`, {
+        method: "PATCH", headers: H,
+        body: JSON.stringify({ open_tracking: true, click_tracking: true }),
+      }).catch(() => null);
+      results[d.name] = r?.ok ? "tracking ON" : `failed ${r?.status ?? "network"}`;
+    }
+    return NextResponse.json({ ok: true, results });
+  }
+
   // ☎️ Twilio audit (?twilioaudit=1): every number on the account with its
   // 30-day call/text activity — the "which numbers are dead rent" report for
   // the Telnyx-consolidation decision. Read-only; stores __twilio_audit__.

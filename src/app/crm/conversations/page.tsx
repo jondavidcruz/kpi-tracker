@@ -52,8 +52,11 @@ export default async function ConversationsPage({ searchParams }: { searchParams
     select: { id: true, name: true, phone: true, assignedTo: true },
   });
   const threads = contacts
-    .map((c) => ({ ...c, last: latestByContact.get(c.id)! }))
-    .sort((a, b) => b.last.at.getTime() - a.last.at.getTime())
+    .map((c) => {
+      const last = latestByContact.get(c.id)!;
+      return { ...c, last, needsReply: stripHtml(last.body).startsWith("⬅") };
+    })
+    .sort((a, b) => (Number(b.needsReply) - Number(a.needsReply)) || (b.last.at.getTime() - a.last.at.getTime()))
     .slice(0, 50);
 
   // selected thread
@@ -97,7 +100,10 @@ export default async function ConversationsPage({ searchParams }: { searchParams
             {threads.map((t) => (
               <Link key={t.id} prefetch={false} href={`/crm/conversations?c=${t.id}`}
                 className={`flex items-start gap-2.5 border-b border-slate-100 px-3 py-2.5 hover:bg-white ${t.id === cId ? "bg-white ring-2 ring-inset ring-brand-navy/20" : ""}`}>
-                <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-navy/90 text-[11px] font-bold text-white">{initials(t.name)}</span>
+                <span className="relative mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-navy/90 text-[11px] font-bold text-white">
+                  {initials(t.name)}
+                  {t.needsReply && <span title="They wrote last — needs a reply" className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />}
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <span className="truncate text-sm font-bold text-slate-800">{t.name}</span>
