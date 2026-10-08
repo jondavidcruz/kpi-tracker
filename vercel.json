@@ -206,7 +206,7 @@
     },
     {
       "path": "/api/cron?flagreasons=1",
-      "schedule": "30 4 * * *"
+      "schedule": "30 22 * * 1-6"
     },
     {
       "path": "/api/cron?offerscan=1",
