@@ -248,14 +248,34 @@ export async function writeActivity(date: string, callAgg: Record<string, Agg>, 
     movesByFirst[first] = (movesByFirst[first] ?? 0) + n;
   }
 
+  // WAR ROOM activity joins the pulse (the team now calls/texts/moves stages
+  // here, not in GHL — without this the dashboard undercounts every rep).
+  const dayStart = new Date(date + "T00:00:00-07:00"); // approx; events carry tz-correct timestamps
+  const dayEnd = new Date(dayStart.getTime() + 26 * 3600_000);
+  const wrEvents = await db.crmEvent.findMany({
+    where: { at: { gte: dayStart, lt: dayEnd }, kind: { in: ["call", "sms", "email", "stage"] }, actor: { not: "" } },
+    select: { actor: true, kind: true, at: true },
+  });
+  const wrByFirst: Record<string, { calls: number; texts: number; emails: number; moves: number }> = {};
+  for (const e of wrEvents) {
+    const first = e.actor.trim().split(/\s+/)[0].toLowerCase();
+    if (!userByFirst.has(first)) continue; // system actors (ghl-sync, pandadoc…) don't count
+    const w = (wrByFirst[first] = wrByFirst[first] ?? { calls: 0, texts: 0, emails: 0, moves: 0 });
+    if (e.kind === "call") w.calls++;
+    else if (e.kind === "sms") w.texts++;
+    else if (e.kind === "email") w.emails++;
+    else w.moves++;
+  }
+
   const totals: Record<string, number> = {};
-  const firsts = new Set<string>([...Object.keys(callAgg), ...Object.keys(movesByFirst)]);
+  const firsts = new Set<string>([...Object.keys(callAgg), ...Object.keys(movesByFirst), ...Object.keys(wrByFirst)]);
   for (const first of firsts) {
     const uid = userByFirst.get(first);
     if (!uid) continue;
     const a = callAgg[first];
-    const calls = a?.dials ?? 0, texts = a?.texts ?? 0, emails = a?.emails ?? 0;
-    const stageMoves = movesByFirst[first] ?? 0;
+    const w = wrByFirst[first];
+    const calls = (a?.dials ?? 0) + (w?.calls ?? 0), texts = (a?.texts ?? 0) + (w?.texts ?? 0), emails = (a?.emails ?? 0) + (w?.emails ?? 0);
+    const stageMoves = (movesByFirst[first] ?? 0) + (w?.moves ?? 0);
     const total = calls + texts + emails + stageMoves;
     await db.crmActivity.upsert({
       where: { userId_date: { userId: uid, date } },
