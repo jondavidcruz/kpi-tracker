@@ -280,7 +280,9 @@ export async function dispatchHardAlerts(created: NewAlert[]): Promise<void> {
       })
       .join("\n\n");
 
-  const chatOk = await sendGoogleChat(chatText, cfg);
+  // Jon 2026-10-08: no real-time chat pings — the KPI room only gets the
+  // compact EOD scoreboard from the daily digest. Email + in-app still fire.
+  const chatOk = false; void chatText;
   const emailOk = await sendEmail(
     `🔴 ${hard.length} money KPI alert${hard.length === 1 ? "" : "s"}: gap + training plan`,
     coachingEmailHtml(blocks),
@@ -566,11 +568,22 @@ export async function sendDailyDigest(date: string, opts?: { chat?: boolean; ema
       return `✅ ${who}${a.kpi.emoji} ${a.kpi.name}\n   _${a.resolutionCategory ?? "resolved"}:_ ${note}${a.resolvedBy ? `  — ${a.resolvedBy}` : ""}`;
     })
     .join("\n\n");
+  // Jon 2026-10-08: the KPI room gets ONE compact end-of-day scoreboard —
+  // one line per person, numbers only. Coaching walls live in the email.
+  void moneySection; void softSection; void justifiedChat; // email still uses the rich blocks
+  const fmtNum = (u: string, n: number) => (u === "duration" ? `${Math.floor(n / 3600)}:${String(Math.floor((n % 3600) / 60)).padStart(2, "0")}` : String(Math.round(n)));
+  const byWho = new Map<string, string[]>();
+  for (const a of open) {
+    const who = a.user?.name?.split(" ")[0] ?? "Team";
+    const arr = byWho.get(who) ?? [];
+    arr.push(`${a.kpi.emoji ?? ""}${a.kpi.name} ${fmtNum(a.kpi.unit, a.actual)}/${fmtNum(a.kpi.unit, a.expected)}`);
+    byWho.set(who, arr);
+  }
   const chatText =
-    `📊 *KPI Digest* (${date}): ${hard.length} money + ${soft.length} activity${justified.length ? ` · ${justified.length} justified` : ""}\n\n` +
-    (moneySection ? moneySection + "\n\n" : "") +
-    (softSection ? `*Activity / missing:*\n${softSection}\n\n` : "") +
-    (justifiedChat ? `*Justifications logged:*\n${justifiedChat}` : "");
+    `📊 *EOD KPIs — ${date}*\n` +
+    [...byWho.entries()].map(([who, misses]) => `• *${who}*: behind on ${misses.join(" · ")}`).join("\n") +
+    (justified.length ? `\n✅ ${justified.length} miss${justified.length === 1 ? "" : "es"} justified with reasons` : "") +
+    `\n📈 Full picture: kpi-tracker-lovat.vercel.app/report`;
 
   // Only post to Google Chat when the CRUCIAL (money / hard) alert set actually CHANGED
   // vs the previous weekday — otherwise the same digest spams the channel every day. If a

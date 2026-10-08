@@ -1174,6 +1174,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", moved, newDefs: defs.map((d) => ({ name: d.name, stages: d.stages.length })) });
   }
 
+  // 📨 Direct REI daily recap (?dreidaily=1): one short line to the Direct REI
+  // chat space at EOD — totals only; their own qualified-lead pings handle the
+  // real-time side (Jon 2026-10-08).
+  if (url.searchParams.get("dreidaily") === "1") {
+    const row = await db.resource.findFirst({ where: { category: "__directrei_feed__" } });
+    if (!row?.description) return NextResponse.json({ ok: false, error: "no feed yet" });
+    try {
+      const f = JSON.parse(row.description) as { seller?: { newToday?: number; repliesToday?: number; new7d?: number; replies7d?: number }; buyer?: { newToday?: number; repliesToday?: number } };
+      const { postToSpace } = await import("@/lib/chat-spaces");
+      const ok = await postToSpace("directrei", `📨 *Direct REI today* — Sellers: ${f.seller?.newToday ?? 0} new · ${f.seller?.repliesToday ?? 0} replied | Buyers: ${f.buyer?.newToday ?? 0} new · ${f.buyer?.repliesToday ?? 0} replied | 7-day: ${f.seller?.new7d ?? 0} seller leads, ${f.seller?.replies7d ?? 0} replies. Replied sellers auto-land in the CRM as warm leads.`);
+      return NextResponse.json({ ok, job: "dreidaily" });
+    } catch { return NextResponse.json({ ok: false, error: "bad feed json" }); }
+  }
+
   // 🤖 Flag auto-reasons (?flagreasons=1, daily cron — Jon 2026-10-08: "Marie
   // isn't filling reasons; can the system see why?"): open flags from the last
   // 3 days with no rep reason get a system analysis from real signals — hours
@@ -2103,7 +2117,17 @@ export async function GET(request: Request) {
       }
     }
     if (bad.length === 0) return NextResponse.json({ ok: true, job: "phonehealth", sent: false, reason: "all healthy" });
-    const ok = await postChatWebhook(webhook, `📞 *Phone Health — daily check*\n${bad.length} of ${rows.length} number(s) need attention:\n${bad.join("\n")}\n\nTest + dispute flagged ones; register the rest at freecallerregistry.com.`);
+    // Jon 2026-10-08: this room = rotation + deliverability ONLY, short and
+    // actionable like Direct REI's health pings. Posts to the dedicated space.
+    const { postToSpace } = await import("@/lib/chat-spaces");
+    let deliverability = "";
+    try {
+      const snap = await db.resource.findFirst({ where: { category: "__telnyx_spend__" } });
+      const s = snap?.description ? JSON.parse(snap.description) : null;
+      if (s?.shortCallPct != null) deliverability = `\n📉 Short-call rate: ${s.shortCallPct}% (keep under 20% or Telnyx surcharges)`;
+    } catch { /* optional */ }
+    const text = `📞 *Phone Health*\n🔄 Rotate/fix ${bad.length} of ${rows.length} numbers:\n${bad.join("\n")}${deliverability}\n✅ Everything else is healthy.`;
+    const ok = (await postToSpace("phonehealth", text)) || (webhook ? await postChatWebhook(webhook, text) : false);
     return NextResponse.json({ ok: true, job: "phonehealth", sent: ok, flagged: bad.length });
   }
 
@@ -2236,10 +2260,20 @@ export async function GET(request: Request) {
     const { humanizeAlarm } = await import("@/lib/telco-errors");
     const errAlarms = alarms.filter((a) => a.level === "error").slice(0, 6);
     for (const a of errAlarms) { const h = humanizeAlarm(a.code, a.text); lines.push(`*${a.provider}*${a.code ? ` [${a.code}]` : ""}: ${h.meaning}${h.action ? ` — ${h.action}` : ""}`); }
-    if (webhook && lines.length) {
-      await postChatWebhook(webhook, `🛡️ *Compliance line check* — issues found:\n${lines.join("\n")}\n\nReview in the War Room → Compliance.`);
+    // Jon 2026-10-08: post ONLY when the issue set CHANGES — the same chronic
+    // issues repeating every weekday was pure noise.
+    const sig = lines.join("|");
+    const sigRow = await db.resource.findFirst({ where: { category: "__compliance_last_sig__" } });
+    const changed = (sigRow?.description ?? "") !== sig;
+    if (sigRow) await db.resource.update({ where: { id: sigRow.id }, data: { description: sig } });
+    else await db.resource.create({ data: { title: "compliance-sig", category: "__compliance_last_sig__", url: "", description: sig } });
+    let posted = false;
+    if (lines.length && changed) {
+      const { postToSpace } = await import("@/lib/chat-spaces");
+      const text = `🛡️ *Line check — change detected:*\n${lines.join("\n")}\n\nReview in the War Room → Compliance.`;
+      posted = (await postToSpace("phonehealth", text)) || (webhook ? await postChatWebhook(webhook, text) : false);
     }
-    return NextResponse.json({ ok: true, job: "compliance", checked: health.map((h) => ({ p: h.provider, connected: h.connected, issues: h.issues.length })), alarms: errAlarms.length, posted: Boolean(webhook && lines.length) });
+    return NextResponse.json({ ok: true, job: "compliance", checked: health.map((h) => ({ p: h.provider, connected: h.connected, issues: h.issues.length })), alarms: errAlarms.length, posted, changed });
   }
 
   // Payday — checked daily; only sends on actual semi-monthly paydays (the 15th

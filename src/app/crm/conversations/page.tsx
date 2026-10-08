@@ -154,10 +154,21 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                         <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-500">{KIND_EMOJI[e.kind] ?? "📞"} {clean} · {when}</span>
                       </div>
                     );
+                    // 📷 inbound MMS/photos arrive as bare image URLs (Jon
+                    // 2026-10-08: "will we SEE the photos, not a string?") —
+                    // render them as actual images, keep the rest as text.
+                    const imgUrls = clean.match(/https?:\/\/\S+\.(?:png|jpe?g|gif|webp)(?:\?\S*)?/gi) ?? [];
+                    const textOnly = imgUrls.reduce((s, u) => s.replace(u, ""), clean).replace(/[[\]]/g, "").trim();
                     return (
                       <div key={i} className={`flex ${inbound ? "justify-start" : "justify-end"}`}>
                         <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm ${inbound ? "rounded-bl-sm bg-white text-slate-800 ring-1 ring-slate-200" : "rounded-br-sm bg-brand-navy text-white"}`}>
-                          <div className="whitespace-pre-line break-words">{clean}</div>
+                          {imgUrls.map((u) => (
+                            <a key={u} href={u} target="_blank" rel="noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={u} alt="photo" className="mb-1 max-h-56 rounded-lg" />
+                            </a>
+                          ))}
+                          {textOnly && <div className="whitespace-pre-line break-words">{textOnly}</div>}
                           <div className={`mt-0.5 text-right text-[9px] ${inbound ? "text-slate-400" : "text-white/60"}`}>{KIND_EMOJI[e.kind] ?? ""} {when}{!inbound && e.actor ? ` · ${e.actor.split(" ")[0]}` : ""}</div>
                         </div>
                       </div>
