@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { CONSENT_TEXT } from "@/lib/sms-consent";
+import { CONSENT_TEXT, CONSENT_FOOTNOTE } from "@/lib/sms-consent";
 
 // Public private-offer form. Embedded on freedom-offers.com (iframe) and
 // reachable directly. Posts to /api/intake/website-lead.
@@ -101,6 +101,7 @@ export default function OfferPage() {
           <input type="checkbox" name="smsConsent" className="mt-1 h-4 w-4" />
           <span>{CONSENT_TEXT}</span>
         </label>
+        <p className="text-xs text-slate-500">{CONSENT_FOOTNOTE}</p>
 
         {status === "error" && <p role="alert" className="text-sm text-red-700">{error}</p>}
 
