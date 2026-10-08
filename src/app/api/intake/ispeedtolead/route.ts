@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { logCrmEvent } from "@/lib/crm";
+import { sendWelcomeText } from "@/lib/website-lead";
 
 export const dynamic = "force-dynamic";
 
@@ -48,5 +49,6 @@ export async function POST(req: Request) {
     .slice(0, 60);
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "note", body: `🛒 iSpeedToLead lead purchased${price ? ` ($${price})` : ""} — full details:\n${lines.join("\n")}`.slice(0, 5000), actor: "ispeedtolead" });
   await db.crmTask.create({ data: { oppId: opp.id, contactId: contact.id, title: `🛒 NEW PURCHASED LEAD — call ${name} NOW (iSpeedToLead${price ? ` $${price}` : ""})`, due: new Date().toISOString().slice(0, 10), assignedTo: existing?.assignedTo || owner, createdBy: "ispeedtolead" } }).catch(() => {});
+  if (phone) sendWelcomeText({ contactId: contact.id, oppId: opp.id, phone, name, repName: existing?.assignedTo || owner || "our team" }).catch(() => {});
   return NextResponse.json({ ok: true, oppId: opp.id });
 }

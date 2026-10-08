@@ -801,6 +801,52 @@ export async function GET(request: Request) {
     }
   }
 
+  // 🔬 Stage report (?stagereport=1): pipeline × stage × count ground truth
+  // (diagnosing the 27-vs-112 board mismatch).
+  if (url.searchParams.get("stagereport") === "1") {
+    const rows = await db.crmOpportunity.groupBy({ by: ["pipeline", "stage"], where: { archivedAt: null }, _count: { _all: true } });
+    const out: Record<string, Record<string, number>> = {};
+    for (const r of rows) {
+      const pl = r.pipeline || "War Room";
+      out[pl] = out[pl] ?? {};
+      out[pl][r.stage] = r._count._all;
+    }
+    const plRow = await db.resource.findFirst({ where: { category: "__crm_pipelines__" } });
+    let plDef: unknown = null; try { plDef = plRow?.description ? JSON.parse(plRow.description) : null; } catch { /* raw */ }
+    return NextResponse.json({ ok: true, dbCounts: out, pipelineDefinitions: plDef });
+  }
+
+  // 🔑 Service-account info (?gsainfo=1): client_email + the numeric client_id
+  // that Google Admin's domain-wide delegation entry must match.
+  if (url.searchParams.get("gsainfo") === "1") {
+    try {
+      const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "{}");
+      return NextResponse.json({ ok: true, client_email: sa.client_email ?? null, client_id: sa.client_id ?? null });
+    } catch { return NextResponse.json({ ok: false, error: "bad SA json" }); }
+  }
+
+  // 📬 Gmail DWD test (?gmailtest=1&as=info@freedom-offers.com): mints a
+  // delegated token and reads the mailbox profile — proves the Admin-console
+  // delegation entry is correct before the offer-scan ships.
+  if (url.searchParams.get("gmailtest") === "1") {
+    const asUser = url.searchParams.get("as") || "info@freedom-offers.com";
+    try {
+      const crypto = await import("crypto");
+      const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "{}");
+      const now = Math.floor(Date.now() / 1000);
+      const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
+      const head = enc({ alg: "RS256", typ: "JWT" });
+      const claims = enc({ iss: sa.client_email, sub: asUser, scope: "https://www.googleapis.com/auth/gmail.readonly", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 });
+      const signer = crypto.createSign("RSA-SHA256");
+      signer.update(`${head}.${claims}`); signer.end();
+      const sig = signer.sign(sa.private_key).toString("base64url");
+      const tok = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${head}.${claims}.${sig}` }) }).then((r) => r.json());
+      if (!tok.access_token) return NextResponse.json({ ok: false, step: "token", error: JSON.stringify(tok).slice(0, 250) });
+      const prof = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", { headers: { Authorization: `Bearer ${tok.access_token}` } }).then((r) => r.json());
+      return NextResponse.json({ ok: !!prof.emailAddress, profile: prof });
+    } catch (e) { return NextResponse.json({ ok: false, error: String(e).slice(0, 200) }); }
+  }
+
   // 📱 Nick's manual-dial targets (?nicktargets=1): he's 5h on an iPhone with
   // no dialer (new acq members don't get system licenses) — the 140/100
   // auto-dialer goals were impossible. Standing per-rep overrides.
@@ -835,7 +881,19 @@ export async function GET(request: Request) {
     const from = new Date(Date.now() - 7 * 86400_000).toISOString();
     const list = await listCompletedDocs(from, to);
     const docs = ((list.body as { results?: Array<{ id: string; name?: string; date_completed?: string }> }).results ?? []).slice(0, 15);
-    const folder = await ensureSubfolder(await driveRootId(), "Deal Files");
+    // Jon's existing ACTIVE DEALS folder (one subfolder per deal) —
+    // files land inside the matching deal's folder, created if missing.
+    const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
+    const { listFolder } = await import("@/lib/gdrive");
+    const dealFolders = await listFolder(DEALS_PARENT).catch(() => []);
+    const folderFor = async (label: string) => {
+      const token = (label.match(/\d{2,6}\s+[A-Za-z][A-Za-z0-9 .']{2,24}/)?.[0] ?? label).trim().toLowerCase();
+      const hitNum = token.match(/\d{2,6}/)?.[0];
+      const hit = dealFolders.find((f) => f.mimeType === "application/vnd.google-apps.folder" && hitNum && f.name.toLowerCase().includes(hitNum));
+      if (hit) return hit.id;
+      return ensureSubfolder(DEALS_PARENT, label.slice(0, 80));
+    };
+    const fallbackFolder = await ensureSubfolder(await driveRootId(), "Deal Files");
     const results: Array<Record<string, string>> = [];
     const deadline = Date.now() + 45_000;
     for (const doc of docs) {
@@ -855,7 +913,8 @@ export async function GET(request: Request) {
       }
       const pdf = await downloadDocPdf(doc.id);
       if (!pdf) { results.push({ doc: doc.name ?? doc.id, status: "download failed" }); continue; }
-      const up = await uploadToFolder(folder, `${(doc.name ?? doc.id).replace(/[\\/]/g, "-").slice(0, 120)}.pdf`, pdf, "application/pdf").catch(() => null);
+      const targetFolder = await folderFor(doc.name ?? opp?.title ?? "Unsorted").catch(() => fallbackFolder);
+      const up = await uploadToFolder(targetFolder, `${(doc.name ?? doc.id).replace(/[\\/]/g, "-").slice(0, 120)}.pdf`, pdf, "application/pdf").catch(() => null);
       if (!up) { results.push({ doc: doc.name ?? doc.id, status: "drive upload failed" }); continue; }
       if (opp) {
         await logCrmEvent({ contactId: opp.contactId, oppId: opp.id, kind: "file", body: `📎 Signed doc saved to Drive: ${doc.name ?? doc.id} — ${up.link}`, meta: { pdId: doc.id, driveId: up.id, link: up.link }, actor: "pandadoc" });

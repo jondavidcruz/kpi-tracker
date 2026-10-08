@@ -87,6 +87,7 @@ export async function createWebsiteLead(lead: WebsiteLead) {
   await db.crmTask.create({
     data: { oppId: opp.id, contactId: contact.id, title: `🌐 WEBSITE LEAD — call ${lead.name} NOW (they asked for an offer)`, due: new Date().toISOString().slice(0, 10), assignedTo: existing?.assignedTo || owner, createdBy: "website" },
   }).catch(() => {});
+  if (lead.smsConsent) sendWelcomeText({ contactId: contact.id, oppId: opp.id, phone: lead.phone, name: lead.name, repName: existing?.assignedTo || owner || "our team" }).catch(() => {});
 
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: "Website lead — private offer requested", actor: "website" });
   await logCrmEvent({
@@ -110,4 +111,28 @@ export async function createWebsiteLead(lead: WebsiteLead) {
   });
 
   return { contactId: contact.id, oppId: opp.id };
+}
+
+// 📲 Instant welcome text (Jon 2026-10-08): the moment a lead hits the
+// system, they get a save-our-number text promising a call in ≤5 minutes.
+// Rotating templates so it never reads canned. Consent-gated.
+const WELCOME_TEXTS = [
+  (first: string, rep: string) => `Hi ${first}! This is Freedom Offers — we got your property info. Save this number: ${rep} from our team is calling you in the next 5 minutes. Reply STOP to opt out.`,
+  (first: string, rep: string) => `${first}, thanks for reaching out to Freedom Offers! Save our number — ${rep} will ring you within 5 minutes to talk through your options. Reply STOP to opt out.`,
+  (first: string, rep: string) => `Hey ${first}, Freedom Offers here 👋 Your request is in. Keep this number handy — ${rep} on our team calls you in under 5 minutes. Reply STOP to opt out.`,
+  (first: string, rep: string) => `Hi ${first} — Freedom Offers received your property details. ${rep} is calling from this number within 5 minutes, so please pick up! Reply STOP to opt out.`,
+];
+
+export async function sendWelcomeText(o: { contactId: string; oppId: string; phone: string; name: string; repName: string }): Promise<void> {
+  const from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
+  if (!process.env.TELNYX_API_KEY || !from || !o.phone) return;
+  const first = o.name.trim().split(/\s+/)[0] || "there";
+  const rep = o.repName.trim().split(/\s+/)[0] || "our team";
+  const text = WELCOME_TEXTS[Math.floor(Math.random() * WELCOME_TEXTS.length)](first, rep);
+  const res = await fetch("https://api.telnyx.com/v2/messages", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to: o.phone, text }),
+  }).catch(() => null);
+  await logCrmEvent({ contactId: o.contactId, oppId: o.oppId, kind: "sms", body: `➡️ Us: ${text}${res?.ok ? "" : " (SEND FAILED)"}`, actor: "auto-welcome" }).catch(() => {});
 }
