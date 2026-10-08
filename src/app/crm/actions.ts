@@ -92,6 +92,16 @@ export async function setOppStageAction(formData: FormData) {
         await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `💰 PRICE CHECK w/ developers — ${contact?.name ?? "lead"}${addr ? ` (${addr})` : ""} → tell ${(full.assignedTo || me.name).split(" ")[0]} the number`, due: today, assignedTo: dispo?.name ?? "", createdBy: "comp-flow" } }).catch(() => {});
         await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `📞 CALL SELLER BACK with the developer number once dispo prices it`, due: today, assignedTo: full.assignedTo || me.name, createdBy: "comp-flow" } }).catch(() => {});
         await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `💰 Sent to dispo for developer pricing — dispo tasks created, acq calls back with the offer`, actor: "comp-flow" });
+      } else if (/sign/i.test(stage) && !/missed|dead/i.test(stage)) {
+        // 💰 iSpeedToLead Closer Program (Jon 2026-10-08): they PAY us for
+        // reporting closings on their leads — never let one slip.
+        const src = `${contact?.name ?? ""} ${(await db.crmContact.findUnique({ where: { id: full.contactId }, select: { source: true, tags: true } }).then((x) => `${x?.source ?? ""} ${x?.tags ?? ""}`))}`;
+        const oppTags = (await db.crmOpportunity.findUnique({ where: { id: full.id }, select: { tags: true, value: true, askPrice: true } }));
+        if (/ispeed|dealspeed/i.test(`${src} ${oppTags?.tags ?? ""}`)) {
+          const price = oppTags?.value ?? oppTags?.askPrice;
+          await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `💰 GET PAID — report this closing to iSpeedToLead Closer Program: app.ispeedtolead.com/closer-program (${contact?.name ?? "seller"}${addr ? ` · ${addr}` : ""}${price != null ? ` · $${price.toLocaleString()}` : ""})`, due: today, assignedTo: "Jon Cruz", createdBy: "closer-program" } }).catch(() => {});
+          await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `💰 iSpeedToLead lead SIGNED — submit to the Closer Program for the payout: https://app.ispeedtolead.com/closer-program`, actor: "closer-program" });
+        }
       } else if (/comp review/i.test(stage)) {
         await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `🧐 Manager: review this underwrite before the offer goes out`, due: today, assignedTo: "Jon Cruz", createdBy: "comp-flow" } }).catch(() => {});
       }
