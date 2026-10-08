@@ -4,6 +4,7 @@ import { getCurrentUser, canAccessMarketing } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import MarketsMap, { type Buyer as MapBuyer, type Market } from "@/components/MarketsMap";
 import { getBuyerDemand, areasOfBuyer, typeLabelOf } from "@/lib/buyer-report";
+import { readDewong, saveDewongAction, type DewongEntry } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function LeadSourcingPage() {
     );
   }
 
-  const [demand, mapRows, targets] = await Promise.all([
+  const [demand, mapRows, targets, dewong] = await Promise.all([
     getBuyerDemand(),
     db.marketContact.findMany({
       where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } },
@@ -27,7 +28,25 @@ export default async function LeadSourcingPage() {
       select: { id: true, name: true, category: true, type: true, region: true, market: true, status: true, email: true, phone: true, website: true, buyBox: true, buyBoxAreas: true, lat: true, lng: true, notes: true, contact: true },
     }),
     db.targetMarket.findMany({ orderBy: { sortOrder: "asc" } }),
+    readDewong(),
   ]);
+
+  // 📊 Dewong verdicts: latest entry per market + trend vs the previous check.
+  // HOT = land actually selling NOW + builders active; WATCH = decent 90-day
+  // volume; PASS = everything else.
+  const verdictOf = (e: DewongEntry) => (e.sold30 >= 10 && e.constr90 >= 10 ? "HOT" : e.sold90 >= 15 ? "WATCH" : "PASS");
+  const byMarket = new Map<string, DewongEntry[]>();
+  for (const e of dewong) {
+    const k = `${e.market}|${e.state}`.toLowerCase();
+    if (!byMarket.has(k)) byMarket.set(k, []);
+    byMarket.get(k)!.push(e); // readDewong is newest-first
+  }
+  const marketCards = [...byMarket.values()].map((list) => {
+    const cur = list[0], prev = list[1];
+    const v = verdictOf(cur);
+    const trend = prev ? (cur.sold30 > prev.sold30 ? "↗" : cur.sold30 < prev.sold30 ? "↘" : "→") : "";
+    return { cur, prev, v, trend };
+  }).sort((a, b) => ({ HOT: 0, WATCH: 1, PASS: 2 }[a.v]! - { HOT: 0, WATCH: 1, PASS: 2 }[b.v]!));
 
   const { buyers, ranked, newMarkets, typeMix } = demand;
   const mapBuyers: MapBuyer[] = mapRows.map((r) => ({
@@ -44,6 +63,49 @@ export default async function LeadSourcingPage() {
   return (
     <div className="space-y-5">
       <SectionTitle title="🗺️ Lead Sourcing — where to pull" subtitle={`Live, from ${buyers.length} vetted buyers' buy boxes${typeMix ? ` (${typeMix})` : ""}. Ranked by how many buyers want deals in each area. Green = you already farm it · amber = NEW demand you're not pulling yet.`} accent="bg-brand-gold" />
+
+
+      {/* 📊 Dewong Market Research — manual scorecards until the data APIs are keyed */}
+      <SectionTitle title="📊 Dewong Market Research" subtitle="Is land actually SELLING there? Log Zillow checks (sold land + new construction + pendings) — the verdict and trend compute themselves." accent="bg-brand-navy" />
+      <Card className="p-4">
+        <form action={saveDewongAction} className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-10">
+          <input name="market" required placeholder="Market / county *" className="col-span-2 rounded-lg border border-slate-200 px-2 py-2 text-sm" />
+          <input name="state" placeholder="ST" maxLength={2} className="rounded-lg border border-slate-200 px-2 py-2 text-sm uppercase" />
+          <input name="sold30" placeholder="sold 30d" inputMode="numeric" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" title="Zillow: land SOLD last 30 days" />
+          <input name="sold90" placeholder="sold 90d" inputMode="numeric" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" />
+          <input name="sold180" placeholder="sold 180d" inputMode="numeric" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" />
+          <input name="constr30" placeholder="new constr 30d" inputMode="numeric" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" title="Zillow: new-construction listings 30d" />
+          <input name="constr90" placeholder="constr 90d" inputMode="numeric" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" />
+          <input name="pendings30" placeholder="pendings 30d" inputMode="numeric" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" />
+          <button className="rounded-lg bg-brand-navy px-3 py-2 text-xs font-bold text-white">Log check</button>
+          <input name="constr180" type="hidden" value="0" />
+          <input name="notes" placeholder="notes (optional)" className="col-span-2 rounded-lg border border-slate-200 px-2 py-2 text-sm sm:col-span-4 lg:col-span-10" />
+        </form>
+        <div className="mt-1 text-[10px] text-slate-400">HOT = 10+ land solds in 30d AND 10+ new-construction in 90d (builders are buying) · WATCH = 15+ solds in 90d · PASS = everything else. Arrow = 30-day solds vs your previous check.</div>
+      </Card>
+      {marketCards.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {marketCards.map(({ cur, prev, v, trend }) => (
+            <Card key={cur.id} className={`p-4 ring-2 ${v === "HOT" ? "ring-red-300" : v === "WATCH" ? "ring-amber-200" : "ring-slate-100"}`}>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-extrabold text-slate-900">{cur.market}{cur.state ? `, ${cur.state}` : ""}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${v === "HOT" ? "bg-red-100 text-red-700" : v === "WATCH" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500"}`}>{v === "HOT" ? "🔥 HOT — pull here" : v === "WATCH" ? "👀 WATCH" : "⏭ PASS"}</span>
+                {trend && <span className="text-base" title={`30-day solds vs previous check (${prev?.sold30 ?? "—"})`}>{trend}</span>}
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
+                <div className="rounded-lg bg-slate-50 py-1.5"><b className="block text-base text-slate-800">{cur.sold30}</b>sold 30d</div>
+                <div className="rounded-lg bg-slate-50 py-1.5"><b className="block text-base text-slate-800">{cur.sold90}</b>sold 90d</div>
+                <div className="rounded-lg bg-slate-50 py-1.5"><b className="block text-base text-slate-800">{cur.sold180}</b>sold 180d</div>
+                <div className="rounded-lg bg-slate-50 py-1.5"><b className="block text-base text-slate-800">{cur.constr30}</b>constr 30d</div>
+                <div className="rounded-lg bg-slate-50 py-1.5"><b className="block text-base text-slate-800">{cur.constr90}</b>constr 90d</div>
+                <div className="rounded-lg bg-slate-50 py-1.5"><b className="block text-base text-slate-800">{cur.pendings30}</b>pending 30d</div>
+              </div>
+              {cur.notes && <div className="mt-2 text-[11px] text-slate-500">📝 {cur.notes}</div>}
+              <div className="mt-1 text-[9px] text-slate-400">checked {new Date(cur.at).toLocaleDateString([], { month: "short", day: "numeric" })} by {cur.by.split(" ")[0]}</div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Top-pick tiles */}
       {topPicks.length > 0 && (
