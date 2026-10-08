@@ -69,7 +69,7 @@ export type Agg = { dials: number; answered: number; connected: number; talkSec:
 export type PullResult = { date: string; scanned: number; pages: number; per: Record<string, Agg> };
 
 /** Crawl conversations + their messages for one day; aggregate call stats per agent. */
-export async function pullDay(date: string, tz: string): Promise<PullResult> {
+export async function pullDay(date: string, tz: string, deadline = Date.now() + 40_000): Promise<PullResult> {
   const { start, end } = dayBounds(date, tz);
   const cfgByCrm = new Map(AGENTS.map((a) => [a.crm, a]));
   const per: Record<string, Agg> = {};
@@ -78,7 +78,7 @@ export async function pullDay(date: string, tz: string): Promise<PullResult> {
   let cursor: string | undefined;
   let pages = 0;
   let scanned = 0;
-  while (pages < 25) {
+  while (pages < 25 && Date.now() < deadline) {
     pages++;
     const res = await searchConversations(cursor ? { limit: "100", startAfterDate: cursor } : { limit: "100" });
     if (!res.ok) break;
@@ -87,15 +87,25 @@ export async function pullDay(date: string, tz: string): Promise<PullResult> {
     if (convs.length === 0) break;
 
     let anyInRange = false;
-    for (const c of convs) {
+    // the serial per-conversation getMessages outgrew the 60s function limit
+    // (hundreds of convs × ~300ms) — fetch in parallel batches of 8 instead.
+    const inRange = convs.filter((c) => {
       const lmd = typeof c.lastMessageDate === "number" ? c.lastMessageDate : Date.parse(String(c.lastMessageDate ?? 0));
-      if (Number.isFinite(lmd) && lmd < start) continue; // last activity before our day → skip
-      anyInRange = true;
-      scanned++;
-      const m = await getMessages(c.id);
-      if (!m.ok) continue;
-      const mb = m.body as { messages?: unknown[] | { messages?: unknown[] } };
-      const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []);
+      return !(Number.isFinite(lmd) && lmd < start);
+    });
+    if (inRange.length) anyInRange = true;
+    const lists: unknown[][] = [];
+    for (let i = 0; i < inRange.length && Date.now() < deadline; i += 8) {
+      const batch = inRange.slice(i, i + 8);
+      const results = await Promise.all(batch.map((c) => getMessages(c.id).catch(() => null)));
+      for (const m of results) {
+        scanned++;
+        if (!m?.ok) continue;
+        const mb = m.body as { messages?: unknown[] | { messages?: unknown[] } };
+        lists.push(Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []));
+      }
+    }
+    for (const list of lists) {
       for (const raw of list) {
         const msg = raw as { dateAdded?: string; userId?: string; messageType?: string; status?: string; direction?: string; meta?: { call?: { duration?: number; status?: string } } };
         const dt = Date.parse(String(msg.dateAdded ?? 0));
