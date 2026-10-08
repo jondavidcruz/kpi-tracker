@@ -223,6 +223,14 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "status", dir: 1 });
   const [open, setOpen] = useState<Set<string>>(new Set());
   const toggleOpen = (id: string) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  // 🐢→⚡ Freeze fix (Sharyn/Jon 2026-10-08): the page used to mount EVERY
+  // prospect's 9 editable cells at once — thousands of live inputs froze the
+  // tab ("wait" dialog). Areas now render their rows ONLY when opened, capped
+  // at 30 with a "show more"; searching auto-opens matches.
+  const ROWS_CAP = 30;
+  const [openAreas, setOpenAreas] = useState<Set<string>>(() => new Set(areas[0] ? [areas[0].area] : []));
+  const toggleArea = (a: string) => setOpenAreas((s) => { const n = new Set(s); if (n.has(a)) n.delete(a); else n.add(a); return n; });
+  const [showAllAreas, setShowAllAreas] = useState<Set<string>>(new Set());
 
   const needle = q.trim().toLowerCase();
   const sortKeyVal = (p: Prospect): string => sort.key === "status" ? String(STATUS.findIndex((s) => s.key === statusOf(p))) : p.name.toLowerCase();
@@ -261,11 +269,17 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
 
       {shown.length === 0 && <p className="rounded-xl border border-slate-200 p-6 text-center text-sm text-slate-400">No prospects match.</p>}
 
-      {shown.map(({ area, rows }) => (
-        <details key={area} open className="overflow-hidden rounded-xl border border-slate-200">
-          <summary className="cursor-pointer bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700">
+      {shown.map(({ area, rows }) => {
+        const isOpen = openAreas.has(area) || !!needle || !!statusFilter || !!typeFilter;
+        const capped = !showAllAreas.has(area) && rows.length > ROWS_CAP;
+        const visibleRows = capped ? rows.slice(0, ROWS_CAP) : rows;
+        return (
+        <div key={area} className="overflow-hidden rounded-xl border border-slate-200">
+          <button type="button" onClick={() => toggleArea(area)} className="block w-full cursor-pointer bg-slate-50 px-4 py-2.5 text-left text-sm font-bold text-slate-700 hover:bg-slate-100">
+            <span className="mr-1 inline-block text-slate-400">{isOpen ? "▾" : "▸"}</span>
             {area} <span className="font-normal text-slate-400">· {rows.length}</span>
-          </summary>
+          </button>
+          {isOpen && (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1240px] border-collapse text-xs">
               <thead>
@@ -282,7 +296,7 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                 </tr>
               </thead>
               <tbody className="[&>tr>td]:border-r [&>tr>td]:border-slate-100">
-                {rows.map((p) => {
+                {visibleRows.map((p) => {
                   const cur = statusOf(p);
                   const m = meta(cur);
                   const overdue = p.nextFollowUp && p.nextFollowUp < today && cur !== "vetted" && cur !== "not_interested";
@@ -360,10 +374,16 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                 })}
               </tbody>
             </table>
+            {capped && (
+              <button type="button" onClick={() => setShowAllAreas((s) => new Set(s).add(area))} className="block w-full border-t border-slate-100 bg-slate-50 px-4 py-2 text-xs font-bold text-brand-navy hover:bg-slate-100">
+                ▼ Show the other {rows.length - ROWS_CAP} in {area}
+              </button>
+            )}
           </div>
+          )}
 
           {/* Add a developer to this area */}
-          {canEdit && allowAdd && (
+          {isOpen && canEdit && allowAdd && (
             <div className="border-t border-slate-100 bg-slate-50/50 px-3 py-2">
               <details>
                 <summary className="cursor-pointer text-xs font-semibold text-brand-navy">+ Add a buyer to this area</summary>
@@ -371,8 +391,8 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
               </details>
             </div>
           )}
-        </details>
-      ))}
+        </div>
+      );})}
     </div>
   );
 }

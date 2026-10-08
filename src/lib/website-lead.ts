@@ -99,13 +99,12 @@ export async function createWebsiteLead(lead: WebsiteLead) {
   if (lead.contactConsent && lead.email) {
     (async () => {
       const { sendEmailTo } = await import("@/lib/notify");
+      const { readMsgTemplates, fillTokens } = await import("@/lib/msg-templates");
       const rep = (existing?.assignedTo || owner || "our team").split(" ")[0];
       const first = lead.name.trim().split(/\s+/)[0] || "there";
-      const ok = await sendEmailTo(
-        [lead.email],
-        "We got your request — your private offer is in motion",
-        `<p>Hi ${first},</p><p>Thanks for reaching out to <b>Freedom Offers</b> about <b>${lead.address}</b>. We received your request and ${rep} from our team will call you within the next few minutes from our number — please save it when the call comes in.</p><p>We'll prepare your private offer within 24 hours. No listings, no showings, no fees — and if you ever prefer email, just reply here.</p><p>— The Freedom Offers Team<br/>freedom-offers.com</p>`,
-      );
+      const tpls = await readMsgTemplates();
+      const tok = { first, rep, address: lead.address };
+      const ok = await sendEmailTo([lead.email], fillTokens(tpls.welcome_email_subject, tok), fillTokens(tpls.welcome_email_body, tok));
       const { logCrmEvent } = await import("@/lib/crm");
       await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "email", body: `➡️ Us: welcome email (we got your request — offer within 24h)${ok ? "" : " (SEND FAILED)"}`, actor: "auto-welcome" }).catch(() => {});
     })().catch(() => {});
@@ -150,7 +149,13 @@ export async function sendWelcomeText(o: { contactId: string; oppId: string; pho
   if (!process.env.TELNYX_API_KEY || !from || !o.phone) return;
   const first = o.name.trim().split(/\s+/)[0] || "there";
   const rep = o.repName.trim().split(/\s+/)[0] || "our team";
-  const text = WELCOME_TEXTS[Math.floor(Math.random() * WELCOME_TEXTS.length)](first, rep);
+  // Owner-edited template wins (Automations → Message automations); the
+  // rotating set only runs while no custom text is saved (Jon 2026-10-08).
+  const { readMsgTemplates, fillTokens, MSG_DEFAULTS } = await import("@/lib/msg-templates");
+  const tpl = (await readMsgTemplates()).welcome_sms;
+  const text = tpl !== MSG_DEFAULTS.welcome_sms
+    ? fillTokens(tpl, { first, rep })
+    : WELCOME_TEXTS[Math.floor(Math.random() * WELCOME_TEXTS.length)](first, rep);
   const res = await fetch("https://api.telnyx.com/v2/messages", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },

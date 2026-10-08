@@ -155,8 +155,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
       <ClientWidgets showPresence />
       {/* ☎️ App-wide softphone (Jon 2026-10-08: "make it ring into the entire
           war room") — ONE registered Telnyx client, mounted globally so inbound
-          calls ring on every page, not just the CRM tab. Bottom-left (Cortana
-          owns bottom-right). */}
+          calls ring on every page, not just the CRM tab. Top-right per Jon. */}
       <GlobalPhone me={me} />
     </div>
   );

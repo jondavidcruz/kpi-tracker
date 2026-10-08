@@ -7,7 +7,7 @@ import { useEffect, useState, useTransition } from "react";
 import {
   setOppStageAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
   addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, saveCrmFormAction,
-  setOppOwnerAction, toggleFollowerAction,
+  setOppOwnerAction, toggleFollowerAction, archiveOppAction,
 } from "@/app/crm/actions";
 import { KIND_EMOJI } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
@@ -90,6 +90,15 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                 <button onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: d.contact.phone, name: d.contact.name, oppId: d.id, contactId: d.contact.id } }))} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">📞 Call</button>
               )}
               <a href={`/crm/${d.id}`} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Open full ↗</a>
+              <button
+                title="Delete this lead (goes to the archive — recoverable, never truly gone)"
+                onClick={() => {
+                  if (!confirm(`Delete ${d.contact.name}? It moves to the archive (recoverable) — it is NOT permanently destroyed.`)) return;
+                  const fd = new FormData(); fd.set("id", d.id);
+                  start(async () => { await archiveOppAction(fd); setOppId(null); window.location.reload(); });
+                }}
+                className="rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:bg-red-50 hover:text-red-600 hover:ring-red-200"
+              >🗑 Delete</button>
               <button onClick={() => setOppId(null)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600">✕</button>
             </div>
 

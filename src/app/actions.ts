@@ -370,7 +370,11 @@ export async function addRepReason(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const repReason = String(formData.get("repReason") ?? "").trim();
   if (!id || !repReason) return;
-  await db.alert.update({ where: { id }, data: { repReason } });
+  // keep the 🤖 AI-context line (if the watchdog wrote one) BELOW the human
+  // answer — the human's honest words always lead (Jon 2026-10-08)
+  const cur = await db.alert.findUnique({ where: { id }, select: { repReason: true } });
+  const aiLine = (cur?.repReason ?? "").split("\n").find((l) => l.startsWith("🤖"));
+  await db.alert.update({ where: { id }, data: { repReason: aiLine ? `${repReason}\n${aiLine}` : repReason } });
   revalidateAlerts();
 }
 

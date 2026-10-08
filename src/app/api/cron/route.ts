@@ -1127,6 +1127,28 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, byPipeline: out });
   }
 
+  // 🏠 War Room pipeline retirement (?warroommove=1 — Jon 2026-10-08: "why is
+  // War Room its own pipeline?"): every lead sitting in the generic bucket
+  // moves to its assigned rep's own pipeline (first stage), Michelle fallback.
+  if (url.searchParams.get("warroommove") === "1") {
+    const { readPipelines } = await import("@/lib/crm");
+    const pls = await readPipelines();
+    const pipeFor = (assigned: string) => {
+      const f = assigned.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+      return (f && pls.find((p) => p.name.toLowerCase().includes(f))) || pls.find((p) => /AQM/i.test(p.name));
+    };
+    const orphans = await db.crmOpportunity.findMany({ where: { pipeline: { in: ["", "War Room"] } }, select: { id: true, assignedTo: true, stage: true } });
+    let moved = 0;
+    for (const o of orphans) {
+      const p = pipeFor(o.assignedTo);
+      if (!p) continue;
+      const stageOk = p.stages.some((st) => st.key === o.stage);
+      await db.crmOpportunity.update({ where: { id: o.id }, data: { pipeline: p.name, ...(stageOk ? {} : { stage: p.stages[0]?.key ?? o.stage }) } });
+      moved++;
+    }
+    return NextResponse.json({ ok: true, moved });
+  }
+
   // 🏷 Pipeline-name fix (?pipefix=1): today's GHL import stamped GHL's own
   // pipeline names onto the rows — walk them back to the War Room names.
   if (url.searchParams.get("pipefix") === "1") {
@@ -1194,41 +1216,79 @@ export async function GET(request: Request) {
   // actually worked (punches), dev-day focus, internet-speed logs, entry gaps.
   // Prefixed 🤖 so the rep can overwrite it with the human story anytime.
   if (url.searchParams.get("flagreasons") === "1") {
+    // Jon 2026-10-08 v2: the 🤖 line is CONTEXT, never the answer — the form
+    // stays open until a human writes an honest reason. Also: detect repeat
+    // misses (systemic → leadership), detect copy-pasted answers, and give
+    // Marie a daily EOD task to review every flag. ?undo=1 clears old 🤖-only
+    // reasons so the forms reopen.
+    if (url.searchParams.get("undo") === "1") {
+      const olds = await db.alert.findMany({ where: { repReason: { startsWith: "🤖" } }, select: { id: true } });
+      for (const o of olds) await db.alert.update({ where: { id: o.id }, data: { repReason: null } });
+      return NextResponse.json({ ok: true, cleared: olds.length });
+    }
     const since = new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10);
+    const week = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+    const todayStr2 = new Date().toISOString().slice(0, 10);
     const open = await db.alert.findMany({
-      where: { status: "open", date: { gte: since }, OR: [{ repReason: null }, { repReason: "" }] },
-      include: { user: { select: { id: true, name: true } }, kpi: { select: { name: true, key: true } } },
+      where: { status: "open", date: { gte: since }, OR: [{ repReason: null }, { repReason: "" }, { repReason: { startsWith: "🤖" } }] },
+      include: { user: { select: { id: true, name: true } }, kpi: { select: { name: true, key: true, id: true } } },
       take: 60,
     });
     let filled = 0;
-    const notes: string[] = [];
+    const jonTasks: string[] = [];
+    const jon = await db.user.findFirst({ where: { active: true, name: { startsWith: "Jon", mode: "insensitive" } }, select: { name: true } });
+    const mkJonTask = async (title: string) => {
+      const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } });
+      if (!dup) { await db.crmTask.create({ data: { oppId: "", contactId: "", title, due: todayStr2, assignedTo: jon?.name ?? "Jon Cruz", createdBy: "flag-watch" } }); jonTasks.push(title); }
+    };
     for (const a of open) {
       if (!a.user) continue;
       const bits: string[] = [];
-      // hours actually worked that day
       const punches = await db.punch.findMany({ where: { userId: a.user.id, date: a.date }, orderBy: { at: "asc" } });
       const ins = punches.filter((p) => p.kind === "in");
       const outs = punches.filter((p) => p.kind === "out");
-      if (punches.length === 0) bits.push("no time-card punches that day (possibly absent or forgot to clock in)");
+      if (punches.length === 0) bits.push("no time-card punches that day");
       else if (ins.length && outs.length) {
         const worked = (outs[outs.length - 1].at.getTime() - ins[0].at.getTime()) / 3_600_000;
-        if (worked < 4) bits.push(`short day — ~${worked.toFixed(1)}h on the clock`);
-        else bits.push(`~${worked.toFixed(1)}h on the clock`);
-      } else if (ins.length && !outs.length) bits.push("clocked in but never clocked out — time card incomplete");
-      // developer-day focus flips the scorecard
+        bits.push(worked < 4 ? `short day — ~${worked.toFixed(1)}h on the clock` : `~${worked.toFixed(1)}h on the clock`);
+      } else if (ins.length && !outs.length) bits.push("clocked in, never clocked out");
       const standup = await db.standup.findUnique({ where: { userId_date: { userId: a.user.id, date: a.date } } }).catch(() => null);
-      if (standup?.focus === "developer") bits.push("developer/luxury outreach day — dialer KPIs weren't the focus");
-      // internet-speed context for the speed KPI
-      if (/internet|speed/i.test(a.kpi.name) && a.actual > 0) bits.push(`measured ${a.actual} Mbps vs ${a.expected} expected — connection problem, not effort`);
-      // zero vs partial
-      if (a.actual === 0 && punches.length > 0) bits.push(`worked but logged 0 — likely forgot to enter this KPI`);
-      else if (a.actual > 0 && a.actual < a.expected) bits.push(`partial: ${a.actual} of ${a.expected}`);
-      const reason = `🤖 auto-analysis: ${bits.length ? bits.join(" · ") : `${a.actual} vs ${a.expected} expected — no obvious system cause (time card + focus look normal)`}`;
-      await db.alert.update({ where: { id: a.id }, data: { repReason: reason.slice(0, 500) } });
+      if (standup?.focus === "developer") bits.push("developer-outreach day — dialer KPIs weren't the focus");
+      if (/internet|speed/i.test(a.kpi.name) && a.actual > 0) bits.push(`measured ${a.actual} vs ${a.expected} Mbps — connection, not effort`);
+      if (a.actual === 0 && punches.length > 0) bits.push("worked but logged 0 — possibly forgot to enter it");
+      // 📉 systemic pattern: same rep+KPI missed 4+ of the last 7 days
+      const repeats = await db.alert.count({ where: { userId: a.user.id, kpiId: a.kpi.id, date: { gte: week } } });
+      if (repeats >= 4) {
+        bits.push(`missed ${repeats} of the last 7 days — looks SYSTEMIC, not effort`);
+        await mkJonTask(`📉 Systemic KPI miss: ${a.user.name.split(" ")[0]}'s ${a.kpi.name} missed ${repeats}/7 days — likely goal too high, not enough leads, or a tracking gap. Decide at the leadership call (recalibrate: /admin/recalibrate)`);
+      }
+      const ctx = `🤖 AI context (not an answer): ${bits.length ? bits.join(" · ") : "time card + focus look normal — needs the human story"}`;
+      await db.alert.update({ where: { id: a.id }, data: { repReason: ctx.slice(0, 480) } });
       filled++;
-      notes.push(`${a.user.name.split(" ")[0]} ${a.kpi.name} ${a.date}`);
     }
-    return NextResponse.json({ ok: true, filled, flags: notes });
+    // 🔁 copy-paste detection: same human answer reused 3+ times in 7 days
+    const answered = await db.alert.findMany({ where: { date: { gte: week }, NOT: [{ repReason: null }, { repReason: "" }] }, include: { user: { select: { name: true } } }, take: 200 });
+    const byRepText = new Map<string, number>();
+    for (const a of answered) {
+      const human = (a.repReason ?? "").split("\n").filter((l) => l && !l.startsWith("🤖")).join(" ").trim().toLowerCase();
+      if (human.length < 4) continue;
+      const k = `${a.user?.name ?? "?"}|${human}`;
+      byRepText.set(k, (byRepText.get(k) ?? 0) + 1);
+    }
+    for (const [k, n] of byRepText) {
+      if (n >= 3) await mkJonTask(`🔁 Copy-paste flag reasons: ${k.split("|")[0]} used the same answer ${n}× this week ("${k.split("|")[1].slice(0, 60)}…") — either it's a real recurring problem to fix, or the check-in is being rubber-stamped. Leadership-call item.`);
+    }
+    // 📋 Marie's EOD task whenever today's flags lack human answers
+    const unansweredToday = open.filter((a) => a.date >= new Date(Date.now() - 86400_000).toISOString().slice(0, 10)).length;
+    if (unansweredToday > 0) {
+      const marie = await db.user.findFirst({ where: { active: true, name: { startsWith: "Marie", mode: "insensitive" } }, select: { name: true } });
+      if (marie) {
+        const title = `📋 EOD flag check (${todayStr2}): ${unansweredToday} flagged KPI${unansweredToday === 1 ? "" : "s"} need an HONEST reason — fresh words, no copy-paste (/entry)`;
+        const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } });
+        if (!dup) await db.crmTask.create({ data: { oppId: "", contactId: "", title, due: todayStr2, assignedTo: marie.name, createdBy: "flag-watch" } });
+      }
+    }
+    return NextResponse.json({ ok: true, filled, jonTasks });
   }
 
   // 🧹 One-time Direct REI flood rollback (?dreicleanup=1, Jon 2026-10-08):

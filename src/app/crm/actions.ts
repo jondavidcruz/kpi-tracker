@@ -28,11 +28,29 @@ export async function createCrmLeadAction(formData: FormData) {
     source: String(formData.get("source") ?? "").trim(),
     assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name,
   } });
+  // land in the ASSIGNED REP'S pipeline, not the generic War Room tab, and
+  // fire the welcome SMS + email like every other intake (Jon 2026-10-08)
+  const repFirst = contact.assignedTo.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const repPipe = repFirst ? (await readPipelines()).find((p) => p.name.toLowerCase().includes(repFirst)) : undefined;
   const opp = await db.crmOpportunity.create({ data: {
-    contactId: contact.id, title, stage: "new",
+    contactId: contact.id, title, stage: repPipe?.stages[0]?.key ?? "new", pipeline: repPipe?.name ?? "",
     assignedTo: contact.assignedTo,
   } });
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: "Lead created", actor: me.name });
+  if (contact.phone) {
+    const { sendWelcomeText } = await import("@/lib/website-lead");
+    sendWelcomeText({ contactId: contact.id, oppId: opp.id, phone: contact.phone, name: contact.name, repName: contact.assignedTo }).catch(() => {});
+  }
+  if (contact.email) {
+    (async () => {
+      const { sendEmailTo } = await import("@/lib/notify");
+      const { readMsgTemplates, fillTokens } = await import("@/lib/msg-templates");
+      const tpls = await readMsgTemplates();
+      const tok = { first: contact.name.split(" ")[0], rep: contact.assignedTo.split(" ")[0], address: title };
+      const ok = await sendEmailTo([contact.email], fillTokens(tpls.welcome_email_subject, tok), fillTokens(tpls.welcome_email_body, tok));
+      await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "email", body: `➡️ Us: welcome email${ok ? "" : " (SEND FAILED)"}`, actor: "auto-welcome" }).catch(() => {});
+    })().catch(() => {});
+  }
   revalidatePath("/crm");
   redirect(`/crm/${opp.id}`);
 }
@@ -343,6 +361,38 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   const err = ok ? "" : (await res.text()).slice(0, 140);
   await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: ${text}${ok ? "" : ` (SEND FAILED: ${err})`}`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
+}
+
+/** 🗑 "Delete" a lead = archive it (archive-never-delete rule): the opp is
+ *  archived and, when nothing else references the contact, the contact too.
+ *  Recoverable from the archived list. Manager or the lead's owner. */
+export async function archiveOppAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { id: true, contactId: true, assignedTo: true } });
+  if (!opp) return;
+  if (!isManager(me) && opp.assignedTo && opp.assignedTo !== me.name) return;
+  await db.crmOpportunity.update({ where: { id }, data: { archivedAt: new Date() } });
+  const siblings = await db.crmOpportunity.count({ where: { contactId: opp.contactId, archivedAt: null } });
+  if (siblings === 0) await db.crmContact.update({ where: { id: opp.contactId }, data: { archivedAt: new Date() } }).catch(() => {});
+  await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: `🗑 Lead deleted (archived — recoverable) by ${me.name}`, actor: me.name }).catch(() => {});
+  revalidatePath("/crm");
+}
+
+/** 💬 Save the editable auto-message templates (C-suite, from /crm/automations). */
+export async function saveMsgTemplatesAction(formData: FormData) {
+  const me = await getCurrentUser();
+  const { canAccessCSuite } = await import("@/lib/auth");
+  if (!canAccessCSuite(me)) return;
+  const { saveMsgTemplates, MSG_TEMPLATE_META } = await import("@/lib/msg-templates");
+  const patch: Record<string, string> = {};
+  for (const m of MSG_TEMPLATE_META) {
+    const v = formData.get(`t_${m.key}`);
+    if (typeof v === "string") patch[m.key] = v.trim().slice(0, 2000);
+  }
+  await saveMsgTemplates(patch);
+  revalidatePath("/crm/automations");
 }
 
 /** 📲 Start a conversation with ANY number/email (Jon 2026-10-08: "text myself

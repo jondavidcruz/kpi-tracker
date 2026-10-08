@@ -260,11 +260,13 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   );
 
   return (
-    <span className={floating ? "fixed bottom-5 left-5 z-40" : "relative"}>
+    // floating = the ONE global phone: top-right on every page (Jon 2026-10-08
+    // — "keep it in the top right"), ringing no matter what section you're in.
+    <span className={floating ? "fixed right-4 top-3 z-50" : "relative"}>
       <audio ref={audioRef} autoPlay style={{ display: "none" }} />
-      <button onClick={() => setOpen((v) => !v)} title="Phone — call from your browser" className={`grid place-items-center rounded-full ${floating ? "h-12 w-12 text-lg shadow-xl ring-2 ring-white/70" : "h-8 w-8 text-sm"} ${state === "active" ? "bg-emerald-500 text-white" : incoming ? "animate-pulse bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>📞</button>
+      <button onClick={() => setOpen((v) => !v)} title="Phone — call from your browser" className={`grid place-items-center rounded-full ${floating ? "h-10 w-10 text-base shadow-lg ring-2 ring-white/70" : "h-8 w-8 text-sm"} ${state === "active" ? "bg-emerald-500 text-white" : incoming ? "animate-pulse bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>📞</button>
       {open && (
-        <span className={`absolute z-40 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 ${floating ? "bottom-14 left-0" : "right-0 top-10"}`}>
+        <span className={`absolute z-50 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 ${floating ? "right-0 top-12" : "right-0 top-10"}`}>
           {/* header: Calling From */}
           <span className="flex items-center justify-between gap-2 border-b border-slate-100 px-3.5 py-2.5">
             <span>

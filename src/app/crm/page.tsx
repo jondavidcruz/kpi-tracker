@@ -150,7 +150,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       {/* 🔀 Pipeline dropdown — exactly like GHL's */}
       <div className="flex flex-wrap items-center gap-2">
         <PipelineSelect
-          pipelines={pipelines.map((pp) => ({ name: pp.name, count: plCounts[pp.name] ?? 0 }))}
+          pipelines={pipelines.filter((pp) => pp.name !== "War Room" || (plCounts["War Room"] ?? 0) > 0).map((pp) => ({ name: pp.name, count: plCounts[pp.name] ?? 0 }))}
           current={plName}
           baseQs={`view=${view}${whoQ}`}
         />
@@ -210,9 +210,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       <Card className="p-4">
         <h3 className="mb-2 text-sm font-bold text-slate-700">＋ New lead</h3>
-        <form action={createCrmLeadAction} className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
+        <form action={createCrmLeadAction} className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-7">
           <input name="name" placeholder="Seller name *" required className={inputCls} />
           <input name="phone" placeholder="Phone" className={inputCls} />
+          <input name="email" type="email" placeholder="Email" className={inputCls} />
           <input name="title" placeholder="Property / opportunity" className={inputCls} />
           <input name="source" placeholder="Source (PPL…)" className={inputCls} />
           <select name="assignedTo" defaultValue={me?.name ?? ""} className={inputCls}>
@@ -220,6 +221,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           </select>
           <button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Add lead</button>
         </form>
+        <p className="mt-1 text-[10px] text-slate-400">Adding a lead auto-sends the welcome text (and email when given) and drops them into the rep&apos;s own pipeline.</p>
       </Card>
 
       {view === "kanban" ? (

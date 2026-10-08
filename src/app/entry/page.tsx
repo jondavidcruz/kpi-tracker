@@ -308,23 +308,30 @@ export default async function EntryPage({
       {rep && myAlerts.length > 0 && (
         <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
           <h2 className="text-base font-bold text-slate-800">⚠️ Your flagged KPIs</h2>
-          <p className="mb-3 text-sm text-slate-500">Add a quick reason so your manager has the context. This doesn&apos;t clear the flag — it just explains it.</p>
+          <p className="mb-3 text-sm text-slate-500">The 🤖 line is machine context (hours worked, signals) — it is NOT your answer. Write what actually happened in your own words, fresh each day. Copy-pasted answers get flagged to leadership.</p>
           <div className="space-y-2">
-            {myAlerts.map((a) => (
+            {myAlerts.map((a) => {
+              // 🤖-prefixed lines are AI context; anything else is the human answer
+              const lines = (a.repReason ?? "").split("\n").filter(Boolean);
+              const ai = lines.find((l) => l.startsWith("🤖"));
+              const human = lines.filter((l) => !l.startsWith("🤖")).join(" ");
+              return (
               <div key={a.id} className="rounded-lg bg-white p-3 ring-1 ring-amber-100">
                 <div className="text-sm font-semibold text-slate-700">{a.kpi.emoji} {a.message}</div>
                 <div className="text-xs text-slate-400">{friendlyDate(a.date)}</div>
-                {a.repReason ? (
-                  <p className="mt-1.5 rounded-md bg-sky-50 px-2.5 py-1.5 text-xs text-sky-800">You said: {a.repReason}</p>
+                {ai && <p className="mt-1.5 rounded-md bg-slate-50 px-2.5 py-1.5 text-[11px] italic text-slate-500">{ai}</p>}
+                {human ? (
+                  <p className="mt-1.5 rounded-md bg-sky-50 px-2.5 py-1.5 text-xs text-sky-800">You said: {human}</p>
                 ) : (
                   <form action={addRepReason} className="mt-2 flex flex-wrap items-center gap-2">
                     <input type="hidden" name="id" value={a.id} />
-                    <input name="repReason" placeholder="e.g. internet down 2 hrs / had 2 closings" className="min-w-56 flex-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
+                    <input name="repReason" placeholder="what actually happened — your own words, honest" className="min-w-56 flex-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
                     <button className="rounded-md bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-700">Add reason</button>
                   </form>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

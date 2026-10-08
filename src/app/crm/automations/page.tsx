@@ -4,7 +4,8 @@ import { Card, SectionTitle } from "@/components/ui";
 import { readPipelines } from "@/lib/crm";
 import { readRules } from "@/lib/crm-automations";
 import { readSequences } from "@/lib/crm-templates";
-import { saveAutomationAction } from "../actions";
+import { saveAutomationAction, saveMsgTemplatesAction } from "../actions";
+import { readMsgTemplates, MSG_TEMPLATE_META } from "@/lib/msg-templates";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function CrmAutomationsPage() {
   const me = await getCurrentUser();
   if (!me || !canAccessCSuite(me)) return <Card className="p-10 text-center text-slate-400">🔒 System Settings — C-suite only.</Card>;
-  const [rules, pipelines, sequences] = await Promise.all([readRules(), readPipelines(), readSequences()]);
+  const [rules, pipelines, sequences, templates] = await Promise.all([readRules(), readPipelines(), readSequences(), readMsgTemplates()]);
 
   return (
     <div className="space-y-4">
@@ -62,6 +63,29 @@ export default async function CrmAutomationsPage() {
             </select>
           </div>
           <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 lg:col-span-3">＋ Add automation</button>
+        </form>
+      </Card>
+
+      {/* 💬 Message automations (Jon 2026-10-08): the exact words every auto
+          SMS / email sends — edit, save, done. Tokens fill per lead. */}
+      <Card className="p-4">
+        <div className="mb-1 text-sm font-extrabold text-slate-800">💬 Message automations <span className="font-normal text-slate-400">— edit exactly what gets sent · tokens: {"{first}"} = lead, {"{rep}"} = rep, {"{address}"} = property</span></div>
+        <form action={saveMsgTemplatesAction} className="space-y-4">
+          {(["sms", "email"] as const).map((kind) => (
+            <div key={kind}>
+              <div className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">{kind === "sms" ? "📲 SMS automations" : "✉️ Email automations"}</div>
+              <div className="space-y-2.5">
+                {MSG_TEMPLATE_META.filter((m) => m.kind === kind).map((m) => (
+                  <label key={m.key} className="block">
+                    <span className="text-xs font-bold text-slate-700">{m.label}</span>
+                    <span className="block text-[10px] text-slate-400">Fires: {m.fires}</span>
+                    <textarea name={`t_${m.key}`} defaultValue={templates[m.key]} rows={m.key === "welcome_email_body" ? 5 : 2} className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button className="rounded-lg bg-brand-navy px-4 py-2 text-xs font-bold text-white hover:bg-brand-navy-700">💾 Save message templates</button>
         </form>
       </Card>
 

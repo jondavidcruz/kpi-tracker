@@ -155,10 +155,13 @@ export async function POST(req: NextRequest) {
         let texted = false;
         if (process.env.TELNYX_API_KEY) {
           const first = contact?.name.split(" ")[0] ?? "there";
+          // editable in CRM → Automations → Message automations (Jon 2026-10-08)
+          const { readMsgTemplates, fillTokens } = await import("@/lib/msg-templates");
+          const tpl = (await readMsgTemplates()).missed_call_sms;
           const res = await fetch("https://api.telnyx.com/v2/messages", {
             method: "POST",
             headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ from: pay.to, to: pay.from, text: `Hi ${first}, this is Freedom Offers — sorry we missed your call! We'll ring you right back. If it's about your property, reply here and we're on it.` }),
+            body: JSON.stringify({ from: pay.to, to: pay.from, text: fillTokens(tpl, { first, rep: contact?.assignedTo?.split(" ")[0] }) }),
           }).catch(() => null);
           texted = !!res?.ok;
         }
