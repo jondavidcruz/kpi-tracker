@@ -3,11 +3,14 @@
 import { useState, type FormEvent } from "react";
 import { CONSENT_TEXT, CONSENT_FOOTNOTE } from "@/lib/sms-consent";
 
+const CONTACT_CONSENT_TEXT = "I agree that Freedom Offers LLC may contact me by phone and email about my property inquiry, and I accept the Privacy Policy and Terms of Service.";
+
 // Public private-offer form. Embedded on freedom-offers.com (iframe) and
 // reachable directly. Posts to /api/intake/website-lead.
 export default function OfferPage() {
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [error, setError] = useState("");
+  const [ptype, setPtype] = useState("home");
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -15,7 +18,11 @@ export default function OfferPage() {
     setError("");
     const fd = new FormData(e.currentTarget);
     const body = {
-      name: fd.get("name"),
+      firstName: fd.get("firstName"),
+      lastName: fd.get("lastName"),
+      apn: fd.get("apn"),
+      priceWanted: fd.get("priceWanted"),
+      contactConsent: fd.get("contactConsent") ? true : false,
       phone: fd.get("phone"),
       email: fd.get("email"),
       address: fd.get("address"),
@@ -63,9 +70,15 @@ export default function OfferPage() {
       <p className="mt-1 text-sm text-slate-600">Share a few details. We will prepare your offer within 24 hours.</p>
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
-        <div>
-          <label className={label} htmlFor="name">Full name *</label>
-          <input id="name" name="name" required autoComplete="name" className={input} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={label} htmlFor="firstName">First name *</label>
+            <input id="firstName" name="firstName" required autoComplete="given-name" className={input} />
+          </div>
+          <div>
+            <label className={label} htmlFor="lastName">Last name *</label>
+            <input id="lastName" name="lastName" required autoComplete="family-name" className={input} />
+          </div>
         </div>
         <div>
           <label className={label} htmlFor="phone">Mobile phone *</label>
@@ -81,10 +94,20 @@ export default function OfferPage() {
         </div>
         <div>
           <label className={label} htmlFor="propertyType">Property type</label>
-          <select id="propertyType" name="propertyType" defaultValue="home" className={input}>
+          <select id="propertyType" name="propertyType" value={ptype} onChange={(e) => setPtype(e.target.value)} className={input}>
             <option value="home">Home</option>
             <option value="land">Land</option>
           </select>
+        </div>
+        {ptype === "land" && (
+          <div>
+            <label className={label} htmlFor="apn">Parcel Number / APN (if you have it)</label>
+            <input id="apn" name="apn" autoComplete="off" className={input} placeholder="e.g. 123-456-789" />
+          </div>
+        )}
+        <div>
+          <label className={label} htmlFor="priceWanted">Price you&apos;d like to get ($)</label>
+          <input id="priceWanted" name="priceWanted" inputMode="numeric" className={input} placeholder="e.g. 85,000" />
         </div>
         <div>
           <label className={label} htmlFor="motivation">Anything we should know? (optional)</label>
@@ -97,6 +120,10 @@ export default function OfferPage() {
           <input id="company_website" name="company_website" tabIndex={-1} autoComplete="off" />
         </div>
 
+        <label className="flex items-start gap-3 text-sm text-slate-700">
+          <input type="checkbox" name="contactConsent" className="mt-1 h-4 w-4" />
+          <span>{CONTACT_CONSENT_TEXT}</span>
+        </label>
         <label className="flex items-start gap-3 text-sm text-slate-700">
           <input type="checkbox" name="smsConsent" className="mt-1 h-4 w-4" />
           <span>{CONSENT_TEXT}</span>

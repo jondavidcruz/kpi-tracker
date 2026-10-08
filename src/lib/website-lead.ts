@@ -12,8 +12,11 @@ export type WebsiteLead = {
   email: string;
   address: string;
   propertyType: "home" | "land";
+  apn: string;
+  priceWanted: string;
   motivation: string;
   smsConsent: boolean;
+  contactConsent: boolean;
   sourcePage: string;
   ip: string;
   userAgent: string;
@@ -28,7 +31,9 @@ export function parseWebsiteLead(
 ): { ok: true; lead: WebsiteLead } | { ok: false; error: string; bot?: boolean } {
   if (clip(raw.company_website, 200)) return { ok: false, error: "bot", bot: true };
 
-  const name = clip(raw.name, 120);
+  const first = clip(raw.firstName, 60);
+  const lastN = clip(raw.lastName, 60);
+  const name = [first, lastN].filter(Boolean).join(" ") || clip(raw.name, 120);
   const digits = clip(raw.phone, 40).replace(/\D/g, "");
   const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
   const email = clip(raw.email, 160);
@@ -37,6 +42,9 @@ export function parseWebsiteLead(
   const propertyType = raw.propertyType === "land" ? "land" : "home";
   // Consent is optional by design — the disclosure says it is not required for any service.
   const smsConsent = raw.smsConsent === true || raw.smsConsent === "true" || raw.smsConsent === "on";
+  const contactConsent = raw.contactConsent === true || raw.contactConsent === "true" || raw.contactConsent === "on";
+  const apn = clip(raw.apn, 60);
+  const priceWanted = clip(raw.priceWanted, 40);
 
   if (!name) return { ok: false, error: "Please enter your name." };
   if (local.length !== 10) return { ok: false, error: "Please enter a valid 10-digit US phone number." };
@@ -45,7 +53,7 @@ export function parseWebsiteLead(
 
   return {
     ok: true,
-    lead: { name, phone: `+1${local}`, email, address, propertyType, motivation, smsConsent, ...meta },
+    lead: { name, phone: `+1${local}`, email, address, propertyType, apn, priceWanted, motivation, smsConsent, contactConsent, ...meta },
   };
 }
 
@@ -63,6 +71,7 @@ export async function createWebsiteLead(lead: WebsiteLead) {
     }));
 
   const formKey = lead.propertyType === "land" ? "land" : "property";
+  const priceNum = Number(lead.priceWanted.replace(/[^\d.]/g, "")) || null;
   const opp = await db.crmOpportunity.create({
     data: {
       contactId: contact.id,
@@ -71,7 +80,8 @@ export async function createWebsiteLead(lead: WebsiteLead) {
       stage: "new",
       tags: "website",
       assignedTo: existing?.assignedTo || owner,
-      formData: { [formKey]: { address: lead.address, motivation: lead.motivation } },
+      askPrice: priceNum,
+      formData: { [formKey]: { address: lead.address, motivation: lead.motivation, ...(lead.apn ? { apn: lead.apn } : {}), ...(lead.priceWanted ? { wants: lead.priceWanted } : {}) } },
     },
   });
   await db.crmTask.create({
@@ -83,10 +93,11 @@ export async function createWebsiteLead(lead: WebsiteLead) {
     contactId: contact.id,
     oppId: opp.id,
     kind: "system",
-    body: lead.smsConsent ? "SMS consent GIVEN (box checked)" : "SMS consent NOT given (box unchecked)",
+    body: `${lead.smsConsent ? "SMS consent GIVEN" : "SMS consent NOT given"} · ${lead.contactConsent ? "contact consent GIVEN" : "contact consent NOT given"}`,
     meta: {
       type: "sms_consent",
       granted: lead.smsConsent,
+      contactConsent: lead.contactConsent,
       consentVersion: CONSENT_VERSION,
       consentText: CONSENT_TEXT,
       phone: lead.phone,
