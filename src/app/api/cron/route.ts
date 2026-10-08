@@ -870,7 +870,26 @@ export async function GET(request: Request) {
     const dup = await db.crmTask.findFirst({ where: { title: `🛠 ${title}`, doneAt: null } });
     if (dup) return NextResponse.json({ ok: true, existed: true });
     await db.crmTask.create({ data: { oppId: "", contactId: "", title: `🛠 ${title}`, due: new Date().toISOString().slice(0, 10), assignedTo: jon?.name ?? "Jon Cruz", createdBy: "warroom-updates" } });
-    return NextResponse.json({ ok: true });
+    // mirror into Jon's Cortana app (Supabase tasks table) when the bridge
+    // key is set: CORTANA_SERVICE_KEY in Vercel (service_role of project
+    // tcfsjfymkxlxvzeljwoj). Business area, Q2, pre-triaged.
+    let cortana = "skipped (no CORTANA_SERVICE_KEY)";
+    if (process.env.CORTANA_SERVICE_KEY) {
+      try {
+        const cUrl = process.env.CORTANA_SUPABASE_URL || "https://tcfsjfymkxlxvzeljwoj.supabase.co";
+        const H = { apikey: process.env.CORTANA_SERVICE_KEY, Authorization: `Bearer ${process.env.CORTANA_SERVICE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates" };
+        const ures = await fetch(`${cUrl}/auth/v1/admin/users?per_page=1`, { headers: H }).then((r) => r.json()).catch(() => null);
+        const uid = (ures as { users?: Array<{ id: string }> } | null)?.users?.[0]?.id;
+        if (uid) {
+          const r = await fetch(`${cUrl}/rest/v1/tasks`, {
+            method: "POST", headers: H,
+            body: JSON.stringify({ user_id: uid, title: `🛠 ${title}`, area: "business", quadrant: "q2", due_date: new Date().toISOString().slice(0, 10), notes: "War Room update — created automatically by Claude.", triaged: true }),
+          });
+          cortana = r.ok ? "mirrored" : `failed ${r.status}`;
+        } else cortana = "no cortana user found";
+      } catch (e) { cortana = `error ${String(e).slice(0, 60)}`; }
+    }
+    return NextResponse.json({ ok: true, cortana });
   }
 
   // 👤 Owner repair (?ghlownerfix=1 dry / &commit=1): re-read every imported
