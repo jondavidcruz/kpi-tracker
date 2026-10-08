@@ -9,6 +9,7 @@ import AdCopyBox from "@/components/AdCopyBox";
 import { getCurrentUser, isManager, canAccessMarketing } from "@/lib/auth";
 import { getActiveDeals, getActiveReps, getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
+import Link from "next/link";
 import { todayStr } from "@/lib/date";
 import { analyzeDeal, agingClasses } from "@/lib/deals";
 import { Card, SectionTitle } from "@/components/ui";
@@ -203,6 +204,13 @@ export default async function DealsPage({
     };
   });
 
+  // 💰 Acquisitions comp-flow hand-offs: open PRICE CHECK tasks created when a
+  // lead enters the "developer comp" stage — this is where dispo sees them.
+  const priceChecks = await db.crmTask.findMany({
+    where: { doneAt: null, createdBy: "comp-flow", title: { startsWith: "💰" } },
+    orderBy: { id: "desc" }, take: 10,
+  });
+
   return (
     <div className="space-y-6">
       <HubTabs tabs={[{ href: "/deals", label: "Active deals" }, { href: "/closing", label: "Escrow & Closing" }, { href: "/closed-deals", label: "Closed deals" }]} />
@@ -212,6 +220,21 @@ export default async function DealsPage({
         accent="bg-brand-gold"
         right={<span className="text-sm font-semibold text-slate-500">{openCount} active{avgSpeedH != null ? ` · ⚡ avg first send ${fmtH(avgSpeedH)}` : ""}</span>}
       />
+
+      {priceChecks.length > 0 && (
+        <Card className="border-l-4 border-amber-400 p-3">
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">💰 Price checks from acquisitions — seller is WAITING on a developer number</div>
+          <div className="space-y-1">
+            {priceChecks.map((t) => (
+              <div key={t.id} className="flex items-center gap-2 text-sm text-slate-700">
+                <span className="min-w-0 flex-1 truncate">{t.title.replace("💰 PRICE CHECK w/ developers — ", "")}</span>
+                <span className="shrink-0 text-[11px] font-bold text-slate-400">{t.assignedTo.split(" ")[0] || "dispo"}</span>
+                {t.oppId && <Link href={`/crm/${t.oppId}`} className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200">open lead ↗</Link>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {sp.saved && (
         <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
