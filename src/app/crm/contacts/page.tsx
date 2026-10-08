@@ -5,6 +5,9 @@ import { Card, SectionTitle } from "@/components/ui";
 import { parseTags, CRM_STAGES } from "@/lib/crm-shared";
 import SelectAllBox from "@/components/SelectAllBox";
 import { bulkContactsAction } from "../actions";
+import DialPad from "@/components/DialPad";
+import CallButton from "@/components/CallButton";
+import { commsFor } from "@/lib/crm-comms";
 import { readPipelines } from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +45,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   ]);
   const pipelines = manager ? await readPipelines() : [];
   const reps2 = manager ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
+  const comms = await commsFor(me!);
   const reps = manager ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const qs = (np: number) => `/crm/contacts?p=${np}${q ? `&q=${encodeURIComponent(q)}` : ""}${who ? `&who=${encodeURIComponent(who)}` : ""}`;
@@ -49,7 +53,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-4">
       <SectionTitle title="👤 Contacts" subtitle={`${total.toLocaleString()} sellers — search by name, phone, email, property or tag.`} accent="bg-brand-gold"
-        right={<Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link>} />
+        right={<span className="flex items-center gap-2">{comms.call && <DialPad />}<Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link></span>} />
 
       <Card className="space-y-2 p-3">
         <form className="flex flex-wrap items-center gap-2" action="/crm/contacts" method="get">
@@ -95,7 +99,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
             <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wide text-slate-400">
               {manager && <th className="w-8 px-3 py-2.5"></th>}
               <th className="px-4 py-2.5">Contact</th><th className="px-3 py-2.5">Phone</th><th className="px-3 py-2.5">Email</th>
-              <th className="px-3 py-2.5">Owner</th><th className="px-3 py-2.5">Stage</th><th className="px-3 py-2.5">Tags</th><th className="px-3 py-2.5 text-right">Last activity</th>
+              <th className="px-3 py-2.5">Owner</th><th className="px-3 py-2.5">Stage</th><th className="px-3 py-2.5">Tags</th><th className="px-3 py-2.5 text-right">Last activity</th><th className="px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -118,6 +122,12 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right text-[11px] text-slate-400">{c.updatedAt.toLocaleDateString([], { month: "short", day: "numeric" })}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">
+                    <span className="flex items-center gap-1">
+                      {comms.call && c.phone && <CallButton phone={c.phone} name={c.name} oppId={opp?.id} contactId={c.id} label="📞" subtle />}
+                      <Link prefetch={false} href={`/crm/conversations?c=${c.id}`} title="Open conversation" className="rounded-lg bg-slate-100 px-2.5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200">💬</Link>
+                    </span>
+                  </td>
                 </tr>
               );
             })}
