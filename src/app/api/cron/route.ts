@@ -1902,18 +1902,28 @@ export async function GET(request: Request) {
   // Live CRM sync — pulls TODAY's calls + offer/contract stage moves every ~15 min
   // so the scorecard is current throughout the day, not just at night.
   if (url.searchParams.get("crmtoday") === "1") {
+    // Time-budgeted: this op grew past the 60s function limit and started
+    // timing out (= silent partial KPI feeds). Core scorecard writes run
+    // first and ALWAYS; best-effort extras only while budget remains, and
+    // the response reports per-step timings so the slow step is visible.
     const settings = await getSettings();
     const tz = settings.orgTimezone;
     const today = date ?? todayStr(tz);
-    const calls = await writeDay(today, tz);
-    const opps = await writeOpps(today, tz);
-    const activity = await writeActivity(today, calls.wrote, opps);
-    try { const { feedCrmBrowserCalls } = await import("@/lib/crm-sync"); await feedCrmBrowserCalls(today, tz); } catch { /* additive */ }
-    // Direct REI pulse rides the same 5×/day schedule (best-effort).
-    let drei: unknown = null;
-    try { const { refreshDreiFeed } = await import("@/lib/directrei-sync"); drei = await refreshDreiFeed(today); } catch { /* feed is additive */ }
-    try { const { syncDreiDeals } = await import("@/lib/directrei-deals-sync"); await syncDreiDeals(today); } catch { /* deal hand-off is additive */ }
-    return NextResponse.json({ ok: true, date: today, calls: calls.wrote, offersContracts: opps.counts, activity, dreiFeed: drei ? "refreshed" : "skipped" });
+    const deadline = Date.now() + 46_000;
+    const timings: Record<string, number | string> = {};
+    const step = async <T,>(name: string, core: boolean, fn: () => Promise<T>): Promise<T | null> => {
+      if (!core && Date.now() > deadline) { timings[name] = "skipped (budget)"; return null; }
+      const t0 = Date.now();
+      try { const r = await fn(); timings[name] = Date.now() - t0; return r; }
+      catch (e) { timings[name] = `error: ${String(e).slice(0, 80)}`; return null; }
+    };
+    const calls = await step("ghlCalls", true, () => writeDay(today, tz));
+    const opps = await step("ghlOpps", true, () => writeOpps(today, tz));
+    const activity = calls && opps ? await step("activity", true, () => writeActivity(today, calls.wrote, opps)) : null;
+    await step("browserCalls", false, async () => { const { feedCrmBrowserCalls } = await import("@/lib/crm-sync"); return feedCrmBrowserCalls(today, tz); });
+    const drei = await step("dreiFeed", false, async () => { const { refreshDreiFeed } = await import("@/lib/directrei-sync"); return refreshDreiFeed(today); });
+    await step("dreiDeals", false, async () => { const { syncDreiDeals } = await import("@/lib/directrei-deals-sync"); return syncDreiDeals(today); });
+    return NextResponse.json({ ok: true, date: today, calls: calls?.wrote ?? null, offersContracts: opps?.counts ?? null, activity, dreiFeed: drei ? "refreshed" : "skipped", timings });
   }
 
   // Nightly REI Reply CRM sync — pulls YESTERDAY's calls + offer/contract stage
