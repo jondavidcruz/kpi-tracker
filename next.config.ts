@@ -28,6 +28,14 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), geolocation=(), payment=()" },
         ],
       },
+      {
+        // Lets the public /offer form be embedded on freedom-offers.com. CSP frame-ancestors
+        // overrides the global X-Frame-Options DENY for this page only.
+        source: "/offer",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self' https://freedom-offers.com https://www.freedom-offers.com" },
+        ],
+      },
     ];
   },
 };

@@ -40,6 +40,8 @@ export default function DialPad() {
   const clientRef = useRef<{ disconnect: () => void } | null>(null);
   const callRef = useRef<{ hangup: () => void; muteAudio: () => void; unmuteAudio: () => void; dtmf?: (digit: string) => void } | null>(null);
   const [dtmfTrail, setDtmfTrail] = useState("");
+  const dialStartRef = useRef(0); // when the attempt began (ring OR answer)
+  const [endConfirm, setEndConfirm] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -206,6 +208,7 @@ export default function DialPad() {
     const to = ctx.phone.replace(/[^+\d]/g, "");
     if (to.replace(/\D/g, "").length < 10) { setMsg("enter a full number"); return; }
     setOnCall(ctx); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
+    dialStartRef.current = Date.now(); setEndConfirm(false);
     try {
       const client = (await ensureClient()) as { newCall: (o: object) => unknown };
       setState("ringing");
@@ -214,6 +217,17 @@ export default function DialPad() {
   };
 
   const hangup = () => {
+    // 💸 Telnyx surcharges calls ≤6s (Jon 2026-10-07: weekly short-duration
+    // flag emails). Hanging up a LIVE call inside 8s asks for one more click;
+    // connecting/failed states end immediately (those aren't billed calls).
+    const elapsed = dialStartRef.current ? Date.now() - dialStartRef.current : 99_000;
+    if (!endConfirm && elapsed < 8_000 && (stateRef.current === "active" || stateRef.current === "ringing")) {
+      setEndConfirm(true);
+      setMsg("💸 Under 8s — short calls get surcharged. Press ⏹ again to end anyway.");
+      setTimeout(() => setEndConfirm(false), 4000);
+      return;
+    }
+    setEndConfirm(false);
     // Red stop must ALWAYS end it — even mid-connect before a call object
     // exists (that was the dead button): hang up if we can, then force-finish.
     try { callRef.current?.hangup(); } catch { /* already gone */ }
@@ -267,11 +281,12 @@ export default function DialPad() {
           )}
           {/* live call bar */}
           {state !== "idle" && (
-            <span className="flex items-center gap-2 bg-emerald-50 px-3.5 py-2 ring-1 ring-emerald-200">
+            <span className="relative mb-4 flex items-center gap-2 bg-emerald-50 px-3.5 py-2 ring-1 ring-emerald-200">
               <span className="min-w-0 flex-1 truncate text-xs font-bold text-emerald-800">
                 {state === "active" ? `🟢 ${onCall?.name ?? onCall?.phone} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `📡 ${state} — ${onCall?.name ?? onCall?.phone ?? ""}`}
                 {dtmfTrail && <span className="ml-1 rounded bg-white px-1 py-0.5 font-mono text-[10px] text-slate-500 ring-1 ring-slate-200">⌨ {dtmfTrail}</span>}
               </span>
+              {endConfirm && <span className="absolute -bottom-5 left-3 right-3 truncate text-[9px] font-bold text-red-600">💸 short calls get surcharged — press ⏹ again to end</span>}
               {state === "active" && <button onClick={toggleMute} className={`rounded-md px-2 py-1 text-[10px] font-bold ${muted ? "bg-amber-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>}
               <button onClick={hangup} title="End the call" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-600 text-base text-white shadow hover:bg-red-700">⏹</button>
             </span>

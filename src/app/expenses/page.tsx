@@ -118,7 +118,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   const nextNewMonth = addMonth(months[0] ?? month, 1);
   // live Telnyx spend snapshot (daily ?telnyxspend=1 cron)
   const spendRow = await db.resource.findFirst({ where: { category: "__telnyx_spend__" } });
-  let telnyx: { at?: string; month?: string; sms?: { cost: number; count: number }; voice?: { cost: number; count: number }; mtd?: number; projected?: number; balance?: number | null } | null = null;
+  let telnyx: { at?: string; month?: string; sms?: { cost: number; count: number }; voice?: { cost: number; count: number }; mtd?: number; projected?: number; balance?: number | null; shortCalls?: { count: number; pct: number }; twilio?: { mtd: number; sms: number; voice: number; projected: number; balance: number | null } | null } | null = null;
   try { telnyx = spendRow?.description ? JSON.parse(spendRow.description) : null; } catch { telnyx = null; }
 
   return (
@@ -140,11 +140,23 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
           <div className="text-sm text-slate-600">
             <div>💬 Texts: <b>${(telnyx.sms?.cost ?? 0).toFixed(2)}</b> · {telnyx.sms?.count ?? 0} messages</div>
             <div>📞 Calls: <b>${(telnyx.voice?.cost ?? 0).toFixed(2)}</b> · {telnyx.voice?.count ?? 0} calls</div>
+            {telnyx.shortCalls && telnyx.voice?.count ? (
+              <div className={telnyx.shortCalls.pct > 15 ? "font-bold text-red-600" : telnyx.shortCalls.pct > 10 ? "text-amber-600" : "text-slate-500"}>
+                💸 Short calls (≤6s): {telnyx.shortCalls.pct}% {telnyx.shortCalls.pct > 15 ? "— OVER Telnyx's 15% surcharge line!" : "(surcharge over 15%)"}
+              </div>
+            ) : null}
           </div>
           <div className="text-sm text-slate-600">
             <div>📈 Projected month: <b>${(telnyx.projected ?? 0).toFixed(2)}</b></div>
             {telnyx.balance != null && <div>💳 Account balance: <b>${telnyx.balance.toFixed(2)}</b></div>}
           </div>
+          {telnyx.twilio && (
+            <div className="border-l border-slate-100 pl-6 text-sm text-slate-600">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">☎️ Twilio — this month</div>
+              <div className="text-xl font-extrabold text-slate-900">${telnyx.twilio.mtd.toFixed(2)}</div>
+              <div className="text-[12px]">💬 ${telnyx.twilio.sms.toFixed(2)} · 📞 ${telnyx.twilio.voice.toFixed(2)} · 📈 proj ${telnyx.twilio.projected.toFixed(2)}{telnyx.twilio.balance != null ? ` · 💳 $${telnyx.twilio.balance.toFixed(2)}` : ""}</div>
+            </div>
+          )}
           <span className="ml-auto text-[10px] text-slate-400">covers War Room + Direct REI lines · refreshes daily{telnyx.at ? ` · last ${new Date(telnyx.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}</span>
         </Card>
       )}

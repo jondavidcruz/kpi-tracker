@@ -10,7 +10,8 @@ import {
 } from "@/app/crm/actions";
 import { KIND_EMOJI } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
-import ConvComposerTabs from "@/components/ConvComposerTabs";
+import SmsComposer from "@/components/SmsComposer";
+import GmailComposer from "@/components/GmailComposer";
 
 type Payload = {
   id: string; title: string; stage: string; pipeline: string; assignedTo: string; tags: string;
@@ -18,6 +19,8 @@ type Payload = {
   formData: Record<string, Record<string, string | string[]>>;
   me: { name: string; fromLabel: string; signature: string; canSms: boolean; canEmail: boolean };
   snippets: Array<{ id: string; name: string; kind: string; subject?: string; body: string }>;
+  smsHistory: Array<{ body: string; inbound: boolean; at: string }>;
+  emailHistory: Array<{ body: string; inbound: boolean; at: string; actor?: string }>;
   contact: { id: string; name: string; phone: string; altPhone: string; email: string; altEmail: string; address: string; pinnedNote: string; tags: string };
   tasks: Array<{ id: string; title: string; due: string }>;
   appts: Array<{ id: string; title: string; at: string; withWho: string }>;
@@ -30,7 +33,8 @@ const TABS = [
   ...CRM_FORMS.map((f) => ({ key: `form:${f.key}`, label: f.name, emoji: f.emoji })),
   { key: "tasks", label: "Tasks", emoji: "✅" },
   { key: "appts", label: "Appointments", emoji: "📅" },
-  { key: "comms", label: "Text / Email", emoji: "💬" },
+  { key: "sms", label: "Text message", emoji: "💬" },
+  { key: "email", label: "Email", emoji: "✉️" },
   { key: "notes", label: "Notes & activity", emoji: "📝" },
 ];
 
@@ -267,14 +271,16 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                   </div>
                 )}
 
-                {tab === "comms" && (
-                  <div className="-m-3">
-                    <ConvComposerTabs
-                      contactId={d.contact.id} oppId={d.id} phone={d.contact.phone} email={d.contact.email}
-                      leadName={d.contact.name} rep={d.me.name} fromLabel={d.me.fromLabel} signature={d.me.signature}
-                      canSms={d.me.canSms} canEmail={d.me.canEmail} snippets={d.snippets}
-                    />
-                  </div>
+                {tab === "sms" && (
+                  !d.me.canSms ? <div className="text-xs text-amber-600">Texting isn&apos;t enabled for you — ask Jon (Comms access on /crm).</div>
+                  : !d.contact.phone ? <div className="text-xs text-slate-400">No phone number on file.</div>
+                  : <SmsComposer compact history={d.smsHistory} oppId={d.id} contactId={d.contact.id} to={d.contact.phone} leadName={d.contact.name} rep={d.me.name} snippets={d.snippets.filter((s) => s.kind === "sms")} />
+                )}
+
+                {tab === "email" && (
+                  !d.me.canEmail ? <div className="text-xs text-amber-600">Email isn&apos;t enabled for you — ask Jon (Comms access on /crm).</div>
+                  : !d.contact.email ? <div className="text-xs text-slate-400">No email on file.</div>
+                  : <GmailComposer history={d.emailHistory} oppId={d.id} contactId={d.contact.id} to={d.contact.email} leadName={d.contact.name} rep={d.me.name} fromLabel={d.me.fromLabel} signature={d.me.signature} snippets={d.snippets.filter((s) => s.kind === "email")} />
                 )}
 
                 {tab === "notes" && (

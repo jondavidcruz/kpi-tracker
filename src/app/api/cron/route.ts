@@ -595,20 +595,44 @@ export async function GET(request: Request) {
       return (await res.json().catch(() => ({}))) as { data?: unknown; meta?: { total_pages?: number } };
     };
     const sumKind = async (recordType: string) => {
-      let total = 0, count = 0;
+      let total = 0, count = 0, short = 0;
       for (let page = 1; page <= 5; page++) {
         const j = await tx(`/detail_records?filter[record_type]=${recordType}&filter[date_range]=this_month&page[size]=1000&page[number]=${page}`);
-        const rows = (j.data ?? []) as Array<{ cost?: string | number; rate?: string | number }>;
-        for (const r of rows) { total += Math.abs(Number(r.cost ?? 0)) || 0; count++; }
+        const rows = (j.data ?? []) as Array<{ cost?: string | number; rate?: string | number; call_sec?: number; billed_sec?: number; duration?: number; call_duration?: number }>;
+        for (const r of rows) {
+          total += Math.abs(Number(r.cost ?? 0)) || 0; count++;
+          const secs = Number(r.call_sec ?? r.billed_sec ?? r.call_duration ?? r.duration ?? NaN);
+          if (!Number.isNaN(secs) && secs <= 6) short++;
+        }
         if (rows.length < 1000) break;
       }
-      return { total, count };
+      return { total, count, short };
     };
-    const [msg, voice, balRes] = await Promise.all([
+    // Twilio side (same card): this-month usage + balance, Basic auth
+    const twSid = process.env.TWILIO_ACCOUNT_SID, twTok = process.env.TWILIO_AUTH_TOKEN;
+    const twAuth = twSid && twTok ? "Basic " + Buffer.from(`${twSid}:${twTok}`).toString("base64") : "";
+    const tw = async (path: string) => twAuth
+      ? fetch(`https://api.twilio.com/2010-04-01/Accounts/${twSid}${path}`, { headers: { Authorization: twAuth }, cache: "no-store" }).then((r) => r.json()).catch(() => null)
+      : null;
+    const [msg, voice, balRes, twUsage, twBal] = await Promise.all([
       sumKind("messaging"), sumKind("voice"),
       fetch("https://api.telnyx.com/v2/balance", { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" }).then((r) => r.json()).catch(() => ({})),
+      tw("/Usage/Records/ThisMonth.json?PageSize=400"),
+      tw("/Balance.json"),
     ]);
     const bal = (balRes as { data?: { balance?: string; currency?: string } }).data;
+    let twilioMtd: number | null = null; let twilioSms = 0; let twilioVoice = 0;
+    const twRecs = (twUsage as { usage_records?: Array<{ category?: string; price?: string | number }> } | null)?.usage_records;
+    if (twRecs) {
+      twilioMtd = 0;
+      for (const r of twRecs) {
+        const p = Number(r.price ?? 0) || 0;
+        twilioMtd += p;
+        if (/sms|messag/i.test(r.category ?? "")) twilioSms += p;
+        if (/call|voice|minute/i.test(r.category ?? "")) twilioVoice += p;
+      }
+    }
+    const twilioBalance = twBal && (twBal as { balance?: string }).balance != null ? Number((twBal as { balance?: string }).balance) : null;
     const day = new Date().getUTCDate();
     const daysInMonth = new Date(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 0).getDate();
     const mtd = msg.total + voice.total;
@@ -617,9 +641,16 @@ export async function GET(request: Request) {
       month: new Date().toISOString().slice(0, 7),
       sms: { cost: Number(msg.total.toFixed(2)), count: msg.count },
       voice: { cost: Number(voice.total.toFixed(2)), count: voice.count },
+      // 💸 Telnyx surcharges accounts whose calls ≤6s exceed 15% of volume
+      shortCalls: { count: voice.short, pct: voice.count ? Number(((voice.short / voice.count) * 100).toFixed(1)) : 0 },
       mtd: Number(mtd.toFixed(2)),
       projected: Number(((mtd / Math.max(1, day)) * daysInMonth).toFixed(2)),
       balance: bal?.balance != null ? Number(bal.balance) : null,
+      twilio: twilioMtd != null ? {
+        mtd: Number(twilioMtd.toFixed(2)), sms: Number(twilioSms.toFixed(2)), voice: Number(twilioVoice.toFixed(2)),
+        projected: Number(((twilioMtd / Math.max(1, day)) * daysInMonth).toFixed(2)),
+        balance: twilioBalance,
+      } : null,
     };
     const row = await db.resource.findFirst({ where: { category: "__telnyx_spend__" } });
     const description = JSON.stringify(snapshot);

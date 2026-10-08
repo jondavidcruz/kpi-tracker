@@ -27,7 +27,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
   // The candidate assessment is a standalone, no-login experience — never wrap it in
   // the War Room shell, even for a signed-in owner. Candidates (who aren't in the
   // business) see ONLY the assessment, none of our sections.
-  if (reqPath.startsWith("/assess")) return <>{children}</>;
+  if (reqPath.startsWith("/assess") || reqPath === "/offer" || reqPath.startsWith("/offer/")) return <>{children}</>;
 
   // Not signed in (login page) → no chrome.
   if (!me) return <>{children}</>;

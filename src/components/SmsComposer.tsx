@@ -2,7 +2,7 @@
 // iPhone-style SMS composer (Jon 2026-10-07): type on the left, see EXACTLY
 // how it lands on the seller's phone on the right — live green-bubble
 // preview, segment counter, and a "send from" picker over our Telnyx lines.
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendCrmSmsAction } from "@/app/crm/actions";
 import { GOOGLE_REVIEW_LINK } from "@/lib/crm-shared";
@@ -14,8 +14,10 @@ function fmt(n: string) {
   return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : n;
 }
 
-export default function SmsComposer({ oppId, contactId, to, leadName, rep, snippets, compact = false }: {
-  oppId: string; contactId: string; to: string; leadName: string; rep: string; snippets: Snip[]; compact?: boolean;
+type HistMsg = { body: string; inbound: boolean; at: string };
+
+export default function SmsComposer({ oppId, contactId, to, leadName, rep, snippets, compact = false, history = [] }: {
+  oppId: string; contactId: string; to: string; leadName: string; rep: string; snippets: Snip[]; compact?: boolean; history?: HistMsg[];
 }) {
   const allSnips: Snip[] = [
     { id: "__review", name: "⭐ Ask for Google review", kind: "sms", body: `Hi {name}, it was a pleasure working with you! Would you mind leaving us a quick Google review? Takes 30 seconds: ${GOOGLE_REVIEW_LINK} — thank you! — {rep} @ Freedom Offers` },
@@ -25,7 +27,10 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   const [from, setFrom] = useState("");
   const [numbers, setNumbers] = useState<string[]>([]);
   const [sent, setSent] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const [pending, start] = useTransition();
+  const threadRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight; }, [text, history.length]);
   const router = useRouter();
   const first = leadName.split(" ")[0] || "there";
 
@@ -43,6 +48,11 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
 
   const send = () => {
     if (!text.trim()) return;
+    // FIRST text to this seller ever → one explicit confirmation (Jon
+    // 2026-10-07: "if it's a new text we definitely want that final check");
+    // quick replies in an existing thread go straight out.
+    if (history.length === 0 && !confirming) { setConfirming(true); return; }
+    setConfirming(false);
     const fd = new FormData();
     fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", to); fd.set("text", text);
     if (from) fd.set("from", from);
@@ -76,7 +86,15 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
           )}
           <span className={`text-[10px] font-bold ${segs > 1 ? "text-amber-600" : "text-slate-400"}`}>{len} chars · {segs || "—"} text{segs === 1 ? "" : "s"}{segs > 1 ? " (they'll see it stitched together)" : ""}</span>
           {sent && <span className="text-[11px] font-bold text-emerald-600">{sent}</span>}
-          <button onClick={send} disabled={pending || !text.trim()} className="ml-auto rounded-lg bg-sky-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-40">{pending ? "Sending…" : "Send SMS"}</button>
+          {confirming ? (
+            <span className="ml-auto flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-amber-700">First text to {first} — send it?</span>
+              <button onClick={send} disabled={pending} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">✓ Yes, send text</button>
+              <button onClick={() => setConfirming(false)} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Cancel</button>
+            </span>
+          ) : (
+            <button onClick={send} disabled={pending || !text.trim()} className="ml-auto rounded-lg bg-sky-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-40">{pending ? "Sending…" : "Send SMS"}</button>
+          )}
         </div>
       </div>
 
@@ -89,13 +107,19 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
               <div className="mx-auto grid h-8 w-8 place-items-center rounded-full bg-slate-300 text-[11px] font-bold text-white">{(leadName[0] ?? "?").toUpperCase()}</div>
               <div className="mt-0.5 text-[10px] font-semibold text-slate-800">{first} 〉</div>
             </div>
-            <div className={`flex flex-col justify-end gap-1 overflow-y-auto bg-white px-2.5 pb-2 ${compact ? "h-[170px]" : "h-[300px]"}`}>
-              <div className="text-center text-[8px] font-semibold text-slate-400">Text Message · SMS · Today</div>
+            <div ref={threadRef} className={`flex flex-col gap-1 overflow-y-auto bg-white px-2.5 pb-2 pt-1 ${compact ? "h-[170px]" : "h-[300px]"}`}>
+              <div className="mt-auto" />
+              <div className="text-center text-[8px] font-semibold text-slate-400">Text Message · SMS{history.length ? "" : " · Today"}</div>
+              {history.map((m, i) => (
+                <div key={i} className={`flex ${m.inbound ? "justify-start" : "justify-end"}`}>
+                  <div className="max-w-[80%] whitespace-pre-line break-words rounded-2xl px-2.5 py-1.5 text-[11px] leading-snug" style={m.inbound ? { backgroundColor: "#e9e9eb", color: "#111", borderBottomLeftRadius: 4 } : { backgroundColor: "#34c759", color: "#fff", borderBottomRightRadius: 4 }}>{m.body}</div>
+                </div>
+              ))}
               <div className="flex justify-end" style={{ display: text ? "flex" : "none" }}>
                 <div className="max-w-[80%] whitespace-pre-line break-words rounded-2xl rounded-br-[4px] px-2.5 py-1.5 text-[11px] leading-snug" style={{ backgroundColor: "#34c759", color: "#fff" }}>{text}</div>
               </div>
               <div className="pr-1 text-right text-[8px] font-semibold text-slate-400" style={{ display: text ? "block" : "none" }}>Delivered</div>
-              {!text && <div className="pb-2 text-center text-[9px] text-slate-300">start typing to preview…</div>}
+              {!text && history.length === 0 && <div className="pb-2 text-center text-[9px] text-slate-300">start typing to preview…</div>}
             </div>
             <div className="flex items-center gap-1.5 border-t border-slate-100 px-2.5 py-1.5">
               <div className="h-5 flex-1 rounded-full bg-slate-100" />

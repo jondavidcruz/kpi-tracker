@@ -17,14 +17,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!isManager(me!) && opp.assignedTo && opp.assignedTo !== me!.name) return NextResponse.json({ error: "not your lead" }, { status: 403 });
   const { commsFor, readSignatures, firstOf, defaultSignature } = await import("@/lib/crm-comms");
   const { readSnippets } = await import("@/lib/crm-templates");
-  const [events, tasks, appts, comms, sigs, snippets] = await Promise.all([
+  const [events, tasks, appts, comms, sigs, snippets, smsEvents, emailEvents] = await Promise.all([
     db.crmEvent.findMany({ where: { contactId: opp.contactId }, orderBy: { at: "desc" }, take: 10 }),
     db.crmTask.findMany({ where: { oppId: id, doneAt: null }, orderBy: { due: "asc" }, take: 10 }),
     db.crmAppointment.findMany({ where: { oppId: id, at: { gte: new Date(Date.now() - 86400_000) } }, orderBy: { at: "asc" }, take: 8 }),
     commsFor(me!),
     readSignatures(),
     readSnippets(),
+    db.crmEvent.findMany({ where: { contactId: opp.contactId, kind: "sms" }, orderBy: { at: "desc" }, take: 15 }),
+    db.crmEvent.findMany({ where: { contactId: opp.contactId, kind: "email" }, orderBy: { at: "desc" }, take: 8 }),
   ]);
+  const clean = (b: string) => stripHtml(b).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400);
+  const smsHistory = [...smsEvents].reverse().map((e) => ({ body: clean(e.body), inbound: stripHtml(e.body).startsWith("⬅"), at: e.at.toISOString() }));
+  const emailHistory = [...emailEvents].reverse().map((e) => ({ body: clean(e.body), inbound: stripHtml(e.body).startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }));
   return NextResponse.json({
     me: {
       name: me!.name,
@@ -33,6 +38,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       canSms: comms.sms, canEmail: comms.email,
     },
     snippets: snippets.map((s) => ({ id: s.id, name: s.name, kind: s.kind, subject: s.subject, body: s.body })),
+    smsHistory, emailHistory,
     id: opp.id, title: opp.title, stage: opp.stage, pipeline: opp.pipeline || "War Room", assignedTo: opp.assignedTo,
     tags: opp.tags, nextFollowUp: opp.nextFollowUp, value: opp.value, askPrice: opp.askPrice,
     formData: (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>,

@@ -8,9 +8,12 @@ import GmailComposer from "@/components/GmailComposer";
 
 type Snip = { id: string; name: string; kind: string; subject?: string; body: string };
 
-export default function ConvComposerTabs({ contactId, oppId, phone, email, leadName, rep, fromLabel, signature, canSms, canEmail, snippets }: {
+type HistMsg = { body: string; inbound: boolean; at: string; actor?: string };
+
+export default function ConvComposerTabs({ contactId, oppId, phone, email, leadName, rep, fromLabel, signature, canSms, canEmail, snippets, smsHistory = [], emailHistory = [] }: {
   contactId: string; oppId: string; phone: string; email: string; leadName: string; rep: string;
   fromLabel: string; signature: string; canSms: boolean; canEmail: boolean; snippets: Snip[];
+  smsHistory?: HistMsg[]; emailHistory?: HistMsg[];
 }) {
   const smsOk = canSms && !!phone;
   const emailOk = canEmail && !!email;
@@ -27,10 +30,10 @@ export default function ConvComposerTabs({ contactId, oppId, phone, email, leadN
         <button onClick={() => setMode("email")} disabled={!emailOk} className={`px-3 py-1.5 text-xs font-bold ${mode === "email" ? "bg-brand-navy text-white" : "bg-white text-slate-500"} disabled:opacity-40`}>✉️ Email</button>
       </div>
       {mode === "sms" && smsOk && (
-        <SmsComposer compact oppId={oppId} contactId={contactId} to={phone} leadName={leadName} rep={rep} snippets={snippets.filter((s) => s.kind === "sms")} />
+        <SmsComposer compact history={smsHistory} oppId={oppId} contactId={contactId} to={phone} leadName={leadName} rep={rep} snippets={snippets.filter((s) => s.kind === "sms")} />
       )}
       {mode === "email" && emailOk && (
-        <GmailComposer oppId={oppId} contactId={contactId} to={email} leadName={leadName} rep={rep} fromLabel={fromLabel} signature={signature} snippets={snippets.filter((s) => s.kind === "email")} />
+        <GmailComposer history={emailHistory} oppId={oppId} contactId={contactId} to={email} leadName={leadName} rep={rep} fromLabel={fromLabel} signature={signature} snippets={snippets.filter((s) => s.kind === "email")} />
       )}
     </div>
   );

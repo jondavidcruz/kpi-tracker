@@ -137,7 +137,9 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     );
                   })}
                 </div>
-                <ConvComposerTabs contactId={contact.id} oppId={opp?.id ?? ""} phone={contact.phone} email={contact.email} leadName={contact.name} rep={me!.name} fromLabel={fromLabel} signature={mySignature} canSms={comms.sms} canEmail={comms.email} snippets={snippets} />
+                <ConvComposerTabs contactId={contact.id} oppId={opp?.id ?? ""} phone={contact.phone} email={contact.email} leadName={contact.name} rep={me!.name} fromLabel={fromLabel} signature={mySignature} canSms={comms.sms} canEmail={comms.email} snippets={snippets}
+                  smsHistory={thread.filter((e) => e.kind === "sms").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString() }; })}
+                  emailHistory={thread.filter((e) => e.kind === "email").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }; })} />
               </>
             )}
           </div>
