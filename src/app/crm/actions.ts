@@ -347,6 +347,17 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
     } catch { /* fall back to the default line */ }
   }
   if (!to || !text) return;
+  // 🕘 quiet hours apply to TEXTS too (Jon 2026-10-08): 9pm–8am in the lead's
+  // own time zone (by area code) = blocked, logged so the rep sees why.
+  {
+    const { quietHoursWarning } = await import("@/lib/npa-tz");
+    const quiet = quietHoursWarning(to);
+    if (quiet) {
+      await logCrmEvent({ contactId, oppId, kind: "sms", body: `🕘 SMS NOT SENT — ${quiet} Draft was: ${text.slice(0, 160)}`, actor: me.name });
+      revalidatePath(`/crm/${oppId}`);
+      return;
+    }
+  }
   if (!process.env.TELNYX_API_KEY || !from) {
     await logCrmEvent({ contactId, oppId, kind: "sms", body: `SMS NOT SENT — set TELNYX_SMS_FROM (a Telnyx number on a messaging profile) in Vercel. Message was: ${text.slice(0, 200)}`, actor: me.name });
     revalidatePath(`/crm/${oppId}`);

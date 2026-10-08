@@ -124,7 +124,15 @@ export async function POST(req: NextRequest) {
     if (sess) {
       sess.legs = sess.legs.filter((l) => l !== p.call_control_id);
       if (!sess.answered && sess.legs.length === 0) {
-        const fb = process.env.TELNYX_FALLBACK_NUMBER ?? "";
+        // fallback cell = env override, else the first active acquisitions
+        // rep's own phone from the roster (/account) — NOT Jon's (2026-10-08)
+        let fb = process.env.TELNYX_FALLBACK_NUMBER ?? "";
+        if (!fb) {
+          const acq = await db.user.findFirst({ where: { active: true, position: "acquisitions" }, orderBy: { name: "asc" }, select: { id: true } });
+          const prof = acq ? await db.teamProfile.findFirst({ where: { userId: acq.id }, select: { phone: true } }) : null;
+          const digits = (prof?.phone ?? "").replace(/[^+\d]/g, "");
+          if (digits.replace(/\D/g, "").length >= 10) fb = digits.startsWith("+") ? digits : `+1${digits.replace(/\D/g, "").slice(-10)}`;
+        }
         if (fb && !sess.fallback && key) {
           const row2 = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
           let cfg2: { ccAppId?: string } = {};

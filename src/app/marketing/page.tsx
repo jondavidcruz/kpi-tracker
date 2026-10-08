@@ -430,6 +430,27 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                   {(p.region || p.market) && <span className="ml-auto text-xs font-semibold text-slate-500">{[p.region, p.market].filter(Boolean).join(" · ")}</span>}
                 </div>
                 {(p.email || p.phone) && <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-slate-600">{p.email && <span>✉️ {p.email}</span>}{p.phone && <span>📞 {p.phone}</span>}</div>}
+                {/* 🔗 clickable sites + submission forms (Jon 2026-10-08) — pulled
+                    from the website/links fields AND any URLs inside buy box/notes */}
+                {(() => {
+                  const urls = [...new Set([
+                    p.website,
+                    ...(p.links ?? "").split(/[\n,\s]+/),
+                    ...((`${p.buyBox ?? ""} ${p.notes ?? ""}`).match(/https?:\/\/\S+|[\w-]+\.(?:com|net|org|io|co)\/\S*|[\w-]+\.(?:com|net|org|io|co)\b/gi) ?? []),
+                  ].map((u) => (u ?? "").trim().replace(/[),.;]+$/, "")).filter((u) => u.includes(".") && !u.includes("@")))];
+                  if (!urls.length) return null;
+                  return (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {urls.slice(0, 6).map((u) => {
+                        const href = /^https?:\/\//i.test(u) ? u : `https://${u}`;
+                        let label = u.replace(/^https?:\/\//i, "").replace(/^www\./, "");
+                        if (label.length > 38) label = label.slice(0, 35) + "…";
+                        const isForm = /form|podio|submit|jv/i.test(u);
+                        return <a key={u} href={href} target="_blank" rel="noreferrer" className={`rounded-lg px-2 py-1 text-[11px] font-bold ring-1 ${isForm ? "bg-indigo-600 text-white ring-indigo-600 hover:bg-indigo-700" : "bg-white text-indigo-700 ring-indigo-200 hover:bg-indigo-50"}`}>{isForm ? "📨 " : "🔗 "}{label}</a>;
+                      })}
+                    </div>
+                  );
+                })()}
                 {p.buyBox && (
                   <div className="mt-2">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Buy boxes they can move</div>

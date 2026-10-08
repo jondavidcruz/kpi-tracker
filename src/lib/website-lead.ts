@@ -147,6 +147,13 @@ const WELCOME_TEXTS = [
 export async function sendWelcomeText(o: { contactId: string; oppId: string; phone: string; name: string; repName: string }): Promise<void> {
   const from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
   if (!process.env.TELNYX_API_KEY || !from || !o.phone) return;
+  // 🕘 quiet hours (lead's own tz): skip the night text; the morning call covers it
+  const { quietHoursWarning } = await import("@/lib/npa-tz");
+  const quiet = quietHoursWarning(o.phone);
+  if (quiet) {
+    await logCrmEvent({ contactId: o.contactId, oppId: o.oppId, kind: "system", body: `🕘 Welcome text held — ${quiet}`, actor: "auto-welcome" }).catch(() => {});
+    return;
+  }
   const first = o.name.trim().split(/\s+/)[0] || "there";
   const rep = o.repName.trim().split(/\s+/)[0] || "our team";
   // Owner-edited template wins (Automations → Message automations); the

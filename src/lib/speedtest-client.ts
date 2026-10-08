@@ -37,7 +37,7 @@ export async function measureDownloadMbps(
     const mbps = await runParallelTest(onProgress);
     return { mbps, accurate: true };
   } catch {
-    const mbps = await runFallbackTest();
+    const mbps = await runFallbackTest(onProgress);
     return { mbps, accurate: false };
   }
 }
@@ -96,14 +96,41 @@ async function runParallelTest(onProgress?: (mbps: number) => void): Promise<num
   return round1((bytesTotal * 8) / ((end - t0) / 1000) / 1_000_000);
 }
 
-/** Old-style single download from our own API. Rough, but works anywhere the app loads. */
-async function runFallbackTest(): Promise<number> {
-  const bytes = 3 * 1024 * 1024; // matches /api/speedtest payload
-  const start = performance.now();
-  const res = await fetch(`/api/speedtest?t=${Date.now()}`, { cache: "no-store" });
-  await res.arrayBuffer();
-  const secs = (performance.now() - start) / 1000;
-  return round1((bytes * 8) / secs / 1_000_000);
+/** Fallback when Cloudflare is unreachable: a PARALLEL, time-boxed loop of
+ *  3MB pulls from our own API. The old single-shot version capped around
+ *  30 Mbps on fast lines (Marie: 36 here vs 631 on speedtest.net — Jon
+ *  2026-10-08); six concurrent looping streams get within real range. */
+async function runFallbackTest(onProgress?: (mbps: number) => void): Promise<number> {
+  const DUR = 8_000, WARM = 1_200;
+  const t0 = performance.now();
+  let bytesTotal = 0, after = 0, warmAt = 0;
+  const worker = async () => {
+    while (performance.now() - t0 < DUR) {
+      const res = await fetch(`/api/speedtest?t=${Date.now()}-${Math.random()}`, { cache: "no-store" });
+      if (!res.ok) break;
+      const reader = res.body?.getReader();
+      if (!reader) { const buf = await res.arrayBuffer(); bytesTotal += buf.byteLength; continue; }
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const now = performance.now();
+        bytesTotal += value.length;
+        if (now - t0 >= WARM) { if (!warmAt) warmAt = now; after += value.length; }
+        if (now - t0 > DUR) { try { await reader.cancel(); } catch { /* done */ } break; }
+      }
+    }
+  };
+  const tick = setInterval(() => {
+    if (onProgress && warmAt && performance.now() > warmAt + 300) {
+      onProgress(round1((after * 8) / ((performance.now() - warmAt) / 1000) / 1_000_000));
+    }
+  }, 300);
+  await Promise.allSettled(Array.from({ length: 6 }, worker));
+  clearInterval(tick);
+  const end = performance.now();
+  if (warmAt && after > 0 && end - warmAt > 500) return round1((after * 8) / ((end - warmAt) / 1000) / 1_000_000);
+  if (!bytesTotal) throw new Error("no data received");
+  return round1((bytesTotal * 8) / ((end - t0) / 1000) / 1_000_000);
 }
 
 function round1(n: number): number {
