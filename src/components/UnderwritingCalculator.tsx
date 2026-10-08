@@ -291,7 +291,7 @@ function SideCalc() {
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} title="Open calculator"
-        className="fixed bottom-5 right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-brand-navy text-xl text-white shadow-lg hover:bg-brand-navy-700">🧮</button>
+        className="fixed bottom-5 right-24 z-40 grid h-12 w-12 place-items-center rounded-full bg-brand-navy text-xl text-white shadow-lg ring-2 ring-white hover:bg-brand-navy-700">🧮</button>
     );
   }
 
@@ -306,7 +306,7 @@ function SideCalc() {
         className="mb-1 flex cursor-move items-center justify-between rounded-lg px-1 py-0.5 hover:bg-slate-50 active:cursor-grabbing"
         title="Drag to move">
         <span className="select-none text-[11px] font-bold uppercase tracking-wide text-slate-400">⠿ 🧮 Calculator</span>
-        <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => setOpen(false)} title="Hide" className="rounded px-1.5 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600">✕</button>
+        <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => setOpen(false)} title="Minimize — reopen with the 🧮 button bottom-right" className="rounded px-1.5 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600">—</button>
       </div>
       <div className="mb-2 rounded-lg bg-slate-900 px-3 py-2 text-right">
         <div className="h-3 truncate text-[10px] text-slate-400">{hist}</div>

@@ -13,8 +13,8 @@ function fmt(n: string) {
   return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : n;
 }
 
-export default function SmsComposer({ oppId, contactId, to, leadName, rep, snippets }: {
-  oppId: string; contactId: string; to: string; leadName: string; rep: string; snippets: Snip[];
+export default function SmsComposer({ oppId, contactId, to, leadName, rep, snippets, compact = false }: {
+  oppId: string; contactId: string; to: string; leadName: string; rep: string; snippets: Snip[]; compact?: boolean;
 }) {
   const [text, setText] = useState("");
   const [from, setFrom] = useState("");
@@ -58,7 +58,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
           <span className="font-bold">→ To</span> {fmt(to)}
         </div>
         <textarea
-          value={text} onChange={(e) => setText(e.target.value)} rows={5}
+          value={text} onChange={(e) => setText(e.target.value)} rows={compact ? 3 : 5}
           placeholder={`Text ${first}…`}
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
         />
@@ -76,7 +76,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
       </div>
 
       {/* their phone, live */}
-      <div className="mx-auto w-[240px] shrink-0 select-none">
+      <div className={`mx-auto shrink-0 select-none ${compact ? "w-[190px]" : "w-[240px]"}`}>
         <div className="rounded-[2.4rem] bg-slate-900 p-2 shadow-xl">
           <div className="overflow-hidden rounded-[1.9rem] bg-white">
             <div className="flex items-center justify-between px-5 pt-2 text-[9px] font-bold text-slate-900"><span>9:41</span><span>📶 🔋</span></div>
@@ -84,22 +84,17 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
               <div className="mx-auto grid h-8 w-8 place-items-center rounded-full bg-slate-300 text-[11px] font-bold text-white">{(leadName[0] ?? "?").toUpperCase()}</div>
               <div className="mt-0.5 text-[10px] font-semibold text-slate-800">{first} 〉</div>
             </div>
-            <div className="flex h-[300px] flex-col justify-end gap-1 overflow-y-auto bg-white px-2.5 pb-2">
+            <div className={`flex flex-col justify-end gap-1 overflow-y-auto bg-white px-2.5 pb-2 ${compact ? "h-[170px]" : "h-[300px]"}`}>
               <div className="text-center text-[8px] font-semibold text-slate-400">Text Message · SMS · Today</div>
-              {text ? (
-                <>
-                  <div className="flex justify-end">
-                    <div className="max-w-[80%] whitespace-pre-line break-words rounded-2xl rounded-br-[4px] bg-[#34c759] px-2.5 py-1.5 text-[11px] leading-snug text-white">{text}</div>
-                  </div>
-                  <div className="pr-1 text-right text-[8px] font-semibold text-slate-400">Delivered</div>
-                </>
-              ) : (
-                <div className="pb-2 text-center text-[9px] text-slate-300">start typing to preview…</div>
-              )}
+              <div className="flex justify-end" style={{ display: text ? "flex" : "none" }}>
+                <div className="max-w-[80%] whitespace-pre-line break-words rounded-2xl rounded-br-[4px] px-2.5 py-1.5 text-[11px] leading-snug" style={{ backgroundColor: "#34c759", color: "#fff" }}>{text}</div>
+              </div>
+              <div className="pr-1 text-right text-[8px] font-semibold text-slate-400" style={{ display: text ? "block" : "none" }}>Delivered</div>
+              {!text && <div className="pb-2 text-center text-[9px] text-slate-300">start typing to preview…</div>}
             </div>
             <div className="flex items-center gap-1.5 border-t border-slate-100 px-2.5 py-1.5">
               <div className="h-5 flex-1 rounded-full bg-slate-100" />
-              <div className="grid h-5 w-5 place-items-center rounded-full bg-[#34c759] text-[9px] text-white">↑</div>
+              <div className="grid h-5 w-5 place-items-center rounded-full text-[9px]" style={{ backgroundColor: "#34c759", color: "#fff" }}>↑</div>
             </div>
           </div>
         </div>

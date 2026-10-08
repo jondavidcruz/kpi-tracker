@@ -21,13 +21,13 @@ export default function ConvComposerTabs({ contactId, oppId, phone, email, leadN
     </div>
   );
   return (
-    <div className="space-y-2 border-t border-slate-100 bg-white p-3">
+    <div className="max-h-[55vh] space-y-2 overflow-y-auto border-t border-slate-100 bg-white p-3">
       <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-200" style={{ width: "fit-content" }}>
         <button onClick={() => setMode("sms")} disabled={!smsOk} className={`px-3 py-1.5 text-xs font-bold ${mode === "sms" ? "bg-brand-navy text-white" : "bg-white text-slate-500"} disabled:opacity-40`}>💬 Text</button>
         <button onClick={() => setMode("email")} disabled={!emailOk} className={`px-3 py-1.5 text-xs font-bold ${mode === "email" ? "bg-brand-navy text-white" : "bg-white text-slate-500"} disabled:opacity-40`}>✉️ Email</button>
       </div>
       {mode === "sms" && smsOk && (
-        <SmsComposer oppId={oppId} contactId={contactId} to={phone} leadName={leadName} rep={rep} snippets={snippets.filter((s) => s.kind === "sms")} />
+        <SmsComposer compact oppId={oppId} contactId={contactId} to={phone} leadName={leadName} rep={rep} snippets={snippets.filter((s) => s.kind === "sms")} />
       )}
       {mode === "email" && emailOk && (
         <GmailComposer oppId={oppId} contactId={contactId} to={email} leadName={leadName} rep={rep} fromLabel={fromLabel} signature={signature} snippets={snippets.filter((s) => s.kind === "email")} />

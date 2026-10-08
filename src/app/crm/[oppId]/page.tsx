@@ -295,6 +295,20 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <input type="hidden" name="oppId" value={opp.id} />
               <input type="hidden" name="contactId" value={c.id} />
               <input name="title" placeholder="＋ offer call…" required className="min-w-[120px] flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+<select name="aptType" className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold">
+                <option value="phone">📞 Phone apt</option>
+                <option value="inperson">🤝 In person apt</option>
+              </select>
+              <select name="purpose" className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold">
+                <option value="Process call">Process call</option>
+                <option value="Offer call">Offer call</option>
+                <option value="Negotiation">Negotiation</option>
+                <option value="Follow-up info">Follow-up info</option>
+                <option value="Inspection / photos">Inspection / photos</option>
+                <option value="Contract signing">Contract signing</option>
+                <option value="custom">✏️ Custom…</option>
+              </select>
+              <input name="purposeCustom" placeholder="custom purpose (if ✏️)" className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
               <input type="datetime-local" name="at" required className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
               <button className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-bold text-white">Book</button>
             </form>

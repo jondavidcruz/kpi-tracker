@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { deleteCrmApptAction } from "../actions";
+import { serviceAccountEmail } from "@/lib/gcal";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,12 @@ export default async function CrmCalendarPage({ searchParams }: { searchParams: 
           </span>
         )}
       </div>
+
+      <Card className="p-3 text-[12px] text-slate-600">
+        <b>📲 Get these on YOUR phone's Google Calendar (one-time, 60 seconds):</b> open <a className="text-indigo-600 underline" href="https://calendar.google.com/calendar/u/0/r/settings" target="_blank">Google Calendar settings</a> → your calendar → <b>Share with specific people</b> → add
+        <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px]">{serviceAccountEmail() || "(service account not configured)"}</code>
+        with <b>"Make changes to events"</b>. Every appointment booked for you then lands on your personal calendar automatically, with 30-and-10-minute reminders.
+      </Card>
 
       {appts.length === 0 && <Card className="p-8 text-center text-sm text-slate-400">No {v} appointments{who ? ` for ${who.split(" ")[0]}` : ""} — book one from a lead card (📅 Appointments section).</Card>}
 

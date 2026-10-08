@@ -2,7 +2,10 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
-import { parseTags } from "@/lib/crm-shared";
+import { parseTags, CRM_STAGES } from "@/lib/crm-shared";
+import SelectAllBox from "@/components/SelectAllBox";
+import { bulkContactsAction } from "../actions";
+import { readPipelines } from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +40,8 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
     db.crmContact.findMany({ where, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PAGE, take: PAGE,
       include: { opportunities: { where: { archivedAt: null }, select: { id: true, stage: true, pipeline: true }, take: 1, orderBy: { updatedAt: "desc" } } } }),
   ]);
+  const pipelines = manager ? await readPipelines() : [];
+  const reps2 = manager ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
   const reps = manager ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const qs = (np: number) => `/crm/contacts?p=${np}${q ? `&q=${encodeURIComponent(q)}` : ""}${who ? `&who=${encodeURIComponent(who)}` : ""}`;
@@ -63,10 +68,32 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
         )}
       </Card>
 
+      <form action={bulkContactsAction}>
+      {manager && (
+        <Card className="mb-3 flex flex-wrap items-center gap-2 p-3">
+          <SelectAllBox />
+          <span className="text-[11px] font-bold text-slate-500">Mass edit checked →</span>
+          <select name="op" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold">
+            <option value="addtag">🏷 Add tag</option>
+            <option value="owner">👤 Set owner</option>
+            <option value="stage">📊 Set stage</option>
+            <option value="pipeline">🔀 Move pipeline</option>
+          </select>
+          <input name="value" placeholder="value (tag text / exact stage key)" className="min-w-[160px] rounded-lg border border-slate-200 px-2 py-1.5 text-xs" list="bulkhints" />
+          <datalist id="bulkhints">
+            {reps2.map((r) => <option key={r.id} value={r.name} />)}
+            {pipelines.map((p) => <option key={p.name} value={p.name} />)}
+            {CRM_STAGES.map((st) => <option key={st.key} value={st.key} />)}
+          </datalist>
+          <button className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white">Apply</button>
+          <span className="text-[10px] text-slate-400">owner also reassigns their leads · tag adds to contact + leads</span>
+        </Card>
+      )}
       <Card className="overflow-x-auto p-0">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              {manager && <th className="w-8 px-3 py-2.5"></th>}
               <th className="px-4 py-2.5">Contact</th><th className="px-3 py-2.5">Phone</th><th className="px-3 py-2.5">Email</th>
               <th className="px-3 py-2.5">Owner</th><th className="px-3 py-2.5">Stage</th><th className="px-3 py-2.5">Tags</th><th className="px-3 py-2.5 text-right">Last activity</th>
             </tr>
@@ -76,6 +103,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
               const opp = c.opportunities[0];
               return (
                 <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/60">
+                  {manager && <td className="px-3 py-2.5"><input type="checkbox" name="ids" value={c.id} /></td>}
                   <td className="px-4 py-2.5">
                     {opp ? <Link href={`/crm/${opp.id}`} className="font-bold text-slate-800 hover:text-indigo-600">{c.name}</Link> : <span className="font-bold text-slate-800">{c.name}</span>}
                     {c.address && <div className="max-w-[200px] truncate text-[11px] text-slate-400">{c.address}</div>}
@@ -97,6 +125,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
         </table>
         {contacts.length === 0 && <div className="p-8 text-center text-sm text-slate-400">No contacts match.</div>}
       </Card>
+      </form>
 
       <div className="flex items-center justify-between text-xs text-slate-500">
         <span>Page {page} of {pages}</span>

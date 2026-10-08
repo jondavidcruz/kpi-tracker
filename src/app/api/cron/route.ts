@@ -583,6 +583,38 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 🗑 Stage removal (?stagedrop=1&match=<regex>&commit=1): delete matching
+  // stages from every pipeline in __crm_pipelines__; leads sitting in them
+  // move to the pipeline's regular appointment stage (or the stage before).
+  if (url.searchParams.get("stagedrop") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const rxStr = url.searchParams.get("match") || "ip apt";
+    const rx = new RegExp(rxStr, "i");
+    const row = await db.resource.findFirst({ where: { category: "__crm_pipelines__" } });
+    if (!row?.description) return NextResponse.json({ ok: false, error: "no __crm_pipelines__" });
+    let pls: Array<{ name: string; stages: Array<{ key: string; label: string }> }> = [];
+    try { pls = JSON.parse(row.description); } catch { return NextResponse.json({ ok: false, error: "bad pipelines json" }); }
+    const report: Record<string, { removed: string[]; movedTo: string; leadsMoved: number }> = {};
+    for (const p of pls) {
+      const drop = p.stages.filter((s) => rx.test(s.label) || rx.test(s.key));
+      if (!drop.length) continue;
+      const keep = p.stages.filter((s) => !drop.includes(s));
+      // destination: the surviving regular apt stage, else the stage before the dropped one
+      const dest = keep.find((s) => /apt|appointment/i.test(s.label) && !rx.test(s.label))
+        ?? keep[Math.max(0, p.stages.indexOf(drop[0]) - 1)] ?? keep[0];
+      let moved = 0;
+      for (const d of drop) {
+        const n = await db.crmOpportunity.count({ where: { pipeline: p.name, stage: d.key, archivedAt: null } });
+        moved += n;
+        if (commit && dest) await db.crmOpportunity.updateMany({ where: { pipeline: p.name, stage: d.key }, data: { stage: dest.key } });
+      }
+      if (commit) p.stages = keep;
+      report[p.name] = { removed: drop.map((d) => d.label), movedTo: dest?.label ?? "?", leadsMoved: moved };
+    }
+    if (commit) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(pls) } });
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", report });
+  }
+
   // 📝 PandaDoc template probe (?pdtplprobe=1): dump both offer templates'
   // field names + signer roles so draft pre-fill maps Jon's 5 essentials
   // exactly (address, APN, seller net, seller name).

@@ -238,6 +238,20 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                   <div className="space-y-3">
                     <form action={submit(addCrmApptAction, { oppId: d.id, contactId: d.contact.id })} className="grid grid-cols-2 gap-2">
                       <input name="title" placeholder="Appointment title…" required className={`${inputCls} col-span-2`} />
+                      <select name="aptType" className={inputCls}>
+                        <option value="phone">📞 Phone apt</option>
+                        <option value="inperson">🤝 In person apt</option>
+                      </select>
+                      <select name="purpose" className={inputCls}>
+                        <option value="Process call">Process call</option>
+                        <option value="Offer call">Offer call</option>
+                        <option value="Negotiation">Negotiation</option>
+                        <option value="Follow-up info">Follow-up info</option>
+                        <option value="Inspection / photos">Inspection / photos</option>
+                        <option value="Contract signing">Contract signing</option>
+                        <option value="custom">✏️ Custom…</option>
+                      </select>
+                      <input name="purposeCustom" placeholder="custom purpose (if ✏️)" className={inputCls} />
                       <input name="at" type="datetime-local" required className={inputCls} />
                       <input name="note" placeholder="Note (optional)" className={inputCls} />
                       <div className="col-span-2"><button className="rounded-xl bg-brand-navy px-3 py-1.5 text-xs font-bold text-white">Book appointment</button></div>

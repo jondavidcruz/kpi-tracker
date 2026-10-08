@@ -70,10 +70,32 @@ export async function setOppStageAction(formData: FormData) {
   if (full) { const { runStageAutomations } = await import("@/lib/crm-automations"); runStageAutomations(full).catch(() => {}); }
   // 📝 GHL-parity (Jon 2026-10-07): hitting an offer/contract stage auto-drafts
   // the PandaDoc contract so the rep just reviews and sends. Never blocks.
-  if (full && /offer|contract/i.test(stage) && !/rejected|sent/i.test(stage)) {
+  if (full && /offer|contract/i.test(stage) && !/rejected|sent|comp/i.test(stage)) {
     // cash unless the lead is tagged novation (buttons on the card override)
     const kind = /novation/i.test((await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } }))?.tags ?? "") ? "novation" : "cash";
     draftContract(full.id, kind, me.name).catch(() => {});
+  }
+  // 🧮 Comping workflow (Jon 2026-10-07): the three comp stages wire acq ↔
+  // dispo ↔ underwriting together instead of sitting dead on the board.
+  if (full) {
+    (async () => {
+      const contact = await db.crmContact.findUnique({ where: { id: full.contactId }, select: { name: true, address: true } });
+      const addr = contact?.address ?? "";
+      const today = new Date().toISOString().slice(0, 10);
+      if (/comp to offer/i.test(stage)) {
+        // acq owner underwrites NOW — 15-minute clock, calculator pre-linked
+        await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `🧮 UNDERWRITE NOW (15-min clock) — ${contact?.name ?? "lead"}`, due: today, assignedTo: full.assignedTo || me.name, createdBy: "comp-flow" } }).catch(() => {});
+        await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `🧮 Comp to offer — underwrite within 15 min: /underwriting${addr ? `?address=${encodeURIComponent(addr)}` : ""}`, actor: "comp-flow" });
+      } else if (/developer comp/i.test(stage)) {
+        // hand the pricing question to dispo; acq calls back with the number
+        const dispo = await db.user.findFirst({ where: { active: true, position: "dispositions" }, select: { name: true } });
+        await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `💰 PRICE CHECK w/ developers — ${contact?.name ?? "lead"}${addr ? ` (${addr})` : ""} → tell ${(full.assignedTo || me.name).split(" ")[0]} the number`, due: today, assignedTo: dispo?.name ?? "", createdBy: "comp-flow" } }).catch(() => {});
+        await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `📞 CALL SELLER BACK with the developer number once dispo prices it`, due: today, assignedTo: full.assignedTo || me.name, createdBy: "comp-flow" } }).catch(() => {});
+        await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `💰 Sent to dispo for developer pricing — dispo tasks created, acq calls back with the offer`, actor: "comp-flow" });
+      } else if (/comp review/i.test(stage)) {
+        await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `🧐 Manager: review this underwrite before the offer goes out`, due: today, assignedTo: "Jon Cruz", createdBy: "comp-flow" } }).catch(() => {});
+      }
+    })().catch(() => {});
   }
   revalidatePath("/crm");
   revalidatePath(`/crm/${id}`);
@@ -181,7 +203,20 @@ export async function addCrmApptAction(formData: FormData) {
   const when = String(formData.get("at") ?? ""); // datetime-local
   const at = when ? new Date(when) : null;
   if (!title || !at || Number.isNaN(at.getTime())) return;
-  await db.crmAppointment.create({ data: { oppId, contactId, title, at, withWho: String(formData.get("withWho") ?? "").trim() || me.name, note: String(formData.get("note") ?? "").trim().slice(0, 300), createdBy: me.name } });
+  // phone vs in-person + what the appointment is FOR (Jon 2026-10-07)
+  const aptType = String(formData.get("aptType") ?? "") === "inperson" ? "🤝 In person" : "📞 Phone";
+  const purposeRaw = String(formData.get("purpose") ?? "").trim();
+  const purpose = purposeRaw === "custom" ? String(formData.get("purposeCustom") ?? "").trim().slice(0, 60) : purposeRaw;
+  const prefix = [aptType, purpose].filter(Boolean).join(" · ");
+  const noteIn = String(formData.get("note") ?? "").trim();
+  const appt = await db.crmAppointment.create({ data: { oppId, contactId, title, at, withWho: String(formData.get("withWho") ?? "").trim() || me.name, note: `${prefix ? `[${prefix}] ` : ""}${noteIn}`.slice(0, 300), createdBy: me.name } });
+  // mirror onto the rep's personal Google Calendar (never blocks booking)
+  (async () => {
+    const { pushApptToGcal } = await import("@/lib/gcal");
+    const c = contactId ? await db.crmContact.findUnique({ where: { id: contactId }, select: { name: true } }) : null;
+    const r = await pushApptToGcal({ id: appt.id, title: appt.title, at: appt.at, note: appt.note, withWho: appt.withWho, leadName: c?.name, oppId });
+    if (!r.ok && contactId) await logCrmEvent({ contactId, oppId, kind: "system", body: `📅 Google Calendar sync skipped: ${r.why} (share your calendar with the service account — see /crm/calendar)`, actor: "gcal" }).catch(() => {});
+  })().catch(() => {});
   if (contactId) await logCrmEvent({ contactId, oppId, kind: "appt", body: `Appointment set: ${title} — ${at.toLocaleString("en-US", { timeZone: "America/New_York" })}`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
   revalidatePath("/crm");
@@ -195,6 +230,7 @@ export async function deleteCrmApptAction(formData: FormData) {
   const a = await db.crmAppointment.findUnique({ where: { id } });
   if (!a) return;
   await db.crmAppointment.delete({ where: { id } }).catch(() => {});
+  (async () => { const { removeApptFromGcal } = await import("@/lib/gcal"); await removeApptFromGcal(id); })().catch(() => {});
   revalidatePath(`/crm/${a.oppId}`);
   revalidatePath("/crm/calendar");
 }
@@ -641,4 +677,38 @@ export async function draftContractAction(formData: FormData) {
   const kind = String(formData.get("kind") ?? "cash") === "novation" ? "novation" : "cash";
   if (!oppId) return;
   await draftContract(oppId, kind, me.name);
+}
+
+/** 📦 Contacts page mass edit (managers): owner / tags / stage / pipeline
+ *  across every checked contact (and their open opportunities). */
+export async function bulkContactsAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me || !isManager(me)) return;
+  let ids: string[] = formData.getAll("ids").map(String).filter(Boolean);
+  if (!ids.length) { try { ids = JSON.parse(String(formData.get("idsJson") ?? "[]")); } catch { /* none */ } }
+  const op = String(formData.get("op") ?? "");
+  const value = String(formData.get("value") ?? "").trim();
+  if (!ids.length || !op) return;
+  for (const contactId of ids.slice(0, 500)) {
+    if (op === "owner") {
+      await db.crmContact.update({ where: { id: contactId }, data: { assignedTo: value } }).catch(() => {});
+      await db.crmOpportunity.updateMany({ where: { contactId, archivedAt: null }, data: { assignedTo: value } }).catch(() => {});
+    } else if (op === "addtag" && value) {
+      const c = await db.crmContact.findUnique({ where: { id: contactId }, select: { tags: true } });
+      const tags = new Set((c?.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean));
+      tags.add(value);
+      await db.crmContact.update({ where: { id: contactId }, data: { tags: [...tags].join(",").slice(0, 300) } }).catch(() => {});
+      const opps = await db.crmOpportunity.findMany({ where: { contactId, archivedAt: null }, select: { id: true, tags: true } });
+      for (const o of opps) {
+        const ot = new Set((o.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean)); ot.add(value);
+        await db.crmOpportunity.update({ where: { id: o.id }, data: { tags: [...ot].join(",").slice(0, 300) } }).catch(() => {});
+      }
+    } else if (op === "stage" && value) {
+      await db.crmOpportunity.updateMany({ where: { contactId, archivedAt: null }, data: { stage: value } }).catch(() => {});
+    } else if (op === "pipeline") {
+      await db.crmOpportunity.updateMany({ where: { contactId, archivedAt: null }, data: { pipeline: value === "War Room" ? "" : value } }).catch(() => {});
+    }
+  }
+  revalidatePath("/crm/contacts");
+  revalidatePath("/crm");
 }
