@@ -83,6 +83,31 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <a href={`/underwriting?address=${encodeURIComponent(opp.title)}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">🧮 Underwrite</a>
           </span>
         </div>
+
+        {/* Salesforce-style path: the whole pipeline as a clickable chevron bar —
+            green behind the current stage, one click moves the lead. */}
+        <div className="mt-3 flex gap-[3px] overflow-x-auto pb-1">
+          {stages.map((s, i) => {
+            const curIdx = stages.findIndex((x) => x.key === opp.stage);
+            const done = i < curIdx, current = i === curIdx;
+            return (
+              <form key={s.key} action={setOppStageAction} className="min-w-0 flex-1" style={{ minWidth: 86 }}>
+                <input type="hidden" name="id" value={opp.id} />
+                <input type="hidden" name="stage" value={s.key} />
+                <button
+                  title={current ? `Current stage: ${s.label}` : `Move to ${s.label}`}
+                  disabled={current}
+                  className={`w-full truncate px-2 py-1.5 text-center text-[10px] font-bold transition first:rounded-l-full last:rounded-r-full ${
+                    current ? "bg-brand-navy text-white"
+                    : done ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                  }`}
+                  style={{ clipPath: i === stages.length - 1 ? undefined : "polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%, 8px 50%)" }}
+                >{s.label}</button>
+              </form>
+            );
+          })}
+        </div>
         {c.pinnedNote && <div className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {c.pinnedNote}</div>}
       </Card>
 
