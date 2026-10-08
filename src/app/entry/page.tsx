@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { saveDay, addRepReason, setDayFocus, refreshCrmToday } from "@/app/actions";
 import { getCurrentUser, isManager, canAccessCSuite, tracksSpeedTest } from "@/lib/auth";
-import { readCommissionPlans, planForUser } from "@/lib/commissions";
+import { readCommissionPlans, planForUser, pathToGoal } from "@/lib/commissions";
 import { db } from "@/lib/db";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
 import SpeedTestCard from "@/components/SpeedTestCard";
@@ -370,6 +370,13 @@ export default async function EntryPage({
                 <div>🏦 {commPlan.base || "No base — commission only: every closed deal pays you directly."}</div>
                 <div>💵 {commPlan.structure}</div>
                 <div className="text-slate-400">⏱ {commPlan.payout}</div>
+              </div>
+              {/* 🔥 why today's KPIs matter — the goal translated into deals (estimate) */}
+              <div className="mt-2 rounded-lg bg-white/70 p-2.5 ring-1 ring-amber-100">
+                <div className="text-[10px] font-extrabold uppercase tracking-wide text-amber-700">🔥 Path to your goal (estimate)</div>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-slate-600">
+                  {pathToGoal(commPlan).map((l, i) => <li key={i}>{l}</li>)}
+                </ul>
               </div>
             </div>
           )}

@@ -15,7 +15,8 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
   const manager = isManager(me!);
   const sp = await searchParams;
   const v = ["today", "overdue", "upcoming", "done"].includes(sp.v ?? "") ? sp.v! : "all";
-  const who = manager ? (sp.who ?? "") : me!.name;
+  // Default = MINE even for managers (Jon 2026-10-08); "Everyone" is ?who=all.
+  const who = manager ? (sp.who === "all" ? "" : (sp.who ?? me!.name)) : me!.name;
   const today = new Date().toISOString().slice(0, 10);
 
   const where = {
@@ -34,7 +35,7 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
     all: await db.crmTask.count({ where: { doneAt: null, ...(who ? { assignedTo: { equals: who, mode: "insensitive" } } : {}) } }),
     overdue: await db.crmTask.count({ where: { doneAt: null, due: { not: "", lt: today }, ...(who ? { assignedTo: { equals: who, mode: "insensitive" } } : {}) } }),
   };
-  const qs = (nv: string) => `/crm/tasks?v=${nv}${who ? `&who=${encodeURIComponent(who)}` : ""}`;
+  const qs = (nv: string) => `/crm/tasks?v=${nv}&who=${encodeURIComponent(who || "all")}`;
 
   return (
     <div className="space-y-4">
@@ -48,7 +49,7 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
       </div>
       {manager && (
         <div className="flex flex-wrap gap-1.5">
-          <Link prefetch={false} href={`/crm/tasks?v=${v}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
+          <Link prefetch={false} href={`/crm/tasks?v=${v}&who=all`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
           {reps.map((r) => (
             <Link key={r.id} prefetch={false} href={`/crm/tasks?v=${v}&who=${encodeURIComponent(r.name)}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>{r.name.split(" ")[0]}</Link>
           ))}

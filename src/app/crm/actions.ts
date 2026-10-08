@@ -82,16 +82,14 @@ export async function setOppStageAction(formData: FormData) {
       const contact = await db.crmContact.findUnique({ where: { id: full.contactId }, select: { name: true, address: true } });
       const addr = contact?.address ?? "";
       const today = new Date().toISOString().slice(0, 10);
-      if (/comp to offer/i.test(stage)) {
-        // acq owner underwrites NOW — 15-minute clock, calculator pre-linked
+      if (/comp.to.offer/i.test(stage)) {
+        // one merged comp stage (2026-10-08 streamline) fires the whole flow:
+        // acq underwrites NOW + dispo prices with developers + acq calls back.
+        // (The old /comp to offer/ space-regexes never matched the slug keys.)
         await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `🧮 UNDERWRITE NOW (15-min clock) — ${contact?.name ?? "lead"}`, due: today, assignedTo: full.assignedTo || me.name, createdBy: "comp-flow" } }).catch(() => {});
-        await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `🧮 Comp to offer — underwrite within 15 min: /underwriting${addr ? `?address=${encodeURIComponent(addr)}` : ""}`, actor: "comp-flow" });
-      } else if (/developer comp/i.test(stage)) {
-        // hand the pricing question to dispo; acq calls back with the number
         const dispo = await db.user.findFirst({ where: { active: true, position: "dispositions" }, select: { name: true } });
         await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `💰 PRICE CHECK w/ developers — ${contact?.name ?? "lead"}${addr ? ` (${addr})` : ""} → tell ${(full.assignedTo || me.name).split(" ")[0]} the number`, due: today, assignedTo: dispo?.name ?? "", createdBy: "comp-flow" } }).catch(() => {});
-        await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `📞 CALL SELLER BACK with the developer number once dispo prices it`, due: today, assignedTo: full.assignedTo || me.name, createdBy: "comp-flow" } }).catch(() => {});
-        await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `💰 Sent to dispo for developer pricing — dispo tasks created, acq calls back with the offer`, actor: "comp-flow" });
+        await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `🧮 Comp → Offer (24h clock): underwrite now (/underwriting${addr ? `?address=${encodeURIComponent(addr)}` : ""}) · dispo pricing task created`, actor: "comp-flow" });
       } else if (/sign/i.test(stage) && !/missed|dead/i.test(stage)) {
         // 💰 iSpeedToLead Closer Program (Jon 2026-10-08): they PAY us for
         // reporting closings on their leads — never let one slip.
@@ -102,9 +100,9 @@ export async function setOppStageAction(formData: FormData) {
           await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `💰 GET PAID — report this closing to iSpeedToLead Closer Program: app.ispeedtolead.com/closer-program (${contact?.name ?? "seller"}${addr ? ` · ${addr}` : ""}${price != null ? ` · $${price.toLocaleString()}` : ""})`, due: today, assignedTo: "Jon Cruz", createdBy: "closer-program" } }).catch(() => {});
           await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `💰 iSpeedToLead lead SIGNED — submit to the Closer Program for the payout: https://app.ispeedtolead.com/closer-program`, actor: "closer-program" });
         }
-      } else if (/comp review/i.test(stage)) {
-        await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `🧐 Manager: review this underwrite before the offer goes out`, due: today, assignedTo: "Jon Cruz", createdBy: "comp-flow" } }).catch(() => {});
       }
+      // (comp-review stage retired 2026-10-08 — manager review happens inside
+      // the merged Comp → Offer stage when Jon wants it, not as a board column)
     })().catch(() => {});
   }
   revalidatePath("/crm");

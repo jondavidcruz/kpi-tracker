@@ -24,22 +24,23 @@ export function tierFor(revenue: number) {
 }
 
 // ── Revenue generated per person ─────────────────────────────────────────────
-// A closed wholesale deal has two contributors: the acquisitions/LM side that
-// signed it (Deal.lmAq / assignedTo) and the dispo side that closed it
-// (ClosedDeal.closedBy). Per Jon's call we credit BOTH the full profit, so each
-// person sees their full impact (team totals will exceed company revenue).
+// Jon 2026-10-08: revenue = ONLY the dispo pipeline's 💰 DEAL WON deals (paid,
+// escrow closed) — the life of the company. Each deal credits everyone named
+// on it (assigned rep + followers), full value, so a person sees their whole
+// impact (team totals can exceed company revenue).
 export type RevRow = { revenue: number; revenueYtd: number; deals: number };
 
 export async function getRevenueByUser(year: number): Promise<{ byUserId: Map<string, RevRow>; unattributed: number; adjustments: Record<string, number>; companyTotal: number }> {
-  const [users, closed, deals, adjRow] = await Promise.all([
+  const [users, wins, adjRow] = await Promise.all([
     db.user.findMany({ where: { active: true }, select: { id: true, name: true } }),
-    db.closedDeal.findMany({ select: { profit: true, year: true, closedBy: true, dealId: true } }),
-    db.deal.findMany({ select: { id: true, lmAq: true, assignedTo: true, status: true, soldPrice: true, assignmentFee: true, soldDate: true } }),
+    db.crmOpportunity.findMany({
+      where: { stage: "deal_won_100", pipeline: { contains: "Signed" } },
+      select: { value: true, assignedTo: true, updatedAt: true, formData: true },
+    }),
     db.resource.findFirst({ where: { category: "__roster_rev_adjust__" } }),
   ]);
   let adjustments: Record<string, number> = {};
   try { adjustments = adjRow?.description ? JSON.parse(adjRow.description) : {}; } catch { /* none */ }
-  const dealById = new Map(deals.map((d) => [d.id, d]));
   const firstOf = (n: string) => n.trim().split(/\s+/)[0].toLowerCase();
   const roster = users.map((u) => ({ id: u.id, first: firstOf(u.name) })).filter((u) => u.first.length >= 2);
   // Which active users are named in a free-text credit field (by first name).
@@ -56,38 +57,17 @@ export async function getRevenueByUser(year: number): Promise<{ byUserId: Map<st
   let companyTotal = 0;
   let companyYtd = 0;
   let companyDeals = 0;
-  for (const c of closed) {
-    companyTotal += c.profit; companyDeals += 1;
-    if (c.year === year) companyYtd += c.profit;
-    const credited = new Set<string>();
-    matchIds(c.closedBy).forEach((id) => credited.add(id)); // dispo side
-    const d = c.dealId ? dealById.get(c.dealId) : null;
-    if (d) {
-      matchIds(d.lmAq).forEach((id) => credited.add(id));       // acquisitions / LM side
-      matchIds(d.assignedTo).forEach((id) => credited.add(id)); // dispo named on the deal
-    }
-    if (credited.size === 0) { unattributed += c.profit; continue; }
-    for (const id of credited) {
-      const row = byUserId.get(id);
-      if (!row) continue;
-      row.revenue += c.profit;
-      row.deals += 1;
-      if (c.year === year) row.revenueYtd += c.profit;
-    }
-  }
-  // Closed deals living only on the Deals board (incl. the GHL DEAL WON
-  // imports) — credit assignedTo + lmAq, skip any already in the ledger.
-  const inLedger = new Set(closed.map((c) => c.dealId).filter(Boolean));
-  for (const d of deals) {
-    if (d.status !== "closed" || inLedger.has(d.id)) continue;
-    const profit = d.assignmentFee ?? d.soldPrice ?? 0;
-    if (!profit) continue;
-    const yr = Number((d.soldDate ?? "").slice(0, 4)) || 0;
+  for (const w of wins) {
+    const profit = w.value ?? 0;
+    const fd = (w.formData ?? {}) as Record<string, unknown>;
+    const closedAt = typeof fd.__closedAt === "string" && fd.__closedAt ? fd.__closedAt : w.updatedAt.toISOString();
+    const yr = Number(closedAt.slice(0, 4)) || 0;
     companyTotal += profit; companyDeals += 1;
     if (yr === year) companyYtd += profit;
     const credited = new Set<string>();
-    matchIds(d.assignedTo).forEach((id) => credited.add(id));
-    matchIds(d.lmAq).forEach((id) => credited.add(id));
+    matchIds(w.assignedTo).forEach((id) => credited.add(id));
+    const followers = Array.isArray(fd.__followers) ? (fd.__followers as string[]) : [];
+    for (const f of followers) matchIds(f).forEach((id) => credited.add(id));
     if (credited.size === 0) { unattributed += profit; continue; }
     for (const id of credited) {
       const row = byUserId.get(id);

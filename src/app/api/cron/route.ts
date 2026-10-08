@@ -1114,8 +1114,66 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, byPipeline: out });
   }
 
+  // 🔀 Pipeline streamlining migration (?stagemigrate=1 dry / &commit=1 —
+  // Jon approved 2026-10-08): rewrites the three bloated pipeline definitions
+  // (AQM 19→11, JrAQ →11, DS Signed 10→7) and walks every lead in a retired
+  // stage to its merge target. Archive-safe: archived rows migrate too.
+  if (url.searchParams.get("stagemigrate") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const { ACQ_STAGE_ALIASES, DS_STAGE_ALIASES, ACQ_STAGES, DS_STAGES } = await import("@/lib/stage-aliases");
+    const plRow = await db.resource.findFirst({ where: { category: "__crm_pipelines__" } });
+    if (!plRow?.description) return NextResponse.json({ ok: false, error: "no pipeline defs" });
+    const defs = JSON.parse(plRow.description) as Array<{ name: string; stages: Array<{ key: string; label: string }> }>;
+    const isAcq = (n: string) => /AQM|JrAQ/i.test(n);
+    const isDs = (n: string) => /Signed/i.test(n) && /DS/i.test(n);
+    const moved: Record<string, number> = {};
+    for (const def of defs) {
+      if (isAcq(def.name)) def.stages = ACQ_STAGES;
+      if (isDs(def.name)) def.stages = DS_STAGES;
+    }
+    for (const [from, to] of Object.entries(ACQ_STAGE_ALIASES)) {
+      const n = commit
+        ? (await db.crmOpportunity.updateMany({ where: { stage: from, pipeline: { contains: "AQ" } }, data: { stage: to } })).count
+        : await db.crmOpportunity.count({ where: { stage: from, pipeline: { contains: "AQ" } } });
+      if (n) moved[`acq:${from}→${to}`] = n;
+    }
+    // tag reduction-needed leads BEFORE the stage move erases the signal
+    const reductions = await db.crmOpportunity.findMany({ where: { stage: "reduction_needed" }, select: { id: true, tags: true } });
+    if (commit) for (const r of reductions) await db.crmOpportunity.update({ where: { id: r.id }, data: { tags: r.tags ? `${r.tags},reduction-needed` : "reduction-needed" } });
+    for (const [from, to] of Object.entries(DS_STAGE_ALIASES)) {
+      const n = commit
+        ? (await db.crmOpportunity.updateMany({ where: { stage: from, pipeline: { contains: "Signed" } }, data: { stage: to } })).count
+        : await db.crmOpportunity.count({ where: { stage: from, pipeline: { contains: "Signed" } } });
+      if (n) moved[`ds:${from}→${to}`] = n;
+    }
+    if (commit) await db.resource.update({ where: { id: plRow.id }, data: { description: JSON.stringify(defs) } });
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", moved, newDefs: defs.map((d) => ({ name: d.name, stages: d.stages.length })) });
+  }
+
+  // 🧹 One-time Direct REI flood rollback (?dreicleanup=1, Jon 2026-10-08):
+  // closes the auto-created "first call" tasks and archives the untouched
+  // auto-imported seller opps (archive, never delete — contacts stay). The
+  // automation itself now only fires on sellers who REPLY.
+  if (url.searchParams.get("dreicleanup") === "1") {
+    const tasks = await db.crmTask.findMany({ where: { title: "📞 First call — new Direct REI seller lead", doneAt: null }, select: { id: true, oppId: true } });
+    let archived = 0;
+    for (const t of tasks) {
+      await db.crmTask.update({ where: { id: t.id }, data: { doneAt: new Date() } });
+      if (t.oppId) {
+        const opp = await db.crmOpportunity.findUnique({ where: { id: t.oppId }, select: { id: true, stage: true, archivedAt: true } });
+        if (opp && !opp.archivedAt && opp.stage === "new") {
+          const touched = await db.crmEvent.count({ where: { oppId: opp.id, NOT: { actor: "automation" } } });
+          if (touched === 0) { await db.crmOpportunity.update({ where: { id: opp.id }, data: { archivedAt: new Date() } }); archived++; }
+        }
+      }
+    }
+    return NextResponse.json({ ok: true, tasksClosed: tasks.length, oppsArchived: archived });
+  }
+
   // ✅ Owner to-do (?jontask=1&title=...): drops a task on Jon's list under the
   // 🛠 War Room updates section — used so action items never live only in chat.
+  // &biz=1 = a BUSINESS task → also mirrored to Jon's Cortana app. Without it
+  // (war-room build work) the task stays in the War Room only (Jon 2026-10-08).
   if (url.searchParams.get("jontask") === "1") {
     const title = (url.searchParams.get("title") ?? "").slice(0, 200);
     if (!title) return NextResponse.json({ ok: false, error: "title required" });
@@ -1123,11 +1181,11 @@ export async function GET(request: Request) {
     const dup = await db.crmTask.findFirst({ where: { title: `🛠 ${title}`, doneAt: null } });
     if (dup) return NextResponse.json({ ok: true, existed: true });
     await db.crmTask.create({ data: { oppId: "", contactId: "", title: `🛠 ${title}`, due: new Date().toISOString().slice(0, 10), assignedTo: jon?.name ?? "Jon Cruz", createdBy: "warroom-updates" } });
-    // mirror into Jon's Cortana app (Supabase tasks table) when the bridge
-    // key is set: CORTANA_SERVICE_KEY in Vercel (service_role of project
-    // tcfsjfymkxlxvzeljwoj). Business area, Q2, pre-triaged.
-    let cortana = "skipped (no CORTANA_SERVICE_KEY)";
-    if (process.env.CORTANA_SERVICE_KEY) {
+    // mirror into Jon's Cortana app (Supabase tasks table) ONLY for business
+    // tasks (&biz=1) when the bridge key is set: CORTANA_SERVICE_KEY in Vercel
+    // (service_role of project tcfsjfymkxlxvzeljwoj). Business area, Q2, pre-triaged.
+    let cortana = url.searchParams.get("biz") === "1" ? "skipped (no CORTANA_SERVICE_KEY)" : "skipped (war-room build task — stays in War Room)";
+    if (process.env.CORTANA_SERVICE_KEY && url.searchParams.get("biz") === "1") {
       try {
         const cUrl = process.env.CORTANA_SUPABASE_URL || "https://tcfsjfymkxlxvzeljwoj.supabase.co";
         const H = { apikey: process.env.CORTANA_SERVICE_KEY, Authorization: `Bearer ${process.env.CORTANA_SERVICE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates" };
@@ -1464,9 +1522,17 @@ export async function GET(request: Request) {
     if (pipeIdx != null) pipelines = pipelines.filter((_, i) => i === Number(pipeIdx));
     const stageName = new Map<string, string>();
     for (const p of plBody.pipelines ?? []) for (const st of p.stages ?? []) stageName.set(st.id, st.name);
-    // GHL parity: keep the EXACT pipeline + stage (slug of GHL's stage name)
+    // GHL parity: keep the EXACT pipeline + stage (slug of GHL's stage name),
+    // then run the streamlining aliases so a re-import can't resurrect retired
+    // stages (Jon's 2026-10-08 pipeline merge).
     const { stageSlug } = await import("@/lib/crm");
-    const mapStage = (n: string) => (n ? stageSlug(n) : "contacted");
+    const { ACQ_STAGE_ALIASES: acqAlias, DS_STAGE_ALIASES: dsAlias } = await import("@/lib/stage-aliases");
+    const mapStage = (n: string, pipeName: string) => {
+      const slug = n ? stageSlug(n) : "contacted";
+      if (/AQ/i.test(pipeName) && acqAlias[slug]) return acqAlias[slug];
+      if (/Signed/i.test(pipeName) && dsAlias[slug]) return dsAlias[slug];
+      return slug;
+    };
     const repByCrm = new Map(AGENTS.map((a) => [a.crm, a.first]));
     const users = await db.user.findMany({ where: { active: true }, select: { name: true } });
     // BUG FIX (Enrico-owns-everything): startsWith("") matches EVERYONE, so an
@@ -1486,12 +1552,15 @@ export async function GET(request: Request) {
       }
       return /nick/i.test(pipeName) ? (fullName("nicholas") || fullName("nick") || "Nicholas Fair") : "";
     };
-    type Row = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; value: number | null; rep: string; stage: string; pipeline: string };
+    type Row = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; value: number | null; rep: string; stage: string; pipeline: string; closedAt: string };
     const rows: Row[] = [];
     for (const p of pipelines) {
       const opps = await fetchAllOpps(searchOpportunities, p.id);
       for (const o of opps) {
-        if (String(o.status ?? "") !== "open") continue;
+        const status = String(o.status ?? "");
+        // Signed pipeline also pulls won/lost (Jon 2026-10-08): DEAL WON +
+        // DEAL DIED are the company's money history. Other pipelines: open only.
+        if (status !== "open" && !(/signed/i.test(p.name) && ["won", "lost", "abandoned"].includes(status))) continue;
         const contact = (o.contact ?? {}) as { id?: string; name?: string; phone?: string; email?: string };
         const ghlStage = stageName.get(String(o.pipelineStageId ?? "")) ?? "";
         // "respective user": GHL owner wins; JrAQ: Nick pipeline defaults to Nicholas
@@ -1501,7 +1570,8 @@ export async function GET(request: Request) {
           name: String(contact.name ?? o.name ?? "—"), phone: String(contact.phone ?? ""), email: String(contact.email ?? ""),
           title: String(o.name ?? contact.name ?? "Imported opportunity"),
           value: o.monetaryValue != null ? Number(o.monetaryValue) : null,
-          rep, stage: mapStage(ghlStage), pipeline: p.name,
+          rep, stage: mapStage(ghlStage, p.name), pipeline: p.name,
+          closedAt: ["won", "lost", "abandoned"].includes(status) ? String((o as { updatedAt?: string }).updatedAt ?? "") : "",
         });
       }
     }
@@ -1522,11 +1592,12 @@ export async function GET(request: Request) {
         }
         const dupOpp = await db.crmOpportunity.findFirst({ where: { ghlId: r.ghlOppId } });
         if (dupOpp) {
-          await db.crmOpportunity.update({ where: { id: dupOpp.id }, data: { pipeline: r.pipeline, stage: r.stage, assignedTo: r.rep || dupOpp.assignedTo, tags: "ghl-import", archivedAt: null } });
+          const fdPrev = (dupOpp.formData ?? {}) as Record<string, unknown>;
+          await db.crmOpportunity.update({ where: { id: dupOpp.id }, data: { pipeline: r.pipeline, stage: r.stage, assignedTo: r.rep || dupOpp.assignedTo, tags: "ghl-import", archivedAt: null, ...(r.value != null && dupOpp.value == null ? { value: r.value } : {}), ...(r.closedAt ? { formData: { ...fdPrev, __closedAt: r.closedAt } } : {}) } });
           updated++;
           continue;
         }
-        const opp = await db.crmOpportunity.create({ data: { contactId, title: r.title.slice(0, 160), pipeline: r.pipeline, stage: r.stage, value: r.value, assignedTo: r.rep, ghlId: r.ghlOppId, tags: "ghl-import" } });
+        const opp = await db.crmOpportunity.create({ data: { contactId, title: r.title.slice(0, 160), pipeline: r.pipeline, stage: r.stage, value: r.value, assignedTo: r.rep, ghlId: r.ghlOppId, tags: "ghl-import", ...(r.closedAt ? { formData: { __closedAt: r.closedAt } } : {}) } });
         await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `Imported from GHL — ${r.pipeline}`, actor: "ghl-import" });
         opps++;
       }

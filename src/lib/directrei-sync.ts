@@ -145,25 +145,28 @@ export async function refreshDreiFeed(todayYmd: string): Promise<DreiFeed | null
     await feedTeamKpi2(["buyer_email_replies"], "Buyer Email Replies", feed.buyer.emailRepliesToday ?? 0);
   } catch { /* KPI feed is additive */ }
 
-  // 🤖 New-lead automation (Jon 2026-10-07): today's NEW Direct REI seller
-  // leads walk themselves into the Seller CRM — round-robin assigned across
-  // acquisitions, with a "first call" task due today. Dedupe by phone/name.
+  // 🤖 Replied-seller automation (Jon 2026-10-08, replacing the 10-07 version):
+  // Direct REI already texts/emails/calls every NEW lead for us — walking all
+  // of them into the CRM buried Michelle under 50 "first call" tasks in a day.
+  // Now only sellers who actually REPLY become CRM leads (they're warm), with
+  // a call-now task. Dedupe by phone/name.
   try {
     const { logCrmEvent } = await import("@/lib/crm");
     const reps = await db.user.findMany({ where: { active: true, position: { in: ["acquisitions", "cc_lm"] } }, select: { name: true } });
-    if (reps.length && feed.newSellersToday?.length) {
+    const replied = (feed.recentReplies ?? []).filter((r) => r.side === "seller" && (r.at ?? "").slice(0, 10) === todayYmd);
+    if (reps.length && replied.length) {
       const counts = await Promise.all(reps.map((r) => db.crmOpportunity.count({ where: { assignedTo: r.name, archivedAt: null } })));
-      for (const lead of feed.newSellersToday) {
-        const last10 = lead.phone.replace(/\D/g, "").slice(-10);
+      for (const lead of replied) {
+        const last10 = (lead.phone ?? "").replace(/\D/g, "").slice(-10);
         const dup = await db.crmContact.findFirst({ where: { OR: [...(last10.length === 10 ? [{ phone: { contains: last10 } }] : []), { name: { equals: lead.name, mode: "insensitive" as const } }] }, select: { id: true } });
         if (dup) continue;
         const i = counts.indexOf(Math.min(...counts));
         counts[i]++;
         const rep = reps[i].name;
-        const contact = await db.crmContact.create({ data: { name: lead.name, phone: lead.phone, email: lead.email, source: "Direct REI", assignedTo: rep } });
-        const opp = await db.crmOpportunity.create({ data: { contactId: contact.id, title: `${lead.name} — Direct REI seller lead`, stage: "new", assignedTo: rep, nextFollowUp: todayYmd } });
-        await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: "📞 First call — new Direct REI seller lead", due: todayYmd, assignedTo: rep, createdBy: "automation" } });
-        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `Auto-created from Direct REI (new seller lead) · assigned ${rep}`, actor: "automation" });
+        const contact = await db.crmContact.create({ data: { name: lead.name, phone: lead.phone ?? "", email: lead.email ?? "", source: "Direct REI (replied)", assignedTo: rep } });
+        const opp = await db.crmOpportunity.create({ data: { contactId: contact.id, title: `${lead.name} — Direct REI seller REPLIED`, stage: "new", assignedTo: rep, nextFollowUp: todayYmd } });
+        await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: "📞 Call now — Direct REI seller REPLIED (warm)", due: todayYmd, assignedTo: rep, createdBy: "automation" } });
+        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `Auto-created from Direct REI (seller replied to campaign) · assigned ${rep}`, actor: "automation" });
       }
     }
   } catch { /* lead automation never breaks the feed */ }

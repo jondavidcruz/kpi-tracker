@@ -64,6 +64,50 @@ export default async function CrmAutomationsPage() {
           <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 lg:col-span-3">＋ Add automation</button>
         </form>
       </Card>
+
+      {/* 🏗 Built-in automations (Jon 2026-10-08): EVERYTHING wired into the code,
+          visible in one place — read-only; tell Claude to change any of them. */}
+      <Card className="p-4">
+        <div className="mb-1 text-sm font-extrabold text-slate-800">🏗 Built-in automations <span className="font-normal text-slate-400">— wired into the War Room itself (read-only; ask Claude to change one)</span></div>
+        <div className="space-y-3">
+          {BUILT_INS.map((g) => (
+            <div key={g.group}>
+              <div className="mb-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">{g.group}</div>
+              <div className="space-y-1">
+                {g.items.map((a, i) => (
+                  <div key={i} className="flex flex-wrap items-baseline gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-xs ring-1 ring-slate-100">
+                    <span className="font-bold text-slate-700">{a.when}</span>
+                    <span className="text-slate-400">→</span>
+                    <span className="text-slate-600">{a.then}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }
+
+const BUILT_INS: Array<{ group: string; items: Array<{ when: string; then: string }> }> = [
+  { group: "🌐 Lead intake", items: [
+    { when: "Seller submits the website form (freedom-offers.com)", then: "new lead in Acquisitions + 📞 call-now task + 📲 welcome text (\"save our number — we call in 5 min\")" },
+    { when: "iSpeedToLead lead purchased (via Zapier)", then: "lead lands with price, source + full notes + call-now task + welcome text" },
+    { when: "Direct REI seller REPLIES to a campaign", then: "warm lead auto-created + 📞 call-now task (new leads alone don't task anyone — Direct REI already works them)" },
+  ] },
+  { group: "🗂 Stage moves", items: [
+    { when: "Lead hits an offer/contract stage", then: "PandaDoc contract auto-drafted (cash — or novation when tagged #novation)" },
+    { when: "Lead hits 🎯 COMP → OFFER (24 hrs)", then: "🧮 underwrite-now task for acq + 💰 developer price-check task for dispo" },
+    { when: "iSpeedToLead-sourced lead gets SIGNED", then: "💰 GET-PAID task — report it to their Closer Program (they pay us)" },
+    { when: "Any custom rule above matches", then: "its task / tag / follow-up / sequence fires" },
+  ] },
+  { group: "📁 Documents & money", items: [
+    { when: "A PandaDoc gets signed", then: "PDF pulled daily at 5:30pm → filed into that deal's Google Drive folder → attached to the matched lead" },
+    { when: "1st of the month, 9am", then: "email to Viktoriia + Enrico requesting last month's P&L" },
+  ] },
+  { group: "🔄 Background feeds (daily crons)", items: [
+    { when: "5× per day", then: "REI Reply sync (dials/texts/emails/moves → KPI auto-entry) + Direct REI reply counts → Marketing-responses KPIs" },
+    { when: "Every day", then: "Telnyx + Twilio spend snapshots · full DB backup to Drive · 3am perf watchdog (speed + data-growth alarms → 🛠 task)" },
+  ] },
+];

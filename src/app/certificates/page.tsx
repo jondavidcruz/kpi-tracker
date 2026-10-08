@@ -25,8 +25,12 @@ function tenure(from: Date): string {
 export default async function CertificatesPage() {
   const me = await getCurrentUser();
   if (!me || !isManager(me)) return <Card className="p-10 text-center text-slate-400">Certificates are issued by leadership.</Card>;
-  const users = await db.user.findMany({ where: { active: true }, select: { name: true, createdAt: true } });
+  const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, createdAt: true } });
   const byFirst = new Map(users.map((u) => [u.name.trim().split(/\s+/)[0].toLowerCase(), u]));
+  // Real joined dates live on the roster (TeamProfile.startDate) — the War Room
+  // account date is only the fallback (Jon 2026-10-08: "the joined date was wrong").
+  const profiles = await db.teamProfile.findMany({ select: { userId: true, startDate: true } });
+  const startByUser = new Map(profiles.filter((p) => p.userId && p.startDate).map((p) => [p.userId as string, p.startDate]));
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
   return (
@@ -38,6 +42,8 @@ export default async function CertificatesPage() {
       {CERTS.map((c) => {
         const u = byFirst.get(c.first);
         if (!u) return null;
+        const startRaw = c.started ?? startByUser.get(u.id) ?? "";
+        const startDate = startRaw ? new Date(startRaw + "T12:00:00Z") : u.createdAt;
         return (
           <div key={c.first} className="mx-auto max-w-3xl break-after-page">
             <div className="relative overflow-hidden rounded-sm border-[6px] border-double border-amber-700/70 bg-[#fffdf5] px-10 py-12 text-center shadow-lg">
@@ -48,9 +54,9 @@ export default async function CertificatesPage() {
               <div className="mt-2 text-4xl font-extrabold tracking-tight text-slate-900" style={{ fontFamily: "var(--font-display), Georgia, serif" }}>{u.name}</div>
               <div className="mx-auto mt-3 h-px w-48 bg-amber-700/40" />
               <div className="mt-4 text-lg font-bold text-amber-900">{c.title}</div>
-              <div className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-600">{c.criteria} — earned through {tenure(u.createdAt)} of proven work on the Freedom Offers {c.track} team.</div>
+              <div className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-600">{c.criteria} — earned through {tenure(startDate)} of proven work on the Freedom Offers {c.track} team.</div>
               <div className="mt-4 flex items-center justify-center gap-6 text-[11px] font-semibold text-slate-500">
-                <span>📅 Joined Freedom Offers · {c.started ?? u.createdAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                <span>📅 Joined Freedom Offers · {startDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}</span>
                 <span className="text-amber-700/50">✦</span>
                 <span>🏅 Certified · {c.certifiedOn ?? today}</span>
               </div>

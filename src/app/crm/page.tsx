@@ -29,7 +29,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // Permissions (Jon 2026-10-07: "Nick gets his own pipeline"): managers see
   // everyone; a rep's board is scoped to THEIR leads — their own pipeline.
   const manager = isManager(me!);
-  const whoRaw = manager ? (sp.who ?? "") : me!.name;
+  // Default = MINE for everyone, Jon included (Jon 2026-10-08): the board opens
+  // on your own leads; "Everyone" is an explicit click (?who=all).
+  const whoRaw = manager ? (sp.who === "all" ? "" : (sp.who ?? me!.name)) : me!.name;
   // role chips (Jon 2026-10-08): "role:acquisitions" / "role:dispositions"
   // scope the board to everyone in that seat at once.
   const roleReps = whoRaw.startsWith("role:")
@@ -79,6 +81,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       { contact: { email: { contains: q, mode: "insensitive" as const } } },
     ] } : {}),
   };
+  const whoQ = manager ? `&who=${encodeURIComponent(whoRaw || "all")}` : "";
   const page = Math.max(1, Number(sp.p) || 1);
   const PER_COL = 60, PER_PAGE = 50;
   const stages = pipe.stages;
@@ -96,7 +99,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true, address: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
     : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true, address: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
   const qs = (over: Record<string, string>) => {
-    const p = new URLSearchParams({ view, pl: plName, ...(manager && whoRaw ? { who: whoRaw } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
+    const p = new URLSearchParams({ view, pl: plName, ...(manager ? { who: whoRaw || "all" } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
     return `/crm?${p.toString()}`;
   };
@@ -138,9 +141,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           <div className="flex items-center gap-2">
             {comms.call && <DialPad />}
             <Link href="/crm/conversations" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">💬 Conversations</Link>
-            <Link href={`/crm?view=kanban${who ? `&who=${who}` : ""}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "kanban" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>🗂 Board</Link>
-            <Link href={`/crm?view=list${who ? `&who=${who}` : ""}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "list" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📋 List</Link>
-            <Link href={`/crm?view=cal${who ? `&who=${who}` : ""}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "cal" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📅 Week</Link>
+            <Link href={`/crm?view=kanban${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "kanban" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>🗂 Board</Link>
+            <Link href={`/crm?view=list${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "list" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📋 List</Link>
+            <Link href={`/crm?view=cal${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "cal" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📅 Week</Link>
           </div>
         }
       />
@@ -150,7 +153,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         <PipelineSelect
           pipelines={pipelines.map((pp) => ({ name: pp.name, count: plCounts[pp.name] ?? 0 }))}
           current={plName}
-          baseQs={`view=${view}${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`}
+          baseQs={`view=${view}${whoQ}`}
         />
         <span className="text-[11px] text-slate-400">{(plCounts[plName] ?? 0).toLocaleString()} opportunities in this pipeline</span>
       </div>
@@ -158,7 +161,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       {/* 🔎 search + GHL-style filters */}
       <Card className="space-y-2 p-3">
         <CrmFilterBar
-          base={{ view, pl: plName, ...(manager && who ? { who } : {}) }}
+          base={{ view, pl: plName, ...(manager ? { who: whoRaw || "all" } : {}) }}
           q={q} stage={fStage} tag={fTag} due={fDue}
           stages={stages.map((st) => ({ key: st.key, label: st.label }))}
         />
@@ -166,7 +169,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           {manager ? (
             <>
               <span className="text-[11px] font-bold text-slate-500">Pipeline:</span>
-              <Link prefetch={false} href={qs({ who: "" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!whoRaw ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
+              <Link prefetch={false} href={qs({ who: "all" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!whoRaw ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
               <Link prefetch={false} href={qs({ who: "role:acquisitions" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${whoRaw === "role:acquisitions" ? "bg-brand-navy text-white" : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"}`}>🧲 Acquisitions</Link>
               <Link prefetch={false} href={qs({ who: "role:dispositions" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${whoRaw === "role:dispositions" ? "bg-brand-navy text-white" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"}`}>🤝 Dispo</Link>
               {reps.map((r) => (
@@ -221,7 +224,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       </Card>
 
       {view === "kanban" ? (
-        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} listHref={`/crm?view=list${manager && who ? `&who=${encodeURIComponent(who)}` : ""}`} /></>
+        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} listHref={`/crm?view=list${whoQ}`} /></>
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>
