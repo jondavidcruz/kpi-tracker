@@ -67,6 +67,11 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
   for (const d of docs) { const arr = docsByUser.get(d.userId) ?? []; arr.push(d); docsByUser.set(d.userId, arr); }
   const fmtSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
+  // commission goals/structures (Resource __commissions__)
+  const commRow = await db.resource.findFirst({ where: { category: "__commissions__" } }).catch(() => null);
+  let commGoals: Record<string, { goalMonthly: number; structure: string }> = { nick: { goalMonthly: 5000, structure: "" }, michelle: { goalMonthly: 500, structure: "" } };
+  try { if (commRow?.description) commGoals = JSON.parse(commRow.description); } catch { /* defaults */ }
+
   return (
     <div className="space-y-5">
       <div className="rounded-xl bg-violet-50 px-4 py-3 ring-1 ring-violet-200">
@@ -77,6 +82,24 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
         />
         <p className="-mt-1 text-xs font-semibold text-violet-700">👁️ Private — only you (Jon) can open this. Sections marked with 🔒 in the sidebar are owner-only.</p>
       </div>
+
+      {/* 🎯 Commission goals (Jon 2026-10-08): each rep's monthly target +
+          their contract structure; MTD math activates once structures are set. */}
+      <Card className="p-4">
+        <div className="mb-2 text-sm font-extrabold text-slate-800">🎯 Commission goals</div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {Object.entries(commGoals).map(([first, g]) => (
+            <div key={first} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-bold capitalize text-slate-800">{first}</span>
+                <span className="ml-auto text-lg font-extrabold text-slate-900">${"{"}g.goalMonthly.toLocaleString(){"}"}<span className="text-[10px] font-semibold text-slate-400">/mo goal</span></span>
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500">{g.structure || "⚠️ structure not set — tell Claude the commission terms (e.g. \"$500 per signed contract\" or \"10% of assignment fee\") and on-track math turns on."}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 text-[10px] text-slate-400">Signed agreements: upload each PDF on the member's row below (HR docs) — they stay in the private Drive folder.</div>
+      </Card>
 
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
       {sp.err && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">{sp.err === "size" ? "That file is over 15MB — compress it and try again." : "Pick a file to upload."}</div>}
