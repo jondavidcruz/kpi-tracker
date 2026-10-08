@@ -45,3 +45,6 @@ export function stripHtml(s: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+// Public "leave us a review" link (Jon 2026-10-07) — used by the ⭐ snippets.
+export const GOOGLE_REVIEW_LINK = "https://g.page/r/Cd9ldgWyl4akEAE/review";

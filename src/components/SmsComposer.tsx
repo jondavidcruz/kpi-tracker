@@ -5,6 +5,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendCrmSmsAction } from "@/app/crm/actions";
+import { GOOGLE_REVIEW_LINK } from "@/lib/crm-shared";
 
 type Snip = { id: string; name: string; kind: string; subject?: string; body: string };
 
@@ -16,6 +17,10 @@ function fmt(n: string) {
 export default function SmsComposer({ oppId, contactId, to, leadName, rep, snippets, compact = false }: {
   oppId: string; contactId: string; to: string; leadName: string; rep: string; snippets: Snip[]; compact?: boolean;
 }) {
+  const allSnips: Snip[] = [
+    { id: "__review", name: "⭐ Ask for Google review", kind: "sms", body: `Hi {name}, it was a pleasure working with you! Would you mind leaving us a quick Google review? Takes 30 seconds: ${GOOGLE_REVIEW_LINK} — thank you! — {rep} @ Freedom Offers` },
+    ...snippets,
+  ];
   const [text, setText] = useState("");
   const [from, setFrom] = useState("");
   const [numbers, setNumbers] = useState<string[]>([]);
@@ -63,10 +68,10 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
         />
         <div className="flex flex-wrap items-center gap-1.5">
-          {snippets.length > 0 && (
-            <select defaultValue="" onChange={(e) => { const s = snippets.find((x) => x.id === e.target.value); if (s) setText(s.body.replaceAll("{name}", first).replaceAll("{rep}", rep.split(" ")[0] || "us")); e.target.value = ""; }} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-bold text-slate-500">
+          {allSnips.length > 0 && (
+            <select defaultValue="" onChange={(e) => { const s = allSnips.find((x) => x.id === e.target.value); if (s) setText(s.body.replaceAll("{name}", first).replaceAll("{rep}", rep.split(" ")[0] || "us")); e.target.value = ""; }} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-bold text-slate-500">
               <option value="">📋 snippet…</option>
-              {snippets.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {allSnips.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           )}
           <span className={`text-[10px] font-bold ${segs > 1 ? "text-amber-600" : "text-slate-400"}`}>{len} chars · {segs || "—"} text{segs === 1 ? "" : "s"}{segs > 1 ? " (they'll see it stitched together)" : ""}</span>

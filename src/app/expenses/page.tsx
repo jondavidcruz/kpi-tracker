@@ -116,6 +116,10 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
 
   const prevMonth = months.find((m) => m < month) ?? addMonth(month, -1);
   const nextNewMonth = addMonth(months[0] ?? month, 1);
+  // live Telnyx spend snapshot (daily ?telnyxspend=1 cron)
+  const spendRow = await db.resource.findFirst({ where: { category: "__telnyx_spend__" } });
+  let telnyx: { at?: string; month?: string; sms?: { cost: number; count: number }; voice?: { cost: number; count: number }; mtd?: number; projected?: number; balance?: number | null } | null = null;
+  try { telnyx = spendRow?.description ? JSON.parse(spendRow.description) : null; } catch { telnyx = null; }
 
   return (
     <div className="space-y-5 pb-24">
@@ -125,6 +129,25 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         accent="bg-emerald-500"
         right={<span className="text-xs text-slate-400">Jon · Viktoriia · Enrico</span>}
       />
+
+
+      {telnyx?.month === new Date().toISOString().slice(0, 7) && (
+        <Card className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📡 Telnyx — this month so far</div>
+            <div className="text-2xl font-extrabold text-slate-900">${(telnyx.mtd ?? 0).toFixed(2)}</div>
+          </div>
+          <div className="text-sm text-slate-600">
+            <div>💬 Texts: <b>${(telnyx.sms?.cost ?? 0).toFixed(2)}</b> · {telnyx.sms?.count ?? 0} messages</div>
+            <div>📞 Calls: <b>${(telnyx.voice?.cost ?? 0).toFixed(2)}</b> · {telnyx.voice?.count ?? 0} calls</div>
+          </div>
+          <div className="text-sm text-slate-600">
+            <div>📈 Projected month: <b>${(telnyx.projected ?? 0).toFixed(2)}</b></div>
+            {telnyx.balance != null && <div>💳 Account balance: <b>${telnyx.balance.toFixed(2)}</b></div>}
+          </div>
+          <span className="ml-auto text-[10px] text-slate-400">covers War Room + Direct REI lines · refreshes daily{telnyx.at ? ` · last ${new Date(telnyx.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}</span>
+        </Card>
+      )}
 
       {/* Month switcher */}
       <div className="flex flex-wrap items-center gap-2">

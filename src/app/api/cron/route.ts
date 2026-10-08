@@ -583,6 +583,51 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // 📡 Telnyx spend (?telnyxspend=1, daily cron): month-to-date cost from
+  // detail records (voice + messaging, covers War Room AND Direct REI lines),
+  // current balance, and a straight-line monthly projection → Resource
+  // __telnyx_spend__ for the P&L card.
+  if (url.searchParams.get("telnyxspend") === "1") {
+    const key = process.env.TELNYX_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, error: "no TELNYX_API_KEY" });
+    const tx = async (path: string) => {
+      const res = await fetch(`https://api.telnyx.com/v2${path}`, { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" });
+      return (await res.json().catch(() => ({}))) as { data?: unknown; meta?: { total_pages?: number } };
+    };
+    const sumKind = async (recordType: string) => {
+      let total = 0, count = 0;
+      for (let page = 1; page <= 5; page++) {
+        const j = await tx(`/detail_records?filter[record_type]=${recordType}&filter[date_range]=this_month&page[size]=1000&page[number]=${page}`);
+        const rows = (j.data ?? []) as Array<{ cost?: string | number; rate?: string | number }>;
+        for (const r of rows) { total += Math.abs(Number(r.cost ?? 0)) || 0; count++; }
+        if (rows.length < 1000) break;
+      }
+      return { total, count };
+    };
+    const [msg, voice, balRes] = await Promise.all([
+      sumKind("messaging"), sumKind("voice"),
+      fetch("https://api.telnyx.com/v2/balance", { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" }).then((r) => r.json()).catch(() => ({})),
+    ]);
+    const bal = (balRes as { data?: { balance?: string; currency?: string } }).data;
+    const day = new Date().getUTCDate();
+    const daysInMonth = new Date(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 0).getDate();
+    const mtd = msg.total + voice.total;
+    const snapshot = {
+      at: new Date().toISOString(),
+      month: new Date().toISOString().slice(0, 7),
+      sms: { cost: Number(msg.total.toFixed(2)), count: msg.count },
+      voice: { cost: Number(voice.total.toFixed(2)), count: voice.count },
+      mtd: Number(mtd.toFixed(2)),
+      projected: Number(((mtd / Math.max(1, day)) * daysInMonth).toFixed(2)),
+      balance: bal?.balance != null ? Number(bal.balance) : null,
+    };
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_spend__" } });
+    const description = JSON.stringify(snapshot);
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "telnyx-spend", category: "__telnyx_spend__", url: "", description } });
+    return NextResponse.json({ ok: true, ...snapshot });
+  }
+
   // 🗑 Stage removal (?stagedrop=1&match=<regex>&commit=1): delete matching
   // stages from every pipeline in __crm_pipelines__; leads sitting in them
   // move to the pipeline's regular appointment stage (or the stage before).

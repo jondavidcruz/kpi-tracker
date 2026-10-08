@@ -5,12 +5,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendCrmEmailAction } from "@/app/crm/actions";
+import { GOOGLE_REVIEW_LINK } from "@/lib/crm-shared";
 
 type Snip = { id: string; name: string; kind: string; subject?: string; body: string };
 
 export default function GmailComposer({ oppId, contactId, to, leadName, rep, fromLabel, signature, snippets }: {
   oppId: string; contactId: string; to: string; leadName: string; rep: string; fromLabel: string; signature: string; snippets: Snip[];
 }) {
+  const allSnips: Snip[] = [
+    { id: "__review", name: "⭐ Ask for Google review", kind: "email", subject: "A quick favor, {name}?", body: `Hi {name},\n\nIt was a pleasure working with you! If you have 30 seconds, a quick Google review would mean the world to our small team:\n${GOOGLE_REVIEW_LINK}\n\nThank you!` },
+    ...snippets,
+  ];
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [sent, setSent] = useState("");
@@ -49,10 +54,10 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
         </div>
         <div className="mt-2 flex items-center gap-2">
           <button onClick={send} disabled={pending || !subject.trim() || !body.trim()} className="rounded-full bg-[#0b57d0] px-5 py-2 text-[13px] font-bold text-white hover:bg-[#0a4bb8] disabled:opacity-40">{pending ? "Sending…" : "Send"}</button>
-          {snippets.length > 0 && (
-            <select defaultValue="" onChange={(e) => { const s = snippets.find((x) => x.id === e.target.value); if (s) { setBody(s.body.replaceAll("{name}", first).replaceAll("{rep}", rep.split(" ")[0] || "us")); if (s.subject) setSubject(s.subject.replaceAll("{name}", first)); } e.target.value = ""; }} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-bold text-slate-500">
+          {allSnips.length > 0 && (
+            <select defaultValue="" onChange={(e) => { const s = allSnips.find((x) => x.id === e.target.value); if (s) { setBody(s.body.replaceAll("{name}", first).replaceAll("{rep}", rep.split(" ")[0] || "us")); if (s.subject) setSubject(s.subject.replaceAll("{name}", first)); } e.target.value = ""; }} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-bold text-slate-500">
               <option value="">📋 snippet…</option>
-              {snippets.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {allSnips.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           )}
           <span className="ml-auto text-[10px] text-slate-400">replies go to your real inbox</span>
