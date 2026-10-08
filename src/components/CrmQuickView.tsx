@@ -7,6 +7,7 @@ import { useEffect, useState, useTransition } from "react";
 import {
   setOppStageAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
   addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, saveCrmFormAction,
+  setOppOwnerAction, toggleFollowerAction,
 } from "@/app/crm/actions";
 import { KIND_EMOJI } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
@@ -18,6 +19,8 @@ type Payload = {
   nextFollowUp: string; value: number | null; askPrice: number | null;
   formData: Record<string, Record<string, string | string[]>>;
   me: { name: string; fromLabel: string; signature: string; canSms: boolean; canEmail: boolean };
+  followers: string[];
+  reps: string[];
   snippets: Array<{ id: string; name: string; kind: string; subject?: string; body: string }>;
   smsHistory: Array<{ body: string; inbound: boolean; at: string }>;
   emailHistory: Array<{ body: string; inbound: boolean; at: string; actor?: string }>;
@@ -139,8 +142,28 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                       </select>
                     </div>
                     <div>
-                      <label className={labelCls}>Owner</label>
-                      <input name="assignedTo" defaultValue={d.assignedTo} className={inputCls} placeholder="Rep name" />
+                      <label className={labelCls}>Owner (saves instantly)</label>
+                      <select
+                        value={d.assignedTo}
+                        onChange={(e) => { const owner = e.target.value; setData({ ...d, assignedTo: owner }); const fd = new FormData(); fd.set("id", d.id); fd.set("owner", owner); start(async () => { await setOppOwnerAction(fd); }); }}
+                        className={inputCls}
+                      >
+                        <option value="">Unassigned</option>
+                        {d.reps.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <input type="hidden" name="assignedTo" value={d.assignedTo} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>👣 Followers (can see this lead)</label>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {d.followers.map((f) => (
+                          <button key={f} type="button" title="Remove follower" onClick={() => { const fd = new FormData(); fd.set("id", d.id); fd.set("name", f); fd.set("remove", "1"); start(async () => { await toggleFollowerAction(fd); if (oppId) await refetch(oppId); }); }} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-600 ring-1 ring-indigo-100 hover:bg-red-50 hover:text-red-500">{f.split(" ")[0]} ✕</button>
+                        ))}
+                        <select value="" onChange={(e) => { const n = e.target.value; if (!n) return; const fd = new FormData(); fd.set("id", d.id); fd.set("name", n); start(async () => { await toggleFollowerAction(fd); if (oppId) await refetch(oppId); }); e.target.value = ""; }} className="rounded-lg border border-slate-200 px-1.5 py-1 text-[11px] font-bold text-slate-500">
+                          <option value="">＋ add…</option>
+                          {d.reps.filter((r) => r !== d.assignedTo && !d.followers.includes(r)).map((r) => <option key={r} value={r}>{r.split(" ")[0]}</option>)}
+                        </select>
+                      </div>
                     </div>
                     <div>
                       <label className={labelCls}>Deal value $</label>

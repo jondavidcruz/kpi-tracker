@@ -14,7 +14,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const opp = await db.crmOpportunity.findUnique({ where: { id }, include: { contact: true } });
   if (!opp) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (!isManager(me!) && opp.assignedTo && opp.assignedTo !== me!.name) return NextResponse.json({ error: "not your lead" }, { status: 403 });
+  const followersList = Array.isArray((opp.formData as Record<string, unknown> | null)?.__followers) ? ((opp.formData as Record<string, unknown>).__followers as string[]) : [];
+  if (!isManager(me!) && opp.assignedTo && opp.assignedTo !== me!.name && !followersList.includes(me!.name)) return NextResponse.json({ error: "not your lead" }, { status: 403 });
   const { commsFor, readSignatures, firstOf, defaultSignature } = await import("@/lib/crm-comms");
   const { readSnippets } = await import("@/lib/crm-templates");
   const [events, tasks, appts, comms, sigs, snippets, smsEvents, emailEvents] = await Promise.all([
@@ -39,6 +40,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
     snippets: snippets.map((s) => ({ id: s.id, name: s.name, kind: s.kind, subject: s.subject, body: s.body })),
     smsHistory, emailHistory,
+    followers: followersList,
+    reps: (await db.user.findMany({ where: { active: true }, select: { name: true }, orderBy: { name: "asc" } })).map((u) => u.name),
     id: opp.id, title: opp.title, stage: opp.stage, pipeline: opp.pipeline || "War Room", assignedTo: opp.assignedTo,
     tags: opp.tags, nextFollowUp: opp.nextFollowUp, value: opp.value, askPrice: opp.askPrice,
     formData: (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>,

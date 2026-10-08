@@ -712,3 +712,39 @@ export async function bulkContactsAction(formData: FormData) {
   revalidatePath("/crm/contacts");
   revalidatePath("/crm");
 }
+
+/** Anyone on the CRM can hand a lead to another rep (GHL-style owner field).
+ *  Updates the opp + contact and leaves a timeline note. */
+export async function setOppOwnerAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const owner = String(formData.get("owner") ?? "").trim();
+  if (!id) return;
+  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, assignedTo: true } });
+  if (!opp || opp.assignedTo === owner) return;
+  await db.crmOpportunity.update({ where: { id }, data: { assignedTo: owner } });
+  await db.crmContact.update({ where: { id: opp.contactId }, data: { assignedTo: owner } }).catch(() => {});
+  await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: `👤 Owner: ${opp.assignedTo || "unassigned"} → ${owner || "unassigned"}`, actor: me.name });
+  revalidatePath("/crm");
+  revalidatePath(`/crm/${id}`);
+}
+
+/** Followers (GHL-style): extra teammates who can SEE a lead that isn't
+ *  theirs. Stored in formData.__followers — no schema change. */
+export async function toggleFollowerAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const remove = String(formData.get("remove") ?? "") === "1";
+  if (!id || !name) return;
+  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, formData: true } });
+  if (!opp) return;
+  const fd = (opp.formData ?? {}) as Record<string, unknown>;
+  const cur = Array.isArray(fd.__followers) ? (fd.__followers as string[]) : [];
+  const next = remove ? cur.filter((n) => n !== name) : [...new Set([...cur, name])];
+  await db.crmOpportunity.update({ where: { id }, data: { formData: { ...fd, __followers: next } as never } });
+  await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: remove ? `👣 ${name.split(" ")[0]} unfollowed` : `👣 ${name.split(" ")[0]} added as follower`, actor: me.name });
+  revalidatePath(`/crm/${id}`);
+}

@@ -799,6 +799,21 @@ export async function GET(request: Request) {
     }
   }
 
+  // 📝 PandaDoc event log (?pdlog=1): the last pandadoc timeline rows —
+  // shows exactly why a draft button "did nothing".
+  if (url.searchParams.get("pdlog") === "1") {
+    const events = await db.crmEvent.findMany({ where: { actor: "pandadoc" }, orderBy: { at: "desc" }, take: 10, select: { body: true, at: true } });
+    return NextResponse.json({ ok: true, count: events.length, events: events.map((e) => ({ at: e.at.toISOString(), body: e.body.slice(0, 220) })) });
+  }
+
+  // 💵 Subscription report (?subsreport=1): what the P&L says we pay the
+  // providers we're cutting Nov 7 (Twilio + GHL/REI Reply).
+  if (url.searchParams.get("subsreport") === "1") {
+    const rows = await db.expenseLine.findMany({ orderBy: [{ month: "desc" }], take: 600 });
+    const match = rows.filter((r) => /twilio|rei\s*reply|gohighlevel|go\s*high|ghl/i.test(`${r.label} ${r.note}`));
+    return NextResponse.json({ ok: true, found: match.length, rows: match.map((r) => ({ month: r.month, label: r.label, actual: r.actual, projected: r.projected })) });
+  }
+
   // 📍 Address backfill (?ghladdrfix=1): GHL-imported contacts came over with
   // no property address — pull address1/city/state/zip from GHL per contact
   // (time-budgeted; run repeatedly until remaining=0).

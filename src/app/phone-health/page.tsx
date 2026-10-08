@@ -97,6 +97,11 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   const manager = isManager(me);
   const sp = await searchParams;
 
+  // Telnyx spend/short-call snapshot (daily ?telnyxspend=1)
+  const spendRow2 = await db.resource.findFirst({ where: { category: "__telnyx_spend__" } }).catch(() => null);
+  let spend: { shortCalls?: { count: number; pct: number }; balance?: number | null; sms?: { count: number }; voice?: { count: number } } | null = null;
+  try { spend = spendRow2?.description ? JSON.parse(spendRow2.description) : null; } catch { spend = null; }
+
   // Telnyx numbers LIVE from the API (War Room + Direct REI connections)
   let telnyxNums: Array<{ number: string; connection: string; msgProfile: boolean; status: string }> = [];
   if (process.env.TELNYX_API_KEY) {
@@ -106,6 +111,25 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
       telnyxNums = (body.data ?? []).map((n) => ({ number: n.phone_number ?? "", connection: n.connection_name ?? "—", msgProfile: Boolean(n.messaging_profile_id), status: n.status ?? "?" })).filter((n) => n.number);
     } catch { /* board degrades to Twilio only */ }
   }
+
+  // 🩺 Telnyx health score (0-100, Twilio-insights style): deducts for the
+  // things Telnyx actually bills/flags us on.
+  const issues: Array<{ pts: number; label: string }> = [];
+  const scPct = spend?.shortCalls?.pct ?? 0;
+  if (scPct > 20) issues.push({ pts: 30, label: `Short calls at ${scPct}% — OVER the 15% surcharge line` });
+  else if (scPct > 15) issues.push({ pts: 20, label: `Short calls at ${scPct}% — over the 15% surcharge line` });
+  else if (scPct > 10) issues.push({ pts: 10, label: `Short calls trending up (${scPct}%)` });
+  const warRoomNums = telnyxNums.filter((n) => /war room/i.test(n.connection));
+  const noSms = warRoomNums.filter((n) => !n.msgProfile).length;
+  if (noSms) issues.push({ pts: Math.min(15, noSms * 5), label: `${noSms} War Room number(s) missing an SMS profile` });
+  const inactive = telnyxNums.filter((n) => n.status !== "active").length;
+  if (inactive) issues.push({ pts: Math.min(20, inactive * 10), label: `${inactive} number(s) not active` });
+  const bal = spend?.balance ?? null;
+  if (bal != null && bal < 20) issues.push({ pts: 15, label: `Balance low ($${bal.toFixed(2)})` });
+  else if (bal != null && bal < 50) issues.push({ pts: 5, label: `Balance getting low ($${bal.toFixed(2)})` });
+  const healthScore = Math.max(0, 100 - issues.reduce((a, i) => a + i.pts, 0));
+  const healthLabel = healthScore >= 75 ? "Good" : healthScore >= 50 ? "Watch" : "At risk";
+  const topIssue = [...issues].sort((a, b) => b.pts - a.pts)[0] ?? null;
 
   // Twilio audit snapshot (written by /api/cron?twilioaudit=1)
   const twRow = await db.resource.findFirst({ where: { category: "__twilio_audit__" } }).catch(() => null);
@@ -144,6 +168,35 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
 
       {/* Live alarms from Twilio/Telnyx (same feed as Compliance) */}
       <TelcoAlarms />
+
+      {/* 🩺 Telnyx health score — Twilio-insights style gauge, straight from the APIs */}
+      <Card className="flex flex-wrap items-center gap-6 p-5">
+        <div className="relative h-24 w-44">
+          <svg viewBox="0 0 100 55" className="h-full w-full">
+            <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#e2e8f0" strokeWidth="8" strokeLinecap="round" />
+            <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke={healthScore >= 75 ? "#10b981" : healthScore >= 50 ? "#f59e0b" : "#ef4444"} strokeWidth="8" strokeLinecap="round"
+              strokeDasharray={`${(healthScore / 100) * 126} 126`} />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-end pb-0.5">
+            <span className="text-2xl font-extrabold text-slate-900">{healthScore}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${healthScore >= 75 ? "bg-emerald-50 text-emerald-700" : healthScore >= 50 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>{healthLabel}</span>
+          </div>
+        </div>
+        <div className="min-w-[220px] flex-1">
+          <div className="text-sm font-extrabold text-slate-800">Your Telnyx health is <span className={healthScore >= 75 ? "text-emerald-600" : healthScore >= 50 ? "text-amber-600" : "text-red-600"}>{healthLabel}</span></div>
+          <div className="mt-0.5 text-xs text-slate-500">Live from the Telnyx API — short calls, SMS registration, number status, balance.</div>
+          <div className="mt-2 text-xs">
+            <span className="font-bold text-slate-700">Top issue: </span>
+            <span className="text-slate-600">{topIssue ? topIssue.label : "none — all clear ✅"}</span>
+          </div>
+          {issues.length > 1 && <ul className="mt-1 space-y-0.5 text-[11px] text-slate-500">{issues.slice(1).map((i, idx) => <li key={idx}>· {i.label}</li>)}</ul>}
+        </div>
+        <div className="text-right text-[11px] text-slate-500">
+          <div>💬 {spend?.sms?.count ?? 0} texts · 📞 {spend?.voice?.count ?? 0} calls this month</div>
+          {bal != null && <div>💳 balance ${bal.toFixed(2)}</div>}
+          <div className="text-[10px] text-slate-400">refreshes daily + live on load</div>
+        </div>
+      </Card>
 
       {/* 📊 Line health board — every number on both providers, Direct REI-style */}
       <Card className="p-4">

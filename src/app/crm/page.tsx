@@ -54,7 +54,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     archivedAt: null,
     // "War Room" = native leads (empty pipeline) · GHL pipelines match by name
     ...(plName === "War Room" ? { pipeline: { in: ["", "War Room"] } } : { pipeline: plName }),
-    ...(who ? { assignedTo: { equals: who.trim(), mode: "insensitive" as const } } : {}),
+    ...(who ? { OR: [
+      { assignedTo: { equals: who.trim(), mode: "insensitive" as const } },
+      { formData: { path: ["__followers"], array_contains: who.trim() } },
+    ] } : {}),
     ...(fStage ? { stage: fStage } : {}),
     ...(fTag ? { OR: [{ tags: { contains: fTag, mode: "insensitive" as const } }, { contact: { tags: { contains: fTag, mode: "insensitive" as const } } }] } : {}),
     ...(fDue ? { nextFollowUp: { not: "", lte: today } } : {}),

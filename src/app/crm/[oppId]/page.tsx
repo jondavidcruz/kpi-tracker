@@ -31,7 +31,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, include: { contact: true } });
   if (!opp) return <Card className="p-10 text-center text-slate-400">Lead not found. <Link href="/crm" className="font-bold text-sky-700 underline">Back to the pipeline</Link></Card>;
   // Reps open only leads in THEIR pipeline (managers see everything).
-  if (!isManager(me!) && opp.assignedTo && opp.assignedTo !== me!.name) {
+  const followersList = Array.isArray((opp.formData as Record<string, unknown> | null)?.__followers) ? ((opp.formData as Record<string, unknown>).__followers as string[]) : [];
+  if (!isManager(me!) && opp.assignedTo && opp.assignedTo !== me!.name && !followersList.includes(me!.name)) {
     return <Card className="p-10 text-center text-slate-400">This lead is in {opp.assignedTo.split(" ")[0]}&apos;s pipeline. <Link href="/crm" className="font-bold text-sky-700 underline">Back to yours</Link></Card>;
   }
   const c = opp.contact;
