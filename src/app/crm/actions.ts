@@ -363,6 +363,43 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   revalidatePath(`/crm/${oppId}`);
 }
 
+// ── Task priority (Jon 2026-10-08: urgent/pending colors) — Resource map
+// __task_priority__ {taskId: "urgent"|"low"}; absent = normal (yellow/pending).
+export async function readTaskPriorities(): Promise<Record<string, string>> {
+  const row = await db.resource.findFirst({ where: { category: "__task_priority__" } }).catch(() => null);
+  try { return row?.description ? JSON.parse(row.description) : {}; } catch { return {}; }
+}
+export async function setTaskPriorityAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const p = String(formData.get("p") ?? "");
+  if (!id || !["urgent", "normal", "low"].includes(p)) return;
+  const row = await db.resource.findFirst({ where: { category: "__task_priority__" } });
+  let map: Record<string, string> = {};
+  try { map = row?.description ? JSON.parse(row.description) : {}; } catch { /* fresh */ }
+  if (p === "normal") delete map[id]; else map[id] = p;
+  const keys = Object.keys(map); if (keys.length > 2000) for (const k of keys.slice(0, keys.length - 2000)) delete map[k];
+  const description = JSON.stringify(map);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { title: "task-priority", category: "__task_priority__", url: "", description } });
+  revalidatePath("/crm/tasks");
+}
+
+/** 🔗 Connect a floating task to a contact (+ their live opportunity) by name. */
+export async function linkTaskAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const q = String(formData.get("q") ?? "").trim();
+  if (!id || q.length < 2) return;
+  const contact = await db.crmContact.findFirst({ where: { archivedAt: null, name: { contains: q, mode: "insensitive" } }, select: { id: true } });
+  if (!contact) return;
+  const opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null }, select: { id: true } });
+  await db.crmTask.update({ where: { id }, data: { contactId: contact.id, oppId: opp?.id ?? "" } });
+  revalidatePath("/crm/tasks");
+}
+
 /** 🗑 "Delete" a lead = archive it (archive-never-delete rule): the opp is
  *  archived and, when nothing else references the contact, the contact too.
  *  Recoverable from the archived list. Manager or the lead's owner. */

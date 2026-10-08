@@ -40,6 +40,12 @@ export default async function CompliancePage() {
         ⚠️ <strong>Not legal advice.</strong> {COMPLIANCE_DISCLAIMER}
       </div>
 
+      {/* 🧾 Consent Vault — the lawsuit shield (Jon 2026-10-08) */}
+      <a href="/compliance/consents" className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 hover:bg-emerald-100">
+        <span className="text-xl">🧾</span>
+        <span><strong>Consent Vault</strong> — every opt-in from our web forms with the exact wording, timestamp, IP and device. If anyone ever claims "I never said you could text me," the proof lives here. →</span>
+      </a>
+
       {/* ── Live line health (Twilio + Telnyx) ── */}
       <section>
         <div className="flex items-center justify-between">
