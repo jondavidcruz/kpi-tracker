@@ -97,6 +97,11 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   const manager = isManager(me);
   const sp = await searchParams;
 
+  // Twilio audit snapshot (written by /api/cron?twilioaudit=1)
+  const twRow = await db.resource.findFirst({ where: { category: "__twilio_audit__" } }).catch(() => null);
+  let twAudit: { at: string; totalNumbers: number; estMonthlyRent: number; deadNumbers: number; numbers: Array<{ number: string; name: string; calls: number; msgs: number; last: string }> } | null = null;
+  try { twAudit = twRow?.description ? JSON.parse(twRow.description) : null; } catch { twAudit = null; }
+
   // Numbers live in the Resource table under a reserved category — degrade gracefully
   // if the store is briefly unreachable rather than crashing the playbook.
   let lines: Line[] = [];
@@ -129,6 +134,27 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
 
       {/* Live alarms from Twilio/Telnyx (same feed as Compliance) */}
       <TelcoAlarms />
+
+      {/* ☎️ Twilio audit — the Telnyx-consolidation decision data (refreshed by ?twilioaudit=1) */}
+      {twAudit && (
+        <Card className="p-4">
+          <div className="mb-2 flex flex-wrap items-baseline gap-3">
+            <span className="text-sm font-extrabold text-slate-800">☎️ Twilio number audit</span>
+            <span className="text-xs text-slate-500">{twAudit.totalNumbers} numbers · ${twAudit.estMonthlyRent}/mo rent · {twAudit.deadNumbers} with zero activity (30d)</span>
+            <span className="ml-auto text-[10px] text-slate-400">last run {new Date(twAudit.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+          </div>
+          <div className="grid gap-1 sm:grid-cols-2">
+            {twAudit.numbers.map((n) => (
+              <div key={n.number} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ring-1 ${n.calls + n.msgs === 0 ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-700 ring-slate-100"}`}>
+                <b className="font-mono">{n.number}</b>
+                <span className="truncate text-slate-400">{n.name}</span>
+                <span className="ml-auto shrink-0">{n.calls}📞 {n.msgs}💬 · {n.last || "no activity"}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-[11px] text-slate-500">Consolidation math: Telnyx runs ~half Twilio&apos;s per-unit rates. All numbers active → the play is <b>porting</b> (keeps the same numbers, ~$0 cost), not releasing. Porting needs Jon&apos;s authorization with both carriers.</div>
+        </Card>
+      )}
 
       {/* Lead-gen SOP: list pull → skip trace → scrub → SMS (from Jon's SOP PDF) */}
       <LeadTextingSop />
