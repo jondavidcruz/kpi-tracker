@@ -7,7 +7,8 @@ import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-c
 import { readSnippets } from "@/lib/crm-templates";
 import CallButton from "@/components/CallButton";
 import ConvComposerTabs from "@/components/ConvComposerTabs";
-import { startConversationAction } from "@/app/crm/actions";
+import { startConversationAction, bulkConvAction } from "@/app/crm/actions";
+import { readConvMap, setConvRead } from "@/lib/conv-read";
 
 export const dynamic = "force-dynamic";
 
@@ -51,10 +52,13 @@ export default async function ConversationsPage({ searchParams }: { searchParams
     where: { id: { in: contactIds }, ...(manager ? (mineOnly ? { assignedTo: { equals: me!.name, mode: "insensitive" } } : {}) : { assignedTo: { in: ["", me!.name] } }) },
     select: { id: true, name: true, phone: true, assignedTo: true },
   });
+  // 👁 red dot = seller wrote last AND the thread hasn't been opened since
+  const convRead = await readConvMap();
   const threads = contacts
     .map((c) => {
       const last = latestByContact.get(c.id)!;
-      return { ...c, last, needsReply: stripHtml(last.body).startsWith("⬅") };
+      const unseen = !convRead[c.id] || last.at.toISOString() > convRead[c.id];
+      return { ...c, last, needsReply: stripHtml(last.body).startsWith("⬅") && unseen };
     })
     .sort((a, b) => (Number(b.needsReply) - Number(a.needsReply)) || (b.last.at.getTime() - a.last.at.getTime()))
     .slice(0, 50);
@@ -62,6 +66,8 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   // selected thread
   const cId = sp.c || threads[0]?.id || "";
   const contact = cId ? await db.crmContact.findUnique({ where: { id: cId } }) : null;
+  // opening a thread marks it read (clears the red dot everywhere)
+  if (cId) setConvRead([cId], true).catch(() => {});
   const visible = contact && (manager || !contact.assignedTo || contact.assignedTo === me!.name);
   const [events, opp] = contact && visible ? await Promise.all([
     db.crmEvent.findMany({ where: { contactId: contact.id, kind: { in: COMMS } }, orderBy: { at: "desc" }, take: 80 }),
@@ -109,22 +115,34 @@ export default async function ConversationsPage({ searchParams }: { searchParams
               )}
             </div>
             {threads.length === 0 && <div className="p-4 text-xs text-slate-400">No conversations yet — texts, emails and calls will appear here.</div>}
-            {threads.map((t) => (
-              <Link key={t.id} prefetch={false} href={`/crm/conversations?c=${t.id}`}
-                className={`flex items-start gap-2.5 border-b border-slate-100 px-3 py-2.5 hover:bg-white ${t.id === cId ? "bg-white ring-2 ring-inset ring-brand-navy/20" : ""}`}>
-                <span className="relative mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-navy/90 text-[11px] font-bold text-white">
-                  {initials(t.name)}
-                  {t.needsReply && <span title="They wrote last — needs a reply" className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-bold text-slate-800">{t.name}</span>
-                    <span className="shrink-0 text-[10px] text-slate-400">{timeAgo(t.last.at)}</span>
-                  </span>
-                  <span className="block truncate text-xs text-slate-500">{KIND_EMOJI[t.last.kind] ?? "•"} {stripHtml(t.last.body).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "")}</span>
-                </span>
-              </Link>
-            ))}
+            {/* ☑️ mass selection (Jon 2026-10-08): tick threads → mark read /
+                unread / DNC in one shot. The checkbox stops the row's link. */}
+            <form action={bulkConvAction}>
+              <div className="sticky top-9 z-10 flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 px-3 py-1.5">
+                <span className="text-[10px] font-bold text-slate-400">☑ selected →</span>
+                <button name="op" value="read" className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-slate-300">mark read</button>
+                <button name="op" value="unread" className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-slate-300">mark unread</button>
+                {manager && <button name="op" value="dnc" className="rounded bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 hover:bg-red-200">🚫 DNC</button>}
+              </div>
+              {threads.map((t) => (
+                <div key={t.id} className={`flex items-start gap-2 border-b border-slate-100 px-2 py-2.5 hover:bg-white ${t.id === cId ? "bg-white ring-2 ring-inset ring-brand-navy/20" : ""}`}>
+                  <input type="checkbox" name="cids" value={t.id} className="mt-2 h-3.5 w-3.5 shrink-0 accent-indigo-600" />
+                  <Link prefetch={false} href={`/crm/conversations?c=${t.id}`} className="flex min-w-0 flex-1 items-start gap-2.5">
+                    <span className="relative mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-navy/90 text-[11px] font-bold text-white">
+                      {initials(t.name)}
+                      {t.needsReply && <span title="They wrote last — unread" className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-sm font-bold text-slate-800">{t.name}</span>
+                        <span className="shrink-0 text-[10px] text-slate-400">{timeAgo(t.last.at)}</span>
+                      </span>
+                      <span className="block truncate text-xs text-slate-500">{KIND_EMOJI[t.last.kind] ?? "•"} {stripHtml(t.last.body).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "")}</span>
+                    </span>
+                  </Link>
+                </div>
+              ))}
+            </form>
           </div>
 
           {/* middle: the thread */}

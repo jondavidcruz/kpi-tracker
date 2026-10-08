@@ -12,6 +12,7 @@ import CrmFilterBar from "@/components/CrmFilterBar";
 import CrmQuickView from "@/components/CrmQuickView";
 import { commsFor } from "@/lib/crm-comms";
 import { createCrmLeadAction, bulkOppAction } from "./actions";
+import CrmOwnerSelect from "@/components/CrmOwnerSelect";
 
 export const dynamic = "force-dynamic";
 
@@ -95,8 +96,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const stageSums: Record<string, number> = {};
   for (const g of grouped) { stageCounts[g.stage] = g._count._all; stageSums[g.stage] = g._sum.value ?? 0; }
   const opps = view === "list"
-    ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true, address: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
-    : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true, address: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
+    ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true, address: true, email: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
+    : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true, address: true, email: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
   const qs = (over: Record<string, string>) => {
     const p = new URLSearchParams({ view, pl: plName, ...(manager ? { who: whoRaw || "all" } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
@@ -109,6 +110,26 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
   const tasksByOpp = new Map<string, { due: string; title: string }[]>();
   for (const t of tasks) { const a = tasksByOpp.get(t.oppId) ?? []; a.push(t); tasksByOpp.set(t.oppId, a); }
+
+  // 🔴 unread-SMS counts per contact (Jon 2026-10-08): inbound texts newer
+  // than the last outbound reply AND newer than the thread's last-read stamp.
+  const cardCids = [...new Set(opps.map((o) => o.contactId))];
+  const [recentSms, readRow] = await Promise.all([
+    cardCids.length ? db.crmEvent.findMany({ where: { contactId: { in: cardCids }, kind: "sms" }, orderBy: { at: "desc" }, take: 1500, select: { contactId: true, body: true, at: true } }) : [],
+    db.resource.findFirst({ where: { category: "__conv_read__" } }),
+  ]);
+  let convRead: Record<string, string> = {};
+  try { convRead = readRow?.description ? JSON.parse(readRow.description) : {}; } catch { /* none */ }
+  const smsUnread = new Map<string, number>();
+  const sealed = new Set<string>();
+  for (const e of recentSms) {
+    if (sealed.has(e.contactId)) continue;
+    const inbound = e.body.startsWith("⬅");
+    if (!inbound) { sealed.add(e.contactId); continue; }
+    const readAt = convRead[e.contactId];
+    if (readAt && e.at.toISOString() <= readAt) { sealed.add(e.contactId); continue; }
+    smsUnread.set(e.contactId, (smsUnread.get(e.contactId) ?? 0) + 1);
+  }
 
   const money = (n: number | null) => (n == null ? "" : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
   const cards: CrmCard[] = opps.map((o) => {
@@ -125,6 +146,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       id: o.id, title: o.title, contactName: o.contact.name, contactId: o.contactId, phone: o.contact.phone, address: o.contact.address, stage: o.stage,
       assignedTo: o.assignedTo, tags: parseTags(o.tags), badges,
       money: money(o.value) || (o.askPrice != null ? `ask ${money(o.askPrice)}` : ""),
+      email: o.contact.email, smsUnread: smsUnread.get(o.contactId) ?? 0,
+      valueNum: o.value ?? o.askPrice ?? 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
     };
   });
 
@@ -166,15 +189,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         />
         <div className="flex flex-wrap items-center gap-2">
           {manager ? (
-            <>
-              <span className="text-[11px] font-bold text-slate-500">Pipeline:</span>
-              <Link prefetch={false} href={qs({ who: "all" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!whoRaw ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
-              <Link prefetch={false} href={qs({ who: "role:acquisitions" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${whoRaw === "role:acquisitions" ? "bg-brand-navy text-white" : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"}`}>🧲 Acquisitions</Link>
-              <Link prefetch={false} href={qs({ who: "role:dispositions" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${whoRaw === "role:dispositions" ? "bg-brand-navy text-white" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"}`}>🤝 Dispo</Link>
-              {reps.map((r) => (
-                <Link key={r.id} prefetch={false} href={qs({ who: r.name })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>{r.name.split(" ")[0]}</Link>
-              ))}
-            </>
+            // one clear dropdown instead of the chip row (Jon 2026-10-08) —
+            // it always STATES whose leads are on screen, so nothing feels missing
+            <CrmOwnerSelect current={whoRaw || "all"} meName={me!.name} reps={reps.map((r) => r.name)} hrefTemplate={qs({ who: "__WHO__" })} />
           ) : (
             <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">👤 Your pipeline — {me!.name.split(" ")[0]}&apos;s leads only</span>
           )}
@@ -225,7 +242,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       </Card>
 
       {view === "kanban" ? (
-        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} listHref={`/crm?view=list${whoQ}`} /></>
+        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} /></>
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>

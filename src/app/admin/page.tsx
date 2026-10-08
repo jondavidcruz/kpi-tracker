@@ -60,6 +60,38 @@ export default async function AdminPage({
   const canDelete = isAdmin(me);
 
   const owner = isAdmin(me);
+  // 🩺 live integration pings (Jon 2026-10-08: "show if the connection is
+  // HEALTHY, not just that a key exists") — cheap/free endpoints only, 2.5s cap.
+  const pings: Record<string, "ok" | "fail"> = {};
+  if (owner) {
+    const t = (ms = 2500) => AbortSignal.timeout(ms);
+    const checks: Array<[string, () => Promise<boolean>]> = [
+      ["REIREPLY_API_KEY", async () => { const { getPipelines } = await import("@/lib/reireply"); const r = await getPipelines(); return Array.isArray((r.body as { pipelines?: unknown[] }).pipelines); }],
+      ["ANTHROPIC_API_KEY", async () => (await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: { "x-api-key": process.env.ANTHROPIC_API_KEY ?? "", "anthropic-version": "2023-06-01" }, signal: t() })).ok],
+      ["GEMINI_API_KEY", async () => (await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1&key=${process.env.GEMINI_API_KEY}`, { signal: t() })).ok],
+      ["TELNYX_API_KEY", async () => (await fetch("https://api.telnyx.com/v2/balance", { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, signal: t() })).ok],
+      ["TWILIO_ACCOUNT_SID", async () => (await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}.json`, { headers: { Authorization: "Basic " + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64") }, signal: t() })).ok],
+      ["PANDADOC_API_KEY", async () => (await fetch("https://api.pandadoc.com/public/v1/templates?count=1", { headers: { Authorization: `API-Key ${process.env.PANDADOC_API_KEY}` }, signal: t() })).ok],
+      ["RESEND_API_KEY", async () => (await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }, signal: t() })).ok],
+      ["GOOGLE_SERVICE_ACCOUNT_JSON", async () => {
+        const crypto = await import("crypto");
+        const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "{}");
+        if (!sa.client_email) return false;
+        const now = Math.floor(Date.now() / 1000);
+        const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
+        const head = enc({ alg: "RS256", typ: "JWT" });
+        const claims = enc({ iss: sa.client_email, scope: "https://www.googleapis.com/auth/drive.readonly", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 600 });
+        const signer = crypto.createSign("RSA-SHA256"); signer.update(`${head}.${claims}`); signer.end();
+        const sig = signer.sign(sa.private_key).toString("base64url");
+        const tok = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${head}.${claims}.${sig}` }), signal: t() }).then((r) => r.json());
+        return !!tok.access_token;
+      }],
+    ];
+    await Promise.allSettled(checks.map(async ([env2, fn]) => {
+      if (!process.env[env2]) return;
+      try { pings[env2] = (await fn()) ? "ok" : "fail"; } catch { pings[env2] = "fail"; }
+    }));
+  }
   const aiLog = owner ? await db.assistantLog.findMany({ orderBy: { createdAt: "desc" }, take: 40 }) : [];
   const navOrderRow = owner ? await db.resource.findFirst({ where: { category: NAV_ORDER_CAT } }).catch(() => null) : null;
   const navOrder = parseNavOrder(navOrderRow?.description);
@@ -444,13 +476,21 @@ export default async function AdminPage({
                 { env: "DEALMACHINE_API_KEY", name: "DealMachine", powers: "NEXT: property autofill (sqft · year · lot · est. value · owner equity) + mail sequences for the Mailers KPI", get: "DealMachine → Automation → API Docs" },
                 { env: "TWILIO_ACCOUNT_SID", name: "Twilio (GHL ops lines)", powers: "LIVE: phone health + A2P checks on your 8 acq/dispo numbers", get: "twilio.com console" },
                 { env: "TELNYX_API_KEY", name: "Telnyx (Direct REI lines)", powers: "LIVE: phone health on the 15 outbound marketing numbers", get: "telnyx.com portal" },
+                { env: "PANDADOC_API_KEY", name: "PandaDoc", powers: "auto-drafted contracts + signed-PDF pull into Drive deal folders", get: "pandadoc.com → Settings → API" },
+                { env: "RESEND_API_KEY", name: "Resend (email)", powers: "welcome emails · P&L requests · alert emails · open/click tracking", get: "resend.com" },
+                { env: "CHAT_WEBHOOKS_JSON", name: "Google Chat rooms (8)", powers: "contracts-signed · team wins · acquisitions · KPI EOD · phone health · Direct REI · receipts · leadership", get: "already connected" },
               ].map((k) => {
                 const on = !!process.env[k.env];
+                const ping = pings[k.env]; // "ok" | "fail" | undefined (not pinged)
+                const dot = !on ? "bg-slate-300" : ping === "ok" ? "bg-emerald-500" : ping === "fail" ? "bg-red-500 animate-pulse" : "bg-sky-400";
+                const box = !on ? "bg-slate-50 ring-slate-200" : ping === "fail" ? "bg-red-50 ring-red-200" : "bg-emerald-50 ring-emerald-200";
                 return (
-                  <div key={k.env} className={`flex items-start gap-2.5 rounded-xl p-2.5 ring-1 ${on ? "bg-emerald-50 ring-emerald-200" : "bg-slate-50 ring-slate-200"}`}>
-                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${on ? "bg-emerald-500" : "bg-slate-300"}`} />
+                  <div key={k.env} className={`flex items-start gap-2.5 rounded-xl p-2.5 ring-1 ${box}`}>
+                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} title={ping === "ok" ? "Live — API answered just now" : ping === "fail" ? "Key set but the API did NOT answer" : on ? "Key set (not pinged — saves quota)" : "Key missing"} />
                     <div className="min-w-0">
-                      <div className="text-sm font-bold text-slate-800">{k.name} <span className="ml-1 rounded bg-white px-1.5 py-0.5 font-mono text-[10px] font-normal text-slate-400 ring-1 ring-slate-200">{k.env}</span></div>
+                      <div className="text-sm font-bold text-slate-800">{k.name} <span className="ml-1 rounded bg-white px-1.5 py-0.5 font-mono text-[10px] font-normal text-slate-400 ring-1 ring-slate-200">{k.env}</span>
+                        {on && <span className={`ml-1 rounded px-1.5 py-0.5 text-[9px] font-extrabold ${ping === "ok" ? "bg-emerald-100 text-emerald-700" : ping === "fail" ? "bg-red-100 text-red-700" : "bg-sky-100 text-sky-700"}`}>{ping === "ok" ? "✓ LIVE — verified now" : ping === "fail" ? "⚠ NOT RESPONDING" : "key set"}</span>}
+                      </div>
                       <div className="text-[11px] text-slate-500">{k.powers}</div>
                       {!on && <div className="mt-0.5 text-[11px] font-semibold text-amber-700">Get it: {k.get}</div>}
                     </div>

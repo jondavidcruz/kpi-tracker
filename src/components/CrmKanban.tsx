@@ -3,7 +3,7 @@
 // (set dataTransfer payload, defer state past dragstart). Click a card →
 // its opportunity page.
 import { useEffect, useLayoutEffect, useState, useTransition } from "react";
-import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction } from "@/app/crm/actions";
+import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction } from "@/app/crm/actions";
 import { STAGE_PROB } from "@/lib/crm-shared";
 
 export type CrmCard = {
@@ -18,7 +18,19 @@ export type CrmCard = {
   tags: string[];
   badges: string[]; // pre-rendered chips: "⏳ 31h at devs", "⏰ task today"…
   money: string;
+  email?: string;
+  smsUnread?: number;   // inbound texts not yet read/answered
+  valueNum?: number;
+  updatedAt?: string;   // ISO — drives sort + age coloring
+  createdAt?: string;
 };
+// 🎨 GHL-style age coloring (Jon 2026-10-08): customizable ranges + colors,
+// saved per device. Days since last stage activity (updatedAt).
+type ColorRange = { max: number | null; color: string };
+const DEFAULT_RANGES: ColorRange[] = [
+  { max: 10, color: "#22c55e" }, { max: 20, color: "#eab308" }, { max: 30, color: "#ef4444" }, { max: null, color: "#06b6d4" },
+];
+type SortKey = "fresh" | "created" | "value" | "name";
 export type CrmColumn = { key: string; label: string; cls: string };
 const LANE_TINTS = ["bg-sky-50/70 ring-sky-100", "bg-yellow-50/70 ring-yellow-100", "bg-violet-50/70 ring-violet-100", "bg-amber-50/70 ring-amber-100", "bg-blue-50/70 ring-blue-100", "bg-emerald-50/70 ring-emerald-100", "bg-rose-50/70 ring-rose-100", "bg-indigo-50/70 ring-indigo-100", "bg-teal-50/70 ring-teal-100", "bg-slate-100/70 ring-slate-200/60"];
 
@@ -32,7 +44,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, reps = [] }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; reps?: string[] }) {
   const [cards, setCards] = useState(initial);
   // THE 27-vs-112 bug (Jon 2026-10-08): this component stays mounted when you
   // switch pipeline tabs, so the drag-and-drop card state kept showing the
@@ -46,6 +58,46 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   // ⚙ per-person card customization (saved on this device)
   const [show, setShow] = useState<Record<FieldKey, boolean>>({ money: true, badges: true, tags: true, rep: true, repTop: false, title: true });
   const [cfgOpen, setCfgOpen] = useState(false);
+  // 👁 privacy blur (phone + address), 🔀 sort, 🎨 coloring, ☑️ multi-select
+  const [privacy, setPrivacy] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("fresh");
+  const [colorOn, setColorOn] = useState(false);
+  const [ranges, setRanges] = useState<ColorRange[]>(DEFAULT_RANGES);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState({ op: "stage", val: "" });
+  useLayoutEffect(() => {
+    try {
+      if (localStorage.getItem("fo_crm_privacy") === "1") setPrivacy(true);
+      const sk = localStorage.getItem("fo_crm_sort"); if (sk) setSortKey(sk as SortKey);
+      const cc = localStorage.getItem("fo_crm_color");
+      if (cc) { const j = JSON.parse(cc); setColorOn(!!j.on); if (Array.isArray(j.ranges)) setRanges(j.ranges); }
+    } catch { /* defaults */ }
+  }, []);
+  const savePrivacy = (v: boolean) => { setPrivacy(v); try { localStorage.setItem("fo_crm_privacy", v ? "1" : "0"); } catch { /* ok */ } };
+  const saveSort = (v: SortKey) => { setSortKey(v); try { localStorage.setItem("fo_crm_sort", v); } catch { /* ok */ } };
+  const saveColor = (on: boolean, r: ColorRange[]) => { setColorOn(on); setRanges(r); try { localStorage.setItem("fo_crm_color", JSON.stringify({ on, ranges: r })); } catch { /* ok */ } };
+  const ageColor = (c: CrmCard): string | null => {
+    if (!colorOn || !c.updatedAt) return null;
+    const days = (Date.now() - new Date(c.updatedAt).getTime()) / 86400_000;
+    for (const r of ranges) if (r.max == null || days <= r.max) return r.color;
+    return null;
+  };
+  const sortCards = (arr: CrmCard[]): CrmCard[] => {
+    const a = [...arr];
+    if (sortKey === "value") a.sort((x, y) => (y.valueNum ?? 0) - (x.valueNum ?? 0));
+    else if (sortKey === "name") a.sort((x, y) => x.contactName.localeCompare(y.contactName));
+    else if (sortKey === "created") a.sort((x, y) => (y.createdAt ?? "").localeCompare(x.createdAt ?? ""));
+    return a; // "fresh" = server order (updated desc)
+  };
+  const toggleSel = (id: string) => setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const runBulk = () => {
+    if (!selected.size || !bulk.val.trim()) return;
+    const fd = new FormData();
+    for (const id of selected) fd.append("ids", id);
+    fd.set("op", bulk.op); fd.set("val", bulk.val.trim());
+    start(async () => { await bulkOppAction(fd); window.location.reload(); });
+  };
   // quick-add popover: {cardId, kind} — one open at a time
   const [quick, setQuick] = useState<{ id: string; contactId?: string; kind: "task" | "appt" | "tag" | "sms"; phone?: string } | null>(null);
   const [qa, setQa] = useState({ title: "", due: "", when: "", tag: "", sms: "" });
@@ -108,7 +160,17 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       <div className="mb-1.5 flex items-center gap-2 text-[11px] text-slate-400">
         <span>✋ Drag a card between stages — saves instantly. Click a card to open the full lead.</span>
         {pending && <span className="font-bold text-amber-600">saving…</span>}
-        <span className="relative ml-auto">
+        <span className="ml-auto flex items-center gap-1.5">
+          <button onClick={() => savePrivacy(!privacy)} title={privacy ? "Show phone + address" : "Privacy: blur phone + address (screen-share safe)"} className={`rounded-lg px-2.5 py-1 font-bold ${privacy ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{privacy ? "🙈" : "👁"}</button>
+          <select value={sortKey} onChange={(e) => saveSort(e.target.value as SortKey)} title="Sort cards inside each stage" className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-bold text-slate-600">
+            <option value="fresh">↕ Last activity</option>
+            <option value="created">🆕 Newest created</option>
+            <option value="value">💵 Highest value</option>
+            <option value="name">🔤 Name A–Z</option>
+          </select>
+          <button onClick={() => { setSelecting((v) => !v); setSelected(new Set()); }} className={`rounded-lg px-2.5 py-1 font-bold ${selecting ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>☑ Select</button>
+        </span>
+        <span className="relative">
           <button onClick={() => setCfgOpen((v) => !v)} className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">⚙ Cards</button>
           {cfgOpen && (
             <span className="absolute right-0 top-7 z-20 flex w-44 flex-col gap-1 rounded-xl bg-white p-2.5 shadow-lg ring-1 ring-slate-200">
@@ -118,13 +180,25 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                   <input type="checkbox" checked={show[k]} onChange={() => toggleField(k)} /> {label}
                 </label>
               ))}
+              <span className="mt-1 border-t border-slate-100 pt-1.5 text-[10px] font-bold uppercase text-slate-400">🎨 Card coloring (days in stage)</span>
+              <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
+                <input type="checkbox" checked={colorOn} onChange={(e) => saveColor(e.target.checked, ranges)} /> color borders by age
+              </label>
+              {ranges.map((r, i) => (
+                <span key={i} className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                  <input type="color" value={r.color} onChange={(e) => { const n = [...ranges]; n[i] = { ...n[i], color: e.target.value }; saveColor(colorOn, n); }} className="h-5 w-7 cursor-pointer rounded border border-slate-200" />
+                  {r.max == null ? <span className="flex-1">everything older</span> : (
+                    <span className="flex flex-1 items-center gap-1">up to <input type="number" min={1} value={r.max} onChange={(e) => { const n = [...ranges]; n[i] = { ...n[i], max: Math.max(1, Number(e.target.value) || 1) }; saveColor(colorOn, n); }} className="w-12 rounded border border-slate-200 px-1 py-0.5" /> days</span>
+                  )}
+                </span>
+              ))}
             </span>
           )}
         </span>
       </div>
       <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-2">
         {columns.map((col, colIdx) => {
-          const colCards = cards.filter((c) => c.stage === col.key || (colIdx === 0 && !columns.some((cc) => cc.key === c.stage)));
+          const colCards = sortCards(cards.filter((c) => c.stage === col.key || (colIdx === 0 && !columns.some((cc) => cc.key === c.stage))));
           const tint = LANE_TINTS[colIdx % LANE_TINTS.length];
           if (collapsed[col.key]) {
             return (
@@ -173,16 +247,19 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       setTimeout(() => setDragId(c.id), 0);
                     }}
                     onDragEnd={() => { setDragId(null); setOverCol(null); }}
-                    onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id } }))}
-                    className={`cursor-pointer rounded-xl bg-white p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${dragId === c.id ? "opacity-50" : ""}`}
+                    onClick={() => selecting ? toggleSel(c.id) : window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id } }))}
+                    style={ageColor(c) ? { border: `2px solid ${ageColor(c)}` } : undefined}
+                    className={`cursor-pointer rounded-xl bg-white p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-1">
+                      {selecting && <input type="checkbox" readOnly checked={selected.has(c.id)} className="mr-1 mt-0.5 h-4 w-4 shrink-0 accent-indigo-600" />}
                       {/* name → FULL card page; anywhere else on the card → quick view */}
                       <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{c.contactName}</a>
                       {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
                     </div>
                     {show.title && <div className="text-[11px] text-slate-500">{c.title}</div>}
-                    {c.address && c.address !== c.title && <div className="truncate text-[10px] text-slate-400">📍 {c.address}</div>}
+                    {c.address && c.address !== c.title && <div className={`truncate text-[10px] text-slate-400 ${privacy ? "select-none blur-[3px]" : ""}`}>📍 {c.address}</div>}
+                    {c.phone && <div className={`text-[10px] font-semibold text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>📞 {c.phone}</div>}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {show.money && c.money && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{c.money}</span>}
                       {show.badges && c.badges.map((b, i) => (
@@ -206,7 +283,12 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       <button type="button" title="Add a task" onClick={() => setQuick(quick?.id === c.id && quick.kind === "task" ? null : { id: c.id, contactId: c.contactId, kind: "task" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">✅</button>
                       <button type="button" title="Book an appointment" onClick={() => setQuick(quick?.id === c.id && quick.kind === "appt" ? null : { id: c.id, contactId: c.contactId, kind: "appt" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">📅</button>
                       <button type="button" title="Add a tag" onClick={() => setQuick(quick?.id === c.id && quick.kind === "tag" ? null : { id: c.id, kind: "tag" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">🏷</button>
-                      {canSms && c.phone && <button type="button" title="Text via our Telnyx number" onClick={() => setQuick(quick?.id === c.id && quick.kind === "sms" ? null : { id: c.id, contactId: c.contactId, kind: "sms", phone: c.phone })} className="grid h-7 w-7 place-items-center rounded-md bg-sky-50 text-[12px] ring-1 ring-sky-200 hover:bg-sky-100">💬</button>}
+                      {canSms && c.phone && (
+                        <button type="button" title={c.smsUnread ? `${c.smsUnread} unread text${c.smsUnread > 1 ? "s" : ""} — open the thread` : "Text via our Telnyx number"} onClick={() => setQuick(quick?.id === c.id && quick.kind === "sms" ? null : { id: c.id, contactId: c.contactId, kind: "sms", phone: c.phone })} className="relative grid h-7 w-7 place-items-center rounded-md bg-sky-50 text-[12px] ring-1 ring-sky-200 hover:bg-sky-100">💬
+                          {!!c.smsUnread && <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-0.5 text-[8px] font-extrabold text-white">{c.smsUnread}</span>}
+                        </button>
+                      )}
+                      {c.email && <button type="button" title={`Email ${c.contactName} (${c.email})`} onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "email" } }))} className="grid h-7 w-7 place-items-center rounded-md bg-amber-50 text-[12px] ring-1 ring-amber-200 hover:bg-amber-100">✉️</button>}
                       {quick?.id === c.id && (
                         <span className="absolute left-0 top-9 z-30 flex w-60 flex-col gap-1.5 rounded-xl bg-white p-2.5 shadow-xl ring-1 ring-slate-200">
                           {quick.kind === "task" && (<>
@@ -243,6 +325,32 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
           );
         })}
       </div>
+      {selecting && (
+        <div className="sticky bottom-3 z-30 mt-3 flex flex-wrap items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-xs text-white shadow-2xl">
+          <span className="font-extrabold">{selected.size} selected</span>
+          <button onClick={() => setSelected(new Set(cards.map((c) => c.id)))} className="rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Select all visible</button>
+          <select value={bulk.op} onChange={(e) => setBulk({ op: e.target.value, val: "" })} className="rounded-lg px-2 py-1 text-xs font-bold text-slate-800">
+            <option value="stage">→ Move to stage</option>
+            <option value="assign">👤 Reassign to</option>
+            <option value="tag">🏷 Add tag</option>
+          </select>
+          {bulk.op === "stage" && (
+            <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1 text-xs text-slate-800">
+              <option value="">stage…</option>
+              {columns.map((cc) => <option key={cc.key} value={cc.key}>{cc.label}</option>)}
+            </select>
+          )}
+          {bulk.op === "assign" && (
+            <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1 text-xs text-slate-800">
+              <option value="">rep…</option>
+              {reps.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          )}
+          {bulk.op === "tag" && <input value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} placeholder="tag…" className="rounded-lg px-2 py-1 text-xs text-slate-800" />}
+          <button onClick={runBulk} disabled={!selected.size || !bulk.val} className="rounded-lg bg-emerald-500 px-3 py-1.5 font-extrabold text-white hover:bg-emerald-600 disabled:opacity-40">Apply to {selected.size}</button>
+          <button onClick={() => { setSelecting(false); setSelected(new Set()); }} className="ml-auto rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Done</button>
+        </div>
+      )}
     </div>
   );
 }

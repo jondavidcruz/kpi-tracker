@@ -578,6 +578,13 @@ export async function GET(request: Request) {
             meta: { msgId, dir, via: "ghl" } as never, actor: "ghl-sync",
             at: m.dateAdded ? new Date(String(m.dateAdded)) : new Date(),
           } }).catch(() => {});
+          // 🚫 STOP / hostile reply → auto-DNC (Jon 2026-10-08)
+          if (dir === "inbound" && isSms) {
+            try {
+              const { DNC_REGEX, dncContact } = await import("@/lib/crm-dnc");
+              if (DNC_REGEX.test(bodyTxt)) await dncContact(c.id, `inbound text matched the STOP/hostile filter: "${bodyTxt.slice(0, 80)}"`);
+            } catch { /* guard never breaks sync */ }
+          }
           seen.add(msgId); inserted++;
         }
       }
@@ -1125,6 +1132,23 @@ export async function GET(request: Request) {
       out[pl][r.assignedTo || "(unassigned)"] = r._count._all;
     }
     return NextResponse.json({ ok: true, byPipeline: out });
+  }
+
+  // 🚫 DNC sweep (?dncsweep=1 — one-time + safety net): scans existing inbound
+  // texts for STOP/hostile language and DNCs those contacts retroactively.
+  if (url.searchParams.get("dncsweep") === "1") {
+    const { DNC_REGEX, dncContact } = await import("@/lib/crm-dnc");
+    const inbound = await db.crmEvent.findMany({ where: { kind: "sms", body: { startsWith: "⬅" } }, orderBy: { at: "desc" }, take: 2000, select: { contactId: true, body: true } });
+    const hit = new Map<string, string>();
+    for (const e of inbound) if (!hit.has(e.contactId) && DNC_REGEX.test(e.body)) hit.set(e.contactId, e.body.slice(0, 80));
+    let moved = 0;
+    for (const [cid, why] of hit) {
+      const c = await db.crmContact.findUnique({ where: { id: cid }, select: { tags: true } });
+      if (c && /\bdnc\b/i.test(c.tags)) continue;
+      await dncContact(cid, `historical sweep — "${why}"`);
+      moved++;
+    }
+    return NextResponse.json({ ok: true, matched: hit.size, newlyDnced: moved });
   }
 
   // 🏠 War Room pipeline retirement (?warroommove=1 — Jon 2026-10-08: "why is

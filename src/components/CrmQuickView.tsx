@@ -54,7 +54,7 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
   const [pending, start] = useTransition();
 
   useEffect(() => {
-    const h = (e: Event) => { const id = (e as CustomEvent).detail?.id as string; if (id) { setOppId(id); setData(null); setTab("opp"); setSaved(""); } };
+    const h = (e: Event) => { const d2 = (e as CustomEvent).detail as { id?: string; tab?: string }; if (d2?.id) { setOppId(d2.id); setData(null); setTab(d2.tab || "opp"); setSaved(""); } };
     window.addEventListener("fo-quickview", h);
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOppId(null); };
     window.addEventListener("keydown", esc);

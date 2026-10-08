@@ -400,6 +400,25 @@ export async function linkTaskAction(formData: FormData) {
   revalidatePath("/crm/tasks");
 }
 
+/** 👁 Bulk conversation actions: mark read / unread / DNC (Jon 2026-10-08). */
+export async function bulkConvAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const ids = formData.getAll("cids").map(String).filter(Boolean).slice(0, 200);
+  const op = String(formData.get("op") ?? "");
+  if (!ids.length) return;
+  const { setConvRead } = await import("@/lib/conv-read");
+  if (op === "read") await setConvRead(ids, true);
+  else if (op === "unread") await setConvRead(ids, false);
+  else if (op === "dnc" && isManager(me)) {
+    const { dncContact } = await import("@/lib/crm-dnc");
+    for (const id of ids) await dncContact(id, `marked DNC by ${me.name}`);
+    await setConvRead(ids, true);
+  }
+  revalidatePath("/crm/conversations");
+  revalidatePath("/crm");
+}
+
 /** 🗑 "Delete" a lead = archive it (archive-never-delete rule): the opp is
  *  archived and, when nothing else references the contact, the contact too.
  *  Recoverable from the archived list. Manager or the lead's owner. */
@@ -462,7 +481,7 @@ export async function bulkOppAction(formData: FormData) {
   const val = String(formData.get("val") ?? "").trim();
   if (!ids.length || !val) return;
   if (op === "assign") await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { assignedTo: val } });
-  else if (op === "stage" && CRM_STAGES.some((s) => s.key === val)) {
+  else if (op === "stage" && ((await readPipelines()).some((p) => p.stages.some((st) => st.key === val)) || CRM_STAGES.some((s) => s.key === val))) {
     await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { stage: val, ...(val === "dead" ? { archivedAt: new Date() } : {}) } });
   } else if (op === "tag") {
     for (const id of ids) {
