@@ -945,14 +945,30 @@ export async function saveMyAddress(formData: FormData) {
   const me = await getCurrentUser();
   if (!me) return;
   const address = String(formData.get("address") ?? "").trim().slice(0, 300);
+  const phone = String(formData.get("phone") ?? "").trim().slice(0, 30);
   await db.teamProfile.upsert({
     where: { userId: me.id },
-    update: { address },
-    create: { userId: me.id, name: me.name, address },
+    update: { address, ...(phone ? { phone } : {}) },
+    create: { userId: me.id, name: me.name, address, phone },
   });
   revalidatePath("/account");
   revalidatePath("/team-roster");
   redirect("/account?addr=1");
+}
+
+/** 🏢 Business Profile (C-suite): saves every b_* field into __biz_profile__. */
+export async function saveBizProfileAction(formData: FormData) {
+  const me = await getCurrentUser();
+  const { canAccessCSuite } = await import("@/lib/auth");
+  if (!canAccessCSuite(me)) return;
+  const vals: Record<string, string> = {};
+  for (const [k, v] of formData.entries()) if (k.startsWith("b_") && typeof v === "string") vals[k.slice(2)] = v.trim().slice(0, 300);
+  const row = await db.resource.findFirst({ where: { category: "__biz_profile__" } });
+  const description = JSON.stringify(vals);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { title: "business-profile", category: "__biz_profile__", url: "", description } });
+  revalidatePath("/settings/business");
+  redirect("/settings/business?saved=1");
 }
 
 // ── Phone health tracker ─────────────────────────────────────────────────────

@@ -68,6 +68,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/crm/automations", label: "Automations", gate: "csuite" },
     { href: "/crm/pipelines", label: "Pipelines", gate: "csuite" },
     { href: "/crm/access", label: "Comms Access", gate: "csuite" },
+    { href: "/settings/business", label: "Business Profile", gate: "csuite" },
   ] },
   { group: "C-Suite", items: [
     { href: "/leaks", label: "War Room Health", gate: "csuite" },

@@ -169,6 +169,10 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
       {/* Live alarms from Twilio/Telnyx (same feed as Compliance) */}
       <TelcoAlarms />
 
+      {/* 📬 Deliverability — SMS delivery rate (Telnyx, live) + email bounces
+          (Jon 2026-10-08: "what is our bounce rate??") */}
+      <Deliverability />
+
       {/* 🩺 Telnyx health score — Twilio-insights style gauge, straight from the APIs */}
       <Card className="flex flex-wrap items-center gap-6 p-5">
         <div className="relative h-24 w-44">
@@ -503,5 +507,53 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
 
       <p className="text-[11px] text-slate-400">Source: iSpeedToLead “Answer-Rate Playbook.” Stats are directional (Hiya 2025 State of the Call, MIT lead-response study, Velocify). Always follow TCPA + Do-Not-Call rules. <Link href="/scripts" className="underline">Scripts</Link> · <Link href="/playbooks" className="underline">Playbooks</Link></p>
     </div>
+  );
+}
+
+// 📬 Deliverability (Jon 2026-10-08): SMS delivery rate pulled live from
+// Telnyx detail records (last 7 days) + email bounce rate from our own logs
+// (sends vs Resend bounce events, last 30 days). Direct REI-style one-liner.
+async function Deliverability() {
+  // --- SMS via Telnyx messaging detail records ---
+  let sms: { total: number; delivered: number; failed: number } | null = null;
+  if (process.env.TELNYX_API_KEY) {
+    try {
+      const r = await fetch("https://api.telnyx.com/v2/detail_records?filter[record_type]=messaging&filter[date_range]=last_7_days&page[size]=250", {
+        headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store", signal: AbortSignal.timeout(6000),
+      });
+      const b = (await r.json()) as { data?: Array<{ status?: string; direction?: string }> };
+      const out = (b.data ?? []).filter((x) => x.direction === "outbound");
+      sms = {
+        total: out.length,
+        delivered: out.filter((x) => x.status === "delivered").length,
+        failed: out.filter((x) => ["failed", "delivery_failed", "sending_failed", "undelivered"].includes(x.status ?? "")).length,
+      };
+    } catch { /* card degrades gracefully */ }
+  }
+  // --- Email from our own event log ---
+  const monthAgo = new Date(Date.now() - 30 * 86400_000);
+  const [sent, bounced, failedSends] = await Promise.all([
+    db.crmEvent.count({ where: { kind: "email", at: { gte: monthAgo }, body: { startsWith: "➡️" } } }),
+    db.crmEvent.count({ where: { kind: "email", at: { gte: monthAgo }, body: { contains: "bounced" } } }),
+    db.crmEvent.count({ where: { kind: "email", at: { gte: monthAgo }, body: { contains: "SEND FAILED" } } }),
+  ]);
+  const smsRate = sms && sms.total > 0 ? Math.round((sms.delivered / sms.total) * 100) : null;
+  const emailBounceRate = sent > 0 ? Math.round(((bounced + failedSends) / sent) * 100) : 0;
+  const chip = (ok: boolean, warn: boolean) => ok ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : warn ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-red-50 text-red-700 ring-red-200";
+  return (
+    <Card className="flex flex-wrap items-center gap-4 p-4">
+      <div className="text-sm font-extrabold text-slate-800">📬 Deliverability</div>
+      {sms ? (
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${chip(smsRate != null && smsRate >= 90, smsRate != null && smsRate >= 75)}`}>
+          💬 SMS: {smsRate != null ? `${smsRate}% delivered` : "no sends"} <span className="font-normal opacity-70">({sms.delivered}/{sms.total} last 7d{sms.failed ? ` · ${sms.failed} failed` : ""})</span>
+        </span>
+      ) : (
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">💬 SMS: Telnyx stats unavailable right now</span>
+      )}
+      <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${chip(emailBounceRate <= 2, emailBounceRate <= 5)}`}>
+        ✉️ Email: {emailBounceRate}% bounce <span className="font-normal opacity-70">({bounced + failedSends} of {sent} sends, 30d)</span>
+      </span>
+      <span className="text-[11px] text-slate-400">SMS under 90% or email bounce over 2% = rotate the number / clean the list.</span>
+    </Card>
   );
 }

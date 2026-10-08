@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap, Landmark,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -134,6 +134,7 @@ export default function Sidebar({
       { href: "/crm/automations", label: "Automations", Icon: Zap, csuiteOnly: true },
       { href: "/crm/pipelines", label: "Pipelines", Icon: Workflow, csuiteOnly: true },
       { href: "/crm/access", label: "Comms Access", Icon: KeyRound, csuiteOnly: true },
+      { href: "/settings/business", label: "Business Profile", Icon: Landmark, csuiteOnly: true },
     ] },
     { label: "C-Suite", items: [
       { href: "/leaks", label: "War Room Health", Icon: Activity, csuiteOnly: true },

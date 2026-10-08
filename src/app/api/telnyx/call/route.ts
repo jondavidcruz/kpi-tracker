@@ -116,13 +116,32 @@ export async function POST(req: NextRequest) {
   }
 
   // Ring leg died (timeout/decline/offline) → when the LAST leg dies with no
-  // answer, release the seller's call so the missed-call text-back fires.
+  // answer, try the PSTN FALLBACK phone (browsers asleep ≠ missed deal — Jon
+  // 2026-10-08); only when that also dies does the text-back path fire.
   if (ev === "call.hangup" && st.ring) {
     const { rowId, map } = await readSess();
-    const sess = map[st.ring];
+    const sess = map[st.ring] as (typeof map)[string] & { fallback?: boolean };
     if (sess) {
       sess.legs = sess.legs.filter((l) => l !== p.call_control_id);
       if (!sess.answered && sess.legs.length === 0) {
+        const fb = process.env.TELNYX_FALLBACK_NUMBER ?? "";
+        if (fb && !sess.fallback && key) {
+          const row2 = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+          let cfg2: { ccAppId?: string } = {};
+          try { cfg2 = row2?.description ? JSON.parse(row2.description) : {}; } catch { /* none */ }
+          const clientState2 = Buffer.from(JSON.stringify({ ring: st.ring })).toString("base64");
+          const r2 = await fetch("https://api.telnyx.com/v2/calls", {
+            method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ connection_id: cfg2.ccAppId, to: fb, from: process.env.TELNYX_CALLER_ID ?? fb, timeout_secs: 20, client_state: clientState2 }),
+          }).catch(() => null);
+          const rb2 = r2 ? ((await r2.json().catch(() => ({}))) as { data?: { call_control_id?: string } }) : {};
+          if (rb2.data?.call_control_id) {
+            sess.fallback = true;
+            sess.legs = [rb2.data.call_control_id];
+            await writeSess(rowId, map);
+            return NextResponse.json({ ok: true, fallback: true });
+          }
+        }
         delete map[st.ring];
         await writeSess(rowId, map);
         await txCall(st.ring, "hangup");

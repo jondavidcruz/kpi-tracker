@@ -6,6 +6,7 @@
 // cards so every 📞 in the CRM rings through the browser — never tel:.
 import { useEffect, useRef, useState } from "react";
 import { logBrowserCallAction, dialerOutcomeQuickAction } from "@/app/crm/actions";
+import { quietHoursWarning } from "@/lib/npa-tz";
 
 type CallState = "idle" | "connecting" | "ringing" | "active" | "error";
 type PhoneData = {
@@ -122,7 +123,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     const dur = startRef.current ? Math.round((Date.now() - startRef.current) / 1000) : 0;
     startRef.current = 0;
     setState("idle"); setMuted(false); setSecs(0); setOnCall(null); setDtmfTrail("");
-    if (ctx?.oppId) setLastCall(ctx);
+    if (ctx?.oppId || ctx?.contactId) setLastCall(ctx);
     if (ctx?.phone || ctx?.contactId) {
       // log EVERY call — keypad dials included; the server find-or-creates the
       // contact so it shows in Conversations recents (Jon 2026-10-08)
@@ -202,8 +203,15 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // and keep the registration alive (tokens/sockets expire quietly).
   useEffect(() => {
     ensureClient().catch(() => { /* connects on first dial instead */ });
-    const keep = setInterval(() => { if (!readyRef.current) ensureClient().catch(() => {}); }, 240_000);
-    return () => clearInterval(keep);
+    // Chrome freezes timers + sockets in background tabs — the #1 reason
+    // inbound went user_busy (Jon 2026-10-08). Re-register the second the tab
+    // wakes, plus a tighter 60s heartbeat while visible.
+    const keep = setInterval(() => { if (!readyRef.current) ensureClient().catch(() => {}); }, 60_000);
+    const wake = () => { if (!readyRef.current) ensureClient().catch(() => {}); };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
+    window.addEventListener("online", wake);
+    return () => { clearInterval(keep); document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); window.removeEventListener("online", wake); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const answerIncoming = () => { try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "" }); } catch { /* gone */ } };
@@ -212,6 +220,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const call = async (ctx: Ctx) => {
     const to = ctx.phone.replace(/[^+\d]/g, "");
     if (to.replace(/\D/g, "").length < 10) { setMsg("enter a full number"); return; }
+    // 🕘 quiet-hours guard: 9pm–8am in the LEAD'S time zone (by area code) = blocked
+    const quiet = quietHoursWarning(to);
+    if (quiet) { setState("error"); setMsg(quiet); setTimeout(() => { setState("idle"); setMsg(""); }, 6000); return; }
     setOnCall(ctx); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     dialStartRef.current = Date.now(); setEndConfirm(false);
     try {
@@ -301,6 +312,27 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
               <button onClick={hangup} title="End the call" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-600 text-base text-white shadow hover:bg-red-700">⏹</button>
             </span>
           )}
+          {/* 📋 Call disposition (GHL-style, Jon 2026-10-08): shows after EVERY
+              call ends, whatever tab is open — pick what happened. */}
+          {lastCall && state === "idle" && (
+            <span className="mx-2 mb-1 mt-1 flex flex-col gap-1 rounded-xl bg-amber-50 px-2.5 py-2 ring-1 ring-amber-200">
+              <span className="text-[10px] font-bold text-amber-800">📋 Disposition — {lastCall.name ?? lastCall.phone}:</span>
+              <span className="flex flex-wrap gap-1">
+                {([["no_answer", "📵 No Answer"], ["voicemail", "📼 Voicemail"], ["follow_up", "🔁 Follow Up"], ["appointment", "📅 Appt Set"], ["talked", "✅ Talked"], ["not_interested", "🚫 Not Interested"], ["wrong_number", "❌ Wrong #"]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => {
+                    const fd = new FormData();
+                    fd.set("oppId", lastCall.oppId ?? "");
+                    fd.set("contactId", lastCall.contactId ?? "");
+                    fd.set("outcome", k);
+                    dialerOutcomeQuickAction(fd).catch(() => {});
+                    setLastCall(null);
+                    setTimeout(() => load(), 800);
+                  }} className="rounded-md bg-white px-2 py-1 text-[10px] font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100">{l}</button>
+                ))}
+                <button onClick={() => setLastCall(null)} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600">skip</button>
+              </span>
+            </span>
+          )}
           {msg && state === "idle" && <span className="px-3.5 py-1 text-[10px] font-semibold text-amber-700">{msg}</span>}
 
           {/* body */}
@@ -355,25 +387,6 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             )}
             {tab === "queue" && (
               <span className="flex flex-col gap-1">
-                {lastCall && state === "idle" && (
-                  <span className="mb-1 flex flex-col gap-1 rounded-xl bg-amber-50 px-2.5 py-2 ring-1 ring-amber-200">
-                    <span className="text-[10px] font-bold text-amber-800">How did it go with {lastCall.name ?? lastCall.phone}?</span>
-                    <span className="flex flex-wrap gap-1">
-                      {([["no_answer", "📵 No answer"], ["voicemail", "📼 VM"], ["callback", "📞 Callback"], ["talked", "✅ Talked"], ["not_interested", "🌱 Nurture"]] as const).map(([k, l]) => (
-                        <button key={k} onClick={() => {
-                          const fd = new FormData();
-                          fd.set("oppId", lastCall.oppId ?? "");
-                          fd.set("contactId", lastCall.contactId ?? "");
-                          fd.set("outcome", k);
-                          dialerOutcomeQuickAction(fd).catch(() => {});
-                          setLastCall(null);
-                          setTimeout(() => load(), 800);
-                        }} className="rounded-md bg-white px-2 py-1 text-[10px] font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100">{l}</button>
-                      ))}
-                      <button onClick={() => setLastCall(null)} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600">skip</button>
-                    </span>
-                  </span>
-                )}
                 <span className="mb-1 flex items-center justify-between rounded-xl bg-emerald-50 px-2.5 py-1.5 ring-1 ring-emerald-200">
                   <span className="text-[10px] font-bold text-emerald-800">⚡ Power mode: auto-dials the next lead when you hang up</span>
                   <button onClick={() => { const on = !autoNext; setAutoNext(on); if (on && data?.queue[qi] && state === "idle") { const t = data.queue[qi]; call({ phone: t.phone, name: t.name, oppId: t.oppId, contactId: t.contactId }); } }} className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${autoNext ? "bg-emerald-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{autoNext ? "ON" : "OFF"}</button>

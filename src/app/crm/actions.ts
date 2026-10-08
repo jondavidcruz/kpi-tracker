@@ -681,12 +681,17 @@ export async function dialerOutcomeQuickAction(formData: FormData): Promise<void
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
   const outcome = String(formData.get("outcome") ?? "");
-  const NEXT_DAYS: Record<string, number> = { no_answer: 1, voicemail: 2, callback: 0, talked: 3, not_interested: 30 };
-  const label: Record<string, string> = { no_answer: "no answer", voicemail: "left voicemail", callback: "callback requested", talked: "talked — good convo", not_interested: "not interested (nurture)" };
-  if (!oppId || !contactId || !(outcome in NEXT_DAYS)) return;
-  const nf = new Date(Date.now() + NEXT_DAYS[outcome] * 86400000).toISOString().slice(0, 10);
-  await db.crmOpportunity.update({ where: { id: oppId }, data: { nextFollowUp: nf, ...(outcome === "not_interested" ? { stage: "nurture" } : {}) } });
-  await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer: ${label[outcome]} · next follow-up ${nf}`, actor: me.name });
+  // GHL-style dispositions (Jon 2026-10-08) — each one sets the follow-up cadence
+  const NEXT_DAYS: Record<string, number> = { no_answer: 1, voicemail: 2, callback: 0, follow_up: 1, appointment: 0, talked: 3, not_interested: 30, wrong_number: -1 };
+  const label: Record<string, string> = { no_answer: "no answer", voicemail: "left voicemail", callback: "callback requested", follow_up: "follow up", appointment: "appointment requested", talked: "talked — good convo", not_interested: "not interested (nurture)", wrong_number: "incorrect number" };
+  if (!(outcome in NEXT_DAYS) || !contactId) return;
+  const nf = NEXT_DAYS[outcome] < 0 ? "" : new Date(Date.now() + NEXT_DAYS[outcome] * 86400000).toISOString().slice(0, 10);
+  if (oppId) await db.crmOpportunity.update({ where: { id: oppId }, data: { nextFollowUp: nf, ...(outcome === "not_interested" ? { stage: "nurture" } : {}) } }).catch(() => {});
+  if (outcome === "wrong_number") {
+    const c = await db.crmContact.findUnique({ where: { id: contactId }, select: { tags: true } });
+    if (c && !/wrong-number/.test(c.tags)) await db.crmContact.update({ where: { id: contactId }, data: { tags: c.tags ? `${c.tags},wrong-number` : "wrong-number" } });
+  }
+  await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer disposition: ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`, actor: me.name });
   revalidatePath("/crm");
 }
 

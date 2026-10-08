@@ -16,7 +16,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const me = await getCurrentUser();
   if (!me) return null;
   const sp = await searchParams;
-  const profile = await db.teamProfile.findUnique({ where: { userId: me.id }, select: { address: true } });
+  const profile = await db.teamProfile.findUnique({ where: { userId: me.id }, select: { address: true, phone: true } });
   const mySig = (await readSignatures())[firstOf(me.name)] || defaultSignature(me.name);
 
   return (
@@ -57,6 +57,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <p className="mb-3 text-xs text-slate-500">So the team knows where to ship reward gifts. Only you and Jon can see this.</p>
         {sp.addr && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Address saved.</div>}
         <form action={saveMyAddress} className="space-y-3">
+          <label><span className={labelCls}>📱 My phone number</span>
+            <input name="phone" defaultValue={profile?.phone ?? ""} placeholder="+1 …" className={inputCls} />
+          </label>
           <label><span className={labelCls}>Full mailing address (name, street, city, state/region, ZIP, country)</span>
             <textarea name="address" rows={3} defaultValue={profile?.address ?? ""} placeholder="Jane Dela Cruz&#10;123 Mabini St, Barangay …&#10;Cebu City, Cebu 6000&#10;Philippines" className={inputCls} />
           </label>
