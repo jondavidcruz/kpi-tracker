@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -86,6 +86,9 @@ export default function Sidebar({
       { href: "/crm/tasks", label: "Tasks", Icon: ListChecks, badge: dueTasks },
       { href: "/crm/contacts", label: "Contacts", Icon: Contact },
       { href: "/crm/calendar", label: "Calendar", Icon: CalendarDays },
+      { href: "/crm/automations", label: "Automations", Icon: Zap, managerOnly: true },
+      { href: "/crm/pipelines", label: "Pipelines", Icon: Workflow, managerOnly: true },
+      { href: "/crm/access", label: "Comms Access", Icon: KeyRound, managerOnly: true },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
     ] },
     { label: "Dispositions", items: [

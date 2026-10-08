@@ -97,6 +97,16 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   const manager = isManager(me);
   const sp = await searchParams;
 
+  // Telnyx numbers LIVE from the API (War Room + Direct REI connections)
+  let telnyxNums: Array<{ number: string; connection: string; msgProfile: boolean; status: string }> = [];
+  if (process.env.TELNYX_API_KEY) {
+    try {
+      const res = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=250", { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store" });
+      const body = (await res.json()) as { data?: Array<{ phone_number?: string; connection_name?: string; messaging_profile_id?: string | null; status?: string }> };
+      telnyxNums = (body.data ?? []).map((n) => ({ number: n.phone_number ?? "", connection: n.connection_name ?? "—", msgProfile: Boolean(n.messaging_profile_id), status: n.status ?? "?" })).filter((n) => n.number);
+    } catch { /* board degrades to Twilio only */ }
+  }
+
   // Twilio audit snapshot (written by /api/cron?twilioaudit=1)
   const twRow = await db.resource.findFirst({ where: { category: "__twilio_audit__" } }).catch(() => null);
   let twAudit: { at: string; totalNumbers: number; estMonthlyRent: number; deadNumbers: number; numbers: Array<{ number: string; name: string; calls: number; msgs: number; last: string }> } | null = null;
@@ -135,26 +145,45 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
       {/* Live alarms from Twilio/Telnyx (same feed as Compliance) */}
       <TelcoAlarms />
 
-      {/* ☎️ Twilio audit — the Telnyx-consolidation decision data (refreshed by ?twilioaudit=1) */}
-      {twAudit && (
-        <Card className="p-4">
-          <div className="mb-2 flex flex-wrap items-baseline gap-3">
-            <span className="text-sm font-extrabold text-slate-800">☎️ Twilio number audit</span>
-            <span className="text-xs text-slate-500">{twAudit.totalNumbers} numbers · ${twAudit.estMonthlyRent}/mo rent · {twAudit.deadNumbers} with zero activity (30d)</span>
-            <span className="ml-auto text-[10px] text-slate-400">last run {new Date(twAudit.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
-          </div>
-          <div className="grid gap-1 sm:grid-cols-2">
-            {twAudit.numbers.map((n) => (
-              <div key={n.number} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ring-1 ${n.calls + n.msgs === 0 ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-700 ring-slate-100"}`}>
-                <b className="font-mono">{n.number}</b>
-                <span className="truncate text-slate-400">{n.name}</span>
-                <span className="ml-auto shrink-0">{n.calls}📞 {n.msgs}💬 · {n.last || "no activity"}</span>
+      {/* 📊 Line health board — every number on both providers, Direct REI-style */}
+      <Card className="p-4">
+        <div className="mb-2 flex flex-wrap items-baseline gap-3">
+          <span className="text-sm font-extrabold text-slate-800">📊 Line health board</span>
+          <span className="text-xs text-slate-500">live from the Telnyx API · Twilio refreshed daily{twAudit ? ` (last ${new Date(twAudit.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })})` : ""}</span>
+          <span className="ml-auto text-[10px] text-slate-400">🟢 healthy · 🟡 watch · 🔴 flagged</span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {telnyxNums.map((n) => {
+            const watch = !n.msgProfile || n.status !== "active";
+            return (
+              <div key={n.number} className={`rounded-xl p-3 ring-1 ${watch ? "bg-amber-50 ring-amber-200" : "bg-emerald-50/50 ring-emerald-100"}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{watch ? "🟡" : "🟢"}</span>
+                  <span className="font-mono text-sm font-bold text-slate-800">{n.number}</span>
+                  <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[9px] font-extrabold text-indigo-600 ring-1 ring-indigo-100">TELNYX</span>
+                </div>
+                <div className="mt-1 text-[11px] text-slate-600">{n.connection}</div>
+                <div className="mt-0.5 text-[10px] text-slate-500">{n.status === "active" ? "✓ active" : `⚠️ ${n.status}`} · {n.msgProfile ? "✓ SMS profile" : "⚠️ no SMS profile (texts blocked)"}</div>
               </div>
-            ))}
-          </div>
-          <div className="mt-2 text-[11px] text-slate-500">Consolidation math: Telnyx runs ~half Twilio&apos;s per-unit rates. All numbers active → the play is <b>porting</b> (keeps the same numbers, ~$0 cost), not releasing. Porting needs Jon&apos;s authorization with both carriers.</div>
-        </Card>
-      )}
+            );
+          })}
+          {(twAudit?.numbers ?? []).map((n) => {
+            const dead = n.calls + n.msgs === 0;
+            return (
+              <div key={n.number} className={`rounded-xl p-3 ring-1 ${dead ? "bg-red-50 ring-red-200" : "bg-emerald-50/50 ring-emerald-100"}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{dead ? "🔴" : "🟢"}</span>
+                  <span className="font-mono text-sm font-bold text-slate-800">{n.number}</span>
+                  <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[9px] font-extrabold text-rose-600 ring-1 ring-rose-100">TWILIO</span>
+                </div>
+                <div className="mt-1 truncate text-[11px] text-slate-600">{n.name || "—"}</div>
+                <div className="mt-0.5 text-[10px] text-slate-500">{n.calls}📞 {n.msgs}💬 last 30d · {n.last ? `last ${n.last}` : "no activity"}</div>
+              </div>
+            );
+          })}
+        </div>
+        {twAudit && <div className="mt-2 text-[11px] text-slate-500">Twilio: {twAudit.totalNumbers} numbers · ${twAudit.estMonthlyRent}/mo rent · consolidation = port actives to Telnyx (~half the usage rates, keeps the numbers — porting needs Jon&apos;s authorization).</div>}
+      </Card>
 
       {/* Lead-gen SOP: list pull → skip trace → scrub → SMS (from Jon's SOP PDF) */}
       <LeadTextingSop />

@@ -20,6 +20,9 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/crm/tasks", label: "Tasks", gate: "all" },
     { href: "/crm/contacts", label: "Contacts", gate: "all" },
     { href: "/crm/calendar", label: "Calendar", gate: "all" },
+    { href: "/crm/automations", label: "Automations", gate: "manager" },
+    { href: "/crm/pipelines", label: "Pipelines", gate: "manager" },
+    { href: "/crm/access", label: "Comms Access", gate: "manager" },
     { href: "/underwriting", label: "Underwriting", gate: "all" },
   ] },
   { group: "Dispositions", items: [
