@@ -29,7 +29,13 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // Permissions (Jon 2026-10-07: "Nick gets his own pipeline"): managers see
   // everyone; a rep's board is scoped to THEIR leads — their own pipeline.
   const manager = isManager(me!);
-  const who = manager ? (sp.who ?? "") : me!.name;
+  const whoRaw = manager ? (sp.who ?? "") : me!.name;
+  // role chips (Jon 2026-10-08): "role:acquisitions" / "role:dispositions"
+  // scope the board to everyone in that seat at once.
+  const roleReps = whoRaw.startsWith("role:")
+    ? (await db.user.findMany({ where: { active: true, position: whoRaw.slice(5) }, select: { name: true } })).map((u) => u.name)
+    : null;
+  const who = roleReps ? "" : whoRaw;
   const q = (sp.q ?? "").trim();
   const fStage = sp.stage ?? "";
   const fTag = (sp.tag ?? "").trim();
@@ -54,6 +60,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     archivedAt: null,
     // "War Room" = native leads (empty pipeline) · GHL pipelines match by name
     ...(plName === "War Room" ? { pipeline: { in: ["", "War Room"] } } : { pipeline: plName }),
+    ...(roleReps ? { assignedTo: { in: roleReps } } : {}),
     ...(who ? { OR: [
       { assignedTo: { equals: who.trim(), mode: "insensitive" as const } },
       { formData: { path: ["__followers"], array_contains: who.trim() } },
@@ -89,7 +96,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true, address: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
     : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true, address: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
   const qs = (over: Record<string, string>) => {
-    const p = new URLSearchParams({ view, pl: plName, ...(manager && who ? { who } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
+    const p = new URLSearchParams({ view, pl: plName, ...(manager && whoRaw ? { who: whoRaw } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
     return `/crm?${p.toString()}`;
   };
@@ -159,7 +166,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           {manager ? (
             <>
               <span className="text-[11px] font-bold text-slate-500">Pipeline:</span>
-              <Link prefetch={false} href={qs({ who: "" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
+              <Link prefetch={false} href={qs({ who: "" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!whoRaw ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
+              <Link prefetch={false} href={qs({ who: "role:acquisitions" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${whoRaw === "role:acquisitions" ? "bg-brand-navy text-white" : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"}`}>🧲 Acquisitions</Link>
+              <Link prefetch={false} href={qs({ who: "role:dispositions" })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${whoRaw === "role:dispositions" ? "bg-brand-navy text-white" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"}`}>🤝 Dispo</Link>
               {reps.map((r) => (
                 <Link key={r.id} prefetch={false} href={qs({ who: r.name })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>{r.name.split(" ")[0]}</Link>
               ))}
