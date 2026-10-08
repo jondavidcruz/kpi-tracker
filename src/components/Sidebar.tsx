@@ -78,6 +78,7 @@ export default function Sidebar({
       { href: "/process", label: "Process Map", Icon: Workflow },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
       { href: "/rewards", label: "Rewards", Icon: Gift },
+      { href: "/certificates", label: "Certificates", Icon: GraduationCap, managerOnly: true },
       { href: "/culture", label: "Culture", Icon: PartyPopper },
     ] },
     { label: "Acquisitions", items: [

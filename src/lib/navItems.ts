@@ -12,6 +12,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/process", label: "Process Map", gate: "all" },
     { href: "/schedule", label: "Schedule & Time", gate: "all" },
     { href: "/rewards", label: "Rewards", gate: "all" },
+    { href: "/certificates", label: "Certificates", gate: "manager" },
     { href: "/culture", label: "Culture", gate: "all" },
   ] },
   { group: "Acquisitions", items: [
