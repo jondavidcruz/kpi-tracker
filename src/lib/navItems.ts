@@ -20,9 +20,6 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/crm/tasks", label: "Tasks", gate: "all" },
     { href: "/crm/contacts", label: "Contacts", gate: "all" },
     { href: "/crm/calendar", label: "Calendar", gate: "all" },
-    { href: "/crm/automations", label: "Automations", gate: "manager" },
-    { href: "/crm/pipelines", label: "Pipelines", gate: "manager" },
-    { href: "/crm/access", label: "Comms Access", gate: "manager" },
     { href: "/underwriting", label: "Underwriting", gate: "all" },
   ] },
   { group: "Dispositions", items: [
@@ -65,6 +62,11 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/issues", label: "Issues", gate: "admin" },
     { href: "/vto", label: "Vision (V/TO)", gate: "all" },
     { href: "/team-360", label: "Team 360", gate: "all" },
+  ] },
+  { group: "System Settings", items: [
+    { href: "/crm/automations", label: "Automations", gate: "csuite" },
+    { href: "/crm/pipelines", label: "Pipelines", gate: "csuite" },
+    { href: "/crm/access", label: "Comms Access", gate: "csuite" },
   ] },
   { group: "C-Suite", items: [
     { href: "/leaks", label: "War Room Health", gate: "csuite" },

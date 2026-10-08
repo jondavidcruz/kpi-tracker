@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getActiveReps } from "@/lib/data";
 import { Card, SectionTitle } from "@/components/ui";
 import { readCommsMap, firstOf } from "@/lib/crm-comms";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // 📡 Comms access — who gets the PAID channels, in its own room.
 export default async function CrmAccessPage() {
   const me = await getCurrentUser();
-  if (!me || !isManager(me)) return <Card className="p-10 text-center text-slate-400">Comms access is manager-only.</Card>;
+  if (!me || !canAccessCSuite(me)) return <Card className="p-10 text-center text-slate-400">🔒 System Settings — C-suite only.</Card>;
   const [reps, commsMap] = await Promise.all([getActiveReps(), readCommsMap()]);
 
   return (

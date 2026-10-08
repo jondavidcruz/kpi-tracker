@@ -799,6 +799,64 @@ export async function GET(request: Request) {
     }
   }
 
+  // 📍 Address backfill (?ghladdrfix=1): GHL-imported contacts came over with
+  // no property address — pull address1/city/state/zip from GHL per contact
+  // (time-budgeted; run repeatedly until remaining=0).
+  if (url.searchParams.get("ghladdrfix") === "1") {
+    const { ghlGet } = await import("@/lib/reireply");
+    const deadline = Date.now() + 45_000;
+    const todo = await db.crmContact.findMany({ where: { address: "", ghlId: { not: "" } }, select: { id: true, ghlId: true }, take: 400 });
+    let updated = 0, empty = 0, failed = 0;
+    for (let i = 0; i < todo.length && Date.now() < deadline; i += 8) {
+      const batch = todo.slice(i, i + 8);
+      const results = await Promise.all(batch.map(async (c) => {
+        const r = await ghlGet(`/contacts/${c.ghlId}`).catch(() => null);
+        const ct = (r?.body as { contact?: { address1?: string; city?: string; state?: string; postalCode?: string } } | null)?.contact;
+        if (!ct) return { id: c.id, addr: null };
+        const addr = [ct.address1, ct.city, ct.state, ct.postalCode].filter(Boolean).join(", ").slice(0, 250);
+        return { id: c.id, addr };
+      }));
+      for (const r of results) {
+        if (r.addr === null) { failed++; continue; }
+        if (!r.addr) { empty++; await db.crmContact.update({ where: { id: r.id }, data: { address: "—" } }).catch(() => {}); continue; }
+        await db.crmContact.update({ where: { id: r.id }, data: { address: r.addr } }).catch(() => {});
+        // mirror onto the lead's title when the title is just the person's name
+        const opp = await db.crmOpportunity.findFirst({ where: { contactId: r.id, archivedAt: null }, include: { contact: { select: { name: true } } } });
+        if (opp && opp.title.trim().toLowerCase() === opp.contact.name.trim().toLowerCase()) {
+          await db.crmOpportunity.update({ where: { id: opp.id }, data: { title: r.addr } }).catch(() => {});
+        }
+        updated++;
+      }
+    }
+    const remaining = await db.crmContact.count({ where: { address: "", ghlId: { not: "" } } });
+    return NextResponse.json({ ok: true, updated, noAddressInGhl: empty, failed, remaining, hint: remaining > 0 ? "run again" : "done — '—' marks contacts with no address in GHL" });
+  }
+
+  // 📊 Owner distribution report (?ownerreport=1): who owns what, per pipeline
+  // (for diagnosing 'everything shows Nick').
+  if (url.searchParams.get("ownerreport") === "1") {
+    const rows = await db.crmOpportunity.groupBy({ by: ["pipeline", "assignedTo"], where: { archivedAt: null }, _count: { _all: true } });
+    const out: Record<string, Record<string, number>> = {};
+    for (const r of rows) {
+      const pl = r.pipeline || "War Room";
+      out[pl] = out[pl] ?? {};
+      out[pl][r.assignedTo || "(unassigned)"] = r._count._all;
+    }
+    return NextResponse.json({ ok: true, byPipeline: out });
+  }
+
+  // ✅ Owner to-do (?jontask=1&title=...): drops a task on Jon's list under the
+  // 🛠 War Room updates section — used so action items never live only in chat.
+  if (url.searchParams.get("jontask") === "1") {
+    const title = (url.searchParams.get("title") ?? "").slice(0, 200);
+    if (!title) return NextResponse.json({ ok: false, error: "title required" });
+    const jon = await db.user.findFirst({ where: { active: true, name: { startsWith: "Jon", mode: "insensitive" } }, select: { name: true } });
+    const dup = await db.crmTask.findFirst({ where: { title: `🛠 ${title}`, doneAt: null } });
+    if (dup) return NextResponse.json({ ok: true, existed: true });
+    await db.crmTask.create({ data: { oppId: "", contactId: "", title: `🛠 ${title}`, due: new Date().toISOString().slice(0, 10), assignedTo: jon?.name ?? "Jon Cruz", createdBy: "warroom-updates" } });
+    return NextResponse.json({ ok: true });
+  }
+
   // 👤 Owner repair (?ghlownerfix=1 dry / &commit=1): re-read every imported
   // lead's TRUE owner from GHL and fix assignedTo ONLY — stages/pipelines the
   // team already moved in the War Room are left alone. Fixes the

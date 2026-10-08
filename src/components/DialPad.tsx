@@ -217,14 +217,17 @@ export default function DialPad() {
   };
 
   const hangup = () => {
-    // 💸 Telnyx surcharges calls ≤6s (Jon 2026-10-07: weekly short-duration
-    // flag emails). Hanging up a LIVE call inside 8s asks for one more click;
-    // connecting/failed states end immediately (those aren't billed calls).
+    // 💸 HARD 8-second floor (Jon 2026-10-08, after Telnyx's abandoned-call
+    // surcharge notice): a ringing or live call CANNOT be ended before 8s —
+    // no override. Hanging up while ringing is exactly what Telnyx counts as
+    // an "abandoned call", so the button simply counts down. Connecting /
+    // failed states (no billable call yet) still end instantly.
     const elapsed = dialStartRef.current ? Date.now() - dialStartRef.current : 99_000;
-    if (!endConfirm && elapsed < 8_000 && (stateRef.current === "active" || stateRef.current === "ringing")) {
+    if (elapsed < 8_000 && (stateRef.current === "active" || stateRef.current === "ringing")) {
+      const left = Math.ceil((8_000 - elapsed) / 1000);
       setEndConfirm(true);
-      setMsg("💸 Under 8s — short calls get surcharged. Press ⏹ again to end anyway.");
-      setTimeout(() => setEndConfirm(false), 4000);
+      setMsg(`🔒 ${left}s — ending early counts as an abandoned call (Telnyx surcharge). Hold on…`);
+      setTimeout(() => { setEndConfirm(false); setMsg(""); }, 8_000 - elapsed + 200);
       return;
     }
     setEndConfirm(false);
@@ -286,7 +289,7 @@ export default function DialPad() {
                 {state === "active" ? `🟢 ${onCall?.name ?? onCall?.phone} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `📡 ${state} — ${onCall?.name ?? onCall?.phone ?? ""}`}
                 {dtmfTrail && <span className="ml-1 rounded bg-white px-1 py-0.5 font-mono text-[10px] text-slate-500 ring-1 ring-slate-200">⌨ {dtmfTrail}</span>}
               </span>
-              {endConfirm && <span className="absolute -bottom-5 left-3 right-3 truncate text-[9px] font-bold text-red-600">💸 short calls get surcharged — press ⏹ again to end</span>}
+              {endConfirm && <span className="absolute -bottom-5 left-3 right-3 truncate text-[9px] font-bold text-red-600">🔒 under 8s — abandoned calls get surcharged; the call can be ended at 0:08</span>}
               {state === "active" && <button onClick={toggleMute} className={`rounded-md px-2 py-1 text-[10px] font-bold ${muted ? "bg-amber-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>}
               <button onClick={hangup} title="End the call" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-600 text-base text-white shadow hover:bg-red-700">⏹</button>
             </span>

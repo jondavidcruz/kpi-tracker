@@ -64,7 +64,8 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
   };
 
   return (
-    <div className="overflow-hidden rounded-xl shadow-md ring-1 ring-slate-200">
+    <div className="flex flex-wrap items-start gap-4">
+    <div className="min-w-[300px] flex-1 overflow-hidden rounded-xl shadow-md ring-1 ring-slate-200">
       <div className="flex items-center justify-between bg-[#404043] px-4 py-2">
         <span className="text-xs font-semibold text-white">New Message</span>
         {sent && <span className="text-xs font-bold text-emerald-300">{sent}</span>}
@@ -119,6 +120,29 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
           <span className="ml-auto text-[10px] text-slate-400">replies go to your real inbox</span>
         </div>
       </div>
+    </div>
+
+    {/* 💻 how it looks when they open it (MacBook / Apple Mail style) */}
+    <div className="mx-auto w-[340px] shrink-0 select-none max-xl:hidden">
+      <div className="rounded-xl bg-slate-800 p-2 shadow-xl">
+        <div className="overflow-hidden rounded-lg bg-white">
+          <div className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 px-3 py-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" /><span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" /><span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+            <span className="ml-2 text-[10px] font-semibold text-slate-400">Inbox — {to || "seller"}</span>
+          </div>
+          <div className="border-b border-slate-100 px-3 py-2">
+            <div className="text-[12px] font-bold text-slate-900">{subject || <span className="text-slate-300">(subject)</span>}</div>
+            <div className="mt-0.5 text-[10px] text-slate-500">{fromLabel}</div>
+            <div className="text-[10px] text-slate-400">To: {leadName} · today</div>
+          </div>
+          <div className="h-[260px] overflow-y-auto px-3 py-2">
+            <div className="whitespace-pre-line text-[11px] leading-relaxed text-slate-800">{body || <span className="text-slate-300">start typing to preview…</span>}</div>
+            {body && <div className="mt-3 whitespace-pre-line border-t border-slate-100 pt-2 text-[10px] leading-snug text-slate-500">{signature}</div>}
+          </div>
+        </div>
+      </div>
+      <div className="mt-1 text-center text-[9px] text-slate-400">how it looks on {first}&apos;s computer</div>
+    </div>
     </div>
   );
 }

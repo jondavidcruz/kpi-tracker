@@ -10,6 +10,7 @@ export type CrmCard = {
   id: string;
   title: string;
   contactName: string;
+  address?: string;
   contactId?: string;
   phone?: string;
   stage: string;
@@ -173,6 +174,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
                     </div>
                     {show.title && <div className="text-[11px] text-slate-500">{c.title}</div>}
+                    {c.address && c.address !== c.title && <div className="truncate text-[10px] text-slate-400">📍 {c.address}</div>}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {show.money && c.money && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{c.money}</span>}
                       {show.badges && c.badges.map((b, i) => (

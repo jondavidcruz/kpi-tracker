@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { readPipelines } from "@/lib/crm";
 import { readRules } from "@/lib/crm-automations";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 // 🤖 Automations — Direct REI-style when → then rules, in their own room.
 export default async function CrmAutomationsPage() {
   const me = await getCurrentUser();
-  if (!me || !isManager(me)) return <Card className="p-10 text-center text-slate-400">Automations are manager-only.</Card>;
+  if (!me || !canAccessCSuite(me)) return <Card className="p-10 text-center text-slate-400">🔒 System Settings — C-suite only.</Card>;
   const [rules, pipelines, sequences] = await Promise.all([readRules(), readPipelines(), readSequences()]);
 
   return (

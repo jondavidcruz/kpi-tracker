@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { readPipelines } from "@/lib/crm";
 import { savePipelineAction } from "../actions";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // 🔀 Pipelines — rename anything, add stages & whole pipelines, in its own room.
 export default async function CrmPipelinesPage() {
   const me = await getCurrentUser();
-  if (!me || !isManager(me)) return <Card className="p-10 text-center text-slate-400">Pipeline editing is manager-only.</Card>;
+  if (!me || !canAccessCSuite(me)) return <Card className="p-10 text-center text-slate-400">🔒 System Settings — C-suite only.</Card>;
   const pipelines = await readPipelines();
   const counts = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null }, _count: { _all: true } });
   const plCounts: Record<string, number> = {};

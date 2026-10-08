@@ -86,9 +86,6 @@ export default function Sidebar({
       { href: "/crm/tasks", label: "Tasks", Icon: ListChecks, badge: dueTasks },
       { href: "/crm/contacts", label: "Contacts", Icon: Contact },
       { href: "/crm/calendar", label: "Calendar", Icon: CalendarDays },
-      { href: "/crm/automations", label: "Automations", Icon: Zap, managerOnly: true },
-      { href: "/crm/pipelines", label: "Pipelines", Icon: Workflow, managerOnly: true },
-      { href: "/crm/access", label: "Comms Access", Icon: KeyRound, managerOnly: true },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
     ] },
     { label: "Dispositions", items: [
@@ -131,6 +128,11 @@ export default function Sidebar({
       { href: "/issues", label: "Issues", Icon: Flag, adminOnly: true },
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
       { href: "/team-360", label: "Team 360", Icon: Sparkles },
+    ] },
+    { label: "System Settings", items: [
+      { href: "/crm/automations", label: "Automations 🔒", Icon: Zap, csuiteOnly: true },
+      { href: "/crm/pipelines", label: "Pipelines 🔒", Icon: Workflow, csuiteOnly: true },
+      { href: "/crm/access", label: "Comms Access 🔒", Icon: KeyRound, csuiteOnly: true },
     ] },
     { label: "C-Suite", items: [
       { href: "/leaks", label: "War Room Health", Icon: Activity, csuiteOnly: true },

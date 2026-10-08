@@ -83,8 +83,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const stageSums: Record<string, number> = {};
   for (const g of grouped) { stageCounts[g.stage] = g._count._all; stageSums[g.stage] = g._sum.value ?? 0; }
   const opps = view === "list"
-    ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
-    : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
+    ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true, address: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
+    : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true, address: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
   const qs = (over: Record<string, string>) => {
     const p = new URLSearchParams({ view, pl: plName, ...(manager && who ? { who } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
@@ -110,7 +110,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     if (o.nextFollowUp && o.nextFollowUp <= today) badges.push("📞 follow-up due");
     if (!["nurture", "dead", "signed"].includes(o.stage) && Date.now() - o.updatedAt.getTime() > 3 * 86400000) badges.push("🕸 quiet 3d+");
     return {
-      id: o.id, title: o.title, contactName: o.contact.name, contactId: o.contactId, phone: o.contact.phone, stage: o.stage,
+      id: o.id, title: o.title, contactName: o.contact.name, contactId: o.contactId, phone: o.contact.phone, address: o.contact.address, stage: o.stage,
       assignedTo: o.assignedTo, tags: parseTags(o.tags), badges,
       money: money(o.value) || (o.askPrice != null ? `ask ${money(o.askPrice)}` : ""),
     };
