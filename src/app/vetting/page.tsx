@@ -34,7 +34,7 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
       orderBy: [{ vetArea: "asc" }, { name: "asc" }],
     }),
     db.marketContact.count({ where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } } }),
-    db.marketContact.findMany({ where: { archivedAt: { not: null } }, orderBy: { archivedAt: "desc" }, select: { id: true, name: true, archivedAt: true, archivedBy: true, archiveReason: true } }),
+    db.marketContact.findMany({ where: { archivedAt: { not: null } }, orderBy: { archivedAt: "desc" }, take: 120, select: { id: true, name: true, archivedAt: true, archivedBy: true, archiveReason: true } }),
   ]);
   const UNASSIGNED = "Unassigned / general buyers";
   const toProspect = (r: typeof rows[number]): Prospect => ({

@@ -130,9 +130,9 @@ export default function Sidebar({
       { href: "/team-360", label: "Team 360", Icon: Sparkles },
     ] },
     { label: "System Settings", items: [
-      { href: "/crm/automations", label: "Automations 🔒", Icon: Zap, csuiteOnly: true },
-      { href: "/crm/pipelines", label: "Pipelines 🔒", Icon: Workflow, csuiteOnly: true },
-      { href: "/crm/access", label: "Comms Access 🔒", Icon: KeyRound, csuiteOnly: true },
+      { href: "/crm/automations", label: "Automations", Icon: Zap, csuiteOnly: true },
+      { href: "/crm/pipelines", label: "Pipelines", Icon: Workflow, csuiteOnly: true },
+      { href: "/crm/access", label: "Comms Access", Icon: KeyRound, csuiteOnly: true },
     ] },
     { label: "C-Suite", items: [
       { href: "/leaks", label: "War Room Health", Icon: Activity, csuiteOnly: true },

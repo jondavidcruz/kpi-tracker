@@ -17,6 +17,8 @@ export const DISPO_STEPS: DispoStep[] = [
   { key: "llcagents", phase: "🚀 Day 0 — launch", label: "Send to LLCs & agents", hint: "LLCs with recent land buys in the area + listing agents (new construction) + buyer agents (land sales) — the 🏘 Agents group." },
   // ── Day 1–3 — work it ──
   { key: "passive", phase: "📞 Day 1–3 — work it", label: "Passive channels posted", hint: "Craigslist · FB Marketplace + land groups · Skool + paid communities · Zillow/land pages (only if under contract)." },
+  { key: "dealspeed", phase: "📞 Day 1–3 — work it", label: "List on DealSpeed (iSpeedToLead)", hint: "app.ispeedtolead.com → ADD NEW PROPERTY — passive marketplace + 5M buyer database on the $199 sub; run a Campaign blast to matching buyers (active)." },
+  { key: "ibuyers", phase: "📞 Day 1–3 — work it", label: "iBuyer sweep (HOUSES only)", hint: "Opendoor · Offerpad · Orchard — request instant offers with the address. Skip for land (iBuyers don't buy vacant land)." },
   { key: "coldcall", phase: "📞 Day 1–3 — work it", label: "Cold-call the top 10 ranked buyers", hint: "📇 Log each touch — it counts toward your KPIs and the buyer's track record." },
   { key: "skiptrace", phase: "📞 Day 1–3 — work it", label: "Skip-trace unresponsive priority buyers", hint: "Skipgenie the Send-first buyers who haven't picked up — new numbers, fresh dials." },
   { key: "outcomes", phase: "📞 Day 1–3 — work it", label: "Log every response in Sends & responses", hint: "Offers + passes (with reasons) — this builds the lowball/tire-kicker intel." },

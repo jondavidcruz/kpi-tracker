@@ -57,7 +57,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     getSettings(),
     db.marketContact.findMany({ where: { archivedAt: null }, orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
     db.targetMarket.findMany({ orderBy: { sortOrder: "asc" } }),
-    db.marketContact.findMany({ where: { archivedAt: { not: null } }, orderBy: { archivedAt: "desc" }, select: { id: true, name: true, archivedAt: true, archivedBy: true, archiveReason: true } }),
+    db.marketContact.findMany({ where: { archivedAt: { not: null } }, orderBy: { archivedAt: "desc" }, take: 120, select: { id: true, name: true, archivedAt: true, archivedBy: true, archiveReason: true } }),
   ]);
   const marketsForMap: Market[] = targets.map((t) => ({ id: t.id, name: t.name, tier: t.tier, score: t.score, lat: t.lat, lng: t.lng }));
   const TIER_PILL: Record<string, string> = { S: "bg-red-100 text-red-700", "1": "bg-orange-100 text-orange-700", "2": "bg-amber-100 text-amber-700", "3": "bg-sky-100 text-sky-700" };
@@ -125,6 +125,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const touchRows = await db.buyerTouch.findMany({
     where: { buyerId: { in: vettedRows.map((r) => r.id) } },
     orderBy: { at: "desc" },
+    take: 1500, // page only shows the last 5 per buyer — unbounded scan was the lag
     select: { buyerId: true, at: true, channel: true, outcome: true, note: true },
   });
   const touchesBy = new Map<string, { at: string; channel: string | null; outcome: string | null; note: string | null }[]>();

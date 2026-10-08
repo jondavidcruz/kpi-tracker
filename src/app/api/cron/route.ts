@@ -799,6 +799,50 @@ export async function GET(request: Request) {
     }
   }
 
+  // 🤝 JV partner + iBuyer seed (?jvseed=1): national dispo channels Jon vetted
+  // (2026-10-08) land in Vetted Buyers as jv_partner / ibuyer rows with the
+  // full submission playbook in notes. Idempotent by name.
+  if (url.searchParams.get("jvseed") === "1") {
+    const SEED = [
+      { name: "MaxDispo (Maximilian Dier)", type: "jv_partner", website: "https://maxdispo.com/#dispo", phone: "1-855-873-4776", buyBox: "ALL 50 STATES — cash, novation, sub-to, seller finance, LAND, multifamily", notes: "JV split 50/50 standard (VIP reduced) OR fee-on-top (we keep 100% of assignment, they add their fee). Interest within 48h, 'closing table in 3 days'. Submit: online form at maxdispo.com (financing type, deal type, structure, location). Phone 1 855 US DISPO. Run by 'The Wholesale Pirate' — hundreds of JV closes, $1M+ in fees. TOP priority for land JVs." },
+      { name: "Novation JV Submission (40% net)", type: "jv_partner", website: "https://novationjvsubmission.com/", buyBox: "ANY location, ANY condition — motivated seller required; novation specialists", notes: "We get 40% of NET profit at close; extra expenses split 50/50 OR one side fronts and gets reimbursed at closing +100% return. Submit via Podio form: podio.com/webforms/28613423/2296179 — needs seller timeline, condition, asking price, situation/motivation. ⚠️ RULE: never mention 'novation' or a partner to the seller." },
+      { name: "Ready To Assign", type: "jv_partner", website: "https://www.readytoassign.com/deals", phone: "424-213-6641", email: "readytoassignnow@gmail.com", buyBox: "SFH, multifamily, commercial — must be ≤95% of Zillow price, NO daisy chains (direct contract only)", notes: "Pasadena CA (251 S. Lake Ave #800). 2–7 days to market + find buyer. Submit on /deals form: our name/email/phone, address, bed/bath, sqft, title/escrow + access info, roof/water-heater/HVAC age, contract price, EMD, projected close date, photo links (Drive/Dropbox), signed PA copy." },
+      { name: "Tony Mont JV", type: "jv_partner", website: "https://go.thetonymont.com/jv", buyBox: "Wholesale JV — property types/terms not published (ask on submit)", notes: "Submit form needs: contact + org, property address/beds/baths/sqft/year, acquisition price + asking + ARV, TWO comps, photos, inspection/closing dates, occupancy, HOA, original purchase agreement. Terms/split disclosed after submission — pin them down before sending a deal." },
+      { name: "Opendoor (iBuyer)", type: "ibuyer", website: "https://www.opendoor.com/", buyBox: "HOUSES ONLY (no land) — instant cash offers in ~50 metros incl TX/TN/FL", notes: "Dispo play: request an instant offer with the property address on any HOUSE deal — free price floor + potential instant exit. Offer in minutes-days, flexible close. Not for vacant land." },
+      { name: "Offerpad (iBuyer)", type: "ibuyer", website: "https://www.offerpad.com/", buyBox: "HOUSES ONLY — instant offers, ~25 metros, flexible close dates", notes: "Same play as Opendoor — always pull BOTH offers on house deals and keep the higher as the floor. 3-day close possible. Not for land." },
+      { name: "Orchard (Move First)", type: "ibuyer", website: "https://orchard.com/services/move-first", buyBox: "HOUSES — buy-before-you-sell program, select metros (TX/CO/GA…)", notes: "Less a direct buyer, more a guaranteed-backup-offer + listing model. Useful on novations: their guaranteed offer can backstop a retail listing. Not for land." },
+      { name: "Knock (Bridge Loan)", type: "ibuyer", website: "https://www.knock.com/markets", buyBox: "HOUSES — bridge 'Home Swap' lender, ~75 markets", notes: "NOT a direct buyer — lender enabling buy-before-sell. Keep on file for creative exits where OUR buyer needs bridge financing. Not for land." },
+      { name: "Flyhomes (iBuyer/Brokerage)", type: "ibuyer", website: "https://flyhomes.com/", buyBox: "HOUSES — cash-offer brokerage + buy-before-sell, West-coast heavy", notes: "Cash-offer program via brokerage. Edge case channel for retail-grade house deals. Not for land." },
+    ];
+    let created = 0, existed = 0;
+    for (const b of SEED) {
+      const dup = await db.marketContact.findFirst({ where: { name: b.name } });
+      if (dup) { existed++; continue; }
+      await db.marketContact.create({ data: {
+        name: b.name, type: b.type, category: "distressed", vetStage: "active", status: b.type === "jv_partner" ? "JV Partner" : "iBuyer",
+        website: b.website, phone: (b as { phone?: string }).phone ?? "", email: (b as { email?: string }).email ?? "",
+        buyBox: b.buyBox, notes: b.notes, market: "Nationwide",
+      } });
+      created++;
+    }
+    return NextResponse.json({ ok: true, created, existed });
+  }
+
+  // 💳 Full subscription audit (?subsaudit=1): every software/dues P&L line
+  // from the last few months, grouped by label with the latest actuals.
+  if (url.searchParams.get("subsaudit") === "1") {
+    const months = [...new Set((await db.expenseLine.findMany({ select: { month: true }, orderBy: { month: "desc" }, take: 500 })).map((r) => r.month))].slice(0, 4);
+    const rows = await db.expenseLine.findMany({ where: { month: { in: months }, category: { in: ["software", "dues", "controllable"] } }, orderBy: [{ month: "desc" }] });
+    const byLabel: Record<string, { months: Record<string, number>; latest: number }> = {};
+    for (const r of rows) {
+      const k = r.label.trim();
+      byLabel[k] = byLabel[k] ?? { months: {}, latest: 0 };
+      byLabel[k].months[r.month] = r.actual;
+      if (!byLabel[k].latest) byLabel[k].latest = r.actual;
+    }
+    return NextResponse.json({ ok: true, monthsCovered: months, subs: byLabel });
+  }
+
   // 📝 PandaDoc event log (?pdlog=1): the last pandadoc timeline rows —
   // shows exactly why a draft button "did nothing".
   if (url.searchParams.get("pdlog") === "1") {
