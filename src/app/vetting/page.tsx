@@ -32,6 +32,18 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
     db.marketContact.findMany({
       where: { archivedAt: null, vetStage: { notIn: ["vetted", "active"] } },
       orderBy: [{ vetArea: "asc" }, { name: "asc" }],
+      // speed (Sharyn 2026-10-08): MarketContact is ~55 columns; this page uses
+      // ~35 — skipping notes/buyBox/contact/audit stamps cuts the payload hard
+      // and keeps it flat as the pool grows.
+      select: {
+        id: true, name: true, website: true, links: true, email: true, phone: true, phone2: true,
+        buyBoxAreas: true, outreachLog: true, lastContacted: true, nextFollowUp: true,
+        vetStage: true, vetStatus: true, igHandle: true, touchOn: true, vetArea: true,
+        category: true, type: true, title: true, company: true, preferredContact: true,
+        dealType: true, buildType: true, closingSpeed: true, priceRange: true, minLotSize: true,
+        propertyType: true, minBeds: true, maxBaths: true, conditionTolerance: true, needsView: true,
+        marketDetails: true, decisionMaker: true, buyingFrequency: true, bestContact: true, companySize: true,
+      },
     }),
     db.marketContact.count({ where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } } }),
     db.marketContact.findMany({ where: { archivedAt: { not: null } }, orderBy: { archivedAt: "desc" }, take: 120, select: { id: true, name: true, archivedAt: true, archivedBy: true, archiveReason: true } }),
@@ -57,12 +69,16 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
   // ONLY position === "dispositions" — a mismatched Position fails silently (the
   // Sharyn 9/22 report), so this strip makes the gate visible to the rep.
   const myCredits = me
-    ? {
-        added: await db.marketContact.count({ where: { addedById: me.id, addedOn: today } }),
-        box: await db.marketContact.count({ where: { boxById: me.id, boxOn: today } }),
-        vetted: await db.marketContact.count({ where: { vettedById: me.id, vettedOn: today } }),
-        touched: await db.marketContact.count({ where: { touchById: me.id, touchOn: today } }),
-      }
+    ? await (async () => {
+        // one parallel batch instead of 4 sequential round-trips (speed pass 2026-10-08)
+        const [added, box, vetted, touched] = await Promise.all([
+          db.marketContact.count({ where: { addedById: me.id, addedOn: today } }),
+          db.marketContact.count({ where: { boxById: me.id, boxOn: today } }),
+          db.marketContact.count({ where: { vettedById: me.id, vettedOn: today } }),
+          db.marketContact.count({ where: { touchById: me.id, touchOn: today } }),
+        ]);
+        return { added, box, vetted, touched };
+      })()
     : null;
   const creditsToScorecard = me?.position === "dispositions";
 

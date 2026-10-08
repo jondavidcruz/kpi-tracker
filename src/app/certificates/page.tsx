@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 // 🎓 Team certificates (Jon 2026-10-08): printable recognition for completing
 // the full A→Z process in their seat — part of the trial-period ladder. New
 // acquisitions reps earn it by getting a contract signed on their own.
-const CERTS: Array<{ first: string; title: string; track: string; criteria: string }> = [
+// certifiedOn: the day they actually earned it (Jon can correct any of these —
+// defaults to the issue date). started: real start date with the company when
+// known; otherwise falls back to their War Room account date.
+const CERTS: Array<{ first: string; title: string; track: string; criteria: string; started?: string; certifiedOn?: string }> = [
   { first: "michelle", title: "Certified Acquisitions Specialist", track: "Acquisitions", criteria: "Mastered the full seller journey — first call to signed contract" },
   { first: "nick", title: "Certified Acquisitions Specialist", track: "Acquisitions", criteria: "Completed the A→Z acquisitions process independently — first contract signed solo" },
   { first: "sharyn", title: "Certified Dispositions Specialist", track: "Dispositions", criteria: "Mastered the 24-hour dispo machine — comp to closed" },
@@ -46,8 +49,14 @@ export default async function CertificatesPage() {
               <div className="mx-auto mt-3 h-px w-48 bg-amber-700/40" />
               <div className="mt-4 text-lg font-bold text-amber-900">{c.title}</div>
               <div className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-600">{c.criteria} — earned through {tenure(u.createdAt)} of proven work on the Freedom Offers {c.track} team.</div>
+              <div className="mt-4 flex items-center justify-center gap-6 text-[11px] font-semibold text-slate-500">
+                <span>📅 Joined Freedom Offers · {c.started ?? u.createdAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                <span className="text-amber-700/50">✦</span>
+                <span>🏅 Certified · {c.certifiedOn ?? today}</span>
+              </div>
               <div className="mt-10 flex items-end justify-between px-6">
                 <div className="text-left">
+                  <div className="-mb-1 text-3xl text-slate-800" style={{ fontFamily: '"Snell Roundhand", "Savoye LET", "Brush Script MT", "Segoe Script", cursive', transform: "rotate(-2deg)" }}>Jonathan Cruz</div>
                   <div className="h-px w-44 bg-slate-400" />
                   <div className="mt-1 text-[11px] font-semibold text-slate-500">Jonathan Cruz · President, Freedom Offers LLC</div>
                 </div>

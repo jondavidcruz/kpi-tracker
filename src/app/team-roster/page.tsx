@@ -5,6 +5,7 @@ import { getAllUsers } from "@/lib/data";
 import { getRevenueByUser, tierFor, REVENUE_LADDER } from "@/lib/roster-revenue";
 import { saveRevAdjustAction } from "@/app/actions";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
+import { readCommissionPlans } from "@/lib/commissions";
 import { db } from "@/lib/db";
 import { todayStr } from "@/lib/date";
 import { getSettings } from "@/lib/data";
@@ -67,10 +68,8 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
   for (const d of docs) { const arr = docsByUser.get(d.userId) ?? []; arr.push(d); docsByUser.set(d.userId, arr); }
   const fmtSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-  // commission goals/structures (Resource __commissions__)
-  const commRow = await db.resource.findFirst({ where: { category: "__commissions__" } }).catch(() => null);
-  let commGoals: Record<string, { goalMonthly: number; structure: string }> = { nick: { goalMonthly: 5000, structure: "" }, michelle: { goalMonthly: 500, structure: "" } };
-  try { if (commRow?.description) commGoals = JSON.parse(commRow.description); } catch { /* defaults */ }
+  // commission plans (real structures from the signed agreements — C-suite view)
+  const commPlans = await readCommissionPlans();
 
   return (
     <div className="space-y-5">
@@ -86,19 +85,21 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
       {/* 🎯 Commission goals (Jon 2026-10-08): each rep's monthly target +
           their contract structure; MTD math activates once structures are set. */}
       <Card className="p-4">
-        <div className="mb-2 text-sm font-extrabold text-slate-800">🎯 Commission goals</div>
+        <div className="mb-2 text-sm font-extrabold text-slate-800">🎯 Commission plans <span className="font-normal text-slate-400">(from the signed agreements — C-suite only)</span></div>
         <div className="grid gap-2 sm:grid-cols-2">
-          {Object.entries(commGoals).map(([first, g]) => (
+          {Object.entries(commPlans).map(([first, g]) => (
             <div key={first} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
               <div className="flex items-baseline gap-2">
                 <span className="text-sm font-bold capitalize text-slate-800">{first}</span>
-                <span className="ml-auto text-lg font-extrabold text-slate-900">${"{"}g.goalMonthly.toLocaleString(){"}"}<span className="text-[10px] font-semibold text-slate-400">/mo goal</span></span>
+                <span className="ml-auto text-lg font-extrabold text-slate-900">${g.goalMonthly.toLocaleString()}<span className="text-[10px] font-semibold text-slate-400">/mo goal</span></span>
               </div>
-              <div className="mt-1 text-[11px] text-slate-500">{g.structure || "⚠️ structure not set — tell Claude the commission terms (e.g. \"$500 per signed contract\" or \"10% of assignment fee\") and on-track math turns on."}</div>
+              <div className="mt-1 text-[11px] font-semibold text-slate-600">{g.base || "No base — commission only"}</div>
+              <div className="mt-1 text-[11px] text-slate-500">💵 {g.structure}</div>
+              <div className="mt-0.5 text-[11px] text-slate-400">⏱ {g.payout}</div>
             </div>
           ))}
         </div>
-        <div className="mt-2 text-[10px] text-slate-400">Signed agreements: upload each PDF on the member's row below (HR docs) — they stay in the private Drive folder.</div>
+        <div className="mt-2 text-[10px] text-slate-400">Each rep sees only their own plan (on their KPI entry page). Signed agreements: upload each PDF on the member&apos;s row below (HR docs).</div>
       </Card>
 
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}

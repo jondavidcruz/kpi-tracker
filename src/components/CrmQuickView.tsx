@@ -24,6 +24,7 @@ type Payload = {
   snippets: Array<{ id: string; name: string; kind: string; subject?: string; body: string }>;
   smsHistory: Array<{ body: string; inbound: boolean; at: string }>;
   emailHistory: Array<{ body: string; inbound: boolean; at: string; actor?: string }>;
+  underwrites: Array<{ tab: string; mao: number; fee: number; confidence: number; by: string; at: string }>;
   contact: { id: string; name: string; phone: string; altPhone: string; email: string; altEmail: string; address: string; pinnedNote: string; tags: string };
   tasks: Array<{ id: string; title: string; due: string }>;
   appts: Array<{ id: string; title: string; at: string; withWho: string }>;
@@ -222,6 +223,7 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                 {CRM_FORMS.map((f) => tab === `form:${f.key}` && (
                   <form key={f.key} action={submit(saveCrmFormAction, { oppId: d.id, contactId: d.contact.id, formKey: f.key })} className="space-y-3">
                     <div className="text-sm font-extrabold text-slate-800">{f.emoji} {f.name}</div>
+                    {f.key === "financial" && <UnderwriteBlock d={d} />}
                     {f.fields.map((fld) => {
                       const cur = d.formData?.[f.key]?.[fld.key];
                       if (fld.type === "select") return (
@@ -349,5 +351,82 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
         )}
       </div>
     </>
+  );
+}
+
+// 🧮 Financials & Offer: the lead's saved underwriting (matched by address),
+// what we offered vs what the seller said, and a negotiation playbook when
+// the answer was no (Jon 2026-10-08). All data already in the payload — zero
+// extra fetches.
+const UW_TABS: Record<string, string> = {
+  cash: "💵 Cash", novation: "📝 Novation", creative: "🎨 Creative",
+  listing: "🏷 Listing", flip: "🔨 Flip", cash_land: "🏞 Land (Cash)",
+  developer: "🚧 Developer", note_land: "📜 Land Note",
+};
+function UnderwriteBlock({ d }: { d: Payload }) {
+  const uw = d.underwrites ?? [];
+  const fin = (d.formData?.financial ?? {}) as Record<string, string | string[]>;
+  const num = (s: unknown) => parseFloat(String(s ?? "").replace(/[^0-9.]/g, "")) || 0;
+  const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  // latest underwrite per exit strategy
+  const latest = new Map<string, (typeof uw)[number]>();
+  for (const u of uw) if (!latest.has(u.tab)) latest.set(u.tab, u);
+  const bestMao = Math.max(0, ...uw.map((u) => u.mao));
+  const ourOffer = num(fin.ourOffer);
+  const sellerNum = num(fin.sellerNumber) || num((d.formData?.discovery as Record<string, string | string[]> | undefined)?.wants);
+  const resp = String(fin.sellerResponse ?? "");
+  const rejected = resp.includes("Rejected") || resp.includes("Countered");
+  const addr = d.contact.address || d.title;
+  const calcHref = `/underwriting?address=${encodeURIComponent(addr)}`;
+
+  // negotiation playbook (rule-based, uses the real numbers on this lead)
+  const tips: string[] = [];
+  if (rejected) {
+    const gap = sellerNum && ourOffer ? sellerNum - ourOffer : 0;
+    if (gap > 0) tips.push(`Gap is ${money(gap)} (they want ${money(sellerNum)}, we offered ${money(ourOffer)}). Reframe to their NET: on the open market they lose ~6% commissions + concessions — our number is net, theirs isn't.`);
+    const nov = latest.get("novation");
+    if (nov && sellerNum && nov.mao >= sellerNum) tips.push(`Our Novation number (${money(nov.mao)}) covers their ask — pivot: "What if I could get you ${money(sellerNum)}, we just need a little more time to close?"`);
+    const cre = latest.get("creative");
+    if (cre && sellerNum && cre.mao >= sellerNum) tips.push(`Creative terms reach ${money(cre.mao)} — ask: "If the price were right, would you be open to receiving it over time instead of all at once?"`);
+    if (!tips.length && sellerNum && bestMao && sellerNum > bestMao) tips.push(`They're ${money(sellerNum - bestMao)} above our best number (${money(bestMao)}). Don't chase — ask "What would you do with the proceeds?" to surface the real need, then anchor with assessed value + sold comps.`);
+    tips.push("Ask what they'd NET from their best alternative, then go quiet — let them fill the silence.");
+    tips.push("No deal today ≠ dead: set a follow-up, most land sellers say yes between day 30 and 120.");
+  }
+
+  return (
+    <div className="space-y-2 rounded-xl bg-indigo-50/50 p-3 ring-1 ring-indigo-100">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-extrabold text-indigo-900">🧮 Underwriting on file</span>
+        <a href={calcHref} target="_blank" className="ml-auto rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">Open calculator ↗</a>
+      </div>
+      {latest.size === 0 ? (
+        <div className="text-[11px] text-slate-500">No saved underwriting matches this address yet — run it in the <a href={calcHref} target="_blank" className="font-bold text-indigo-700 underline">calculator</a> (address pre-filled) and the MAOs appear here automatically.</div>
+      ) : (
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+          {[...latest.values()].map((u) => (
+            <a key={u.tab} href={calcHref} target="_blank" className="rounded-lg bg-white p-2 ring-1 ring-indigo-100 hover:ring-indigo-300">
+              <div className="text-[10px] font-bold text-slate-500">{UW_TABS[u.tab] ?? u.tab}</div>
+              <div className="text-sm font-extrabold text-slate-900">{money(u.mao)} <span className="text-[9px] font-semibold text-slate-400">MAO</span></div>
+              <div className="text-[10px] text-slate-400">fee {money(u.fee)} · {u.confidence}% conf · {u.by.split(" ")[0]} {new Date(u.at).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}</div>
+            </a>
+          ))}
+        </div>
+      )}
+      {(ourOffer > 0 || sellerNum > 0 || resp) && (
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          {ourOffer > 0 && <span className="rounded-lg bg-white px-2 py-1 font-bold text-slate-700 ring-1 ring-slate-200">Our offer: {money(ourOffer)}</span>}
+          {sellerNum > 0 && <span className="rounded-lg bg-white px-2 py-1 font-bold text-slate-700 ring-1 ring-slate-200">Seller: {money(sellerNum)}</span>}
+          {resp && <span className={`rounded-lg px-2 py-1 font-bold ring-1 ${resp.includes("Accepted") ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : rejected ? "bg-red-50 text-red-700 ring-red-200" : "bg-white text-slate-600 ring-slate-200"}`}>{resp}</span>}
+        </div>
+      )}
+      {tips.length > 0 && (
+        <div className="rounded-lg bg-white p-2.5 ring-1 ring-amber-200">
+          <div className="text-[11px] font-extrabold text-amber-800">🤝 Negotiation playbook — they said no. Try this:</div>
+          <ul className="mt-1 list-disc space-y-1 pl-4 text-[11px] text-slate-600">
+            {tips.map((t, i) => <li key={i}>{t}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

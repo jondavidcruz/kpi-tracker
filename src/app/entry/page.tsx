@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { saveDay, addRepReason, setDayFocus, refreshCrmToday, importTeamLeads } from "@/app/actions";
-import { getCurrentUser, isManager, isOwner, tracksSpeedTest } from "@/lib/auth";
+import { saveDay, addRepReason, setDayFocus, refreshCrmToday } from "@/app/actions";
+import { getCurrentUser, isManager, canAccessCSuite, tracksSpeedTest } from "@/lib/auth";
+import { readCommissionPlans, planForUser } from "@/lib/commissions";
 import { db } from "@/lib/db";
 import EntryForm, { type EntryGroup } from "@/components/EntryForm";
 import SpeedTestCard from "@/components/SpeedTestCard";
@@ -104,6 +105,8 @@ export default async function EntryPage({
   // outreach for the day. The focus decides which KPIs show + how they're scored.
   const isDispo = rep?.position === "dispositions";
   const standup = rep && isDispo ? await db.standup.findUnique({ where: { userId_date: { userId: rep.id, date } } }) : null;
+  // commission plan for the selected rep (render-gated to the rep themselves + C-suite)
+  const commPlan = rep ? planForUser(await readCommissionPlans(), rep.name) : null;
   const focus: "traditional" | "developer" = standup?.focus === "developer" ? "developer" : "traditional";
 
   // Decide which KPIs to show (and which dialer KPIs to grey out on a dev day).
@@ -120,11 +123,15 @@ export default async function EntryPage({
     mutedKpis = mutedKpis.filter((k) => !isKpiHiddenForRep(rep.name, k.key));
   }
 
+  // Goals are per-rep now (e.g. Nick 60 dials vs Michelle 140), so any
+  // "Goal 140/day"-style copy baked into a shared definition is wrong for
+  // someone — strip it and let the personalized goal chip speak instead.
+  const stripGoalCopy = (s: string) => s.replace(/\s*\(?goal:?\s[^.;)]*\d[^.;)]*\)?[.;]?/gi, "").replace(/\s{2,}/g, " ").trim();
   const toItem = (k: (typeof roleKpis)[number]) => ({
     kpiId: k.id,
     kpiKey: k.key,
     name: k.name,
-    definition: k.definition || undefined,
+    definition: stripGoalCopy(k.definition || "") || undefined,
     noteLabel: k.key === "acq_signed" ? "type of contract" : undefined,
     noteOptions: k.key === "acq_signed" ? ["Assignment", "Novation", "Sub2", "Seller Finance"] : undefined,
     initialNote: k.key === "acq_signed" ? (notes.get(`${k.id}|${rep?.id ?? ""}`) ?? "") : undefined,
@@ -261,35 +268,6 @@ export default async function EntryPage({
         </div>
       )}
 
-      {/* Owner-only bulk lead import — record a batch we uploaded ourselves (e.g. a PPL list
-          we didn't buy through the provider) straight to the team KPI, any date, no rep card. */}
-      {isOwner(me) && (
-        <Card className="border-l-4 border-brand-gold p-4">
-          <div className="text-sm font-bold text-slate-800">📥 Bulk lead import <span className="font-normal text-slate-400">(owner)</span></div>
-          <p className="mt-0.5 text-xs text-slate-500">Uploaded a batch of leads yourself instead of buying through the provider? Record it here — writes straight to the team KPI for any date, no rep card needed.</p>
-          <form action={importTeamLeads} className="mt-3 flex flex-wrap items-end gap-3">
-            <label className="text-xs font-semibold text-slate-500">Lead type
-              <select name="kpiKey" defaultValue="ppl_leads" className="mt-0.5 block rounded-md border border-slate-300 px-3 py-1.5 text-sm">
-                {teamDaily.filter((k) => k.key !== "text_responses").map((k) => <option key={k.id} value={k.key}>{k.emoji} {k.name}</option>)}
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-slate-500">Date
-              <input type="date" name="date" defaultValue={date} className="mt-0.5 block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-            </label>
-            <label className="text-xs font-semibold text-slate-500"># of leads
-              <input type="number" name="count" min="0" step="1" placeholder="215" required className="mt-0.5 block w-28 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-            </label>
-            <label className="text-xs font-semibold text-slate-500">How
-              <select name="mode" defaultValue="set" className="mt-0.5 block rounded-md border border-slate-300 px-3 py-1.5 text-sm">
-                <option value="set">Set to</option>
-                <option value="add">Add to existing</option>
-              </select>
-            </label>
-            <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Record leads</button>
-          </form>
-        </Card>
-      )}
-
       {rep && isDispo && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
           <div>
@@ -379,6 +357,23 @@ export default async function EntryPage({
           )}
           <EntryForm groups={groups} date={date} enteredBy={me?.name ?? rep?.name ?? "team"} action={saveDay} />
 
+          {/* 💰 Commission plan (Jon 2026-10-08): PRIVATE — rendered only when the
+              viewer IS this rep, or is C-suite. Nobody else ever sees these numbers. */}
+          {rep && me && (me.id === rep.id || canAccessCSuite(me)) && commPlan && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-extrabold text-slate-800">💰 Your commission plan</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600">private — only you &amp; leadership see this</span>
+                <span className="ml-auto text-base font-extrabold text-slate-900">${commPlan.goalMonthly.toLocaleString()}<span className="text-[10px] font-semibold text-slate-400">/mo goal</span></span>
+              </div>
+              <div className="mt-1.5 space-y-0.5 text-xs text-slate-600">
+                <div>🏦 {commPlan.base || "No base — commission only: every closed deal pays you directly."}</div>
+                <div>💵 {commPlan.structure}</div>
+                <div className="text-slate-400">⏱ {commPlan.payout}</div>
+              </div>
+            </div>
+          )}
+
           {/* 📖 Why these numbers — the reasoning behind every goal (Jon 2026-10-07) */}
           {rep && shown.length > 0 && (
             <details className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -389,7 +384,7 @@ export default async function EntryPage({
                   return (
                     <div key={k.id} className="rounded-lg bg-white px-3 py-2 text-xs ring-1 ring-slate-100">
                       <span className="font-bold text-slate-700">{k.emoji} {k.name}{g != null ? ` — goal ${k.unit === "duration" ? `${Math.round(g / 60)} min` : g}` : ""}:</span>{" "}
-                      <span className="text-slate-500">{k.definition}</span>
+                      <span className="text-slate-500">{stripGoalCopy(k.definition || "")}</span>
                     </div>
                   );
                 })}

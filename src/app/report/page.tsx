@@ -15,7 +15,6 @@ import { KpiLabel } from "@/lib/kpiIcons";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import RepRoleBars from "@/components/RepRoleBars";
-import CrmActivityStrip from "@/components/CrmActivityStrip";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -34,7 +33,8 @@ export default async function ReportPage({
   const settings = await getSettings();
   const today = sp.date ?? todayStr(settings.orgTimezone);
   // Day / week / month view; ?prev=1 shows the previous one (yesterday / last week / last month).
-  const range = sp.range === "day" || sp.range === "month" ? sp.range : "week";
+  // Default = DAY (Jon 2026-10-08): the report opens on today's numbers; week/month are a click away.
+  const range = sp.range === "week" || sp.range === "month" ? sp.range : "day";
   const prev = sp.prev === "1" || sp.week === "last"; // ?week=last kept for old links
   let wk: { start: string; end: string; label: string };
   if (range === "day") {
@@ -167,7 +167,7 @@ export default async function ReportPage({
       {sp.synced && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Synced from REI Reply — KPIs are current.</div>}
 
       {/* CRM activity — auto-pulled through the day; managers only */}
-      {manager && <CrmActivityStrip />}
+      {/* CRM activity strip removed (Jon 2026-10-08): KPIs now auto-feed each member's numbers, so this was double. */}
 
       {/* ===== KPIs at a glance — three story bands (lead $ → responses → offer trail) ===== */}
       <section>
@@ -239,27 +239,15 @@ export default async function ReportPage({
             const activityKpis = roleKpis.filter((k) => k.category !== "green");
             return (
               <div key={pos.key} className="space-y-2">
-                {moneyKpis.length > 0 && (
-                  <RepRoleBars
-                    emoji="💰"
-                    label={`${pos.label} — Money movers`}
-                    reps={roleReps}
-                    kpis={moneyKpis}
-                    cell={(repId, k) => {
-                      const val = sums.get(`${k.id}|${repId}`) ?? 0;
-                      const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;
-                      const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdays : null;
-                      const pct = weeklyGoal ? Math.min(100, (val / weeklyGoal) * 100) : null;
-                      const status = weeklyGoal ? (val >= weeklyGoal ? "hit" : val >= weeklyGoal * 0.7 ? "close" : "miss") : "tracked";
-                      return { value: val, pct, status, goalText: weeklyGoal ? `/ ${formatValue(k.unit as Unit, weeklyGoal)} ${rangeNoun === "day" ? "day" : rangeNoun}` : undefined };
-                    }}
-                  />
-                )}
+                {/* one card per rep — 💰 money + ⚡ activity color-coded INSIDE it,
+                    so nobody's name is listed twice (Jon 2026-10-08) */}
                 <RepRoleBars
-                  emoji="⚡"
-                  label={`${pos.label} — Activity`}
+                  label={pos.label}
                   reps={roleReps}
-                  kpis={activityKpis}
+                  sections={[
+                    { emoji: "💰", name: "Money movers", tone: "money", kpis: moneyKpis },
+                    { emoji: "⚡", name: "Activity", tone: "activity", kpis: activityKpis },
+                  ]}
                   cell={(repId, k) => {
                     const val = sums.get(`${k.id}|${repId}`) ?? 0;
                     const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;

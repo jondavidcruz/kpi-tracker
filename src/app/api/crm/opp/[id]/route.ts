@@ -28,6 +28,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     db.crmEvent.findMany({ where: { contactId: opp.contactId, kind: "sms" }, orderBy: { at: "desc" }, take: 15 }),
     db.crmEvent.findMany({ where: { contactId: opp.contactId, kind: "email" }, orderBy: { at: "desc" }, take: 8 }),
   ]);
+  // Saved underwriting for THIS property (matched by address) — powers the
+  // Financials & Offer tab: MAO per exit + offer-vs-accepted + negotiation tips.
+  const { readUnderwrites } = await import("@/app/actions");
+  const { addrMatch } = await import("@/lib/underwrite-history");
+  const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
+  const leadAddr = opp.contact.address || String(fd.discovery?.address ?? "") || opp.title;
+  const underwrites = (await readUnderwrites().catch(() => []))
+    .filter((u) => u.address && addrMatch(u.address, leadAddr))
+    .slice(0, 8)
+    .map((u) => ({ tab: u.tab, mao: u.mao, fee: u.fee, confidence: u.confidence, by: u.by, at: u.at }));
+
   const clean = (b: string) => stripHtml(b).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400);
   const smsHistory = [...smsEvents].reverse().map((e) => ({ body: clean(e.body), inbound: stripHtml(e.body).startsWith("⬅"), at: e.at.toISOString() }));
   const emailHistory = [...emailEvents].reverse().map((e) => ({ body: clean(e.body), inbound: stripHtml(e.body).startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }));
@@ -39,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       canSms: comms.sms, canEmail: comms.email,
     },
     snippets: snippets.map((s) => ({ id: s.id, name: s.name, kind: s.kind, subject: s.subject, body: s.body })),
-    smsHistory, emailHistory,
+    smsHistory, emailHistory, underwrites,
     followers: followersList,
     reps: (await db.user.findMany({ where: { active: true }, select: { name: true }, orderBy: { name: "asc" } })).map((u) => u.name),
     id: opp.id, title: opp.title, stage: opp.stage, pipeline: opp.pipeline || "War Room", assignedTo: opp.assignedTo,

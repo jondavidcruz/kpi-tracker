@@ -71,6 +71,11 @@ export const CRM_FORMS: CrmForm[] = [
       { key: "behind", label: "Behind on payments?", type: "select", options: ["No", "Yes — under 3 months", "Yes — 3+ months", "In foreclosure"] },
       { key: "creativeTerms", label: "Creative terms they'd take", type: "textarea", hint: "Price if we pay over time? Down payment needed? Monthly?" },
       { key: "bottomLine", label: "Bottom-line cash number $", type: "text" },
+      // offer outcome (Jon 2026-10-08): track what WE offered vs what the seller
+      // said — powers the negotiation playbook + accepted-vs-offered view.
+      { key: "ourOffer", label: "Our offer $", type: "text", hint: "What we actually offered (from the underwriting above)" },
+      { key: "sellerResponse", label: "Seller response to our offer", type: "select", options: ["— not offered yet", "✅ Accepted", "🔁 Countered", "❌ Rejected", "🤔 Thinking about it"] },
+      { key: "sellerNumber", label: "Seller's counter / accepted $", type: "text" },
       { key: "confidence", label: "Deal confidence", type: "select", options: ["🔥 Hot — ready now", "Warm — needs the right number", "Cold — long nurture"] },
     ],
   },

@@ -2,7 +2,7 @@
 // Acquisitions CRM Kanban — same battle-tested HTML5 DnD as DealKanban
 // (set dataTransfer payload, defer state past dragstart). Click a card →
 // its opportunity page.
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useLayoutEffect, useState, useTransition } from "react";
 import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction } from "@/app/crm/actions";
 import { STAGE_PROB } from "@/lib/crm-shared";
 
@@ -34,6 +34,12 @@ type FieldKey = (typeof FIELDS)[number][0];
 
 export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean }) {
   const [cards, setCards] = useState(initial);
+  // THE 27-vs-112 bug (Jon 2026-10-08): this component stays mounted when you
+  // switch pipeline tabs, so the drag-and-drop card state kept showing the
+  // PREVIOUS pipeline's cards while the columns changed — the catch-all then
+  // dumped all of them into column 1 (112 = Nick's whole board capped at 60/col).
+  // Resync local card state whenever the server sends a fresh set.
+  useEffect(() => { setCards(initial); }, [initial]);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -68,7 +74,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     setQuick(null); setQa({ title: "", due: "", when: "", tag: "", sms: "" });
   };
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  useEffect(() => {
+  // useLayoutEffect = restore the saved collapse state BEFORE first paint, so
+  // lanes don't flash open then bounce shut on page load (Jon 2026-10-08).
+  useLayoutEffect(() => {
     try { const raw = localStorage.getItem("fo_crm_collapsed"); if (raw) setCollapsed(JSON.parse(raw)); } catch { /* none */ }
   }, []);
   const toggleCollapse = (k: string) => {

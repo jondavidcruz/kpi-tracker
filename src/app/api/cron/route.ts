@@ -816,6 +816,58 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, dbCounts: out, pipelineDefinitions: plDef });
   }
 
+  // 📈 Perf & data-growth watchdog (?perfsnap=1, daily cron — Jon 2026-10-08:
+  // "the system has to be lightning fast and protected 100%"). Snapshots row
+  // counts, side-store sizes and two live query timings; keeps a 90-day trend
+  // in __perf_snapshots__ and drops a 🛠 Jon task when something balloons.
+  if (url.searchParams.get("perfsnap") === "1") {
+    const t0 = Date.now();
+    const [opps, contacts, events, tasksN, appts, mkt, touches, resources] = await Promise.all([
+      db.crmOpportunity.count(), db.crmContact.count(), db.crmEvent.count(), db.crmTask.count(),
+      db.crmAppointment.count(), db.marketContact.count(), db.buyerTouch.count(),
+      db.resource.findMany({ where: { category: { startsWith: "__" } }, select: { category: true, description: true } }),
+    ]);
+    const tCounts = Date.now() - t0;
+    // live timing probes: the two pages the team actually feels
+    const tb0 = Date.now();
+    await db.crmOpportunity.groupBy({ by: ["stage"], where: { archivedAt: null }, _count: { _all: true } });
+    const tBoard = Date.now() - tb0;
+    const tv0 = Date.now();
+    await db.marketContact.findMany({ where: { archivedAt: null, vetStage: { notIn: ["vetted", "active"] } }, select: { id: true }, take: 2000 });
+    const tVet = Date.now() - tv0;
+    const stores: Record<string, number> = {};
+    let storeTotal = 0;
+    for (const r of resources) { const kb = Math.round((r.description?.length ?? 0) / 1024); stores[r.category] = (stores[r.category] ?? 0) + kb; storeTotal += kb; }
+    const snap = { at: new Date().toISOString(), rows: { opps, contacts, events, tasks: tasksN, appts, mkt, touches }, storeKb: storeTotal, bigStores: Object.fromEntries(Object.entries(stores).filter(([, v]) => v > 100)), ms: { counts: tCounts, board: tBoard, vetting: tVet } };
+    const PERF_CAT = "__perf_snapshots__";
+    const row = await db.resource.findFirst({ where: { category: PERF_CAT } });
+    let hist: Array<typeof snap> = [];
+    try { hist = row?.description ? JSON.parse(row.description) : []; } catch { hist = []; }
+    const weekAgo = hist.find((h) => Date.now() - new Date(h.at).getTime() > 6.5 * 86400_000);
+    hist.unshift(snap); hist = hist.slice(0, 90);
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(hist) } });
+    else await db.resource.create({ data: { title: "perf-snapshots", category: PERF_CAT, url: "", description: JSON.stringify(hist) } });
+    // alarms → 🛠 Jon task (dup-guarded)
+    const alarms: string[] = [];
+    if (tBoard > 1500) alarms.push(`CRM board count query took ${tBoard}ms`);
+    if (tVet > 1500) alarms.push(`Buyer Research query took ${tVet}ms`);
+    const bigStore = Object.entries(stores).find(([, v]) => v > 800);
+    if (bigStore) alarms.push(`side-store ${bigStore[0]} is ${bigStore[1]}KB — needs a trim/offload`);
+    if (weekAgo) {
+      for (const [k, v] of Object.entries(snap.rows)) {
+        const old = (weekAgo.rows as Record<string, number>)[k] ?? 0;
+        if (old > 500 && v > old * 2) alarms.push(`${k} doubled in a week (${old} → ${v})`);
+      }
+    }
+    if (alarms.length) {
+      const title = `🛠 Perf watchdog: ${alarms[0]}${alarms.length > 1 ? ` (+${alarms.length - 1} more)` : ""}`;
+      const jon = await db.user.findFirst({ where: { active: true, name: { startsWith: "Jon", mode: "insensitive" } }, select: { name: true } });
+      const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } });
+      if (!dup) await db.crmTask.create({ data: { oppId: "", contactId: "", title, due: new Date().toISOString().slice(0, 10), assignedTo: jon?.name ?? "Jon Cruz", createdBy: "perf-watchdog" } });
+    }
+    return NextResponse.json({ ok: true, snap, alarms });
+  }
+
   // 🔑 Service-account info (?gsainfo=1): client_email + the numeric client_id
   // that Google Admin's domain-wide delegation entry must match.
   if (url.searchParams.get("gsainfo") === "1") {
