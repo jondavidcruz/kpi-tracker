@@ -390,6 +390,15 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   const setV = (k: string, val: string) => { setF((p) => ({ ...p, [k]: val })); autoStartTimer(); };
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV(k, e.target.value);
 
+  // CRM "🧮 Underwrite" links pass ?address= — prefill the subject once,
+  // without starting the comp timer (no edit happened yet).
+  useEffect(() => {
+    try {
+      const addr = new URLSearchParams(window.location.search).get("address");
+      if (addr && !f.subject) setF((p) => (p.subject ? p : { ...p, subject: addr }));
+    } catch { /* no URL access */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Additional-cost rows (cash-for-keys, eviction, liens…) — 1 by default, "+ add" for more.
   const [aExtraN, setAExtraN] = useState(1);
   const [nExtraN, setNExtraN] = useState(1);
