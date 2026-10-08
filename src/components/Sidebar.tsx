@@ -46,7 +46,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
 };
 
 export default function Sidebar({
-  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions, officeMeetLink, mondayMeetLink, navOrder,
+  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions, dueTasks = 0, officeMeetLink, mondayMeetLink, navOrder,
 }: {
   name: string;
   manager: boolean;
@@ -56,6 +56,7 @@ export default function Sidebar({
   timecard: boolean;
   csuite: boolean;
   training: boolean;
+  dueTasks?: number;
   allowedPaths?: string[] | null;
   hiddenNav?: string[];
   newTickets: number;
@@ -82,7 +83,7 @@ export default function Sidebar({
     { label: "Acquisitions", items: [
       { href: "/crm", label: "Seller CRM", Icon: Phone },
       { href: "/crm/conversations", label: "Conversations", Icon: MessagesSquare },
-      { href: "/crm/tasks", label: "Tasks", Icon: ListChecks },
+      { href: "/crm/tasks", label: "Tasks", Icon: ListChecks, badge: dueTasks },
       { href: "/crm/contacts", label: "Contacts", Icon: Contact },
       { href: "/crm/calendar", label: "Calendar", Icon: CalendarDays },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },

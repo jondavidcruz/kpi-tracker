@@ -48,10 +48,13 @@ export default async function AppShell({ children }: { children: React.ReactNode
   const csuite = canAccessCSuite(me); // C-Suite group — Jon, Enrico, Viktoriia only
   const trainFirst = me.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   const training = manager || ["michelle", "marie", "sharyn"].includes(trainFirst); // can view the Training Portal
-  const [newTickets, newSuggestions, openOffboarding] = await Promise.all([
+  const todayYmd = new Date().toISOString().slice(0, 10);
+  const [newTickets, newSuggestions, openOffboarding, dueTasks] = await Promise.all([
     manager ? db.ticket.count({ where: { status: "new" } }) : Promise.resolve(0),
     admin ? db.suggestion.count({ where: { status: "proposed" } }) : Promise.resolve(0),
     manager ? db.offboarding.findFirst({ where: { completedAt: null }, include: { _count: { select: { tasks: { where: { done: false } } } } } }) : Promise.resolve(null),
+    // GHL-style red badge: MY open CRM tasks due today or overdue
+    db.crmTask.count({ where: { doneAt: null, due: { not: "", lte: todayYmd }, assignedTo: { equals: me.name, mode: "insensitive" } } }).catch(() => 0),
   ]);
 
   // Meeting quick-links pinned at the top of the sidebar (replaced the Daily
@@ -105,7 +108,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
         </div>
       )}
       <ThemeToggle />
-      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} navOrder={navOrder} />
+      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} dueTasks={dueTasks} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} navOrder={navOrder} />
       <main className="min-w-0 flex-1">
         <ContentWrap>
           {openOffboarding && (
