@@ -583,6 +583,51 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contactsChecked: contacts.length, messagesScanned: scanned, inserted });
   }
 
+  // ☎️ Twilio audit (?twilioaudit=1): every number on the account with its
+  // 30-day call/text activity — the "which numbers are dead rent" report for
+  // the Telnyx-consolidation decision. Read-only; stores __twilio_audit__.
+  if (url.searchParams.get("twilioaudit") === "1") {
+    const sid = process.env.TWILIO_ACCOUNT_SID, tok = process.env.TWILIO_AUTH_TOKEN;
+    if (!sid || !tok) return NextResponse.json({ ok: false, error: "no Twilio creds" });
+    const auth = "Basic " + Buffer.from(`${sid}:${tok}`).toString("base64");
+    const tw = async (path: string) => fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}${path}`, { headers: { Authorization: auth }, cache: "no-store" }).then((r) => r.json()).catch(() => ({}));
+    const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+    const nums = (await tw("/IncomingPhoneNumbers.json?PageSize=400")) as { incoming_phone_numbers?: Array<{ phone_number?: string; friendly_name?: string }> };
+    const owned = (nums.incoming_phone_numbers ?? []).map((n) => n.phone_number ?? "").filter(Boolean);
+    const act: Record<string, { calls: number; msgs: number; last: string }> = {};
+    for (const n of owned) act[n] = { calls: 0, msgs: 0, last: "" };
+    const bump = (n: string | undefined, kind: "calls" | "msgs", when: string) => {
+      if (!n || !act[n]) return;
+      act[n][kind]++;
+      const d = new Date(when).toISOString().slice(0, 10);
+      if (d > act[n].last) act[n].last = d;
+    };
+    for (let page = 0; page < 3; page++) {
+      const j = (await tw(`/Calls.json?PageSize=1000&Page=${page}&StartTime%3E=${since}`)) as { calls?: Array<{ from?: string; to?: string; start_time?: string }> };
+      for (const c of j.calls ?? []) { bump(c.from, "calls", c.start_time ?? ""); bump(c.to, "calls", c.start_time ?? ""); }
+      if ((j.calls ?? []).length < 1000) break;
+    }
+    for (let page = 0; page < 3; page++) {
+      const j = (await tw(`/Messages.json?PageSize=1000&Page=${page}&DateSent%3E=${since}`)) as { messages?: Array<{ from?: string; to?: string; date_sent?: string }> };
+      for (const m of j.messages ?? []) { bump(m.from, "msgs", m.date_sent ?? ""); bump(m.to, "msgs", m.date_sent ?? ""); }
+      if ((j.messages ?? []).length < 1000) break;
+    }
+    const report = owned.map((n) => ({ number: n, name: (nums.incoming_phone_numbers ?? []).find((x) => x.phone_number === n)?.friendly_name ?? "", ...act[n] }))
+      .sort((a, b) => (a.calls + a.msgs) - (b.calls + b.msgs));
+    const dead = report.filter((r) => r.calls + r.msgs === 0);
+    const summary = {
+      at: new Date().toISOString(), windowDays: 30, totalNumbers: owned.length,
+      estMonthlyRent: Number((owned.length * 1.15).toFixed(2)),
+      deadNumbers: dead.length, deadMonthlyWaste: Number((dead.length * 1.15).toFixed(2)),
+      numbers: report,
+    };
+    const row = await db.resource.findFirst({ where: { category: "__twilio_audit__" } });
+    const description = JSON.stringify(summary);
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "twilio-audit", category: "__twilio_audit__", url: "", description } });
+    return NextResponse.json({ ok: true, ...summary });
+  }
+
   // 📡 Telnyx spend (?telnyxspend=1, daily cron): month-to-date cost from
   // detail records (voice + messaging, covers War Room AND Direct REI lines),
   // current balance, and a straight-line monthly projection → Resource
