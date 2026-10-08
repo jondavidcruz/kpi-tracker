@@ -24,6 +24,7 @@ export const STAGE_PROB: Record<string, number> = {
 };
 
 export const KIND_EMOJI: Record<string, string> = {
+  file: "📎",
   note: "📝", call: "📞", sms: "💬", email: "✉️", stage: "🔀", task: "✅", appt: "📅", system: "✨",
 };
 

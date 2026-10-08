@@ -13,7 +13,7 @@ import { Card, SectionTitle } from "@/components/ui";
 import PageTabs from "@/components/PageTabs";
 import NavOrderBoard from "@/components/NavOrderBoard";
 import KpiOrderBoard from "@/components/KpiOrderBoard";
-import { getCurrentUser, isManager, isAdmin, isOwner } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, isOwner, canAccessCSuite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ export default async function AdminPage({
 
   // Admin is restricted to managers/admins.
   const me = await getCurrentUser();
-  if (!isManager(me)) {
+  if (!isManager(me) || !canAccessCSuite(me)) {
     return (
       <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
         <div className="mb-2 text-3xl">🔒</div>

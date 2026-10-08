@@ -40,6 +40,8 @@ export const maxDuration = 60;
  * `Authorization: Bearer $CRON_SECRET`. For manual runs you can pass
  * `?secret=$CRON_SECRET` and optionally `?date=YYYY-MM-DD&force=1`.
  */
+export async function POST(request: Request) { return GET(request); }
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const secret = process.env.CRON_SECRET;
@@ -797,6 +799,83 @@ export async function GET(request: Request) {
     } catch (e) {
       return NextResponse.json({ ok: false, error: String(e).slice(0, 300) }, { status: 500 });
     }
+  }
+
+  // 📎 Signed-doc puller (?pdpull=1, daily cron): PandaDoc completed docs from
+  // the last 7 days → signed PDF saved to the Shared Drive "Deal Files"
+  // folder → 📎 file event on the matching OPPORTUNITY (metadata.oppId from
+  // our drafts, else address-match on the doc name). Storage SOP: files live
+  // on Drive, never in Vercel/Supabase.
+  if (url.searchParams.get("pdpull") === "1") {
+    const { pandadocConfigured, listCompletedDocs, getDocDetails, downloadDocPdf } = await import("@/lib/pandadoc");
+    if (!pandadocConfigured()) return NextResponse.json({ ok: false, error: "no PANDADOC_API_KEY" });
+    const { gdriveConfigured, ensureSubfolder, uploadToFolder, driveRootId } = await import("@/lib/gdrive");
+    if (!gdriveConfigured()) return NextResponse.json({ ok: false, error: "no Drive" });
+    const { logCrmEvent } = await import("@/lib/crm");
+    const to = new Date().toISOString();
+    const from = new Date(Date.now() - 7 * 86400_000).toISOString();
+    const list = await listCompletedDocs(from, to);
+    const docs = ((list.body as { results?: Array<{ id: string; name?: string; date_completed?: string }> }).results ?? []).slice(0, 15);
+    const folder = await ensureSubfolder(await driveRootId(), "Deal Files");
+    const results: Array<Record<string, string>> = [];
+    const deadline = Date.now() + 45_000;
+    for (const doc of docs) {
+      if (Date.now() > deadline) { results.push({ doc: doc.name ?? doc.id, status: "deferred (budget)" }); continue; }
+      const already = await db.crmEvent.findFirst({ where: { kind: "file", meta: { path: ["pdId"], equals: doc.id } }, select: { id: true } }).catch(() => null);
+      if (already) continue;
+      // match the opportunity: our drafts carry metadata.oppId; others by address in the doc name
+      const det = await getDocDetails(doc.id);
+      const meta = ((det.body as { metadata?: Record<string, string> }).metadata ?? {});
+      let opp = meta.oppId ? await db.crmOpportunity.findUnique({ where: { id: meta.oppId }, select: { id: true, contactId: true, title: true } }) : null;
+      if (!opp && doc.name) {
+        const m = doc.name.match(/(\d{2,6}\s+[A-Za-z][A-Za-z0-9 .']{2,30}?)(?:,|$| -)/);
+        const needle = m?.[1]?.trim();
+        if (needle) {
+          opp = await db.crmOpportunity.findFirst({ where: { OR: [{ title: { contains: needle, mode: "insensitive" } }, { contact: { address: { contains: needle, mode: "insensitive" } } }] }, select: { id: true, contactId: true, title: true }, orderBy: { updatedAt: "desc" } });
+        }
+      }
+      const pdf = await downloadDocPdf(doc.id);
+      if (!pdf) { results.push({ doc: doc.name ?? doc.id, status: "download failed" }); continue; }
+      const up = await uploadToFolder(folder, `${(doc.name ?? doc.id).replace(/[\\/]/g, "-").slice(0, 120)}.pdf`, pdf, "application/pdf").catch(() => null);
+      if (!up) { results.push({ doc: doc.name ?? doc.id, status: "drive upload failed" }); continue; }
+      if (opp) {
+        await logCrmEvent({ contactId: opp.contactId, oppId: opp.id, kind: "file", body: `📎 Signed doc saved to Drive: ${doc.name ?? doc.id} — ${up.link}`, meta: { pdId: doc.id, driveId: up.id, link: up.link }, actor: "pandadoc" });
+        results.push({ doc: doc.name ?? doc.id, status: `attached → ${opp.title.slice(0, 40)}` });
+      } else {
+        const jon = await db.user.findFirst({ where: { active: true, name: { startsWith: "Jon", mode: "insensitive" } }, select: { name: true } });
+        await db.crmTask.create({ data: { oppId: "", contactId: "", title: `📎 Signed doc saved but UNMATCHED — file it: ${(doc.name ?? doc.id).slice(0, 110)} → ${up.link}`, due: new Date().toISOString().slice(0, 10), assignedTo: jon?.name ?? "Jon Cruz", createdBy: "pandadoc" } }).catch(() => {});
+        // remember we processed it so it doesn't loop daily
+        await db.crmEvent.create({ data: { contactId: (await db.crmContact.findFirst({ select: { id: true } }))!.id, oppId: "", kind: "file", body: `📎 (unmatched) ${doc.name ?? doc.id} — ${up.link}`, meta: { pdId: doc.id, driveId: up.id, link: up.link, unmatched: true } as never, actor: "pandadoc" } }).catch(() => {});
+        results.push({ doc: doc.name ?? doc.id, status: "saved, unmatched → task" });
+      }
+    }
+    return NextResponse.json({ ok: true, scanned: docs.length, results });
+  }
+
+  // 📣 Team update poster (?teamupdate=1, POST body {text}): sends to the
+  // War Room Updates Google Chat space (WARROOM_CHAT_WEBHOOK).
+  if (url.searchParams.get("teamupdate") === "1") {
+    const hook = process.env.WARROOM_CHAT_WEBHOOK;
+    if (!hook) return NextResponse.json({ ok: false, error: "no WARROOM_CHAT_WEBHOOK" });
+    let text = url.searchParams.get("t") ?? "";
+    try { const b = await request.json(); if (b?.text) text = String(b.text); } catch { /* query fallback */ }
+    if (!text) return NextResponse.json({ ok: false, error: "no text" });
+    const r = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 3800) }) }).catch(() => null);
+    return NextResponse.json({ ok: !!r?.ok, status: r?.status ?? 0 });
+  }
+
+  // 🧾 Monthly P&L request (?pnlrequest=1, cron on the 1st): emails Viktoriia
+  // + Enrico asking for last month's P&L.
+  if (url.searchParams.get("pnlrequest") === "1") {
+    const users = await db.user.findMany({ where: { active: true }, select: { name: true, email: true } });
+    const emails = users.filter((u) => ["viktoriia", "enrico"].includes(u.name.trim().split(/\s+/)[0].toLowerCase())).map((u) => u.email).filter(Boolean);
+    if (!emails.length) return NextResponse.json({ ok: false, error: "no recipient emails" });
+    const prev = new Date(); prev.setUTCDate(0); // last day of previous month
+    const label = prev.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+    const { getChannelConfig, sendEmailTo } = await import("@/lib/notify");
+    const cfg = await getChannelConfig();
+    const ok = await sendEmailTo(emails, `📊 ${label} P&L time`, `<p>Hi team,</p><p>It's the 1st — please send Jon the <b>${label}</b> P&L and enter it on the War Room's <a href="https://kpi-tracker-lovat.vercel.app/expenses">Profit &amp; Loss page</a> when ready.</p><p>— the War Room (automated monthly reminder)</p>`, cfg);
+    return NextResponse.json({ ok, sent: emails.length });
   }
 
   // 🤝 JV partner + iBuyer seed (?jvseed=1): national dispo channels Jon vetted

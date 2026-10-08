@@ -81,7 +81,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/software", label: "Software & Logins", gate: "all" },
     { href: "/ai-champion", label: "AI Champion", gate: "all" },
     { href: "/ai-updates", label: "AI updates", gate: "admin" },
-    { href: "/admin", label: "Admin", gate: "manager" },
+    { href: "/admin", label: "Admin", gate: "csuite" },
   ] },
 ];
 

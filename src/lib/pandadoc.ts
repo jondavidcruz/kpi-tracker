@@ -83,6 +83,17 @@ export async function createOfferDraft(o: { name: string; recipientEmail: string
   return { id: (r.body as { id?: string }).id };
 }
 
+/** Download a document's signed PDF (binary). */
+export async function downloadDocPdf(id: string): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(`${BASE}/documents/${id}/download`, {
+      headers: { Authorization: `API-Key ${process.env.PANDADOC_API_KEY}` }, cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return new Uint8Array(await res.arrayBuffer());
+  } catch { return null; }
+}
+
 /** Completed documents in a date window (status=2 = document.completed). */
 export async function listCompletedDocs(fromISO: string, toISO: string) {
   return pd("/documents", { status: "2", completed_from: fromISO, completed_to: toISO, count: "50", order_by: "date_completed" });

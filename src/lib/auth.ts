@@ -40,9 +40,12 @@ const SOFTWARE_CURATORS = ["sharyn", "marie"];
 // Austin should not see the vault at all — not even tool names/login emails).
 // Name-keyed like the other locks so a checkbox can never re-grant it.
 const SOFTWARE_BLOCKED = new Set(["nick", "nicholas"]); // austin erased 2026-09-27
+const SOFTWARE_ALLOWED = new Set(["jon", "jonathan", "enrico", "viktoriia", "michelle", "sharyn", "marie"]);
 export function isSoftwareBlocked(user: { name?: string } | null): boolean {
+  // Jon 2026-10-08: Software & Logins = C-suite + trusted core only; new
+  // people NEVER see it (allowlist, not blocklist).
   const first = (user?.name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-  return SOFTWARE_BLOCKED.has(first);
+  return !SOFTWARE_ALLOWED.has(first);
 }
 
 /** Can add/edit/delete entries in the Software & Logins directory. */

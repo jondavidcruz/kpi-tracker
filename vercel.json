@@ -191,6 +191,14 @@
     {
       "path": "/api/cron?telnyxspend=1",
       "schedule": "45 13 * * *"
+    },
+    {
+      "path": "/api/cron?pdpull=1",
+      "schedule": "30 17 * * *"
+    },
+    {
+      "path": "/api/cron?pnlrequest=1",
+      "schedule": "0 16 1 * *"
     }
   ]
 }

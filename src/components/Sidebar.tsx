@@ -147,7 +147,7 @@ export default function Sidebar({
       { href: "/software", label: "Software & Logins", Icon: KeyRound },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
-      { href: "/admin", label: "Admin", Icon: Settings, managerOnly: true },
+      { href: "/admin", label: "Admin", Icon: Settings, csuiteOnly: true },
     ] },
   ];
 
