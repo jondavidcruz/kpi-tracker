@@ -33,7 +33,7 @@ const nextConfig: NextConfig = {
         // overrides the global X-Frame-Options DENY for this page only.
         source: "/offer",
         headers: [
-          { key: "Content-Security-Policy", value: "frame-ancestors 'self' https://freedom-offers.com https://www.freedom-offers.com" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self' https://freedom-offers.com https://www.freedom-offers.com https://uland.postking.app" },
         ],
       },
     ];
