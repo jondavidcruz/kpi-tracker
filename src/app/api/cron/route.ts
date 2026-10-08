@@ -816,8 +816,9 @@ export async function GET(request: Request) {
         const addr = [ct.address1, ct.city, ct.state, ct.postalCode].filter(Boolean).join(", ").slice(0, 250);
         return { id: c.id, addr };
       }));
+      const markFailed = url.searchParams.get("markfailed") === "1";
       for (const r of results) {
-        if (r.addr === null) { failed++; continue; }
+        if (r.addr === null) { failed++; if (markFailed) await db.crmContact.update({ where: { id: r.id }, data: { address: "—" } }).catch(() => {}); continue; }
         if (!r.addr) { empty++; await db.crmContact.update({ where: { id: r.id }, data: { address: "—" } }).catch(() => {}); continue; }
         await db.crmContact.update({ where: { id: r.id }, data: { address: r.addr } }).catch(() => {});
         // mirror onto the lead's title when the title is just the person's name
