@@ -270,3 +270,46 @@ export async function writeActivity(date: string, callAgg: Record<string, Agg>, 
   }
   return totals;
 }
+
+/** Offers Made / Contracts Sent from WAR ROOM stage moves (the team now moves
+ *  stages here, not in GHL, so the GHL-only feed was trending to zero).
+ *  Counts each rep's day's `stage` events whose NEW stage is an offer /
+ *  contract-sent stage. Takes the MAX of what's already auto-written (GHL)
+ *  vs the War Room count — the systems are disjoint, max avoids any
+ *  double-count if a lead was moved in both. Manual entries still win. */
+export async function feedWarRoomOpps(date: string, tz: string): Promise<Record<string, number>> {
+  const { start, end } = dayBounds(date, tz);
+  const events = await db.crmEvent.findMany({
+    where: { kind: "stage", at: { gte: new Date(start), lt: new Date(end) }, actor: { not: "" } },
+    select: { actor: true, body: true },
+  });
+  const per: Record<string, { offers_made: number; acq_contracts_sent: number }> = {};
+  for (const e of events) {
+    const to = (e.body.split("→")[1] ?? "").trim().toLowerCase();
+    if (!to) continue;
+    const isOffer = /offer/.test(to) && !/rejected|comp|call/.test(to);
+    const isContract = /contract/.test(to) && (/sent/.test(to) || to === "contract_sent");
+    if (!isOffer && !isContract) continue;
+    const first = e.actor.trim().split(/\s+/)[0].toLowerCase();
+    per[first] = per[first] ?? { offers_made: 0, acq_contracts_sent: 0 };
+    if (isOffer) per[first].offers_made++;
+    if (isContract) per[first].acq_contracts_sent++;
+  }
+  const users = await db.user.findMany({ select: { id: true, name: true } });
+  const userByFirst = new Map(users.map((u) => [u.name.trim().split(/\s+/)[0].toLowerCase(), u.id]));
+  const out: Record<string, number> = {};
+  for (const [first, v] of Object.entries(per)) {
+    const uid = userByFirst.get(first);
+    if (!uid) continue;
+    for (const [kpiKey, n] of [["offers_made", v.offers_made], ["acq_contracts_sent", v.acq_contracts_sent]] as const) {
+      if (!n) continue;
+      const kpi = await db.kpi.findUnique({ where: { key: kpiKey }, select: { id: true } });
+      if (!kpi) continue;
+      const existing = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: uid, date } });
+      if (existing) { if (existing.enteredBy === "crm" && n > existing.value) await db.entry.update({ where: { id: existing.id }, data: { value: n } }); }
+      else await db.entry.create({ data: { kpiId: kpi.id, userId: uid, date, value: n, enteredBy: "crm" } });
+      out[`${first}|${kpiKey}`] = n;
+    }
+  }
+  return out;
+}

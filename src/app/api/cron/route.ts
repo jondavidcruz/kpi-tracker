@@ -1920,10 +1920,11 @@ export async function GET(request: Request) {
     const calls = await step("ghlCalls", true, () => writeDay(today, tz));
     const opps = await step("ghlOpps", true, () => writeOpps(today, tz));
     const activity = calls && opps ? await step("activity", true, () => writeActivity(today, calls.wrote, opps)) : null;
+    const wrOpps = await step("warRoomOpps", true, async () => { const { feedWarRoomOpps } = await import("@/lib/crm-sync"); return feedWarRoomOpps(today, tz); });
     await step("browserCalls", false, async () => { const { feedCrmBrowserCalls } = await import("@/lib/crm-sync"); return feedCrmBrowserCalls(today, tz); });
     const drei = await step("dreiFeed", false, async () => { const { refreshDreiFeed } = await import("@/lib/directrei-sync"); return refreshDreiFeed(today); });
     await step("dreiDeals", false, async () => { const { syncDreiDeals } = await import("@/lib/directrei-deals-sync"); return syncDreiDeals(today); });
-    return NextResponse.json({ ok: true, date: today, calls: calls?.wrote ?? null, offersContracts: opps?.counts ?? null, activity, dreiFeed: drei ? "refreshed" : "skipped", timings });
+    return NextResponse.json({ ok: true, date: today, calls: calls?.wrote ?? null, offersContracts: opps?.counts ?? null, warRoomOpps: wrOpps, activity, dreiFeed: drei ? "refreshed" : "skipped", timings });
   }
 
   // Nightly REI Reply CRM sync — pulls YESTERDAY's calls + offer/contract stage
