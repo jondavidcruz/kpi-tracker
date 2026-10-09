@@ -19,3 +19,17 @@ export async function postToSpace(space: ChatSpace, text: string): Promise<boole
     return r.ok;
   } catch { return false; }
 }
+
+/** Post text + an image card (the EOD scoreboard) to a space. */
+export async function postImageCard(space: ChatSpace, text: string, imageUrl: string): Promise<boolean> {
+  try {
+    const map = JSON.parse(process.env.CHAT_WEBHOOKS_JSON || "{}") as Record<string, string>;
+    const url = map[space];
+    if (!url) return false;
+    const r = await fetch(url, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, cardsV2: [{ cardId: "kpi-eod", card: { sections: [{ widgets: [{ image: { imageUrl, onClick: { openLink: { url: "https://kpi-tracker-lovat.vercel.app/report" } } } }] }] } }] }),
+    });
+    return r.ok;
+  } catch { return false; }
+}

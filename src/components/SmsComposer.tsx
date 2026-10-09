@@ -99,7 +99,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
       </div>
 
       {/* their phone, live */}
-      <div className={`mx-auto shrink-0 select-none ${compact ? "w-[320px]" : "w-[340px]"}`}>
+      <div className={`mx-auto shrink-0 select-none ${compact ? "w-[280px]" : "w-[300px]"}`}>
         <div className="rounded-[2.4rem] bg-slate-900 p-2 shadow-xl">
           <div className="overflow-hidden rounded-[1.9rem] bg-white">
             <div className="flex items-center justify-between px-5 pt-2 text-[9px] font-bold text-slate-900"><span>9:41</span><span>📶 🔋</span></div>
@@ -107,7 +107,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
               <div className="mx-auto grid h-8 w-8 place-items-center rounded-full bg-slate-300 text-[11px] font-bold text-white">{(leadName[0] ?? "?").toUpperCase()}</div>
               <div className="mt-0.5 text-[10px] font-semibold text-slate-800">{first} 〉</div>
             </div>
-            <div ref={threadRef} className={`flex flex-col gap-1 overflow-y-auto bg-white px-2.5 pb-2 pt-1 ${compact ? "h-[380px]" : "h-[440px]"}`}>
+            <div ref={threadRef} className={`flex flex-col gap-1 overflow-y-auto bg-white px-2.5 pb-2 pt-1 ${compact ? "h-[300px]" : "h-[340px]"}`}>
               <div className="mt-auto" />
               <div className="text-center text-[8px] font-semibold text-slate-400">Text Message · SMS{history.length ? "" : " · Today"}</div>
               {history.map((m, i) => (

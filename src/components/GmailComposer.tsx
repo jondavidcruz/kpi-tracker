@@ -123,7 +123,7 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
     </div>
 
     {/* 💻 how it looks when they open it (MacBook / Apple Mail style) */}
-    <div className="mx-auto w-[340px] shrink-0 select-none max-xl:hidden">
+    <div className="mx-auto w-[460px] shrink-0 select-none max-xl:hidden">
       <div className="rounded-xl bg-slate-800 p-2 shadow-xl">
         <div className="overflow-hidden rounded-lg bg-white">
           <div className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 px-3 py-2">
@@ -135,7 +135,7 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
             <div className="mt-0.5 text-[10px] text-slate-500">{fromLabel}</div>
             <div className="text-[10px] text-slate-400">To: {leadName} · today</div>
           </div>
-          <div className="h-[380px] overflow-y-auto px-3 py-2">
+          <div className="h-[260px] overflow-y-auto px-3 py-2">
             <div className="whitespace-pre-line text-[11px] leading-relaxed text-slate-800">{body || <span className="text-slate-300">start typing to preview…</span>}</div>
             {body && <div className="mt-3 whitespace-pre-line border-t border-slate-100 pt-2 text-[10px] leading-snug text-slate-500">{signature}</div>}
           </div>

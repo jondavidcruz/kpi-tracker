@@ -264,6 +264,21 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             />
           )}
 
+          <div id="timeline" className="scroll-mt-4 pl-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline — everything, newest first</div>
+          {events.map((e) => (
+            <Card key={e.id} className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""}`}>
+              <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
+              <div className="min-w-0 flex-1">
+                <div className="whitespace-pre-line text-[13px] text-slate-800">{e.kind === "note" ? <><b>{e.actor}:</b> {stripHtml(e.body)}</> : <><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</>}</div>
+                <div className="mt-0.5 text-[10px] text-slate-400">{fmtAt(e.at)}{e.actor && e.kind !== "note" ? ` · ${e.actor}` : ""}{e.oppId && e.oppId !== opp.id ? " · other opportunity" : ""}</div>
+              </div>
+            </Card>
+          ))}
+          {events.length === 0 && <Card className="p-6 text-center text-xs text-slate-400">Nothing yet — the first note starts the story.</Card>}
+        </div>
+
+        {/* ── RIGHT: the work — tasks, appointments, discovery, parties ── */}
+        <div className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
           <Card className="flex flex-wrap items-center gap-2 p-3">
             <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📝 Contracts</span>
             <form action={draftContractAction}>
@@ -317,21 +332,6 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             </Card>
           )}
 
-          <div id="timeline" className="scroll-mt-4 pl-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline — everything, newest first</div>
-          {events.map((e) => (
-            <Card key={e.id} className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""}`}>
-              <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
-              <div className="min-w-0 flex-1">
-                <div className="whitespace-pre-line text-[13px] text-slate-800">{e.kind === "note" ? <><b>{e.actor}:</b> {stripHtml(e.body)}</> : <><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</>}</div>
-                <div className="mt-0.5 text-[10px] text-slate-400">{fmtAt(e.at)}{e.actor && e.kind !== "note" ? ` · ${e.actor}` : ""}{e.oppId && e.oppId !== opp.id ? " · other opportunity" : ""}</div>
-              </div>
-            </Card>
-          ))}
-          {events.length === 0 && <Card className="p-6 text-center text-xs text-slate-400">Nothing yet — the first note starts the story.</Card>}
-        </div>
-
-        {/* ── RIGHT: the work — tasks, appointments, discovery, parties ── */}
-        <div className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
           {/* tasks */}
           <Card className="p-4">
             <div id="tasks" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">⏰ Tasks</div>

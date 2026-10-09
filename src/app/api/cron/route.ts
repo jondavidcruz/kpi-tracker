@@ -1315,6 +1315,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, filled, jonTasks });
   }
 
+  // 🖼 EOD scoreboard JSON (?eodjson=1&d=YYYY-MM-DD) — feeds the KPI-room
+  // image card: per-rep misses with Marie's justifications (Jon 2026-10-08).
+  if (url.searchParams.get("eodjson") === "1") {
+    const d = url.searchParams.get("d") ?? new Date().toISOString().slice(0, 10);
+    const [reps2, alerts2] = await Promise.all([
+      db.user.findMany({ where: { active: true, position: { in: ["acquisitions", "dispositions", "cc_lm"] } }, select: { id: true, name: true, position: true }, orderBy: { name: "asc" } }),
+      db.alert.findMany({ where: { date: d }, include: { kpi: { select: { name: true, emoji: true, unit: true } } } }),
+    ]);
+    const fmtV = (unit: string, n: number) => unit === "duration" ? `${Math.floor(n / 3600)}:${String(Math.floor((n % 3600) / 60)).padStart(2, "0")}` : String(Math.round(n));
+    const rows = reps2.map((r) => {
+      const mine = alerts2.filter((a) => a.userId === r.id);
+      return {
+        name: r.name.split(" ")[0],
+        position: r.position,
+        misses: mine.map((a) => ({
+          kpi: `${a.kpi.emoji ?? ""}${a.kpi.name}`,
+          actual: fmtV(a.kpi.unit, a.actual),
+          expected: fmtV(a.kpi.unit, a.expected),
+          excused: a.excused,
+          reason: (a.repReason ?? "").split("\n").filter((l) => l && !l.startsWith("🤖")).join(" ") || (a.resolutionNote ?? "") || "",
+        })),
+      };
+    });
+    return NextResponse.json({ ok: true, date: d, rows });
+  }
+
   // 🔎 Verify completed system tasks (?verifytasks=1, daily cron + on demand —
   // Jon 2026-10-08: "when I mark it complete, have Claude check it was set up
   // right"). Runs a real probe per known task type; a failed check files a
