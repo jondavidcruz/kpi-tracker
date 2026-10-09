@@ -102,7 +102,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
       </details>
 
       <Card className="overflow-hidden p-0">
-        <div className="flex h-[74vh]">
+        <div className="flex h-[84vh]">
           {/* left: thread list */}
           <div className="w-72 shrink-0 overflow-y-auto border-r border-slate-100 bg-slate-50/50">
             <div className="sticky top-0 flex items-center gap-2 border-b border-slate-100 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">
@@ -179,7 +179,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     const textOnly = imgUrls.reduce((s, u) => s.replace(u, ""), clean).replace(/[[\]]/g, "").trim();
                     return (
                       <div key={i} className={`flex ${inbound ? "justify-start" : "justify-end"}`}>
-                        <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm ${inbound ? "rounded-bl-sm bg-white text-slate-800 ring-1 ring-slate-200" : "rounded-br-sm bg-brand-navy text-white"}`}>
+                        <div className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-sm ${inbound ? "rounded-bl-sm bg-white text-slate-800 ring-1 ring-slate-200" : "rounded-br-sm bg-brand-navy text-white"}`}>
                           {imgUrls.map((u) => (
                             <a key={u} href={u} target="_blank" rel="noreferrer">
                               {/* eslint-disable-next-line @next/next/no-img-element */}

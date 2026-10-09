@@ -58,16 +58,28 @@ export async function createOfferDraft(o: { name: string; recipientEmail: string
   try {
     const det = await getTemplateDetails(tpl);
     const db2 = det.body as { fields?: Array<{ field_id?: string; merge_field?: string; name?: string }> };
+    // exact renamed ids first (Jon renamed them 2026-10-08 incl. SellerName2
+    // for a second seller), fuzzy fallback for anything else
+    const exact: Record<string, string> = {
+      sellername2: o.tokens["Seller.Name2"] ?? "",
+      propertyaddress: o.tokens["Property.Address"] ?? "",
+      apn: o.tokens["APN"] ?? "",
+      sellernet: o.tokens["Seller.Net"] ?? "",
+      sellername: o.tokens["Seller.Name"] ?? "",
+    };
     const want: Array<[RegExp, string]> = [
       [/apn/i, o.tokens["APN"] ?? ""],
       [/address|property/i, o.tokens["Property.Address"] ?? ""],
       [/net|amount|price|sum/i, o.tokens["Seller.Net"] ?? ""],
+      [/name2|seller2|second/i, o.tokens["Seller.Name2"] ?? ""],
       [/name|seller|printed/i, o.tokens["Seller.Name"] ?? ""],
     ];
     for (const f of db2.fields ?? []) {
       const key = f.merge_field || f.field_id || "";
       const label = `${f.name ?? ""} ${key}`;
       if (!key || fields[key]) continue;
+      const ex = exact[key.toLowerCase()];
+      if (ex) { fields[key] = { value: ex }; continue; }
       for (const [rx, val] of want) if (val && rx.test(label)) { fields[key] = { value: val }; break; }
     }
   } catch { /* fields stay empty — tokens still apply */ }

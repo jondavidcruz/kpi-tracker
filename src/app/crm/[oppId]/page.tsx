@@ -119,7 +119,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           ))}
         </nav>
         {/* ── Left column ── */}
-        <div className="flex w-full max-w-md flex-col gap-3 lg:w-[380px]">
+        <div className="flex w-full max-w-md flex-col gap-3 lg:w-[400px]">
           {/* contact card */}
           <Card className="p-4">
             <details open id="contact" className="scroll-mt-4">
@@ -261,7 +261,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
 
           {/* 📋 Discovery forms — the GHL custom-field sections, simplified */}
           <Card className="p-4" id="discovery">
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">📋 Discovery — fill as you talk</div>
+            <details>
+            <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">📋 Discovery — fill as you talk <span className="normal-case text-slate-300">(click to open)</span></summary>
             {(() => {
               const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
               return CRM_FORMS.map((form) => {
@@ -305,11 +306,13 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 );
               });
             })()}
+            </details>
           </Card>
 
           {/* parties in the deal */}
           <Card className="p-4">
-            <div id="parties" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">🤝 Parties in this deal</div>
+            <details id="parties" className="scroll-mt-4">
+            <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">🤝 Parties in this deal <span className="normal-case text-slate-300">(click to open)</span></summary>
             <div className="space-y-1.5">
               {parties.map((p) => (
                 <div key={p.id} className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs ring-1 ring-slate-100">
@@ -341,6 +344,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <input name="note" placeholder="Note (company, file #…)" className="col-span-2 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
               <button className="col-span-2 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-bold text-white">＋ Attach party</button>
             </form>
+            </details>
           </Card>
 
           {/* appointments */}

@@ -1955,6 +1955,15 @@ export async function revokeTeamAccess(formData: FormData) {
       await admin.auth.admin.updateUserById(authId, { ban_duration: "876000h" }).catch(() => {});
     }
   }
+  // 👥 Off-boarding trigger (Jon 2026-10-08): pull them out of every Google
+  // Chat space automatically — fire-and-forget, never blocks the revoke.
+  if (u.email) {
+    (async () => {
+      const { offboardFromAllChats, logChatRosterChange } = await import("@/lib/chat-members");
+      const res = await offboardFromAllChats(u.email);
+      await logChatRosterChange(`off-boarded ${u.email}: ${JSON.stringify(res)}`);
+    })().catch(() => {});
+  }
 
   // Spin up a mandatory offboarding checklist — fixed steps + every shared tool
   // this person had access to (so passwords get changed / access removed).

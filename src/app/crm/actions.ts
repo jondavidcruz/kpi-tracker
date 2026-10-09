@@ -435,6 +435,20 @@ export async function isDnd(contactId: string, channel: "sms" | "email" | "call"
   return /\bdnc\b|\bdnd_all\b/i.test(c.tags) || new RegExp(`\\bdnd_${channel}\\b`, "i").test(c.tags);
 }
 
+/** 👤 Reassign a task to someone else (managers, or the current assignee). */
+export async function reassignTaskAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const who = String(formData.get("assignedTo") ?? "").trim();
+  if (!id || !who) return;
+  const t = await db.crmTask.findUnique({ where: { id }, select: { assignedTo: true } });
+  if (!t) return;
+  if (!isManager(me) && t.assignedTo.toLowerCase() !== me.name.toLowerCase()) return;
+  await db.crmTask.update({ where: { id }, data: { assignedTo: who } });
+  revalidatePath("/crm/tasks");
+}
+
 /** 📝 Save/edit a task's description (GHL-style details). */
 export async function saveTaskNoteAction(formData: FormData) {
   const me = await crmUser();

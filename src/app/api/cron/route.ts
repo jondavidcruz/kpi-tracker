@@ -1315,6 +1315,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, filled, jonTasks });
   }
 
+  // 👥 Chat roster (?chatmember=add|remove&email=…&rooms=team,acquisitions|all):
+  // puts a person into / out of the Google Chat spaces (DWD chat.memberships).
+  if (url.searchParams.get("chatmember")) {
+    const op = url.searchParams.get("chatmember")!;
+    const email = (url.searchParams.get("email") ?? "").trim().toLowerCase();
+    if (!email.includes("@")) return NextResponse.json({ ok: false, error: "email required" });
+    const { addToSpaces, removeFromSpaces, chatSpaces, logChatRosterChange } = await import("@/lib/chat-members");
+    const roomsParam = (url.searchParams.get("rooms") ?? "all").trim();
+    const rooms = roomsParam === "all" ? Object.keys(chatSpaces()) : roomsParam.split(",").map((s) => s.trim()).filter(Boolean);
+    const res = op === "add" ? await addToSpaces(email, rooms) : await removeFromSpaces(email, rooms);
+    await logChatRosterChange(`${op} ${email} → ${JSON.stringify(res)}`);
+    return NextResponse.json({ ok: true, op, email, results: res, knownRooms: Object.keys(chatSpaces()) });
+  }
+
   // 📝 Seed step-by-step instructions onto the OPEN owner tasks
   // (?tasknotes=1, one-time — Jon 2026-10-08: "how else do we complete these?").
   if (url.searchParams.get("tasknotes") === "1") {
