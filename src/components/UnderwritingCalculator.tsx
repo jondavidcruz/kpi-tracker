@@ -564,6 +564,10 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   const nReserve = n("nReserve");                    // reserve: misc out-of-pocket + lender-required repairs
   const nNet = nExpectedSale - nRepairCredit - nExpectedSale * (nComm / 100) - nSellerClose - nHoaCost - nExtra - nReserve;
   const novMao = nNet - nMinFee;
+  // Best-case twin (Jon 2026-10-09): the same math if the listing sells at FULL
+  // list price instead of the realistic 95% — shown alongside, never replacing.
+  const nNetFull = nList - nRepairCredit - nList * (nComm / 100) - nList * (nSellerClosePct / 100) - nHoaCost - nExtra - nReserve;
+  const novMaoFull = nNetFull - nMinFee;
   const nAnchorPct = "7"; // standard anchor — fixed, no input (Jon 2026-09-25)
   const novAnchor = novMao * (1 - num(nAnchorPct) / 100);
   const feeAtAnchor = nNet - novAnchor;
@@ -1963,6 +1967,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
               {extraItems("nExtra", nExtraN).map((x, i) => <Res key={i} label={`− ${x.note || "Additional cost"}`} value={money(x.amt)} tone="muted" />)}
               <Res label="Net after credit, commission, closing, HOA + extras" value={money(nNet)} tone="muted" />
               <Res label="🎯 Novation MAO (max seller payout)" value={money(novMao)} tone={novMao > 0 ? "navy" : "bad"} big />
+              {nList > 0 && <Res label={`💯 Best case — sells at FULL list (${money(nList)})`} value={`net ${money(nNetFull)} · max seller payout ${money(novMaoFull)}`} tone={novMaoFull > 0 ? "good" : "bad"} />}
               {novMao > 0 && nList > 0 && <Res label="Sanity check" value={`${Math.round((novMao / nList) * 100)}% of list · ${nSaneWord}`} tone={nSaneTone} />}
               <Res label="⚓ Anchor payout (open here)" value={money(novAnchor)} tone="good" />
               <Res label="Our fee at anchor" value={money(feeAtAnchor)} tone="good" />

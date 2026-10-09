@@ -149,6 +149,27 @@ I know that's not the number we both hoped for. But this is real money, partners
               </div>
               {agreed > 0 && netAt(agreed) < fee && netAt(agreed) > 0 && <div className="bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-700">⚠️ That&apos;s under our {money(fee)} minimum — counter higher or get manager approval.</div>}
               {agreed > 0 && netAt(agreed) <= 0 && <div className="bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-600">🛑 We&apos;d LOSE money at that number.</div>}
+              {/* 🏷 novation flip-side (Jon 2026-10-09): what the MARKET must
+                  deliver — the list price we need and the lowest on-market
+                  offer we can accept and still clear the minimum fee. */}
+              {dealType === "novation" && (() => {
+                const a = agentPct / 100;
+                const c = closingMode === "%" ? sellerClosing / 100 : 0;
+                const denom = 1 - a - c;
+                if (denom <= 0.05) return null;
+                const minSale = (p: number) => Math.ceil((p + fee + (closingMode === "%" ? 0 : sellerClosing)) / denom / 100) * 100;
+                const listAt = (p: number) => Math.ceil(minSale(p) / 0.95 / 100) * 100;
+                return (
+                  <div className="space-y-1 border-t border-slate-100 bg-sky-50/60 px-3 py-2.5 text-[12px]">
+                    <div className="text-[10px] font-extrabold uppercase tracking-wide text-sky-700">🏷 On the market — what it takes to still clear our {money(fee)} minimum</div>
+                    <div className="flex items-baseline justify-between gap-2"><span className="text-slate-600">If seller stays at {money(contract)} → list at <b className="text-slate-800">{money(listAt(contract))}</b></span><span className="shrink-0 font-extrabold text-sky-800">lowest offer we can take: {money(minSale(contract))}</span></div>
+                    {target > 0 && target < contract && (
+                      <div className="flex items-baseline justify-between gap-2"><span className="text-slate-600">If they sign at {money(target)} → list at <b className="text-slate-800">{money(listAt(target))}</b></span><span className="shrink-0 font-extrabold text-emerald-700">lowest offer we can take: {money(minSale(target))}</span></div>
+                    )}
+                    <div className="text-[9px] font-semibold text-slate-400">list price assumes offers come in ~95% of list — an on-market offer below the &quot;lowest&quot; number means we make less than {money(fee)}</div>
+                  </div>
+                );
+              })()}
               {/* 📐 the full breakdown, out of the way until wanted */}
               <details className="border-t border-slate-100 bg-slate-50/60">
                 <summary className="cursor-pointer px-3 py-2 text-[10px] font-extrabold uppercase tracking-wide text-slate-400 hover:text-slate-600">📐 see the full math</summary>
