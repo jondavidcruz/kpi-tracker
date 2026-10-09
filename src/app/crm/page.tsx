@@ -29,9 +29,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // Permissions (Jon 2026-10-07: "Nick gets his own pipeline"): managers see
   // everyone; a rep's board is scoped to THEIR leads — their own pipeline.
   const manager = isManager(me!);
-  // Default = MINE for everyone, Jon included (Jon 2026-10-08): the board opens
-  // on your own leads; "Everyone" is an explicit click (?who=all).
-  const whoRaw = manager ? (sp.who === "all" ? "" : (sp.who ?? me!.name)) : me!.name;
+  // Managers default to EVERYONE (Jon 2026-10-09 — "I don't have leads
+  // assigned to me"); the dropdown narrows it. Reps stay locked to their own.
+  const whoRaw = manager ? (sp.who === "all" || sp.who == null ? "" : sp.who) : me!.name;
   // role chips (Jon 2026-10-08): "role:acquisitions" / "role:dispositions"
   // scope the board to everyone in that seat at once.
   const roleReps = whoRaw.startsWith("role:")

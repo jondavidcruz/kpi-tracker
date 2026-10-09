@@ -917,6 +917,21 @@ export async function GET(request: Request) {
     } catch (e) { return NextResponse.json({ ok: false, error: String(e).slice(0, 200) }); }
   }
 
+  // 🎯 Generic per-rep goal override (?settarget=1&who=michelle&key=connected_calls&value=20)
+  if (url.searchParams.get("settarget") === "1") {
+    const who = (url.searchParams.get("who") ?? "").toLowerCase();
+    const key2 = url.searchParams.get("key") ?? "";
+    const value2 = Number(url.searchParams.get("value"));
+    if (!who || !key2 || !Number.isFinite(value2)) return NextResponse.json({ ok: false, error: "who, key, value required" });
+    const u2 = await db.user.findFirst({ where: { active: true, name: { startsWith: who, mode: "insensitive" } }, select: { id: true, name: true } });
+    const kpi2 = await db.kpi.findFirst({ where: { OR: [{ key: key2 }, { name: { equals: key2, mode: "insensitive" } }] }, select: { id: true, name: true } });
+    if (!u2 || !kpi2) return NextResponse.json({ ok: false, error: `${!u2 ? "user" : "kpi"} not found` });
+    const ex2 = await db.target.findFirst({ where: { kpiId: kpi2.id, userId: u2.id, period: null } });
+    if (ex2) await db.target.update({ where: { id: ex2.id }, data: { goalValue: value2 } });
+    else await db.target.create({ data: { kpiId: kpi2.id, userId: u2.id, period: null, goalValue: value2 } });
+    return NextResponse.json({ ok: true, user: u2.name, kpi: kpi2.name, goal: value2 });
+  }
+
   // 📱 Nick's manual-dial targets (?nicktargets=1): he's 5h on an iPhone with
   // no dialer (new acq members don't get system licenses) — the 140/100
   // auto-dialer goals were impossible. Standing per-rep overrides.
@@ -1357,25 +1372,38 @@ export async function GET(request: Request) {
   // 🖼 EOD scoreboard JSON (?eodjson=1&d=YYYY-MM-DD) — feeds the KPI-room
   // image card: per-rep misses with Marie's justifications (Jon 2026-10-08).
   if (url.searchParams.get("eodjson") === "1") {
+    // v2 (Jon 2026-10-09): EVERY rep's full day — met KPIs get a ✓, misses go
+    // red with the written reason. Nobody's numbers are invisible anymore.
     const d = url.searchParams.get("d") ?? new Date().toISOString().slice(0, 10);
-    const [reps2, alerts2] = await Promise.all([
+    const { getKpis, getAllTargets, resolveGoalWith } = await import("@/lib/data");
+    const [reps2, alerts2, kpis2, targets2, entries2] = await Promise.all([
       db.user.findMany({ where: { active: true, position: { in: ["acquisitions", "dispositions", "cc_lm"] } }, select: { id: true, name: true, position: true }, orderBy: { name: "asc" } }),
-      db.alert.findMany({ where: { date: d }, include: { kpi: { select: { name: true, emoji: true, unit: true } } } }),
+      db.alert.findMany({ where: { date: d }, include: { kpi: { select: { id: true } } } }),
+      getKpis({ scope: "per_rep", computed: false }),
+      getAllTargets(),
+      db.entry.findMany({ where: { date: d, userId: { not: null } }, select: { kpiId: true, userId: true, value: true } }),
     ]);
+    const month2 = d.slice(0, 7);
+    const sum2 = new Map<string, number>();
+    for (const e of entries2) sum2.set(`${e.kpiId}|${e.userId}`, (sum2.get(`${e.kpiId}|${e.userId}`) ?? 0) + e.value);
     const fmtV = (unit: string, n: number) => unit === "duration" ? `${Math.floor(n / 3600)}:${String(Math.floor((n % 3600) / 60)).padStart(2, "0")}` : String(Math.round(n));
     const rows = reps2.map((r) => {
-      const mine = alerts2.filter((a) => a.userId === r.id);
-      return {
-        name: r.name.split(" ")[0],
-        position: r.position,
-        misses: mine.map((a) => ({
-          kpi: `${a.kpi.emoji ?? ""}${a.kpi.name}`,
-          actual: fmtV(a.kpi.unit, a.actual),
-          expected: fmtV(a.kpi.unit, a.expected),
-          excused: a.excused,
-          reason: (a.repReason ?? "").split("\n").filter((l) => l && !l.startsWith("🤖")).join(" ") || (a.resolutionNote ?? "") || "",
-        })),
-      };
+      const roleKpis = kpis2.filter((k) => (k as { roleKey?: string }).roleKey === r.position);
+      const kpiRows = roleKpis.map((k) => {
+        const val = sum2.get(`${k.id}|${r.id}`) ?? 0;
+        const goal = k.goalKind === "at_least" ? resolveGoalWith(targets2, k, r.id, month2) : null;
+        const met = goal == null ? val > 0 : val >= goal;
+        const alert = alerts2.find((a) => a.userId === r.id && a.kpi.id === k.id);
+        return {
+          kpi: `${k.emoji ?? ""}${k.name}`,
+          actual: fmtV(k.unit, val),
+          expected: goal != null ? fmtV(k.unit, goal) : "",
+          met: met && !alert,
+          excused: alert?.excused ?? false,
+          reason: alert ? ((alert.repReason ?? "").split("\n").filter((l) => l && !l.startsWith("🤖")).join(" ") || (alert.resolutionNote ?? "") || "") : "",
+        };
+      }).filter((k) => k.expected || !k.met || Number(k.actual) > 0);
+      return { name: r.name.split(" ")[0], position: r.position, kpis: kpiRows, missCount: kpiRows.filter((k) => !k.met).length };
     });
     return NextResponse.json({ ok: true, date: d, rows });
   }
@@ -2229,6 +2257,31 @@ export async function GET(request: Request) {
     const sends = deals.length ? await db.dealSend.findMany({ where: { dealId: { in: deals.map((d) => d.id) } }, select: { dealId: true, sentAt: true, outcome: true, passReason: true, offerAmount: true } }) : [];
     const today = new Date().toISOString().slice(0, 10);
     const fuCount = await db.marketContact.count({ where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, nextFollowUp: { not: "", lte: today } } });
+    // 🔻 Reduction radar + 3-offer rule (Jon 2026-10-09): 30+ days on market
+    // → reduction play task; NEVER accept/reduce without 3 offers — tasks go
+    // to the assigned dispo rep, dup-guarded.
+    try {
+      for (const d2 of deals) {
+        const listedSince = d2.onMarketSince || "";
+        if (!listedSince) continue;
+        const dom = Math.floor((Date.now() - Date.parse(listedSince + "T12:00:00Z")) / 86400_000);
+        const offerCount = sends.filter((s2) => s2.dealId === d2.id && s2.offerAmount != null).length;
+        const rep2 = d2.assignedTo || "Sharyn Kayle";
+        if (dom >= 30) {
+          const title3 = `🔻 ${d2.address}: ${dom} days on market — run the Reduction Play (need ${Math.max(0, 3 - offerCount)} more offer${3 - offerCount === 1 ? "" : "s"} first: ${offerCount}/3 in)`;
+          const dup3 = await db.crmTask.findFirst({ where: { title: title3, doneAt: null } });
+          if (!dup3) {
+            const ct = await db.crmTask.create({ data: { oppId: "", contactId: "", title: title3, due: today, assignedTo: rep2, createdBy: "deal-watch" } });
+            const { writeTaskNote } = await import("@/lib/task-notes");
+            await writeTaskNote(ct.id, `THE RULE: minimum 3 offers before we accept anything OR go for a reduction. This deal has ${offerCount}/3.\n1. If under 3 offers → push the buyer list harder TODAY (cascade + cold list).\n2. Once 3+ offers are in → open /reduction, fill in the numbers + buyer-walk feedback, and it writes your seller script.\n3. Signed ${d2.contractDate || "—"} · listed ${listedSince} · ${dom} days on market.`);
+          }
+        } else if (dom >= 21 && offerCount < 3) {
+          const title4 = `⚠️ ${d2.address}: ${dom} DOM and only ${offerCount}/3 offers — push for 3 before day 30`;
+          const dup4 = await db.crmTask.findFirst({ where: { title: title4, doneAt: null } });
+          if (!dup4) await db.crmTask.create({ data: { oppId: "", contactId: "", title: title4, due: today, assignedTo: rep2, createdBy: "deal-watch" } });
+        }
+      }
+    } catch { /* radar never breaks the huddle */ }
     const lines: string[] = [`📋 *Dispo huddle — ${deals.length} live deal${deals.length === 1 ? "" : "s"}, ${fuCount} follow-ups due*`];
     for (const d of deals) {
       const ds = sends.filter((s) => s.dealId === d.id);

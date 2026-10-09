@@ -216,7 +216,13 @@ export async function addCrmTaskAction(formData: FormData) {
   } });
   const note = String(formData.get("note") ?? "").trim();
   if (note) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(created.id, note); }
-  const prio = String(formData.get("priority") ?? "");
+  let prio = String(formData.get("priority") ?? "");
+  if (!prio) {
+    // 🤖 predicted priority — the rep can always flip the dot afterwards
+    const hay = `${title} ${note}`.toLowerCase();
+    if (/\burgent|asap|now\b|today|call.?back|closing|wire|contract|offer|escrow|deadline|overdue|🔴/.test(hay) || String(formData.get("due") ?? "") === new Date().toISOString().slice(0, 10)) prio = "urgent";
+    else if (/\bsomeday|later|idea|maybe|research|read|explore|eventually|low\b/.test(hay)) prio = "low";
+  }
   if (["urgent", "low"].includes(prio)) {
     const fd2 = new FormData(); fd2.set("id", created.id); fd2.set("p", prio);
     await setTaskPriorityAction(fd2);
@@ -483,6 +489,20 @@ export async function isDnd(contactId: string, channel: "sms" | "email" | "call"
   return /\bdnc\b|\bdnd_all\b/i.test(c.tags) || new RegExp(`\\bdnd_${channel}\\b`, "i").test(c.tags);
 }
 
+/** 🗑 Delete a task — archive-style: marked done with a deleted stamp so the
+ *  Completed tab keeps the paper trail (Jon 2026-10-09). */
+export async function deleteTaskAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const t = await db.crmTask.findUnique({ where: { id }, select: { assignedTo: true, doneAt: true } });
+  if (!t) return;
+  if (!isManager(me) && t.assignedTo.toLowerCase() !== me.name.toLowerCase()) return;
+  await db.crmTask.update({ where: { id }, data: { doneAt: t.doneAt ?? new Date(), doneBy: `🗑 deleted by ${me.name}` } });
+  revalidatePath("/crm/tasks");
+  revalidatePath("/crm");
+}
+
 /** 👤 Reassign a task to someone else (managers, or the current assignee). */
 export async function reassignTaskAction(formData: FormData) {
   const me = await crmUser();
@@ -539,6 +559,43 @@ export async function bulkConvAction(formData: FormData) {
   }
   revalidatePath("/crm/conversations");
   revalidatePath("/crm");
+}
+
+/** 📎 Upload a document for this lead — stored in the deal's Google Drive
+ *  folder (our SOP: files live in Drive, never Vercel/Supabase), linked on
+ *  the lead's Documents panel + timeline. */
+export async function uploadLeadDocAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const file = formData.get("file");
+  if (!oppId || !contactId || !(file instanceof File) || file.size === 0) return;
+  if (file.size > 15 * 1024 * 1024) {
+    await logCrmEvent({ contactId, oppId, kind: "system", body: "📎 Upload skipped — file over 15MB; compress it and retry.", actor: me.name });
+    revalidatePath(`/crm/${oppId}`);
+    return;
+  }
+  try {
+    const { gdriveConfigured, ensureSubfolder, uploadToFolder, listFolder } = await import("@/lib/gdrive");
+    if (!gdriveConfigured()) return;
+    const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
+    const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contact: { select: { address: true, name: true } } } });
+    const label = (opp?.contact.address || opp?.title || opp?.contact.name || "Unfiled").trim();
+    const streetNo = label.match(/^\d+/)?.[0];
+    let folderId = "";
+    if (streetNo) {
+      const existing = (await listFolder(DEALS_PARENT).catch(() => [])).find((f) => f.name.startsWith(streetNo));
+      if (existing) folderId = existing.id;
+    }
+    if (!folderId) folderId = await ensureSubfolder(DEALS_PARENT, label.slice(0, 80));
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const up = await uploadToFolder(folderId, file.name.slice(0, 120), bytes, file.type || "application/octet-stream");
+    await logCrmEvent({ contactId, oppId, kind: "file", body: `📎 ${file.name} — uploaded to the deal's Drive folder`, meta: { driveId: up.id, link: up.link }, actor: me.name });
+  } catch (e) {
+    await logCrmEvent({ contactId, oppId, kind: "system", body: `📎 Upload failed: ${String(e).slice(0, 120)}`, actor: me.name }).catch(() => {});
+  }
+  revalidatePath(`/crm/${oppId}`);
 }
 
 /** 🗑 "Delete" a lead = archive it (archive-never-delete rule): the opp is

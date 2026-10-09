@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
-import { addCrmTaskAction, toggleCrmTaskAction, setTaskPriorityAction, linkTaskAction, readTaskPriorities, saveTaskNoteAction, reassignTaskAction } from "../actions";
+import { addCrmTaskAction, toggleCrmTaskAction, setTaskPriorityAction, linkTaskAction, readTaskPriorities, saveTaskNoteAction, reassignTaskAction, deleteTaskAction } from "../actions";
 import { readTaskNotes } from "@/lib/task-notes";
 
 export const dynamic = "force-dynamic";
@@ -167,6 +167,13 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
                   <button className="rounded-lg bg-brand-navy px-3 py-1.5 text-[11px] font-bold text-white">Save description</button>
                 </form>
               </details>
+              <div className="flex flex-wrap items-center gap-3">
+              {!t.doneAt && (
+                <form action={deleteTaskAction}>
+                  <input type="hidden" name="id" value={t.id} />
+                  <button className="rounded-lg px-2 py-1 text-[10px] font-bold text-slate-400 ring-1 ring-slate-200 hover:bg-red-50 hover:text-red-600" title="Delete — it moves to Completed with a deleted stamp (never destroyed)">🗑 Delete task</button>
+                </form>
+              )}
               {manager && (
                 <form action={reassignTaskAction} className="flex items-center gap-1.5">
                   <input type="hidden" name="id" value={t.id} />
@@ -177,6 +184,7 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
                   <button className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-slate-300">move</button>
                 </form>
               )}
+              </div>
               <div className="text-[10px] text-slate-400">created {t.createdAt.toLocaleDateString("en-US")} by {t.createdBy || "—"}{t.doneAt ? ` · ✓ completed ${t.doneAt.toLocaleString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}${t.doneBy ? ` by ${t.doneBy}` : ""}` : ""}</div>
             </div>
             </details>

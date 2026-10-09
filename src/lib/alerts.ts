@@ -603,19 +603,10 @@ export async function sendDailyDigest(date: string, opts?: { chat?: boolean; ema
     await db.alert.findMany({ where: { status: "open", severity: "hard", date: prevWeekday(date) }, select: { userId: true, kpiId: true } }),
   );
   const crucialChanged = todayHardSig !== priorHardSig;
-  // Jon 2026-10-08: the KPI room gets an IMAGE scoreboard — misses highlighted
-  // red with the written justifications, on-target people in green.
-  let chatOk = false;
-  if (sendChat && crucialChanged) {
-    try {
-      const crypto = await import("crypto");
-      const sig = crypto.createHmac("sha256", process.env.CRON_SECRET ?? "").update(date).digest("hex").slice(0, 20);
-      const imageUrl = `https://kpi-tracker-lovat.vercel.app/api/kpi-image?d=${date}&sig=${sig}`;
-      const { postImageCard } = await import("@/lib/chat-spaces");
-      chatOk = await postImageCard("kpi", `📊 EOD KPIs — ${date}`, imageUrl);
-    } catch { /* fall through to text */ }
-    if (!chatOk) chatOk = await sendGoogleChat(chatText, cfg);
-  }
+  // Jon 2026-10-09: the daily 6pm ?kpipost=1 cron owns the KPI-room image —
+  // the digest no longer double-posts there (two photos = noise). Email only.
+  const chatOk = false;
+  void crucialChanged; void chatText; void sendChat;
 
   // ---- Email (rich coaching cards for money, plain list for the rest) ----
   const emailHtml =

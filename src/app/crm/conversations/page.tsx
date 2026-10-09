@@ -155,7 +155,10 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                   <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy/90 text-[11px] font-bold text-white">{initials(contact.name)}</span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-extrabold text-slate-900">{contact.name}</div>
-                    <div className="truncate text-[11px] text-slate-500">{[contact.phone, contact.email].filter(Boolean).join(" · ")}</div>
+                    <div className="flex flex-wrap items-baseline gap-x-3">
+                      {contact.phone && <span className="font-mono text-lg font-extrabold tracking-wider text-slate-800">{contact.phone.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3")}</span>}
+                      {contact.email && <span className="truncate text-[11px] text-slate-500">{contact.email}</span>}
+                    </div>
                   </div>
                   {comms.call && contact.phone && <CallButton phone={contact.phone} name={contact.name} oppId={opp?.id} contactId={contact.id} />}
                   {opp && <Link href={`/crm/${opp.id}`} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Open lead ↗</Link>}
@@ -206,7 +209,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
               <div className="mb-3 text-xs font-extrabold uppercase tracking-wide text-slate-400">Contact details</div>
               <div className="space-y-2 text-sm">
                 <div><div className="text-[10px] font-bold text-slate-400">Name</div><div className="font-semibold text-slate-800">{contact.name}</div></div>
-                {contact.phone && <div><div className="text-[10px] font-bold text-slate-400">Phone</div><div className="text-slate-700">{contact.phone}</div></div>}
+                {contact.phone && <div><div className="text-[10px] font-bold text-slate-400">Phone</div><div className="font-mono text-xl font-extrabold tracking-wider text-slate-900">{contact.phone.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3")}</div></div>}
                 {contact.altPhone && <div><div className="text-[10px] font-bold text-slate-400">Phone 2</div><div className="text-slate-700">{contact.altPhone}</div></div>}
                 {contact.email && <div><div className="text-[10px] font-bold text-slate-400">Email</div><div className="break-all text-slate-700">{contact.email}</div></div>}
                 {contact.address && <div><div className="text-[10px] font-bold text-slate-400">Property</div><div className="text-slate-700">{contact.address}</div></div>}

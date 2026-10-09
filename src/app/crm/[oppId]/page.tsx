@@ -7,7 +7,7 @@ import { stripHtml } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
-import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, draftContractAction, toggleDndAction } from "../actions";
+import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, draftContractAction, toggleDndAction, uploadLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
@@ -183,8 +183,14 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           {/* 📎 Documents — every file saved on this lead (PandaDoc, Drive, uploads) */}
           <Card className="p-4">
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">📎 Documents</div>
+            <form action={uploadLeadDocAction} className="mb-2 flex items-center gap-1.5">
+              <input type="hidden" name="oppId" value={opp.id} />
+              <input type="hidden" name="contactId" value={c.id} />
+              <input type="file" name="file" required className="min-w-0 flex-1 text-[10px] text-slate-500 file:mr-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[10px] file:font-bold file:text-slate-600" />
+              <button className="rounded-lg bg-brand-navy px-2.5 py-1 text-[10px] font-bold text-white">⬆ to Drive</button>
+            </form>
             {events.filter((e) => e.kind === "file").length === 0 ? (
-              <p className="text-xs text-slate-400">No documents yet — signed PandaDocs and Drive files attach here automatically.</p>
+              <p className="text-xs text-slate-400">No documents yet — upload above, or signed PandaDocs attach automatically. Everything lands in the deal&apos;s Google Drive folder.</p>
             ) : (
               <div className="space-y-1.5">
                 {events.filter((e) => e.kind === "file").map((e) => {

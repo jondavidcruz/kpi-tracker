@@ -33,6 +33,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/report": "kpi history reports past dates calendar",
   "/entry": "enter kpis log numbers bulk lead import",
   "/deals": "pipeline dispositions",
+  "/reduction": "price reduction seller negotiate script calculator dom offers",
   "/call-scoring": "call recording transcript coaching score",
   "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers list pull skip trace sms sop directrei regrid skipmatrix scrub dnc litigator suppression texting campaign",
   "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
@@ -91,6 +92,7 @@ export default function Sidebar({
     ] },
     { label: "Dispositions", items: [
       { href: "/deals", label: "Deals", Icon: Building2 },
+      { href: "/reduction", label: "Reduction Play", Icon: TrendingUp },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
       { href: "/vetting", label: "Buyer Research", Icon: Search, marketingOnly: true },
       { href: "/closing-calc", label: "Closing Calculator", Icon: Receipt, managerOnly: true },
@@ -210,6 +212,11 @@ export default function Sidebar({
         <a href="https://freedom-offers.com" target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className="block" title="Visit freedom-offers.com">
           <Logo size="sm" tagline />
         </a>
+        {/* 🏷 always-visible company reference (Jon 2026-10-09): what to tell sellers */}
+        <div className="mt-1.5 space-y-0.5 text-[11px] font-semibold text-brand-navy-200">
+          <div>🌐 freedom-offers.com</div>
+          <div className="font-mono tracking-wider">☎️ 1-877-652-8991</div>
+        </div>
         {owner && <div className="mt-2"><StatusDot /></div>}
         {(officeMeetLink || mondayMeetLink) && (
           <div className="mt-3 space-y-1.5">
