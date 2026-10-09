@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     await logCrmEvent({
       contactId: contact.id, oppId: opp?.id ?? "", kind: "sms",
       body: `⬅️ Seller: ${bodyTxt}`,
-      meta: { msgId, dir: "inbound", via: "telnyx", ...(mediaUrls.length ? { media: mediaUrls } : {}) },
+      meta: { msgId, dir: "inbound", via: "telnyx", line: p.to?.[0]?.phone_number ?? "", ...(mediaUrls.length ? { media: mediaUrls } : {}) },
       actor: "inbound-sms",
     }).catch(() => {});
     // 🚫 real-time STOP / hostile guard

@@ -419,6 +419,18 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   let from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
   // rep picked a From number — honor it only if it's one of OUR lines
   const reqFrom = String(formData.get("from") ?? "").replace(/[^+\d]/g, "");
+  // 📌 sticky line (Jon 2026-10-09): no explicit pick → default to the line
+  // this lead ALREADY knows (last line they texted or we texted them on), so
+  // they never get a confusing text from a second number.
+  if (!reqFrom && contactId) {
+    try {
+      const prev = await db.crmEvent.findMany({ where: { contactId, kind: "sms" }, orderBy: { at: "desc" }, take: 20, select: { meta: true } });
+      for (const e of prev) {
+        const m = e.meta as { line?: string } | null;
+        if (m?.line) { from = m.line; break; }
+      }
+    } catch { /* env default */ }
+  }
   if (reqFrom && reqFrom !== from && process.env.TELNYX_API_KEY) {
     try {
       const cfgRow = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
@@ -458,7 +470,7 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   });
   const ok = res.ok;
   const err = ok ? "" : (await res.text()).slice(0, 140);
-  await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: ${text}${ok ? "" : ` (SEND FAILED: ${err})`}`, actor: me.name });
+  await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: ${text}${ok ? "" : ` (SEND FAILED: ${err})`}`, meta: { dir: "outbound", line: from ?? "" }, actor: me.name });
   if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
 }
 

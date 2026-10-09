@@ -53,8 +53,13 @@ export async function GET(req: NextRequest) {
       db.crmEvent.findMany({ where: { contactId: cid, kind: "sms" }, orderBy: { at: "desc" }, take: 12 }),
     ]);
     await setConvRead([cid], true);
-    const history = [...sms].reverse().map((e) => ({ body: e.body.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: e.body.startsWith("⬅"), at: e.at.toISOString() }));
-    return NextResponse.json({ id: contact.id, name: contact.name, phone: contact.phone, oppId: opp?.id ?? "", history, me: me!.name });
+    const history = [...sms].reverse().map((e) => {
+      const m = e.meta as { line?: string } | null;
+      return { body: e.body.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: e.body.startsWith("⬅"), at: e.at.toISOString(), line: m?.line ?? "" };
+    });
+    // 📌 the line this lead already knows — newest message that recorded one
+    const suggestFrom = [...history].reverse().find((h) => h.line)?.line ?? "";
+    return NextResponse.json({ id: contact.id, name: contact.name, phone: contact.phone, oppId: opp?.id ?? "", history, suggestFrom, me: me!.name });
   }
   const { unread, all } = await smsThreads(me!.name, isManager(me!));
   // threads = unread (badge + legacy consumers); recent = iPhone Messages list

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { sendCrmSmsAction } from "@/app/crm/actions";
 
 type Thread = { id: string; name: string; phone: string; owner: string; snippet: string; at: string; unread?: boolean };
-type QuickThread = { id: string; name: string; phone: string; oppId: string; history: Array<{ body: string; inbound: boolean; at: string }>; me: string };
+type QuickThread = { id: string; name: string; phone: string; oppId: string; history: Array<{ body: string; inbound: boolean; at: string; line?: string }>; suggestFrom?: string; me: string };
 
 function fmtPhone(n: string) {
   const d = n.replace(/\D/g, "").slice(-10);
@@ -146,6 +146,7 @@ export default function InboxBell() {
       if (!r.ok) { setThreadErr("Couldn't load that thread — use Open Conversations below."); setLoading(""); return; }
       const q = (await r.json()) as QuickThread;
       setQuick(q); setMsgs(q.history); setText("");
+      setFrom(q.suggestFrom ?? ""); // sticky line: default to the number this lead already knows
       setRecent((rs) => rs.map((t) => (t.id === id ? { ...t, unread: false } : t)));
       setCount((c) => Math.max(0, c - (recent.find((t) => t.id === id)?.unread ? 1 : 0)));
     } catch { setThreadErr("Couldn't load that thread — use Open Conversations below."); }
@@ -160,7 +161,7 @@ export default function InboxBell() {
     if (from) fd.set("from", from);
     start(async () => {
       await sendCrmSmsAction(fd);
-      setMsgs((m) => [...m, { body, inbound: false, at: new Date().toISOString() }]);
+      setMsgs((m) => [...m, { body, inbound: false, at: new Date().toISOString(), line: from || quick.suggestFrom || "" }]);
       setText("");
     });
   };
@@ -194,7 +195,8 @@ export default function InboxBell() {
               Texting from
               <select value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold">
                 <option value="">Default line</option>
-                {numbers.map((n) => <option key={n} value={n}>{fmtPhone(n)}</option>)}
+                {from && !numbers.includes(from) && <option value={from}>{fmtPhone(from)} (their line)</option>}
+                {numbers.map((n) => <option key={n} value={n}>{fmtPhone(n)}{quick?.suggestFrom === n ? " · their line" : ""}</option>)}
               </select>
             </span>
           )}
@@ -217,8 +219,9 @@ export default function InboxBell() {
                       <span className="mt-auto" />
                       <span className="block text-center text-[8px] font-semibold text-slate-400">Text Message · SMS</span>
                       {msgs.map((m, i) => (
-                        <span key={i} className={`flex ${m.inbound ? "justify-start" : "justify-end"}`}>
+                        <span key={i} className={`flex flex-col ${m.inbound ? "items-start" : "items-end"}`}>
                           <span className="max-w-[80%] whitespace-pre-line break-words rounded-2xl px-2.5 py-1.5 text-[11px] leading-snug" style={m.inbound ? { backgroundColor: "#e9e9eb", color: "#111", borderBottomLeftRadius: 4 } : { backgroundColor: "#34c759", color: "#fff", borderBottomRightRadius: 4 }}>{m.body}</span>
+                          {!m.inbound && m.line && <span className="px-1 text-[7px] font-semibold text-slate-300">from {fmtPhone(m.line)}</span>}
                         </span>
                       ))}
                     </span>
