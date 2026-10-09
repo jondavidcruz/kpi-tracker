@@ -41,7 +41,8 @@ STRONGEST BUYER QUOTE (weave it in naturally if present): ${b.feedback || "(none
 MARKET CONTEXT TO USE: elevated mortgage rates, high material costs, the property has already been exposed to the market so every serious buyer has seen it.
 
 RULES FOR THE SCRIPT:
-- Warm, honest, factual — the rep is the messenger of what buyers said, never criticizing the house personally.
+- CRITICAL WORDING: when speaking to the seller, NEVER say "buyer" or "buyers" — always call them "our funding partners" (or "our partners"). The seller must feel WE are in the deal with them and our partners fund the close; "buyers" makes them think we're not the ones buying and kills reductions. Same for the quote: introduce it as what one of our funding partners said.
+- Warm, honest, factual — the rep is the messenger of what our funding partners found, never criticizing the property personally.
 - Specific trade language for each repair (e.g. "architectural shingle tear-off and re-deck", "stem-wall crack needing epoxy injection and a structural letter") — credible, not exaggerated, with rough cost ranges a contractor would quote.
 - Present the ask number ONCE, then instruct the rep: [PAUSE — say nothing until they respond].
 - Include short [IF THEY SAY NO] and [IF THEY COUNTER] branches (counter at or above $${b.settle.toLocaleString()} = accept and close).

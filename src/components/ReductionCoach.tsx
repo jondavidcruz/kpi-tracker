@@ -53,15 +53,15 @@ export default function ReductionCoach({ initial, uw = [] }: { initial?: { addre
 
   const script = contract && best ? `Hi — it's about ${f.address || "the property"}. I wanted to give you a straight update, because you deserve the truth, not silence.
 
-We've now had ${offers || "several"} serious buyers through the property${dom ? ` over the ${dom} days it's been on the market` : ""}. Every single one of them came back in the same range — and every one of them flagged the same things:
-${repairLines.length ? repairLines.map((r) => `  • ${r}`).join("\n") : "  • the repairs their contractors quoted after walking it"}
-${f.feedback.trim() ? `\nIn their own words: "${f.feedback.trim().slice(0, 200)}"` : ""}
+We've now run the property past ${offers || "several"} of our funding partners${dom ? ` over the ${dom} days it's been on the market` : ""}. Every single one of them came back in the same range — and every one of them flagged the same things:
+${repairLines.length ? repairLines.map((r) => `  • ${r}`).join("\n") : "  • the issues their walk-throughs turned up"}
+${f.feedback.trim() ? `\nIn one partner's own words: "${f.feedback.trim().slice(0, 200)}"` : ""}
 
-Here's the honest picture of the market right now: material costs are up, mortgage rates are still high, and buyers are pricing every repair into their offers. The property has also already been seen by the market${dom ? ` for ${dom} days` : ""} — everyone who was going to pay more has already looked.
+Here's the honest picture of the market right now: material costs are up, rates are still high, and our partners are pricing every one of those items into what they'll fund. The property has also already been exposed to the market${dom ? ` for ${dom} days` : ""} — everyone who was going to pay more has already looked.
 
-For this to actually close, the number that works is ${money(settle)}${dealType === "novation" ? " — and remember, we're covering your closing costs, so that's what you actually walk away with" : ""}. I'd like to adjust our agreement to ${money(target)} — that gives me just enough room to push the buyers up and still get you to the closing table instead of starting over.
+For this to actually close, the number that works is ${money(settle)}${dealType === "novation" ? " — and remember, we're covering your closing costs, so that's what you actually walk away with" : ""}. I'd like to adjust our agreement to ${money(target)} — that gives me just enough room to push our partners up and still get you to the closing table instead of starting over.
 
-I know that's not the number we both hoped for. But this is real money, from a real buyer, who can close. What would you like to do?` : "";
+I know that's not the number we both hoped for. But this is real money, partners who are ready to fund, and a closing that actually happens. What would you like to do?` : "";
 
   return (
     <div className="space-y-4">
@@ -122,7 +122,7 @@ I know that's not the number we both hoped for. But this is real money, from a r
             <label><span className={lbl}># of offers received</span><input value={f.offers} onChange={set("offers")} placeholder="3" className={inputCls} /></label>
             <label><span className={lbl}>Days on market</span><input value={f.dom} onChange={set("dom")} placeholder="34" className={inputCls} /></label>
           </div>
-          <label><span className={lbl}>What buyers said is wrong (rough bullets — one per line, AI writes the professional wording)</span><textarea value={f.repairs} onChange={set("repairs")} rows={3} placeholder={propType === "land" ? "easement across the back\ngopher tortoises\nscrub jay area\nhalf of it looks wet" : "roof bad\nac old\ncrack in foundation"} className={inputCls} /></label>
+          <label><span className={lbl}>What buyers flagged (rough bullets — one per line; on the call we say &quot;our funding partners,&quot; and the AI writes it that way)</span><textarea value={f.repairs} onChange={set("repairs")} rows={3} placeholder={propType === "land" ? "easement across the back\ngopher tortoises\nscrub jay area\nhalf of it looks wet" : "roof bad\nac old\ncrack in foundation"} className={inputCls} /></label>
           <label><span className={lbl}>Strongest buyer quote — the most powerful thing a buyer actually SAID, word-for-word <span className="font-normal text-slate-400">(optional — you repeat it to the seller as third-party proof; a real buyer&apos;s words always beat yours)</span></span><textarea value={f.feedback} onChange={set("feedback")} rows={2} placeholder={propType === "land" ? "between the easement and the tortoises, I can't go past 30" : "with that roof, I'm at 60 — not a dollar more"} className={inputCls} /></label>
           {contract > 0 && best > 0 && (
             <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-100">
@@ -186,7 +186,7 @@ I know that's not the number we both hoped for. But this is real money, from a r
                     <span className="shrink-0 font-extrabold tabular-nums text-slate-900">{money(e.low)}–{money(e.high)}</span>
                   </div>
                 ))}
-                <div className="flex justify-between border-t border-amber-200/70 pt-1.5 text-[12px] font-extrabold"><span className="text-amber-900">Total {propType === "land" ? "costs buyers are pricing in" : "repairs buyers are pricing in"}</span><span className="text-red-600">{money(ai.estimates.reduce((n, e) => n + e.low, 0))}–{money(ai.estimates.reduce((n, e) => n + e.high, 0))}</span></div>
+                <div className="flex justify-between border-t border-amber-200/70 pt-1.5 text-[12px] font-extrabold"><span className="text-amber-900">Total {propType === "land" ? "costs our partners are pricing in" : "repairs our partners are pricing in"}</span><span className="text-red-600">{money(ai.estimates.reduce((n, e) => n + e.low, 0))}–{money(ai.estimates.reduce((n, e) => n + e.high, 0))}</span></div>
               </div>
               <p className="mt-1.5 text-[10px] text-amber-700">{propType === "land" ? "Realistic permit, mitigation and site-work costs — say them as ranges (“the tortoise relocation alone is a three-to-fifteen-thousand-dollar process”) and you’ll sound like the due-diligence reports are on your desk." : "Realistic national-average installed costs — say them as ranges (“the roof alone is a twelve-to-fifteen-thousand-dollar job”) and you’ll sound like the contractor walked it with you."}</p>
             </div>
@@ -210,7 +210,8 @@ I know that's not the number we both hoped for. But this is real money, from a r
           <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-100">
             <div className="font-extrabold">🎓 First-timer rules</div>
             <ul className="mt-1 list-disc space-y-1 pl-4">
-              <li><b>Facts, not apologies.</b> You&apos;re the messenger of what BUYERS said — never make it your opinion of their house.</li>
+              <li><b>Say &quot;funding partners,&quot; never &quot;buyers.&quot;</b> The seller must feel WE&apos;re in the deal and our partners fund it — &quot;buyers&quot; tells them we&apos;re not the one buying, and the reduction dies.</li>
+              <li><b>Facts, not apologies.</b> You&apos;re the messenger of what our FUNDING PARTNERS found — never make it your opinion of their property.</li>
               <li><b>Say the number, then stop talking.</b> The silence after the ask is where the deal happens. Count to ten in your head.</li>
               <li><b>They say no?</b> &quot;Totally understand. Which of those repair items do you disagree with?&quot; — argue the repairs, never the person.</li>
               <li><b>They counter?</b> Anything at or above the &quot;must land&quot; number is a YES. Take it and close.</li>
