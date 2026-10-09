@@ -10,19 +10,25 @@ const lbl = "mb-0.5 block text-[11px] font-bold text-slate-500";
 const UW_LABEL: Record<string, string> = { cash: "💵 Cash MAO", novation: "📝 Novation MAO", creative: "🎨 Creative MAO", listing: "🏷 Listing", flip: "🔨 Flip", developer: "🚧 Developer" };
 
 export default function ReductionCoach({ initial, uw = [] }: { initial?: { address?: string; contractPrice?: string }; uw?: Array<{ tab: string; mao: number; fee: number }> } = {}) {
-  const [f, setF] = useState({ address: initial?.address ?? "", contractPrice: initial?.contractPrice ?? "", bestOffer: "", fee: "10,000", offers: "", dom: "", repairs: "", feedback: "" });
+  const [f, setF] = useState({ address: initial?.address ?? "", contractPrice: initial?.contractPrice ?? "", bestOffer: "", fee: "10,000", agentPct: "3", sellerClosing: "2,000", offers: "", dom: "", repairs: "", feedback: "" });
+  const [dealType, setDealType] = useState<"assignment" | "novation">("assignment");
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const num = (s: string) => Number(s.replace(/[^0-9.]/g, "")) || 0;
 
   const contract = num(f.contractPrice);
-  const best = num(f.bestOffer); // what the BUYER offers US
-  const fee = num(f.fee);        // our minimum assignment fee — never goes to zero
+  const best = num(f.bestOffer); // assignment: buyer's offer to US · novation: end-buyer sale price
+  const fee = num(f.fee);        // our minimum fee — never goes to zero
+  const agentPct = num(f.agentPct);
+  const sellerClosing = num(f.sellerClosing);
   const offers = num(f.offers);
   const dom = num(f.dom);
-  // 💰 the wholesale math (Jon 2026-10-09): buyer pays us `best`; we keep
-  // `fee`; so the SELLER must land at or below best − fee for this to close
-  // with us still making money. Example: buyer 70k, fee 10k → seller ≤ 60k.
-  const settle = best && fee ? best - fee : 0;           // seller's ceiling (our walk-away floor)
+  // 💰 deal-type math (Jon 2026-10-09):
+  //  ASSIGNMENT — buyer covers ALL closing costs: seller ≤ buyerOffer − ourFee.
+  //  NOVATION  — WE cover the seller's closing costs and agent fees come out
+  //  of the sale: seller ≤ salePrice − agentFees − sellerClosingCosts − ourFee.
+  const agentFees = dealType === "novation" ? Math.round((best * agentPct) / 100) : 0;
+  const coveredClosing = dealType === "novation" ? sellerClosing : 0;
+  const settle = best && fee ? best - fee - agentFees - coveredClosing : 0; // seller's ceiling (our walk-away floor)
   const gap = contract && settle ? contract - settle : 0; // how far the seller must come down
   // open the ask ~15% PAST the target so there's room to "meet in the middle"
   const askReduction = gap > 0 ? Math.round((gap * 1.15) / 500) * 500 : 0;
@@ -40,7 +46,7 @@ ${f.feedback.trim() ? `\nIn their own words: "${f.feedback.trim().slice(0, 200)}
 
 Here's the honest picture of the market right now: material costs are up, mortgage rates are still high, and buyers are pricing every repair into their offers. The property has also already been seen by the market${dom ? ` for ${dom} days` : ""} — everyone who was going to pay more has already looked.
 
-For this to actually close, the number that works is ${money(settle)}. I'd like to adjust our agreement to ${money(target)} — that gives me just enough room to push the buyers up and still get you to the closing table instead of starting over.
+For this to actually close, the number that works is ${money(settle)}${dealType === "novation" ? " — and remember, we're covering your closing costs, so that's what you actually walk away with" : ""}. I'd like to adjust our agreement to ${money(target)} — that gives me just enough room to push the buyers up and still get you to the closing table instead of starting over.
 
 I know that's not the number we both hoped for. But this is real money, from a real buyer, who can close. What would you like to do?` : "";
 
@@ -63,11 +69,18 @@ I know that's not the number we both hoped for. But this is real money, from a r
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="text-sm font-extrabold text-slate-800">1️⃣ The real numbers</div>
+          <div className="flex gap-1.5">
+            {([["assignment", "📄 Assignment — buyer covers ALL closing costs"], ["novation", "🏷 Novation — WE cover seller closing + agent fees"]] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setDealType(k)} className={`flex-1 rounded-xl px-2 py-2 text-[11px] font-bold ring-1 ${dealType === k ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>{l}</button>
+            ))}
+          </div>
           <label><span className={lbl}>Property address</span><input value={f.address} onChange={set("address")} placeholder="123 Main St" className={inputCls} /></label>
           <div className="grid grid-cols-2 gap-2">
             <label><span className={lbl}>Our contract price with the SELLER $</span><input value={f.contractPrice} onChange={set("contractPrice")} placeholder="80,000" className={inputCls} /></label>
-            <label><span className={lbl}>Best BUYER offer to US $</span><input value={f.bestOffer} onChange={set("bestOffer")} placeholder="70,000" className={inputCls} /></label>
+            <label><span className={lbl}>{dealType === "assignment" ? "Best BUYER offer to US $" : "End-buyer SALE price $"}</span><input value={f.bestOffer} onChange={set("bestOffer")} placeholder="70,000" className={inputCls} /></label>
             <label><span className={lbl}>Our minimum fee $ <span className="font-normal text-slate-400">(we never work for free)</span></span><input value={f.fee} onChange={set("fee")} className={inputCls} /></label>
+            {dealType === "novation" && <label><span className={lbl}>Agent fees %</span><input value={f.agentPct} onChange={set("agentPct")} className={inputCls} /></label>}
+            {dealType === "novation" && <label><span className={lbl}>Seller closing costs WE cover $</span><input value={f.sellerClosing} onChange={set("sellerClosing")} className={inputCls} /></label>}
             <label><span className={lbl}># of offers received</span><input value={f.offers} onChange={set("offers")} placeholder="3" className={inputCls} /></label>
             <label><span className={lbl}>Days on market</span><input value={f.dom} onChange={set("dom")} placeholder="34" className={inputCls} /></label>
           </div>
@@ -75,12 +88,14 @@ I know that's not the number we both hoped for. But this is real money, from a r
           <label><span className={lbl}>Strongest buyer quote (optional — gold on the call)</span><textarea value={f.feedback} onChange={set("feedback")} rows={2} placeholder={"at this price I'd need the roof done, otherwise I'm at 60"} className={inputCls} /></label>
           {contract > 0 && best > 0 && (
             <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-100">
-              <div className="flex justify-between"><span className="text-slate-500">Buyer pays us</span><b>{money(best)}</b></div>
+              <div className="flex justify-between"><span className="text-slate-500">{dealType === "assignment" ? "Buyer pays us (covers their own closing)" : "End-buyer sale price"}</span><b>{money(best)}</b></div>
+              {dealType === "novation" && <div className="flex justify-between"><span className="text-slate-500">− agent fees ({agentPct}%)</span><b className="text-amber-700">{money(agentFees)}</b></div>}
+              {dealType === "novation" && <div className="flex justify-between"><span className="text-slate-500">− seller closing costs (we cover)</span><b className="text-amber-700">{money(coveredClosing)}</b></div>}
               <div className="flex justify-between"><span className="text-slate-500">− our fee (protected)</span><b className="text-indigo-700">{money(fee)}</b></div>
               <div className="flex justify-between border-t border-slate-200 pt-1"><span className="font-bold text-slate-700">Seller must land at or below</span><b className="text-emerald-700">{money(settle)}</b></div>
               <div className="flex justify-between"><span className="text-slate-500">Open the ask at</span><b>{money(target)} <span className="text-[10px] font-semibold text-slate-400">(~15% past target = room to meet in the middle)</span></b></div>
               <div className="flex justify-between"><span className="text-slate-500">Seller comes down by</span><b className="text-red-600">{money(gap)}</b></div>
-              {settle <= 0 && <div className="text-[11px] font-bold text-red-600">⚠️ The buyer offer doesn&apos;t even cover the fee — this needs a bigger buyer push, not a reduction.</div>}
+              {settle <= 0 && <div className="text-[11px] font-bold text-red-600">⚠️ After {dealType === "novation" ? "agent fees + closing costs + " : ""}our fee there&apos;s nothing left — this needs a better buyer, not a reduction.</div>}
             </div>
           )}
         </div>
