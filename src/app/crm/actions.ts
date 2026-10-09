@@ -216,6 +216,21 @@ export async function addCrmTaskAction(formData: FormData) {
   } });
   const note = String(formData.get("note") ?? "").trim();
   if (note) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(created.id, note); }
+  const prio = String(formData.get("priority") ?? "");
+  if (["urgent", "low"].includes(prio)) {
+    const fd2 = new FormData(); fd2.set("id", created.id); fd2.set("p", prio);
+    await setTaskPriorityAction(fd2);
+  }
+  const recur = String(formData.get("recur") ?? "");
+  if (["daily", "weekdays", "weekly", "monthly"].includes(recur)) {
+    const recRow = await db.resource.findFirst({ where: { category: "__task_recur__" } });
+    let map: Record<string, string> = {};
+    try { map = recRow?.description ? JSON.parse(recRow.description) : {}; } catch { /* fresh */ }
+    map[created.id] = recur;
+    const description = JSON.stringify(map);
+    if (recRow) await db.resource.update({ where: { id: recRow.id }, data: { description } });
+    else await db.resource.create({ data: { title: "task-recur", category: "__task_recur__", url: "", description } });
+  }
   revalidatePath(`/crm/${oppId}`);
   revalidatePath("/crm");
   revalidatePath("/crm/tasks");
@@ -229,6 +244,39 @@ export async function toggleCrmTaskAction(formData: FormData) {
   if (!t) return;
   await db.crmTask.update({ where: { id }, data: t.doneAt ? { doneAt: null, doneBy: "" } : { doneAt: new Date(), doneBy: me.name } });
   if (!t.doneAt && t.contactId) await logCrmEvent({ contactId: t.contactId, oppId: t.oppId, kind: "task", body: `Done: ${t.title}`, actor: me.name });
+  if (!t.doneAt) {
+    // 🔁 recurring: completing one spawns the next occurrence (rule in __task_recur__)
+    try {
+      const recRow = await db.resource.findFirst({ where: { category: "__task_recur__" } });
+      const recur: Record<string, string> = recRow?.description ? JSON.parse(recRow.description) : {};
+      const rule = recur[id];
+      if (rule) {
+        const base = t.due ? new Date(t.due + "T12:00:00Z") : new Date();
+        const next = new Date(base);
+        if (rule === "daily") next.setUTCDate(next.getUTCDate() + 1);
+        else if (rule === "weekdays") { do { next.setUTCDate(next.getUTCDate() + 1); } while ([0, 6].includes(next.getUTCDay())); }
+        else if (rule === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+        else if (rule === "monthly") next.setUTCMonth(next.getUTCMonth() + 1);
+        const spawned = await db.crmTask.create({ data: { oppId: t.oppId, contactId: t.contactId, title: t.title, due: next.toISOString().slice(0, 10), assignedTo: t.assignedTo, createdBy: t.createdBy || "recurring" } });
+        recur[spawned.id] = rule; delete recur[id];
+        await db.resource.update({ where: { id: recRow!.id }, data: { description: JSON.stringify(recur) } });
+        const { readTaskNotes, writeTaskNote } = await import("@/lib/task-notes");
+        const n = (await readTaskNotes())[id]; if (n) await writeTaskNote(spawned.id, n);
+      }
+    } catch { /* recurrence best-effort */ }
+    // 🔎 system tasks Jon completes go to Claude's verification queue (Jon 2026-10-08)
+    try {
+      if (["warroom-updates", "flag-watch", "perf-watchdog"].includes(t.createdBy)) {
+        const qRow = await db.resource.findFirst({ where: { category: "__task_verify_queue__" } });
+        let q: Array<{ id: string; title: string; at: string }> = [];
+        try { q = qRow?.description ? JSON.parse(qRow.description) : []; } catch { /* fresh */ }
+        q.unshift({ id, title: t.title, at: new Date().toISOString() });
+        const description = JSON.stringify(q.slice(0, 50));
+        if (qRow) await db.resource.update({ where: { id: qRow.id }, data: { description } });
+        else await db.resource.create({ data: { title: "task-verify-queue", category: "__task_verify_queue__", url: "", description } });
+      }
+    } catch { /* queue best-effort */ }
+  }
   revalidatePath(`/crm/${t.oppId}`);
   revalidatePath("/crm");
   revalidatePath("/crm/tasks");

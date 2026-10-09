@@ -83,6 +83,18 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
           <input type="hidden" name="contactId" value="" />
           <input name="title" required placeholder="➕ New task — what needs doing?" className="min-w-[220px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
           <input name="note" placeholder="description / steps (optional)" className="min-w-[220px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+          <select name="priority" defaultValue="" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" title="Priority">
+            <option value="">🟡 Pending</option>
+            <option value="urgent">🔴 Urgent</option>
+            <option value="low">⚪ Low</option>
+          </select>
+          <select name="recur" defaultValue="" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" title="Repeats — completing it spawns the next one">
+            <option value="">no repeat</option>
+            <option value="daily">🔁 daily</option>
+            <option value="weekdays">🔁 weekdays</option>
+            <option value="weekly">🔁 weekly</option>
+            <option value="monthly">🔁 monthly</option>
+          </select>
           <input name="due" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" />
           {manager ? (
             <select name="assignedTo" className="rounded-lg border border-slate-200 px-2 py-2 text-sm font-semibold">

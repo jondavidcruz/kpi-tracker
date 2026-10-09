@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { saveDay, addRepReason, setDayFocus, refreshCrmToday } from "@/app/actions";
+import { toggleCrmTaskAction } from "@/app/crm/actions";
 import { getCurrentUser, isManager, canAccessCSuite, tracksSpeedTest } from "@/lib/auth";
 import { readCommissionPlans, planForUser, pathToGoal } from "@/lib/commissions";
 import { db } from "@/lib/db";
@@ -83,6 +84,11 @@ export default async function EntryPage({
         orderBy: { date: "desc" },
         take: 10,
       })
+    : [];
+  // ✅ EOD task accountability (Jon 2026-10-08): open tasks due today/overdue
+  // stare the rep in the face on their KPI screen — no more forgotten tasks.
+  const myOpenTasks = rep
+    ? await db.crmTask.findMany({ where: { assignedTo: { equals: rep.name, mode: "insensitive" }, doneAt: null, due: { not: "", lte: date } }, orderBy: { due: "asc" }, take: 15 })
     : [];
 
   // Internet speed gets its own prominent test card (below), not a plain field.
@@ -303,6 +309,25 @@ export default async function EntryPage({
             <div className={`text-lg font-bold ${onTrack ? "text-emerald-300" : "text-slate-500"}`}>{onTrack ? "✓ On track" : "In progress"}</div>
           </Card>
         </div>
+      )}
+
+      {rep && myOpenTasks.length > 0 && (
+        <section className="rounded-xl border-2 border-indigo-300 bg-indigo-50/70 p-5">
+          <h2 className="text-base font-bold text-slate-800">✅ Before you close the day — {myOpenTasks.length} task{myOpenTasks.length === 1 ? "" : "s"} waiting on you</h2>
+          <p className="mb-3 text-sm text-slate-500">Tick what&apos;s done; what isn&apos;t, your manager sees too. Tasks live in <a href="/crm/tasks" className="font-bold text-indigo-700 underline">CRM → Tasks</a>.</p>
+          <div className="space-y-1.5">
+            {myOpenTasks.map((t) => (
+              <div key={t.id} className="flex items-center gap-2.5 rounded-lg bg-white px-3 py-2 ring-1 ring-indigo-100">
+                <form action={toggleCrmTaskAction}>
+                  <input type="hidden" name="id" value={t.id} />
+                  <button title="Mark done" className="grid h-5 w-5 place-items-center rounded-full border border-slate-300 bg-white text-[10px] text-transparent hover:text-emerald-600">✓</button>
+                </form>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700">{t.title}</span>
+                <span className={`text-[11px] font-bold ${t.due < date ? "text-red-600" : "text-slate-400"}`}>{t.due < date ? `overdue · ${t.due}` : "due today"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {rep && myAlerts.length > 0 && (

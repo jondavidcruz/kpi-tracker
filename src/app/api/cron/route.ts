@@ -1315,6 +1315,95 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, filled, jonTasks });
   }
 
+  // 🔎 Verify completed system tasks (?verifytasks=1, daily cron + on demand —
+  // Jon 2026-10-08: "when I mark it complete, have Claude check it was set up
+  // right"). Runs a real probe per known task type; a failed check files a
+  // ⚠️ follow-up task with what's still wrong; passes are logged ✅.
+  if (url.searchParams.get("verifytasks") === "1") {
+    const qRow = await db.resource.findFirst({ where: { category: "__task_verify_queue__" } });
+    let q: Array<{ id: string; title: string; at: string }> = [];
+    try { q = qRow?.description ? JSON.parse(qRow.description) : []; } catch { q = []; }
+    if (!q.length) return NextResponse.json({ ok: true, verified: [], note: "queue empty" });
+    const results: Array<{ title: string; check: string; pass: boolean; detail: string }> = [];
+    const jon2 = await db.user.findFirst({ where: { active: true, name: { startsWith: "Jon", mode: "insensitive" } }, select: { name: true } });
+    const fileFail = async (title: string, why: string) => {
+      const t2 = `⚠️ Verify FAILED: ${title.slice(0, 120)} — ${why.slice(0, 60)}`;
+      const dup = await db.crmTask.findFirst({ where: { title: t2, doneAt: null } });
+      if (!dup) {
+        const created2 = await db.crmTask.create({ data: { oppId: "", contactId: "", title: t2, due: new Date().toISOString().slice(0, 10), assignedTo: jon2?.name ?? "Jon Cruz", createdBy: "warroom-updates" } });
+        const { writeTaskNote } = await import("@/lib/task-notes");
+        await writeTaskNote(created2.id, `Claude re-checked after you marked the original done and the system still can't see it working:\n${why}\n\nRe-do the original steps or tell Claude what you hit.`);
+      }
+    };
+    const keep: typeof q = [];
+    for (const item of q) {
+      const t = item.title.toLowerCase();
+      let check = "", pass = false, detail = "";
+      try {
+        if (/gmail api/.test(t)) {
+          check = "Gmail profile read";
+          const { scanOffers } = await import("@/lib/gmail-offers"); void scanOffers;
+          const crypto = await import("crypto");
+          const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "{}");
+          const now2 = Math.floor(Date.now() / 1000);
+          const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
+          const head = enc({ alg: "RS256", typ: "JWT" });
+          const claims = enc({ iss: sa.client_email, sub: "info@freedom-offers.com", scope: "https://www.googleapis.com/auth/gmail.readonly", aud: "https://oauth2.googleapis.com/token", iat: now2, exp: now2 + 600 });
+          const signer = crypto.createSign("RSA-SHA256"); signer.update(`${head}.${claims}`); signer.end();
+          const sig = signer.sign(sa.private_key).toString("base64url");
+          const tok = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${head}.${claims}.${sig}` }) }).then((r) => r.json());
+          pass = !!tok.access_token; detail = pass ? "token mints" : "token refused";
+        } else if (/chat api|chat auto|chat.memberships|chat scope/.test(t)) {
+          check = "Chat membership API";
+          const { addToSpaces } = await import("@/lib/chat-members");
+          const res = await addToSpaces("info@freedom-offers.com", ["updates"]);
+          const v = Object.values(res)[0] ?? "";
+          pass = v === "added" || /409|ALREADY_EXISTS|already/i.test(v);
+          detail = v.slice(0, 120);
+        } else if (/michelle.*(cell|phone)/.test(t)) {
+          check = "Michelle's phone on file";
+          const mich = await db.user.findFirst({ where: { active: true, name: { startsWith: "Michelle", mode: "insensitive" } }, select: { id: true } });
+          const prof = mich ? await db.teamProfile.findFirst({ where: { userId: mich.id }, select: { phone: true } }) : null;
+          pass = !!prof?.phone && prof.phone.replace(/\D/g, "").length >= 10;
+          detail = pass ? prof!.phone : "no phone saved on /account";
+        } else if (/pandadoc/.test(t)) {
+          check = "PandaDoc field ids";
+          const { getTemplateDetails, PANDADOC_TEMPLATES } = await import("@/lib/pandadoc");
+          const det = await getTemplateDetails(PANDADOC_TEMPLATES.cash.id);
+          const ids = JSON.stringify(det.body).toLowerCase();
+          pass = ids.includes("propertyaddress") && ids.includes("sellernet");
+          detail = pass ? "renamed fields visible" : "renamed fields NOT found on cash template";
+        } else if (/calendar/.test(t)) {
+          check = "Calendar sharing";
+          pass = true; detail = "no probe available — trust-marked (tell Claude if sync still empty)";
+        } else if (/nick.*softphone|softphone.*nick/.test(t)) {
+          check = "Nick call access";
+          const row2 = await db.resource.findFirst({ where: { category: "__crm_comms__" } });
+          pass = !!row2?.description && /nick/i.test(row2.description) && /call/i.test(row2.description);
+          detail = pass ? "comms row mentions nick+call" : "couldn't confirm in Comms Access — check /crm/access";
+        } else { check = "no automated probe"; pass = true; detail = "nothing to verify automatically"; }
+      } catch (e) { check = check || "probe"; pass = false; detail = String(e).slice(0, 120); }
+      results.push({ title: item.title, check, pass, detail });
+      if (!pass) { await fileFail(item.title, `${check}: ${detail}`); keep.push(item); }
+    }
+    const description = JSON.stringify(keep.filter((k) => Date.now() - Date.parse(k.at) < 7 * 86400_000));
+    if (qRow) await db.resource.update({ where: { id: qRow.id }, data: { description } });
+    return NextResponse.json({ ok: true, verified: results });
+  }
+
+  // 📲 Arm the inbound-SMS webhook (?smsarm=1, one-time): points the "War Room
+  // SMS" messaging profile at /api/telnyx/sms so seller texts land real-time.
+  if (url.searchParams.get("smsarm") === "1") {
+    if (!process.env.TELNYX_API_KEY) return NextResponse.json({ ok: false, error: "no TELNYX_API_KEY" });
+    const profileId = url.searchParams.get("profile") ?? "4001a118-4be9-4916-9732-be7d6dec9063";
+    const r = await fetch(`https://api.telnyx.com/v2/messaging_profiles/${profileId}`, {
+      method: "PATCH", headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ webhook_url: "https://kpi-tracker-lovat.vercel.app/api/telnyx/sms", webhook_api_version: "2" }),
+    });
+    const b = (await r.json().catch(() => ({}))) as { data?: { name?: string; webhook_url?: string } };
+    return NextResponse.json({ ok: r.ok, profile: b.data?.name, webhook: b.data?.webhook_url, status: r.status });
+  }
+
   // 👥 Chat roster (?chatmember=add|remove&email=…&rooms=team,acquisitions|all):
   // puts a person into / out of the Google Chat spaces (DWD chat.memberships).
   if (url.searchParams.get("chatmember")) {

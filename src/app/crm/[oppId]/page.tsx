@@ -111,15 +111,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
         {c.pinnedNote && <div className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {c.pinnedNote}</div>}
       </Card>
 
-      <div className="flex flex-wrap items-start gap-4">
-        {/* GHL-style section nav */}
-        <nav className="sticky top-4 hidden w-44 shrink-0 flex-col gap-0.5 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200 xl:flex">
-          {[["#opp", "Opportunity details"], ["#contact", "Contact details"], ["#discovery", "📋 Discovery"], ["#parties", "Parties (DS)"], ["#tasks", "Tasks"], ["#appts", "Appointments"], ["#compose", "Email / SMS"], ["#timeline", "Notes & timeline"]].map(([h, l]) => (
-            <a key={h} href={h} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900">{l}</a>
-          ))}
-        </nav>
-        {/* ── Left column ── */}
-        <div className="flex w-full max-w-md flex-col gap-3 lg:w-[400px]">
+      <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[300px_minmax(0,1fr)_330px] xl:items-start">
+        {/* ── LEFT: who they are ── */}
+        <div className="order-2 flex min-w-0 flex-col gap-3 xl:order-none">
           {/* contact card */}
           <Card className="p-4">
             <details open id="contact" className="scroll-mt-4">
@@ -232,6 +226,112 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             </form>
           </Card>
 
+        </div>
+
+        {/* ── MIDDLE: comms — the main event (SMS / email / notes / timeline) ── */}
+        <div className="order-1 min-w-0 space-y-2.5 xl:order-none">
+          <Card className="p-3">
+            <form action={addCrmNoteAction} className="flex gap-2">
+              <input type="hidden" name="oppId" value={opp.id} />
+              <input type="hidden" name="contactId" value={c.id} />
+              <input name="body" placeholder="Write a note… what did the seller say?" required className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+              <button className="rounded-xl bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:opacity-90">📝 Note</button>
+            </form>
+            <form action={logCrmTouchAction} className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <input type="hidden" name="oppId" value={opp.id} />
+              <input type="hidden" name="contactId" value={c.id} />
+              <span className="font-bold text-slate-400">Quick log:</span>
+              <button name="kind" value="call" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">📞 called</button>
+              <button name="kind" value="sms" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">💬 texted</button>
+              <button name="kind" value="email" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">✉️ emailed</button>
+              <input name="body" placeholder="optional note" className="min-w-[120px] flex-1 rounded-lg border border-slate-200 px-2 py-1" />
+            </form>
+          </Card>
+
+          {comms.sms && c.phone && (
+            <Card id="compose" className="scroll-mt-4 p-4">
+              <SmsComposer history={[...events].reverse().filter((e) => e.kind === "sms").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString() }; })} oppId={opp.id} contactId={c.id} to={c.phone} leadName={c.name} rep={me!.name} snippets={snippets.filter((x) => x.kind === "sms")} />
+            </Card>
+          )}
+
+          {comms.email && c.email && (
+            <GmailComposer
+              history={[...events].reverse().filter((e) => e.kind === "email").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }; })}
+              oppId={opp.id} contactId={c.id} to={c.email} leadName={c.name} rep={me!.name}
+              fromLabel={`${me!.name} <${me!.name.split(" ")[0].toLowerCase()}@freedom-offers.com>`}
+              signature={mySignature}
+              snippets={snippets.filter((x) => x.kind === "email")}
+            />
+          )}
+
+          <Card className="flex flex-wrap items-center gap-2 p-3">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📝 Contracts</span>
+            <form action={draftContractAction}>
+              <input type="hidden" name="oppId" value={opp.id} />
+              <input type="hidden" name="kind" value="cash" />
+              <button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700" title="Quick close, 30–60 days — no disclosures">💵 Draft cash offer</button>
+            </form>
+            <form action={draftContractAction}>
+              <input type="hidden" name="oppId" value={opp.id} />
+              <input type="hidden" name="kind" value="novation" />
+              <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700" title="Disclosures to list, 90–180 days">🏷 Draft novation offer</button>
+            </form>
+            <span className="text-[10px] text-slate-400">drafts in PandaDoc with seller, address &amp; price pre-filled — link lands on the timeline. Moving to an offer stage auto-drafts cash (tag the lead <b>novation</b> first to flip it).</span>
+          </Card>
+
+          {comms.email && c.email && (
+            <Card className="p-0">
+              <details className="group" open={!!enrolled}>
+                <summary className="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📧 Sequences</span>
+                  {enrolled && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">▶ running</span>}
+                  <span className="ml-auto text-slate-300 transition-transform group-open:rotate-90">›</span>
+                </summary>
+                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 p-3">
+                  {enrolled ? (
+                    <>
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">
+                        ▶ {sequences.find((x) => x.id === enrolled.seqId)?.name ?? enrolled.seqId} — step {enrolled.step + 1}, next {enrolled.nextYmd}
+                      </span>
+                      <span className="text-[10px] text-slate-400">auto-stops the moment they reply</span>
+                      <form action={unenrollSequenceAction} className="ml-auto">
+                        <input type="hidden" name="oppId" value={opp.id} />
+                        <input type="hidden" name="contactId" value={c.id} />
+                        <button className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200">⏹ stop</button>
+                      </form>
+                    </>
+                  ) : (
+                    <form action={enrollSequenceAction} className="flex flex-1 flex-wrap items-center gap-1.5">
+                      <input type="hidden" name="oppId" value={opp.id} />
+                      <input type="hidden" name="contactId" value={c.id} />
+                      <input type="hidden" name="email" value={c.email} />
+                      <select name="seqId" className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold">
+                        {sequences.map((sq) => <option key={sq.id} value={sq.id}>{sq.name} ({sq.steps.length} emails)</option>)}
+                      </select>
+                      <button className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700">▶ Enroll</button>
+                      <span className="text-[10px] text-slate-400">like Direct REI's drip — ours, free, stops on reply</span>
+                    </form>
+                  )}
+                </div>
+              </details>
+            </Card>
+          )}
+
+          <div id="timeline" className="scroll-mt-4 pl-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline — everything, newest first</div>
+          {events.map((e) => (
+            <Card key={e.id} className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""}`}>
+              <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
+              <div className="min-w-0 flex-1">
+                <div className="whitespace-pre-line text-[13px] text-slate-800">{e.kind === "note" ? <><b>{e.actor}:</b> {stripHtml(e.body)}</> : <><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</>}</div>
+                <div className="mt-0.5 text-[10px] text-slate-400">{fmtAt(e.at)}{e.actor && e.kind !== "note" ? ` · ${e.actor}` : ""}{e.oppId && e.oppId !== opp.id ? " · other opportunity" : ""}</div>
+              </div>
+            </Card>
+          ))}
+          {events.length === 0 && <Card className="p-6 text-center text-xs text-slate-400">Nothing yet — the first note starts the story.</Card>}
+        </div>
+
+        {/* ── RIGHT: the work — tasks, appointments, discovery, parties ── */}
+        <div className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
           {/* tasks */}
           <Card className="p-4">
             <div id="tasks" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">⏰ Tasks</div>
@@ -383,108 +483,6 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <button className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-bold text-white">Book</button>
             </form>
           </Card>
-        </div>
-
-        {/* ── Right column: composer + timeline ── */}
-        <div className="min-w-0 flex-1 space-y-2.5" style={{ flexBasis: "480px", flexGrow: 999 }}>
-          <Card className="p-3">
-            <form action={addCrmNoteAction} className="flex gap-2">
-              <input type="hidden" name="oppId" value={opp.id} />
-              <input type="hidden" name="contactId" value={c.id} />
-              <input name="body" placeholder="Write a note… what did the seller say?" required className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
-              <button className="rounded-xl bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:opacity-90">📝 Note</button>
-            </form>
-            <form action={logCrmTouchAction} className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
-              <input type="hidden" name="oppId" value={opp.id} />
-              <input type="hidden" name="contactId" value={c.id} />
-              <span className="font-bold text-slate-400">Quick log:</span>
-              <button name="kind" value="call" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">📞 called</button>
-              <button name="kind" value="sms" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">💬 texted</button>
-              <button name="kind" value="email" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">✉️ emailed</button>
-              <input name="body" placeholder="optional note" className="min-w-[120px] flex-1 rounded-lg border border-slate-200 px-2 py-1" />
-            </form>
-          </Card>
-
-          {comms.sms && c.phone && (
-            <Card id="compose" className="scroll-mt-4 p-4">
-              <SmsComposer history={[...events].reverse().filter((e) => e.kind === "sms").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString() }; })} oppId={opp.id} contactId={c.id} to={c.phone} leadName={c.name} rep={me!.name} snippets={snippets.filter((x) => x.kind === "sms")} />
-            </Card>
-          )}
-
-          {comms.email && c.email && (
-            <GmailComposer
-              history={[...events].reverse().filter((e) => e.kind === "email").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }; })}
-              oppId={opp.id} contactId={c.id} to={c.email} leadName={c.name} rep={me!.name}
-              fromLabel={`${me!.name} <${me!.name.split(" ")[0].toLowerCase()}@freedom-offers.com>`}
-              signature={mySignature}
-              snippets={snippets.filter((x) => x.kind === "email")}
-            />
-          )}
-
-          <Card className="flex flex-wrap items-center gap-2 p-3">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📝 Contracts</span>
-            <form action={draftContractAction}>
-              <input type="hidden" name="oppId" value={opp.id} />
-              <input type="hidden" name="kind" value="cash" />
-              <button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700" title="Quick close, 30–60 days — no disclosures">💵 Draft cash offer</button>
-            </form>
-            <form action={draftContractAction}>
-              <input type="hidden" name="oppId" value={opp.id} />
-              <input type="hidden" name="kind" value="novation" />
-              <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700" title="Disclosures to list, 90–180 days">🏷 Draft novation offer</button>
-            </form>
-            <span className="text-[10px] text-slate-400">drafts in PandaDoc with seller, address &amp; price pre-filled — link lands on the timeline. Moving to an offer stage auto-drafts cash (tag the lead <b>novation</b> first to flip it).</span>
-          </Card>
-
-          {comms.email && c.email && (
-            <Card className="p-0">
-              <details className="group" open={!!enrolled}>
-                <summary className="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📧 Sequences</span>
-                  {enrolled && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">▶ running</span>}
-                  <span className="ml-auto text-slate-300 transition-transform group-open:rotate-90">›</span>
-                </summary>
-                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 p-3">
-                  {enrolled ? (
-                    <>
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">
-                        ▶ {sequences.find((x) => x.id === enrolled.seqId)?.name ?? enrolled.seqId} — step {enrolled.step + 1}, next {enrolled.nextYmd}
-                      </span>
-                      <span className="text-[10px] text-slate-400">auto-stops the moment they reply</span>
-                      <form action={unenrollSequenceAction} className="ml-auto">
-                        <input type="hidden" name="oppId" value={opp.id} />
-                        <input type="hidden" name="contactId" value={c.id} />
-                        <button className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200">⏹ stop</button>
-                      </form>
-                    </>
-                  ) : (
-                    <form action={enrollSequenceAction} className="flex flex-1 flex-wrap items-center gap-1.5">
-                      <input type="hidden" name="oppId" value={opp.id} />
-                      <input type="hidden" name="contactId" value={c.id} />
-                      <input type="hidden" name="email" value={c.email} />
-                      <select name="seqId" className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold">
-                        {sequences.map((sq) => <option key={sq.id} value={sq.id}>{sq.name} ({sq.steps.length} emails)</option>)}
-                      </select>
-                      <button className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700">▶ Enroll</button>
-                      <span className="text-[10px] text-slate-400">like Direct REI's drip — ours, free, stops on reply</span>
-                    </form>
-                  )}
-                </div>
-              </details>
-            </Card>
-          )}
-
-          <div id="timeline" className="scroll-mt-4 pl-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline — everything, newest first</div>
-          {events.map((e) => (
-            <Card key={e.id} className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""}`}>
-              <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
-              <div className="min-w-0 flex-1">
-                <div className="whitespace-pre-line text-[13px] text-slate-800">{e.kind === "note" ? <><b>{e.actor}:</b> {stripHtml(e.body)}</> : <><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</>}</div>
-                <div className="mt-0.5 text-[10px] text-slate-400">{fmtAt(e.at)}{e.actor && e.kind !== "note" ? ` · ${e.actor}` : ""}{e.oppId && e.oppId !== opp.id ? " · other opportunity" : ""}</div>
-              </div>
-            </Card>
-          ))}
-          {events.length === 0 && <Card className="p-6 text-center text-xs text-slate-400">Nothing yet — the first note starts the story.</Card>}
         </div>
       </div>
     </div>
