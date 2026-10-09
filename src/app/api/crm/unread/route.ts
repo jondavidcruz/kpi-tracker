@@ -32,6 +32,17 @@ export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return NextResponse.json({ count: 0, threads: [] });
+  // ?q=<text> → contact search for the bell's iPhone search bar
+  const q = new URL(req.url).searchParams.get("q");
+  if (q && q.trim().length >= 2) {
+    const digits = q.replace(/\D/g, "");
+    const contacts = await db.crmContact.findMany({
+      where: { archivedAt: null, OR: [{ name: { contains: q.trim(), mode: "insensitive" } }, ...(digits.length >= 3 ? [{ phone: { contains: digits } }] : [])] },
+      orderBy: { updatedAt: "desc" }, take: 8,
+      select: { id: true, name: true, phone: true },
+    });
+    return NextResponse.json({ contacts });
+  }
   // ?thread=<contactId> → everything the bell's quick-text phone needs
   const cid = new URL(req.url).searchParams.get("thread");
   if (cid) {
@@ -63,6 +74,22 @@ export async function POST(req: NextRequest) {
   if (body.op === "read" && body.id) {
     await setConvRead([body.id], true);
     return NextResponse.json({ ok: true });
+  }
+  // {op:"ensure", phone, name?} → text ANY number from the bell's iPhone:
+  // find the contact by last-10 or create one, return its id for openThread.
+  const b2 = body as { op?: string; phone?: string; name?: string };
+  if (b2.op === "ensure" && b2.phone) {
+    const phone = String(b2.phone).replace(/[^+\d]/g, "");
+    const last10 = phone.replace(/\D/g, "").slice(-10);
+    if (last10.length !== 10) return NextResponse.json({ ok: false, error: "need a 10-digit number" });
+    let contact = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true } });
+    if (!contact) {
+      contact = await db.crmContact.create({
+        data: { name: String(b2.name ?? "").trim() || `(${last10.slice(0, 3)}) ${last10.slice(3, 6)}-${last10.slice(6)}`, phone: phone.startsWith("+") ? phone : `+1${last10}`, source: "Manual (bell quick text)", assignedTo: me!.name },
+        select: { id: true },
+      });
+    }
+    return NextResponse.json({ ok: true, id: contact.id });
   }
   return NextResponse.json({ ok: false });
 }

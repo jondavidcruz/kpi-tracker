@@ -28,6 +28,30 @@ export default function InboxBell() {
   const [quick, setQuick] = useState<QuickThread | null>(null);
   const [threadErr, setThreadErr] = useState("");
   const [loading, setLoading] = useState("");
+  // list filters (Jon 2026-10-09): All / Unread / ⭐ Starred + search-anyone
+  const [view, setView] = useState<"all" | "unread" | "star">("all");
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<Thread[]>([]);
+  const [stars, setStars] = useState<Record<string, boolean>>({});
+  useEffect(() => { try { setStars(JSON.parse(localStorage.getItem("fo_bell_star") ?? "{}")); } catch { /* none */ } }, []);
+  const toggleStar = (id: string) => setStars((s) => {
+    const next = { ...s, [id]: !s[id] };
+    if (!next[id]) delete next[id];
+    try { localStorage.setItem("fo_bell_star", JSON.stringify(next)); } catch { /* fine */ }
+    return next;
+  });
+  // debounce the contact search so typing doesn't hammer the API
+  useEffect(() => {
+    if (query.trim().length < 2) { setFound([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/crm/unread?q=${encodeURIComponent(query.trim())}`, { cache: "no-store" });
+        const j = (await r.json()) as { contacts?: Array<{ id: string; name: string; phone: string }> };
+        setFound((j.contacts ?? []).map((c) => ({ id: c.id, name: c.name, phone: c.phone, owner: "", snippet: c.phone ? fmtPhone(c.phone) : "", at: "" })));
+      } catch { /* search is best-effort */ }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query]);
   // composer state lives up here so switching threads resets cleanly
   const [text, setText] = useState("");
   const [from, setFrom] = useState("");
@@ -123,6 +147,7 @@ export default function InboxBell() {
         className="relative grid h-10 w-10 place-items-center rounded-full bg-white text-base shadow-lg ring-1 ring-slate-200 hover:bg-slate-50">
         {muted ? "🔕" : "🔔"}
         {count > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-0.5 text-[9px] font-extrabold text-white">{count}</span>}
+        {muted && <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 rounded bg-slate-700 px-1 text-[7px] font-extrabold uppercase tracking-wide text-white">muted</span>}
       </button>
       {open && (
         <span className="absolute right-0 top-12 flex w-[300px] max-w-[92vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
@@ -132,7 +157,7 @@ export default function InboxBell() {
             {quick && <a href={`/crm/conversations?c=${quick.id}`} className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700 hover:bg-slate-200">full thread ↗</a>}
             <span className="ml-auto flex gap-1">
               {!quick && count > 0 && <button onClick={markAll} className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-slate-200">✓ all read</button>}
-              <button onClick={toggleMute} title={muted ? "Chime is off" : "Chime is on"} className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-slate-200">{muted ? "🔕" : "🔔"}</button>
+              <button onClick={toggleMute} title={muted ? "Chime is off — click to turn on" : "Chime is on — click to mute"} className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-slate-200">{muted ? "🔕 muted" : "🔔 on"}</button>
               <button onClick={() => { setOpen(false); setQuick(null); }} className="px-1 text-slate-300 hover:text-slate-500">✕</button>
             </span>
           </span>
@@ -184,25 +209,61 @@ export default function InboxBell() {
                 ) : (
                   <>
                     {/* Messages list — like the real app */}
-                    <span className="block border-b border-slate-100 px-3 pb-1 pt-0.5 text-left text-[15px] font-extrabold text-slate-900">Messages</span>
-                    <span className="block h-[282px] overflow-y-auto">
-                      {recent.length === 0 ? (
-                        <span className="block px-4 py-10 text-center text-[10px] text-slate-400">No conversations yet.<br />Texts from sellers land here. 🎉</span>
-                      ) : recent.map((t) => (
-                        <button key={t.id} onClick={() => openThread(t.id)} className="flex w-full items-center gap-2 border-b border-slate-50 px-2.5 py-2 text-left hover:bg-slate-50">
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${t.unread ? "bg-sky-500" : "bg-transparent"}`} />
-                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-300 text-[11px] font-bold text-white">{(t.name[0] ?? "?").toUpperCase()}</span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-baseline justify-between gap-1">
-                              <span className={`truncate text-[11px] ${t.unread ? "font-extrabold text-slate-900" : "font-semibold text-slate-700"}`}>{t.name}</span>
-                              <span className="shrink-0 text-[8px] text-slate-400">{loading === t.id ? "…" : ago(t.at)}</span>
-                            </span>
-                            <span className={`block truncate text-[10px] ${t.unread ? "font-semibold text-slate-700" : "text-slate-400"}`}>{t.snippet}</span>
-                          </span>
-                        </button>
-                      ))}
+                    <span className="flex items-center justify-between border-b border-slate-100 px-3 pb-1 pt-0.5">
+                      <span className="text-[15px] font-extrabold text-slate-900">Messages</span>
+                      <span className="flex gap-0.5">
+                        {([["all", "All"], ["unread", `Unread${count ? ` ${count}` : ""}`], ["star", "⭐"]] as const).map(([k, l]) => (
+                          <button key={k} onClick={() => setView(k)} className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold ${view === k ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-500"}`}>{l}</button>
+                        ))}
+                      </span>
                     </span>
-                    <span className="block border-t border-slate-100 py-1 text-center text-[8px] font-semibold text-slate-300">tap a conversation to reply</span>
+                    <span className="block px-2 py-1">
+                      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 Search name, or type a number to text it" className="h-6 w-full rounded-lg border border-slate-100 bg-slate-50 px-2 text-[10px] outline-none focus:border-sky-300" />
+                    </span>
+                    <span className="block h-[248px] overflow-y-auto">
+                      {(() => {
+                        const searching = query.trim().length >= 2;
+                        const ql = query.trim().toLowerCase();
+                        const qd = query.replace(/\D/g, "");
+                        let rows = searching
+                          ? [...recent.filter((t) => t.name.toLowerCase().includes(ql) || (qd.length >= 3 && t.phone.replace(/\D/g, "").includes(qd))), ...found.filter((f) => !recent.some((t) => t.id === f.id))]
+                          : recent.filter((t) => (view === "unread" ? t.unread : view === "star" ? stars[t.id] : true));
+                        rows = rows.slice(0, 20);
+                        const phoneish = qd.length >= 10 && rows.length === 0;
+                        if (rows.length === 0 && !phoneish) return <span className="block px-4 py-10 text-center text-[10px] text-slate-400">{searching ? "No match — type a full number to text it." : view === "unread" ? "Nothing unread. 🎉" : view === "star" ? "No starred chats yet — tap ☆ on any conversation." : <>No conversations yet.<br />Texts from sellers land here. 🎉</>}</span>;
+                        return (
+                          <>
+                            {phoneish && (
+                              <button onClick={async () => {
+                                const r = await fetch("/api/crm/unread", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "ensure", phone: qd }) }).catch(() => null);
+                                const j = r ? ((await r.json().catch(() => ({}))) as { id?: string }) : {};
+                                if (j.id) { setQuery(""); openThread(j.id); }
+                              }} className="flex w-full items-center gap-2 border-b border-slate-50 px-2.5 py-2.5 text-left hover:bg-emerald-50">
+                                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500 text-[13px] font-bold text-white">＋</span>
+                                <span className="text-[11px] font-extrabold text-emerald-700">Text {fmtPhone(qd)}</span>
+                              </button>
+                            )}
+                            {rows.map((t) => (
+                              <span key={t.id} className="flex w-full items-center border-b border-slate-50 hover:bg-slate-50">
+                                <button onClick={() => openThread(t.id)} className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left">
+                                  <span className={`h-2 w-2 shrink-0 rounded-full ${t.unread ? "bg-sky-500" : "bg-transparent"}`} />
+                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-300 text-[11px] font-bold text-white">{(t.name[0] ?? "?").toUpperCase()}</span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="flex items-baseline justify-between gap-1">
+                                      <span className={`truncate text-[11px] ${t.unread ? "font-extrabold text-slate-900" : "font-semibold text-slate-700"}`}>{t.name}</span>
+                                      <span className="shrink-0 text-[8px] text-slate-400">{loading === t.id ? "…" : t.at ? ago(t.at) : ""}</span>
+                                    </span>
+                                    <span className={`block truncate text-[10px] ${t.unread ? "font-semibold text-slate-700" : "text-slate-400"}`}>{t.snippet}</span>
+                                  </span>
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); toggleStar(t.id); }} className={`shrink-0 pr-2 text-[11px] ${stars[t.id] ? "" : "opacity-30 hover:opacity-70"}`}>{stars[t.id] ? "⭐" : "☆"}</button>
+                              </span>
+                            ))}
+                          </>
+                        );
+                      })()}
+                    </span>
+                    <span className="block border-t border-slate-100 py-1 text-center text-[8px] font-semibold text-slate-300">tap a conversation to reply · ☆ to star</span>
                   </>
                 )}
               </span>
