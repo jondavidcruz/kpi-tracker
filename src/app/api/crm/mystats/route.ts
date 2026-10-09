@@ -29,5 +29,5 @@ export async function GET() {
     return t?.goalValue ?? 0;
   };
   const [goalDials, goalConnects] = await Promise.all([goal("outbound_calls"), goal("connected_calls")]);
-  return NextResponse.json({ dials, connects, goalDials, goalConnects });
+  return NextResponse.json({ who: me!.name.split(" ")[0], dials, connects, goalDials, goalConnects }, { headers: { "Cache-Control": "private, no-store" } });
 }

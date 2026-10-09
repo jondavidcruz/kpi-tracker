@@ -3,7 +3,7 @@
 // always visible bottom-left, refreshes itself. One glance — never a page.
 import { useEffect, useState } from "react";
 
-type Stats = { dials: number; connects: number; goalDials: number; goalConnects: number };
+type Stats = { who?: string; dials: number; connects: number; goalDials: number; goalConnects: number };
 
 export default function MyDayPill() {
   const [s, setS] = useState<Stats | null>(null);
@@ -21,7 +21,7 @@ export default function MyDayPill() {
   const tone = (v: number, g: number) => (g <= 0 ? "text-slate-700" : v >= g ? "text-emerald-600" : v >= g * 0.6 ? "text-amber-600" : "text-red-500");
   return (
     <span className="fixed right-28 top-4 z-40 flex items-center gap-2.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-extrabold shadow-lg ring-1 ring-slate-200">
-      <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">My day</span>
+      <span title={`${s?.who ?? "your"} numbers only — everyone sees their own`} className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">{s.who ? `${s.who}\u2019s day` : "My day"}</span>
       <span className={tone(s.dials, s.goalDials)}>📞 {s.dials}{s.goalDials > 0 ? `/${s.goalDials}` : ""} dials</span>
       <span className={tone(s.connects, s.goalConnects)}>✅ {s.connects}{s.goalConnects > 0 ? `/${s.goalConnects}` : ""} connects</span>
       <button onClick={toggle} title="Hide" className="text-slate-300 hover:text-slate-500">✕</button>

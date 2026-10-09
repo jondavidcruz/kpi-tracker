@@ -27,12 +27,17 @@ export async function createCrmLeadAction(formData: FormData) {
   const title = normalizeAddress(addrJoined || String(formData.get("title") ?? "").trim()) || "New opportunity";
   const notes = String(formData.get("notes") ?? "").trim();
   if (!name) return;
+  // phone saved as E.164 — "(909) 395-6195" raw broke the welcome text,
+  // Telnyx rejects anything that isn't +1XXXXXXXXXX (Jon 2026-10-09)
+  const rawPhone = String(formData.get("phone") ?? "").replace(/[^+\d]/g, "");
+  const p10 = rawPhone.replace(/\D/g, "").slice(-10);
   const contact = await db.crmContact.create({ data: {
     name,
-    phone: String(formData.get("phone") ?? "").trim(),
+    phone: rawPhone ? (rawPhone.startsWith("+") ? rawPhone : p10.length === 10 ? `+1${p10}` : rawPhone) : "",
     email: String(formData.get("email") ?? "").trim(),
     source: String(formData.get("source") ?? "").trim(),
     assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name,
+    address: title === "New opportunity" ? "" : title,
   } });
   // land in the ASSIGNED REP'S pipeline, not the generic War Room tab, and
   // fire the welcome SMS + email like every other intake (Jon 2026-10-08)
@@ -399,8 +404,9 @@ export async function sendCrmEmailAction(formData: FormData) {
   const html = `<p>${body.replace(/\n/g, "<br>")}</p><p style="color:#64748b;font-size:13px;white-space:pre-line">${sig.replace(/</g, "&lt;")}</p>`;
   const { getChannelConfig, sendEmailTo } = await import("@/lib/notify");
   const cfg = { ...(await getChannelConfig()), emailFrom: fromAddr };
-  const ok = await sendEmailTo([to], subject, html, cfg, me.email || process.env.CASCADE_REPLY_TO || "info@freedom-offers.com");
-  await logCrmEvent({ contactId, oppId, kind: "email", body: `➡️ Us: ${subject} — ${body.slice(0, 300)}${ok ? "" : " (SEND FAILED)"}`, actor: me.name });
+  const errOut: { msg?: string } = {};
+  const ok = await sendEmailTo([to], subject, html, cfg, me.email || process.env.CASCADE_REPLY_TO || "info@freedom-offers.com", errOut);
+  await logCrmEvent({ contactId, oppId, kind: "email", body: `➡️ Us: ${subject} — ${body.slice(0, 300)}${ok ? "" : ` (SEND FAILED${errOut.msg ? `: ${errOut.msg}` : ""})`}`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
 }
 

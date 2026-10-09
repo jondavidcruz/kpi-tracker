@@ -140,10 +140,12 @@ export async function sendEmailTo(
   html: string,
   cfg?: ChannelConfig,
   replyTo?: string,
+  errOut?: { msg?: string }, // callers can surface the REAL reason on the timeline (Jon 2026-10-09)
 ): Promise<boolean> {
   const c = cfg ?? (await getChannelConfig());
   if (!c.resendKey || to.length === 0 || !c.emailFrom) {
     console.log(`[notify] Email-to not configured — would send "${subject}" to ${to.join(", ")}`);
+    if (errOut) errOut.msg = "email not configured (Resend key / from address missing)";
     return false;
   }
   try {
@@ -152,9 +154,18 @@ export async function sendEmailTo(
       headers: { Authorization: `Bearer ${c.resendKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: c.emailFrom, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
     });
-    if (!res.ok) { console.error("[notify] Email-to failed:", res.status, await res.text()); return false; }
+    if (!res.ok) {
+      const t = await res.text();
+      console.error("[notify] Email-to failed:", res.status, t);
+      if (errOut) errOut.msg = `${res.status}: ${t.slice(0, 160)}`;
+      return false;
+    }
     return true;
-  } catch (err) { console.error("[notify] Email-to error:", err); return false; }
+  } catch (err) {
+    console.error("[notify] Email-to error:", err);
+    if (errOut) errOut.msg = String(err).slice(0, 160);
+    return false;
+  }
 }
 
 /** Send an email with one file attachment (content = base64 string). */

@@ -163,10 +163,14 @@ export async function sendWelcomeText(o: { contactId: string; oppId: string; pho
   const text = tpl !== MSG_DEFAULTS.welcome_sms
     ? fillTokens(tpl, { first, rep })
     : WELCOME_TEXTS[Math.floor(Math.random() * WELCOME_TEXTS.length)](first, rep);
+  // always E.164 — raw "(909) 395-6195" from forms gets rejected by Telnyx
+  const d10 = o.phone.replace(/\D/g, "").slice(-10);
+  const toE164 = o.phone.trim().startsWith("+") ? o.phone.replace(/[^+\d]/g, "") : d10.length === 10 ? `+1${d10}` : o.phone;
   const res = await fetch("https://api.telnyx.com/v2/messages", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: o.phone, text }),
+    body: JSON.stringify({ from, to: toE164, text }),
   }).catch(() => null);
-  await logCrmEvent({ contactId: o.contactId, oppId: o.oppId, kind: "sms", body: `➡️ Us: ${text}${res?.ok ? "" : " (SEND FAILED)"}`, actor: "auto-welcome" }).catch(() => {});
+  const errTxt = res && !res.ok ? (await res.text().catch(() => "")).slice(0, 140) : "";
+  await logCrmEvent({ contactId: o.contactId, oppId: o.oppId, kind: "sms", body: `➡️ Us: ${text}${res?.ok ? "" : ` (SEND FAILED${errTxt ? `: ${errTxt}` : ""})`}`, meta: { line: from ?? "" }, actor: "auto-welcome" }).catch(() => {});
 }

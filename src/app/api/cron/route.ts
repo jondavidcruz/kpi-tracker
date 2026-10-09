@@ -875,6 +875,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, snap, alarms });
   }
 
+  // 📡 Comms probe (?commstest=1&phone=+1…&email=…): fires a REAL test SMS
+  // and/or email and returns the providers' raw verdicts — the timeline only
+  // said "SEND FAILED" with no reason (Jon 2026-10-09).
+  if (url.searchParams.get("commstest") === "1") {
+    const out: Record<string, unknown> = {};
+    const phone = (url.searchParams.get("phone") ?? "").replace(/[^+\d]/g, "");
+    const email = (url.searchParams.get("email") ?? "").trim();
+    if (phone && process.env.TELNYX_API_KEY) {
+      const from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
+      const r = await fetch("https://api.telnyx.com/v2/messages", {
+        method: "POST", headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from, to: phone, text: "War Room comms test ✅ (ignore)" }),
+      }).catch(() => null);
+      out.sms = r ? `${r.status}: ${(await r.text().catch(() => "")).slice(0, 220)}` : "network error";
+    }
+    if (email) {
+      const { sendEmailTo, getChannelConfig } = await import("@/lib/notify");
+      const base = await getChannelConfig();
+      const e1: { msg?: string } = {};
+      const ok1 = await sendEmailTo([email], "War Room email test (default from)", "<p>test — default sender ✅</p>", base, undefined, e1);
+      const e2: { msg?: string } = {};
+      const ok2 = await sendEmailTo([email], "War Room email test (rep from)", "<p>test — rep-identity sender ✅</p>", { ...base, emailFrom: "Jon Cruz <jon@freedom-offers.com>" }, undefined, e2);
+      out.emailDefaultFrom = ok1 ? "✅ sent" : `❌ ${e1.msg}`;
+      out.emailRepFrom = ok2 ? "✅ sent" : `❌ ${e2.msg}`;
+    }
+    return NextResponse.json({ ok: true, ...out });
+  }
+
   // ✏️ KPI display rename (?kpirename=1&from=…&to=…): changes a KPI's shown
   // name only — keys/targets/entries all hang off the id, so nothing breaks.
   if (url.searchParams.get("kpirename") === "1") {
