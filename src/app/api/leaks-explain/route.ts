@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, canAccessPayroll } from "@/lib/auth";
+import { aiText, AI_CONFIGURED } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 
@@ -11,27 +12,15 @@ export async function POST(request: Request) {
   const me = await getCurrentUser();
   if (!canAccessPayroll(me)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return NextResponse.json({ reply: "Add ANTHROPIC_API_KEY in Vercel to enable the full AI breakdown." });
+  if (!AI_CONFIGURED()) return NextResponse.json({ reply: "Add ANTHROPIC_API_KEY or GEMINI_API_KEY in Vercel to enable the full AI breakdown." });
 
   let body: { data?: string };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }
   const data = String(body.data || "").slice(0, 5000);
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-opus-4-8",
-        max_tokens: 1500,
-        system: SYSTEM,
-        messages: [{ role: "user", content: `Here is our live war-room funnel + economics (JSON). Break it down for me — where are we failing and what do I fix first?\n\n${data}` }],
-      }),
-    });
-    if (!res.ok) return NextResponse.json({ reply: "The breakdown hit an error — try again." });
-    const json = await res.json();
-    return NextResponse.json({ reply: (json?.content?.[0]?.text as string) || "No response." });
+    const reply = await aiText({ system: SYSTEM, maxTokens: 1500, messages: [{ role: "user", content: `Here is our live war-room funnel + economics (JSON). Break it down for me — where are we failing and what do I fix first?\n\n${data}` }] });
+    return NextResponse.json({ reply: reply || "The breakdown hit an error — try again." });
   } catch {
     return NextResponse.json({ reply: "Couldn't reach the analysis — try again." });
   }

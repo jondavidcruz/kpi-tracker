@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { aiText, AI_CONFIGURED } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -49,8 +50,7 @@ export async function POST(request: Request) {
   const me = await getCurrentUser();
   if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return NextResponse.json({ reply: "The AI assistant isn't configured yet (missing ANTHROPIC_API_KEY)." });
+  if (!AI_CONFIGURED()) return NextResponse.json({ reply: "The AI assistant isn't configured yet (missing ANTHROPIC_API_KEY / GEMINI_API_KEY)." });
 
   let body: { messages?: { role: string; content: string }[]; context?: string };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }
@@ -59,43 +59,14 @@ export async function POST(request: Request) {
 
   const system = body.context ? `${PLAYBOOK}\n\nCURRENT DEAL CONTEXT (from the calculator on screen):\n${String(body.context).slice(0, 1500)}` : PLAYBOOK;
 
-  const payload = JSON.stringify({
-    model: "claude-opus-4-8",
-    max_tokens: 1200,
-    system,
-    messages: msgs.map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })),
-  });
-
-  // Up to 3 tries; back off on transient overload/rate-limit before giving up.
-  let lastStatus = 0;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await sleep(attempt === 1 ? 700 : 1800);
+  // Two passes with a short back-off; aiText itself already falls from Claude
+  // (credits/outage/auth) to Gemini's free tier on every pass.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await sleep(900);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: payload,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const reply: string = data?.content?.[0]?.text ?? "Sorry — no answer came back. Try rephrasing.";
-        return NextResponse.json({ reply });
-      }
-      lastStatus = res.status;
-      if (TRANSIENT.has(res.status)) continue; // overloaded/rate-limited → retry
-      // Non-transient: don't waste retries.
-      const errText = await res.text().catch(() => "");
-      console.error("underwrite-chat api error", res.status, errText.slice(0, 500));
-      if (/credit balance/i.test(errText)) return NextResponse.json({ reply: "⚠️ The Anthropic account is out of credits — Jon: top up at console.anthropic.com → Billing." });
-      if (res.status === 401 || res.status === 403) return NextResponse.json({ reply: "⚠️ The AI assistant's access needs attention (auth). Let Jon know — the API key may need renewing." });
-      return NextResponse.json({ reply: `The assistant hit an error (${res.status}). Try again in a moment.` });
-    } catch {
-      lastStatus = -1; // network blip — worth another try
-    }
+      const reply = await aiText({ system, maxTokens: 1200, messages: msgs.map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })) });
+      if (reply) return NextResponse.json({ reply });
+    } catch { /* one more pass */ }
   }
-  // All retries exhausted.
-  const busy = lastStatus === 429 || lastStatus === 529 || (lastStatus >= 500 && lastStatus < 600);
-  return NextResponse.json({ reply: busy
-    ? "🤖 The AI is busy right now (high demand). Give it a few seconds and hit Send again — your numbers are still here."
-    : "The assistant couldn't be reached. Check your connection and try again." });
+  return NextResponse.json({ reply: "🤖 The AI is busy right now. Give it a few seconds and hit Send again — your numbers are still here." });
 }

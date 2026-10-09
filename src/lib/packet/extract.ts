@@ -4,6 +4,7 @@
 // diligence rows as "Per seller: … — verify" plus short Site Highlights.
 // Cached by notes-hash in DiligenceCache so regenerations don't re-bill.
 import { fetchCached } from "@/lib/geo/fetchCached";
+import { aiText, AI_CONFIGURED } from "@/lib/ai";
 
 export type SellerFacts = {
   utilitiesWater: string;
@@ -18,28 +19,17 @@ const EMPTY: SellerFacts = { utilitiesWater: "", utilitiesSewer: "", electric: "
 
 export async function extractSellerFacts(notes: string): Promise<SellerFacts> {
   const text = (notes ?? "").trim().slice(0, 4000);
-  if (!text || text.length < 15 || !process.env.ANTHROPIC_API_KEY) return EMPTY;
+  if (!text || text.length < 15 || !AI_CONFIGURED()) return EMPTY;
   return fetchCached<SellerFacts>("sellerx", { text }, async () => {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-8",
-        max_tokens: 600,
-        system: `You extract land-deal facts from a wholesaler's seller-call notes for an offering packet. Return ONLY JSON:
+    const raw = await aiText({
+      maxTokens: 600,
+      timeoutMs: 25000,
+      system: `You extract land-deal facts from a wholesaler's seller-call notes for an offering packet. Return ONLY JSON:
 {"utilitiesWater":"","utilitiesSewer":"","electric":"","setbacks":"","species":"","highlights":[]}
 Rules: include ONLY facts the notes explicitly state (never guess or infer); each field a short phrase ("county water at street", "septic needed") or "" if not mentioned; highlights = up to 4 short factual selling points about the SITE (improvements, clearing, fill, access, survey, utilities) — no pricing, no seller's personal situation, no motivation/distress details.`,
-        messages: [{ role: "user", content: text }],
-      }),
-      signal: AbortSignal.timeout(25000),
+      messages: [{ role: "user", content: text }],
     });
-    if (!res.ok) throw new Error(`anthropic ${res.status}`);
-    const j = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-    const raw = j.content?.find((c) => c.type === "text")?.text ?? "";
+    if (!raw) throw new Error("ai unavailable"); // don't cache a failed run
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) return EMPTY;
     try {

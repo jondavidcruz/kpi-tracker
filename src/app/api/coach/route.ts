@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, isManager } from "@/lib/auth";
+import { aiText, AI_CONFIGURED } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +44,7 @@ export async function POST(request: Request) {
   const me = await getCurrentUser();
   if (!isManager(me)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return NextResponse.json({ reply: "The AI coach isn't configured yet — add ANTHROPIC_API_KEY in Vercel." });
+  if (!AI_CONFIGURED()) return NextResponse.json({ reply: "The AI coach isn't configured yet — add ANTHROPIC_API_KEY or GEMINI_API_KEY in Vercel." });
 
   let body: { rep?: string; role?: string; skill?: string; mode?: string; context?: string };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }
@@ -55,20 +55,8 @@ export async function POST(request: Request) {
   const context = String(body.context || "");
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-opus-4-8",
-        max_tokens: 1400,
-        system: SYSTEM,
-        messages: [{ role: "user", content: buildPrompt(rep, role, skill, mode, context) }],
-      }),
-    });
-    if (!res.ok) return NextResponse.json({ reply: "The AI coach hit an error — try again in a moment." });
-    const data = await res.json();
-    const reply = (data?.content?.[0]?.text as string) || "No response.";
-    return NextResponse.json({ reply });
+    const reply = await aiText({ system: SYSTEM, maxTokens: 1400, messages: [{ role: "user", content: buildPrompt(rep, role, skill, mode, context) }] });
+    return NextResponse.json({ reply: reply || "The AI coach hit an error — try again in a moment." });
   } catch {
     return NextResponse.json({ reply: "Couldn't reach the AI coach — try again." });
   }

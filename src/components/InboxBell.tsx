@@ -47,15 +47,14 @@ function PhoneQuickReply({ t, onSent }: { t: QuickThread; onSent: () => void }) 
   };
   return (
     <span className="block">
-      {numbers.length > 0 && (
-        <span className="mb-1.5 flex items-center justify-center gap-1.5 text-[10px] font-bold text-slate-500">
-          Texting from
-          <select value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold">
-            <option value="">Default line</option>
-            {numbers.map((n) => <option key={n} value={n}>{fmtPhone(n)}</option>)}
-          </select>
-        </span>
-      )}
+      <span className="mb-1.5 flex items-center justify-center gap-1.5 text-[10px] font-bold text-slate-500">
+        Texting from
+        <select value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold">
+          <option value="">Default line</option>
+          {numbers.map((n) => <option key={n} value={n}>{fmtPhone(n)}</option>)}
+        </select>
+        {numbers.length === 0 && <span className="font-semibold text-slate-300">(lines loading…)</span>}
+      </span>
       <span className="mx-auto block w-[250px] rounded-[2.4rem] bg-slate-900 p-2 shadow-xl">
         <span className="block overflow-hidden rounded-[1.9rem] bg-white">
           <span className="flex items-center justify-between px-5 pt-2 text-[9px] font-bold text-slate-900"><span>9:41</span><span>📶 🔋</span></span>
@@ -144,19 +143,27 @@ export default function InboxBell() {
   };
   // 📱 quick-text right in the panel (Jon 2026-10-09): clicking a thread
   // opens the iPhone composer inline — fire a reply without leaving the page.
+  const [threadErr, setThreadErr] = useState("");
   const openThread = async (id: string) => {
+    setThreadErr("");
     try {
       const r = await fetch(`/api/crm/unread?thread=${id}`, { cache: "no-store" });
-      if (!r.ok) return;
+      if (!r.ok) { setThreadErr("Couldn't load that thread — use Open Conversations below."); return; }
       setQuick((await r.json()) as QuickThread);
       setCount((c) => Math.max(0, c - 1));
       setThreads((ts) => ts.filter((t) => t.id !== id));
-    } catch { /* fall back to nothing */ }
+    } catch { setThreadErr("Couldn't load that thread — use Open Conversations below."); }
+  };
+  // 📱 one unread text → clicking the bell jumps STRAIGHT into the iPhone
+  const openBell = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !quick && threads.length === 1) openThread(threads[0].id);
   };
 
   return (
     <span className="fixed right-16 top-3 z-50">
-      <button onClick={() => setOpen((v) => !v)} title="Texts waiting on a reply — click to open"
+      <button onClick={openBell} title="Texts waiting on a reply — click to open"
         className="relative grid h-10 w-10 place-items-center rounded-full bg-white text-base shadow-lg ring-1 ring-slate-200 hover:bg-slate-50">
         {muted ? "🔕" : "🔔"}
         {count > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-0.5 text-[9px] font-extrabold text-white">{count}</span>}
@@ -184,6 +191,7 @@ export default function InboxBell() {
               <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-slate-500">✕</button>
             </span>
           </span>
+          {threadErr && <span className="px-3.5 py-1.5 text-[10px] font-bold text-red-500">{threadErr}</span>}
           {threads.length === 0 ? (
             <span className="px-4 py-6 text-center text-xs text-slate-400">Inbox zero — nothing waiting. 🎉</span>
           ) : (
@@ -200,6 +208,7 @@ export default function InboxBell() {
               </button>
             ))
           )}
+          {threads.length > 0 && <span className="px-3.5 pb-1 text-center text-[9px] font-bold text-slate-400">👆 tap a text — the iPhone opens right here to reply</span>}
           <a href="/crm/conversations" className="bg-slate-50 px-3.5 py-2 text-center text-[11px] font-bold text-indigo-700 hover:bg-slate-100">Open Conversations →</a>
         </span>
       )}

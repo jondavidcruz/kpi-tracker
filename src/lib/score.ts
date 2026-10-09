@@ -1,7 +1,7 @@
 // AI scoring of an acquisitions call transcript against a coaching rubric.
-// Uses the Anthropic Messages API directly (no SDK). Requires ANTHROPIC_API_KEY
-// in the environment; returns { configured: false } if it's not set so the UI
-// can show a setup notice instead of erroring.
+// Runs through aiText (Claude first, Gemini free-tier fallback); returns
+// { configured: false } when neither key is set so the UI shows a setup notice.
+import { aiText, AI_CONFIGURED } from "@/lib/ai";
 
 export interface ScoreArea {
   area: string;
@@ -35,38 +35,17 @@ export async function scoreTranscript(
   transcript: string,
   opts?: { label?: string; script?: string },
 ): Promise<ScoreResult> {
-  const key = process.env.ANTHROPIC_API_KEY;
   const empty: ScoreResult = { configured: false, overall: 0, breakdown: [], summary: "" };
-  if (!key) return empty;
+  if (!AI_CONFIGURED()) return empty;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
-        system: buildRubric(opts?.label, opts?.script),
-        messages: [{ role: "user", content: `Score this ${opts?.label ?? "call"} transcript:\n\n${transcript.slice(0, 24000)}` }],
-      }),
+    const text = await aiText({
+      model: "claude-haiku-4-5-20251001",
+      maxTokens: 1024,
+      system: buildRubric(opts?.label, opts?.script),
+      messages: [{ role: "user", content: `Score this ${opts?.label ?? "call"} transcript:\n\n${transcript.slice(0, 24000)}` }],
     });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      console.error("scoring api error", res.status, errText.slice(0, 500));
-      if (/credit balance/i.test(errText)) {
-        return { ...empty, configured: true, error: "Anthropic account is out of credits — top up at console.anthropic.com → Billing, then re-score." };
-      }
-      if (res.status === 401 || res.status === 403) {
-        return { ...empty, configured: true, error: "API key not accepted — check ANTHROPIC_API_KEY in Vercel." };
-      }
-      return { ...empty, configured: true, error: `Scoring API error (${res.status}). Check the API key and billing.` };
-    }
-    const data = await res.json();
-    const text: string = data?.content?.[0]?.text ?? "";
+    if (!text) return { ...empty, configured: true, error: "Both AI engines were unavailable — try again in a minute." };
     const json = extractJson(text);
     if (!json) return { ...empty, configured: true, error: "Could not parse the score. Try again." };
     return {

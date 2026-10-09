@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, isManager, isAdmin, canAccessPayroll } from "@/lib/auth";
 import { buildAssistantContext } from "@/lib/assistant-context";
+import { aiText, AI_CONFIGURED } from "@/lib/ai";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -37,8 +38,7 @@ export async function POST(request: Request) {
   const me = await getCurrentUser();
   if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return NextResponse.json({ reply: "I'm not switched on yet — an admin needs to add the ANTHROPIC_API_KEY in Vercel." });
+  if (!AI_CONFIGURED()) return NextResponse.json({ reply: "I'm not switched on yet — an admin needs to add ANTHROPIC_API_KEY or GEMINI_API_KEY in Vercel." });
 
   let body: { messages?: { role: string; content: string }[]; path?: string };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }
@@ -70,35 +70,10 @@ export async function POST(request: Request) {
   db.assistantLog.create({ data: { userId: me.id, name: me.name, role, path: (body.path ?? "").slice(0, 120), question: lastQ.slice(0, 500), flagged } }).catch(() => {});
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-opus-4-8",
-        max_tokens: 1200,
-        system,
-        messages: msgs.map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })),
-      }),
-    });
-    if (!res.ok) {
-      // Read the real reason — Anthropic reports "credit balance is too low" as
-      // a 400, which otherwise looks like a code bug.
-      const errText = await res.text().catch(() => "");
-      console.error("assistant api error", res.status, errText.slice(0, 500));
-      if (/credit balance/i.test(errText)) {
-        return NextResponse.json({ reply: "⚠️ The Anthropic account is out of credits — that's why I keep erroring. Jon: top up at console.anthropic.com → Billing, and I'm instantly back." });
-      }
-      if (res.status === 401 || res.status === 403) {
-        return NextResponse.json({ reply: "⚠️ My API key isn't being accepted (auth). Jon: check ANTHROPIC_API_KEY in Vercel." });
-      }
-      if (res.status === 429) {
-        return NextResponse.json({ reply: "I'm being rate-limited right now — give it a minute and ask again." });
-      }
-      return NextResponse.json({ reply: `I hit an error (${res.status}) reaching my brain. Tell Jon to check the API key / billing.` });
-    }
-    const data = await res.json();
-    const reply: string = data?.content?.[0]?.text ?? "Hmm — nothing came back. Try asking again.";
-    return NextResponse.json({ reply });
+    // aiText tries Claude first and silently falls back to Gemini's free tier
+    // (billing/outage/auth failures included), so credit issues never surface.
+    const reply = await aiText({ system, messages: msgs.map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })), maxTokens: 1200 });
+    return NextResponse.json({ reply: reply || "Hmm — neither AI engine answered. Give it a minute and ask again; if it keeps happening, tell Jon." });
   } catch {
     return NextResponse.json({ reply: "I couldn't reach my brain just now (network). Try again in a moment." });
   }
