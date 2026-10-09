@@ -85,8 +85,11 @@ function health(m: Meta): { label: string; cls: string } {
   const carriers = [m.att, m.verizon, m.tmobile];
   if (carriers.includes("flagged")) return { label: "⚠️ Flagged", cls: "bg-red-100 text-red-700" };
   if (!m.registered) return { label: "Not registered", cls: "bg-amber-100 text-amber-800" };
-  if (m.answerRate != null && m.answerRate < 5) return { label: "Low answer rate", cls: "bg-amber-100 text-amber-800" };
-  if (carriers.includes("unknown")) return { label: "Test needed", cls: "bg-slate-100 text-slate-600" };
+  // 0% with no test on record just means NOBODY MEASURED IT yet — that's
+  // "not tested", not a warning (every number showed a false "Low answer
+  // rate" wall, Jon 2026-10-09)
+  if (m.answerRate != null && m.answerRate > 0 && m.answerRate < 5) return { label: "Low answer rate", cls: "bg-amber-100 text-amber-800" };
+  if (carriers.includes("unknown") || !m.answerRate) return { label: "— not tested yet", cls: "bg-slate-100 text-slate-500" };
   return { label: "✓ Healthy", cls: "bg-emerald-100 text-emerald-700" };
 }
 const CARRIER_OPTS = [["unknown", "—"], ["clean", "Clean"], ["flagged", "Flagged"]] as const;
