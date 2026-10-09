@@ -12,6 +12,9 @@ const UW_LABEL: Record<string, string> = { cash: "💵 Cash MAO", novation: "�
 export default function ReductionCoach({ initial, uw = [] }: { initial?: { address?: string; contractPrice?: string }; uw?: Array<{ tab: string; mao: number; fee: number }> } = {}) {
   const [f, setF] = useState({ address: initial?.address ?? "", contractPrice: initial?.contractPrice ?? "", bestOffer: "", fee: "10,000", agentPct: "3", sellerClosing: "2,000", agreed: "", offers: "", dom: "", repairs: "", feedback: "" });
   const [dealType, setDealType] = useState<"assignment" | "novation">("assignment");
+  // 🌲 land vs house (Jon 2026-10-09): same calculator, the AI swaps hats —
+  // GC walk-through for houses, land due-diligence pricing for vacant land.
+  const [propType, setPropType] = useState<"house" | "land">("land");
   // seller closing costs: exact $ when known, or % of sale price when not (Jon 2026-10-09)
   const [closingMode, setClosingMode] = useState<"$" | "%">("$");
   const [ai, setAi] = useState<{ busy: boolean; script: string; err: string; estimates: Array<{ item: string; pro: string; low: number; high: number }> }>({ busy: false, script: "", err: "", estimates: [] });
@@ -80,6 +83,11 @@ I know that's not the number we both hoped for. But this is real money, from a r
               <button key={k} type="button" onClick={() => setDealType(k)} className={`flex-1 rounded-xl px-2 py-2 text-[11px] font-bold ring-1 ${dealType === k ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>{l}</button>
             ))}
           </div>
+          <div className="flex gap-1.5">
+            {([["land", "🌲 Vacant land — issues priced as due-diligence costs (easements, tortoises, scrub jays, wetlands, access)"], ["house", "🏠 House — issues priced as GC repair quotes"]] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setPropType(k)} className={`flex-1 rounded-xl px-2 py-1.5 text-[10px] font-bold ring-1 ${propType === k ? "bg-emerald-700 text-white ring-emerald-700" : "bg-slate-50 text-slate-500 ring-slate-200 hover:bg-slate-100"}`}>{l}</button>
+            ))}
+          </div>
           <label><span className={lbl}>Property address</span><input value={f.address} onChange={set("address")} placeholder="123 Main St" className={inputCls} /></label>
           <div className="grid grid-cols-2 gap-2">
             <label><span className={lbl}>Our contract price with the SELLER $</span><input value={f.contractPrice} onChange={set("contractPrice")} placeholder="80,000" className={inputCls} /></label>
@@ -102,7 +110,7 @@ I know that's not the number we both hoped for. But this is real money, from a r
             <label><span className={lbl}># of offers received</span><input value={f.offers} onChange={set("offers")} placeholder="3" className={inputCls} /></label>
             <label><span className={lbl}>Days on market</span><input value={f.dom} onChange={set("dom")} placeholder="34" className={inputCls} /></label>
           </div>
-          <label><span className={lbl}>What buyers said is wrong (rough bullets — one per line, AI writes the professional wording)</span><textarea value={f.repairs} onChange={set("repairs")} rows={3} placeholder={"roof bad\nac old\ncrack in foundation"} className={inputCls} /></label>
+          <label><span className={lbl}>What buyers said is wrong (rough bullets — one per line, AI writes the professional wording)</span><textarea value={f.repairs} onChange={set("repairs")} rows={3} placeholder={propType === "land" ? "easement across the back\ngopher tortoises\nscrub jay area\nhalf of it looks wet" : "roof bad\nac old\ncrack in foundation"} className={inputCls} /></label>
           <label><span className={lbl}>Strongest buyer quote — the most powerful thing a buyer actually SAID, word-for-word <span className="font-normal text-slate-400">(optional — you repeat it to the seller as third-party proof; a real buyer&apos;s words always beat yours)</span></span><textarea value={f.feedback} onChange={set("feedback")} rows={2} placeholder={"with that roof, I'm at 60 — not a dollar more"} className={inputCls} /></label>
           {contract > 0 && best > 0 && (
             <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-100">
@@ -144,7 +152,7 @@ I know that's not the number we both hoped for. But this is real money, from a r
                 try {
                   const r = await fetch("/api/reduction/script", {
                     method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ dealType, address: f.address, contract, best, fee, agentFees, coveredClosing, offers, dom, repairs: f.repairs, feedback: f.feedback, settle, target }),
+                    body: JSON.stringify({ dealType, propType, address: f.address, contract, best, fee, agentFees, coveredClosing, offers, dom, repairs: f.repairs, feedback: f.feedback, settle, target }),
                   });
                   const j = (await r.json()) as { script?: string; estimates?: Array<{ item: string; pro: string; low: number; high: number }>; error?: string };
                   if (j.script) setAi({ busy: false, script: j.script, err: "", estimates: j.estimates ?? [] });
@@ -157,7 +165,7 @@ I know that's not the number we both hoped for. But this is real money, from a r
           {ai.err && <p className="text-[11px] font-bold text-amber-600">{ai.err}</p>}
           {ai.estimates.length > 0 && (
             <div className="rounded-xl bg-amber-50/70 p-3 ring-1 ring-amber-200">
-              <div className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-800">🔨 GC walk-through estimate — quote these numbers to the seller</div>
+              <div className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-800">{propType === "land" ? "🌲 Land due-diligence costs — quote these numbers to the seller" : "🔨 GC walk-through estimate — quote these numbers to the seller"}</div>
               <div className="space-y-1.5">
                 {ai.estimates.map((e, i) => (
                   <div key={i} className="flex items-start gap-2 text-[12px]">
@@ -165,9 +173,9 @@ I know that's not the number we both hoped for. But this is real money, from a r
                     <span className="shrink-0 font-extrabold tabular-nums text-slate-900">{money(e.low)}–{money(e.high)}</span>
                   </div>
                 ))}
-                <div className="flex justify-between border-t border-amber-200/70 pt-1.5 text-[12px] font-extrabold"><span className="text-amber-900">Total repairs buyers are pricing in</span><span className="text-red-600">{money(ai.estimates.reduce((n, e) => n + e.low, 0))}–{money(ai.estimates.reduce((n, e) => n + e.high, 0))}</span></div>
+                <div className="flex justify-between border-t border-amber-200/70 pt-1.5 text-[12px] font-extrabold"><span className="text-amber-900">Total {propType === "land" ? "costs buyers are pricing in" : "repairs buyers are pricing in"}</span><span className="text-red-600">{money(ai.estimates.reduce((n, e) => n + e.low, 0))}–{money(ai.estimates.reduce((n, e) => n + e.high, 0))}</span></div>
               </div>
-              <p className="mt-1.5 text-[10px] text-amber-700">Realistic national-average installed costs — say them as ranges (&quot;the roof alone is a twelve-to-fifteen-thousand-dollar job&quot;) and you&apos;ll sound like the contractor walked it with you.</p>
+              <p className="mt-1.5 text-[10px] text-amber-700">{propType === "land" ? "Realistic permit, mitigation and site-work costs — say them as ranges (“the tortoise relocation alone is a three-to-fifteen-thousand-dollar process”) and you’ll sound like the due-diligence reports are on your desk." : "Realistic national-average installed costs — say them as ranges (“the roof alone is a twelve-to-fifteen-thousand-dollar job”) and you’ll sound like the contractor walked it with you."}</p>
             </div>
           )}
           {ai.script && (

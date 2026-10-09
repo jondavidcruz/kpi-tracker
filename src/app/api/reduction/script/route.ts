@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "AI key not configured" }, { status: 503 });
 
   const b = (await req.json().catch(() => ({}))) as {
-    dealType?: string; address?: string; contract?: number; best?: number; fee?: number;
+    dealType?: string; propType?: string; address?: string; contract?: number; best?: number; fee?: number;
     agentFees?: number; coveredClosing?: number; offers?: number; dom?: number;
     repairs?: string; feedback?: string; settle?: number; target?: number;
   };
@@ -31,7 +31,9 @@ DEAL FACTS (never reveal our fee or internal math to the seller):
 - OPEN THE ASK AT: $${(b.target ?? b.settle).toLocaleString()} (leave room to meet in the middle)
 - THE NUMBER THAT MUST CLOSE: $${b.settle.toLocaleString()} (anything at or above this is a yes)
 
-RAW REPAIR NOTES FROM BUYERS (rough bullets — turn these into specific, credible contractor language with realistic materials, trades and cost ranges; expand abbreviations; sound like someone who has walked job sites):
+PROPERTY TYPE: ${b.propType === "land" ? "VACANT LAND — the issues below are land due-diligence problems (easements, protected species like gopher tortoises or scrub jays, wetlands, legal access, clearing, fill, perc/septic, utilities), NOT house repairs" : "single-family house"}.
+
+RAW ${b.propType === "land" ? "ISSUE" : "REPAIR"} NOTES FROM BUYERS (rough bullets — turn these into specific, credible ${b.propType === "land" ? "land-development and entitlement language with realistic permit, mitigation, survey and site-work cost ranges; sound like a land consultant who deals with counties and environmental agencies weekly" : "contractor language with realistic materials, trades and cost ranges; expand abbreviations; sound like someone who has walked job sites"}):
 ${b.repairs || "(none given — lean on days-on-market and current market conditions instead)"}
 
 STRONGEST BUYER QUOTE (weave it in naturally if present): ${b.feedback || "(none)"}
@@ -46,7 +48,7 @@ RULES FOR THE SCRIPT:
 - Never mention our fee, our buyer's identity, or the word "wholesale".
 - Under 350 words of spoken script.
 
-ALSO act as a licensed general contractor doing a walk-through: for EACH raw repair bullet, give the professional line-item scope and a realistic installed-cost range (low/high, whole dollars, national-average pricing — e.g. full architectural-shingle roof replacement $9,000–$15,000; foundation stem-wall crack repair w/ structural letter $8,000–$18,000; full rewire $12,000–$30,000). Scale to the repair as described; when size is unknown assume a typical 1,500 sq ft single-family home. The script should quote these same numbers so the rep sounds like a GC walked the property.
+ALSO act as ${b.propType === "land" ? `a land due-diligence consultant pricing what each issue costs the BUYER to cure or absorb: for EACH raw issue bullet, give the professional line-item scope and a realistic cost range (low/high, whole dollars — e.g. gopher tortoise survey + permitted relocation $3,000–$15,000 depending on burrow count; scrub-jay habitat review and mitigation $5,000–$25,000+; easement title curative / attorney work $2,500–$8,000; lot clearing and grubbing $3,000–$10,000 per acre; wetlands delineation + impacts $4,000–$20,000; no legal access / easement acquisition $5,000–$25,000; well + septic w/ perc test $15,000–$35,000). Where an issue mostly kills VALUE rather than carrying a fixed cost (flood zone, odd shape), price the market-value impact instead and say so in the scope line` : `a licensed general contractor doing a walk-through: for EACH raw repair bullet, give the professional line-item scope and a realistic installed-cost range (low/high, whole dollars, national-average pricing — e.g. full architectural-shingle roof replacement $9,000–$15,000; foundation stem-wall crack repair w/ structural letter $8,000–$18,000; full rewire $12,000–$30,000). Scale to the repair as described; when size is unknown assume a typical 1,500 sq ft single-family home`}. The script should quote these same numbers so the rep sounds like ${b.propType === "land" ? "the due-diligence reports are already on their desk" : "a GC walked the property"}.
 
 OUTPUT STRICTLY AS JSON — no markdown fences, no commentary, exactly this shape:
 {"script": "<the full spoken script with [PAUSE] and the two branch blocks>", "estimates": [{"item": "<short repair name>", "pro": "<one-line professional scope, trade language>", "low": <number>, "high": <number>}]}`;
