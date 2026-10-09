@@ -85,7 +85,15 @@ export default function InboxBell() {
       if (!r.ok) return;
       const j = (await r.json()) as { count: number; recent?: Thread[] };
       setCount(j.count); setRecent(j.recent ?? []);
-      if (prevRef.current !== null && j.count > prevRef.current && !mutedRef.current) ding();
+      // ding ONLY when (a) mute is off RIGHT NOW in storage — mutedRef goes
+      // stale when the mute was toggled in another tab — and (b) the newest
+      // unread is actually fresh; overnight syncs re-flagging old threads
+      // bumped the count and made "random" dings (Jon 2026-10-09).
+      let mutedNow = mutedRef.current;
+      try { mutedNow = localStorage.getItem("fo_bell_muted") === "1"; } catch { /* keep ref */ }
+      const newestUnread = (j.recent ?? []).filter((t) => t.unread).map((t) => t.at).sort().pop();
+      const fresh = !!newestUnread && Date.now() - Date.parse(newestUnread) < 3 * 60_000;
+      if (prevRef.current !== null && j.count > prevRef.current && fresh && !mutedNow) ding();
       prevRef.current = j.count;
       document.title = document.title.replace(/^\(\d+\) /, "");
       if (j.count > 0) document.title = `(${j.count}) ${document.title}`;

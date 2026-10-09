@@ -226,19 +226,33 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       )}
 
       <Card className="p-4">
-        <h3 className="mb-2 text-sm font-bold text-slate-700">＋ New lead</h3>
-        <form action={createCrmLeadAction} className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-7">
-          <input name="name" placeholder="Seller name *" required className={inputCls} />
-          <input name="phone" placeholder="Phone" className={inputCls} />
-          <input name="email" type="email" placeholder="Email" className={inputCls} />
-          <input name="title" placeholder="Property / opportunity" className={inputCls} />
-          <input name="source" placeholder="Source (PPL…)" className={inputCls} />
-          <select name="assignedTo" defaultValue={me?.name ?? ""} className={inputCls}>
-            {reps.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
-          </select>
-          <button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Add lead</button>
-        </form>
-        <p className="mt-1 text-[10px] text-slate-400">Adding a lead auto-sends the welcome text (and email when given) and drops them into the rep&apos;s own pipeline.</p>
+        <details>
+          <summary className="cursor-pointer text-sm font-bold text-slate-700">＋ New lead <span className="font-normal text-slate-400">— everything in one go: who, the property address, source, rep and your notes</span></summary>
+          <form action={createCrmLeadAction} className="mt-3 space-y-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Seller name *</span><input name="name" placeholder="Jane Smith" required className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Phone</span><input name="phone" placeholder="(555) 123-4567" className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Email</span><input name="email" type="email" placeholder="jane@email.com" className={inputCls} /></label>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+              <label className="col-span-2 block sm:col-span-3"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Property street address</span><input name="street" placeholder="123 Main St" className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">City</span><input name="city" placeholder="Dallas" className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">State</span><input name="state" placeholder="TX" maxLength={20} className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Zip</span><input name="zip" placeholder="75001" maxLength={10} className={inputCls} /></label>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Where did this lead come from? (source)</span><input name="source" placeholder="PPL / Direct REI / referral / cold call…" className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Assigned to</span><select name="assignedTo" defaultValue={me?.name ?? ""} className={inputCls}>
+                {reps.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
+              </select></label>
+            </div>
+            <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Notes — everything from the first call (lands on the timeline instantly)</span><textarea name="notes" rows={3} placeholder={"motivated — behind on taxes\nwants to close in 30 days\nquoted ~$80k on the phone"} className={inputCls} /></label>
+            <div className="flex items-center gap-3">
+              <button className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700">Add lead → opens the full card</button>
+              <p className="text-[10px] text-slate-400">Address is auto-scrubbed to &quot;street, City, ST zip&quot;. Welcome text (and email when given) sends automatically; the lead lands in the rep&apos;s own pipeline.</p>
+            </div>
+          </form>
+        </details>
       </Card>
 
       {view === "kanban" ? (

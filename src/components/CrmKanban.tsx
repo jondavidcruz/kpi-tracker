@@ -257,7 +257,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{c.contactName}</a>
                       {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
                     </div>
-                    {show.title && <div className="text-[11px] text-slate-500">{c.title}</div>}
+                    {show.title && <div className={`text-[11px] text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>{c.title}</div>}
                     {c.address && c.address !== c.title && <div className={`truncate text-[10px] text-slate-400 ${privacy ? "select-none blur-[3px]" : ""}`}>📍 {c.address}</div>}
                     {c.phone && <div className={`text-[10px] font-semibold text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>📞 {c.phone}</div>}
                     <div className="mt-1 flex flex-wrap items-center gap-1">

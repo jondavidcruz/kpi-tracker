@@ -19,7 +19,13 @@ export async function createCrmLeadAction(formData: FormData) {
   const me = await crmUser();
   if (!me) return;
   const name = String(formData.get("name") ?? "").trim();
-  const title = String(formData.get("title") ?? "").trim() || "New opportunity";
+  // v2 form (Jon 2026-10-09): explicit street/city/state/zip fields, scrubbed
+  // through normalizeAddress as the final check before the card exists.
+  const { normalizeAddress } = await import("@/lib/address");
+  const street = String(formData.get("street") ?? "").trim();
+  const addrJoined = [street, String(formData.get("city") ?? "").trim(), `${String(formData.get("state") ?? "").trim()} ${String(formData.get("zip") ?? "").trim()}`.trim()].filter(Boolean).join(", ");
+  const title = normalizeAddress(addrJoined || String(formData.get("title") ?? "").trim()) || "New opportunity";
+  const notes = String(formData.get("notes") ?? "").trim();
   if (!name) return;
   const contact = await db.crmContact.create({ data: {
     name,
@@ -37,6 +43,8 @@ export async function createCrmLeadAction(formData: FormData) {
     assignedTo: contact.assignedTo,
   } });
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: "Lead created", actor: me.name });
+  // intake notes land on the timeline immediately — no second step (Jon 2026-10-09)
+  if (notes) await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "note", body: notes.slice(0, 4000), actor: me.name });
   if (contact.phone) {
     const { sendWelcomeText } = await import("@/lib/website-lead");
     sendWelcomeText({ contactId: contact.id, oppId: opp.id, phone: contact.phone, name: contact.name, repName: contact.assignedTo }).catch(() => {});

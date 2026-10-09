@@ -875,6 +875,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, snap, alarms });
   }
 
+  // 🧹 Address scrub (?addrscrub=1 dry-run / &commit=1 applies): normalizes
+  // every live opportunity title into "street, City, ST zip" — kills doubled
+  // zips, repeated city/state and trailing USA from the GHL import. Originals
+  // are archived in __addr_scrub_log__ (archive-never-delete).
+  if (url.searchParams.get("addrscrub") === "1") {
+    const { normalizeAddress } = await import("@/lib/address");
+    const commit = url.searchParams.get("commit") === "1";
+    const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { id: true, title: true } });
+    const changes = opps.map((o) => ({ id: o.id, from: o.title, to: normalizeAddress(o.title) })).filter((c) => c.to && c.to !== c.from);
+    if (commit && changes.length) {
+      for (const c of changes) await db.crmOpportunity.update({ where: { id: c.id }, data: { title: c.to } }).catch(() => {});
+      try {
+        const row = await db.resource.findFirst({ where: { category: "__addr_scrub_log__" } });
+        const prev: unknown[] = row?.description ? JSON.parse(row.description) : [];
+        const entry = { at: new Date().toISOString(), changed: changes.length, originals: changes.map((c) => ({ id: c.id, from: c.from })) };
+        const description = JSON.stringify([entry, ...prev].slice(0, 5));
+        if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+        else await db.resource.create({ data: { title: "addr-scrub-log", category: "__addr_scrub_log__", url: "", description } });
+      } catch { /* log is best-effort */ }
+    }
+    return NextResponse.json({ ok: true, committed: commit, total: opps.length, wouldChange: changes.length, sample: changes.slice(0, 15).map((c) => `${c.from} → ${c.to}`) });
+  }
+
   // 🧠 AI engine health (?aitest=1): pings Claude and Gemini with a 1-word
   // prompt and reports which engines answer — instant billing/key diagnosis.
   if (url.searchParams.get("aitest") === "1") {
