@@ -11,10 +11,14 @@ const UW_LABEL: Record<string, string> = { cash: "💵 Cash MAO", novation: "�
 
 export default function ReductionCoach({ initial, uw = [] }: { initial?: { address?: string; contractPrice?: string }; uw?: Array<{ tab: string; mao: number; fee: number }> } = {}) {
   const [f, setF] = useState({ address: initial?.address ?? "", contractPrice: initial?.contractPrice ?? "", bestOffer: "", fee: "10,000", agentPct: "3", sellerClosing: "2,000", agreed: "", offers: "", dom: "", repairs: "", feedback: "" });
-  const [dealType, setDealType] = useState<"assignment" | "novation">("assignment");
-  // 🌲 land vs house (Jon 2026-10-09): same calculator, the AI swaps hats —
-  // GC walk-through for houses, land due-diligence pricing for vacant land.
-  const [propType, setPropType] = useState<"house" | "land">("land");
+  // dummy-proof wizard (Jon 2026-10-09): BOTH choices start empty so nobody
+  // runs the math on the wrong deal type by accident — the numbers only
+  // appear after step 1 + step 2 are picked.
+  const [dealType, setDealType] = useState<"assignment" | "novation" | null>(null);
+  // 🌲 land vs house: same calculator, the AI swaps hats — GC walk-through
+  // for houses, land due-diligence pricing for vacant land.
+  const [propType, setPropType] = useState<"house" | "land" | null>(null);
+  const setupDone = dealType !== null && propType !== null;
   // seller closing costs: exact $ when known, or % of sale price when not (Jon 2026-10-09)
   const [closingMode, setClosingMode] = useState<"$" | "%">("$");
   const [ai, setAi] = useState<{ busy: boolean; script: string; err: string; estimates: Array<{ item: string; pro: string; low: number; high: number }> }>({ busy: false, script: "", err: "", estimates: [] });
@@ -77,17 +81,25 @@ I know that's not the number we both hoped for. But this is real money, from a r
       )}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <div className="text-sm font-extrabold text-slate-800">1️⃣ The real numbers</div>
-          <div className="flex gap-1.5">
-            {([["assignment", "📄 Assignment — buyer covers ALL closing costs"], ["novation", "🏷 Novation — WE cover seller closing + agent fees"]] as const).map(([k, l]) => (
-              <button key={k} type="button" onClick={() => setDealType(k)} className={`flex-1 rounded-xl px-2 py-2 text-[11px] font-bold ring-1 ${dealType === k ? "bg-brand-navy text-white ring-brand-navy" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>{l}</button>
-            ))}
+          <div>
+            <div className={`text-[11px] font-extrabold uppercase tracking-wide ${dealType ? "text-emerald-600" : "text-red-500"}`}>{dealType ? "✅" : "1️⃣"} Step 1 — how is this deal structured?</div>
+            <div className="mt-1 flex gap-1.5">
+              {([["assignment", "📄 Assignment — buyer covers ALL closing costs"], ["novation", "🏷 Novation — WE cover seller closing + agent fees"]] as const).map(([k, l]) => (
+                <button key={k} type="button" onClick={() => setDealType(k)} className={`flex-1 rounded-xl px-2 py-2 text-[11px] font-bold ring-1 ${dealType === k ? "bg-brand-navy text-white ring-brand-navy" : dealType === null ? "bg-white text-slate-600 ring-red-200 hover:bg-slate-50" : "bg-slate-50 text-slate-500 ring-slate-200 hover:bg-slate-100"}`}>{l}</button>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-1.5">
-            {([["land", "🌲 Vacant land — issues priced as due-diligence costs (easements, tortoises, scrub jays, wetlands, access)"], ["house", "🏠 House — issues priced as GC repair quotes"]] as const).map(([k, l]) => (
-              <button key={k} type="button" onClick={() => setPropType(k)} className={`flex-1 rounded-xl px-2 py-1.5 text-[10px] font-bold ring-1 ${propType === k ? "bg-emerald-700 text-white ring-emerald-700" : "bg-slate-50 text-slate-500 ring-slate-200 hover:bg-slate-100"}`}>{l}</button>
-            ))}
+          <div>
+            <div className={`text-[11px] font-extrabold uppercase tracking-wide ${propType ? "text-emerald-600" : "text-red-500"}`}>{propType ? "✅" : "2️⃣"} Step 2 — what are we selling?</div>
+            <div className="mt-1 flex gap-1.5">
+              {([["land", "🌲 Vacant land — issues priced as due-diligence costs (easements, tortoises, scrub jays, wetlands, access)"], ["house", "🏠 House — issues priced as GC repair quotes"]] as const).map(([k, l]) => (
+                <button key={k} type="button" onClick={() => setPropType(k)} className={`flex-1 rounded-xl px-2 py-1.5 text-[10px] font-bold ring-1 ${propType === k ? "bg-emerald-700 text-white ring-emerald-700" : propType === null ? "bg-white text-slate-500 ring-red-200 hover:bg-slate-50" : "bg-slate-50 text-slate-500 ring-slate-200 hover:bg-slate-100"}`}>{l}</button>
+              ))}
+            </div>
           </div>
+          {!setupDone && <div className="rounded-xl bg-slate-50 px-3 py-4 text-center text-xs font-bold text-slate-400 ring-1 ring-slate-100">👆 Make both choices above — the numbers unlock once you do.</div>}
+          {setupDone && <>
+          <div className="pt-1 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">3️⃣ Step 3 — the real numbers</div>
           <label><span className={lbl}>Property address</span><input value={f.address} onChange={set("address")} placeholder="123 Main St" className={inputCls} /></label>
           <div className="grid grid-cols-2 gap-2">
             <label><span className={lbl}>Our contract price with the SELLER $</span><input value={f.contractPrice} onChange={set("contractPrice")} placeholder="80,000" className={inputCls} /></label>
@@ -111,7 +123,7 @@ I know that's not the number we both hoped for. But this is real money, from a r
             <label><span className={lbl}>Days on market</span><input value={f.dom} onChange={set("dom")} placeholder="34" className={inputCls} /></label>
           </div>
           <label><span className={lbl}>What buyers said is wrong (rough bullets — one per line, AI writes the professional wording)</span><textarea value={f.repairs} onChange={set("repairs")} rows={3} placeholder={propType === "land" ? "easement across the back\ngopher tortoises\nscrub jay area\nhalf of it looks wet" : "roof bad\nac old\ncrack in foundation"} className={inputCls} /></label>
-          <label><span className={lbl}>Strongest buyer quote — the most powerful thing a buyer actually SAID, word-for-word <span className="font-normal text-slate-400">(optional — you repeat it to the seller as third-party proof; a real buyer&apos;s words always beat yours)</span></span><textarea value={f.feedback} onChange={set("feedback")} rows={2} placeholder={"with that roof, I'm at 60 — not a dollar more"} className={inputCls} /></label>
+          <label><span className={lbl}>Strongest buyer quote — the most powerful thing a buyer actually SAID, word-for-word <span className="font-normal text-slate-400">(optional — you repeat it to the seller as third-party proof; a real buyer&apos;s words always beat yours)</span></span><textarea value={f.feedback} onChange={set("feedback")} rows={2} placeholder={propType === "land" ? "between the easement and the tortoises, I can't go past 30" : "with that roof, I'm at 60 — not a dollar more"} className={inputCls} /></label>
           {contract > 0 && best > 0 && (
             <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-100">
               <div className="flex justify-between"><span className="text-slate-500">{dealType === "assignment" ? "Buyer pays us (covers their own closing)" : "End-buyer sale price"}</span><b>{money(best)}</b></div>
@@ -139,14 +151,15 @@ I know that's not the number we both hoped for. But this is real money, from a r
               {agreed > 0 && netAt(agreed) <= 0 && <div className="text-[11px] font-bold text-red-600">🛑 We&apos;d LOSE money at that number.</div>}
             </div>
           )}
+          </>}
         </div>
 
         <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="flex items-center gap-2">
-            <div className="text-sm font-extrabold text-slate-800">2️⃣ Your script — read it, don&apos;t wing it</div>
+            <div className="text-sm font-extrabold text-slate-800">4️⃣ Your script — read it, don&apos;t wing it</div>
             <button
               type="button"
-              disabled={ai.busy || !contract || !best || settle <= 0}
+              disabled={ai.busy || !setupDone || !contract || !best || settle <= 0}
               onClick={async () => {
                 setAi({ busy: true, script: "", err: "", estimates: [] });
                 try {
@@ -192,7 +205,7 @@ I know that's not the number we both hoped for. But this is real money, from a r
               <pre className="mt-1 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 font-sans text-[13px] leading-relaxed text-slate-700 ring-1 ring-slate-100">{script}</pre>
             </details>
           ) : !ai.script ? (
-            <p className="text-xs text-slate-400">Fill in the contract price and the best offer — the script writes itself from your real numbers.</p>
+            <p className="text-xs text-slate-400">{setupDone ? "Fill in the contract price and the best offer — the script writes itself from your real numbers." : "Do steps 1–3 on the left first — the script writes itself from your real numbers."}</p>
           ) : null}
           <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-100">
             <div className="font-extrabold">🎓 First-timer rules</div>
