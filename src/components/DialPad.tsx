@@ -56,11 +56,20 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const keepTabAlive = () => {
     try {
       if (keepAliveRef.current) return;
-      const a = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=");
-      a.loop = true; a.volume = 0.01;
+      // ⚠️ NEVER a looping audio FILE here: a zero-length looping clip made the
+      // browser seek forever — pegged CPUs, froze tabs, dropped Jon's Meet
+      // (2026-10-09). A live silent oscillator stream costs ~nothing.
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      g.gain.value = 0.0001; // inaudible, but counts as "playing audio" → no tab discard
+      const dst = ctx.createMediaStreamDestination();
+      osc.connect(g); g.connect(dst); osc.start();
+      const a = new Audio();
+      a.srcObject = dst.stream;
       keepAliveRef.current = a;
       a.play().catch(() => {
-        const once = () => { a.play().catch(() => {}); document.removeEventListener("pointerdown", once); };
+        const once = () => { a.play().catch(() => {}); ctx.resume().catch(() => {}); document.removeEventListener("pointerdown", once); };
         document.addEventListener("pointerdown", once);
       });
     } catch { /* tab discard protection is best-effort */ }
