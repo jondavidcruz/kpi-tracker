@@ -875,6 +875,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, snap, alarms });
   }
 
+  // ✏️ KPI display rename (?kpirename=1&from=…&to=…): changes a KPI's shown
+  // name only — keys/targets/entries all hang off the id, so nothing breaks.
+  if (url.searchParams.get("kpirename") === "1") {
+    const from = url.searchParams.get("from") ?? "";
+    const to = url.searchParams.get("to") ?? "";
+    if (!from || !to) return NextResponse.json({ ok: false, error: "need from & to" });
+    const rows = await db.kpi.findMany({ where: { name: { equals: from, mode: "insensitive" } }, select: { id: true, name: true } });
+    for (const r of rows) await db.kpi.update({ where: { id: r.id }, data: { name: to } });
+    return NextResponse.json({ ok: true, renamed: rows.length, from, to });
+  }
+
   // ☎️ SIP-URI unlock (?sipallow=1): credential connections ship with SIP-URI
   // calling DISABLED — so ring-all's dials to sip:gencred…@sip.telnyx.com were
   // rejected instantly (user_busy) even with the browser registered, while

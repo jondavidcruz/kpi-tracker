@@ -79,9 +79,20 @@ export async function POST(req: NextRequest) {
         ...(fresh.length > 0 ? [] : [cfg.sipUser ?? ""]),
       ].filter(Boolean))];
       const inId = p.call_control_id;
-      const legs: string[] = [];
+      // ⚡ idempotency FIRST: slow handling made Telnyx RETRY call.initiated,
+      // each retry dialed another wave of ring legs, and answering a leg the
+      // next wave's cleanup had already cancelled = "call ended" instantly
+      // (Jon 2026-10-09). One wave per inbound call, ever.
+      {
+        const { rowId, map } = await readSess();
+        if (map[inId]) return NextResponse.json({ ok: true, dup: true });
+        map[inId] = { legs: [], answered: false, at: new Date().toISOString() };
+        await writeSess(rowId, map);
+      }
       const clientState = Buffer.from(JSON.stringify({ ring: inId })).toString("base64");
-      for (const sip of targets) {
+      // dial every browser in PARALLEL — sequential dials were what pushed the
+      // handler past Telnyx's webhook timeout in the first place
+      const legs = (await Promise.all(targets.map(async (sip) => {
         const r = await fetch("https://api.telnyx.com/v2/calls", {
           method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -90,11 +101,12 @@ export async function POST(req: NextRequest) {
           }),
         }).catch(() => null);
         const rb = r ? ((await r.json().catch(() => ({}))) as { data?: { call_control_id?: string } }) : {};
-        if (rb.data?.call_control_id) legs.push(rb.data.call_control_id);
+        return rb.data?.call_control_id ?? "";
+      }))).filter(Boolean);
+      {
+        const { rowId, map } = await readSess();
+        if (map[inId]) { map[inId].legs = legs; await writeSess(rowId, map); }
       }
-      const { rowId, map } = await readSess();
-      map[inId] = { legs, answered: false, at: new Date().toISOString() };
-      await writeSess(rowId, map);
       if (legs.length === 0 && cfg.sipUser) {
         // dial-out refused entirely → old single transfer as a last resort
         await txCall(inId, "transfer", { to: `sip:${cfg.sipUser}@sip.telnyx.com`, timeout_secs: 25 });
