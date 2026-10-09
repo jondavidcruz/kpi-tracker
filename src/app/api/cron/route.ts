@@ -891,14 +891,23 @@ export async function GET(request: Request) {
       } catch (e) { out.claude = `❌ ${String(e).slice(0, 120)}`; }
     } else out.claude = "no key";
     if (process.env.GEMINI_API_KEY) {
+      const model = url.searchParams.get("gmodel") || "gemini-3.8-flash";
       try {
-        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: "Reply with exactly: OK" }] }] }),
-          signal: AbortSignal.timeout(15000),
+          body: JSON.stringify({ contents: [{ parts: [{ text: "Reply with exactly: OK" }] }], generationConfig: { maxOutputTokens: 200 } }),
+          signal: AbortSignal.timeout(40000),
         });
-        out.gemini = r.ok ? "✅ working" : `❌ ${r.status}: ${(await r.text().catch(() => "")).slice(0, 180)}`;
+        const bodyTxt = (await r.text().catch(() => "")).slice(0, 400);
+        out.gemini = r.ok ? `✅ working (${model}): ${bodyTxt.slice(0, 160)}` : `❌ ${r.status}: ${bodyTxt.slice(0, 180)}`;
       } catch (e) { out.gemini = `❌ ${String(e).slice(0, 120)}`; }
+      if (url.searchParams.get("models") === "1") {
+        try {
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=60&key=${process.env.GEMINI_API_KEY}`, { signal: AbortSignal.timeout(15000) });
+          const j = (await r.json()) as { models?: Array<{ name?: string; supportedGenerationMethods?: string[] }> };
+          out.models = (j.models ?? []).filter((m) => m.supportedGenerationMethods?.includes("generateContent")).map((m) => (m.name ?? "").replace("models/", "")).join(", ").slice(0, 1500);
+        } catch (e) { out.models = `❌ ${String(e).slice(0, 120)}`; }
+      }
     } else out.gemini = "no key";
     return NextResponse.json({ ok: true, ...out });
   }
