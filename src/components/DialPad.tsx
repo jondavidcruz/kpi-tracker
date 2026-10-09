@@ -282,7 +282,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
           <span className="flex items-center justify-between gap-2 border-b border-slate-100 px-3.5 py-2.5">
             <span>
               <span className="block text-[13px] font-extrabold text-slate-800">Calling From</span>
-              <select value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 w-44 rounded-md border border-slate-200 px-1 py-0.5 text-[10px] font-semibold text-slate-600">
+              <select value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 w-52 rounded-md border border-slate-200 px-1.5 py-1 text-[13px] font-semibold text-slate-700">
                 <option value="auto">📍 Closest to the contact (auto)</option>
                 {(data?.numbers ?? []).map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
