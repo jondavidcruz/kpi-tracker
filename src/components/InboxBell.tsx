@@ -61,6 +61,7 @@ export default function InboxBell() {
   const prevRef = useRef<number | null>(null);
   const mutedRef = useRef(false);
   const threadRef = useRef<HTMLSpanElement>(null);
+  const newToRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight; }, [msgs.length, quick?.id]);
 
   const ding = () => {
@@ -219,14 +220,16 @@ export default function InboxBell() {
                     {/* Messages list — like the real app */}
                     <span className="flex items-center justify-between border-b border-slate-100 px-3 pb-1 pt-0.5">
                       <span className="text-[15px] font-extrabold text-slate-900">Messages</span>
-                      <span className="flex gap-0.5">
+                      <span className="flex items-center gap-0.5">
                         {([["all", "All"], ["unread", `Unread${count ? ` ${count}` : ""}`], ["star", "⭐"]] as const).map(([k, l]) => (
                           <button key={k} onClick={() => setView(k)} className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold ${view === k ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-500"}`}>{l}</button>
                         ))}
+                        <button onClick={() => { setQuery(""); newToRef.current?.focus(); }} title="New message — type any name or phone number" className="ml-0.5 text-[13px] text-sky-500 hover:text-sky-600">✏️</button>
                       </span>
                     </span>
-                    <span className="block px-2 py-1">
-                      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 Search name, or type a number to text it" className="h-6 w-full rounded-lg border border-slate-100 bg-slate-50 px-2 text-[10px] outline-none focus:border-sky-300" />
+                    <span className="flex items-center gap-1 px-2 py-1">
+                      <span className="text-[9px] font-extrabold text-slate-400">To:</span>
+                      <input ref={newToRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="name, or any phone number" className="h-6 min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50 px-2 text-[10px] outline-none focus:border-sky-300" />
                     </span>
                     <span className="block h-[248px] overflow-y-auto">
                       {(() => {

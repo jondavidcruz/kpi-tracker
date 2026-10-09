@@ -64,7 +64,11 @@ export async function POST(req: NextRequest) {
   // sends the text-back.
   if (ev === "call.initiated" && !st.bridgeTo && !st.ring && key && p.call_control_id) {
     const pay0 = p as { direction?: string; to?: string; from?: string };
-    if (pay0.direction === "incoming") {
+    // ⚠️ Only a REAL seller call (dialed to one of our +1 numbers). Since the
+    // SIP unlock, every browser leg we dial fires its own mirror "incoming"
+    // event with to=gencredXXX — treating those as new calls made ring waves
+    // spawn ring waves (Jon 2026-10-09: answered → instantly hung up).
+    if (pay0.direction === "incoming" && (pay0.to ?? "").startsWith("+")) {
       const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
       let cfg: { sipUser?: string; ccAppId?: string; agents?: Record<string, { sipUser: string; lastSeen?: string }> } = {};
       try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
@@ -209,7 +213,7 @@ export async function POST(req: NextRequest) {
   // ☎️ Missed INBOUND call → instant text-back + a task for the lead's owner
   // (GHL's signature move). Inbound legs carry no client_state.
   const pay = p as { direction?: string; from?: string; to?: string; hangup_cause?: string; start_time?: string; answered_at?: string };
-  if (ev === "call.hangup" && !st.contactId && (pay.direction === "incoming" || !pay.direction) && pay.from && pay.to) {
+  if (ev === "call.hangup" && !st.contactId && (pay.direction === "incoming" || !pay.direction) && pay.from && pay.to && pay.to.startsWith("+")) {
     // caller hung up while browsers were still ringing → stop the ring legs
     if (p.call_control_id) {
       const { rowId, map } = await readSess();
