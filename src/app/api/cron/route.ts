@@ -875,6 +875,28 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, snap, alarms });
   }
 
+  // ☎️ SIP-URI unlock (?sipallow=1): credential connections ship with SIP-URI
+  // calling DISABLED — so ring-all's dials to sip:gencred…@sip.telnyx.com were
+  // rejected instantly (user_busy) even with the browser registered, while
+  // outbound worked fine. "internal" = only our own account can dial them.
+  if (url.searchParams.get("sipallow") === "1") {
+    const key = process.env.TELNYX_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, error: "no TELNYX_API_KEY" });
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+    let cfg: { connId?: string } = {};
+    try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
+    if (!cfg.connId) return NextResponse.json({ ok: false, error: "no credential connection in cfg" });
+    const get1 = await fetch(`https://api.telnyx.com/v2/credential_connections/${cfg.connId}`, { headers: { Authorization: `Bearer ${key}` } });
+    const gb = (await get1.json()) as { data?: Record<string, unknown> };
+    const before = gb.data?.sip_uri_calling_preference ?? "(field missing)";
+    const patch = await fetch(`https://api.telnyx.com/v2/credential_connections/${cfg.connId}`, {
+      method: "PATCH", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sip_uri_calling_preference: "internal" }),
+    });
+    const pb = (await patch.json().catch(() => ({}))) as { data?: Record<string, unknown>; errors?: unknown };
+    return NextResponse.json({ ok: patch.ok, before, after: pb.data?.sip_uri_calling_preference ?? null, error: patch.ok ? undefined : JSON.stringify(pb.errors ?? pb).slice(0, 300) });
+  }
+
   // 🧹 Address scrub (?addrscrub=1 dry-run / &commit=1 applies): normalizes
   // every live opportunity title into "street, City, ST zip" — kills doubled
   // zips, repeated city/state and trailing USA from the GHL import. Originals

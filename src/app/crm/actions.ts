@@ -878,12 +878,19 @@ export async function dialerOutcomeQuickAction(formData: FormData): Promise<void
   const me = await crmUser();
   if (!me) return;
   const oppId = String(formData.get("oppId") ?? "");
-  const contactId = String(formData.get("contactId") ?? "");
+  let contactId = String(formData.get("contactId") ?? "");
   const outcome = String(formData.get("outcome") ?? "");
   // GHL-style dispositions (Jon 2026-10-08) — each one sets the follow-up cadence
   const NEXT_DAYS: Record<string, number> = { no_answer: 1, voicemail: 2, callback: 0, follow_up: 1, appointment: 0, talked: 3, not_interested: 30, wrong_number: -1 };
   const label: Record<string, string> = { no_answer: "no answer", voicemail: "left voicemail", callback: "callback requested", follow_up: "follow up", appointment: "appointment requested", talked: "talked — good convo", not_interested: "not interested (nurture)", wrong_number: "incorrect number" };
-  if (!(outcome in NEXT_DAYS) || !contactId) return;
+  if (!(outcome in NEXT_DAYS)) return;
+  // keypad dials carry only the number — the call log already find-or-created
+  // the contact, so look them up by last-10 (Jon 2026-10-09)
+  if (!contactId) {
+    const last10 = String(formData.get("to") ?? "").replace(/\D/g, "").slice(-10);
+    if (last10.length === 10) contactId = (await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true } }))?.id ?? "";
+  }
+  if (!contactId) return;
   const nf = NEXT_DAYS[outcome] < 0 ? "" : new Date(Date.now() + NEXT_DAYS[outcome] * 86400000).toISOString().slice(0, 10);
   if (oppId) await db.crmOpportunity.update({ where: { id: oppId }, data: { nextFollowUp: nf, ...(outcome === "not_interested" ? { stage: "nurture" } : {}) } }).catch(() => {});
   if (outcome === "wrong_number") {

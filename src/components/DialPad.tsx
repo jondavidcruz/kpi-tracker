@@ -151,7 +151,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     const dur = startRef.current ? Math.round((Date.now() - startRef.current) / 1000) : 0;
     startRef.current = 0;
     setState("idle"); setMuted(false); setSecs(0); setOnCall(null); setDtmfTrail("");
-    if (ctx?.oppId || ctx?.contactId) setLastCall(ctx);
+    if (ctx?.oppId || ctx?.contactId || ctx?.phone) setLastCall(ctx); // keypad dials get the strip too (Jon 2026-10-09)
     if (ctx?.phone || ctx?.contactId) {
       // log EVERY call — keypad dials included; the server find-or-creates the
       // contact so it shows in Conversations recents (Jon 2026-10-08)
@@ -390,6 +390,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
                     const fd = new FormData();
                     fd.set("oppId", lastCall.oppId ?? "");
                     fd.set("contactId", lastCall.contactId ?? "");
+                    fd.set("to", lastCall.phone ?? "");
                     fd.set("outcome", k);
                     dialerOutcomeQuickAction(fd).catch(() => {});
                     setLastCall(null);

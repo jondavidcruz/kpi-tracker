@@ -158,6 +158,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
           calls ring on every page, not just the CRM tab. Top-right per Jon. */}
       <GlobalPhone me={me} />
       <GlobalBell me={me} />
+      <GlobalDayPill me={me} />
     </div>
   );
 }
@@ -169,6 +170,17 @@ async function GlobalBell({ me }: { me: NonNullable<Awaited<ReturnType<typeof ge
     if (!comms.sms && !comms.call) return null;
     const { default: InboxBell } = await import("./InboxBell");
     return <InboxBell />;
+  } catch { return null; }
+}
+
+async function GlobalDayPill({ me }: { me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }) {
+  try {
+    // reps who call or text get the all-day dials/connects pill (Jon 2026-10-09)
+    const { commsFor } = await import("@/lib/crm-comms");
+    const comms = await commsFor(me);
+    if (!comms.call && !comms.sms) return null;
+    const { default: MyDayPill } = await import("./MyDayPill");
+    return <MyDayPill />;
   } catch { return null; }
 }
 
