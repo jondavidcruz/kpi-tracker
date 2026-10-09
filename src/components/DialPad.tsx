@@ -166,9 +166,37 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     }
   };
 
+  // 👑 ONE phone per browser (Jon 2026-10-09): multiple War Room tabs were
+  // logging into the same Telnyx credential and kicking each other off every
+  // few minutes — the line was mid-reconnect whenever a call arrived, so
+  // inbound hit user_busy instantly. A Web Lock elects ONE leader tab to hold
+  // the phone; the rest stand down. Dialing from another tab steals the lock.
+  const leaderRef = useRef(false);
+  const releaseRef = useRef<(() => void) | null>(null);
+  const holdLock = (steal: boolean) => {
+    if (!("locks" in navigator)) { leaderRef.current = true; return Promise.resolve(); }
+    return new Promise<void>((acquired) => {
+      navigator.locks.request("fo_dialer_leader", steal ? { steal: true } : {}, async () => {
+        leaderRef.current = true;
+        acquired();
+        ensureClient().catch(() => {});
+        await new Promise<void>((res) => { releaseRef.current = res; });
+      }).catch(() => {
+        // our lock was STOLEN (user dialed from another tab) → stand down and
+        // queue up again so we take over if that tab ever closes
+        leaderRef.current = false;
+        try { (clientRef.current as { disconnect?: () => void } | null)?.disconnect?.(); } catch { /* gone */ }
+        clientRef.current = null; readyRef.current = false; setLineOk(false);
+        acquired();
+        holdLock(false);
+      });
+    });
+  };
+
   // One persistent connection: dialing uses it AND it keeps listening for
   // INBOUND calls (sellers calling our number ring right here in the browser).
   const ensureClient = async (): Promise<unknown> => {
+    if (!leaderRef.current) throw new Error("phone is live in another tab");
     if (clientRef.current && readyRef.current) return clientRef.current;
     if (connectingRef.current) return connectingRef.current;
     connectingRef.current = (async () => {
@@ -221,21 +249,22 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // connect in the background so inbound calls ring even before first use,
   // and keep the registration alive (tokens/sockets expire quietly).
   useEffect(() => {
-    ensureClient().catch(() => { /* connects on first dial instead */ });
+    holdLock(false); // leader election — the winning tab connects inside
     // Chrome freezes timers + sockets in background tabs — the #1 reason
     // inbound went user_busy (Jon 2026-10-08). Re-register the second the tab
     // wakes, plus a tighter 60s heartbeat while visible.
     // While CONNECTED, ping presence so inbound ring-all knows this browser is
     // awake and dials it; while disconnected, keep trying to re-register.
     const keep = setInterval(() => {
+      if (!leaderRef.current) return; // standby tab — the leader runs the phone
       if (!readyRef.current) ensureClient().catch(() => {});
       else fetch("/api/telnyx/presence", { method: "POST" }).catch(() => {});
     }, 60_000);
-    const wake = () => { if (!readyRef.current) ensureClient().catch(() => {}); };
+    const wake = () => { if (leaderRef.current && !readyRef.current) ensureClient().catch(() => {}); };
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
     window.addEventListener("online", wake);
-    return () => { clearInterval(keep); document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); window.removeEventListener("online", wake); };
+    return () => { releaseRef.current?.(); clearInterval(keep); document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); window.removeEventListener("online", wake); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const answerIncoming = () => { try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "" }); } catch { /* gone */ } };
@@ -250,6 +279,8 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     setOnCall(ctx); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     dialStartRef.current = Date.now(); setEndConfirm(false);
     try {
+      // dialing from a standby tab → steal the phone from the leader tab first
+      if (!leaderRef.current) { setMsg("Taking the line from your other tab…"); await holdLock(true); }
       const client = (await ensureClient()) as { newCall: (o: object) => unknown };
       setState("ringing");
       callRef.current = client.newCall({ destinationNumber: to, callerNumber: pickFrom(to), audio: true, video: false }) as never;
@@ -299,7 +330,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     // — "keep it in the top right"), ringing no matter what section you're in.
     <span className={floating ? "fixed right-4 top-3 z-50" : "relative"}>
       <audio ref={audioRef} autoPlay style={{ display: "none" }} />
-      <button onClick={() => setOpen((v) => !v)} title={lineOk ? "Phone — line connected, inbound rings here" : "Phone — reconnecting… inbound will NOT ring this tab yet"} className={`relative grid place-items-center rounded-full ${floating ? "h-10 w-10 text-base shadow-lg ring-2 ring-white/70" : "h-8 w-8 text-sm"} ${state === "active" ? "bg-emerald-500 text-white" : incoming ? "animate-pulse bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>
+      <button onClick={() => setOpen((v) => !v)} title={lineOk ? "Phone — line connected, inbound rings here" : leaderRef.current ? "Phone — reconnecting… inbound will NOT ring this tab yet" : "Phone is live in another War Room tab — dialing here takes it over"} className={`relative grid place-items-center rounded-full ${floating ? "h-10 w-10 text-base shadow-lg ring-2 ring-white/70" : "h-8 w-8 text-sm"} ${state === "active" ? "bg-emerald-500 text-white" : incoming ? "animate-pulse bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>
         📞
         <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${lineOk ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
       </button>
