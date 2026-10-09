@@ -27,10 +27,23 @@ async function unreadThreads(meName: string, managerAll: boolean) {
   }).sort((a, b) => b.at.localeCompare(a.at));
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return NextResponse.json({ count: 0, threads: [] });
+  // ?thread=<contactId> → everything the bell's quick-text phone needs
+  const cid = new URL(req.url).searchParams.get("thread");
+  if (cid) {
+    const contact = await db.crmContact.findUnique({ where: { id: cid }, select: { id: true, name: true, phone: true } });
+    if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
+    const [opp, sms] = await Promise.all([
+      db.crmOpportunity.findFirst({ where: { contactId: cid, archivedAt: null }, select: { id: true } }),
+      db.crmEvent.findMany({ where: { contactId: cid, kind: "sms" }, orderBy: { at: "desc" }, take: 12 }),
+    ]);
+    await setConvRead([cid], true);
+    const history = [...sms].reverse().map((e) => ({ body: e.body.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: e.body.startsWith("⬅"), at: e.at.toISOString() }));
+    return NextResponse.json({ id: contact.id, name: contact.name, phone: contact.phone, oppId: opp?.id ?? "", history, me: me!.name });
+  }
   const threads = await unreadThreads(me!.name, isManager(me!));
   return NextResponse.json({ count: threads.length, threads: threads.slice(0, 8) });
 }

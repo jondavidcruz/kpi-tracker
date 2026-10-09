@@ -213,7 +213,7 @@ export default function Sidebar({
           <Logo size="sm" tagline />
         </a>
         {/* 🏷 always-visible company reference (Jon 2026-10-09): what to tell sellers */}
-        <div className="mt-1.5 space-y-0.5 text-[11px] font-semibold text-brand-navy-200">
+        <div className="mt-1.5 space-y-0.5 text-[11px] font-semibold text-white/90">
           <div>🌐 freedom-offers.com</div>
           <div className="font-mono tracking-wider">☎️ 1-877-652-8991</div>
         </div>

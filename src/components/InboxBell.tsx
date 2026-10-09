@@ -4,14 +4,17 @@
 // to clear everything, and the mute toggle lives inside the panel. Soft
 // two-tone ding on NEW texts only; never on load, never twice.
 import { useEffect, useRef, useState } from "react";
+import SmsComposer from "@/components/SmsComposer";
 
 type Thread = { id: string; name: string; phone: string; owner: string; snippet: string; at: string };
+type QuickThread = { id: string; name: string; phone: string; oppId: string; history: Array<{ body: string; inbound: boolean; at: string }>; me: string };
 
 export default function InboxBell() {
   const [count, setCount] = useState(0);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [open, setOpen] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [quick, setQuick] = useState<QuickThread | null>(null);
   const prevRef = useRef<number | null>(null);
   const mutedRef = useRef(false);
 
@@ -61,9 +64,16 @@ export default function InboxBell() {
     setCount(0); setThreads([]); prevRef.current = 0;
     document.title = document.title.replace(/^\(\d+\) /, "");
   };
+  // 📱 quick-text right in the panel (Jon 2026-10-09): clicking a thread
+  // opens the iPhone composer inline — fire a reply without leaving the page.
   const openThread = async (id: string) => {
-    await fetch("/api/crm/unread", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "read", id }) }).catch(() => {});
-    window.location.href = `/crm/conversations?c=${id}`;
+    try {
+      const r = await fetch(`/api/crm/unread?thread=${id}`, { cache: "no-store" });
+      if (!r.ok) return;
+      setQuick((await r.json()) as QuickThread);
+      setCount((c) => Math.max(0, c - 1));
+      setThreads((ts) => ts.filter((t) => t.id !== id));
+    } catch { /* fall back to nothing */ }
   };
 
   return (
@@ -73,7 +83,20 @@ export default function InboxBell() {
         {muted ? "🔕" : "🔔"}
         {count > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-0.5 text-[9px] font-extrabold text-white">{count}</span>}
       </button>
-      {open && (
+      {open && quick && (
+        <span className="absolute right-0 top-12 flex w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+          <span className="flex items-center gap-2 border-b border-slate-100 px-3.5 py-2.5">
+            <button onClick={() => setQuick(null)} className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-200">← back</button>
+            <span className="text-[13px] font-extrabold text-slate-800">💬 {quick.name}</span>
+            <a href={`/crm/conversations?c=${quick.id}`} className="ml-auto rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-bold text-indigo-700 hover:bg-slate-200">full thread ↗</a>
+            <button onClick={() => { setQuick(null); setOpen(false); }} className="text-slate-300 hover:text-slate-500">✕</button>
+          </span>
+          <span className="block p-3">
+            <SmsComposer compact oppId={quick.oppId} contactId={quick.id} to={quick.phone} leadName={quick.name} rep={quick.me} snippets={[]} history={quick.history} />
+          </span>
+        </span>
+      )}
+      {open && !quick && (
         <span className="absolute right-0 top-12 flex w-[320px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
           <span className="flex items-center gap-2 border-b border-slate-100 px-3.5 py-2.5">
             <span className="text-[13px] font-extrabold text-slate-800">💬 Unread texts</span>

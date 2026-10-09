@@ -544,19 +544,26 @@ async function Deliverability() {
   const emailBounceRate = sent > 0 ? Math.round(((bounced + failedSends) / sent) * 100) : 0;
   const chip = (ok: boolean, warn: boolean) => ok ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : warn ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-red-50 text-red-700 ring-red-200";
   return (
-    <Card className="flex flex-wrap items-center gap-4 p-4">
-      <div className="text-sm font-extrabold text-slate-800">📬 Deliverability</div>
-      {sms ? (
-        <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${chip(smsRate != null && smsRate >= 90, smsRate != null && smsRate >= 75)}`}>
-          💬 SMS: {smsRate != null ? `${smsRate}% delivered` : "no sends"} <span className="font-normal opacity-70">({sms.delivered}/{sms.total} last 7d{sms.failed ? ` · ${sms.failed} failed` : ""})</span>
+    <div className="grid gap-3 lg:grid-cols-2">
+      <Card className="flex flex-wrap items-center gap-3 p-4">
+        <div className="text-sm font-extrabold text-slate-800">💬 SMS Deliverability</div>
+        {sms ? (
+          <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${chip(smsRate != null && smsRate >= 90, smsRate != null && smsRate >= 75)}`}>
+            {smsRate != null ? `${smsRate}% delivered` : "no sends"} <span className="font-normal opacity-70">({sms.delivered}/{sms.total} last 7d{sms.failed ? ` · ${sms.failed} failed` : ""})</span>
+          </span>
+        ) : (
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">Telnyx stats unavailable right now</span>
+        )}
+        <span className="w-full text-[11px] text-slate-400">Under 90% = rotate the from-number · live from Telnyx detail records.</span>
+      </Card>
+      <Card className="flex flex-wrap items-center gap-3 p-4">
+        <div className="text-sm font-extrabold text-slate-800">✉️ Email Health</div>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${chip(emailBounceRate <= 2, emailBounceRate <= 5)}`}>
+          {emailBounceRate}% bounce <span className="font-normal opacity-70">({bounced + failedSends} of {sent} sends, 30d)</span>
         </span>
-      ) : (
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">💬 SMS: Telnyx stats unavailable right now</span>
-      )}
-      <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${chip(emailBounceRate <= 2, emailBounceRate <= 5)}`}>
-        ✉️ Email: {emailBounceRate}% bounce <span className="font-normal opacity-70">({bounced + failedSends} of {sent} sends, 30d)</span>
-      </span>
-      <span className="text-[11px] text-slate-400">SMS under 90% or email bounce over 2% = rotate the number / clean the list.</span>
-    </Card>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${sent > 0 ? "bg-slate-50 text-slate-600 ring-slate-200" : "bg-slate-100 text-slate-500 ring-slate-200"}`}>{sent} emails sent (30d)</span>
+        <span className="w-full text-[11px] text-slate-400">Over 2% bounce = clean the list · bounces land on each lead&apos;s timeline via Resend.</span>
+      </Card>
+    </div>
   );
 }
