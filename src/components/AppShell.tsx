@@ -108,7 +108,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
         </div>
       )}
       <ThemeToggle />
-      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} dueTasks={dueTasks} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} navOrder={navOrder} />
+      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} dueTasks={dueTasks} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} leadershipMeetLink={meetSettings.leadershipMeetLink} navOrder={navOrder} />
       <main className="min-w-0 flex-1">
         <ContentWrap>
           {openOffboarding && (

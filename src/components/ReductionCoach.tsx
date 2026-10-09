@@ -7,8 +7,10 @@ import { useState } from "react";
 const inputCls = "w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm";
 const lbl = "mb-0.5 block text-[11px] font-bold text-slate-500";
 
-export default function ReductionCoach() {
-  const [f, setF] = useState({ address: "", contractPrice: "", bestOffer: "", offers: "", dom: "", repairs: "", feedback: "" });
+const UW_LABEL: Record<string, string> = { cash: "💵 Cash MAO", novation: "📝 Novation MAO", creative: "🎨 Creative MAO", listing: "🏷 Listing", flip: "🔨 Flip", developer: "🚧 Developer" };
+
+export default function ReductionCoach({ initial, uw = [] }: { initial?: { address?: string; contractPrice?: string }; uw?: Array<{ tab: string; mao: number; fee: number }> } = {}) {
+  const [f, setF] = useState({ address: initial?.address ?? "", contractPrice: initial?.contractPrice ?? "", bestOffer: "", offers: "", dom: "", repairs: "", feedback: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const num = (s: string) => Number(s.replace(/[^0-9.]/g, "")) || 0;
 
@@ -45,6 +47,15 @@ I know that's not the number we both hoped for. But this is real money, from a r
         {ready ? `✅ ${offers} offers in hand — you're cleared to run the reduction.` : `🛑 ${offers || 0}/3 offers — DO NOT reduce or accept yet. Push the buyer list until you have 3 real offers. Three offers = proof of the market; one offer = one person's opinion.`}
       </div>
 
+      {uw.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-indigo-50/60 px-4 py-2.5 ring-1 ring-indigo-100">
+          <span className="text-[11px] font-extrabold text-indigo-900">🧮 From the underwriting calculator for this address:</span>
+          {uw.map((u) => (
+            <span key={u.tab} className="rounded-lg bg-white px-2 py-1 text-[11px] font-bold text-slate-700 ring-1 ring-indigo-100">{UW_LABEL[u.tab] ?? u.tab}: ${u.mao.toLocaleString()}</span>
+          ))}
+          <span className="text-[10px] text-slate-500">— any settle number at or above these keeps the deal profitable.</span>
+        </div>
+      )}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="text-sm font-extrabold text-slate-800">1️⃣ The real numbers</div>

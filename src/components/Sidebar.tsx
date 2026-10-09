@@ -35,6 +35,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/deals": "pipeline dispositions",
   "/reduction": "price reduction seller negotiate script calculator dom offers",
   "/call-scoring": "call recording transcript coaching score",
+  "/email-health": "email health bounce rate deliverability opens clicks resend direct rei campaigns domain reputation",
   "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers list pull skip trace sms sop directrei regrid skipmatrix scrub dnc litigator suppression texting campaign",
   "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
   "/ai-training": "ai training claude chatgpt gemini perplexity prompt prompting models haiku sonnet opus fable effort artificial intelligence learn",
@@ -47,7 +48,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
 };
 
 export default function Sidebar({
-  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions, dueTasks = 0, officeMeetLink, mondayMeetLink, navOrder,
+  name, manager, admin, owner, marketing, timecard, csuite, training, allowedPaths, hiddenNav, newTickets, newSuggestions, dueTasks = 0, officeMeetLink, mondayMeetLink, leadershipMeetLink, navOrder,
 }: {
   name: string;
   manager: boolean;
@@ -63,6 +64,7 @@ export default function Sidebar({
   newTickets: number;
   newSuggestions: number;
   officeMeetLink?: string;
+  leadershipMeetLink?: string;
   mondayMeetLink?: string;
   navOrder?: { groups: string[]; items: Record<string, string[]>; moves?: Record<string, string>; labels?: Record<string, string>; groupLabels?: Record<string, string> } | null;
 }) {
@@ -89,10 +91,10 @@ export default function Sidebar({
       { href: "/crm/contacts", label: "Contacts", Icon: Contact },
       { href: "/crm/calendar", label: "Calendar", Icon: CalendarDays },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
+      { href: "/reduction", label: "Reduction Play", Icon: TrendingUp },
     ] },
     { label: "Dispositions", items: [
       { href: "/deals", label: "Deals", Icon: Building2 },
-      { href: "/reduction", label: "Reduction Play", Icon: TrendingUp },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
       { href: "/vetting", label: "Buyer Research", Icon: Search, marketingOnly: true },
       { href: "/closing-calc", label: "Closing Calculator", Icon: Receipt, managerOnly: true },
@@ -103,6 +105,7 @@ export default function Sidebar({
     { label: "Business Heartbeat", items: [
       { href: "/compliance", label: "Compliance", Icon: ShieldCheck },
       { href: "/phone-health", label: "Phone Health", Icon: Phone },
+      { href: "/email-health", label: "Email Health", Icon: Megaphone },
     ] },
     { label: "Performance", items: [
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
@@ -137,6 +140,7 @@ export default function Sidebar({
       { href: "/crm/pipelines", label: "Pipelines", Icon: Workflow, csuiteOnly: true },
       { href: "/crm/access", label: "Comms Access", Icon: KeyRound, csuiteOnly: true },
       { href: "/settings/business", label: "Business Profile", Icon: Landmark, csuiteOnly: true },
+      { href: "/settings/chat", label: "Chat & Notifications", Icon: Bell, csuiteOnly: true },
     ] },
     { label: "C-Suite", items: [
       { href: "/leaks", label: "War Room Health", Icon: Activity, csuiteOnly: true },
@@ -218,18 +222,26 @@ export default function Sidebar({
           <div className="font-mono tracking-wider">☎️ 1-877-652-8991</div>
         </div>
         {owner && <div className="mt-2"><StatusDot /></div>}
-        {(officeMeetLink || mondayMeetLink) && (
-          <div className="mt-3 space-y-1.5">
+        {(officeMeetLink || mondayMeetLink || leadershipMeetLink) && (
+          // 🎛 compact meeting tiles (Jon 2026-10-09): three small squares —
+          // Office · Monday · Leadership — visible, not space-hogging
+          <div className="mt-3 grid grid-cols-3 gap-1.5">
             {officeMeetLink && (
-              <a href={officeMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600/90 px-3 py-2 text-[13px] font-bold text-white hover:bg-emerald-600">
-                🎥 Freedom Offers Office
+              <a href={officeMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title="Freedom Offers Office (Meet)"
+                className="flex flex-col items-center gap-0.5 rounded-lg bg-emerald-600/90 px-1 py-2 text-white hover:bg-emerald-600">
+                <span className="text-base leading-none">🎥</span><span className="text-[9px] font-bold leading-tight">Office</span>
               </a>
             )}
             {mondayMeetLink && (
-              <a href={mondayMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
-                className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-[13px] font-bold text-white ring-1 ring-white/15 hover:bg-white/15">
-                📋 Monday Meeting
+              <a href={mondayMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title="Monday Meeting (Meet)"
+                className="flex flex-col items-center gap-0.5 rounded-lg bg-white/10 px-1 py-2 text-white ring-1 ring-white/15 hover:bg-white/15">
+                <span className="text-base leading-none">📋</span><span className="text-[9px] font-bold leading-tight">Monday</span>
+              </a>
+            )}
+            {leadershipMeetLink && (
+              <a href={leadershipMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title="Friday Leadership Meeting (Meet)"
+                className="flex flex-col items-center gap-0.5 rounded-lg bg-violet-500/80 px-1 py-2 text-white hover:bg-violet-500">
+                <span className="text-base leading-none">👑</span><span className="text-[9px] font-bold leading-tight">Leaders</span>
               </a>
             )}
           </div>

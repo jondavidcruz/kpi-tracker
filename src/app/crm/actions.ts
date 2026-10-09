@@ -113,7 +113,19 @@ export async function setOppStageAction(formData: FormData) {
       // deal won → whole-team room; offer stages → acquisitions room.
       try {
         const { postToSpace } = await import("@/lib/chat-spaces");
-        if (/contract_signed/i.test(stage)) postToSpace("contracts", `🖊 CONTRACT SIGNED — ${contact?.name ?? "seller"}${addr ? ` · ${addr}` : ""} · by ${(full.assignedTo || me.name)}${full.value != null ? ` · $${full.value.toLocaleString()}` : ""} 🎉`).catch(() => {});
+        if (/contract_signed/i.test(stage)) {
+          postToSpace("contracts", `🖊 CONTRACT SIGNED — ${contact?.name ?? "seller"}${addr ? ` · ${addr}` : ""} · by ${(full.assignedTo || me.name)}${full.value != null ? ` · $${full.value.toLocaleString()}` : ""} 🎉`).catch(() => {});
+          // 📧 auto-create the Gmail deal label + filter in every teammate's
+          // inbox (live once the gmail.labels/settings scopes are on the DWD)
+          if (addr) {
+            (async () => {
+              const { rolloutDealLabel } = await import("@/lib/gmail-admin");
+              const res = await rolloutDealLabel(addr);
+              const ok = Object.values(res).filter((v) => v.startsWith("✓")).length;
+              await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: ok ? `📧 Gmail deal label + filter created in ${ok} inboxes for "${addr.split(",")[0]}"` : `📧 Gmail label rollout waiting on the DWD scopes (${Object.values(res)[0] ?? ""})`, actor: "gmail-labels" });
+            })().catch(() => {});
+          }
+        }
         if (/deal_won/i.test(stage)) {
           postToSpace("contracts", `💰 DEAL WON (escrow closed) — ${contact?.name ?? "deal"}${addr ? ` · ${addr}` : ""}${full.value != null ? ` · $${full.value.toLocaleString()}` : ""}`).catch(() => {});
           postToSpace("team", `💰🎉 WE CLOSED A DEAL! ${addr || contact?.name || ""}${full.value != null ? ` — $${full.value.toLocaleString()}` : ""} — congrats team!`).catch(() => {});

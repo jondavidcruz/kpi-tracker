@@ -1484,6 +1484,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, verified: results });
   }
 
+  // 📧 Gmail deal-label rollout test (?gmaillabels=1&address=…)
+  if (url.searchParams.get("gmaillabels") === "1") {
+    const address = url.searchParams.get("address") ?? "";
+    if (!address) return NextResponse.json({ ok: false, error: "address required" });
+    const { rolloutDealLabel } = await import("@/lib/gmail-admin");
+    return NextResponse.json({ ok: true, results: await rolloutDealLabel(address) });
+  }
+
   // 📲 Arm the inbound-SMS webhook (?smsarm=1, one-time): points the "War Room
   // SMS" messaging profile at /api/telnyx/sms so seller texts land real-time.
   if (url.searchParams.get("smsarm") === "1") {

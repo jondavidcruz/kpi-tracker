@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { savePhoneLine, deletePhoneLine, savePhoneSetup, savePhoneAlertConfig, testPhoneAlert, getPhoneAlertWebhook } from "@/app/actions";
+import { savePhoneSetup } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import CopyButton from "@/components/CopyButton";
 import TelcoAlarms from "@/components/TelcoAlarms";
@@ -92,7 +92,6 @@ function health(m: Meta): { label: string; cls: string } {
   if (carriers.includes("unknown") || !m.answerRate) return { label: "— not tested yet", cls: "bg-slate-100 text-slate-500" };
   return { label: "✓ Healthy", cls: "bg-emerald-100 text-emerald-700" };
 }
-const CARRIER_OPTS = [["unknown", "—"], ["clean", "Clean"], ["flagged", "Flagged"]] as const;
 
 export default async function PhoneHealthPage({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string }> }) {
   const me = await getCurrentUser();
@@ -159,7 +158,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
     if (row) setupStatus = JSON.parse(row.description || "{}");
   } catch {}
   const setupDone = SETUP_TASKS.filter((t) => setupStatus[t.key] === "done").length;
-  const alertWebhook = manager ? await getPhoneAlertWebhook().catch(() => "") : "";
+
 
   const flaggedCount = lines.filter((l) => health(l.meta).label.startsWith("⚠️")).length;
   const unregistered = lines.filter((l) => !l.meta.registered).length;
@@ -313,30 +312,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
         </Card>
       </div>
 
-      {/* Alert channel config (manager-only) */}
-      {manager && (
-        <div id="alerts" className="scroll-mt-4">
-          <Card className="p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-800">🔔 Alerts → Google Chat</h2>
-              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${alertWebhook ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{alertWebhook ? "✓ Connected" : "Not set up"}</span>
-            </div>
-            <p className="mt-1 text-[12px] text-slate-600">Posts to its <b>own</b> Chat space (separate from KPI alerts) the moment a number is logged flagged or under 5% answer rate — plus a daily digest of anything unhealthy (weekdays, 8am PT).</p>
-            <form action={savePhoneAlertConfig} className="mt-3 flex flex-wrap items-end gap-2">
-              <label className="min-w-[260px] flex-1"><span className={labelCls}>Google Chat webhook URL</span>
-                <input name="webhook" type="url" defaultValue={alertWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…" className={inputCls} />
-              </label>
-              <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save</button>
-            </form>
-            {alertWebhook && (
-              <form action={testPhoneAlert} className="mt-2">
-                <button className="rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-300">Send test message</button>
-              </form>
-            )}
-            <p className="mt-1.5 text-[11px] text-slate-400">The webhook is stored securely in the database, never in the code. In Google Chat: space → Apps &amp; integrations → Webhooks → copy URL.</p>
-          </Card>
-        </div>
-      )}
+      {/* 🔔 Chat alert config moved to Settings → Chat & Notifications (Jon 2026-10-09) */}
 
       {/* The plays */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -448,65 +424,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
         </div>
       </Card>
 
-      {/* ── Number tracker ─────────────────────────────────────────── */}
-      <div id="tracker" className="scroll-mt-4">
-        <SectionTitle title="📇 Our numbers — health tracker" subtitle="Every Twilio & Telnyx number, its registration + per-carrier status, and answer rate. Test monthly and log what sellers see." accent="bg-brand-navy" />
-      </div>
-      {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
-      {sp.err && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">{sp.err}</div>}
-      {!storeOk && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">The number tracker store is briefly unavailable — the playbook above still works. If this persists, tell Jon.</div>}
-
-      {lines.length > 0 ? (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead><tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-400">
-              <th className="px-3 py-2">Number</th><th className="px-3 py-2">Provider</th><th className="px-3 py-2">Registered</th><th className="px-3 py-2">AT&T</th><th className="px-3 py-2">Verizon</th><th className="px-3 py-2">T-Mobile</th><th className="px-3 py-2">Answer %</th><th className="px-3 py-2">Tested</th><th className="px-3 py-2">Health</th>{manager && <th className="px-3 py-2" />}
-            </tr></thead>
-            <tbody>
-              {lines.map((l) => {
-                const h = health(l.meta);
-                const cell = (v: string) => v === "flagged" ? <span className="font-bold text-red-600">Flagged</span> : v === "clean" ? <span className="text-emerald-600">Clean</span> : <span className="text-slate-400">—</span>;
-                return (
-                  <tr key={l.id} className="border-b border-slate-100">
-                    <td className="px-3 py-2 font-semibold text-slate-800">{l.number}{l.meta.label && <span className="ml-1 text-[11px] font-normal text-slate-400">{l.meta.label}</span>}</td>
-                    <td className="px-3 py-2 capitalize text-slate-600">{l.meta.provider}</td>
-                    <td className="px-3 py-2">{l.meta.registered ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">No</span>}</td>
-                    <td className="px-3 py-2">{cell(l.meta.att)}</td>
-                    <td className="px-3 py-2">{cell(l.meta.verizon)}</td>
-                    <td className="px-3 py-2">{cell(l.meta.tmobile)}</td>
-                    <td className="px-3 py-2 tabular-nums text-slate-600">{l.meta.answerRate != null ? `${l.meta.answerRate}%` : "—"}</td>
-                    <td className="px-3 py-2 text-[12px] text-slate-500">{l.meta.lastTested || "—"}</td>
-                    <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${h.cls}`}>{h.label}</span></td>
-                    {manager && <td className="px-3 py-2"><form action={deletePhoneLine}><input type="hidden" name="id" value={l.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">remove</button></form></td>}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
-      ) : storeOk ? (
-        <Card className="p-4 text-sm text-slate-400">No numbers tracked yet{manager ? " — add your first one below." : "."}</Card>
-      ) : null}
-
-      {manager && (
-        <Card className="p-4">
-          <h3 className="mb-2 text-sm font-bold text-slate-700">➕ Add / update a number</h3>
-          <form action={savePhoneLine} className="grid grid-cols-1 gap-2 sm:grid-cols-12">
-            <label className="sm:col-span-3"><span className={labelCls}>Number</span><input name="number" placeholder="+1 813-555-0148" required className={inputCls} /></label>
-            <label className="sm:col-span-2"><span className={labelCls}>Provider</span><select name="provider" defaultValue="twilio" className={inputCls}><option value="twilio">Twilio</option><option value="telnyx">Telnyx</option></select></label>
-            <label className="sm:col-span-3"><span className={labelCls}>Label (optional)</span><input name="label" placeholder="Acquisitions line 1" className={inputCls} /></label>
-            <label className="sm:col-span-2"><span className={labelCls}>Answer %</span><input name="answerRate" type="number" min="0" max="100" step="0.1" placeholder="e.g. 12" className={inputCls} /></label>
-            <label className="sm:col-span-2"><span className={labelCls}>Last tested</span><input name="lastTested" type="date" className={inputCls} /></label>
-            <label className="sm:col-span-3"><span className={labelCls}>AT&amp;T (Hiya)</span><select name="att" defaultValue="unknown" className={inputCls}>{CARRIER_OPTS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
-            <label className="sm:col-span-3"><span className={labelCls}>Verizon (TNS)</span><select name="verizon" defaultValue="unknown" className={inputCls}>{CARRIER_OPTS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
-            <label className="sm:col-span-3"><span className={labelCls}>T-Mobile (First Orion)</span><select name="tmobile" defaultValue="unknown" className={inputCls}>{CARRIER_OPTS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
-            <label className="flex items-end gap-2 sm:col-span-3"><input type="checkbox" name="registered" className="h-4 w-4" /> <span className="text-sm text-slate-600">Registered at freecallerregistry</span></label>
-            <label className="sm:col-span-9"><span className={labelCls}>Notes</span><input name="notes" placeholder="e.g. warming up — 20/day until Aug 4" className={inputCls} /></label>
-            <div className="sm:col-span-3 flex items-end"><button className="w-full rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700">Save number</button></div>
-          </form>
-          <p className="mt-1.5 text-[11px] text-slate-400">To update a number, remove it and re-add — or tell me and I’ll add inline editing.</p>
-        </Card>
-      )}
+      {/* 📇 manual number tracker removed (Jon 2026-10-09) — live API monitoring covers it; data kept in __phone_line__ */}
 
       <p className="text-[11px] text-slate-400">Source: iSpeedToLead “Answer-Rate Playbook.” Stats are directional (Hiya 2025 State of the Call, MIT lead-response study, Velocify). Always follow TCPA + Do-Not-Call rules. <Link href="/scripts" className="underline">Scripts</Link> · <Link href="/playbooks" className="underline">Playbooks</Link></p>
     </div>

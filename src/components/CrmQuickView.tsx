@@ -407,7 +407,10 @@ function UnderwriteBlock({ d }: { d: Payload }) {
     <div className="space-y-2 rounded-xl bg-indigo-50/50 p-3 ring-1 ring-indigo-100">
       <div className="flex items-center gap-2">
         <span className="text-xs font-extrabold text-indigo-900">🧮 Underwriting on file</span>
-        <a href={calcHref} target="_blank" className="ml-auto rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">Open calculator ↗</a>
+        <span className="ml-auto flex gap-1.5">
+          <a href={`/reduction?address=${encodeURIComponent(addr)}&contract=${d.value ?? d.askPrice ?? ""}`} target="_blank" className="rounded-lg bg-rose-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-rose-700" title="Price reduction coach — pre-filled with this property">🔻 Reduction Play</a>
+          <a href={calcHref} target="_blank" className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">Open calculator ↗</a>
+        </span>
       </div>
       {latest.size === 0 ? (
         <div className="text-[11px] text-slate-500">No saved underwriting matches this address yet — run it in the <a href={calcHref} target="_blank" className="font-bold text-indigo-700 underline">calculator</a> (address pre-filled) and the MAOs appear here automatically.</div>

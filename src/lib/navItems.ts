@@ -22,10 +22,10 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/crm/contacts", label: "Contacts", gate: "all" },
     { href: "/crm/calendar", label: "Calendar", gate: "all" },
     { href: "/underwriting", label: "Underwriting", gate: "all" },
+    { href: "/reduction", label: "Reduction Play", gate: "all" },
   ] },
   { group: "Dispositions", items: [
     { href: "/deals", label: "Deals", gate: "all" },
-    { href: "/reduction", label: "Reduction Play", gate: "all" },
     { href: "/marketing", label: "Vetted Buyers", gate: "marketing" },
     { href: "/vetting", label: "Buyer Research", gate: "marketing" },
     { href: "/closing-calc", label: "Closing Calculator", gate: "manager" },
@@ -36,6 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
   { group: "Business Heartbeat", items: [
     { href: "/compliance", label: "Compliance", gate: "all" },
     { href: "/phone-health", label: "Phone Health", gate: "all" },
+    { href: "/email-health", label: "Email Health", gate: "manager" },
   ] },
   { group: "Performance", items: [
     { href: "/entry", label: "Enter KPIs", gate: "all" },
@@ -70,6 +71,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/crm/pipelines", label: "Pipelines", gate: "csuite" },
     { href: "/crm/access", label: "Comms Access", gate: "csuite" },
     { href: "/settings/business", label: "Business Profile", gate: "csuite" },
+    { href: "/settings/chat", label: "Chat & Notifications", gate: "csuite" },
   ] },
   { group: "C-Suite", items: [
     { href: "/leaks", label: "War Room Health", gate: "csuite" },
