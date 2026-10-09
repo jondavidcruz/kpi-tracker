@@ -875,6 +875,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, snap, alarms });
   }
 
+  // 🧠 AI engine health (?aitest=1): pings Claude and Gemini with a 1-word
+  // prompt and reports which engines answer — instant billing/key diagnosis.
+  if (url.searchParams.get("aitest") === "1") {
+    const out: Record<string, string> = {};
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        const r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+          body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 10, messages: [{ role: "user", content: "Reply with exactly: OK" }] }),
+          signal: AbortSignal.timeout(15000),
+        });
+        out.claude = r.ok ? "✅ working" : `❌ ${r.status}: ${(await r.text().catch(() => "")).slice(0, 180)}`;
+      } catch (e) { out.claude = `❌ ${String(e).slice(0, 120)}`; }
+    } else out.claude = "no key";
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: "Reply with exactly: OK" }] }] }),
+          signal: AbortSignal.timeout(15000),
+        });
+        out.gemini = r.ok ? "✅ working" : `❌ ${r.status}: ${(await r.text().catch(() => "")).slice(0, 180)}`;
+      } catch (e) { out.gemini = `❌ ${String(e).slice(0, 120)}`; }
+    } else out.gemini = "no key";
+    return NextResponse.json({ ok: true, ...out });
+  }
+
   // 🔑 Service-account info (?gsainfo=1): client_email + the numeric client_id
   // that Google Admin's domain-wide delegation entry must match.
   if (url.searchParams.get("gsainfo") === "1") {
