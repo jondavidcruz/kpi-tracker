@@ -1315,6 +1315,45 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, filled, jonTasks });
   }
 
+  // 📣 Daily 6pm KPI scoreboard post (?kpipost=1 — Jon 2026-10-08: "send it
+  // every day at 6pm"): posts today's image card to the KPI room, always.
+  if (url.searchParams.get("kpipost") === "1") {
+    const d = url.searchParams.get("d") ?? new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10); // "today" in PT
+    const crypto2 = await import("crypto");
+    const sig2 = crypto2.createHmac("sha256", process.env.CRON_SECRET ?? "").update(d).digest("hex").slice(0, 20);
+    const { postImageCard } = await import("@/lib/chat-spaces");
+    const ok2 = await postImageCard("kpi", `📊 EOD KPIs — ${d}`, `https://kpi-tracker-lovat.vercel.app/api/kpi-image?d=${d}&sig=${sig2}`);
+    return NextResponse.json({ ok: ok2, date: d });
+  }
+
+  // 📰 Daily change-log (?updateslog=add&text=… appends · ?daychangelog=1
+  // posts tonight's bullets to the War Room Updates room at 8pm and clears).
+  if (url.searchParams.get("updateslog") === "add") {
+    const text = (url.searchParams.get("text") ?? "").slice(0, 400);
+    if (!text) return NextResponse.json({ ok: false, error: "text required" });
+    const row = await db.resource.findFirst({ where: { category: "__daily_updates__" } });
+    let list: string[] = [];
+    try { list = row?.description ? JSON.parse(row.description) : []; } catch { list = []; }
+    list.push(text);
+    const description = JSON.stringify(list.slice(-40));
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "daily-updates", category: "__daily_updates__", url: "", description } });
+    return NextResponse.json({ ok: true, lines: list.length });
+  }
+  if (url.searchParams.get("daychangelog") === "1") {
+    const row = await db.resource.findFirst({ where: { category: "__daily_updates__" } });
+    let list: string[] = [];
+    try { list = row?.description ? JSON.parse(row.description) : []; } catch { list = []; }
+    if (!list.length) return NextResponse.json({ ok: true, posted: false, reason: "no updates today" });
+    const d = new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10);
+    const { postChatWebhook } = await import("@/lib/notify");
+    const posted = process.env.WARROOM_CHAT_WEBHOOK
+      ? await postChatWebhook(process.env.WARROOM_CHAT_WEBHOOK, `🛠 *War Room updates — ${d}*\n${list.map((l) => `• ${l}`).join("\n")}\n\n— shipped today, live now. Hard-refresh if something looks unchanged.`)
+      : false;
+    if (posted && row) await db.resource.update({ where: { id: row.id }, data: { description: "[]" } });
+    return NextResponse.json({ ok: true, posted, count: list.length });
+  }
+
   // 🖼 EOD scoreboard JSON (?eodjson=1&d=YYYY-MM-DD) — feeds the KPI-room
   // image card: per-rep misses with Marie's justifications (Jon 2026-10-08).
   if (url.searchParams.get("eodjson") === "1") {

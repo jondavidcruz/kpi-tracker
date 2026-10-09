@@ -157,8 +157,19 @@ export default async function AppShell({ children }: { children: React.ReactNode
           war room") — ONE registered Telnyx client, mounted globally so inbound
           calls ring on every page, not just the CRM tab. Top-right per Jon. */}
       <GlobalPhone me={me} />
+      <GlobalBell me={me} />
     </div>
   );
+}
+
+async function GlobalBell({ me }: { me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }) {
+  try {
+    const { commsFor } = await import("@/lib/crm-comms");
+    const comms = await commsFor(me);
+    if (!comms.sms && !comms.call) return null;
+    const { default: InboxBell } = await import("./InboxBell");
+    return <InboxBell />;
+  } catch { return null; }
 }
 
 async function GlobalPhone({ me }: { me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }) {

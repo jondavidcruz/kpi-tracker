@@ -235,6 +235,14 @@
     {
       "path": "/api/cron?verifytasks=1",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron?kpipost=1",
+      "schedule": "0 1 * * 2-6"
+    },
+    {
+      "path": "/api/cron?daychangelog=1",
+      "schedule": "0 3 * * 2-6"
     }
   ]
 }
