@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "dispositions", "cc_lm"].includes(me.position ?? ""));
   if (!allowed) return NextResponse.json({ error: "no access" }, { status: 403 });
-  if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "AI key not configured" }, { status: 503 });
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.GEMINI_API_KEY) return NextResponse.json({ error: "AI key not configured" }, { status: 503 });
 
   const b = (await req.json().catch(() => ({}))) as {
     dealType?: string; propType?: string; address?: string; contract?: number; best?: number; fee?: number;
@@ -54,15 +54,32 @@ ALSO act as ${b.propType === "land" ? `a land due-diligence consultant pricing w
 OUTPUT STRICTLY AS JSON — no markdown fences, no commentary, exactly this shape:
 {"script": "<the full spoken script with [PAUSE] and the two branch blocks>", "estimates": [{"item": "<short repair name>", "pro": "<one-line professional scope, trade language>", "low": <number>, "high": <number>}]}`;
 
-  try {
+  // Claude first; any failure (credits, outage, missing key) silently falls
+  // back to Gemini's free tier so the rep is never blocked (Jon 2026-10-09).
+  const callClaude = async (): Promise<string> => {
+    if (!process.env.ANTHROPIC_API_KEY) return "";
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({ model: "claude-opus-4-8", max_tokens: 1200, messages: [{ role: "user", content: prompt }] }),
     });
-    const j = (await res.json()) as { content?: Array<{ text?: string }>; error?: { message?: string } };
-    const text = j.content?.map((c) => c.text ?? "").join("").trim();
-    if (!text) return NextResponse.json({ error: j.error?.message ?? "AI gave no script" }, { status: 502 });
+    const j = (await res.json()) as { content?: Array<{ text?: string }> };
+    return j.content?.map((c) => c.text ?? "").join("").trim() ?? "";
+  };
+  const callGemini = async (): Promise<string> => {
+    if (!process.env.GEMINI_API_KEY) return "";
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2000 } }),
+    });
+    const j = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    return j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim() ?? "";
+  };
+
+  try {
+    let text = await callClaude().catch(() => "");
+    if (!text) text = await callGemini().catch(() => "");
+    if (!text) return NextResponse.json({ error: "AI gave no script — try again in a minute" }, { status: 502 });
     // the model answers in the JSON contract above; fall back to raw text as the script
     try {
       const cleaned = text.replace(/^```json?\s*/i, "").replace(/```\s*$/, "").trim();
