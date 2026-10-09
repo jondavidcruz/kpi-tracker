@@ -12,6 +12,7 @@ const UW_LABEL: Record<string, string> = { cash: "💵 Cash MAO", novation: "�
 export default function ReductionCoach({ initial, uw = [] }: { initial?: { address?: string; contractPrice?: string }; uw?: Array<{ tab: string; mao: number; fee: number }> } = {}) {
   const [f, setF] = useState({ address: initial?.address ?? "", contractPrice: initial?.contractPrice ?? "", bestOffer: "", fee: "10,000", agentPct: "3", sellerClosing: "2,000", offers: "", dom: "", repairs: "", feedback: "" });
   const [dealType, setDealType] = useState<"assignment" | "novation">("assignment");
+  const [ai, setAi] = useState<{ busy: boolean; script: string; err: string }>({ busy: false, script: "", err: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const num = (s: string) => Number(s.replace(/[^0-9.]/g, "")) || 0;
 
@@ -84,7 +85,7 @@ I know that's not the number we both hoped for. But this is real money, from a r
             <label><span className={lbl}># of offers received</span><input value={f.offers} onChange={set("offers")} placeholder="3" className={inputCls} /></label>
             <label><span className={lbl}>Days on market</span><input value={f.dom} onChange={set("dom")} placeholder="34" className={inputCls} /></label>
           </div>
-          <label><span className={lbl}>Repairs buyers flagged (one per line — their contractors&apos; words)</span><textarea value={f.repairs} onChange={set("repairs")} rows={3} placeholder={"roof needs replacing — quoted $12k\nfoundation crack on the east side\nfull electrical update"} className={inputCls} /></label>
+          <label><span className={lbl}>What buyers said is wrong (rough bullets — one per line, AI writes the professional wording)</span><textarea value={f.repairs} onChange={set("repairs")} rows={3} placeholder={"roof bad\nac old\ncrack in foundation"} className={inputCls} /></label>
           <label><span className={lbl}>Strongest buyer quote (optional — gold on the call)</span><textarea value={f.feedback} onChange={set("feedback")} rows={2} placeholder={"at this price I'd need the roof done, otherwise I'm at 60"} className={inputCls} /></label>
           {contract > 0 && best > 0 && (
             <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-100">
@@ -101,12 +102,43 @@ I know that's not the number we both hoped for. But this is real money, from a r
         </div>
 
         <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <div className="text-sm font-extrabold text-slate-800">2️⃣ Your script — read it, don&apos;t wing it</div>
-          {script ? (
-            <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3 font-sans text-[13px] leading-relaxed text-slate-700 ring-1 ring-slate-100">{script}</pre>
-          ) : (
-            <p className="text-xs text-slate-400">Fill in the contract price and the best offer — the script writes itself from your real numbers.</p>
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-extrabold text-slate-800">2️⃣ Your script — read it, don&apos;t wing it</div>
+            <button
+              type="button"
+              disabled={ai.busy || !contract || !best || settle <= 0}
+              onClick={async () => {
+                setAi({ busy: true, script: "", err: "" });
+                try {
+                  const r = await fetch("/api/reduction/script", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ dealType, address: f.address, contract, best, fee, agentFees, coveredClosing, offers, dom, repairs: f.repairs, feedback: f.feedback, settle, target }),
+                  });
+                  const j = (await r.json()) as { script?: string; error?: string };
+                  if (j.script) setAi({ busy: false, script: j.script, err: "" });
+                  else setAi({ busy: false, script: "", err: j.error ?? "AI didn't answer — the draft below still works" });
+                } catch { setAi({ busy: false, script: "", err: "AI unreachable — the draft below still works" }); }
+              }}
+              className="ml-auto rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-violet-700 disabled:opacity-40"
+            >{ai.busy ? "✨ writing…" : "✨ Write it for me (AI)"}</button>
+          </div>
+          {ai.err && <p className="text-[11px] font-bold text-amber-600">{ai.err}</p>}
+          {ai.script && (
+            <div className="rounded-xl bg-violet-50 p-3 ring-1 ring-violet-200">
+              <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-violet-700">✨ AI script — professional wording from your bullets
+                <button type="button" onClick={() => { navigator.clipboard.writeText(ai.script).catch(() => {}); }} className="ml-auto rounded bg-white px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">copy</button>
+              </div>
+              <pre className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed text-slate-800">{ai.script}</pre>
+            </div>
           )}
+          {script && !ai.script ? (
+            <details open={!ai.busy}>
+              <summary className="cursor-pointer text-[10px] font-extrabold uppercase tracking-wide text-slate-400">📝 instant draft (hit ✨ above for the professional version)</summary>
+              <pre className="mt-1 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 font-sans text-[13px] leading-relaxed text-slate-700 ring-1 ring-slate-100">{script}</pre>
+            </details>
+          ) : !ai.script ? (
+            <p className="text-xs text-slate-400">Fill in the contract price and the best offer — the script writes itself from your real numbers.</p>
+          ) : null}
           <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-100">
             <div className="font-extrabold">🎓 First-timer rules</div>
             <ul className="mt-1 list-disc space-y-1 pl-4">
