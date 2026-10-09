@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     }).catch(() => null);
   // ring sessions: inbound call id → outstanding browser legs (ring-all state)
   const SESS = "__ring_sessions__";
-  type Sess = Record<string, { legs: string[]; answered: boolean; at: string }>;
+  type Sess = Record<string, { legs: string[]; answered: boolean; at: string; winner?: string }>;
   const readSess = async (): Promise<{ rowId: string | null; map: Sess }> => {
     const row = await db.resource.findFirst({ where: { category: SESS } });
     let map: Sess = {};
@@ -103,22 +103,37 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Ring leg ANSWERED → answer the seller's call and bridge the two; hang up
-  // every other still-ringing browser leg.
+  // Ring leg ANSWERED → remember the winner, tell Telnyx to answer the
+  // seller's leg, hang up the losers. DO NOT bridge yet: "answer" is async,
+  // and bridging before the seller's leg is live fails silently — browser
+  // connected to nothing while the caller keeps hearing ringback (Jon
+  // 2026-10-09). The bridge happens below, when the seller's call.answered
+  // webhook confirms the leg is actually up.
   if (ev === "call.answered" && st.ring && key && p.call_control_id) {
     const { rowId, map } = await readSess();
     const sess = map[st.ring];
     if (sess && !sess.answered) {
       sess.answered = true;
+      sess.winner = p.call_control_id;
       await writeSess(rowId, map);
       await txCall(st.ring, "answer");
-      await txCall(p.call_control_id, "bridge", { call_control_id: st.ring });
       for (const leg of sess.legs) if (leg !== p.call_control_id) await txCall(leg, "hangup");
     } else {
       // raced: someone else already took it
       await txCall(p.call_control_id, "hangup");
     }
     return NextResponse.json({ ok: true });
+  }
+
+  // Seller's leg is now LIVE (its own call.answered, no client_state) →
+  // bridge it to the winning browser leg.
+  if (ev === "call.answered" && !st.ring && !st.bridgeTo && key && p.call_control_id) {
+    const { map } = await readSess();
+    const sess = map[p.call_control_id];
+    if (sess?.winner) {
+      await txCall(p.call_control_id, "bridge", { call_control_id: sess.winner });
+      return NextResponse.json({ ok: true, bridged: true });
+    }
   }
 
   // Ring leg died (timeout/decline/offline) → when the LAST leg dies with no
