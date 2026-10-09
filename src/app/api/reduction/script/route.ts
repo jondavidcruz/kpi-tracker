@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, isManager } from "@/lib/auth";
+import { aiText } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -56,29 +57,8 @@ OUTPUT STRICTLY AS JSON — no markdown fences, no commentary, exactly this shap
 
   // Claude first; any failure (credits, outage, missing key) silently falls
   // back to Gemini's free tier so the rep is never blocked (Jon 2026-10-09).
-  const callClaude = async (): Promise<string> => {
-    if (!process.env.ANTHROPIC_API_KEY) return "";
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-opus-4-8", max_tokens: 1200, messages: [{ role: "user", content: prompt }] }),
-    });
-    const j = (await res.json()) as { content?: Array<{ text?: string }> };
-    return j.content?.map((c) => c.text ?? "").join("").trim() ?? "";
-  };
-  const callGemini = async (): Promise<string> => {
-    if (!process.env.GEMINI_API_KEY) return "";
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2000 } }),
-    });
-    const j = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    return j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim() ?? "";
-  };
-
   try {
-    let text = await callClaude().catch(() => "");
-    if (!text) text = await callGemini().catch(() => "");
+    const text = await aiText({ maxTokens: 1600, messages: [{ role: "user", content: prompt }] });
     if (!text) return NextResponse.json({ error: "AI gave no script — try again in a minute" }, { status: 502 });
     // the model answers in the JSON contract above; fall back to raw text as the script
     try {
