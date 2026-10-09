@@ -124,32 +124,48 @@ I know that's not the number we both hoped for. But this is real money, partners
           </div>
           <label><span className={lbl}>What buyers flagged (rough bullets — one per line; on the call we say &quot;our funding partners,&quot; and the AI writes it that way)</span><textarea value={f.repairs} onChange={set("repairs")} rows={3} placeholder={propType === "land" ? "easement across the back\ngopher tortoises\nscrub jay area\nhalf of it looks wet" : "roof bad\nac old\ncrack in foundation"} className={inputCls} /></label>
           <label><span className={lbl}>Strongest buyer quote — the most powerful thing a buyer actually SAID, word-for-word <span className="font-normal text-slate-400">(optional — you repeat it to the seller as third-party proof; a real buyer&apos;s words always beat yours)</span></span><textarea value={f.feedback} onChange={set("feedback")} rows={2} placeholder={propType === "land" ? "between the easement and the tortoises, I can't go past 30" : "with that roof, I'm at 60 — not a dollar more"} className={inputCls} /></label>
-          {contract > 0 && best > 0 && (
-            <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-100">
-              <div className="flex justify-between"><span className="text-slate-500">{dealType === "assignment" ? "Buyer pays us (covers their own closing)" : "End-buyer sale price"}</span><b>{money(best)}</b></div>
-              {dealType === "novation" && <div className="flex justify-between"><span className="text-slate-500">− agent fees ({agentPct}%)</span><b className="text-amber-700">{money(agentFees)}</b></div>}
-              {dealType === "novation" && <div className="flex justify-between"><span className="text-slate-500">− seller closing costs (we cover)</span><b className="text-amber-700">{money(coveredClosing)}</b></div>}
-              <div className="flex justify-between"><span className="text-slate-500">− our fee (protected)</span><b className="text-indigo-700">{money(fee)}</b></div>
-              <div className="flex justify-between border-t border-slate-200 pt-1"><span className="font-bold text-slate-700">Seller must land at or below</span><b className="text-emerald-700">{money(settle)}</b></div>
-              <div className="flex justify-between"><span className="text-slate-500">Open the ask at</span><b>{money(target)} <span className="text-[10px] font-semibold text-slate-400">(~15% past target = room to meet in the middle)</span></b></div>
-              <div className="flex justify-between"><span className="text-slate-500">Seller comes down by</span><b className="text-red-600">{money(gap)}</b></div>
-              {settle <= 0 && <div className="text-[11px] font-bold text-red-600">⚠️ After {dealType === "novation" ? "agent fees + closing costs + " : ""}our fee there&apos;s nothing left — this needs a better buyer, not a reduction.</div>}
+          {contract > 0 && best > 0 && settle > 0 && (
+            <div className="overflow-hidden rounded-xl ring-1 ring-slate-200">
+              {/* 🎯 the only 3 numbers the rep needs on the call */}
+              <div className="grid grid-cols-2 divide-x divide-slate-100">
+                <div className="bg-indigo-50/70 p-3.5 text-center">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wide text-indigo-500">🎯 Say this number</div>
+                  <div className="mt-0.5 text-2xl font-extrabold text-indigo-800">{money(target)}</div>
+                  <div className="mt-0.5 text-[10px] font-semibold leading-tight text-slate-400">say it once, then go silent</div>
+                </div>
+                <div className="bg-emerald-50/70 p-3.5 text-center">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-600">🤝 Take any counter up to</div>
+                  <div className="mt-0.5 text-2xl font-extrabold text-emerald-700">{money(settle)}</div>
+                  <div className="mt-0.5 text-[10px] font-semibold leading-tight text-slate-400">above this = manager approval first</div>
+                </div>
+              </div>
+              {/* 💵 one live money line instead of a wall of rows */}
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-white px-3 py-2.5 text-sm">
+                <span className="font-bold text-slate-600">If they agree at $</span>
+                <input value={f.agreed} onChange={set("agreed")} placeholder={String(target || 40000).replace(/\B(?=(\d{3})+(?!\d))/g, ",")} className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm font-bold" />
+                <b className={`ml-auto ${agreed > 0 ? (netAt(agreed) >= fee ? "text-emerald-700" : netAt(agreed) > 0 ? "text-amber-600" : "text-red-600") : "text-slate-300"}`}>
+                  {agreed > 0 ? `we make ${money(netAt(agreed))}` : `at ${money(target)} we make ${money(netAt(target))}`}
+                </b>
+              </div>
+              {agreed > 0 && netAt(agreed) < fee && netAt(agreed) > 0 && <div className="bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-700">⚠️ That&apos;s under our {money(fee)} minimum — counter higher or get manager approval.</div>}
+              {agreed > 0 && netAt(agreed) <= 0 && <div className="bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-600">🛑 We&apos;d LOSE money at that number.</div>}
+              {/* 📐 the full breakdown, out of the way until wanted */}
+              <details className="border-t border-slate-100 bg-slate-50/60">
+                <summary className="cursor-pointer px-3 py-2 text-[10px] font-extrabold uppercase tracking-wide text-slate-400 hover:text-slate-600">📐 see the full math</summary>
+                <div className="space-y-1 px-3 pb-3 text-[13px]">
+                  <div className="flex justify-between"><span className="text-slate-500">{dealType === "assignment" ? "Our funding partner pays us (covers their own closing)" : "End-buyer sale price"}</span><b>{money(best)}</b></div>
+                  {dealType === "novation" && <div className="flex justify-between"><span className="text-slate-500">− agent fees ({agentPct}%)</span><b className="text-amber-700">{money(agentFees)}</b></div>}
+                  {dealType === "novation" && <div className="flex justify-between"><span className="text-slate-500">− seller closing costs (we cover)</span><b className="text-amber-700">{money(coveredClosing)}</b></div>}
+                  <div className="flex justify-between"><span className="text-slate-500">− our minimum fee</span><b className="text-indigo-700">{money(fee)}</b></div>
+                  <div className="flex justify-between border-t border-slate-200 pt-1"><span className="font-bold text-slate-700">= the most the seller can get</span><b className="text-emerald-700">{money(settle)}</b></div>
+                  <div className="flex justify-between"><span className="text-slate-500">We open {money(target)} (~15% past it) so there&apos;s room to meet in the middle</span><b className="text-red-600">seller comes down {money(gap)}</b></div>
+                  <div className="flex justify-between"><span className="text-slate-500">At today&apos;s contract ({money(contract)}) this deal nets us</span><b className={netAt(contract) >= 0 ? "text-emerald-700" : "text-red-600"}>{money(netAt(contract))}</b></div>
+                </div>
+              </details>
             </div>
           )}
-          {contract > 0 && best > 0 && (
-            <div className="space-y-1 rounded-xl bg-emerald-50/60 p-3 text-sm ring-1 ring-emerald-100">
-              <div className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-800">💵 What WE net (after {dealType === "novation" ? "agent fees + seller closing costs" : "closing — buyer covers it all"})</div>
-              <div className="flex justify-between"><span className="text-slate-500">At today&apos;s contract ({money(contract)})</span><b className={netAt(contract) >= fee ? "text-emerald-700" : "text-red-600"}>{money(netAt(contract))}</b></div>
-              <div className="flex justify-between"><span className="text-slate-500">If they sign the opening ask ({money(target)})</span><b className="text-emerald-700">{money(netAt(target))}</b></div>
-              <div className="flex justify-between"><span className="text-slate-500">At the walk-away floor ({money(settle)})</span><b className="text-emerald-700">{money(netAt(settle))} <span className="text-[10px] font-semibold text-slate-400">= our minimum fee</span></b></div>
-              <div className="flex items-center justify-between gap-2 border-t border-emerald-100 pt-1.5">
-                <span className="shrink-0 text-slate-600">What if the seller agrees at $</span>
-                <input value={f.agreed} onChange={set("agreed")} placeholder="40,000" className="w-28 rounded-lg border border-emerald-200 px-2 py-1 text-right text-sm font-bold" />
-                {agreed > 0 && <b className={`shrink-0 ${netAt(agreed) >= fee ? "text-emerald-700" : netAt(agreed) > 0 ? "text-amber-600" : "text-red-600"}`}>→ we net {money(netAt(agreed))}</b>}
-              </div>
-              {agreed > 0 && netAt(agreed) < fee && netAt(agreed) > 0 && <div className="text-[11px] font-bold text-amber-700">⚠️ Below our minimum fee of {money(fee)} — counter higher or get manager approval.</div>}
-              {agreed > 0 && netAt(agreed) <= 0 && <div className="text-[11px] font-bold text-red-600">🛑 We&apos;d LOSE money at that number.</div>}
-            </div>
+          {contract > 0 && best > 0 && settle <= 0 && (
+            <div className="rounded-xl bg-red-50 p-3 text-[12px] font-bold text-red-600 ring-1 ring-red-100">⚠️ After {dealType === "novation" ? "agent fees + closing costs + " : ""}our fee there&apos;s nothing left — this needs a better offer from our partners, not a reduction.</div>
           )}
           </>}
         </div>
