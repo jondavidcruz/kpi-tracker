@@ -1741,30 +1741,21 @@ export async function GET(request: Request) {
       const a = ab.data;
       ccApp = a ? { name: a.application_name, webhook: a.webhook_event_url, active: a.active, api_version: a.webhook_api_version } : `lookup failed ${ares.status}`;
     }
-    // Who would the PSTN fallback actually ring right now? (Jon 2026-10-09:
-    // dead-air bug was fb resolving to nothing — surface it here forever.)
-    let fallback = process.env.TELNYX_FALLBACK_NUMBER ? "env:" + process.env.TELNYX_FALLBACK_NUMBER : "";
-    const fbUsers = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, position: true } });
-    const fbProfs = await db.teamProfile.findMany({ where: { userId: { in: fbUsers.map((u) => u.id) } }, select: { userId: true, phone: true } });
-    const fbPm = new Map(fbProfs.map((pr) => [pr.userId, pr.phone]));
-    const rosterPhones = fbUsers.map((u) => ({ name: u.name, position: u.position, phone: (fbPm.get(u.id) ?? "").trim() || "(none)" }));
-    if (!fallback) {
-      // mirror of the webhook's ranking: US (+1) numbers first (intl dial-out
-      // is refused on our Telnyx profile), then acquisitions, then name
-      const cand = fbUsers.map((u) => {
-        const digits = (fbPm.get(u.id) ?? "").replace(/[^+\d]/g, "");
-        return { u, digits, us: digits.startsWith("+1") || (!digits.startsWith("+") && digits.replace(/\D/g, "").length === 10) };
-      }).filter((c) => c.digits.replace(/\D/g, "").length >= 10)
-        .sort((x, y) => (Number(y.us) - Number(x.us)) || ((x.u.position === "acquisitions" ? 0 : 1) - (y.u.position === "acquisitions" ? 0 : 1)) || x.u.name.localeCompare(y.u.name));
-      if (cand[0]) fallback = `${cand[0].u.name}: ${cand[0].digits}${cand[0].us ? "" : " ⚠️ international — Telnyx may refuse the dial"}`;
-    }
+    // PSTN fallback = env override ONLY (Jon 2026-10-09: never ring personal
+    // numbers — CRM browsers are the ring target). Presence shows who's awake.
+    const fallback = process.env.TELNYX_FALLBACK_NUMBER ? "env:" + process.env.TELNYX_FALLBACK_NUMBER : "";
+    const cfgA = cfg as { agents?: Record<string, { sipUser?: string; lastSeen?: string }> };
+    const browserPresence = Object.entries(cfgA.agents ?? {}).map(([name, a]) => {
+      const seen = a.lastSeen ? Date.now() - Date.parse(a.lastSeen) : null;
+      return { agent: name, sipUser: a.sipUser, lastSeen: a.lastSeen ?? "never", awake: seen !== null && seen < 5 * 60_000 ? "🟢 will ring" : "⚪ asleep — won't be dialed" };
+    });
     return NextResponse.json({
       ok: true, number: num,
       numberInfo: pn ? { status: pn.status, connection_id: pn.connection_id, connection_name: pn.connection_name, messaging_profile_id: pn.messaging_profile_id ?? null, emergency: undefined } : "NOT FOUND",
       webrtcConnection: cfg.connId ?? null,
       callControlApp: ccApp,
-      fallbackWouldRing: fallback || "🚨 NOBODY — no env fallback and no roster phones; browsers asleep = dead air",
-      rosterPhones,
+      fallbackWouldRing: fallback || "(none — by design: CRM browsers only; missed calls get the auto text-back)",
+      browserPresence,
       recentWebhookEvents: events,
       hint: "Call the number with /crm open (hard refresh first), then run this again — the events list shows exactly what Telnyx did.",
     });

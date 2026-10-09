@@ -35,6 +35,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [onCall, setOnCall] = useState<Ctx | null>(null);
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
   const [incoming, setIncoming] = useState<{ number: string } | null>(null);
+  const [lineOk, setLineOk] = useState(false); // 🟢 socket registered = inbound will ring here
   const incomingCallRef = useRef<{ answer: () => void; hangup: () => void } | null>(null);
   const readyRef = useRef(false);
   const connectingRef = useRef<Promise<unknown> | null>(null);
@@ -46,6 +47,24 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const keepAliveRef = useRef<HTMLAudioElement | null>(null);
+  // 🔇 anti-discard: Chrome's Memory Saver unloads idle tabs, killing the
+  // phone socket — THE reason inbound went user_busy while the tab sat idle
+  // (Jon 2026-10-09). A looping near-silent tone marks the tab as "playing
+  // audio", which exempts it from discard. Starts on registration; if
+  // autoplay is blocked, retries on the first click anywhere.
+  const keepTabAlive = () => {
+    try {
+      if (keepAliveRef.current) return;
+      const a = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=");
+      a.loop = true; a.volume = 0.01;
+      keepAliveRef.current = a;
+      a.play().catch(() => {
+        const once = () => { a.play().catch(() => {}); document.removeEventListener("pointerdown", once); };
+        document.addEventListener("pointerdown", once);
+      });
+    } catch { /* tab discard protection is best-effort */ }
+  };
   const autoNextRef = useRef(false);
   const qiRef = useRef(0);
   const dataRef = useRef<PhoneData | null>(null);
@@ -164,9 +183,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       clientRef.current = client as never;
       await new Promise<void>((resolve, reject) => {
         const to = setTimeout(() => reject(new Error("connect timeout")), 12000);
-        client.on("telnyx.ready", () => { clearTimeout(to); readyRef.current = true; resolve(); });
+        client.on("telnyx.ready", () => { clearTimeout(to); readyRef.current = true; setLineOk(true); fetch("/api/telnyx/presence", { method: "POST" }).catch(() => {}); keepTabAlive(); resolve(); });
         client.on("telnyx.error", (e: unknown) => { setMsg(String((e as { message?: string })?.message ?? e).slice(0, 120)); });
-        client.on("telnyx.socket.close", () => { readyRef.current = false; connectingRef.current = null; });
+        client.on("telnyx.socket.close", () => { readyRef.current = false; setLineOk(false); connectingRef.current = null; });
         client.on("telnyx.notification", (n: { type: string; call?: { state?: string; direction?: string; remoteStream?: MediaStream; options?: { remoteCallerNumber?: string }; answer?: () => void; hangup?: () => void } }) => {
           if (n.type !== "callUpdate" || !n.call) return;
           const cs = n.call.state ?? "";
@@ -206,7 +225,12 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     // Chrome freezes timers + sockets in background tabs — the #1 reason
     // inbound went user_busy (Jon 2026-10-08). Re-register the second the tab
     // wakes, plus a tighter 60s heartbeat while visible.
-    const keep = setInterval(() => { if (!readyRef.current) ensureClient().catch(() => {}); }, 60_000);
+    // While CONNECTED, ping presence so inbound ring-all knows this browser is
+    // awake and dials it; while disconnected, keep trying to re-register.
+    const keep = setInterval(() => {
+      if (!readyRef.current) ensureClient().catch(() => {});
+      else fetch("/api/telnyx/presence", { method: "POST" }).catch(() => {});
+    }, 60_000);
     const wake = () => { if (!readyRef.current) ensureClient().catch(() => {}); };
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
@@ -275,7 +299,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     // — "keep it in the top right"), ringing no matter what section you're in.
     <span className={floating ? "fixed right-4 top-3 z-50" : "relative"}>
       <audio ref={audioRef} autoPlay style={{ display: "none" }} />
-      <button onClick={() => setOpen((v) => !v)} title="Phone — call from your browser" className={`grid place-items-center rounded-full ${floating ? "h-10 w-10 text-base shadow-lg ring-2 ring-white/70" : "h-8 w-8 text-sm"} ${state === "active" ? "bg-emerald-500 text-white" : incoming ? "animate-pulse bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>📞</button>
+      <button onClick={() => setOpen((v) => !v)} title={lineOk ? "Phone — line connected, inbound rings here" : "Phone — reconnecting… inbound will NOT ring this tab yet"} className={`relative grid place-items-center rounded-full ${floating ? "h-10 w-10 text-base shadow-lg ring-2 ring-white/70" : "h-8 w-8 text-sm"} ${state === "active" ? "bg-emerald-500 text-white" : incoming ? "animate-pulse bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>
+        📞
+        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${lineOk ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
+      </button>
       {open && (
         <span className={`absolute z-50 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 ${floating ? "right-0 top-12" : "right-0 top-10"}`}>
           {/* header: Calling From */}

@@ -13,7 +13,7 @@ async function tx(path: string, init?: RequestInit) {
   return { ok: res.ok, status: res.status, body, text };
 }
 
-type AgentCred = { credId: string; sipUser: string };
+type AgentCred = { credId: string; sipUser: string; lastSeen?: string };
 export type TelnyxCfg = { connId?: string; credId?: string; callerId?: string; ccAppId?: string; sipUser?: string; msgProfileId?: string; agents?: Record<string, AgentCred> };
 
 // agentFirst: each rep gets their OWN telephony credential (own SIP identity),
@@ -74,6 +74,8 @@ export async function provisionAndToken(agentFirst?: string): Promise<{ token?: 
         } else steps.push(`agent credential refused ${r.status} — falling back to shared`);
       } else steps.push(`agent credential exists (${agentFirst})`);
       if (cfg.agents[agentFirst]?.credId) tokenCredId = cfg.agents[agentFirst].credId;
+      // presence stamp: ring-all only dials browsers seen recently (2026-10-09)
+      if (cfg.agents[agentFirst]) cfg.agents[agentFirst].lastSeen = new Date().toISOString();
     }
     const description = JSON.stringify(cfg);
     if (row) await db.resource.update({ where: { id: row.id }, data: { description } });

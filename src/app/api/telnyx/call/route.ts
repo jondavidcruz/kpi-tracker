@@ -66,11 +66,17 @@ export async function POST(req: NextRequest) {
     const pay0 = p as { direction?: string; to?: string; from?: string };
     if (pay0.direction === "incoming") {
       const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
-      let cfg: { sipUser?: string; ccAppId?: string; agents?: Record<string, { sipUser: string }> } = {};
+      let cfg: { sipUser?: string; ccAppId?: string; agents?: Record<string, { sipUser: string; lastSeen?: string }> } = {};
       try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
+      // Only ring browsers seen in the last 5 min (presence heartbeat) — dead
+      // credentials come back user_busy instantly and eat the ring window
+      // (2026-10-09). No fresh agent at all → ring everything as a hail mary.
+      const agentList = Object.values(cfg.agents ?? {});
+      const fresh = agentList.filter((a) => a.lastSeen && Date.now() - Date.parse(a.lastSeen) < 5 * 60_000);
+      const pool = fresh.length > 0 ? fresh : agentList;
       const targets = [...new Set([
-        ...Object.values(cfg.agents ?? {}).map((a) => a.sipUser),
-        cfg.sipUser ?? "",
+        ...pool.map((a) => a.sipUser),
+        ...(fresh.length > 0 ? [] : [cfg.sipUser ?? ""]),
       ].filter(Boolean))];
       const inId = p.call_control_id;
       const legs: string[] = [];
@@ -80,7 +86,7 @@ export async function POST(req: NextRequest) {
           method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             connection_id: cfg.ccAppId, to: `sip:${sip}@sip.telnyx.com`,
-            from: pay0.from ?? pay0.to, timeout_secs: 25, client_state: clientState,
+            from: pay0.from ?? pay0.to, timeout_secs: 30, client_state: clientState,
           }),
         }).catch(() => null);
         const rb = r ? ((await r.json().catch(() => ({}))) as { data?: { call_control_id?: string } }) : {};
@@ -124,30 +130,17 @@ export async function POST(req: NextRequest) {
     if (sess) {
       sess.legs = sess.legs.filter((l) => l !== p.call_control_id);
       if (!sess.answered && sess.legs.length === 0) {
-        // fallback cell = env override, else ANY active rep with a usable
-        // phone on the roster — acquisitions first (Jon 2026-10-09: priority 1
-        // is that inbound RINGS SOMEWHERE; the old first-acq-rep-only lookup
-        // resolved to Michelle-with-no-phone and callers got dead air).
-        let fb = process.env.TELNYX_FALLBACK_NUMBER ?? "";
-        if (!fb) {
-          const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, position: true } });
-          const profs = await db.teamProfile.findMany({ where: { userId: { in: users.map((u) => u.id) } }, select: { userId: true, phone: true } });
-          const pm = new Map(profs.map((pr) => [pr.userId, pr.phone]));
-          // US (+1) numbers first — Telnyx refuses international dial-out on our
-          // profile, so a +63 cell as "fallback" = silent dead air (2026-10-09)
-          const cand = users.map((u) => {
-            const digits = (pm.get(u.id) ?? "").replace(/[^+\d]/g, "");
-            return { u, digits, us: digits.startsWith("+1") || (!digits.startsWith("+") && digits.replace(/\D/g, "").length === 10) };
-          }).filter((c) => c.digits.replace(/\D/g, "").length >= 10)
-            .sort((x, y) => (Number(y.us) - Number(x.us)) || ((x.u.position === "acquisitions" ? 0 : 1) - (y.u.position === "acquisitions" ? 0 : 1)) || x.u.name.localeCompare(y.u.name));
-          if (cand[0]) fb = cand[0].digits.startsWith("+") ? cand[0].digits : `+1${cand[0].digits.replace(/\D/g, "").slice(-10)}`;
-        }
+        // Fallback = ONLY the env override (Jon 2026-10-09: "I don't want it
+        // to ring someone's personal number — only ring our CRM"). No roster
+        // scan. Unset env (today's state) = no PSTN leg; the missed-call
+        // text-back + CALL BACK NOW task are the net.
+        const fb = process.env.TELNYX_FALLBACK_NUMBER ?? "";
         // breadcrumb so ?inbounddiag=1 shows WHY a caller did or didn't ring a cell
         try {
           const row3 = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
           let list3: unknown[] = [];
           try { list3 = row3?.description ? JSON.parse(row3.description) : []; } catch { /* fresh */ }
-          list3.unshift({ at: new Date().toISOString(), ev: "fallback-resolve", to: fb || "(NO FALLBACK PHONE FOUND — roster phones empty + no env)" });
+          list3.unshift({ at: new Date().toISOString(), ev: "fallback-resolve", to: fb || "(no env fallback — CRM browsers only, by design)" });
           if (row3) await db.resource.update({ where: { id: row3.id }, data: { description: JSON.stringify(list3.slice(0, 25)) } });
         } catch { /* never blocks */ }
         if (fb && !sess.fallback && key) {
