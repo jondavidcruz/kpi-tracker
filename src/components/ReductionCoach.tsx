@@ -10,9 +10,11 @@ const lbl = "mb-0.5 block text-[11px] font-bold text-slate-500";
 const UW_LABEL: Record<string, string> = { cash: "💵 Cash MAO", novation: "📝 Novation MAO", creative: "🎨 Creative MAO", listing: "🏷 Listing", flip: "🔨 Flip", developer: "🚧 Developer" };
 
 export default function ReductionCoach({ initial, uw = [] }: { initial?: { address?: string; contractPrice?: string }; uw?: Array<{ tab: string; mao: number; fee: number }> } = {}) {
-  const [f, setF] = useState({ address: initial?.address ?? "", contractPrice: initial?.contractPrice ?? "", bestOffer: "", fee: "10,000", agentPct: "3", sellerClosing: "2,000", offers: "", dom: "", repairs: "", feedback: "" });
+  const [f, setF] = useState({ address: initial?.address ?? "", contractPrice: initial?.contractPrice ?? "", bestOffer: "", fee: "10,000", agentPct: "3", sellerClosing: "2,000", agreed: "", offers: "", dom: "", repairs: "", feedback: "" });
   const [dealType, setDealType] = useState<"assignment" | "novation">("assignment");
-  const [ai, setAi] = useState<{ busy: boolean; script: string; err: string }>({ busy: false, script: "", err: "" });
+  // seller closing costs: exact $ when known, or % of sale price when not (Jon 2026-10-09)
+  const [closingMode, setClosingMode] = useState<"$" | "%">("$");
+  const [ai, setAi] = useState<{ busy: boolean; script: string; err: string; estimates: Array<{ item: string; pro: string; low: number; high: number }> }>({ busy: false, script: "", err: "", estimates: [] });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const num = (s: string) => Number(s.replace(/[^0-9.]/g, "")) || 0;
 
@@ -28,8 +30,11 @@ export default function ReductionCoach({ initial, uw = [] }: { initial?: { addre
   //  NOVATION  — WE cover the seller's closing costs and agent fees come out
   //  of the sale: seller ≤ salePrice − agentFees − sellerClosingCosts − ourFee.
   const agentFees = dealType === "novation" ? Math.round((best * agentPct) / 100) : 0;
-  const coveredClosing = dealType === "novation" ? sellerClosing : 0;
+  const coveredClosing = dealType === "novation" ? (closingMode === "%" ? Math.round((best * sellerClosing) / 100) : sellerClosing) : 0;
   const settle = best && fee ? best - fee - agentFees - coveredClosing : 0; // seller's ceiling (our walk-away floor)
+  // 💵 our net at any seller price P: everything left after the deal's real costs
+  const netAt = (p: number) => best - p - agentFees - coveredClosing;
+  const agreed = num(f.agreed);
   const gap = contract && settle ? contract - settle : 0; // how far the seller must come down
   // open the ask ~15% PAST the target so there's room to "meet in the middle"
   const askReduction = gap > 0 ? Math.round((gap * 1.15) / 500) * 500 : 0;
@@ -81,12 +86,24 @@ I know that's not the number we both hoped for. But this is real money, from a r
             <label><span className={lbl}>{dealType === "assignment" ? "Best BUYER offer to US $" : "End-buyer SALE price $"}</span><input value={f.bestOffer} onChange={set("bestOffer")} placeholder="70,000" className={inputCls} /></label>
             <label><span className={lbl}>Our minimum fee $ <span className="font-normal text-slate-400">(we never work for free)</span></span><input value={f.fee} onChange={set("fee")} className={inputCls} /></label>
             {dealType === "novation" && <label><span className={lbl}>Agent fees %</span><input value={f.agentPct} onChange={set("agentPct")} className={inputCls} /></label>}
-            {dealType === "novation" && <label><span className={lbl}>Seller closing costs WE cover $</span><input value={f.sellerClosing} onChange={set("sellerClosing")} className={inputCls} /></label>}
+            {dealType === "novation" && (
+              <label>
+                <span className={lbl}>Seller closing costs WE cover
+                  <span className="float-right inline-flex overflow-hidden rounded-md ring-1 ring-slate-200">
+                    {(["$", "%"] as const).map((m) => (
+                      <button key={m} type="button" onClick={() => { setClosingMode(m); setF({ ...f, sellerClosing: m === "%" ? "2" : "2,000" }); }} className={`px-2 py-0.5 text-[10px] font-extrabold ${closingMode === m ? "bg-brand-navy text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>{m}</button>
+                    ))}
+                  </span>
+                </span>
+                <input value={f.sellerClosing} onChange={set("sellerClosing")} className={inputCls} placeholder={closingMode === "%" ? "2" : "2,000"} />
+                {closingMode === "%" && best > 0 && <span className="text-[10px] font-bold text-slate-400">{sellerClosing}% of {money(best)} = {money(coveredClosing)}</span>}
+              </label>
+            )}
             <label><span className={lbl}># of offers received</span><input value={f.offers} onChange={set("offers")} placeholder="3" className={inputCls} /></label>
             <label><span className={lbl}>Days on market</span><input value={f.dom} onChange={set("dom")} placeholder="34" className={inputCls} /></label>
           </div>
           <label><span className={lbl}>What buyers said is wrong (rough bullets — one per line, AI writes the professional wording)</span><textarea value={f.repairs} onChange={set("repairs")} rows={3} placeholder={"roof bad\nac old\ncrack in foundation"} className={inputCls} /></label>
-          <label><span className={lbl}>Strongest buyer quote (optional — gold on the call)</span><textarea value={f.feedback} onChange={set("feedback")} rows={2} placeholder={"at this price I'd need the roof done, otherwise I'm at 60"} className={inputCls} /></label>
+          <label><span className={lbl}>Strongest buyer quote — the most powerful thing a buyer actually SAID, word-for-word <span className="font-normal text-slate-400">(optional — you repeat it to the seller as third-party proof; a real buyer&apos;s words always beat yours)</span></span><textarea value={f.feedback} onChange={set("feedback")} rows={2} placeholder={"with that roof, I'm at 60 — not a dollar more"} className={inputCls} /></label>
           {contract > 0 && best > 0 && (
             <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-100">
               <div className="flex justify-between"><span className="text-slate-500">{dealType === "assignment" ? "Buyer pays us (covers their own closing)" : "End-buyer sale price"}</span><b>{money(best)}</b></div>
@@ -99,6 +116,21 @@ I know that's not the number we both hoped for. But this is real money, from a r
               {settle <= 0 && <div className="text-[11px] font-bold text-red-600">⚠️ After {dealType === "novation" ? "agent fees + closing costs + " : ""}our fee there&apos;s nothing left — this needs a better buyer, not a reduction.</div>}
             </div>
           )}
+          {contract > 0 && best > 0 && (
+            <div className="space-y-1 rounded-xl bg-emerald-50/60 p-3 text-sm ring-1 ring-emerald-100">
+              <div className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-800">💵 What WE net (after {dealType === "novation" ? "agent fees + seller closing costs" : "closing — buyer covers it all"})</div>
+              <div className="flex justify-between"><span className="text-slate-500">At today&apos;s contract ({money(contract)})</span><b className={netAt(contract) >= fee ? "text-emerald-700" : "text-red-600"}>{money(netAt(contract))}</b></div>
+              <div className="flex justify-between"><span className="text-slate-500">If they sign the opening ask ({money(target)})</span><b className="text-emerald-700">{money(netAt(target))}</b></div>
+              <div className="flex justify-between"><span className="text-slate-500">At the walk-away floor ({money(settle)})</span><b className="text-emerald-700">{money(netAt(settle))} <span className="text-[10px] font-semibold text-slate-400">= our minimum fee</span></b></div>
+              <div className="flex items-center justify-between gap-2 border-t border-emerald-100 pt-1.5">
+                <span className="shrink-0 text-slate-600">What if the seller agrees at $</span>
+                <input value={f.agreed} onChange={set("agreed")} placeholder="40,000" className="w-28 rounded-lg border border-emerald-200 px-2 py-1 text-right text-sm font-bold" />
+                {agreed > 0 && <b className={`shrink-0 ${netAt(agreed) >= fee ? "text-emerald-700" : netAt(agreed) > 0 ? "text-amber-600" : "text-red-600"}`}>→ we net {money(netAt(agreed))}</b>}
+              </div>
+              {agreed > 0 && netAt(agreed) < fee && netAt(agreed) > 0 && <div className="text-[11px] font-bold text-amber-700">⚠️ Below our minimum fee of {money(fee)} — counter higher or get manager approval.</div>}
+              {agreed > 0 && netAt(agreed) <= 0 && <div className="text-[11px] font-bold text-red-600">🛑 We&apos;d LOSE money at that number.</div>}
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -108,21 +140,36 @@ I know that's not the number we both hoped for. But this is real money, from a r
               type="button"
               disabled={ai.busy || !contract || !best || settle <= 0}
               onClick={async () => {
-                setAi({ busy: true, script: "", err: "" });
+                setAi({ busy: true, script: "", err: "", estimates: [] });
                 try {
                   const r = await fetch("/api/reduction/script", {
                     method: "POST", headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ dealType, address: f.address, contract, best, fee, agentFees, coveredClosing, offers, dom, repairs: f.repairs, feedback: f.feedback, settle, target }),
                   });
-                  const j = (await r.json()) as { script?: string; error?: string };
-                  if (j.script) setAi({ busy: false, script: j.script, err: "" });
-                  else setAi({ busy: false, script: "", err: j.error ?? "AI didn't answer — the draft below still works" });
-                } catch { setAi({ busy: false, script: "", err: "AI unreachable — the draft below still works" }); }
+                  const j = (await r.json()) as { script?: string; estimates?: Array<{ item: string; pro: string; low: number; high: number }>; error?: string };
+                  if (j.script) setAi({ busy: false, script: j.script, err: "", estimates: j.estimates ?? [] });
+                  else setAi({ busy: false, script: "", err: j.error ?? "AI didn't answer — the draft below still works", estimates: [] });
+                } catch { setAi({ busy: false, script: "", err: "AI unreachable — the draft below still works", estimates: [] }); }
               }}
               className="ml-auto rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-violet-700 disabled:opacity-40"
             >{ai.busy ? "✨ writing…" : "✨ Write it for me (AI)"}</button>
           </div>
           {ai.err && <p className="text-[11px] font-bold text-amber-600">{ai.err}</p>}
+          {ai.estimates.length > 0 && (
+            <div className="rounded-xl bg-amber-50/70 p-3 ring-1 ring-amber-200">
+              <div className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-800">🔨 GC walk-through estimate — quote these numbers to the seller</div>
+              <div className="space-y-1.5">
+                {ai.estimates.map((e, i) => (
+                  <div key={i} className="flex items-start gap-2 text-[12px]">
+                    <span className="min-w-0 flex-1 leading-snug"><b className="text-slate-800">{e.item}</b> <span className="text-slate-500">— {e.pro}</span></span>
+                    <span className="shrink-0 font-extrabold tabular-nums text-slate-900">{money(e.low)}–{money(e.high)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-amber-200/70 pt-1.5 text-[12px] font-extrabold"><span className="text-amber-900">Total repairs buyers are pricing in</span><span className="text-red-600">{money(ai.estimates.reduce((n, e) => n + e.low, 0))}–{money(ai.estimates.reduce((n, e) => n + e.high, 0))}</span></div>
+              </div>
+              <p className="mt-1.5 text-[10px] text-amber-700">Realistic national-average installed costs — say them as ranges (&quot;the roof alone is a twelve-to-fifteen-thousand-dollar job&quot;) and you&apos;ll sound like the contractor walked it with you.</p>
+            </div>
+          )}
           {ai.script && (
             <div className="rounded-xl bg-violet-50 p-3 ring-1 ring-violet-200">
               <div className="mb-1 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wide text-violet-700">✨ AI script — professional wording from your bullets

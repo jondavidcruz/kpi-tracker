@@ -44,7 +44,12 @@ RULES FOR THE SCRIPT:
 - Present the ask number ONCE, then instruct the rep: [PAUSE — say nothing until they respond].
 - Include short [IF THEY SAY NO] and [IF THEY COUNTER] branches (counter at or above $${b.settle.toLocaleString()} = accept and close).
 - Never mention our fee, our buyer's identity, or the word "wholesale".
-- Under 350 words of spoken script. Output ONLY the script with the two branch blocks — no preamble, no explanation.`;
+- Under 350 words of spoken script.
+
+ALSO act as a licensed general contractor doing a walk-through: for EACH raw repair bullet, give the professional line-item scope and a realistic installed-cost range (low/high, whole dollars, national-average pricing — e.g. full architectural-shingle roof replacement $9,000–$15,000; foundation stem-wall crack repair w/ structural letter $8,000–$18,000; full rewire $12,000–$30,000). Scale to the repair as described; when size is unknown assume a typical 1,500 sq ft single-family home. The script should quote these same numbers so the rep sounds like a GC walked the property.
+
+OUTPUT STRICTLY AS JSON — no markdown fences, no commentary, exactly this shape:
+{"script": "<the full spoken script with [PAUSE] and the two branch blocks>", "estimates": [{"item": "<short repair name>", "pro": "<one-line professional scope, trade language>", "low": <number>, "high": <number>}]}`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -55,7 +60,13 @@ RULES FOR THE SCRIPT:
     const j = (await res.json()) as { content?: Array<{ text?: string }>; error?: { message?: string } };
     const text = j.content?.map((c) => c.text ?? "").join("").trim();
     if (!text) return NextResponse.json({ error: j.error?.message ?? "AI gave no script" }, { status: 502 });
-    return NextResponse.json({ script: text });
+    // the model answers in the JSON contract above; fall back to raw text as the script
+    try {
+      const cleaned = text.replace(/^```json?\s*/i, "").replace(/```\s*$/, "").trim();
+      const out = JSON.parse(cleaned) as { script?: string; estimates?: Array<{ item?: string; pro?: string; low?: number; high?: number }> };
+      if (out.script) return NextResponse.json({ script: out.script, estimates: out.estimates ?? [] });
+    } catch { /* non-JSON — serve as plain script */ }
+    return NextResponse.json({ script: text, estimates: [] });
   } catch (e) {
     return NextResponse.json({ error: String(e).slice(0, 150) }, { status: 502 });
   }
