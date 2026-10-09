@@ -109,9 +109,25 @@ export default function InboxBell() {
       const j = (await r.json()) as { numbers?: string[] };
       if (j.numbers?.length) setNumbers(j.numbers);
     }).catch(() => {});
-    const t = setInterval(poll, 45_000);
+    const t = setInterval(poll, 20_000);
     return () => clearInterval(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 💬 live thread: while a conversation is open, pull fresh messages every
+  // 5s so their reply lands like a real phone, not on the next poll cycle
+  useEffect(() => {
+    if (!quick) return;
+    const id = quick.id;
+    const t = setInterval(async () => {
+      try {
+        const r = await fetch(`/api/crm/unread?thread=${id}`, { cache: "no-store" });
+        if (!r.ok) return;
+        const q = (await r.json()) as QuickThread;
+        setMsgs((cur) => (q.history.length > cur.length ? q.history : cur));
+      } catch { /* next tick */ }
+    }, 5_000);
+    return () => clearInterval(t);
+  }, [quick?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleMute = () => {
     const next = !muted;
@@ -140,6 +156,7 @@ export default function InboxBell() {
     if (!body || pending || !quick) return;
     const fd = new FormData();
     fd.set("oppId", quick.oppId); fd.set("contactId", quick.id); fd.set("to", quick.phone); fd.set("text", body);
+    fd.set("quiet", "1"); // no route refresh — it was closing this panel mid-conversation
     if (from) fd.set("from", from);
     start(async () => {
       await sendCrmSmsAction(fd);

@@ -406,6 +406,8 @@ export async function sendCrmEmailAction(formData: FormData) {
 
 /** 💬 Send a real SMS via Telnyx from the card. */
 export async function sendCrmSmsAction(formData: FormData): Promise<void> {
+  // quiet=1 → no route refresh (the bell phone manages its own UI and a refresh was closing it — Jon 2026-10-09)
+  const skipRefresh = String(formData.get("quiet") ?? "") === "1";
   const me = await crmUser();
   if (!me) return;
   const { commsFor } = await import("@/lib/crm-comms");
@@ -435,18 +437,18 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
     const quiet = quietHoursWarning(to);
     if (quiet) {
       await logCrmEvent({ contactId, oppId, kind: "sms", body: `🕘 SMS NOT SENT — ${quiet} Draft was: ${text.slice(0, 160)}`, actor: me.name });
-      revalidatePath(`/crm/${oppId}`);
+      if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
       return;
     }
   }
   if (contactId && await isDnd(contactId, "sms")) {
     await logCrmEvent({ contactId, oppId, kind: "sms", body: `🔕 SMS NOT SENT — this contact is DND for texts.`, actor: me.name });
-    revalidatePath(`/crm/${oppId}`);
+    if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
     return;
   }
   if (!process.env.TELNYX_API_KEY || !from) {
     await logCrmEvent({ contactId, oppId, kind: "sms", body: `SMS NOT SENT — set TELNYX_SMS_FROM (a Telnyx number on a messaging profile) in Vercel. Message was: ${text.slice(0, 200)}`, actor: me.name });
-    revalidatePath(`/crm/${oppId}`);
+    if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
     return;
   }
   const res = await fetch("https://api.telnyx.com/v2/messages", {
@@ -457,7 +459,7 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   const ok = res.ok;
   const err = ok ? "" : (await res.text()).slice(0, 140);
   await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: ${text}${ok ? "" : ` (SEND FAILED: ${err})`}`, actor: me.name });
-  revalidatePath(`/crm/${oppId}`);
+  if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
 }
 
 // ── Task priority (Jon 2026-10-08: urgent/pending colors) — Resource map
