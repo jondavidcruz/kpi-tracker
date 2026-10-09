@@ -68,7 +68,7 @@ OUTPUT STRICTLY AS JSON — no markdown fences, no commentary, exactly this shap
   };
   const callGemini = async (): Promise<string> => {
     if (!process.env.GEMINI_API_KEY) return "";
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2000 } }),
     });

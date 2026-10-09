@@ -892,7 +892,7 @@ export async function GET(request: Request) {
     } else out.claude = "no key";
     if (process.env.GEMINI_API_KEY) {
       try {
-        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ contents: [{ parts: [{ text: "Reply with exactly: OK" }] }] }),
           signal: AbortSignal.timeout(15000),
