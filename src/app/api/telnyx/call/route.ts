@@ -133,11 +133,14 @@ export async function POST(req: NextRequest) {
           const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, position: true } });
           const profs = await db.teamProfile.findMany({ where: { userId: { in: users.map((u) => u.id) } }, select: { userId: true, phone: true } });
           const pm = new Map(profs.map((pr) => [pr.userId, pr.phone]));
-          const ranked = [...users].sort((x, y) => ((x.position === "acquisitions" ? 0 : 1) - (y.position === "acquisitions" ? 0 : 1)) || x.name.localeCompare(y.name));
-          for (const u of ranked) {
+          // US (+1) numbers first — Telnyx refuses international dial-out on our
+          // profile, so a +63 cell as "fallback" = silent dead air (2026-10-09)
+          const cand = users.map((u) => {
             const digits = (pm.get(u.id) ?? "").replace(/[^+\d]/g, "");
-            if (digits.replace(/\D/g, "").length >= 10) { fb = digits.startsWith("+") ? digits : `+1${digits.replace(/\D/g, "").slice(-10)}`; break; }
-          }
+            return { u, digits, us: digits.startsWith("+1") || (!digits.startsWith("+") && digits.replace(/\D/g, "").length === 10) };
+          }).filter((c) => c.digits.replace(/\D/g, "").length >= 10)
+            .sort((x, y) => (Number(y.us) - Number(x.us)) || ((x.u.position === "acquisitions" ? 0 : 1) - (y.u.position === "acquisitions" ? 0 : 1)) || x.u.name.localeCompare(y.u.name));
+          if (cand[0]) fb = cand[0].digits.startsWith("+") ? cand[0].digits : `+1${cand[0].digits.replace(/\D/g, "").slice(-10)}`;
         }
         // breadcrumb so ?inbounddiag=1 shows WHY a caller did or didn't ring a cell
         try {
@@ -156,13 +159,24 @@ export async function POST(req: NextRequest) {
             method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
             body: JSON.stringify({ connection_id: cfg2.ccAppId, to: fb, from: process.env.TELNYX_CALLER_ID ?? fb, timeout_secs: 20, client_state: clientState2 }),
           }).catch(() => null);
-          const rb2 = r2 ? ((await r2.json().catch(() => ({}))) as { data?: { call_control_id?: string } }) : {};
+          const rb2txt = r2 ? await r2.text().catch(() => "") : "(network error)";
+          let rb2: { data?: { call_control_id?: string } } = {};
+          try { rb2 = JSON.parse(rb2txt); } catch { /* non-JSON error body */ }
           if (rb2.data?.call_control_id) {
             sess.fallback = true;
             sess.legs = [rb2.data.call_control_id];
             await writeSess(rowId, map);
             return NextResponse.json({ ok: true, fallback: true });
           }
+          // dial refused (intl blocked, bad number, balance…) → leave the
+          // reason in the breadcrumbs instead of failing silently
+          try {
+            const row4 = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
+            let list4: unknown[] = [];
+            try { list4 = row4?.description ? JSON.parse(row4.description) : []; } catch { /* fresh */ }
+            list4.unshift({ at: new Date().toISOString(), ev: "fallback-dial-FAILED", to: fb, cause: `${r2?.status ?? "no-response"}: ${rb2txt.slice(0, 160)}` });
+            if (row4) await db.resource.update({ where: { id: row4.id }, data: { description: JSON.stringify(list4.slice(0, 25)) } });
+          } catch { /* never blocks */ }
         }
         delete map[st.ring];
         await writeSess(rowId, map);

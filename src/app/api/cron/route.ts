@@ -1749,11 +1749,14 @@ export async function GET(request: Request) {
     const fbPm = new Map(fbProfs.map((pr) => [pr.userId, pr.phone]));
     const rosterPhones = fbUsers.map((u) => ({ name: u.name, position: u.position, phone: (fbPm.get(u.id) ?? "").trim() || "(none)" }));
     if (!fallback) {
-      const ranked = [...fbUsers].sort((x, y) => ((x.position === "acquisitions" ? 0 : 1) - (y.position === "acquisitions" ? 0 : 1)) || x.name.localeCompare(y.name));
-      for (const u of ranked) {
+      // mirror of the webhook's ranking: US (+1) numbers first (intl dial-out
+      // is refused on our Telnyx profile), then acquisitions, then name
+      const cand = fbUsers.map((u) => {
         const digits = (fbPm.get(u.id) ?? "").replace(/[^+\d]/g, "");
-        if (digits.replace(/\D/g, "").length >= 10) { fallback = `${u.name}: ${digits}`; break; }
-      }
+        return { u, digits, us: digits.startsWith("+1") || (!digits.startsWith("+") && digits.replace(/\D/g, "").length === 10) };
+      }).filter((c) => c.digits.replace(/\D/g, "").length >= 10)
+        .sort((x, y) => (Number(y.us) - Number(x.us)) || ((x.u.position === "acquisitions" ? 0 : 1) - (y.u.position === "acquisitions" ? 0 : 1)) || x.u.name.localeCompare(y.u.name));
+      if (cand[0]) fallback = `${cand[0].u.name}: ${cand[0].digits}${cand[0].us ? "" : " ⚠️ international — Telnyx may refuse the dial"}`;
     }
     return NextResponse.json({
       ok: true, number: num,
