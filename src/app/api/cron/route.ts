@@ -883,9 +883,17 @@ export async function GET(request: Request) {
     const { normalizeAddress } = await import("@/lib/address");
     const commit = url.searchParams.get("commit") === "1";
     const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { id: true, title: true } });
-    const changes = opps.map((o) => ({ id: o.id, from: o.title, to: normalizeAddress(o.title) })).filter((c) => c.to && c.to !== c.from);
+    // the 📍 line on cards is CrmContact.address — scrub it with the same brush
+    const contacts = await db.crmContact.findMany({ where: { address: { not: "" } }, select: { id: true, address: true } });
+    const changes = [
+      ...opps.map((o) => ({ kind: "opp" as const, id: o.id, from: o.title, to: normalizeAddress(o.title) })),
+      ...contacts.map((c) => ({ kind: "contact" as const, id: c.id, from: c.address, to: normalizeAddress(c.address) })),
+    ].filter((c) => c.to && c.to !== c.from);
     if (commit && changes.length) {
-      for (const c of changes) await db.crmOpportunity.update({ where: { id: c.id }, data: { title: c.to } }).catch(() => {});
+      for (const c of changes) {
+        if (c.kind === "opp") await db.crmOpportunity.update({ where: { id: c.id }, data: { title: c.to } }).catch(() => {});
+        else await db.crmContact.update({ where: { id: c.id }, data: { address: c.to } }).catch(() => {});
+      }
       try {
         const row = await db.resource.findFirst({ where: { category: "__addr_scrub_log__" } });
         const prev: unknown[] = row?.description ? JSON.parse(row.description) : [];
@@ -895,7 +903,32 @@ export async function GET(request: Request) {
         else await db.resource.create({ data: { title: "addr-scrub-log", category: "__addr_scrub_log__", url: "", description } });
       } catch { /* log is best-effort */ }
     }
-    return NextResponse.json({ ok: true, committed: commit, total: opps.length, wouldChange: changes.length, sample: changes.slice(0, 15).map((c) => `${c.from} → ${c.to}`) });
+    return NextResponse.json({ ok: true, committed: commit, totalOpps: opps.length, totalContacts: contacts.length, wouldChange: changes.length, sample: changes.slice(0, 15).map((c) => `[${c.kind}] ${c.from} → ${c.to}`) });
+  }
+
+  // 📱 Bell thread-open diagnostics (?belltest=1[&cid=…]): runs the exact
+  // logic behind GET /api/crm/unread?thread= server-side and reports any
+  // error — Jon's "clicking a text does nothing" (2026-10-09).
+  if (url.searchParams.get("belltest") === "1") {
+    try {
+      let cid = url.searchParams.get("cid") ?? "";
+      if (!cid) {
+        const ev = await db.crmEvent.findFirst({ where: { kind: "sms" }, orderBy: { at: "desc" }, select: { contactId: true } });
+        cid = ev?.contactId ?? "";
+      }
+      if (!cid) return NextResponse.json({ ok: false, error: "no sms thread found at all" });
+      const contact = await db.crmContact.findUnique({ where: { id: cid }, select: { id: true, name: true, phone: true } });
+      if (!contact) return NextResponse.json({ ok: false, error: "contact not found", cid });
+      const [opp, sms] = await Promise.all([
+        db.crmOpportunity.findFirst({ where: { contactId: cid, archivedAt: null }, select: { id: true } }),
+        db.crmEvent.findMany({ where: { contactId: cid, kind: "sms" }, orderBy: { at: "desc" }, take: 12 }),
+      ]);
+      const { setConvRead } = await import("@/lib/conv-read");
+      await setConvRead([cid], true);
+      return NextResponse.json({ ok: true, cid, name: contact.name, oppId: opp?.id ?? "", historyCount: sms.length });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: String(e).slice(0, 400) });
+    }
   }
 
   // 🧠 AI engine health (?aitest=1): pings Claude and Gemini with a 1-word
