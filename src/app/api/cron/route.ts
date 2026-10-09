@@ -1741,11 +1741,27 @@ export async function GET(request: Request) {
       const a = ab.data;
       ccApp = a ? { name: a.application_name, webhook: a.webhook_event_url, active: a.active, api_version: a.webhook_api_version } : `lookup failed ${ares.status}`;
     }
+    // Who would the PSTN fallback actually ring right now? (Jon 2026-10-09:
+    // dead-air bug was fb resolving to nothing — surface it here forever.)
+    let fallback = process.env.TELNYX_FALLBACK_NUMBER ? "env:" + process.env.TELNYX_FALLBACK_NUMBER : "";
+    const fbUsers = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, position: true } });
+    const fbProfs = await db.teamProfile.findMany({ where: { userId: { in: fbUsers.map((u) => u.id) } }, select: { userId: true, phone: true } });
+    const fbPm = new Map(fbProfs.map((pr) => [pr.userId, pr.phone]));
+    const rosterPhones = fbUsers.map((u) => ({ name: u.name, position: u.position, phone: (fbPm.get(u.id) ?? "").trim() || "(none)" }));
+    if (!fallback) {
+      const ranked = [...fbUsers].sort((x, y) => ((x.position === "acquisitions" ? 0 : 1) - (y.position === "acquisitions" ? 0 : 1)) || x.name.localeCompare(y.name));
+      for (const u of ranked) {
+        const digits = (fbPm.get(u.id) ?? "").replace(/[^+\d]/g, "");
+        if (digits.replace(/\D/g, "").length >= 10) { fallback = `${u.name}: ${digits}`; break; }
+      }
+    }
     return NextResponse.json({
       ok: true, number: num,
       numberInfo: pn ? { status: pn.status, connection_id: pn.connection_id, connection_name: pn.connection_name, messaging_profile_id: pn.messaging_profile_id ?? null, emergency: undefined } : "NOT FOUND",
       webrtcConnection: cfg.connId ?? null,
       callControlApp: ccApp,
+      fallbackWouldRing: fallback || "🚨 NOBODY — no env fallback and no roster phones; browsers asleep = dead air",
+      rosterPhones,
       recentWebhookEvents: events,
       hint: "Call the number with /crm open (hard refresh first), then run this again — the events list shows exactly what Telnyx did.",
     });

@@ -124,15 +124,29 @@ export async function POST(req: NextRequest) {
     if (sess) {
       sess.legs = sess.legs.filter((l) => l !== p.call_control_id);
       if (!sess.answered && sess.legs.length === 0) {
-        // fallback cell = env override, else the first active acquisitions
-        // rep's own phone from the roster (/account) — NOT Jon's (2026-10-08)
+        // fallback cell = env override, else ANY active rep with a usable
+        // phone on the roster — acquisitions first (Jon 2026-10-09: priority 1
+        // is that inbound RINGS SOMEWHERE; the old first-acq-rep-only lookup
+        // resolved to Michelle-with-no-phone and callers got dead air).
         let fb = process.env.TELNYX_FALLBACK_NUMBER ?? "";
         if (!fb) {
-          const acq = await db.user.findFirst({ where: { active: true, position: "acquisitions" }, orderBy: { name: "asc" }, select: { id: true } });
-          const prof = acq ? await db.teamProfile.findFirst({ where: { userId: acq.id }, select: { phone: true } }) : null;
-          const digits = (prof?.phone ?? "").replace(/[^+\d]/g, "");
-          if (digits.replace(/\D/g, "").length >= 10) fb = digits.startsWith("+") ? digits : `+1${digits.replace(/\D/g, "").slice(-10)}`;
+          const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, position: true } });
+          const profs = await db.teamProfile.findMany({ where: { userId: { in: users.map((u) => u.id) } }, select: { userId: true, phone: true } });
+          const pm = new Map(profs.map((pr) => [pr.userId, pr.phone]));
+          const ranked = [...users].sort((x, y) => ((x.position === "acquisitions" ? 0 : 1) - (y.position === "acquisitions" ? 0 : 1)) || x.name.localeCompare(y.name));
+          for (const u of ranked) {
+            const digits = (pm.get(u.id) ?? "").replace(/[^+\d]/g, "");
+            if (digits.replace(/\D/g, "").length >= 10) { fb = digits.startsWith("+") ? digits : `+1${digits.replace(/\D/g, "").slice(-10)}`; break; }
+          }
         }
+        // breadcrumb so ?inbounddiag=1 shows WHY a caller did or didn't ring a cell
+        try {
+          const row3 = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
+          let list3: unknown[] = [];
+          try { list3 = row3?.description ? JSON.parse(row3.description) : []; } catch { /* fresh */ }
+          list3.unshift({ at: new Date().toISOString(), ev: "fallback-resolve", to: fb || "(NO FALLBACK PHONE FOUND — roster phones empty + no env)" });
+          if (row3) await db.resource.update({ where: { id: row3.id }, data: { description: JSON.stringify(list3.slice(0, 25)) } });
+        } catch { /* never blocks */ }
         if (fb && !sess.fallback && key) {
           const row2 = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
           let cfg2: { ccAppId?: string } = {};
