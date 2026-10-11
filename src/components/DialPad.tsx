@@ -97,19 +97,43 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
         const gain = ctx.createGain();
         gain.gain.value = 0;
         gain.connect(ctx.destination);
-        for (const f of [440, 480]) {
-          const o = ctx.createOscillator();
-          o.frequency.value = f;
-          o.connect(gain);
-          o.start();
+        let timer: ReturnType<typeof setInterval>;
+        if (incoming) {
+          // 📲 INCOMING ringtone (Jon 2026-10-11: "an actual ringtone — calming
+          // but alerting", not the outbound ringback): a soft 4-note chime,
+          // E5→G#5→B5→E6, bell-like envelopes, repeating every 2.6s.
+          const chime = () => {
+            const notes = [659.25, 830.61, 987.77, 1318.51];
+            notes.forEach((f, i) => {
+              const t0 = ctx.currentTime + i * 0.22;
+              const o = ctx.createOscillator();
+              const g = ctx.createGain();
+              o.type = "sine"; o.frequency.value = f;
+              g.gain.setValueAtTime(0, t0);
+              g.gain.linearRampToValueAtTime(0.14, t0 + 0.03);
+              g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+              o.connect(g); g.connect(ctx.destination);
+              o.start(t0); o.stop(t0 + 0.65);
+            });
+          };
+          chime();
+          timer = setInterval(chime, 2600);
+        } else {
+          // 🔔 outbound ringback — classic US dual-tone 440+480, 2s on / 4s off
+          for (const f of [440, 480]) {
+            const o = ctx.createOscillator();
+            o.frequency.value = f;
+            o.connect(gain);
+            o.start();
+          }
+          const pulse = () => {
+            const t = ctx.currentTime;
+            gain.gain.setValueAtTime(0.08, t);
+            gain.gain.setValueAtTime(0, t + 2);
+          };
+          pulse();
+          timer = setInterval(pulse, 6000);
         }
-        const pulse = () => {
-          const t = ctx.currentTime;
-          gain.gain.setValueAtTime(0.08, t);
-          gain.gain.setValueAtTime(0, t + 2);
-        };
-        pulse();
-        const timer = setInterval(pulse, 6000);
         ringCtx.current = { ctx, gain, timer };
       } catch { /* no audio context — silent ring */ }
     } else stop();

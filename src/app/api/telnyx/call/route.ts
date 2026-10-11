@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     }).catch(() => null);
   // ring sessions: inbound call id → outstanding browser legs (ring-all state)
   const SESS = "__ring_sessions__";
-  type Sess = Record<string, { legs: string[]; answered: boolean; at: string; winner?: string }>;
+  type Sess = Record<string, { legs: string[]; answered: boolean; at: string; winner?: string; vm?: boolean }>;
   const readSess = async (): Promise<{ rowId: string | null; map: Sess }> => {
     const row = await db.resource.findFirst({ where: { category: SESS } });
     let map: Sess = {};
@@ -150,6 +150,25 @@ export async function POST(req: NextRequest) {
       await txCall(p.call_control_id, "bridge", { call_control_id: sess.winner });
       return NextResponse.json({ ok: true, bridged: true });
     }
+    if (sess?.vm) {
+      const vmState = Buffer.from(JSON.stringify({ vm: p.call_control_id })).toString("base64");
+      await txCall(p.call_control_id, "speak", {
+        payload: "Hi! Sorry we missed your call. We're sending you a text message right now — reply there and we're on it. Talk soon!",
+        voice: "female", language: "en-US", client_state: vmState,
+      });
+      return NextResponse.json({ ok: true, vm: true });
+    }
+  }
+
+  // Voicemail-style message finished → hang up and clean the session
+  if (ev === "call.speak.ended") {
+    const stVm = st as { vm?: string };
+    if (stVm.vm) {
+      await txCall(stVm.vm, "hangup");
+      const { rowId, map } = await readSess();
+      if (map[stVm.vm]) { delete map[stVm.vm]; await writeSess(rowId, map); }
+      return NextResponse.json({ ok: true });
+    }
   }
 
   // Ring leg died (timeout/decline/offline) → when the LAST leg dies with no
@@ -202,9 +221,12 @@ export async function POST(req: NextRequest) {
             if (row4) await db.resource.update({ where: { id: row4.id }, data: { description: JSON.stringify(list4.slice(0, 25)) } });
           } catch { /* never blocks */ }
         }
-        delete map[st.ring];
+        // nobody answered → answer and SAY so (endless ringing then a dead
+        // drop feels broken to sellers — Jon 2026-10-11), then the speak.ended
+        // handler hangs up; the missed-call text still fires (vm flag below).
+        sess.vm = true;
         await writeSess(rowId, map);
-        await txCall(st.ring, "hangup");
+        await txCall(st.ring, "answer");
       } else await writeSess(rowId, map);
     }
     return NextResponse.json({ ok: true });
@@ -224,7 +246,9 @@ export async function POST(req: NextRequest) {
         await writeSess(rowId, map);
       }
     }
-    const missed = !pay.answered_at; // never answered = missed, whatever the cause
+    // never answered = missed — and the voicemail-speak path ANSWERS the call
+    // to play its message, so the vm flag keeps counting it as missed
+    const missed = !pay.answered_at || !!(st as { vm?: unknown }).vm;
     if (missed && pay.from.replace(/\D/g, "").length >= 10) {
       const last10 = pay.from.replace(/\D/g, "").slice(-10);
       const contact = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true, name: true, assignedTo: true } });
