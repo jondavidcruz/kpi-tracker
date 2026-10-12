@@ -278,7 +278,13 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
         const to = setTimeout(() => reject(new Error("connect timeout")), 12000);
         client.on("telnyx.ready", () => { clearTimeout(to); readyRef.current = true; setLineOk(true); fetch("/api/telnyx/presence", { method: "POST" }).catch(() => {}); keepTabAlive(); resolve(); });
         client.on("telnyx.error", (e: unknown) => { setMsg(String((e as { message?: string })?.message ?? e).slice(0, 120)); });
-        client.on("telnyx.socket.close", () => { readyRef.current = false; setLineOk(false); connectingRef.current = null; });
+        client.on("telnyx.socket.close", () => {
+          readyRef.current = false; setLineOk(false); connectingRef.current = null;
+          // kicked off the line (e.g. another window took it over) → the
+          // pending INVITE will never resolve here; stop the ringing UI/chime
+          incomingCallRef.current = null;
+          setIncoming(null);
+        });
         client.on("telnyx.notification", (n: { type: string; call?: { state?: string; direction?: string; remoteStream?: MediaStream; options?: { remoteCallerNumber?: string }; answer?: () => void; hangup?: () => void } }) => {
           if (n.type !== "callUpdate" || !n.call) return;
           const cs = n.call.state ?? "";
