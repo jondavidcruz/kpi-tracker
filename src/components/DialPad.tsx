@@ -162,6 +162,11 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     return stop;
   }, [state, incoming]);
 
+  // let the auto-updater know a call is live (never reload mid-call)
+  useEffect(() => {
+    (window as unknown as { __fo_on_call?: boolean }).__fo_on_call = state !== "idle" || !!incoming || !!remoteIncoming;
+  }, [state, incoming, remoteIncoming]);
+
   const load = async (q = "") => {
     try {
       const r = await fetch(`/api/crm/phone${q ? `?q=${encodeURIComponent(q)}` : ""}`);

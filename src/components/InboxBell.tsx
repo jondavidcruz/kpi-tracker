@@ -112,7 +112,24 @@ export default function InboxBell() {
       if (j.numbers?.length) setNumbers(j.numbers);
     }).catch(() => {});
     const t = setInterval(poll, 10_000);
-    return () => clearInterval(t);
+    // 🔁 self-updating tabs (Jon 2026-10-12: Sharyn's hidden phone window ran
+    // yesterday's code and ignored her answer click): every 5 min compare the
+    // deployed sha — when it changes, hidden tabs reload themselves (never
+    // during a call, never the window being used).
+    let mySha = "";
+    const ver = async () => {
+      try {
+        const r = await fetch("/api/version", { cache: "no-store" });
+        const j = (await r.json()) as { sha?: string };
+        if (!j.sha) return;
+        if (!mySha) { mySha = j.sha; return; }
+        const onCall = (window as unknown as { __fo_on_call?: boolean }).__fo_on_call;
+        if (j.sha !== mySha && document.visibilityState === "hidden" && !onCall) window.location.reload();
+      } catch { /* next check */ }
+    };
+    ver();
+    const tv = setInterval(ver, 5 * 60_000);
+    return () => { clearInterval(t); clearInterval(tv); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 💬 live thread: while a conversation is open, pull fresh messages every
