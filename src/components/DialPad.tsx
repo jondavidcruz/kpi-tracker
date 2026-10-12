@@ -15,7 +15,7 @@ type PhoneData = {
   contacts: Array<{ id: string; name: string; phone: string }>;
   queue: Array<{ oppId: string; contactId: string; name: string; phone: string; title: string; due: string }>;
 };
-type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string };
+type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string; dir?: "in" | "out" };
 
 const areaCode = (e164: string) => e164.replace(/\D/g, "").replace(/^1/, "").slice(0, 3);
 
@@ -303,7 +303,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
                 if (j.at && j.agent === meFirstRef.current && Date.now() - Date.parse(j.at) < 12_000) {
                   clearInterval(claimPoll);
                   try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { setMicOk(false); return; }
-                  try { (incomingCallRef.current as { answer?: () => void } | null)?.answer?.(); setOnCall({ phone: "inbound" }); } catch { /* raced */ }
+                  try { (incomingCallRef.current as { answer?: () => void } | null)?.answer?.(); setOnCall({ phone: "inbound", dir: "in" }); } catch { /* raced */ }
                 }
               } catch { /* next tick */ }
             }, 2_000);
@@ -427,7 +427,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       return;
     }
     setMicOk(true);
-    try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "" }); } catch { /* gone */ }
+    try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "", dir: "in" }); } catch { /* gone */ }
   };
   const declineIncoming = () => { try { incomingCallRef.current?.hangup(); } catch { /* gone */ } incomingCallRef.current = null; setIncoming(null); try { bcRef.current?.postMessage({ t: "incoming-clear" }); } catch { /* fine */ } };
   // refs so the BroadcastChannel handler (bound once on mount) always calls
@@ -457,7 +457,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     // 🕘 quiet-hours guard: 9pm–8am in the LEAD'S time zone (by area code) = blocked
     const quiet = quietHoursWarning(to);
     if (quiet) { setState("error"); setMsg(quiet); setTimeout(() => { setState("idle"); setMsg(""); }, 6000); return; }
-    setOnCall(ctx); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
+    setOnCall({ ...ctx, dir: "out" }); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     dialStartRef.current = Date.now(); setEndConfirm(false);
     try {
       // dialing from a standby tab → steal the phone from the leader tab first
@@ -564,7 +564,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
               </span>
               {endConfirm && <span className="absolute -bottom-5 left-3 right-3 truncate text-[9px] font-bold text-red-600">🔒 under 8s — abandoned calls get surcharged; the call can be ended at 0:08</span>}
               {state === "active" && <button onClick={toggleMute} className={`rounded-md px-2 py-1 text-[10px] font-bold ${muted ? "bg-amber-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>}
-              {state === "active" && onCall?.phone && (
+              {state === "active" && onCall?.phone && onCall.dir === "out" && (
                 <button
                   onClick={async () => {
                     setMsg("📼 dropping your voicemail…");
@@ -604,7 +604,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
               </span>
             </span>
           )}
-          {msg && state === "idle" && <span className="px-3.5 py-1 text-[10px] font-semibold text-amber-700">{msg}</span>}
+          {msg && <span className="px-3.5 py-1 text-[10px] font-semibold text-amber-700">{msg}</span>}
 
           {/* body */}
           <span className="max-h-[360px] min-h-[280px] overflow-y-auto px-3.5 py-2.5">
