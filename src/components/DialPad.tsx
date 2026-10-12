@@ -35,6 +35,12 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [onCall, setOnCall] = useState<Ctx | null>(null);
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
   const [incoming, setIncoming] = useState<{ number: string } | null>(null);
+  // 📣 cross-tab ring (Jon 2026-10-12: Sharyn heard her OTHER tab ringing but
+  // saw nothing on the tab she was looking at): the leader tab broadcasts
+  // incoming calls to every sibling tab; any tab can answer/decline remotely.
+  const [remoteIncoming, setRemoteIncoming] = useState<{ number: string } | null>(null);
+  const [standby, setStandby] = useState(false);
+  const bcRef = useRef<BroadcastChannel | null>(null);
   const [lineOk, setLineOk] = useState(false); // 🟢 socket registered = inbound will ring here
   const incomingCallRef = useRef<{ answer: () => void; hangup: () => void } | null>(null);
   const readyRef = useRef(false);
@@ -211,6 +217,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     return new Promise<void>((acquired) => {
       navigator.locks.request("fo_dialer_leader", steal ? { steal: true } : {}, async () => {
         leaderRef.current = true;
+        setStandby(false);
         acquired();
         ensureClient().catch(() => {});
         await new Promise<void>((res) => { releaseRef.current = res; });
@@ -218,6 +225,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
         // our lock was STOLEN (user dialed from another tab) → stand down and
         // queue up again so we take over if that tab ever closes
         leaderRef.current = false;
+        setStandby(true);
         try { (clientRef.current as { disconnect?: () => void } | null)?.disconnect?.(); } catch { /* gone */ }
         clientRef.current = null; readyRef.current = false; setLineOk(false);
         acquired();
@@ -253,8 +261,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
           const inbound = n.call.direction === "inbound";
           if (inbound && cs === "ringing") {
             incomingCallRef.current = n.call as never;
-            setIncoming({ number: n.call.options?.remoteCallerNumber ?? "unknown" });
+            const number = n.call.options?.remoteCallerNumber ?? "unknown";
+            setIncoming({ number });
             setOpen(true);
+            try { bcRef.current?.postMessage({ t: "incoming", number }); } catch { /* same-tab only */ }
             return;
           }
           if (cs === "active") {
@@ -265,6 +275,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             }
             setState("active"); setMsg("");
             if (audioRef.current && n.call.remoteStream) { audioRef.current.srcObject = n.call.remoteStream; audioRef.current.play().catch(() => {}); }
+          }
+          if (cs === "active" || ["hangup", "destroy"].includes(cs)) {
+            try { bcRef.current?.postMessage({ t: "incoming-clear" }); } catch { /* fine */ }
           }
           if (["hangup", "destroy"].includes(cs)) {
             if (inbound && incomingCallRef.current) { incomingCallRef.current = null; setIncoming(null); }
@@ -283,6 +296,21 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // and keep the registration alive (tokens/sockets expire quietly).
   useEffect(() => {
     holdLock(false); // leader election — the winning tab connects inside
+    // standby detection: still not the leader after 1.5s = another tab has
+    // the phone; this tab shows a blue dot + remote answer banners instead
+    const standbyT = setTimeout(() => { if (!leaderRef.current) setStandby(true); }, 1500);
+    // cross-tab channel: leader announces rings, any tab can answer/decline
+    try {
+      const bc = new BroadcastChannel("fo_phone");
+      bcRef.current = bc;
+      bc.onmessage = (ev: MessageEvent<{ t?: string; number?: string }>) => {
+        const m = ev.data ?? {};
+        if (m.t === "incoming" && !leaderRef.current) { setRemoteIncoming({ number: m.number ?? "unknown" }); setOpen(true); }
+        if (m.t === "incoming-clear") setRemoteIncoming(null);
+        if (m.t === "answer" && leaderRef.current) answerIncomingRef.current?.();
+        if (m.t === "decline" && leaderRef.current) declineIncomingRef.current?.();
+      };
+    } catch { /* older browser — leader-tab-only ringing */ }
     // Chrome freezes timers + sockets in background tabs — the #1 reason
     // inbound went user_busy (Jon 2026-10-08). Re-register the second the tab
     // wakes, plus a tighter 60s heartbeat while visible.
@@ -297,11 +325,19 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
     window.addEventListener("online", wake);
-    return () => { releaseRef.current?.(); clearInterval(keep); document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); window.removeEventListener("online", wake); };
+    return () => { releaseRef.current?.(); clearInterval(keep); clearTimeout(standbyT); try { bcRef.current?.close(); } catch { /* fine */ } document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); window.removeEventListener("online", wake); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const answerIncoming = () => { try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "" }); } catch { /* gone */ } };
-  const declineIncoming = () => { try { incomingCallRef.current?.hangup(); } catch { /* gone */ } incomingCallRef.current = null; setIncoming(null); };
+  const declineIncoming = () => { try { incomingCallRef.current?.hangup(); } catch { /* gone */ } incomingCallRef.current = null; setIncoming(null); try { bcRef.current?.postMessage({ t: "incoming-clear" }); } catch { /* fine */ } };
+  // refs so the BroadcastChannel handler (bound once on mount) always calls
+  // the latest versions
+  const answerIncomingRef = useRef(answerIncoming);
+  const declineIncomingRef = useRef(declineIncoming);
+  answerIncomingRef.current = answerIncoming;
+  declineIncomingRef.current = declineIncoming;
+  const remoteAnswer = () => { try { bcRef.current?.postMessage({ t: "answer" }); } catch { /* no channel */ } setRemoteIncoming({ number: `✅ answered — audio is in your other War Room tab` }); setTimeout(() => setRemoteIncoming(null), 4000); };
+  const remoteDecline = () => { try { bcRef.current?.postMessage({ t: "decline" }); } catch { /* no channel */ } setRemoteIncoming(null); };
 
   const call = async (ctx: Ctx) => {
     const to = ctx.phone.replace(/[^+\d]/g, "");
@@ -365,7 +401,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       <audio ref={audioRef} autoPlay style={{ display: "none" }} />
       <button onClick={() => setOpen((v) => !v)} title={lineOk ? "Phone — line connected, inbound rings here" : leaderRef.current ? "Phone — reconnecting… inbound will NOT ring this tab yet" : "Phone is live in another War Room tab — dialing here takes it over"} className={`relative grid place-items-center rounded-full ${floating ? "h-10 w-10 text-base shadow-lg ring-2 ring-white/70" : "h-8 w-8 text-sm"} ${state === "active" ? "bg-emerald-500 text-white" : incoming ? "animate-pulse bg-emerald-500 text-white" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>
         📞
-        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${lineOk ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
+        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${lineOk ? "bg-emerald-400" : standby ? "bg-sky-400" : "bg-amber-400 animate-pulse"}`} />
       </button>
       {open && (
         <span className={`absolute z-50 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 ${floating ? "right-0 top-12" : "right-0 top-10"}`}>
@@ -389,6 +425,18 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
               </span>
               <button onClick={answerIncoming} className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg text-emerald-700 shadow hover:bg-emerald-50" title="Answer">📞</button>
               <button onClick={declineIncoming} className="grid h-10 w-10 place-items-center rounded-full bg-red-600 text-lg text-white shadow hover:bg-red-700" title="Decline">⏹</button>
+            </span>
+          )}
+          {!incoming && remoteIncoming && (
+            <span className="flex items-center gap-2 bg-emerald-600 px-3.5 py-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-emerald-100">📲 Incoming call{remoteIncoming.number.startsWith("✅") ? "" : " (ringing in your other tab)"}</span>
+                <span className="block truncate text-sm font-extrabold text-white">{remoteIncoming.number}</span>
+              </span>
+              {!remoteIncoming.number.startsWith("✅") && <>
+                <button onClick={remoteAnswer} className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg text-emerald-700 shadow hover:bg-emerald-50" title="Answer (connects in your other tab)">📞</button>
+                <button onClick={remoteDecline} className="grid h-10 w-10 place-items-center rounded-full bg-red-600 text-lg text-white shadow hover:bg-red-700" title="Decline">⏹</button>
+              </>}
             </span>
           )}
           {/* live call bar */}
