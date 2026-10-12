@@ -36,6 +36,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
   const [incoming, setIncoming] = useState<{ number: string; name?: string } | null>(null);
   const [answeredBy, setAnsweredBy] = useState<{ agent: string; caller: string } | null>(null);
+  const meFirstRef = useRef("");
   // after a ring ends without ME answering, find out who took it (brief race
   // with the webhook write, so wait a beat)
   const checkWhoAnswered = () => {
@@ -277,6 +278,22 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
           const inbound = n.call.direction === "inbound";
           if (inbound && cs === "ringing") {
             incomingCallRef.current = n.call as never;
+            // ⚡ cross-profile answer: if I click Answer in ANOTHER browser
+            // window (different profile), it files a claim — this ringing
+            // client sees it within 2s and picks up here (audio plays via
+            // this computer either way).
+            const claimPoll = setInterval(async () => {
+              if (!incomingCallRef.current) { clearInterval(claimPoll); return; }
+              try {
+                const r = await fetch("/api/crm/callerid?claim=1", { cache: "no-store" });
+                const j = (await r.json()) as { at?: string; agent?: string };
+                if (j.at && j.agent === meFirstRef.current && Date.now() - Date.parse(j.at) < 12_000) {
+                  clearInterval(claimPoll);
+                  try { (incomingCallRef.current as { answer?: () => void } | null)?.answer?.(); setOnCall({ phone: "inbound" }); } catch { /* raced */ }
+                }
+              } catch { /* next tick */ }
+            }, 2_000);
+            setTimeout(() => clearInterval(claimPoll), 35_000);
             const number = n.call.options?.remoteCallerNumber ?? "unknown";
             setIncoming({ number });
             setOpen(true);
@@ -320,6 +337,11 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // and keep the registration alive (tokens/sockets expire quietly).
   useEffect(() => {
     holdLock(false); // leader election — the winning tab connects inside
+    fetch("/api/crm/mystats", { cache: "no-store" }).then(async (r) => {
+      if (!r.ok) return;
+      const j = (await r.json()) as { who?: string };
+      if (j.who) meFirstRef.current = j.who.toLowerCase();
+    }).catch(() => {});
     // standby detection: still not the leader after 1.5s = another tab has
     // the phone; this tab shows a blue dot + remote answer banners instead
     const standbyT = setTimeout(() => { if (!leaderRef.current) setStandby(true); }, 1500);
@@ -382,7 +404,12 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const declineIncomingRef = useRef(declineIncoming);
   answerIncomingRef.current = answerIncoming;
   declineIncomingRef.current = declineIncoming;
-  const remoteAnswer = () => { try { bcRef.current?.postMessage({ t: "answer" }); } catch { /* no channel */ } setRemoteIncoming({ number: `✅ answered — audio is in your other War Room tab` }); setTimeout(() => setRemoteIncoming(null), 4000); };
+  const remoteAnswer = () => {
+    try { bcRef.current?.postMessage({ t: "answer" }); } catch { /* no channel */ }
+    fetch("/api/crm/callerid", { method: "POST" }).catch(() => {}); // cross-profile claim
+    setRemoteIncoming({ number: `✅ answering — just talk, audio connects on this computer` });
+    setTimeout(() => setRemoteIncoming(null), 5000);
+  };
   const remoteDecline = () => { try { bcRef.current?.postMessage({ t: "decline" }); } catch { /* no channel */ } setRemoteIncoming(null); };
 
   const call = async (ctx: Ctx) => {

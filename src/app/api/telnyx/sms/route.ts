@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
         select: { id: true, assignedTo: true, tags: true, name: true },
       });
     }
+    let wasDnced = false;
     const text = String(p.text ?? "").slice(0, 900);
     const mediaUrls = (p.media ?? []).map((m) => m.url).filter(Boolean) as string[];
     const bodyTxt = [text, ...mediaUrls].filter(Boolean).join("\n") || "(empty message)";
@@ -51,11 +52,24 @@ export async function POST(req: NextRequest) {
     // 🚫 real-time STOP / hostile guard
     try {
       const { DNC_REGEX, dncContact } = await import("@/lib/crm-dnc");
-      if (DNC_REGEX.test(text)) await dncContact(contact.id, `inbound text matched the STOP/hostile filter: "${text.slice(0, 80)}"`);
+      if (DNC_REGEX.test(text)) { wasDnced = true; await dncContact(contact.id, `inbound text matched the STOP/hostile filter: "${text.slice(0, 80)}"`); }
+      else if (text.length >= 12) {
+        // 🤖 AI opt-out screen (Jon 2026-10-12): catches the polite-but-firm
+        // "I'm not looking to sell, please lose my information" texts the
+        // regex can't — any clear stop/not-interested goes straight to DNC.
+        try {
+          const { aiText } = await import("@/lib/ai");
+          const verdict = await aiText({
+            maxTokens: 10,
+            messages: [{ role: "user", content: `A homeowner replied to a real-estate investor's text:\n"""${text.slice(0, 400)}"""\nDoes this message clearly ask us to STOP contacting them, say the property is NOT for sale, or express firm disinterest or hostility? Answer with exactly one word: YES or NO.` }],
+          });
+          if (/^\s*yes/i.test(verdict)) { wasDnced = true; await dncContact(contact.id, `AI opt-out screen — seller said stop/not interested: "${text.slice(0, 80)}"`); }
+        } catch { /* screen is best-effort; the rep task still fires */ }
+      }
     } catch { /* guard never breaks intake */ }
     // 📣 nudge the owner: a task so the reply never slips (dup-guarded per day)
     try {
-      if (contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags)) {
+      if (!wasDnced && contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags)) {
         const today = new Date().toISOString().slice(0, 10);
         const title = `💬 ${contact.name.split(" ")[0]} texted back — reply (${fromNum})`;
         const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } });
@@ -64,6 +78,7 @@ export async function POST(req: NextRequest) {
     } catch { /* best-effort */ }
     // 📲 push to the installed iPhone/desktop app: assigned rep, else everyone
     try {
+      if (wasDnced) return NextResponse.json({ ok: true, dnc: true });
       const { sendPushTo } = await import("@/lib/push");
       const who = contact.assignedTo ? [contact.assignedTo.split(" ")[0]] : ("all" as const);
       sendPushTo(who, { title: `💬 ${contact.name}`, body: text.slice(0, 120) || "📷 picture message", url: `/crm/conversations?c=${contact.id}`, tag: `sms-${contact.id}` }).catch(() => {});
