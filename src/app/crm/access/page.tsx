@@ -13,10 +13,13 @@ export default async function CrmAccessPage() {
   if (!me || !canAccessCSuite(me)) return <Card className="p-10 text-center text-slate-400">🔒 System Settings — C-suite only.</Card>;
   // EVERYONE active except admins (Jon can't lock himself out) — managers like
   // Viktoriia + Enrico included; they default to full access until saved.
-  const [users, commsMap] = await Promise.all([
-    db.user.findMany({ where: { active: true, role: { not: "admin" } }, orderBy: { name: "asc" } }),
+  // NOTE: filter admins in JS — a Prisma `role: { not: "admin" }` also drops
+  // rows where role is null/empty, which hid most of the roster (2026-10-12).
+  const [allUsers, commsMap] = await Promise.all([
+    db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     readCommsMap(),
   ]);
+  const users = allUsers.filter((u) => u.role !== "admin");
 
   return (
     <div className="space-y-4">
