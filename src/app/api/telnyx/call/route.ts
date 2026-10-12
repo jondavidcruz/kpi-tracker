@@ -264,7 +264,21 @@ export async function POST(req: NextRequest) {
           });
           const tj = (await tr.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
           const text = tj.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("").trim();
-          if (text) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📝 Call transcript:\n${text.slice(0, 3600)}`, actor: "recorder" });
+          if (text) {
+            await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📝 Call transcript:\n${text.slice(0, 3600)}`, actor: "recorder" });
+            // 🎯 auto-score every real conversation (≥60s) against the coaching
+            // rubric — Jon's call-scoring feature, fed by the free transcript
+            if (secs >= 60) {
+              try {
+                const { scoreTranscript } = await import("@/lib/score");
+                const sc = await scoreTranscript(text, { label: "seller call" });
+                if (sc.configured && sc.overall > 0) {
+                  const lines = sc.breakdown.slice(0, 5).map((b) => `• ${b.area}: ${b.score} — ${b.note}`).join("\n");
+                  await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `🎯 AI call score: ${sc.overall}/100\n${lines}\n💡 ${sc.summary}`.slice(0, 3800), actor: "coach" });
+                }
+              } catch { /* scoring is gravy — transcript already landed */ }
+            }
+          }
         } catch { /* recording itself is already filed */ }
       }
     } catch (e) {
