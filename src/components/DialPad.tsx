@@ -359,7 +359,19 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
     window.addEventListener("online", wake);
-    return () => { releaseRef.current?.(); clearInterval(keep); clearTimeout(standbyT); try { bcRef.current?.close(); } catch { /* fine */ } document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); window.removeEventListener("online", wake); };
+    // ☎️ poll-carried ring: works across browsers/profiles where the
+    // BroadcastChannel can't reach (Jon 2026-10-12 — Sharyn's case)
+    const onRing = (ev: Event) => {
+      const d = (ev as CustomEvent<{ from?: string; name?: string; at?: string }>).detail ?? {};
+      const age = d.at ? Date.now() - Date.parse(d.at) : 99_000;
+      if (age > 32_000) return;
+      if (incomingCallRef.current) return; // this tab is ringing natively already
+      setRemoteIncoming((cur) => cur ?? { number: d.name || d.from || "unknown" });
+      setOpen(true);
+      setTimeout(() => setRemoteIncoming(null), Math.max(3_000, 32_000 - age));
+    };
+    window.addEventListener("fo-ring", onRing);
+    return () => { releaseRef.current?.(); clearInterval(keep); clearTimeout(standbyT); try { bcRef.current?.close(); } catch { /* fine */ } document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); window.removeEventListener("online", wake); window.removeEventListener("fo-ring", onRing); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const answerIncoming = () => { try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "" }); } catch { /* gone */ } };

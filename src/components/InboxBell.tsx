@@ -84,8 +84,10 @@ export default function InboxBell() {
     try {
       const r = await fetch("/api/crm/unread", { cache: "no-store" });
       if (!r.ok) return;
-      const j = (await r.json()) as { count: number; recent?: Thread[] };
+      const j = (await r.json()) as { count: number; recent?: Thread[]; activeRing?: { from: string; name: string; at: string } | null };
       setCount(j.count); setRecent(j.recent ?? []);
+      // ☎️ live ring reaches EVERY tab in EVERY browser via this poll
+      if (j.activeRing) { try { window.dispatchEvent(new CustomEvent("fo-ring", { detail: j.activeRing })); } catch { /* fine */ } }
       // ding ONLY when (a) mute is off RIGHT NOW in storage — mutedRef goes
       // stale when the mute was toggled in another tab — and (b) the newest
       // unread is actually fresh; overnight syncs re-flagging old threads
@@ -109,7 +111,7 @@ export default function InboxBell() {
       const j = (await r.json()) as { numbers?: string[] };
       if (j.numbers?.length) setNumbers(j.numbers);
     }).catch(() => {});
-    const t = setInterval(poll, 20_000);
+    const t = setInterval(poll, 10_000);
     return () => clearInterval(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

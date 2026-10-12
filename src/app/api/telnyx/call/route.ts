@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     }).catch(() => null);
   // ring sessions: inbound call id → outstanding browser legs (ring-all state)
   const SESS = "__ring_sessions__";
-  type Sess = Record<string, { legs: string[]; answered: boolean; at: string; winner?: string; vm?: boolean }>;
+  type Sess = Record<string, { legs: string[]; answered: boolean; at: string; winner?: string; vm?: boolean; from?: string; callerName?: string }>;
   const readSess = async (): Promise<{ rowId: string | null; map: Sess }> => {
     const row = await db.resource.findFirst({ where: { category: SESS } });
     let map: Sess = {};
@@ -116,6 +116,11 @@ export async function POST(req: NextRequest) {
       try {
         const caller10 = (pay0.from ?? "").replace(/\D/g, "").slice(-10);
         const c = caller10.length === 10 ? await db.crmContact.findFirst({ where: { phone: { contains: caller10 } }, select: { name: true } }) : null;
+        // stamp the caller onto the ring session → every tab's poll can show it
+        try {
+          const { rowId: rrId, map: rmap } = await readSess();
+          if (rmap[inId]) { rmap[inId].from = pay0.from ?? ""; rmap[inId].callerName = c?.name ?? ""; await writeSess(rrId, rmap); }
+        } catch { /* cosmetic */ }
         const { sendPushTo } = await import("@/lib/push");
         sendPushTo("all", { title: `📞 Incoming call — ${c?.name ?? pay0.from ?? "unknown"}`, body: "Ringing the War Room now — open it on a computer to answer.", url: "/crm", tag: "ring" }).catch(() => {});
       } catch { /* best-effort */ }

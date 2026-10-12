@@ -62,8 +62,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ id: contact.id, name: contact.name, phone: contact.phone, oppId: opp?.id ?? "", history, suggestFrom, me: me!.name });
   }
   const { unread, all } = await smsThreads(me!.name, isManager(me!));
+  // ☎️ active ring (Jon 2026-10-12: Sharyn's line rang in a browser she wasn't
+  // looking at) — every tab's poll surfaces a live unanswered inbound call
+  let activeRing: { from: string; name: string; at: string } | null = null;
+  try {
+    const rs = await db.resource.findFirst({ where: { category: "__ring_sessions__" } });
+    const m = (rs?.description ? JSON.parse(rs.description) : {}) as Record<string, { answered?: boolean; at?: string; from?: string; callerName?: string }>;
+    for (const sess of Object.values(m)) {
+      if (!sess.answered && sess.at && Date.now() - Date.parse(sess.at) < 35_000) {
+        activeRing = { from: sess.from ?? "", name: sess.callerName ?? "", at: sess.at };
+        break;
+      }
+    }
+  } catch { /* cosmetic */ }
   // threads = unread (badge + legacy consumers); recent = iPhone Messages list
-  return NextResponse.json({ count: unread.length, threads: unread.slice(0, 8), recent: all.slice(0, 10) });
+  return NextResponse.json({ count: unread.length, threads: unread.slice(0, 8), recent: all.slice(0, 10), activeRing });
 }
 
 export async function POST(req: NextRequest) {
