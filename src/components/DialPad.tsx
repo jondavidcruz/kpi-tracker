@@ -218,6 +218,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       navigator.locks.request("fo_dialer_leader", steal ? { steal: true } : {}, async () => {
         leaderRef.current = true;
         setStandby(false);
+        try { localStorage.setItem("fo_phone_hb", String(Date.now())); } catch { /* fine */ }
         acquired();
         ensureClient().catch(() => {});
         await new Promise<void>((res) => { releaseRef.current = res; });
@@ -317,10 +318,20 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     // While CONNECTED, ping presence so inbound ring-all knows this browser is
     // awake and dials it; while disconnected, keep trying to re-register.
     const keep = setInterval(() => {
-      if (!leaderRef.current) return; // standby tab — the leader runs the phone
+      if (!leaderRef.current) {
+        // 🧟 frozen-leader takeover (Jon 2026-10-12: Sharyn's ring vanished —
+        // a paused tab held her phone lock): the leader stamps a heartbeat;
+        // if it goes stale, a standby tab seizes the line.
+        try {
+          const hb = Number(localStorage.getItem("fo_phone_hb") || 0);
+          if (hb && Date.now() - hb > 150_000) { localStorage.setItem("fo_phone_hb", String(Date.now())); holdLock(true); }
+        } catch { /* no storage */ }
+        return;
+      }
+      try { localStorage.setItem("fo_phone_hb", String(Date.now())); } catch { /* fine */ }
       if (!readyRef.current) ensureClient().catch(() => {});
       else fetch("/api/telnyx/presence", { method: "POST" }).catch(() => {});
-    }, 60_000);
+    }, 45_000);
     const wake = () => { if (leaderRef.current && !readyRef.current) ensureClient().catch(() => {}); };
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);

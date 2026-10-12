@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { logCrmEvent } from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // recording.saved does a Drive upload + Gemini transcript
 
 // Telnyx Call Control webhook for CRM click-to-call: we dial the REP first;
 // when they answer, bridge the seller in; when it ends, log duration on the
@@ -148,6 +149,9 @@ export async function POST(req: NextRequest) {
     const sess = map[p.call_control_id];
     if (sess?.winner) {
       await txCall(p.call_control_id, "bridge", { call_control_id: sess.winner });
+      // 🎙 record the whole conversation (dual channel = both voices) — the
+      // recording.saved handler files it on the lead + transcribes it
+      await txCall(p.call_control_id, "record_start", { format: "mp3", channels: "dual" });
       return NextResponse.json({ ok: true, bridged: true });
     }
     if (sess?.vm) {
@@ -158,6 +162,72 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ ok: true, vm: true });
     }
+    // 🎙 outbound browser call answered (credential leg → seller) → record it
+    const pd = p as { direction?: string; to?: string };
+    if (pd.direction === "outgoing" && (pd.to ?? "").startsWith("+")) {
+      await txCall(p.call_control_id, "record_start", { format: "mp3", channels: "dual" });
+      return NextResponse.json({ ok: true, recording: true });
+    }
+  }
+
+  // 🎙 Recording landed → file it on the lead: MP3 → the deal's Drive folder,
+  // link + transcript on the timeline (Jon's backlog item #1, 2026-10-12).
+  if (ev === "call.recording.saved") {
+    const pr = p as unknown as { recording_urls?: { mp3?: string }; download_urls?: { mp3?: string }; from?: string; to?: string; recording_started_at?: string; recording_ended_at?: string };
+    const url = pr.download_urls?.mp3 || pr.recording_urls?.mp3 || "";
+    if (!url) return NextResponse.json({ ok: true, noUrl: true });
+    // whoever on the call is in our CRM = the lead
+    let contact: { id: string } | null = null;
+    for (const num of [pr.from ?? "", pr.to ?? ""]) {
+      const last10 = num.replace(/\D/g, "").slice(-10);
+      if (last10.length !== 10) continue;
+      contact = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true } });
+      if (contact) break;
+    }
+    if (!contact) return NextResponse.json({ ok: true, noContact: true });
+    const opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null }, select: { id: true, title: true, contact: { select: { address: true, name: true } } } });
+    const secs = pr.recording_started_at && pr.recording_ended_at ? Math.max(0, Math.round((Date.parse(pr.recording_ended_at) - Date.parse(pr.recording_started_at)) / 1000)) : 0;
+    try {
+      const res = await fetch(url);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (!res.ok || bytes.length === 0) throw new Error(`download ${res.status}`);
+      let link = "";
+      if (bytes.length <= 15 * 1024 * 1024) {
+        const { gdriveConfigured, ensureSubfolder, uploadToFolder, listFolder } = await import("@/lib/gdrive");
+        if (gdriveConfigured()) {
+          const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
+          const label = (opp?.contact.address || opp?.title || opp?.contact.name || "Unfiled").trim();
+          const streetNo = label.match(/^\d+/)?.[0];
+          let folderId = "";
+          if (streetNo) {
+            const existing = (await listFolder(DEALS_PARENT).catch(() => [])).find((fo) => fo.name.startsWith(streetNo));
+            if (existing) folderId = existing.id;
+          }
+          if (!folderId) folderId = await ensureSubfolder(DEALS_PARENT, label.slice(0, 80));
+          const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+          const up = await uploadToFolder(folderId, `call ${stamp}.mp3`, bytes, "audio/mpeg");
+          link = up.link;
+        }
+      }
+      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, secs }, actor: "recorder" });
+      // 📝 transcript via Gemini (free tier) — best effort, small enough files only
+      if (process.env.GEMINI_API_KEY && bytes.length < 9 * 1024 * 1024) {
+        try {
+          const b64 = Buffer.from(bytes).toString("base64");
+          const tr = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: "audio/mp3", data: b64 } }, { text: "Transcribe this real-estate phone call. Label speakers 'Rep:' and 'Seller:'. Transcript only, no commentary." }] }], generationConfig: { maxOutputTokens: 4000 } }),
+            signal: AbortSignal.timeout(40000),
+          });
+          const tj = (await tr.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+          const text = tj.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("").trim();
+          if (text) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📝 Call transcript:\n${text.slice(0, 3600)}`, actor: "recorder" });
+        } catch { /* recording itself is already filed */ }
+      }
+    } catch (e) {
+      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "system", body: `🎙 Recording save failed: ${String(e).slice(0, 120)}`, actor: "recorder" }).catch(() => {});
+    }
+    return NextResponse.json({ ok: true });
   }
 
   // Voicemail-style message finished → hang up and clean the session
