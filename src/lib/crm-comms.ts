@@ -29,14 +29,15 @@ export function firstOf(name: string): string {
 
 export async function commsFor(user: User | null): Promise<CommsPerm> {
   if (!user) return { call: false, sms: false, email: false };
-  // admins (Jon) can never lock themselves out
-  if (user.role === "admin") return { call: true, sms: true, email: true };
+  const first = firstOf(user.name);
+  // Jon himself can never be locked out (by NAME — several teammates also
+  // carry the admin role, and Jon manages their rows on /crm/access)
+  if (first === "jon" || first === "jonathan") return { call: true, sms: true, email: true };
   const map = await readCommsMap();
-  const rec = map[firstOf(user.name)];
-  // an explicit saved row wins for ANYONE (Jon 2026-10-12: Viktoriia + Enrico
-  // now manageable on /crm/access); managers default to full until saved.
+  const rec = map[first];
+  // an explicit saved row wins for ANYONE; managers/admins default to full
   if (rec) return rec;
-  return isManager(user) ? { call: true, sms: true, email: true } : { call: false, sms: false, email: false };
+  return isManager(user) || user.role === "admin" ? { call: true, sms: true, email: true } : { call: false, sms: false, email: false };
 }
 
 // ── Per-agent email signatures (GHL-style "From" identity) ─────────────────

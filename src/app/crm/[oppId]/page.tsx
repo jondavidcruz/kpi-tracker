@@ -276,6 +276,11 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
               <div className="min-w-0 flex-1">
                 <div className="whitespace-pre-line text-[13px] text-slate-800">{e.kind === "note" ? <><b>{e.actor}:</b> {stripHtml(e.body)}</> : <><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</>}</div>
+                {/* 🎙 recording → play it right here (Jon 2026-10-12) */}
+                {(() => { const m = e.meta as { link?: string } | null; return m?.link && e.body.startsWith("🎙") ? (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                  <audio controls preload="none" src={m.link} className="mt-1.5 h-9 w-full max-w-sm" />
+                ) : null; })()}
                 <div className="mt-0.5 text-[10px] text-slate-400">{fmtAt(e.at)}{e.actor && e.kind !== "note" ? ` · ${e.actor}` : ""}{e.oppId && e.oppId !== opp.id ? " · other opportunity" : ""}</div>
               </div>
             </Card>
