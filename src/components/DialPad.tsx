@@ -34,7 +34,22 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [qi, setQi] = useState(0);
   const [onCall, setOnCall] = useState<Ctx | null>(null);
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
-  const [incoming, setIncoming] = useState<{ number: string } | null>(null);
+  const [incoming, setIncoming] = useState<{ number: string; name?: string } | null>(null);
+  const [answeredBy, setAnsweredBy] = useState<{ agent: string; caller: string } | null>(null);
+  // after a ring ends without ME answering, find out who took it (brief race
+  // with the webhook write, so wait a beat)
+  const checkWhoAnswered = () => {
+    setTimeout(async () => {
+      try {
+        const r = await fetch("/api/crm/callerid?last=1", { cache: "no-store" });
+        const j = (await r.json()) as { at?: string; agent?: string; from?: string; callerName?: string };
+        if (j.at && j.agent && Date.now() - Date.parse(j.at) < 90_000) {
+          setAnsweredBy({ agent: `${j.agent[0].toUpperCase()}${j.agent.slice(1)}`, caller: j.callerName || j.from || "" });
+          setTimeout(() => setAnsweredBy(null), 8000);
+        }
+      } catch { /* cosmetic */ }
+    }, 1500);
+  };
   // 📣 cross-tab ring (Jon 2026-10-12: Sharyn heard her OTHER tab ringing but
   // saw nothing on the tab she was looking at): the leader tab broadcasts
   // incoming calls to every sibling tab; any tab can answer/decline remotely.
@@ -266,6 +281,14 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             setIncoming({ number });
             setOpen(true);
             try { bcRef.current?.postMessage({ t: "incoming", number }); } catch { /* same-tab only */ }
+            // 🏷 caller-ID: swap the raw number for the CRM name on every tab
+            fetch(`/api/crm/callerid?num=${encodeURIComponent(number)}`, { cache: "no-store" }).then(async (r) => {
+              const j = (await r.json().catch(() => ({}))) as { name?: string };
+              if (j.name) {
+                setIncoming((cur) => (cur && cur.number === number ? { ...cur, name: j.name } : cur));
+                try { bcRef.current?.postMessage({ t: "incoming", number, name: j.name }); } catch { /* fine */ }
+              }
+            }).catch(() => {});
             return;
           }
           if (cs === "active") {
@@ -281,7 +304,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             try { bcRef.current?.postMessage({ t: "incoming-clear" }); } catch { /* fine */ }
           }
           if (["hangup", "destroy"].includes(cs)) {
-            if (inbound && incomingCallRef.current) { incomingCallRef.current = null; setIncoming(null); }
+            if (inbound && incomingCallRef.current) { incomingCallRef.current = null; setIncoming(null); checkWhoAnswered(); }
             finish(onCallRef.current);
           }
         });
@@ -306,8 +329,8 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       bcRef.current = bc;
       bc.onmessage = (ev: MessageEvent<{ t?: string; number?: string }>) => {
         const m = ev.data ?? {};
-        if (m.t === "incoming" && !leaderRef.current) { setRemoteIncoming({ number: m.number ?? "unknown" }); setOpen(true); }
-        if (m.t === "incoming-clear") setRemoteIncoming(null);
+        if (m.t === "incoming" && !leaderRef.current) { setRemoteIncoming({ number: (m as { name?: string }).name || m.number || "unknown" }); setOpen(true); }
+        if (m.t === "incoming-clear") { setRemoteIncoming((cur) => { if (cur) checkWhoAnswered(); return null; }); }
         if (m.t === "answer" && leaderRef.current) answerIncomingRef.current?.();
         if (m.t === "decline" && leaderRef.current) declineIncomingRef.current?.();
       };
@@ -414,6 +437,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
         📞
         <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${lineOk ? "bg-emerald-400" : standby ? "bg-sky-400" : "bg-amber-400 animate-pulse"}`} />
       </button>
+      {answeredBy && (
+        <span className="absolute right-12 top-1 z-50 whitespace-nowrap rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-extrabold text-white shadow-lg">✅ {answeredBy.agent} answered{answeredBy.caller ? ` — ${answeredBy.caller}` : ""}</span>
+      )}
       {open && (
         <span className={`absolute z-50 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 ${floating ? "right-0 top-12" : "right-0 top-10"}`}>
           {/* header: Calling From */}
@@ -432,7 +458,8 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             <span className="flex items-center gap-2 bg-emerald-600 px-3.5 py-2.5">
               <span className="min-w-0 flex-1">
                 <span className="block text-[10px] font-bold uppercase tracking-wide text-emerald-100">📲 Incoming call</span>
-                <span className="block truncate text-sm font-extrabold text-white">{incoming.number}</span>
+                <span className="block truncate text-sm font-extrabold text-white">{incoming.name ?? incoming.number}</span>
+                {incoming.name && <span className="block truncate text-[10px] font-semibold text-emerald-100">{incoming.number}</span>}
               </span>
               <button onClick={answerIncoming} className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg text-emerald-700 shadow hover:bg-emerald-50" title="Answer">📞</button>
               <button onClick={declineIncoming} className="grid h-10 w-10 place-items-center rounded-full bg-red-600 text-lg text-white shadow hover:bg-red-700" title="Decline">⏹</button>

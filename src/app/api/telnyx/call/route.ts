@@ -142,6 +142,24 @@ export async function POST(req: NextRequest) {
       await writeSess(rowId, map);
       await txCall(st.ring, "answer");
       for (const leg of sess.legs) if (leg !== p.call_control_id) await txCall(leg, "hangup");
+      // 🏷 WHO answered (Jon 2026-10-12): the winning leg's SIP user maps to an
+      // agent; stash it so every other screen can show "answered by X" and the
+      // lead's timeline records it.
+      try {
+        const pw = p as { to?: string; from?: string };
+        const sipUser = (pw.to ?? "").replace(/^sip:/, "").split("@")[0];
+        const cfgRow = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+        const cfgA = (cfgRow?.description ? JSON.parse(cfgRow.description) : {}) as { agents?: Record<string, { sipUser?: string }> };
+        const agent = Object.entries(cfgA.agents ?? {}).find(([, a]) => a.sipUser === sipUser)?.[0] ?? "";
+        const caller = pw.from ?? "";
+        const last10 = caller.replace(/\D/g, "").slice(-10);
+        const contact = last10.length === 10 ? await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true, name: true } }) : null;
+        const laRow = await db.resource.findFirst({ where: { category: "__last_answer__" } });
+        const payload = JSON.stringify({ at: new Date().toISOString(), agent, from: caller, callerName: contact?.name ?? "" });
+        if (laRow) await db.resource.update({ where: { id: laRow.id }, data: { description: payload } });
+        else await db.resource.create({ data: { title: "last-answer", category: "__last_answer__", url: "", description: payload } });
+        if (contact && agent) await logCrmEvent({ contactId: contact.id, oppId: "", kind: "call", body: `📞 Inbound call answered by ${agent[0].toUpperCase()}${agent.slice(1)}`, actor: agent }).catch(() => {});
+      } catch { /* cosmetic — never blocks the bridge */ }
     } else {
       // raced: someone else already took it
       await txCall(p.call_control_id, "hangup");
