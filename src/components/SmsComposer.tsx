@@ -26,6 +26,21 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   const [text, setText] = useState("");
   const [from, setFrom] = useState("");
   const [numbers, setNumbers] = useState<string[]>([]);
+  // 📷 MMS attachment (Jon 2026-10-12) — compressed in the browser so it
+  // always fits carrier limits (max 1280px, jpeg q0.8, ~<500KB)
+  const [photo, setPhoto] = useState<{ blob: Blob; preview: string } | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const pickPhoto = async (f: File) => {
+    try {
+      const bmp = await createImageBitmap(f);
+      const scale = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
+      canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      const blob: Blob = await new Promise((res) => canvas.toBlob((b) => res(b!), "image/jpeg", 0.8));
+      setPhoto({ blob, preview: URL.createObjectURL(blob) });
+    } catch { /* unsupported file — ignore */ }
+  };
   const [sent, setSent] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [pending, start] = useTransition();
@@ -47,7 +62,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   const segs = len === 0 ? 0 : len <= 160 ? 1 : Math.ceil(len / 153);
 
   const send = () => {
-    if (!text.trim()) return;
+    if (!text.trim() && !photo) return;
     // FIRST text to this seller ever → one explicit confirmation (Jon
     // 2026-10-07: "if it's a new text we definitely want that final check");
     // quick replies in an existing thread go straight out.
@@ -56,7 +71,8 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
     const fd = new FormData();
     fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", to); fd.set("text", text);
     if (from) fd.set("from", from);
-    start(async () => { await sendCrmSmsAction(fd); setText(""); setSent("✓ Sent"); setTimeout(() => setSent(""), 2500); router.refresh(); });
+    if (photo) fd.set("photo", photo.blob, "photo.jpg");
+    start(async () => { await sendCrmSmsAction(fd); setText(""); setPhoto(null); setSent("✓ Sent"); setTimeout(() => setSent(""), 2500); router.refresh(); });
   };
 
   return (
@@ -77,7 +93,16 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
           placeholder={`Text ${first}…`}
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
         />
+        {photo && (
+          <div className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photo.preview} alt="attachment" className="h-14 w-14 rounded-lg object-cover ring-1 ring-slate-200" />
+            <button onClick={() => setPhoto(null)} className="text-[10px] font-bold text-red-500 hover:text-red-700">✕ remove photo</button>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-1.5">
+          <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickPhoto(f); e.target.value = ""; }} />
+          <button onClick={() => photoInputRef.current?.click()} title="Attach a photo (MMS)" className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] hover:bg-slate-50">📷</button>
           {allSnips.length > 0 && (
             <select defaultValue="" onChange={(e) => { const s = allSnips.find((x) => x.id === e.target.value); if (s) setText(s.body.replaceAll("{name}", first).replaceAll("{rep}", rep.split(" ")[0] || "us")); e.target.value = ""; }} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-bold text-slate-500">
               <option value="">📋 snippet…</option>

@@ -402,11 +402,21 @@ export async function sendCrmEmailAction(formData: FormData) {
   const domain = (process.env.ALERT_EMAIL_FROM ?? "info@freedom-offers.com").split("@")[1] ?? "freedom-offers.com";
   const fromAddr = `${me.name} <${firstOf(me.name)}@${domain}>`;
   const html = `<p>${body.replace(/\n/g, "<br>")}</p><p style="color:#64748b;font-size:13px;white-space:pre-line">${sig.replace(/</g, "&lt;")}</p>`;
-  const { getChannelConfig, sendEmailTo } = await import("@/lib/notify");
+  const { getChannelConfig, sendEmailTo, sendEmailWithAttachment } = await import("@/lib/notify");
   const cfg = { ...(await getChannelConfig()), emailFrom: fromAddr };
   const errOut: { msg?: string } = {};
-  const ok = await sendEmailTo([to], subject, html, cfg, me.email || process.env.CASCADE_REPLY_TO || "info@freedom-offers.com", errOut);
-  await logCrmEvent({ contactId, oppId, kind: "email", body: `➡️ Us: ${subject} — ${body.slice(0, 300)}${ok ? "" : ` (SEND FAILED${errOut.msg ? `: ${errOut.msg}` : ""})`}`, actor: me.name });
+  // 📎 optional attachment (Jon's worklist 2026-10-12) — ≤10MB via Resend
+  const file = formData.get("file");
+  let ok: boolean;
+  let attachNote = "";
+  if (file instanceof File && file.size > 0 && file.size <= 10 * 1024 * 1024) {
+    const b64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+    ok = await sendEmailWithAttachment([to], subject, html, { filename: file.name.slice(0, 100), content: b64 }, cfg);
+    attachNote = ` 📎 ${file.name.slice(0, 60)}`;
+  } else {
+    ok = await sendEmailTo([to], subject, html, cfg, me.email || process.env.CASCADE_REPLY_TO || "info@freedom-offers.com", errOut);
+  }
+  await logCrmEvent({ contactId, oppId, kind: "email", body: `➡️ Us: ${subject}${attachNote} — ${body.slice(0, 300)}${ok ? "" : ` (SEND FAILED${errOut.msg ? `: ${errOut.msg}` : ""})`}`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
 }
 
@@ -422,6 +432,7 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   const contactId = String(formData.get("contactId") ?? "");
   const to = String(formData.get("to") ?? "").replace(/[^+\d]/g, "");
   const text = String(formData.get("text") ?? "").trim().slice(0, 900);
+  const hasPhoto = (() => { const f = formData.get("photo"); return f instanceof File && f.size > 0; })();
   let from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
   // rep picked a From number — honor it only if it's one of OUR lines
   const reqFrom = String(formData.get("from") ?? "").replace(/[^+\d]/g, "");
@@ -447,7 +458,7 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
       if ((body.data ?? []).some((n) => n.phone_number === reqFrom && ours.has(String(n.connection_id ?? "")))) from = reqFrom;
     } catch { /* fall back to the default line */ }
   }
-  if (!to || !text) return;
+  if (!to || (!text && !hasPhoto)) return; // photo-only MMS is a valid send
   // 🕘 quiet hours apply to TEXTS too (Jon 2026-10-08): 9pm–8am in the lead's
   // own time zone (by area code) = blocked, logged so the rep sees why.
   {
@@ -469,14 +480,24 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
     if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
     return;
   }
+  // 📷 MMS (Jon's worklist 2026-10-12): the composer attaches a pre-compressed
+  // photo; it lands in Drive (public direct link) so Telnyx can fetch it.
+  let mediaUrl = "";
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0 && photo.size <= 2 * 1024 * 1024) {
+    try {
+      const { gdriveConfigured, uploadToDrive } = await import("@/lib/gdrive");
+      if (gdriveConfigured()) mediaUrl = await uploadToDrive(`mms-${Date.now()}.jpg`, new Uint8Array(await photo.arrayBuffer()), photo.type || "image/jpeg");
+    } catch { /* fall back to text-only */ }
+  }
   const res = await fetch("https://api.telnyx.com/v2/messages", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to, text }),
+    body: JSON.stringify({ from, to, text: text || (mediaUrl ? "📷" : text), ...(mediaUrl ? { media_urls: [mediaUrl] } : {}) }),
   });
   const ok = res.ok;
   const err = ok ? "" : (await res.text()).slice(0, 140);
-  await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: ${text}${ok ? "" : ` (SEND FAILED: ${err})`}`, meta: { dir: "outbound", line: from ?? "" }, actor: me.name });
+  await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: ${mediaUrl ? `📷 photo${text ? " — " : ""}` : ""}${text}${ok ? "" : ` (SEND FAILED: ${err})`}`, meta: { dir: "outbound", line: from ?? "", ...(mediaUrl ? { media: [mediaUrl] } : {}) }, actor: me.name });
   if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
 }
 
