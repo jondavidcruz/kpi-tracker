@@ -554,6 +554,12 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             <TabBtn id="keypad" icon="🔢" label="Keypad" />
             <TabBtn id="queue" icon="⚡" label="Dialer" />
           </span>
+          {/* 💡 what the dot means (Jon 2026-10-12: team-facing legend) */}
+          <span className="flex items-center justify-center gap-2.5 border-t border-slate-50 bg-slate-50/60 px-2 py-1 text-[8px] font-bold text-slate-400">
+            <span><span className="mr-0.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" /> rings here</span>
+            <span><span className="mr-0.5 inline-block h-1.5 w-1.5 rounded-full bg-sky-400" /> rings in your other tab</span>
+            <span><span className="mr-0.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-400" /> reconnecting</span>
+          </span>
         </span>
       )}
     </span>
