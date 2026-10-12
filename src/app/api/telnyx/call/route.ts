@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
         const payload = JSON.stringify({ at: new Date().toISOString(), agent, from: caller, callerName: contact?.name ?? "" });
         if (laRow) await db.resource.update({ where: { id: laRow.id }, data: { description: payload } });
         else await db.resource.create({ data: { title: "last-answer", category: "__last_answer__", url: "", description: payload } });
-        if (contact && agent) await logCrmEvent({ contactId: contact.id, oppId: "", kind: "call", body: `📞 Inbound call answered by ${agent[0].toUpperCase()}${agent.slice(1)}`, actor: agent }).catch(() => {});
+        if (contact && agent) await logCrmEvent({ contactId: contact.id, oppId: "", kind: "call", body: `📞 ${agent[0].toUpperCase()}${agent.slice(1)} answered a call from ${contact.name} (${caller})`, actor: agent }).catch(() => {});
       } catch { /* cosmetic — never blocks the bridge */ }
     } else {
       // raced: someone else already took it
@@ -187,10 +187,23 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ ok: true, vm: true });
     }
-    // 🎙 outbound browser call answered (credential leg → seller) → record it
+    // 🎙 outbound browser call answered (credential leg → seller) → record it,
+    // and remember the leg so 📼 Drop VM can speak into it (Jon 2026-10-12)
     const pd = p as { direction?: string; to?: string };
     if (pd.direction === "outgoing" && (pd.to ?? "").startsWith("+")) {
       await txCall(p.call_control_id, "record_start", { format: "mp3", channels: "dual" });
+      try {
+        const last10 = (pd.to ?? "").replace(/\D/g, "").slice(-10);
+        const row5 = await db.resource.findFirst({ where: { category: "__active_out__" } });
+        let m5: Record<string, { id: string; at: string }> = {};
+        try { m5 = row5?.description ? JSON.parse(row5.description) : {}; } catch { /* fresh */ }
+        const cutoff = Date.now() - 2 * 3600_000;
+        for (const k of Object.keys(m5)) if (Date.parse(m5[k].at) < cutoff) delete m5[k];
+        m5[last10] = { id: p.call_control_id, at: new Date().toISOString() };
+        const d5 = JSON.stringify(m5);
+        if (row5) await db.resource.update({ where: { id: row5.id }, data: { description: d5 } });
+        else await db.resource.create({ data: { title: "active-out", category: "__active_out__", url: "", description: d5 } });
+      } catch { /* vm drop is best-effort */ }
       return NextResponse.json({ ok: true, recording: true });
     }
   }

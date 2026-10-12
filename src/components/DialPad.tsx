@@ -438,7 +438,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
         <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${lineOk ? "bg-emerald-400" : standby ? "bg-sky-400" : "bg-amber-400 animate-pulse"}`} />
       </button>
       {answeredBy && (
-        <span className="absolute right-12 top-1 z-50 whitespace-nowrap rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-extrabold text-white shadow-lg">✅ {answeredBy.agent} answered{answeredBy.caller ? ` — ${answeredBy.caller}` : ""}</span>
+        <span className="absolute right-12 top-1 z-50 whitespace-nowrap rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-extrabold text-white shadow-lg">✅ {answeredBy.agent} answered a call from {answeredBy.caller || "unknown"}</span>
       )}
       {open && (
         <span className={`absolute z-50 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 ${floating ? "right-0 top-12" : "right-0 top-10"}`}>
@@ -486,6 +486,21 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
               </span>
               {endConfirm && <span className="absolute -bottom-5 left-3 right-3 truncate text-[9px] font-bold text-red-600">🔒 under 8s — abandoned calls get surcharged; the call can be ended at 0:08</span>}
               {state === "active" && <button onClick={toggleMute} className={`rounded-md px-2 py-1 text-[10px] font-bold ${muted ? "bg-amber-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>}
+              {state === "active" && onCall?.phone && (
+                <button
+                  onClick={async () => {
+                    setMsg("📼 dropping your voicemail…");
+                    try {
+                      const r = await fetch("/api/telnyx/vmdrop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: onCall.phone }) });
+                      if (!r.ok) { const j = (await r.json().catch(() => ({}))) as { error?: string }; setMsg(`📼 VM drop failed: ${j.error ?? r.status}`); return; }
+                      try { callRef.current?.muteAudio?.(); } catch { /* best-effort */ }
+                      setMsg("📼 voicemail playing — the call hangs up by itself, you're free");
+                    } catch { setMsg("📼 VM drop failed — network"); }
+                  }}
+                  title="Hit an answering machine? Plays your saved voicemail script into the call and hangs up for you (edit the script on the Dialer tab)"
+                  className="rounded-md bg-violet-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-violet-700"
+                >📼 VM</button>
+              )}
               <button onClick={hangup} title="End the call" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-600 text-base text-white shadow hover:bg-red-700">⏹</button>
             </span>
           )}
@@ -565,6 +580,11 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             )}
             {tab === "queue" && (
               <span className="flex flex-col gap-1">
+                {/* 📼 my voicemail-drop script (spoken into answering machines) */}
+                <details className="mb-1 rounded-xl bg-violet-50 px-2.5 py-1.5 ring-1 ring-violet-200">
+                  <summary className="cursor-pointer text-[10px] font-bold text-violet-800">📼 My voicemail script — one click leaves it on answering machines</summary>
+                  <VmScriptEditor />
+                </details>
                 <span className="mb-1 flex items-center justify-between rounded-xl bg-emerald-50 px-2.5 py-1.5 ring-1 ring-emerald-200">
                   <span className="text-[10px] font-bold text-emerald-800">⚡ Power mode: auto-dials the next lead when you hang up</span>
                   <button onClick={() => { const on = !autoNext; setAutoNext(on); if (on && data?.queue[qi] && state === "idle") { const t = data.queue[qi]; call({ phone: t.phone, name: t.name, oppId: t.oppId, contactId: t.contactId }); } }} className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${autoNext ? "bg-emerald-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{autoNext ? "ON" : "OFF"}</button>
@@ -600,6 +620,36 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
           </span>
         </span>
       )}
+    </span>
+  );
+}
+
+// 📼 per-rep voicemail-drop script editor (lives on the Dialer tab)
+function VmScriptEditor() {
+  const [text, setText] = useState("");
+  const [saved, setSaved] = useState("");
+  useEffect(() => {
+    fetch("/api/telnyx/vmdrop").then(async (r) => {
+      if (!r.ok) return;
+      const j = (await r.json()) as { text?: string };
+      if (j.text) setText(j.text);
+    }).catch(() => {});
+  }, []);
+  return (
+    <span className="mt-1.5 flex flex-col gap-1.5">
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} maxLength={600} className="w-full rounded-lg border border-violet-200 bg-white px-2 py-1.5 text-[11px]" />
+      <span className="flex items-center gap-2">
+        <button
+          onClick={async () => {
+            const r = await fetch("/api/telnyx/vmdrop", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }).catch(() => null);
+            setSaved(r?.ok ? "✓ saved" : "save failed");
+            setTimeout(() => setSaved(""), 2500);
+          }}
+          className="rounded-md bg-violet-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-violet-700"
+        >Save script</button>
+        {saved && <span className="text-[10px] font-bold text-emerald-600">{saved}</span>}
+        <span className="text-[9px] text-slate-400">a natural voice reads this into the machine when you hit 📼 VM on a call</span>
+      </span>
     </span>
   );
 }

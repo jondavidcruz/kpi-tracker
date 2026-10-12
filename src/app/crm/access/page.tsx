@@ -20,7 +20,7 @@ export default async function CrmAccessPage() {
     db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     readCommsMap(),
   ]);
-  const users = allUsers.filter((u) => !["jon", "jonathan"].includes(firstOf(u.name)));
+  const users = allUsers; // Jon 2026-10-12: show EVERYONE — his own row renders as always-on
 
   return (
     <div className="space-y-4">
@@ -33,15 +33,16 @@ export default async function CrmAccessPage() {
           {users.map((r) => {
             const first = firstOf(r.name);
             const mgr = isManager(r);
-            const p = commsMap[first] ?? (mgr ? { call: true, sms: true, email: true } : { call: false, sms: false, email: false });
+            const owner = first === "jon" || first === "jonathan";
+            const p = owner || (!commsMap[first] && mgr) ? { call: true, sms: true, email: true } : commsMap[first] ?? { call: false, sms: false, email: false };
             return (
               <form key={r.id} action={saveCommsPermsAction} className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs ring-1 ring-slate-100">
                 <input type="hidden" name="first" value={first} />
-                <span className="w-28 font-bold text-slate-700">{r.name.split(" ")[0]}{mgr ? " 👑" : ""}</span>
-                <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="call" defaultChecked={p.call} /> 📞 call</label>
-                <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="sms" defaultChecked={p.sms} /> 💬 SMS</label>
-                <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="email" defaultChecked={p.email} /> ✉️ email</label>
-                <button className="ml-auto rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-700">Save</button>
+                <span className="w-28 font-bold text-slate-700">{r.name.split(" ")[0]}{owner ? " 🔑" : mgr ? " 👑" : ""}</span>
+                <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="call" defaultChecked={p.call} disabled={owner} /> 📞 call</label>
+                <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="sms" defaultChecked={p.sms} disabled={owner} /> 💬 SMS</label>
+                <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="email" defaultChecked={p.email} disabled={owner} /> ✉️ email</label>
+                {owner ? <span className="ml-auto text-[10px] font-bold text-slate-400">owner — always on</span> : <button className="ml-auto rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-700">Save</button>}
               </form>
             );
           })}
