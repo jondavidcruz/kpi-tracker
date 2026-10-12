@@ -36,6 +36,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
   const [incoming, setIncoming] = useState<{ number: string; name?: string } | null>(null);
   const [answeredBy, setAnsweredBy] = useState<{ agent: string; caller: string } | null>(null);
+  const [micOk, setMicOk] = useState<boolean | null>(null); // null = unknown
   const meFirstRef = useRef("");
   // after a ring ends without ME answering, find out who took it (brief race
   // with the webhook write, so wait a beat)
@@ -294,6 +295,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
                 const j = (await r.json()) as { at?: string; agent?: string };
                 if (j.at && j.agent === meFirstRef.current && Date.now() - Date.parse(j.at) < 12_000) {
                   clearInterval(claimPoll);
+                  try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { setMicOk(false); return; }
                   try { (incomingCallRef.current as { answer?: () => void } | null)?.answer?.(); setOnCall({ phone: "inbound" }); } catch { /* raced */ }
                 }
               } catch { /* next tick */ }
@@ -342,6 +344,13 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // and keep the registration alive (tokens/sockets expire quietly).
   useEffect(() => {
     holdLock(false); // leader election — the winning tab connects inside
+    // 🎤 proactive mic check: answering is impossible without it
+    try {
+      (navigator.permissions?.query({ name: "microphone" as PermissionName }) as Promise<PermissionStatus>)?.then((st) => {
+        setMicOk(st.state === "granted");
+        st.onchange = () => setMicOk(st.state === "granted");
+      }).catch(() => {});
+    } catch { /* older browser — the answer-time prompt still covers it */ }
     fetch("/api/crm/mystats", { cache: "no-store" }).then(async (r) => {
       if (!r.ok) return;
       const j = (await r.json()) as { who?: string };
@@ -401,7 +410,18 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     return () => { releaseRef.current?.(); clearInterval(keep); clearTimeout(standbyT); try { bcRef.current?.close(); } catch { /* fine */ } document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); window.removeEventListener("online", wake); window.removeEventListener("fo-ring", onRing); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const answerIncoming = () => { try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "" }); } catch { /* gone */ } };
+  const answerIncoming = async () => {
+    // 🎤 the #1 silent answer-killer: no mic permission (Sharyn 2026-10-12) —
+    // ask for it explicitly so the browser PROMPTS instead of failing quietly
+    try { await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch {
+      setMsg("🎤 MICROPHONE BLOCKED — the call can't connect. Click the 🔒 padlock by the address bar → Microphone → Allow, then answer again.");
+      setMicOk(false);
+      return;
+    }
+    setMicOk(true);
+    try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "" }); } catch { /* gone */ }
+  };
   const declineIncoming = () => { try { incomingCallRef.current?.hangup(); } catch { /* gone */ } incomingCallRef.current = null; setIncoming(null); try { bcRef.current?.postMessage({ t: "incoming-clear" }); } catch { /* fine */ } };
   // refs so the BroadcastChannel handler (bound once on mount) always calls
   // the latest versions
@@ -649,6 +669,12 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             )}
           </span>
 
+          {micOk === false && (
+            <button
+              onClick={async () => { try { await navigator.mediaDevices.getUserMedia({ audio: true }); setMicOk(true); setMsg(""); } catch { setMsg("🎤 Still blocked — click the 🔒 padlock by the address bar → Microphone → Allow."); } }}
+              className="mx-2 mb-1 rounded-xl bg-red-600 px-3 py-2 text-left text-[11px] font-extrabold text-white hover:bg-red-700"
+            >🎤 Microphone is OFF in this browser — calls can ring but can&apos;t be ANSWERED. Tap here to enable it.</button>
+          )}
           {/* bottom tabs — GHL style */}
           <span className="flex gap-1 border-t border-slate-100 px-2 py-1.5">
             <TabBtn id="recents" icon="🕐" label="Recents" />
