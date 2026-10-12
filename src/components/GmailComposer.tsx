@@ -112,12 +112,14 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
               <button onClick={() => setConfirming(false)} className="rounded-full bg-slate-100 px-3 py-2 text-[13px] font-bold text-slate-600 hover:bg-slate-200">Cancel</button>
             </>
           ) : (
-            <button onClick={send} disabled={pending || !subject.trim() || !body.trim()} className="rounded-full bg-[#0b57d0] px-5 py-2 text-[13px] font-bold text-white hover:bg-[#0a4bb8] disabled:opacity-40">{pending ? "Sending…" : "Send"}</button>
-            <label className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] hover:bg-slate-50" title="Attach a file (max 10MB)">
-              📎{attach ? ` ${attach.name.slice(0, 18)}${attach.name.length > 18 ? "…" : ""}` : ""}
-              <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f && f.size <= 10 * 1024 * 1024) setAttach(f); e.target.value = ""; }} />
-            </label>
-            {attach && <button onClick={() => setAttach(null)} className="text-[10px] font-bold text-red-500 hover:text-red-700">✕</button>}
+            <>
+              <button onClick={send} disabled={pending || !subject.trim() || !body.trim()} className="rounded-full bg-[#0b57d0] px-5 py-2 text-[13px] font-bold text-white hover:bg-[#0a4bb8] disabled:opacity-40">{pending ? "Sending…" : "Send"}</button>
+              <label className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] hover:bg-slate-50" title="Attach a file (max 10MB)">
+                📎{attach ? ` ${attach.name.slice(0, 18)}${attach.name.length > 18 ? "…" : ""}` : ""}
+                <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f && f.size <= 10 * 1024 * 1024) setAttach(f); e.target.value = ""; }} />
+              </label>
+              {attach && <button onClick={() => setAttach(null)} className="text-[10px] font-bold text-red-500 hover:text-red-700">✕</button>}
+            </>
           )}
           {allSnips.length > 0 && (
             <select defaultValue="" onChange={(e) => { const s = allSnips.find((x) => x.id === e.target.value); if (s) { setBody(s.body.replaceAll("{name}", first).replaceAll("{rep}", rep.split(" ")[0] || "us")); if (s.subject) setSubject(s.subject.replaceAll("{name}", first)); } e.target.value = ""; }} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-bold text-slate-500">
