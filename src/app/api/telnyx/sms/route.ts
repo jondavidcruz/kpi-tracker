@@ -62,6 +62,12 @@ export async function POST(req: NextRequest) {
         if (!dup) await db.crmTask.create({ data: { contactId: contact.id, oppId: opp?.id ?? "", title, due: today, assignedTo: contact.assignedTo, createdBy: "inbound-sms" } });
       }
     } catch { /* best-effort */ }
+    // 📲 push to the installed iPhone/desktop app: assigned rep, else everyone
+    try {
+      const { sendPushTo } = await import("@/lib/push");
+      const who = contact.assignedTo ? [contact.assignedTo.split(" ")[0]] : ("all" as const);
+      sendPushTo(who, { title: `💬 ${contact.name}`, body: text.slice(0, 120) || "📷 picture message", url: `/crm/conversations?c=${contact.id}`, tag: `sms-${contact.id}` }).catch(() => {});
+    } catch { /* push is best-effort */ }
     return NextResponse.json({ ok: true });
   }
 

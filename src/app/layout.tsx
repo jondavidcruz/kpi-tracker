@@ -36,9 +36,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet" />
         {/* Kill any leftover service worker + caches from the old PWA build so new
             deploys always show up (no more "I don't see the changes"). */}
+        {/* Register the push-only service worker (v2 — it has NO fetch handler,
+            so it can never serve stale builds; it also clears old caches). */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister()})}).catch(function(){})}if(window.caches&&caches.keys){caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k)})}).catch(function(){})}}catch(e){}`,
+            __html: `try{if(window.caches&&caches.keys){caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k)})}).catch(function(){})}if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){})}}catch(e){}`,
           }}
         />
         {/* Apply saved dark-mode preference before first paint (no flash). */}

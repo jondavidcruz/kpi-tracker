@@ -112,6 +112,13 @@ export async function POST(req: NextRequest) {
         const { rowId, map } = await readSess();
         if (map[inId]) { map[inId].legs = legs; await writeSess(rowId, map); }
       }
+      // 📲 push alert so phones buzz even when nobody's at a computer
+      try {
+        const caller10 = (pay0.from ?? "").replace(/\D/g, "").slice(-10);
+        const c = caller10.length === 10 ? await db.crmContact.findFirst({ where: { phone: { contains: caller10 } }, select: { name: true } }) : null;
+        const { sendPushTo } = await import("@/lib/push");
+        sendPushTo("all", { title: `📞 Incoming call — ${c?.name ?? pay0.from ?? "unknown"}`, body: "Ringing the War Room now — open it on a computer to answer.", url: "/crm", tag: "ring" }).catch(() => {});
+      } catch { /* best-effort */ }
       if (legs.length === 0 && cfg.sipUser) {
         // dial-out refused entirely → old single transfer as a last resort
         await txCall(inId, "transfer", { to: `sip:${cfg.sipUser}@sip.telnyx.com`, timeout_secs: 25 });
@@ -341,6 +348,10 @@ export async function POST(req: NextRequest) {
         if (contact) {
           await logCrmEvent({ contactId: contact.id, kind: "call", body: `📵 Missed inbound call from ${pay.from}${texted ? " — auto text-back sent ✅" : " (text-back failed — number may need a messaging profile)"}`, meta: { msgId: hourKey }, actor: "inbound" });
           await db.crmTask.create({ data: { contactId: contact.id, title: `📞 CALL BACK NOW — they called us (${pay.from})`, due: new Date().toISOString().slice(0, 10), assignedTo: contact.assignedTo, createdBy: "inbound" } }).catch(() => {});
+          try {
+            const { sendPushTo } = await import("@/lib/push");
+            sendPushTo(contact.assignedTo ? [contact.assignedTo.split(" ")[0]] : "all", { title: `📵 Missed call — ${contact.name}`, body: `${pay.from} · auto text-back ${texted ? "sent" : "failed"} — call them back`, url: `/crm/conversations?c=${contact.id}`, tag: `missed-${contact.id}` }).catch(() => {});
+          } catch { /* best-effort */ }
         }
       }
     }
