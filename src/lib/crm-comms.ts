@@ -29,9 +29,14 @@ export function firstOf(name: string): string {
 
 export async function commsFor(user: User | null): Promise<CommsPerm> {
   if (!user) return { call: false, sms: false, email: false };
-  if (isManager(user)) return { call: true, sms: true, email: true };
+  // admins (Jon) can never lock themselves out
+  if (user.role === "admin") return { call: true, sms: true, email: true };
   const map = await readCommsMap();
-  return map[firstOf(user.name)] ?? { call: false, sms: false, email: false };
+  const rec = map[firstOf(user.name)];
+  // an explicit saved row wins for ANYONE (Jon 2026-10-12: Viktoriia + Enrico
+  // now manageable on /crm/access); managers default to full until saved.
+  if (rec) return rec;
+  return isManager(user) ? { call: true, sms: true, email: true } : { call: false, sms: false, email: false };
 }
 
 // ── Per-agent email signatures (GHL-style "From" identity) ─────────────────
