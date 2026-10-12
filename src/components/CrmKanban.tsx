@@ -3,7 +3,7 @@
 // (set dataTransfer payload, defer state past dragstart). Click a card →
 // its opportunity page.
 import { useEffect, useLayoutEffect, useState, useTransition } from "react";
-import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction } from "@/app/crm/actions";
+import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction, addCrmNoteAction } from "@/app/crm/actions";
 import { STAGE_PROB } from "@/lib/crm-shared";
 
 export type CrmCard = {
@@ -99,8 +99,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     start(async () => { await bulkOppAction(fd); window.location.reload(); });
   };
   // quick-add popover: {cardId, kind} — one open at a time
-  const [quick, setQuick] = useState<{ id: string; contactId?: string; kind: "task" | "appt" | "tag" | "sms"; phone?: string } | null>(null);
-  const [qa, setQa] = useState({ title: "", due: "", when: "", tag: "", sms: "" });
+  const [quick, setQuick] = useState<{ id: string; contactId?: string; kind: "task" | "appt" | "tag" | "sms" | "note"; phone?: string } | null>(null);
+  const [qa, setQa] = useState({ title: "", due: "", when: "", tag: "", sms: "", note: "" });
   const [, startQuick] = useTransition();
   const submitQuick = () => {
     if (!quick) return;
@@ -118,12 +118,16 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       fd.set("id", quick.id); fd.set("tag", qa.tag);
       startQuick(async () => { await addOppTagAction(fd); });
       setCards((cs) => cs.map((c) => (c.id === quick.id ? { ...c, tags: [...c.tags, qa.tag.trim()] } : c)));
+    } else if (quick.kind === "note") {
+      if (!qa.note.trim()) return;
+      fd.set("oppId", quick.id); fd.set("contactId", quick.contactId ?? ""); fd.set("body", qa.note);
+      startQuick(async () => { await addCrmNoteAction(fd); });
     } else if (quick.kind === "sms") {
       if (!qa.sms.trim() || !quick.phone) return;
       fd.set("oppId", quick.id); fd.set("contactId", quick.contactId ?? ""); fd.set("to", quick.phone); fd.set("text", qa.sms);
       startQuick(async () => { await sendCrmSmsAction(fd); });
     }
-    setQuick(null); setQa({ title: "", due: "", when: "", tag: "", sms: "" });
+    setQuick(null); setQa({ title: "", due: "", when: "", tag: "", sms: "", note: "" });
   };
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // useLayoutEffect = restore the saved collapse state BEFORE first paint, so
@@ -280,15 +284,17 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                           className="grid h-7 w-7 place-items-center rounded-md bg-emerald-50 text-[12px] ring-1 ring-emerald-200 hover:bg-emerald-100"
                         >📞</button>
                       )}
-                      <button type="button" title="Add a task" onClick={() => setQuick(quick?.id === c.id && quick.kind === "task" ? null : { id: c.id, contactId: c.contactId, kind: "task" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">✅</button>
-                      <button type="button" title="Book an appointment" onClick={() => setQuick(quick?.id === c.id && quick.kind === "appt" ? null : { id: c.id, contactId: c.contactId, kind: "appt" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">📅</button>
-                      <button type="button" title="Add a tag" onClick={() => setQuick(quick?.id === c.id && quick.kind === "tag" ? null : { id: c.id, kind: "tag" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">🏷</button>
                       {canSms && c.phone && (
                         <button type="button" title={c.smsUnread ? `${c.smsUnread} unread text${c.smsUnread > 1 ? "s" : ""} — open the thread` : "Text via our Telnyx number"} onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "sms" } }))} className="relative grid h-7 w-7 place-items-center rounded-md bg-sky-50 text-[12px] ring-1 ring-sky-200 hover:bg-sky-100">💬
                           {!!c.smsUnread && <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-0.5 text-[8px] font-extrabold text-white">{c.smsUnread}</span>}
                         </button>
                       )}
+                      <button type="button" title="Add a task" onClick={() => setQuick(quick?.id === c.id && quick.kind === "task" ? null : { id: c.id, contactId: c.contactId, kind: "task" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">✅</button>
+                      <button type="button" title="Book an appointment" onClick={() => setQuick(quick?.id === c.id && quick.kind === "appt" ? null : { id: c.id, contactId: c.contactId, kind: "appt" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">📅</button>
+                      <button type="button" title="Add a tag" onClick={() => setQuick(quick?.id === c.id && quick.kind === "tag" ? null : { id: c.id, kind: "tag" })} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">🏷</button>
+                      
                       {c.email && <button type="button" title={`Email ${c.contactName} (${c.email})`} onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "email" } }))} className="grid h-7 w-7 place-items-center rounded-md bg-amber-50 text-[12px] ring-1 ring-amber-200 hover:bg-amber-100">✉️</button>}
+                      <button type="button" title="Add a quick note to the timeline" onClick={() => setQuick(quick?.id === c.id && quick.kind === "note" ? null : { id: c.id, contactId: c.contactId, kind: "note" })} className="grid h-7 w-7 place-items-center rounded-md bg-violet-50 text-[12px] ring-1 ring-violet-200 hover:bg-violet-100">📝</button>
                       {quick?.id === c.id && (
                         <span className="absolute left-0 top-9 z-30 flex w-60 flex-col gap-1.5 rounded-xl bg-white p-2.5 shadow-xl ring-1 ring-slate-200">
                           {quick.kind === "task" && (<>
@@ -299,6 +305,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                             <input autoFocus value={qa.title} onChange={(e) => setQa({ ...qa, title: e.target.value })} placeholder="Appointment…" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
                             <input type="datetime-local" value={qa.when} onChange={(e) => setQa({ ...qa, when: e.target.value })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
                           </>)}
+                          {quick.kind === "note" && (
+                            <textarea autoFocus value={qa.note} onChange={(e) => setQa({ ...qa, note: e.target.value })} rows={3} placeholder="Note… (saves to the timeline)" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                          )}
                           {quick.kind === "tag" && (
                             <input autoFocus value={qa.tag} onChange={(e) => setQa({ ...qa, tag: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submitQuick()} placeholder="Tag… (Enter)" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
                           )}
