@@ -47,5 +47,32 @@ export async function POST(req: NextRequest) {
   const row = await db.resource.findFirst({ where: { category: "__ring_claim__" } });
   if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
   else await db.resource.create({ data: { title: "ring-claim", category: "__ring_claim__", url: "", description: payload } });
+  // 🔁 RE-RING the claimer (Jon 2026-10-12, Sharyn): her old registration never
+  // answers, so her clicking tab takes over the credential and we dial a FRESH
+  // leg at it — the tab auto-answers. Works from any machine, any profile.
+  try {
+    if (process.env.TELNYX_API_KEY) {
+      const sessRow = await db.resource.findFirst({ where: { category: "__ring_sessions__" } });
+      const sessMap = (sessRow?.description ? JSON.parse(sessRow.description) : {}) as Record<string, { legs: string[]; answered: boolean; at: string; from?: string }>;
+      const entry = Object.entries(sessMap).find(([, v]) => !v.answered && Date.now() - Date.parse(v.at) < 32_000);
+      const cfgRow = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
+      const cfg = (cfgRow?.description ? JSON.parse(cfgRow.description) : {}) as { ccAppId?: string; agents?: Record<string, { sipUser?: string }> };
+      const sip = cfg.agents?.[first]?.sipUser;
+      if (entry && sip && cfg.ccAppId) {
+        const [inId, sess] = entry;
+        const clientState = Buffer.from(JSON.stringify({ ring: inId })).toString("base64");
+        const r = await fetch("https://api.telnyx.com/v2/calls", {
+          method: "POST", headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ connection_id: cfg.ccAppId, to: `sip:${sip}@sip.telnyx.com`, from: sess.from || "+18302100552", timeout_secs: 25, client_state: clientState }),
+        });
+        const rb = (await r.json().catch(() => ({}))) as { data?: { call_control_id?: string } };
+        if (rb.data?.call_control_id) {
+          sess.legs.push(rb.data.call_control_id);
+          if (sessRow) await db.resource.update({ where: { id: sessRow.id }, data: { description: JSON.stringify(sessMap) } });
+          return NextResponse.json({ ok: true, rering: true });
+        }
+      }
+    }
+  } catch { /* claim poll still covers the same-machine case */ }
   return NextResponse.json({ ok: true });
 }

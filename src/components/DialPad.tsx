@@ -37,6 +37,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [incoming, setIncoming] = useState<{ number: string; name?: string } | null>(null);
   const [answeredBy, setAnsweredBy] = useState<{ agent: string; caller: string } | null>(null);
   const [micOk, setMicOk] = useState<boolean | null>(null); // null = unknown
+  const claimUntilRef = useRef(0); // while fresh, the next native ring auto-answers here
   const meFirstRef = useRef("");
   // after a ring ends without ME answering, find out who took it (brief race
   // with the webhook write, so wait a beat)
@@ -429,11 +430,18 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const declineIncomingRef = useRef(declineIncoming);
   answerIncomingRef.current = answerIncoming;
   declineIncomingRef.current = declineIncoming;
-  const remoteAnswer = () => {
+  const remoteAnswer = async () => {
     try { bcRef.current?.postMessage({ t: "answer" }); } catch { /* no channel */ }
-    fetch("/api/crm/callerid", { method: "POST" }).catch(() => {}); // cross-profile claim
-    setRemoteIncoming({ number: `✅ answering — just talk, audio connects on this computer` });
-    setTimeout(() => setRemoteIncoming(null), 5000);
+    // 🎤 secure the mic NOW (user gesture) so the auto-answer can't fail on it
+    try { await navigator.mediaDevices.getUserMedia({ audio: true }); setMicOk(true); }
+    catch { setMicOk(false); setRemoteIncoming({ number: "🎤 mic blocked — padlock icon → Microphone → Allow, then answer again" }); setTimeout(() => setRemoteIncoming(null), 8000); return; }
+    // take the phone line over INTO THIS TAB and have the server re-ring us here
+    claimUntilRef.current = Date.now() + 25_000;
+    try { if (!leaderRef.current) await holdLock(true); } catch { /* proceed */ }
+    ensureClient().catch(() => {});
+    fetch("/api/crm/callerid", { method: "POST" }).catch(() => {});
+    setRemoteIncoming({ number: `✅ answering — connecting the call to THIS window…` });
+    setTimeout(() => setRemoteIncoming(null), 6000);
   };
   const remoteDecline = () => { try { bcRef.current?.postMessage({ t: "decline" }); } catch { /* no channel */ } setRemoteIncoming(null); };
 
