@@ -2897,6 +2897,11 @@ export async function cascadeRank(formData: FormData): Promise<{
   ranked?: Array<{
     id: string; name: string; company: string; type: string; phone: string; email: string;
     score: number; tier: 1 | 2 | 3; why: Array<{ ok: boolean | "warn"; label: string }>; geoBasis: string;
+    box: null | {
+      priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string;
+      discount: number | null; acresMin: number | null; acresMax: number | null; types: string[];
+      closeDays: number | null; funding: string | null; where: string[]; volumeNote: string; buyingNow: boolean | null;
+    };
   }>;
   nearest?: { name: string; miles: number } | null;
   excluded?: Array<{ name: string; reason: string }>;
@@ -2950,7 +2955,20 @@ export async function cascadeRank(formData: FormData): Promise<{
     nearest: ranked.length ? null : nearestMiss(deal, buyers),
     ranked: ranked.map((r) => {
       const c = byId.get(r.buyer.id);
-      return { id: r.buyer.id, name: r.buyer.name, company: c?.company ?? "", type: c?.type ?? "", phone: c?.phone ?? "", email: c?.email ?? "", score: r.score, tier: r.tier, why: r.why, geoBasis: r.geoBasis };
+      // 💰 the buy box, summarized for the cascade row expansion (Jon 2026-10-12:
+      // "I can see the buyers but not what they pay")
+      const bb = (c?.buyBoxStruct ?? null) as import("@/lib/buybox/types").BuyBox | null;
+      const box = bb ? {
+        priceMin: bb.price?.min ?? null, priceMax: bb.price?.max ?? null, priceUnit: bb.price?.unit ?? null,
+        priceNotes: [bb.price?.notes, bb.geo?.neighborhood_notes].filter(Boolean).join(" · ").slice(0, 300),
+        discount: typeof bb.price?.discount_to_market_pct === "number" ? bb.price.discount_to_market_pct : null,
+        acresMin: bb.size?.acres_min ?? null, acresMax: bb.size?.acres_max ?? null,
+        types: (bb.asset?.types ?? []).map((t) => String(t).replace(/_/g, " ")),
+        closeDays: bb.terms?.close_days ?? null, funding: bb.terms?.funding ?? null,
+        where: [bb.geo?.nationwide ? "nationwide" : "", ...(bb.geo?.regions ?? []), ...(bb.geo?.counties ?? []), ...(bb.geo?.cities ?? []), ...(bb.geo?.states ?? [])].filter(Boolean).slice(0, 10),
+        volumeNote: bb.status?.volume_note ?? "", buyingNow: bb.status?.buying_now ?? null,
+      } : null;
+      return { id: r.buyer.id, name: r.buyer.name, company: c?.company ?? "", type: c?.type ?? "", phone: c?.phone ?? "", email: c?.email ?? "", score: r.score, tier: r.tier, why: r.why, geoBasis: r.geoBasis, box };
     }),
   };
 }

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
+import VmRecorder from "@/components/VmRecorder";
 import { readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { saveSignatureAction } from "@/app/crm/actions";
 
@@ -65,6 +66,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           </label>
           <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save address</button>
         </form>
+      </Card>
+
+      <Card className="p-5">
+        <h3 className="mb-1 text-sm font-bold text-slate-700">📼 My voicemail drop</h3>
+        <p className="mb-3 text-xs text-slate-400">Record the voicemail that gets left on answering machines when you tap 📼 VM during a call — in your own voice.</p>
+        <VmRecorder />
       </Card>
 
       <Card className="p-5">

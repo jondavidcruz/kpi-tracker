@@ -274,7 +274,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Voicemail-style message finished → hang up and clean the session
-  if (ev === "call.speak.ended") {
+  if (ev === "call.speak.ended" || ev === "call.playback.ended") {
     const stVm = st as { vm?: string };
     if (stVm.vm) {
       await txCall(stVm.vm, "hangup");

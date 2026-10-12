@@ -6,7 +6,8 @@ import { useRef, useState, useTransition } from "react";
 import { cascadeRank, logBuyerOutreach } from "@/app/actions";
 
 type Chip = { ok: boolean | "warn"; label: string };
-type Card = { id: string; name: string; company: string; type: string; phone: string; email: string; score: number; tier: 1 | 2 | 3; why: Chip[]; geoBasis: string };
+type Box = { priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; discount: number | null; acresMin: number | null; acresMax: number | null; types: string[]; closeDays: number | null; funding: string | null; where: string[]; volumeNote: string; buyingNow: boolean | null };
+type Card = { id: string; name: string; company: string; type: string; phone: string; email: string; score: number; tier: 1 | 2 | 3; why: Chip[]; geoBasis: string; box: Box | null };
 type Geo = { lat: number; lng: number; formatted: string; county: string; city: string; state: string; zip: string };
 type Excluded = { name: string; reason: string };
 
@@ -42,6 +43,7 @@ export default function CascadeBoard() {
   const [error, setError] = useState("");
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const addr = useRef("");
 
@@ -61,7 +63,9 @@ export default function CascadeBoard() {
   const copy = async (text: string, tag: string) => {
     try { await navigator.clipboard.writeText(text); setCopied(tag); setTimeout(() => setCopied(""), 1500); } catch { /* ignore */ }
   };
-  const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} — ${c.phone || "no phone"} · ${c.email || "no email"} · fit ${c.score}`;
+  const money = (n: number | null) => (n == null ? "?" : `$${n.toLocaleString()}`);
+
+const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} — ${c.phone || "no phone"} · ${c.email || "no email"} · fit ${c.score}`;
   const topN = (n: number) => (cards ?? []).slice(0, n).map((c, i) => `${i + 1}. ${rowText(c)}`).join("\n");
   const csv = () => {
     const head = "rank,name,company,type,phone,email,score,tier,why";
@@ -147,12 +151,29 @@ export default function CascadeBoard() {
                 </div>
                 <div className="mt-1 text-[12px] text-slate-500">{c.phone && <span className="font-semibold">{c.phone}</span>}{c.phone && c.email && " · "}{c.email}</div>
               </div>
+              <button onClick={() => setExpanded(expanded === c.id ? null : c.id)} title="What this buyer pays — their full buy box" className="shrink-0 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">💰 Buy box {expanded === c.id ? "▴" : "▾"}</button>
               <div className="flex shrink-0 flex-wrap gap-1.5">
                 <button onClick={() => logTouchFor(c.id)} disabled={touched.has(c.id)} title="I called/texted this buyer — logs the touch to your KPIs and sets their next follow-up 3 days out" className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100 disabled:opacity-60">{touched.has(c.id) ? "✅ Logged" : "📇 Log touch"}</button>
                 {c.email && <a href={mailto(c)} title="Opens your email app with the offer message pre-written to this buyer" className="rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">✉ Draft email</a>}
                 <button onClick={() => copy(rowText(c), c.id)} title="Copy this buyer's name, phone & email — paste into a text message" className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">{copied === c.id ? "✅ Copied" : "📋 Copy"}</button>
               </div>
             </div>
+            {expanded === c.id && (
+              <div className="mt-3 rounded-xl bg-slate-50 p-3 text-[12px] ring-1 ring-slate-100">
+                {c.box ? (
+                  <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                    <div><span className="font-extrabold text-emerald-700">💰 Pays:</span> {c.box.priceMin == null && c.box.priceMax == null ? "price range unknown" : `${money(c.box.priceMin)} – ${money(c.box.priceMax)}`}{c.box.priceUnit ? ` (${c.box.priceUnit.replace(/_/g, " ")})` : ""}{c.box.discount != null ? ` · ~${c.box.discount}% of market` : ""}</div>
+                    <div><span className="font-extrabold text-slate-700">📐 Size:</span> {c.box.acresMin == null && c.box.acresMax == null ? "any" : `${c.box.acresMin ?? "?"} – ${c.box.acresMax ?? "?"} acres`}</div>
+                    <div><span className="font-extrabold text-slate-700">🏷 Buys:</span> {c.box.types.length ? c.box.types.join(", ") : "unknown"}</div>
+                    <div><span className="font-extrabold text-slate-700">⏱ Close:</span> {c.box.closeDays != null ? `~${c.box.closeDays} days` : "unknown"}{c.box.funding ? ` · ${c.box.funding.replace(/_/g, " ")}` : ""}{c.box.buyingNow === false ? " · ⚠️ buying paused" : ""}</div>
+                    {c.box.where.length > 0 && <div className="sm:col-span-2"><span className="font-extrabold text-slate-700">🗺 Where:</span> {c.box.where.join(" · ")}</div>}
+                    {(c.box.priceNotes || c.box.volumeNote) && <div className="sm:col-span-2 text-slate-500"><span className="font-extrabold text-slate-700">📝 Notes:</span> {[c.box.priceNotes, c.box.volumeNote].filter(Boolean).join(" · ")}</div>}
+                  </div>
+                ) : (
+                  <p className="text-slate-400">No structured buy box on file for this buyer yet — open them in the <b>Buyers</b> tab to fill it in (or book an interview).</p>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
