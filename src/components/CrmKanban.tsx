@@ -277,11 +277,23 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
                     </div>
                     {/* property line — opp title only when it's NOT just the name (Jon
-                        2026-10-13: name was showing twice); for land with no address
-                        show the APN instead so the parcel is identified. */}
-                    {show.title && c.title && c.title.trim().toLowerCase() !== c.contactName.trim().toLowerCase() && <div className={`text-[11px] text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>{c.title}</div>}
-                    {!c.address && c.apn && c.title.trim().toLowerCase() === c.contactName.trim().toLowerCase() && <div className={`truncate text-[10px] font-semibold text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>🧭 APN {c.apn}</div>}
-                    {c.address && c.address !== c.title && <div className={`truncate text-[10px] text-slate-400 ${privacy ? "select-none blur-[3px]" : ""}`}>📍 {c.address}</div>}
+                        2026-10-13: name was showing twice, incl. near-dups like
+                        "Theil/Phill Torrence"); for land with no address show the APN. */}
+                    {(() => {
+                      const norm = (x: string) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                      const nName = norm(c.contactName);
+                      const t = (c.title ?? "").trim();
+                      const nTitle = norm(t);
+                      const titleIsName = !!nTitle && !!nName && (nTitle === nName || nTitle.includes(nName) || nName.includes(nTitle));
+                      const addr = (c.address ?? "").trim();
+                      const blur = privacy ? "select-none blur-[3px]" : "";
+                      return (<>
+                        {show.title && t && !titleIsName && <div className={`text-[11px] text-slate-500 ${blur}`}>{t}</div>}
+                        {addr
+                          ? (addr !== t && <div className={`truncate text-[10px] text-slate-400 ${blur}`}>📍 {addr}</div>)
+                          : (titleIsName && c.apn && <div className={`truncate text-[10px] font-semibold text-slate-500 ${blur}`}>🧭 APN {c.apn}</div>)}
+                      </>);
+                    })()}
                     {c.phone && <div className={`text-[10px] font-semibold text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>📞 {c.phone}</div>}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {show.money && c.money && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{c.money}</span>}
