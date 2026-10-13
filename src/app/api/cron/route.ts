@@ -929,6 +929,41 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, committed: commit, wouldChange: changes.length, byTo: changes.reduce((m, c) => { m[c.to] = (m[c.to] ?? 0) + 1; return m; }, {} as Record<string, number>), sample: changes.slice(0, 12) });
   }
 
+  // 🩹 Fix invisible leads (?fixstages=1[&commit=1]): any opp whose stage
+  // isn't a valid column of its pipeline gets remapped to the best-matching
+  // column (token overlap), else the pipeline's first stage. Jon 2026-10-13:
+  // the re-sync left ~31 land/acq leads in orphan stages → off the board.
+  if (url.searchParams.get("fixstages") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const { readPipelines } = await import("@/lib/crm");
+    const pipes = await readPipelines();
+    const colsByPipe: Record<string, Array<{ key: string }>> = {};
+    for (const p of pipes) colsByPipe[p.name] = p.stages.map((st) => ({ key: st.key }));
+    const toks = (k: string) => new Set(k.split(/[_\s]+/).filter((t) => t.length > 2));
+    const bestMatch = (stage: string, cols: Array<{ key: string }>) => {
+      const st = toks(stage);
+      let best = "", score = 0;
+      for (const c of cols) {
+        const ct = toks(c.key);
+        let overlap = 0;
+        for (const t of st) if (ct.has(t)) overlap++;
+        if (overlap > score) { score = overlap; best = c.key; }
+      }
+      return score > 0 ? best : (cols[0]?.key ?? stage);
+    };
+    const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { id: true, pipeline: true, stage: true } });
+    const changes: Array<{ id: string; pipeline: string; from: string; to: string }> = [];
+    for (const o of opps) {
+      const cols = colsByPipe[o.pipeline];
+      if (!cols) continue;
+      if (cols.some((c) => c.key === o.stage)) continue; // already visible
+      const to = bestMatch(o.stage, cols);
+      if (to && to !== o.stage) changes.push({ id: o.id, pipeline: o.pipeline, from: o.stage, to });
+    }
+    if (commit) for (const c of changes) await db.crmOpportunity.update({ where: { id: c.id }, data: { stage: c.to } }).catch(() => {});
+    return NextResponse.json({ ok: true, committed: commit, fixed: changes.length, map: changes.reduce((m, c) => { const k = `${c.from} → ${c.to}`; m[k] = (m[k] ?? 0) + 1; return m; }, {} as Record<string, number>) });
+  }
+
   // 🩺 Stage visibility diag (?stagediag=1): per pipeline, which opp stages
   // are NOT valid columns → those leads are invisible on the board.
   if (url.searchParams.get("stagediag") === "1") {
