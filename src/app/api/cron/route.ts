@@ -929,6 +929,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, committed: commit, wouldChange: changes.length, byTo: changes.reduce((m, c) => { m[c.to] = (m[c.to] ?? 0) + 1; return m; }, {} as Record<string, number>), sample: changes.slice(0, 12) });
   }
 
+  // 🩺 Stage visibility diag (?stagediag=1): per pipeline, which opp stages
+  // are NOT valid columns → those leads are invisible on the board.
+  if (url.searchParams.get("stagediag") === "1") {
+    const { readPipelines } = await import("@/lib/crm");
+    const pipes = await readPipelines();
+    const validByPipe: Record<string, Set<string>> = {};
+    for (const p of pipes) validByPipe[p.name] = new Set(p.stages.map((st) => st.key));
+    const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { pipeline: true, stage: true } });
+    const out: Record<string, { total: number; byStage: Record<string, number>; orphanStages: Record<string, number> }> = {};
+    for (const o of opps) {
+      const pn = o.pipeline || "(blank)";
+      out[pn] ??= { total: 0, byStage: {}, orphanStages: {} };
+      out[pn].total++;
+      out[pn].byStage[o.stage] = (out[pn].byStage[o.stage] ?? 0) + 1;
+      const valid = validByPipe[pn];
+      if (!valid || !valid.has(o.stage)) out[pn].orphanStages[o.stage] = (out[pn].orphanStages[o.stage] ?? 0) + 1;
+    }
+    return NextResponse.json({ ok: true, perPipeline: out, validColumns: Object.fromEntries(Object.entries(validByPipe).map(([k, v]) => [k, [...v]])) });
+  }
+
   // 🔢 WarRoom opp counts by pipeline (?pipecount=1): confirms where imported
   // dispo/acq opps actually landed vs what the board queries.
   if (url.searchParams.get("pipecount") === "1") {

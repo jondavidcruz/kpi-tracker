@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { stripHtml } from "@/lib/crm-shared";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const opp = await db.crmOpportunity.findUnique({ where: { id }, include: { contact: true } });
   if (!opp) return NextResponse.json({ error: "not found" }, { status: 404 });
   const followersList = Array.isArray((opp.formData as Record<string, unknown> | null)?.__followers) ? ((opp.formData as Record<string, unknown>).__followers as string[]) : [];
-  if (!isManager(me!) && opp.assignedTo && opp.assignedTo !== me!.name && !followersList.includes(me!.name)) return NextResponse.json({ error: "not your lead" }, { status: 403 });
+  if (!canManageAllLeads(me!) && opp.assignedTo && opp.assignedTo !== me!.name && !followersList.includes(me!.name)) return NextResponse.json({ error: "not your lead" }, { status: 403 });
   const { commsFor, readSignatures, firstOf, defaultSignature } = await import("@/lib/crm-comms");
   const { readSnippets } = await import("@/lib/crm-templates");
   const [events, tasks, appts, comms, sigs, snippets, smsEvents, emailEvents] = await Promise.all([
