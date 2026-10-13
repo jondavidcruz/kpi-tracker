@@ -29,9 +29,14 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // Permissions (Jon 2026-10-07: "Nick gets his own pipeline"): managers see
   // everyone; a rep's board is scoped to THEIR leads — their own pipeline.
   const manager = isManager(me!);
+  // 👁 who can see the WHOLE board (Jon 2026-10-13): managers/admins + the
+  // trusted veteran reps. New reps (Nick, future hires) stay locked to their
+  // own leads only. Add a first name here to grant full visibility.
+  const VIEW_ALL = new Set(["sharyn", "michelle", "marie"]);
+  const canViewAll = manager || VIEW_ALL.has(me!.name.trim().split(/\s+/)[0].toLowerCase());
   // Managers default to EVERYONE (Jon 2026-10-09 — "I don't have leads
   // assigned to me"); the dropdown narrows it. Reps stay locked to their own.
-  const whoRaw = manager ? (sp.who === "all" || sp.who == null ? "" : sp.who) : me!.name;
+  const whoRaw = canViewAll ? (sp.who === "all" || sp.who == null ? "" : sp.who) : me!.name;
   // role chips (Jon 2026-10-08): "role:acquisitions" / "role:dispositions"
   // scope the board to everyone in that seat at once.
   const roleReps = whoRaw.startsWith("role:")
@@ -81,7 +86,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       { contact: { email: { contains: q, mode: "insensitive" as const } } },
     ] } : {}),
   };
-  const whoQ = manager ? `&who=${encodeURIComponent(whoRaw || "all")}` : "";
+  const whoQ = canViewAll ? `&who=${encodeURIComponent(whoRaw || "all")}` : "";
   const page = Math.max(1, Number(sp.p) || 1);
   const PER_COL = 60, PER_PAGE = 50;
   const stages = pipe.stages;
@@ -99,7 +104,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true, address: true, email: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
     : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true, address: true, email: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
   const qs = (over: Record<string, string>) => {
-    const p = new URLSearchParams({ view, pl: plName, ...(manager ? { who: whoRaw || "all" } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
+    const p = new URLSearchParams({ view, pl: plName, ...(canViewAll ? { who: whoRaw || "all" } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
     return `/crm?${p.toString()}`;
   };
@@ -183,12 +188,12 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       {/* 🔎 search + GHL-style filters */}
       <Card className="space-y-2 p-3">
         <CrmFilterBar
-          base={{ view, pl: plName, ...(manager ? { who: whoRaw || "all" } : {}) }}
+          base={{ view, pl: plName, ...(canViewAll ? { who: whoRaw || "all" } : {}) }}
           q={q} stage={fStage} tag={fTag} due={fDue}
           stages={stages.map((st) => ({ key: st.key, label: st.label }))}
         />
         <div className="flex flex-wrap items-center gap-2">
-          {manager ? (
+          {canViewAll ? (
             // one clear dropdown instead of the chip row (Jon 2026-10-08) —
             // it always STATES whose leads are on screen, so nothing feels missing
             <CrmOwnerSelect current={whoRaw || "all"} meName={me!.name} reps={reps.map((r) => r.name)} hrefTemplate={qs({ who: "__WHO__" })} />
