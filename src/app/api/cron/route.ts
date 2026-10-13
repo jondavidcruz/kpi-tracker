@@ -2240,7 +2240,7 @@ export async function GET(request: Request) {
     const mapStage = (n: string, pipeName: string) => {
       const slug = n ? stageSlug(n) : "contacted";
       if (/AQ/i.test(pipeName) && acqAlias[slug]) return acqAlias[slug];
-      if (/Signed/i.test(pipeName) && dsAlias[slug]) return dsAlias[slug];
+      if (/Signed|Sell Land|DS:/i.test(pipeName) && dsAlias[slug]) return dsAlias[slug];
       return slug;
     };
     const repByCrm = new Map(AGENTS.map((a) => [a.crm, a.first]));

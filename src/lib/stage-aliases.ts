@@ -22,6 +22,12 @@ export const DS_STAGE_ALIASES: Record<string, string> = {
   on_market_90_120_days: "on_market",
   reduction_needed: "on_market",                     // tagged "reduction-needed" instead
   escrow_closed_95: "deal_won_100",                  // escrow closed = paid = won
+  // Sell-Land pipeline GHL stages → the streamlined land columns (Jon 2026-10-13:
+  // these were orphaning 23 land leads off the board on each re-sync).
+  sent_to_agents_developers: "sent_to_agents_buyers_jvp",
+  receiving_offers: "received_3_offers",
+  find_developer_mao: "new_land_lead",
+  comp_to_offer_24_hrs: "comp_offer_24_hrs",          // Nick's pipeline uses the no-"to" key
 };
 
 export const ACQ_STAGES = [
