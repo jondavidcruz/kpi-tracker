@@ -10,6 +10,7 @@ import PipelineSelect from "@/components/PipelineSelect";
 import SelectAllBox from "@/components/SelectAllBox";
 import CrmFilterBar from "@/components/CrmFilterBar";
 import CrmQuickView from "@/components/CrmQuickView";
+import DueTodayReminder from "@/components/DueTodayReminder";
 import { commsFor } from "@/lib/crm-comms";
 import { createCrmLeadAction, bulkOppAction } from "./actions";
 import CrmOwnerSelect from "@/components/CrmOwnerSelect";
@@ -109,8 +110,16 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const comms = await commsFor(me!);
   const weekAppts = view === "cal" ? await db.crmAppointment.findMany({ where: { at: { gte: new Date(Date.now() - 86400000), lte: new Date(Date.now() + 8 * 86400000) }, ...(who ? { withWho: { contains: who.split(" ")[0] } } : {}) }, orderBy: { at: "asc" } }) : [];
 
-  const tasksByOpp = new Map<string, { due: string; title: string }[]>();
+  const tasksByOpp = new Map<string, { due: string; title: string; assignedTo: string }[]>();
   for (const t of tasks) { const a = tasksByOpp.get(t.oppId) ?? []; a.push(t); tasksByOpp.set(t.oppId, a); }
+
+  // 📅 appointments due TODAY per opp (Jon 2026-10-13: color the card + remind
+  // the owner so a due appointment is never missed). Today in the org timezone.
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
+  const apptsToday = await db.crmAppointment.findMany({ where: { at: { gte: dayStart, lte: dayEnd } }, select: { oppId: true, title: true, at: true, withWho: true } });
+  const apptTodayByOpp = new Map<string, { title: string; at: Date; withWho: string }[]>();
+  for (const a of apptsToday) { if (!a.oppId) continue; const arr = apptTodayByOpp.get(a.oppId) ?? []; arr.push(a); apptTodayByOpp.set(a.oppId, arr); }
 
   // 🔴 unread-SMS counts per contact (Jon 2026-10-08): inbound texts newer
   // than the last outbound reply AND newer than the thread's last-read stamp.
@@ -143,14 +152,25 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     if (due.length) badges.push(`⏰ ${due.length} task${due.length > 1 ? "s" : ""} due`);
     if (o.nextFollowUp && o.nextFollowUp <= today) badges.push("📞 follow-up due");
     if (!["nurture", "dead", "signed"].includes(o.stage) && Date.now() - o.updatedAt.getTime() > 3 * 86400000) badges.push("🕸 quiet 3d+");
+    const apptToday = apptTodayByOpp.get(o.id) ?? [];
+    if (apptToday.length) badges.push(`📅 appt today${apptToday[0].at ? ` ${apptToday[0].at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`);
+    // APN/parcel for land with no street address (shows on the card in place of address)
+    const fd = (o.formData ?? {}) as { property?: { apn?: string } };
     return {
       id: o.id, title: o.title, contactName: o.contact.name, contactId: o.contactId, phone: o.contact.phone, address: o.contact.address, stage: o.stage,
       assignedTo: o.assignedTo, tags: parseTags(o.tags), badges,
       money: money(o.value) || (o.askPrice != null ? `ask ${money(o.askPrice)}` : ""),
       email: o.contact.email, smsUnread: smsUnread.get(o.contactId) ?? 0,
       valueNum: o.value ?? o.askPrice ?? 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
+      apn: fd.property?.apn ?? "", apptDueToday: apptToday.length > 0, taskDueToday: due.length > 0,
     };
   });
+
+  // 🔔 due-today reminder popup for the signed-in user: their own tasks +
+  // appointments due today (so the person in charge of the lead can't miss it).
+  const myFirst = (me!.name || "").split(" ")[0].toLowerCase();
+  const myDueTasks = tasks.filter((t) => t.due && t.due.slice(0, 10) <= today && (t.assignedTo || "").toLowerCase().includes(myFirst)).map((t) => ({ title: t.title, oppId: t.oppId, due: t.due }));
+  const myApptsToday = apptsToday.filter((a) => (a.withWho || "").toLowerCase().includes(myFirst)).map((a) => ({ title: a.title, oppId: a.oppId, at: a.at.toISOString() }));
 
   const upcoming = appts.filter((a) => a.at.getTime() - Date.now() < 24 * 3600_000);
 
@@ -256,6 +276,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         </details>
       </Card>
 
+      <DueTodayReminder tasks={myDueTasks} appts={myApptsToday} />
       {view === "kanban" ? (
         <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={pipelines.map((p) => p.name)} /></>
       ) : view === "cal" ? (

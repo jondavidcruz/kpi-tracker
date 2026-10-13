@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
-import { stripHtml, KIND_EMOJI } from "@/lib/crm-shared";
+import { stripHtml, KIND_EMOJI, titleCase } from "@/lib/crm-shared";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets } from "@/lib/crm-templates";
 import CallButton from "@/components/CallButton";
@@ -33,6 +33,10 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return <Card className="p-10 text-center text-slate-400">Conversations live inside the Seller CRM (acquisitions + managers).</Card>;
   const manager = isManager(me!);
+  // 👁 who sees the WHOLE team inbox (every call/text/email): managers + the
+  // full-access reps (Sharyn/Michelle/Marie/Viktoriia). Jon 2026-10-13: Sharyn
+  // & co. couldn't see all calls here — now they can.
+  const canSeeAll = canManageAllLeads(me!);
   const sp = await searchParams;
   const comms = await commsFor(me!);
   const snippets = await readSnippets();
@@ -48,9 +52,9 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const latestByContact = new Map<string, { kind: string; body: string; at: Date }>();
   for (const e of recent) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
   const contactIds = [...latestByContact.keys()].slice(0, 120);
-  const mineOnly = manager && sp.who === "me";
+  const mineOnly = canSeeAll && sp.who === "me";
   const contacts = await db.crmContact.findMany({
-    where: { id: { in: contactIds }, ...(manager ? (mineOnly ? { assignedTo: { equals: me!.name, mode: "insensitive" } } : {}) : { assignedTo: { in: ["", me!.name] } }) },
+    where: { id: { in: contactIds }, ...(canSeeAll ? (mineOnly ? { assignedTo: { equals: me!.name, mode: "insensitive" } } : {}) : { assignedTo: { in: ["", me!.name] } }) },
     select: { id: true, name: true, phone: true, assignedTo: true },
   });
   // 👁 red dot = seller wrote last AND the thread hasn't been opened since
@@ -69,7 +73,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const contact = cId ? await db.crmContact.findUnique({ where: { id: cId } }) : null;
   // opening a thread marks it read (clears the red dot everywhere)
   if (cId) setConvRead([cId], true).catch(() => {});
-  const visible = contact && (manager || !contact.assignedTo || contact.assignedTo === me!.name);
+  const visible = contact && (canSeeAll || !contact.assignedTo || contact.assignedTo === me!.name);
   const [events, opps] = contact && visible ? await Promise.all([
     db.crmEvent.findMany({ where: { contactId: contact.id, kind: { in: COMMS } }, orderBy: { at: "desc" }, take: 80 }),
     db.crmOpportunity.findMany({ where: { contactId: contact.id, archivedAt: null }, orderBy: { createdAt: "asc" }, select: { id: true, title: true, stage: true, pipeline: true, formData: true, createdAt: true } }),
@@ -118,7 +122,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
           <div className="w-72 shrink-0 overflow-y-auto border-r border-slate-100 bg-slate-50/50">
             <div className="sticky top-0 flex items-center gap-2 border-b border-slate-100 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">
               <span>Team inbox · {threads.length}</span>
-              {manager && (
+              {canSeeAll && (
                 <span className="ml-auto flex gap-1 normal-case tracking-normal">
                   <Link prefetch={false} href="/crm/conversations" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${!mineOnly ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>All</Link>
                   <Link prefetch={false} href="/crm/conversations?who=me" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${mineOnly ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>Mine</Link>
@@ -145,7 +149,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-sm font-bold text-slate-800">{t.name}</span>
+                        <span className="truncate text-sm font-bold text-slate-800">{titleCase(t.name)}</span>
                         <span className="shrink-0 text-[10px] text-slate-400">{timeAgo(t.last.at)}</span>
                       </span>
                       <span className="block truncate text-xs text-slate-500">{KIND_EMOJI[t.last.kind] ?? "•"} {stripHtml(t.last.body).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "")}</span>
@@ -165,7 +169,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                 <div className="flex items-center gap-3 border-b border-slate-100 bg-white px-4 py-2.5">
                   <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy/90 text-[11px] font-bold text-white">{initials(contact.name)}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-extrabold text-slate-900">{contact.name}</div>
+                    <div className="truncate text-sm font-extrabold text-slate-900">{titleCase(contact.name)}</div>
                     <div className="flex flex-wrap items-baseline gap-x-3">
                       {contact.phone && <span className="font-mono text-[13px] font-bold tracking-wide text-slate-700">{contact.phone.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3")}</span>}
                       {contact.email && <span className="truncate text-[11px] text-slate-500">{contact.email}</span>}
@@ -181,11 +185,24 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     const inbound = body.startsWith("⬅");
                     const clean = body.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "");
                     const when = e.at.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-                    if (e.kind === "call" || e.kind === "voicemail") return (
-                      <div key={i} className="flex justify-center">
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-500">{KIND_EMOJI[e.kind] ?? "📞"} {clean} · {when}</span>
-                      </div>
-                    );
+                    if (e.kind === "call" || e.kind === "voicemail") {
+                      // 🎙 a recording event (body starts 🎙, has a Drive link) gets
+                      // an inline player right in the thread (Jon 2026-10-13: "no
+                      // playable button with the most recent call").
+                      const recLink = (e.meta as { link?: string } | null)?.link;
+                      const isRec = recLink && clean.startsWith("🎙");
+                      return (
+                        <div key={i} className="flex justify-center">
+                          <div className={`max-w-[82%] rounded-2xl px-3 py-1.5 text-[11px] font-semibold text-slate-500 ${isRec ? "bg-white ring-1 ring-slate-200" : "rounded-full bg-slate-100"}`}>
+                            <div>{KIND_EMOJI[e.kind] ?? "📞"} {clean.replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}</div>
+                            {isRec && (
+                              /* eslint-disable-next-line jsx-a11y/media-has-caption */
+                              <audio controls preload="none" src={recLink} className="mt-1 h-8 w-64 max-w-full" />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
                     // 📷 inbound MMS/photos arrive as bare image URLs (Jon
                     // 2026-10-08: "will we SEE the photos, not a string?") —
                     // render them as actual images, keep the rest as text.

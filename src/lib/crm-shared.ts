@@ -37,6 +37,14 @@ export function stageSlug(name: string): string {
 }
 
 /** GHL notes arrive as HTML — render them as clean text with line breaks. */
+// 🔤 GHL imports store names ALL CAPS ("BASSAM REFAI") — display "Bassam Refai".
+// Leaves phone-number placeholders alone; keeps LLC / roman numerals upper.
+export function titleCase(s: string): string {
+  if (!s) return s;
+  if (/^[\d()+\-.\s]+$/.test(s.trim())) return s.trim();
+  return s.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\b(Llc|Ii|Iii|Iv)\b/g, (m) => m.toUpperCase());
+}
+
 export function stripHtml(s: string): string {
   return s
     .replace(/<(br|\/p|\/div|\/li)[^>]*>/gi, "\n")

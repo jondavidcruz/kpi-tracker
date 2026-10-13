@@ -4,7 +4,7 @@
 // its opportunity page.
 import { useEffect, useLayoutEffect, useState, useTransition } from "react";
 import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction, addCrmNoteAction } from "@/app/crm/actions";
-import { STAGE_PROB } from "@/lib/crm-shared";
+import { STAGE_PROB, titleCase } from "@/lib/crm-shared";
 
 export type CrmCard = {
   id: string;
@@ -23,6 +23,9 @@ export type CrmCard = {
   valueNum?: number;
   updatedAt?: string;   // ISO — drives sort + age coloring
   createdAt?: string;
+  apn?: string;         // parcel number — shown in place of address for land
+  apptDueToday?: boolean; // 📅 appointment due today → red card
+  taskDueToday?: boolean; // ⏰ task due today → green card
 };
 // 🎨 GHL-style age coloring (Jon 2026-10-08): customizable ranges + colors,
 // saved per device. Days since last stage activity (updatedAt).
@@ -252,16 +255,20 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     }}
                     onDragEnd={() => { setDragId(null); setOverCol(null); }}
                     onClick={() => selecting ? toggleSel(c.id) : window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id } }))}
-                    style={ageColor(c) ? { border: `2px solid ${ageColor(c)}` } : undefined}
-                    className={`cursor-pointer rounded-xl bg-white p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : ""}`}
+                    style={c.apptDueToday ? { border: "2px solid #ef4444" } : c.taskDueToday ? { border: "2px solid #22c55e" } : ageColor(c) ? { border: `2px solid ${ageColor(c)}` } : undefined}
+                    className={`cursor-pointer rounded-xl p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${c.apptDueToday ? "bg-red-50/60" : c.taskDueToday ? "bg-emerald-50/50" : "bg-white"} ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-1">
                       {selecting && <input type="checkbox" readOnly checked={selected.has(c.id)} className="mr-1 mt-0.5 h-4 w-4 shrink-0 accent-indigo-600" />}
                       {/* name → FULL card page; anywhere else on the card → quick view */}
-                      <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{c.contactName}</a>
+                      <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{titleCase(c.contactName)}</a>
                       {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
                     </div>
-                    {show.title && <div className={`text-[11px] text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>{c.title}</div>}
+                    {/* property line — opp title only when it's NOT just the name (Jon
+                        2026-10-13: name was showing twice); for land with no address
+                        show the APN instead so the parcel is identified. */}
+                    {show.title && c.title && c.title.trim().toLowerCase() !== c.contactName.trim().toLowerCase() && <div className={`text-[11px] text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>{c.title}</div>}
+                    {!c.address && c.apn && c.title.trim().toLowerCase() === c.contactName.trim().toLowerCase() && <div className={`truncate text-[10px] font-semibold text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>🧭 APN {c.apn}</div>}
                     {c.address && c.address !== c.title && <div className={`truncate text-[10px] text-slate-400 ${privacy ? "select-none blur-[3px]" : ""}`}>📍 {c.address}</div>}
                     {c.phone && <div className={`text-[10px] font-semibold text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>📞 {c.phone}</div>}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -329,6 +336,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         </span>
                       )}
                     </div>
+                    {/* 📅 when this lead entered the system — bottom-right (Jon 2026-10-13) */}
+                    {c.createdAt && <div className="mt-1.5 text-right text-[9px] font-medium text-slate-400">📅 Entered {new Date(c.createdAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</div>}
                   </div>
                 ))}
                 {colCards.length === 0 && <div className="rounded-xl border border-dashed border-slate-200 px-2 py-3 text-center text-[10px] text-slate-300">empty</div>}

@@ -10,6 +10,7 @@
 //   with its own address, APN/parcel number, and its own notes.
 import { useState } from "react";
 import Link from "next/link";
+import { titleCase } from "@/lib/crm-shared";
 import { saveConvContactAction, addPropertyAction, savePropertyAction, addPropertyNoteAction } from "@/app/crm/actions";
 
 type Prop = { id: string; title: string; stage: string; pipeline: string; apn: string; createdAt: string };
@@ -40,7 +41,7 @@ const inp = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2 py-1.5 
 export default function ConvContactRail({ contact, opps, owners, canEdit }: { contact: Contact; opps: Prop[]; owners: string[]; canEdit: boolean }) {
   const [editing, setEditing] = useState(false);
   const { first, last } = splitName(contact.name);
-  const displayName = contact.name?.trim() || fmtPhone(contact.phone) || "Unknown";
+  const displayName = titleCase(contact.name?.trim() || "") || fmtPhone(contact.phone) || "Unknown";
 
   return (
     <div className="hidden w-80 shrink-0 overflow-y-auto border-l border-slate-100 bg-white p-4 lg:block">
