@@ -903,6 +903,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, ...out });
   }
 
+  // 📞 Number porting status (?portstatus=1): live Telnyx porting orders +
+  // every number currently on the Telnyx account — the Nov 7 Twilio shutdown
+  // checklist (Jon 2026-10-12).
+  if (url.searchParams.get("portstatus") === "1") {
+    const key = process.env.TELNYX_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, error: "no TELNYX_API_KEY" });
+    const [po, nums] = await Promise.all([
+      fetch("https://api.telnyx.com/v2/porting_orders?page[size]=50", { headers: { Authorization: `Bearer ${key}` } }).then((r) => r.json()).catch(() => ({})),
+      fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=250", { headers: { Authorization: `Bearer ${key}` } }).then((r) => r.json()).catch(() => ({})),
+    ]);
+    const orders = ((po as { data?: Array<Record<string, unknown>> }).data ?? []).map((o) => ({
+      id: o.id, status: (o.status as { value?: string })?.value ?? o.status, numbers: (o.phone_numbers as Array<{ phone_number?: string }> | undefined)?.map((n) => n.phone_number) ?? [],
+      focDate: o.requested_foc_date ?? o.foc_date ?? null, created: o.created_at,
+    }));
+    const numbers = ((nums as { data?: Array<{ phone_number?: string; status?: string; connection_name?: string }> }).data ?? []).map((n) => ({ number: n.phone_number, status: n.status, connection: n.connection_name }));
+    return NextResponse.json({ ok: true, portingOrders: orders, telnyxNumbers: numbers });
+  }
+
   // 🎙 One-off: assign "record your voicemail" to every active teammate
   // (?vmtasks=1, dup-guarded) — Jon 2026-10-12.
   if (url.searchParams.get("vmtasks") === "1") {
