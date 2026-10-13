@@ -1502,6 +1502,12 @@ export async function GET(request: Request) {
       telnyxEvents: telnyx });
   }
 
+  // 🔎 Probe GHL call-message shape to find where the recording URL lives
+  if (url.searchParams.get("ghlcallprobe") === "1") {
+    const { probeCallShape } = await import("@/lib/reireply");
+    return NextResponse.json({ ok: true, probe: await probeCallShape() });
+  }
+
   // 🎙 Sync HISTORICAL GHL (REI Reply) call recordings into the War Room
   // (?ghlrecsync=1, 2026-10-13). Bounded + idempotent (dedupe by GHL message id
   // in __ghl_rec_synced__). Each recording → Drive + a 🎙 event + AI summary on
