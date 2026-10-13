@@ -1540,7 +1540,7 @@ export async function GET(request: Request) {
         const r = await fetch(v.u, { headers: { Authorization: `Bearer ${key}`, Version: "2021-07-28", Accept: v.audio ? "audio/x-wav, audio/mpeg, */*" : "application/json" }, redirect: "manual", cache: "no-store" });
         const ct = r.headers.get("content-type") ?? "";
         const isAudio = /audio|octet-stream/i.test(ct);
-        results.push({ tag: v.tag, status: r.status, contentType: ct, location: r.headers.get("location") ?? undefined, bodyPreview: isAudio ? `(binary audio ${r.headers.get("content-length") ?? "?"}b)` : (await r.text()).slice(0, 400) });
+        results.push({ tag: v.tag, status: r.status, contentType: ct, location: r.headers.get("location") ?? undefined, bodyPreview: isAudio ? `(binary audio ${r.headers.get("content-length") ?? "?"}b)` : (await r.text()).slice(0, v.tag === "msg-detail" ? 2500 : 400) });
       } catch (e) { results.push({ tag: v.tag, error: String(e).slice(0, 120) }); }
     }
     return NextResponse.json({ ok: true, messageId: mid.slice(0, 6) + "…", convId: convId.slice(0, 6) + "…", results });
