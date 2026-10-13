@@ -47,7 +47,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       name: me!.name,
       fromLabel: `${me!.name} <${firstOf(me!.name)}@freedom-offers.com>`,
       signature: sigs[firstOf(me!.name)] || defaultSignature(me!.name),
-      canSms: comms.sms, canEmail: comms.email,
+      canSms: comms.sms, canEmail: comms.email, canCall: comms.call,
     },
     snippets: snippets.map((s) => ({ id: s.id, name: s.name, kind: s.kind, subject: s.subject, body: s.body })),
     smsHistory, emailHistory, underwrites,

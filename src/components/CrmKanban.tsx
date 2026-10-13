@@ -44,7 +44,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, reps = [] }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; reps?: string[] }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [] }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[] }) {
   const [cards, setCards] = useState(initial);
   // THE 27-vs-112 bug (Jon 2026-10-08): this component stays mounted when you
   // switch pipeline tabs, so the drag-and-drop card state kept showing the
@@ -276,7 +276,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     {show.rep && c.assignedTo && <div className="mt-1 text-[9px] font-semibold text-slate-400">👤 {c.assignedTo}</div>}
                     {/* GHL-style quick actions — popovers, zero page hops */}
                     <div className="relative mt-1.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      {c.phone && (
+                      {canCall && c.phone && (
                         <button
                           type="button"
                           title={`Call ${c.contactName} from the browser (Telnyx)`}

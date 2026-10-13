@@ -903,6 +903,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, ...out });
   }
 
+  // 🔎 Comms access diag (?commsdiag=1): the saved per-rep map + what each
+  // active rep effectively gets, so "why can X still see the phone" is answerable.
+  if (url.searchParams.get("commsdiag") === "1") {
+    const { readCommsMap, commsFor } = await import("@/lib/crm-comms");
+    const [map, users] = await Promise.all([
+      readCommsMap(),
+      db.user.findMany({ where: { active: true }, select: { id: true, name: true, role: true, position: true } }),
+    ]);
+    const effective = [];
+    for (const u of users) effective.push({ name: u.name, role: u.role, position: u.position, effective: await commsFor(u as never) });
+    return NextResponse.json({ ok: true, savedMap: map, effective });
+  }
+
   // 📞 Number porting status (?portstatus=1): live Telnyx porting orders +
   // every number currently on the Telnyx account — the Nov 7 Twilio shutdown
   // checklist (Jon 2026-10-12).

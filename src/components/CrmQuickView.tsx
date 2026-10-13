@@ -18,7 +18,7 @@ type Payload = {
   id: string; title: string; stage: string; pipeline: string; assignedTo: string; tags: string;
   nextFollowUp: string; value: number | null; askPrice: number | null;
   formData: Record<string, Record<string, string | string[]>>;
-  me: { name: string; fromLabel: string; signature: string; canSms: boolean; canEmail: boolean };
+  me: { name: string; fromLabel: string; signature: string; canSms: boolean; canEmail: boolean; canCall: boolean };
   followers: string[];
   reps: string[];
   snippets: Array<{ id: string; name: string; kind: string; subject?: string; body: string }>;
@@ -86,7 +86,7 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
               </div>
               {saved && <span className="text-xs font-bold text-emerald-600">{saved}</span>}
               {pending && <span className="text-xs text-slate-400">saving…</span>}
-              {d.contact.phone && (
+              {d.contact.phone && d.me.canCall && (
                 <button onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: d.contact.phone, name: d.contact.name, oppId: d.id, contactId: d.contact.id } }))} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">📞 Call</button>
               )}
               <a href={`/crm/${d.id}`} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Open full ↗</a>
