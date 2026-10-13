@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
   // 🎙 Recording landed → file it on the lead: MP3 → the deal's Drive folder,
   // link + transcript on the timeline (Jon's backlog item #1, 2026-10-12).
   if (ev === "call.recording.saved") {
-    const pr = p as unknown as { recording_urls?: { mp3?: string }; download_urls?: { mp3?: string }; from?: string; to?: string; recording_started_at?: string; recording_ended_at?: string };
+    const pr = p as unknown as { recording_urls?: { mp3?: string }; download_urls?: { mp3?: string }; from?: string; to?: string; direction?: string; recording_started_at?: string; recording_ended_at?: string };
     const url = pr.download_urls?.mp3 || pr.recording_urls?.mp3 || "";
     if (!url) return NextResponse.json({ ok: true, noUrl: true });
     // whoever on the call is in our CRM = the lead
@@ -230,6 +230,17 @@ export async function POST(req: NextRequest) {
       if (last10.length !== 10) continue;
       contact = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true } });
       if (contact) break;
+    }
+    // 🆕 Jon 2026-10-13: if neither number is a contact yet (e.g. a brand-new
+    // inbound caller, or a test call), create one from the seller-side number so
+    // the recording never vanishes. Inbound → caller is `from`; outbound → `to`.
+    if (!contact) {
+      const sellerNum = pr.direction === "incoming" ? (pr.from ?? "") : pr.direction === "outgoing" ? (pr.to ?? "") : (pr.from ?? "");
+      const last10 = sellerNum.replace(/\D/g, "").slice(-10);
+      if (last10.length === 10) {
+        const e164 = sellerNum.startsWith("+") ? sellerNum : `+1${last10}`;
+        contact = await db.crmContact.create({ data: { name: last10.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3"), phone: e164, source: "Phone call" } });
+      }
     }
     if (!contact) return NextResponse.json({ ok: true, noContact: true });
     const opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null }, select: { id: true, title: true, contact: { select: { address: true, name: true } } } });

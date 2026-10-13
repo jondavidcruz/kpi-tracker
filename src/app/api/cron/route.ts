@@ -1490,6 +1490,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, renamed });
   }
 
+  // 🎙 Recording diagnostic (?recdiag=1, 2026-10-13): did recent calls record?
+  if (url.searchParams.get("recdiag") === "1") {
+    const recs = await db.crmEvent.findMany({ where: { body: { startsWith: "🎙" } }, orderBy: { at: "desc" }, take: 10, select: { at: true, body: true, actor: true, contactId: true, meta: true } });
+    const { gdriveConfigured } = await import("@/lib/gdrive");
+    const evRow = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
+    let telnyx: unknown[] = [];
+    try { telnyx = evRow?.description ? (JSON.parse(evRow.description) as unknown[]).slice(0, 12) : []; } catch { /* none */ }
+    return NextResponse.json({ ok: true, gdrive: gdriveConfigured(), gemini: !!process.env.GEMINI_API_KEY,
+      recentRecordings: recs.map((r) => ({ at: r.at, actor: r.actor, body: r.body.slice(0, 70), hasLink: !!(r.meta as { link?: string } | null)?.link, hasTranscript: !!(r.meta as { transcript?: string } | null)?.transcript })),
+      telnyxEvents: telnyx });
+  }
+
   // ⚙️ Seed the GREEN (internal, no-outreach) stage automations Jon approved
   // (?seedautomations=1, 2026-10-13): reads live pipeline stage keys and installs
   // task/follow-up rules per stage for acq + dispo. Also files the 3 ORANGE
