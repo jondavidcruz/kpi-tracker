@@ -44,7 +44,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [] }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[] }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [] }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[] }) {
   const [cards, setCards] = useState(initial);
   // THE 27-vs-112 bug (Jon 2026-10-08): this component stays mounted when you
   // switch pipeline tabs, so the drag-and-drop card state kept showing the
@@ -92,10 +92,10 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   };
   const toggleSel = (id: string) => setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const runBulk = () => {
-    if (!selected.size || !bulk.val.trim()) return;
+    if (!selected.size || (bulk.op !== "delete" && !bulk.val.trim())) return;
     const fd = new FormData();
     for (const id of selected) fd.append("ids", id);
-    fd.set("op", bulk.op); fd.set("val", bulk.val.trim());
+    fd.set("op", bulk.op); fd.set("val", bulk.val.trim()); if (bulk.op === "delete" && !confirm(`Archive ${selected.size} selected lead(s)? They can be restored.`)) return;
     start(async () => { await bulkOppAction(fd); window.location.reload(); });
   };
   // quick-add popover: {cardId, kind} — one open at a time
@@ -340,8 +340,12 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
           <button onClick={() => setSelected(new Set(cards.map((c) => c.id)))} className="rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Select all visible</button>
           <select value={bulk.op} onChange={(e) => setBulk({ op: e.target.value, val: "" })} className="rounded-lg px-2 py-1 text-xs font-bold text-slate-800">
             <option value="stage">→ Move to stage</option>
-            <option value="assign">👤 Reassign to</option>
+            <option value="pipeline">📂 Move to pipeline</option>
+            <option value="assign">👤 Change owner</option>
+            <option value="follower">👥 Add follower</option>
             <option value="tag">🏷 Add tag</option>
+            <option value="untag">🏷 Remove tag</option>
+            <option value="delete">🗑 Delete (archive)</option>
           </select>
           {bulk.op === "stage" && (
             <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1 text-xs text-slate-800">
@@ -349,14 +353,21 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
               {columns.map((cc) => <option key={cc.key} value={cc.key}>{cc.label}</option>)}
             </select>
           )}
-          {bulk.op === "assign" && (
+          {bulk.op === "pipeline" && (
             <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1 text-xs text-slate-800">
-              <option value="">rep…</option>
+              <option value="">pipeline…</option>
+              {pipelineNames.map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+            </select>
+          )}
+          {(bulk.op === "assign" || bulk.op === "follower") && (
+            <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1 text-xs text-slate-800">
+              <option value="">person…</option>
               {reps.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           )}
-          {bulk.op === "tag" && <input value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} placeholder="tag…" className="rounded-lg px-2 py-1 text-xs text-slate-800" />}
-          <button onClick={runBulk} disabled={!selected.size || !bulk.val} className="rounded-lg bg-emerald-500 px-3 py-1.5 font-extrabold text-white hover:bg-emerald-600 disabled:opacity-40">Apply to {selected.size}</button>
+          {(bulk.op === "tag" || bulk.op === "untag") && <input value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} placeholder="tag…" className="rounded-lg px-2 py-1 text-xs text-slate-800" />}
+          {bulk.op === "delete" && <span className="text-[11px] font-bold text-red-300">archives the selected leads (recoverable)</span>}
+          <button onClick={runBulk} disabled={!selected.size || (bulk.op !== "delete" && !bulk.val)} className={`rounded-lg px-3 py-1.5 font-extrabold text-white disabled:opacity-40 ${bulk.op === "delete" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600"}`}>Apply to {selected.size}</button>
           <button onClick={() => { setSelecting(false); setSelected(new Set()); }} className="ml-auto rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Done</button>
         </div>
       )}

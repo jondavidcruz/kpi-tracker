@@ -716,18 +716,42 @@ export async function startConversationAction(formData: FormData) {
 export async function bulkOppAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
-  const ids = formData.getAll("ids").map(String).filter(Boolean).slice(0, 200);
+  const ids = formData.getAll("ids").map(String).filter(Boolean).slice(0, 500);
   const op = String(formData.get("op") ?? "");
   const val = String(formData.get("val") ?? "").trim();
-  if (!ids.length || !val) return;
-  if (op === "assign") await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { assignedTo: val } });
-  else if (op === "stage" && ((await readPipelines()).some((p) => p.stages.some((st) => st.key === val)) || CRM_STAGES.some((s) => s.key === val))) {
+  // delete needs no value; everything else does
+  if (!ids.length || (op !== "delete" && !val)) return;
+  if (op === "assign") {
+    await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { assignedTo: val } });
+  } else if (op === "stage" && ((await readPipelines()).some((p) => p.stages.some((st) => st.key === val)) || CRM_STAGES.some((s) => s.key === val))) {
     await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { stage: val, ...(val === "dead" ? { archivedAt: new Date() } : {}) } });
+  } else if (op === "pipeline") {
+    // move many to another pipeline → that pipeline's first stage + its owner
+    const target = (await readPipelines()).find((p) => p.name === val);
+    if (!target) return;
+    const first = target.stages[0]?.key ?? "new";
+    const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nick Fair" };
+    await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { pipeline: val, stage: first, archivedAt: null, ...(OWN[val] ? { assignedTo: OWN[val] } : {}) } });
   } else if (op === "tag") {
     for (const id of ids) {
       const o = await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } });
       if (o && !o.tags.toLowerCase().includes(val.toLowerCase())) await db.crmOpportunity.update({ where: { id }, data: { tags: o.tags ? `${o.tags}, ${val}` : val } });
     }
+  } else if (op === "untag") {
+    for (const id of ids) {
+      const o = await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } });
+      if (o) { const kept = o.tags.split(",").map((t) => t.trim()).filter((t) => t && t.toLowerCase() !== val.toLowerCase()).join(", "); if (kept !== o.tags) await db.crmOpportunity.update({ where: { id }, data: { tags: kept } }); }
+    }
+  } else if (op === "follower") {
+    for (const id of ids) {
+      const o = await db.crmOpportunity.findUnique({ where: { id }, select: { formData: true } });
+      if (!o) continue;
+      const fd = (o.formData ?? {}) as Record<string, unknown>;
+      const cur = Array.isArray(fd.__followers) ? (fd.__followers as string[]) : [];
+      await db.crmOpportunity.update({ where: { id }, data: { formData: { ...fd, __followers: [...new Set([...cur, val])] } as never } });
+    }
+  } else if (op === "delete") {
+    await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { archivedAt: new Date() } });
   } else return;
   revalidatePath("/crm");
 }
@@ -1221,5 +1245,24 @@ export async function setOppPipelineAction(formData: FormData) {
     ...(owner ? { assignedTo: owner } : {}),
   } });
   await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "stage", body: `📂 Moved ${opp.pipeline || "War Room"} → ${pipeline}${owner ? ` · assigned ${owner}` : ""}`, actor: me.name });
+  revalidatePath("/crm");
+}
+
+/** 🔀 Reorder the pipeline tabs (Jon 2026-10-13: drag/move pipelines, not just
+ *  rename). dir "up"/"down" swaps a pipeline with its neighbor in the stored
+ *  order (the War Room + DNC built-ins aren't in the stored list). */
+export async function reorderPipelineAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const { readGhlPipelinesRaw, writeGhlPipelines } = await import("@/lib/crm");
+  const list = await readGhlPipelinesRaw();
+  const name = String(formData.get("name") ?? "");
+  const dir = String(formData.get("dir") ?? "");
+  const i = list.findIndex((p) => p.name === name);
+  if (i < 0) return;
+  const j = dir === "up" ? i - 1 : i + 1;
+  if (j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]];
+  await writeGhlPipelines(list);
   revalidatePath("/crm");
 }

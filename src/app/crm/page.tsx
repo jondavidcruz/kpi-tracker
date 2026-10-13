@@ -256,7 +256,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       </Card>
 
       {view === "kanban" ? (
-        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} /></>
+        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={pipelines.map((p) => p.name)} /></>
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>
