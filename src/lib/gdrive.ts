@@ -176,6 +176,29 @@ export async function listFolder(folderId: string): Promise<{ id: string; name: 
   return j.files ?? [];
 }
 
+// 📁 Auto-surface a deal's existing Google Drive files in the War Room (Jon
+// 2026-10-13: "files saved in Drive under the property address aren't showing
+// under Documents"). Finds the deal folder under DEALS_PARENT by street number
+// (same match as the recording/upload path) and lists its files. Best-effort.
+const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
+export async function listDealFiles(label: string): Promise<{ id: string; name: string; link: string; mimeType: string }[]> {
+  if (!gdriveConfigured()) return [];
+  const clean = (label || "").trim();
+  const streetNo = clean.match(/^\d+/)?.[0];
+  const firstTok = clean.toLowerCase().split(",")[0].slice(0, 18);
+  try {
+    const top = await listFolder(DEALS_PARENT);
+    const folders = top.filter((x) => x.mimeType.includes("folder"));
+    let folder = streetNo ? folders.find((x) => x.name.startsWith(streetNo)) : undefined;
+    if (!folder && firstTok) folder = folders.find((x) => x.name.toLowerCase().includes(firstTok));
+    if (!folder) return [];
+    const files = await listFolder(folder.id);
+    return files
+      .filter((x) => !x.mimeType.includes("folder"))
+      .map((x) => ({ id: x.id, name: x.name, mimeType: x.mimeType, link: x.mimeType.includes("google-apps") ? `https://drive.google.com/open?id=${x.id}` : `https://drive.google.com/file/d/${x.id}/view` }));
+  } catch { return []; }
+}
+
 /** Find or create a subfolder by name inside a parent folder. */
 export async function ensureSubfolder(parentId: string, name: string): Promise<string> {
   const existing = (await listFolder(parentId)).find((f) => f.name === name && f.mimeType === "application/vnd.google-apps.folder");

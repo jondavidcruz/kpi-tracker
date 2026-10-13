@@ -49,6 +49,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   ]);
   const [snippets, sequences, seqState] = await Promise.all([readSnippets(), readSequences(), readSeqState()]);
   const enrolled = seqState[opp.id];
+  // 📁 auto-pull this deal's existing Google Drive files (best-effort; no manual
+  // export needed). Matched by the property address / street number.
+  const driveFiles = await import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)).catch(() => [] as { id: string; name: string; link: string; mimeType: string }[]);
   const pipe = pipelines.find((x) => x.name === (opp.pipeline || "War Room")) ?? pipelines[0];
   const stages = pipe.stages;
   const st = stages.find((s) => s.key === opp.stage);
@@ -131,6 +134,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                   <label><span className={lbl}>Email 2</span><input name="altEmail" defaultValue={c.altEmail} className={inputCls} /></label>
                 </div>
                 <label><span className={lbl}>Address</span><input name="address" defaultValue={c.address} className={inputCls} /></label>
+                {/* 🧭 APN / parcel # — land leads are a parcel, not a street
+                    address (Jon 2026-10-13). Saved on this opportunity. */}
+                <label><span className={lbl}>🧭 APN / Parcel #</span><input name="apn" defaultValue={((opp.formData as { property?: { apn?: string } } | null)?.property?.apn) ?? ""} placeholder="123-456-789" className={inputCls} /></label>
                 <label><span className={lbl}>Contact tags</span><input name="ctags" defaultValue={c.tags} placeholder="motivated, probate…" className={inputCls} /></label>
                 <label><span className={lbl}>📌 Pinned note (always visible)</span><input name="pinnedNote" defaultValue={c.pinnedNote} className={inputCls} /></label>
                 <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">Save contact</button>
@@ -139,6 +145,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <div className="mt-2 space-y-1 text-[13px] text-slate-700">
               {c.phone && <div>📱 {c.phone}{c.altPhone ? ` · ${c.altPhone}` : ""}</div>}
               {c.email && <div>✉️ {c.email}{c.altEmail ? ` · ${c.altEmail}` : ""}</div>}
+              {((opp.formData as { property?: { apn?: string } } | null)?.property?.apn) && <div>🧭 APN {(opp.formData as { property?: { apn?: string } } | null)?.property?.apn}</div>}
               {c.address && <div>🏠 {c.address}</div>}
               <div className="text-xs text-slate-400">Source: {c.source || "—"} · added {c.createdAt.toLocaleDateString()}</div>
               {parseTags(c.tags).length > 0 && (
@@ -191,7 +198,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <input type="file" name="file" required className="min-w-0 flex-1 text-[10px] text-slate-500 file:mr-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[10px] file:font-bold file:text-slate-600" />
               <button className="rounded-lg bg-brand-navy px-2.5 py-1 text-[10px] font-bold text-white">⬆ to Drive</button>
             </form>
-            {events.filter((e) => e.kind === "file").length === 0 ? (
+            {events.filter((e) => e.kind === "file").length === 0 && driveFiles.length === 0 ? (
               <p className="text-xs text-slate-400">No documents yet — upload above, or signed PandaDocs attach automatically. Everything lands in the deal&apos;s Google Drive folder.</p>
             ) : (
               <div className="space-y-1.5">
@@ -205,6 +212,19 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                     </a>
                   );
                 })}
+                {/* 📁 files that already live in the deal's Google Drive folder —
+                    auto-synced so the team doesn't export/re-import by hand */}
+                {driveFiles.length > 0 && (
+                  <>
+                    <div className="pt-1 text-[9px] font-bold uppercase tracking-wide text-slate-300">📁 From Google Drive ({driveFiles.length})</div>
+                    {driveFiles.map((f) => (
+                      <a key={f.id} href={f.link} target="_blank" rel="noreferrer" className="block rounded-lg bg-emerald-50/50 px-2.5 py-1.5 text-xs text-emerald-800 ring-1 ring-emerald-100 hover:bg-emerald-50">
+                        {f.mimeType.includes("image") ? "🖼" : f.mimeType.includes("pdf") ? "📕" : f.mimeType.includes("spreadsheet") ? "📊" : f.mimeType.includes("document") ? "📝" : "📄"} {f.name.slice(0, 90)}
+                        <span className="block text-[9px] text-emerald-500/70">in the deal&apos;s Drive folder</span>
+                      </a>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </Card>

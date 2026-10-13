@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { commsFor, readSignatures, firstOf, defaultSignature } = await import("@/lib/crm-comms");
   const { readSnippets } = await import("@/lib/crm-templates");
   const [events, tasks, appts, comms, sigs, snippets, smsEvents, emailEvents] = await Promise.all([
-    db.crmEvent.findMany({ where: { contactId: opp.contactId }, orderBy: { at: "desc" }, take: 10 }),
+    db.crmEvent.findMany({ where: { contactId: opp.contactId }, orderBy: { at: "desc" }, take: 40 }),
     db.crmTask.findMany({ where: { oppId: id, doneAt: null }, orderBy: { due: "asc" }, take: 10 }),
     db.crmAppointment.findMany({ where: { oppId: id, at: { gte: new Date(Date.now() - 86400_000) } }, orderBy: { at: "asc" }, take: 8 }),
     commsFor(me!),
@@ -65,6 +65,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
     tasks: tasks.map((t) => ({ id: t.id, title: t.title, due: t.due })),
     appts: appts.map((a) => ({ id: a.id, title: a.title, at: a.at.toISOString(), withWho: a.withWho })),
-    events: events.map((e) => ({ kind: e.kind, body: stripHtml(e.body).slice(0, 300), actor: e.actor, at: e.at.toISOString() })),
+    events: events.map((e) => ({ id: e.id, kind: e.kind, body: stripHtml(e.body).slice(0, 600), actor: e.actor, at: e.at.toISOString() })),
   });
 }

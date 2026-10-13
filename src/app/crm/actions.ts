@@ -241,6 +241,14 @@ export async function saveCrmContactAction(formData: FormData) {
     tags: String(formData.get("ctags") ?? "").trim().slice(0, 300),
     pinnedNote: String(formData.get("pinnedNote") ?? "").trim().slice(0, 300),
   } });
+  // 🧭 APN/parcel lives on the opportunity (no contact column) — Jon 2026-10-13
+  const apn = formData.get("apn");
+  if (apn != null && oppId) {
+    const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
+    const fd = (o?.formData ?? {}) as Record<string, unknown>;
+    const prop = (fd.property ?? {}) as Record<string, unknown>;
+    await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, property: { ...prop, apn: String(apn).trim() } } } });
+  }
   revalidatePath(`/crm/${oppId}`);
 }
 

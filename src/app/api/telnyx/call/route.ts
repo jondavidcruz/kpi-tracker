@@ -71,14 +71,18 @@ export async function POST(req: NextRequest) {
     // spawn ring waves (Jon 2026-10-09: answered → instantly hung up).
     if (pay0.direction === "incoming" && (pay0.to ?? "").startsWith("+")) {
       const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
-      let cfg: { sipUser?: string; ccAppId?: string; agents?: Record<string, { sipUser: string; lastSeen?: string }> } = {};
+      let cfg: { sipUser?: string; ccAppId?: string; agents?: Record<string, { sipUser: string; lastSeen?: string; onCall?: boolean; busyAt?: string }> } = {};
       try { cfg = row?.description ? JSON.parse(row.description) : {}; } catch { /* none */ }
       // Only ring browsers seen in the last 5 min (presence heartbeat) — dead
       // credentials come back user_busy instantly and eat the ring window
       // (2026-10-09). No fresh agent at all → ring everything as a hail mary.
       const agentList = Object.values(cfg.agents ?? {});
       const fresh = agentList.filter((a) => a.lastSeen && Date.now() - Date.parse(a.lastSeen) < 5 * 60_000);
-      const pool = fresh.length > 0 ? fresh : agentList;
+      // 📞 skip agents already ON a call (Jon 2026-10-13: "route only to the
+      // agent who is available"). busyAt within ~3min = on a call now. If that
+      // leaves nobody, fall back to all fresh so we never black-hole a call.
+      const available = fresh.filter((a) => !(a.onCall && a.busyAt && Date.now() - Date.parse(a.busyAt) < 3 * 60_000));
+      const pool = available.length > 0 ? available : fresh.length > 0 ? fresh : agentList;
       const targets = [...new Set([
         ...pool.map((a) => a.sipUser),
         ...(fresh.length > 0 ? [] : [cfg.sipUser ?? ""]),

@@ -7,7 +7,7 @@ import { useEffect, useState, useTransition } from "react";
 import {
   setOppStageAction, setOppPipelineAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
   addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, saveCrmFormAction,
-  setOppOwnerAction, toggleFollowerAction, archiveOppAction,
+  setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction,
 } from "@/app/crm/actions";
 import { KIND_EMOJI } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
@@ -29,7 +29,7 @@ type Payload = {
   contact: { id: string; name: string; phone: string; altPhone: string; email: string; altEmail: string; address: string; pinnedNote: string; tags: string };
   tasks: Array<{ id: string; title: string; due: string }>;
   appts: Array<{ id: string; title: string; at: string; withWho: string }>;
-  events: Array<{ kind: string; body: string; actor: string; at: string }>;
+  events: Array<{ id?: string; kind: string; body: string; actor: string; at: string }>;
 };
 
 const TABS = [
@@ -51,6 +51,7 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
   const [data, setData] = useState<Payload | null>(null);
   const [tab, setTab] = useState("opp");
   const [saved, setSaved] = useState("");
+  const [editNoteId, setEditNoteId] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   useEffect(() => {
@@ -228,6 +229,10 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                       <input name="address" defaultValue={d.contact.address} className={inputCls} />
                     </div>
                     <div className="col-span-2">
+                      <label className={labelCls}>🧭 APN / Parcel # (land leads)</label>
+                      <input name="apn" defaultValue={(d.formData as { property?: { apn?: string } } | undefined)?.property?.apn ?? ""} placeholder="123-456-789" className={inputCls} />
+                    </div>
+                    <div className="col-span-2">
                       <label className={labelCls}>📌 Pinned note (always on top)</label>
                       <input name="pinnedNote" defaultValue={d.contact.pinnedNote} className={inputCls} />
                     </div>
@@ -350,13 +355,26 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                       <button className="rounded-xl bg-brand-navy px-3 py-1.5 text-xs font-bold text-white">📝 Add</button>
                     </form>
                     <div className="space-y-1.5">
-                      {d.events.map((e, i) => (
-                        <div key={i} className="rounded-lg bg-white px-3 py-2 text-xs text-slate-700 ring-1 ring-slate-100">
-                          <span className="mr-1">{KIND_EMOJI[e.kind] ?? "•"}</span>
-                          <span className="whitespace-pre-line">{e.body}</span>
-                          <span className="ml-1 text-[9px] text-slate-400">{e.actor} · {new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
-                        </div>
-                      ))}
+                      {d.events.map((e, i) => {
+                        const mine = e.kind === "note" && !!e.id && e.actor === d.me.name;
+                        if (mine && editNoteId === e.id) return (
+                          <form key={e.id} action={submit(editCrmNoteAction, { id: e.id!, oppId: d.id })} onSubmit={() => setEditNoteId(null)} className="rounded-lg bg-white p-2 ring-1 ring-indigo-200">
+                            <textarea name="body" defaultValue={e.body} rows={3} className={inputCls} autoFocus />
+                            <div className="mt-1 flex gap-1.5">
+                              <button className="rounded-lg bg-brand-navy px-3 py-1 text-[11px] font-bold text-white">Save</button>
+                              <button type="button" onClick={() => setEditNoteId(null)} className="rounded-lg bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">Cancel</button>
+                            </div>
+                          </form>
+                        );
+                        return (
+                          <div key={e.id ?? i} className="group/qn rounded-lg bg-white px-3 py-2 text-xs text-slate-700 ring-1 ring-slate-100">
+                            <span className="mr-1">{KIND_EMOJI[e.kind] ?? "•"}</span>
+                            <span className="whitespace-pre-line">{e.body}</span>
+                            <span className="ml-1 text-[9px] text-slate-400">{e.actor} · {new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                            {mine && <button onClick={() => { setEditNoteId(e.id!); }} title="Edit this note" className="ml-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-indigo-600">✎ edit</button>}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

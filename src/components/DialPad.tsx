@@ -349,6 +349,12 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   };
   const onCallRef = useRef<Ctx | null>(null);
   useEffect(() => { onCallRef.current = onCall; }, [onCall]);
+  // 📞 report busy the instant a call goes active / ends (Jon 2026-10-13) so the
+  // next inbound call skips me while I'm on the phone — no 45s heartbeat lag.
+  useEffect(() => {
+    if (!leaderRef.current || !readyRef.current) return;
+    fetch("/api/telnyx/presence", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ busy: state === "active" }) }).catch(() => {});
+  }, [state]);
   // connect in the background so inbound calls ring even before first use,
   // and keep the registration alive (tokens/sockets expire quietly).
   useEffect(() => {
@@ -399,7 +405,8 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       }
       try { localStorage.setItem("fo_phone_hb", String(Date.now())); } catch { /* fine */ }
       if (!readyRef.current) ensureClient().catch(() => {});
-      else fetch("/api/telnyx/presence", { method: "POST" }).catch(() => {});
+      // report busy=true while on an ACTIVE call so inbound ring-all skips me
+      else fetch("/api/telnyx/presence", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ busy: stateRef.current === "active" }) }).catch(() => {});
     }, 45_000);
     const wake = () => { if (leaderRef.current && !readyRef.current) ensureClient().catch(() => {}); };
     document.addEventListener("visibilitychange", wake);
