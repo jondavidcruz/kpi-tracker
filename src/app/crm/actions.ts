@@ -715,7 +715,8 @@ export async function startConversationAction(formData: FormData) {
 /** List-view bulk actions: reassign / add tag / move stage for many at once. */
 export async function bulkOppAction(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isManager(me)) return;
+  const { canManageAllLeads } = await import("@/lib/auth");
+  if (!canManageAllLeads(me)) return;
   const ids = formData.getAll("ids").map(String).filter(Boolean).slice(0, 500);
   const op = String(formData.get("op") ?? "");
   const val = String(formData.get("val") ?? "").trim();

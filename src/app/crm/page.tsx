@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { readPipelines, parseTags } from "@/lib/crm";
@@ -29,11 +29,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // Permissions (Jon 2026-10-07: "Nick gets his own pipeline"): managers see
   // everyone; a rep's board is scoped to THEIR leads — their own pipeline.
   const manager = isManager(me!);
-  // 👁 who can see the WHOLE board (Jon 2026-10-13): managers/admins + the
-  // trusted veteran reps. New reps (Nick, future hires) stay locked to their
-  // own leads only. Add a first name here to grant full visibility.
-  const VIEW_ALL = new Set(["sharyn", "michelle", "marie"]);
-  const canViewAll = manager || VIEW_ALL.has(me!.name.trim().split(/\s+/)[0].toLowerCase());
+  const canViewAll = canManageAllLeads(me!);
   // Managers default to EVERYONE (Jon 2026-10-09 — "I don't have leads
   // assigned to me"); the dropdown narrows it. Reps stay locked to their own.
   const whoRaw = canViewAll ? (sp.who === "all" || sp.who == null ? "" : sp.who) : me!.name;

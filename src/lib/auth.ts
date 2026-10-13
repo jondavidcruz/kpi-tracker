@@ -22,6 +22,14 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   return db.user.findUnique({ where: { email } });
 });
 
+// 👁 Veteran reps Jon trusts to see AND edit EVERY lead (2026-10-13), on top of
+// managers/admins. New hires + Nick are NOT here → own-leads only. Add a first
+// name to grant full lead access.
+export const FULL_LEAD_ACCESS = new Set(["sharyn", "michelle", "marie", "viktoriia"]);
+export function canManageAllLeads(user: User | null): boolean {
+  return isManager(user) || (!!user && FULL_LEAD_ACCESS.has(user.name.trim().split(/\s+/)[0].toLowerCase()));
+}
+
 export function isManager(user: User | null): boolean {
   return !!user && (user.role === "manager" || user.role === "admin");
 }
