@@ -72,6 +72,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [endConfirm, setEndConfirm] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef(0);
+  const recStartedRef = useRef(false); // 🎙 did we already start recording this outbound call?
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const keepAliveRef = useRef<HTMLAudioElement | null>(null);
   // 🔇 anti-discard: Chrome's Memory Saver unloads idle tabs, killing the
@@ -205,7 +206,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     const dur = startRef.current ? Math.round((Date.now() - startRef.current) / 1000) : 0;
     startRef.current = 0;
-    setState("idle"); setMuted(false); setSecs(0); setOnCall(null); setDtmfTrail("");
+    setState("idle"); setMuted(false); setSecs(0); setOnCall(null); setDtmfTrail(""); recStartedRef.current = false;
     if (ctx?.oppId || ctx?.contactId || ctx?.phone) setLastCall({ ...ctx, secs: dur }); // keypad dials get the strip too (Jon 2026-10-09)
     if (ctx?.phone || ctx?.contactId) {
       // log EVERY call — keypad dials included; the server find-or-creates the
@@ -332,6 +333,14 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             }
             setState("active"); setMsg("");
             if (audioRef.current && n.call.remoteStream) { audioRef.current.srcObject = n.call.remoteStream; audioRef.current.play().catch(() => {}); }
+            // 🎙 outbound WebRTC calls aren't recorded by the webhook — start the
+            // recording here the moment it connects (Jon 2026-10-13). Inbound
+            // calls are already recorded on the winner bridge.
+            if (onCallRef.current?.dir === "out" && !recStartedRef.current) {
+              const cc = callRef.current as unknown as { telnyxIDs?: { telnyxCallControlId?: string }; id?: string } | null;
+              const ccId = cc?.telnyxIDs?.telnyxCallControlId || cc?.id || "";
+              if (ccId) { recStartedRef.current = true; fetch("/api/telnyx/record", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callControlId: ccId }) }).catch(() => {}); }
+            }
           }
           if (cs === "active" || ["hangup", "destroy"].includes(cs)) {
             try { bcRef.current?.postMessage({ t: "incoming-clear" }); } catch { /* fine */ }

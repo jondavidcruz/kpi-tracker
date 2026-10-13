@@ -196,11 +196,12 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ ok: true, vm: true });
     }
-    // 🎙 outbound browser call answered (credential leg → seller) → record it,
-    // and remember the leg so 📼 Drop VM can speak into it (Jon 2026-10-12)
+    // 📼 outbound browser call answered → remember the leg so 📼 Drop VM can
+    // speak into it (Jon 2026-10-12). Recording is now started client-side from
+    // the dialer (/api/telnyx/record) the moment it connects, since this webhook
+    // path doesn't reliably fire for WebRTC outbound legs — 2026-10-13.
     const pd = p as { direction?: string; to?: string };
     if (pd.direction === "outgoing" && (pd.to ?? "").startsWith("+")) {
-      await txCall(p.call_control_id, "record_start", { format: "mp3", channels: "dual" });
       try {
         const last10 = (pd.to ?? "").replace(/\D/g, "").slice(-10);
         const row5 = await db.resource.findFirst({ where: { category: "__active_out__" } });
