@@ -252,34 +252,37 @@ export async function POST(req: NextRequest) {
           link = up.link;
         }
       }
-      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, secs }, actor: "recorder" });
-      // 📝 transcript via Gemini (free tier) — best effort, small enough files only
+      // 📝 Transcribe + SUMMARIZE in one Gemini call (Jon 2026-10-13: "AI get the
+      // MAIN details, not the whole transcript in the notes"). The note shows a
+      // short key-points summary; the full transcript rides along in meta.
+      let transcript = "";
       if (process.env.GEMINI_API_KEY && bytes.length < 9 * 1024 * 1024) {
         try {
           const b64 = Buffer.from(bytes).toString("base64");
           const tr = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
             method: "POST", headers: { "content-type": "application/json" },
-            body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: "audio/mp3", data: b64 } }, { text: "Transcribe this real-estate phone call. Label speakers 'Rep:' and 'Seller:'. Transcript only, no commentary." }] }], generationConfig: { maxOutputTokens: 4000 } }),
+            body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: "audio/mp3", data: b64 } }, { text: "This is a recorded real-estate acquisitions phone call. Reply in EXACTLY this format:\nSUMMARY:\n- (3 to 6 short bullets covering: seller's motivation to sell, asking price / any numbers discussed, timeline, property condition or issues, objections, and the agreed next step)\n\nTRANSCRIPT:\n(full transcript, labeling speakers 'Rep:' and 'Seller:')" }] }], generationConfig: { maxOutputTokens: 4000 } }),
             signal: AbortSignal.timeout(40000),
           });
           const tj = (await tr.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-          const text = tj.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("").trim();
-          if (text) {
-            await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📝 Call transcript:\n${text.slice(0, 3600)}`, actor: "recorder" });
-            // 🎯 auto-score every real conversation (≥60s) against the coaching
-            // rubric — Jon's call-scoring feature, fed by the free transcript
-            if (secs >= 60) {
-              try {
-                const { scoreTranscript } = await import("@/lib/score");
-                const sc = await scoreTranscript(text, { label: "seller call" });
-                if (sc.configured && sc.overall > 0) {
-                  const lines = sc.breakdown.slice(0, 5).map((b) => `• ${b.area}: ${b.score} — ${b.note}`).join("\n");
-                  await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `🎯 AI call score: ${sc.overall}/100\n${lines}\n💡 ${sc.summary}`.slice(0, 3800), actor: "coach" });
-                }
-              } catch { /* scoring is gravy — transcript already landed */ }
-            }
+          const out = tj.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("").trim() ?? "";
+          const m = out.split(/\n\s*TRANSCRIPT:\s*\n/i);
+          const summary = (m[0] || "").replace(/^\s*SUMMARY:\s*\n?/i, "").trim();
+          transcript = (m[1] || (m.length === 1 ? out : "")).trim();
+          if (summary) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📞 Call summary (AI) — ${secs ? `${Math.floor(secs / 60)}m ${secs % 60}s` : ""}\n${summary}`.slice(0, 2000), actor: "recorder" });
+        } catch { /* recording itself is already filed below */ }
+      }
+      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, secs, transcript: transcript.slice(0, 12000) }, actor: "recorder" });
+      // 🎯 auto-score every real conversation (≥60s) against the coaching rubric
+      if (transcript && secs >= 60) {
+        try {
+          const { scoreTranscript } = await import("@/lib/score");
+          const sc = await scoreTranscript(transcript, { label: "seller call" });
+          if (sc.configured && sc.overall > 0) {
+            const lines = sc.breakdown.slice(0, 5).map((b) => `• ${b.area}: ${b.score} — ${b.note}`).join("\n");
+            await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `🎯 AI call score: ${sc.overall}/100\n${lines}\n💡 ${sc.summary}`.slice(0, 3800), actor: "coach" });
           }
-        } catch { /* recording itself is already filed */ }
+        } catch { /* scoring is gravy — transcript already landed */ }
       }
     } catch (e) {
       await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "system", body: `🎙 Recording save failed: ${String(e).slice(0, 120)}`, actor: "recorder" }).catch(() => {});

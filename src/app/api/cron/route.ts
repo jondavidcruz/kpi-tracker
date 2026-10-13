@@ -1490,6 +1490,64 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, renamed });
   }
 
+  // ⚙️ Seed the GREEN (internal, no-outreach) stage automations Jon approved
+  // (?seedautomations=1, 2026-10-13): reads live pipeline stage keys and installs
+  // task/follow-up rules per stage for acq + dispo. Also files the 3 ORANGE
+  // (seller/buyer-facing) ones as reminder TASKS for later. Idempotent.
+  if (url.searchParams.get("seedautomations") === "1") {
+    const { readRules, writeRules } = await import("@/lib/crm-automations");
+    const { readPipelines } = await import("@/lib/crm");
+    const pls = (await readPipelines()).filter((p) => !/dnc|dead|cold/i.test(p.name));
+    const existing = await readRules();
+    type Plan = { action: "task" | "followup"; title?: string; dueDays?: number; days?: number };
+    const planFor = (label: string): Plan | null => {
+      const s = label.toLowerCase();
+      if (/<\s*1 ?min|new \(call/.test(s) || /^\s*new\s*$/.test(s)) return { action: "task", title: "📞 Call now — speed to lead (under 1 min)", dueDays: 0 };
+      if (/10 ?days|qualif/.test(s)) return { action: "followup", days: 1 };
+      if (/process call/.test(s)) return { action: "task", title: "Gather title, liens, condition & heirs for the offer", dueDays: 1 };
+      if (/comp.*offer|offer.*comp/.test(s)) return { action: "task", title: "🧮 Underwrite + price now — 24h clock", dueDays: 0 };
+      if (/offer call/.test(s)) return { action: "task", title: "📞 Make the offer call — ASAP", dueDays: 0 };
+      if (/verbal offer|negotiat/.test(s)) return { action: "followup", days: 1 };
+      if (/contract.*(apt|appt)|sign.*appt|appt.*sign/.test(s)) return { action: "task", title: "Confirm the signing appointment", dueDays: 0 };
+      if (/contract sent/.test(s)) return { action: "task", title: "Follow up — is the contract signed? Answer any questions", dueDays: 1 };
+      if (/contract signed|signed.*dispo/.test(s)) return { action: "task", title: "Hand to dispo + start title/escrow", dueDays: 0 };
+      if (/sent.*(agent|buyer|jvp)/.test(s)) return { action: "task", title: "Follow up with the buyer list", dueDays: 2 };
+      if (/received.*offer|\d+ ?offers/.test(s)) return { action: "task", title: "Rack & stack offers — pick the best (need 3)", dueDays: 0 };
+      if (/overpric/.test(s)) return { action: "followup", days: 14 };
+      if (/on market|reduction/.test(s)) return { action: "task", title: "Check days-on-market — 30+ → run the Reduction Play", dueDays: 0 };
+      if (/deal won|escrow closed|\bwon\b/.test(s)) return { action: "task", title: "Confirm escrow + closing", dueDays: 0 };
+      return null;
+    };
+    const rules = [...existing];
+    let added = 0;
+    for (const pl of pls) {
+      for (const st of pl.stages) {
+        const plan = planFor(st.label);
+        if (!plan) continue;
+        const dup = existing.some((r) => r.pipeline === pl.name && r.stage === st.key && r.action === plan.action);
+        if (dup) continue;
+        rules.push({ id: `seed_${Math.random().toString(36).slice(2, 9)}`, name: plan.title || `auto: ${st.label}`, pipeline: pl.name, stage: st.key, action: plan.action, params: { ...(plan.title ? { title: plan.title } : {}), ...(plan.dueDays != null ? { dueDays: plan.dueDays } : {}), ...(plan.days != null ? { days: plan.days } : {}) }, enabled: true, createdBy: "seed" });
+        added++;
+      }
+    }
+    await writeRules(rules.slice(0, 80));
+    // 🟠 deferred seller/buyer-facing automations → reminder tasks for Jon
+    const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const oranges = [
+      "🟠 Automation to set up later: Buyer Blast (deal → buyer list text/email) — still deciding how we want to run it",
+      "🟠 Automation to set up later: Seller 'market feedback' reduction nudge (Overpriced/Nurture stage)",
+      "🟠 Automation to set up later: Seller closing-day update text/email",
+    ];
+    let orangeTasks = 0;
+    for (const t of oranges) {
+      const dup = await db.crmTask.findFirst({ where: { title: t, doneAt: null } });
+      if (dup) continue;
+      await db.crmTask.create({ data: { title: t, due, assignedTo: "Jon Cruz", createdBy: "automation-setup" } });
+      orangeTasks++;
+    }
+    return NextResponse.json({ ok: true, rulesAdded: added, totalRules: Math.min(rules.length, 80), orangeReminderTasks: orangeTasks });
+  }
+
   // 🏠 War Room pipeline retirement (?warroommove=1 — Jon 2026-10-08: "why is
   // War Room its own pipeline?"): every lead sitting in the generic bucket
   // moves to its assigned rep's own pipeline (first stage), Michelle fallback.

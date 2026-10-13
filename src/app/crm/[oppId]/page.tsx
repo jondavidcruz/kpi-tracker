@@ -325,11 +325,15 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 {e.kind === "note"
                   ? <EditableNote id={e.id} oppId={opp.id} actor={e.actor} body={stripHtml(e.body)} canEdit={e.actor === me!.name || manager} />
                   : <div className="whitespace-pre-line text-[13px] text-slate-800"><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</div>}
-                {/* 🎙 recording → play it right here (Jon 2026-10-12) */}
-                {(() => { const m = e.meta as { link?: string } | null; return m?.link && e.body.startsWith("🎙") ? (
-                  // eslint-disable-next-line jsx-a11y/media-has-caption
-                  <audio controls preload="none" src={m.link} className="mt-1.5 h-9 w-full max-w-sm" />
-                ) : null; })()}
+                {/* 🎙 recording → play it right here + collapsed full transcript
+                    (the AI summary is its own 📝 note; Jon 2026-10-12/13) */}
+                {(() => { const m = e.meta as { link?: string; transcript?: string } | null; if (!(m && e.body.startsWith("🎙"))) return null; return (
+                  <div className="mt-1.5 space-y-1">
+                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                    {m.link && <audio controls preload="none" src={m.link} className="h-9 w-full max-w-sm" />}
+                    {m.transcript && <details className="text-[11px]"><summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">📄 Full transcript</summary><div className="mt-1 max-h-60 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 p-2 text-slate-600 ring-1 ring-slate-100">{m.transcript}</div></details>}
+                  </div>
+                ); })()}
                 <div className="mt-0.5 text-[10px] text-slate-400">{fmtAt(e.at)}{e.actor && e.kind !== "note" ? ` · ${e.actor}` : ""}{e.oppId && e.oppId !== opp.id ? " · other opportunity" : ""}</div>
               </div>
             </Card>
