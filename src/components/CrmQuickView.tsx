@@ -86,7 +86,7 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                 <div className="truncate text-lg font-extrabold tracking-tight text-slate-900">Edit “{d.contact.name}”</div>
                 <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
                   <span className="font-semibold text-slate-400">Pipeline:</span>
-                  <select value={d.pipeline} onChange={(e) => { const pipeline = e.target.value; if (pipeline === d.pipeline) return; setData({ ...d, pipeline }); const fd = new FormData(); fd.set("id", d.id); fd.set("pipeline", pipeline); start(async () => { await setOppPipelineAction(fd); if (oppId) await refetch(oppId); }); }} className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-bold text-slate-700">
+                  <select value={d.pipeline} onChange={(e) => { const pipeline = e.target.value; if (pipeline === d.pipeline) return; setData({ ...d, pipeline }); const fd = new FormData(); fd.set("id", d.id); fd.set("pipeline", pipeline); start(async () => { await setOppPipelineAction(fd); setSaved("✓ Moved — refreshing"); window.location.reload(); }); }} className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-bold text-slate-700">
                     {(d.pipelines ?? [d.pipeline]).map((pn) => <option key={pn} value={pn}>{pn}</option>)}
                   </select>
                 </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -73,6 +73,11 @@ export default function Sidebar({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // 🖥 desktop sidebar collapse (Jon 2026-10-13: "minimize like on a MacBook") —
+  // hides the rail to reclaim screen width, persisted per device.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => { try { if (localStorage.getItem("fo_sidebar_collapsed") === "1") setCollapsed(true); } catch { /* ok */ } }, []);
+  const toggleCollapsed = () => setCollapsed((v) => { const n = !v; try { localStorage.setItem("fo_sidebar_collapsed", n ? "1" : "0"); } catch { /* ok */ } return n; });
 
   const groups: { label: string; items: Item[] }[] = [
     // Department columns (Jon 2026-10-06) — defaults only; every tab drags
@@ -215,9 +220,13 @@ export default function Sidebar({
   const Nav = (
     <div className="flex h-full flex-col">
       <div className="px-4 pt-5 pb-3">
-        <a href="https://freedom-offers.com" target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className="block" title="Visit freedom-offers.com">
-          <Logo size="sm" tagline />
-        </a>
+        <div className="flex items-start justify-between">
+          <a href="https://freedom-offers.com" target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className="block" title="Visit freedom-offers.com">
+            <Logo size="sm" tagline />
+          </a>
+          {/* collapse the rail (desktop only) */}
+          <button onClick={toggleCollapsed} title="Minimize the menu" aria-label="Minimize the menu" className="hidden shrink-0 rounded-lg px-1.5 py-1 text-brand-navy-300 hover:bg-white/5 hover:text-white md:block">«</button>
+        </div>
         {/* 🏷 always-visible company reference (Jon 2026-10-09): what to tell sellers */}
         <div className="mt-1.5 space-y-0.5 text-[11px] font-semibold text-white/90">
           <div>🌐 freedom-offers.com</div>
@@ -371,8 +380,12 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* Desktop rail */}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 bg-brand-navy md:block">{Nav}</aside>
+      {/* Desktop rail — collapsible (Jon 2026-10-13) */}
+      <aside className={`sticky top-0 hidden h-screen shrink-0 overflow-hidden bg-brand-navy transition-all md:block ${collapsed ? "w-0" : "w-60"}`}>{collapsed ? null : Nav}</aside>
+      {/* reopen tab when collapsed */}
+      {collapsed && (
+        <button onClick={toggleCollapsed} title="Open the menu" aria-label="Open the menu" className="fixed left-0 top-3 z-40 hidden items-center gap-1 rounded-r-lg bg-brand-navy px-2 py-2 text-xs font-bold text-white shadow-lg hover:bg-brand-navy-700 md:flex">☰</button>
+      )}
 
       {/* Mobile drawer */}
       {open && (

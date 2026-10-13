@@ -39,13 +39,21 @@ export async function createCrmLeadAction(formData: FormData) {
     assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name,
     address: title === "New opportunity" ? "" : title,
   } });
-  // land in the ASSIGNED REP'S pipeline, not the generic War Room tab, and
-  // fire the welcome SMS + email like every other intake (Jon 2026-10-08)
+  // land in the ASSIGNED REP'S pipeline; if that rep has no pipeline (e.g. a
+  // dispo rep or unassigned) default to MICHELLE's acquisitions pipeline, NEVER
+  // the generic War Room tab (Jon 2026-10-13). Fire welcome SMS + email too.
+  const pls = await readPipelines();
   const repFirst = contact.assignedTo.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-  const repPipe = repFirst ? (await readPipelines()).find((p) => p.name.toLowerCase().includes(repFirst)) : undefined;
+  const repPipe = repFirst ? pls.find((p) => p.name.toLowerCase().includes(repFirst)) : undefined;
+  const michellePipe = pls.find((p) => /michelle/i.test(p.name));
+  const landPipe = repPipe ?? michellePipe;
+  const owner = repPipe ? contact.assignedTo : (michellePipe ? "Michelle Lagudas" : contact.assignedTo);
+  if (!repPipe && michellePipe && owner !== contact.assignedTo) {
+    await db.crmContact.update({ where: { id: contact.id }, data: { assignedTo: owner } }).catch(() => {});
+  }
   const opp = await db.crmOpportunity.create({ data: {
-    contactId: contact.id, title, stage: repPipe?.stages[0]?.key ?? "new", pipeline: repPipe?.name ?? "",
-    assignedTo: contact.assignedTo,
+    contactId: contact.id, title, stage: landPipe?.stages[0]?.key ?? "new", pipeline: landPipe?.name ?? "",
+    assignedTo: owner,
   } });
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: "Lead created", actor: me.name });
   // intake notes land on the timeline immediately — no second step (Jon 2026-10-09)
@@ -782,8 +790,8 @@ export async function bulkOppAction(formData: FormData) {
     if (!target) return;
     const wantStage = String(formData.get("targetStage") ?? "").trim();
     const stage = target.stages.some((s) => s.key === wantStage) ? wantStage : (target.stages[0]?.key ?? "new");
-    const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nick Fair" };
-    await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { pipeline: val, stage, archivedAt: null, ...(OWN[val] ? { assignedTo: OWN[val] } : {}) } });
+    const own = ownerForPipeline(val);
+    await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { pipeline: val, stage, archivedAt: null, ...(own ? { assignedTo: own } : {}) } });
   } else if (op === "tag") {
     for (const id of ids) {
       const o = await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } });
@@ -839,8 +847,8 @@ export async function bulkOppStageAction(formData: FormData) {
     if (!target) return;
     const wantStage = String(formData.get("targetStage") ?? "").trim();
     const stage = target.stages.some((s) => s.key === wantStage) ? wantStage : (target.stages[0]?.key ?? "new");
-    const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nick Fair" };
-    await db.crmOpportunity.updateMany({ where, data: { pipeline: val, stage, archivedAt: null, ...(OWN[val] ? { assignedTo: OWN[val] } : {}) } });
+    const own = ownerForPipeline(val);
+    await db.crmOpportunity.updateMany({ where, data: { pipeline: val, stage, archivedAt: null, ...(own ? { assignedTo: own } : {}) } });
   } else if (op === "delete") {
     await db.crmOpportunity.updateMany({ where, data: { archivedAt: new Date() } });
   } else if (op === "tag" || op === "untag" || op === "follower") {
@@ -1328,10 +1336,15 @@ export async function logCallTypeKpiAction(formData: FormData): Promise<{ ok: bo
 /** 🔀 Move an opp to a DIFFERENT pipeline (Jon 2026-10-13: team can move
  *  between pipelines, not just stages). Lands on the target pipeline's first
  *  stage and auto-assigns to that pipeline's owner when one is defined. */
-const PIPELINE_OWNERS: Record<string, string> = {
-  "🔥 AQM: Michelle Lagudas": "Michelle Lagudas",
-  "🎓 JrAQ: Nick Fair": "Nick Fair",
-};
+// Derive the auto-owner from a pipeline NAME (robust to emoji/prefix renames —
+// the old hardcoded "🔥 AQM:" map went stale when pipelines were renamed to
+// "💰 AQ:"). Only the per-rep acquisitions pipelines auto-assign an owner.
+function ownerForPipeline(name: string): string {
+  const n = (name || "").toLowerCase();
+  if (n.includes("michelle")) return "Michelle Lagudas";
+  if (n.includes("nick")) return "Nick Fair";
+  return "";
+}
 export async function setOppPipelineAction(formData: FormData) {
   const me = await crmUser();
   if (!me) return;
@@ -1344,7 +1357,7 @@ export async function setOppPipelineAction(formData: FormData) {
   const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, pipeline: true, stage: true, assignedTo: true } });
   if (!opp) return;
   const firstStage = target.stages[0]?.key ?? opp.stage;
-  const owner = PIPELINE_OWNERS[pipeline];
+  const owner = ownerForPipeline(pipeline);
   await db.crmOpportunity.update({ where: { id }, data: {
     pipeline, stage: firstStage, archivedAt: null,
     ...(owner ? { assignedTo: owner } : {}),
