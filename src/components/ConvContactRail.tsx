@@ -55,6 +55,16 @@ export default function ConvContactRail({ contact, opps, owners, canEdit }: { co
       </div>
       <div className="mb-3"><AgeChip iso={contact.createdAt} /></div>
 
+      {/* 📝 quick note from the Conversations view (Jon 2026-10-13) — lands on the
+          lead's timeline + the thread audit on the left. */}
+      <form action={addPropertyNoteAction} className="mb-3 rounded-xl bg-amber-50/60 p-2 ring-1 ring-amber-100">
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">📝 Add a note</div>
+        <input type="hidden" name="oppId" value={opps[0]?.id ?? ""} />
+        <input type="hidden" name="contactId" value={contact.id} />
+        <textarea name="body" rows={2} placeholder="What did the seller say?" className="w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs" required />
+        <button className="mt-1 w-full rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">Save note</button>
+      </form>
+
       {/* ── CONTACT: read view ── */}
       {!editing && (
         <div className="space-y-2 text-sm">

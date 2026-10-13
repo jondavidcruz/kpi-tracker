@@ -44,7 +44,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
     db.crmEvent.findMany({ where: { contactId: c.id }, orderBy: { at: "desc" }, take: 400 }),
     db.crmTask.findMany({ where: { oppId }, orderBy: [{ doneAt: "asc" }, { due: "asc" }] }),
     db.crmAppointment.findMany({ where: { oppId }, orderBy: { at: "asc" } }),
-    db.crmOpportunity.findMany({ where: { contactId: c.id, id: { not: oppId } }, select: { id: true, title: true, stage: true } }),
+    db.crmOpportunity.findMany({ where: { contactId: c.id, id: { not: oppId } }, select: { id: true, title: true, stage: true, formData: true } }),
     db.crmParty.findMany({ where: { oppId }, orderBy: { createdAt: "asc" } }),
   ]);
   const [snippets, sequences, seqState] = await Promise.all([readSnippets(), readSequences(), readSeqState()]);
@@ -154,17 +154,24 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             </div>
             {/* multi-opportunity */}
             <div className="mt-3 border-t border-slate-100 pt-2">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Other opportunities ({siblingOpps.length})</div>
-              {siblingOpps.map((o) => (
-                <Link key={o.id} href={`/crm/${o.id}`} className="mt-1 flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
-                  <span className="flex-1">{o.title}</span>
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${stages.find((s) => s.key === o.stage)?.cls ?? ""}`}>{stages.find((s) => s.key === o.stage)?.label ?? o.stage}</span>
-                </Link>
-              ))}
-              <form action={addOpportunityAction} className="mt-1.5 flex gap-1.5">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🔗 Linked opportunities ({siblingOpps.length}) — each parcel is its own card</div>
+              {siblingOpps.map((o) => {
+                const sibApn = (o.formData as { property?: { apn?: string } } | null)?.property?.apn;
+                return (
+                  <Link key={o.id} href={`/crm/${o.id}`} className="mt-1 flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                    <span className="flex-1 truncate">{o.title}{sibApn ? <span className="ml-1 font-normal text-slate-400">· APN {sibApn}</span> : null}</span>
+                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${stages.find((s) => s.key === o.stage)?.cls ?? ""}`}>{stages.find((s) => s.key === o.stage)?.label ?? o.stage}</span>
+                  </Link>
+                );
+              })}
+              {/* add another parcel — its own opportunity, with address + APN */}
+              <form action={addOpportunityAction} className="mt-1.5 space-y-1.5">
                 <input type="hidden" name="contactId" value={c.id} />
-                <input name="title" placeholder="＋ another property…" className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
-                <button className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200">Add</button>
+                <input name="title" placeholder="＋ another property / address…" className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                <div className="flex gap-1.5">
+                  <input name="apn" placeholder="🧭 APN / Parcel # (optional)" className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                  <button className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-bold text-white hover:bg-slate-700">Add</button>
+                </div>
               </form>
             </div>
           </Card>

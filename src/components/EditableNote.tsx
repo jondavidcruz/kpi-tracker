@@ -2,7 +2,7 @@
 // ✎ Inline note editor (Jon 2026-10-13): edit a note you wrote, right in the
 // timeline. Only the author (or a manager) gets the pencil; others see plain text.
 import { useState } from "react";
-import { editCrmNoteAction } from "@/app/crm/actions";
+import { editCrmNoteAction, deleteCrmNoteAction } from "@/app/crm/actions";
 
 export default function EditableNote({ id, oppId, actor, body, canEdit }: { id: string; oppId: string; actor: string; body: string; canEdit: boolean }) {
   const [editing, setEditing] = useState(false);
@@ -26,6 +26,13 @@ export default function EditableNote({ id, oppId, actor, body, canEdit }: { id: 
       <span className="whitespace-pre-line text-[13px] text-slate-800"><b>{actor}:</b> {body}</span>
       {canEdit && (
         <button onClick={() => setEditing(true)} title="Edit this note" className="ml-1.5 align-middle text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/note:opacity-100 hover:text-indigo-600">✎ edit</button>
+      )}
+      {canEdit && (
+        <form action={deleteCrmNoteAction} className="inline" onSubmit={(e) => { if (!confirm("Delete this note?")) e.preventDefault(); }}>
+          <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="oppId" value={oppId} />
+          <button title="Delete this note" className="ml-1 align-middle text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/note:opacity-100 hover:text-red-600">🗑</button>
+        </form>
       )}
     </div>
   );

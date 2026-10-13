@@ -73,10 +73,11 @@ export async function addOpportunityAction(formData: FormData) {
   const me = await crmUser();
   if (!me) return;
   const contactId = String(formData.get("contactId") ?? "");
-  const title = String(formData.get("title") ?? "").trim();
+  const apn = String(formData.get("apn") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim() || (apn ? `APN ${apn}` : "");
   if (!contactId || !title) return;
-  const opp = await db.crmOpportunity.create({ data: { contactId, title, stage: "new", assignedTo: me.name } });
-  await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `New opportunity: ${title}`, actor: me.name });
+  const opp = await db.crmOpportunity.create({ data: { contactId, title, stage: "new", assignedTo: me.name, ...(apn ? { formData: { property: { apn } } } : {}) } });
+  await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `New opportunity: ${title}${apn ? ` · APN ${apn}` : ""}`, actor: me.name });
   revalidatePath("/crm");
   redirect(`/crm/${opp.id}`);
 }
@@ -191,6 +192,24 @@ export async function editCrmNoteAction(formData: FormData) {
   const marked = /\(edited\)\s*$/.test(body) ? body : `${body}  _(edited)_`;
   await db.crmEvent.update({ where: { id }, data: { body: marked } });
   revalidatePath(`/crm/${oppId}`);
+  revalidatePath("/crm/conversations");
+}
+
+// 🗑 Delete a note you wrote (author or manager). Only kind:"note" — never a
+// call/sms/email audit row. Jon 2026-10-13.
+export async function deleteCrmNoteAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const oppId = String(formData.get("oppId") ?? "");
+  if (!id) return;
+  const ev = await db.crmEvent.findUnique({ where: { id }, select: { actor: true, kind: true } });
+  if (!ev || ev.kind !== "note") return;
+  const { isManager } = await import("@/lib/auth");
+  if (ev.actor !== me.name && !isManager(me)) return;
+  await db.crmEvent.delete({ where: { id } });
+  revalidatePath(`/crm/${oppId}`);
+  revalidatePath("/crm/conversations");
 }
 
 /** Log a call/sms/email the rep just did manually (Telnyx auto-log comes via webhook). */
