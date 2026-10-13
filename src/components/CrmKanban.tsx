@@ -3,7 +3,7 @@
 // (set dataTransfer payload, defer state past dragstart). Click a card →
 // its opportunity page.
 import { useEffect, useLayoutEffect, useState, useTransition } from "react";
-import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction, addCrmNoteAction } from "@/app/crm/actions";
+import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction, bulkOppStageAction, addCrmNoteAction } from "@/app/crm/actions";
 import { STAGE_PROB, titleCase } from "@/lib/crm-shared";
 import { stageHelp } from "@/lib/stage-help";
 
@@ -48,7 +48,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [] }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[] }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [], currentPipeline = "", who = "all" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[]; currentPipeline?: string; who?: string }) {
   const [cards, setCards] = useState(initial);
   // THE 27-vs-112 bug (Jon 2026-10-08): this component stays mounted when you
   // switch pipeline tabs, so the drag-and-drop card state kept showing the
@@ -70,6 +70,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState({ op: "stage", val: "" });
+  // when the rep clicks a stage's "select all N", we target the WHOLE stage
+  // server-side (every lead, not just the loaded ~60). null = id-based select.
+  const [stageScope, setStageScope] = useState<{ stage: string; count: number } | null>(null);
   useLayoutEffect(() => {
     try {
       if (localStorage.getItem("fo_crm_privacy") === "1") setPrivacy(true);
@@ -94,9 +97,26 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     else if (sortKey === "created") a.sort((x, y) => (y.createdAt ?? "").localeCompare(x.createdAt ?? ""));
     return a; // "fresh" = server order (updated desc)
   };
-  const toggleSel = (id: string) => setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleSel = (id: string) => { setStageScope(null); setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
+  // "select all N" on a stage header → whole-stage scope + visually tick loaded cards
+  const selectWholeStage = (stageKey: string) => {
+    setSelecting(true);
+    const ids = cards.filter((c) => c.stage === stageKey).map((c) => c.id);
+    setSelected(new Set(ids));
+    setStageScope({ stage: stageKey, count: counts[stageKey] ?? ids.length });
+  };
   const runBulk = () => {
-    if (!selected.size || (bulk.op !== "delete" && !bulk.val.trim())) return;
+    if (bulk.op !== "delete" && !bulk.val.trim()) return;
+    // whole-stage scope → server applies to EVERY lead in the stage
+    if (stageScope) {
+      if (bulk.op === "delete" && !confirm(`Archive ALL ${stageScope.count} lead(s) in this stage? They can be restored.`)) return;
+      const fd = new FormData();
+      fd.set("pipeline", currentPipeline); fd.set("stage", stageScope.stage); fd.set("who", who);
+      fd.set("op", bulk.op); fd.set("val", bulk.val.trim());
+      start(async () => { await bulkOppStageAction(fd); window.location.reload(); });
+      return;
+    }
+    if (!selected.size) return;
     const fd = new FormData();
     for (const id of selected) fd.append("ids", id);
     fd.set("op", bulk.op); fd.set("val", bulk.val.trim()); if (bulk.op === "delete" && !confirm(`Archive ${selected.size} selected lead(s)? They can be restored.`)) return;
@@ -176,7 +196,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
             <option value="value">💵 Highest value</option>
             <option value="name">🔤 Name A–Z</option>
           </select>
-          <button onClick={() => { setSelecting((v) => !v); setSelected(new Set()); }} className={`rounded-lg px-2.5 py-1 font-bold ${selecting ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>☑ Select</button>
+          <button onClick={() => { setSelecting((v) => !v); setSelected(new Set()); setStageScope(null); }} className={`rounded-lg px-2.5 py-1 font-bold ${selecting ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>☑ Select</button>
         </span>
         <span className="relative">
           <button onClick={() => setCfgOpen((v) => !v)} className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">⚙ Cards</button>
@@ -246,6 +266,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                   ) : null; })()}
                 </span>
                 <span className="flex items-center gap-1">
+                  {(counts[col.key] ?? colCards.length) > 0 && (
+                    <button onClick={() => selectWholeStage(col.key)} title={`Select all ${(counts[col.key] ?? colCards.length).toLocaleString()} leads in this stage for a bulk action`} className={`grid h-5 w-5 place-items-center rounded text-[11px] font-bold ${stageScope?.stage === col.key ? "bg-indigo-600 text-white" : "bg-white/70 text-slate-400 hover:text-indigo-600"}`}>☑</button>
+                  )}
                   <span className="text-xs font-extrabold tabular-nums text-slate-500">{(counts[col.key] ?? colCards.length).toLocaleString()}</span>
                   <button onClick={() => toggleCollapse(col.key)} title="Minimize this stage" className="grid h-5 w-5 place-items-center rounded text-[11px] font-extrabold text-slate-400 hover:bg-white/70 hover:text-slate-600">‹</button>
                 </span>
@@ -377,8 +400,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       </div>
       {selecting && (
         <div className="sticky bottom-3 z-30 mt-3 flex flex-wrap items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-xs text-white shadow-2xl">
-          <span className="font-extrabold">{selected.size} selected</span>
-          <button onClick={() => setSelected(new Set(cards.map((c) => c.id)))} className="rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Select all visible</button>
+          <span className="font-extrabold">{stageScope ? <span className="text-indigo-300">whole stage · {stageScope.count.toLocaleString()} leads</span> : `${selected.size} selected`}</span>
+          <button onClick={() => { setStageScope(null); setSelected(new Set(cards.map((c) => c.id))); }} className="rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Select all visible</button>
           <select value={bulk.op} onChange={(e) => setBulk({ op: e.target.value, val: "" })} className="rounded-lg px-2 py-1 text-xs font-bold text-slate-800">
             <option value="stage">→ Move to stage</option>
             <option value="pipeline">📂 Move to pipeline</option>
@@ -408,8 +431,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
           )}
           {(bulk.op === "tag" || bulk.op === "untag") && <input value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} placeholder="tag…" className="rounded-lg px-2 py-1 text-xs text-slate-800" />}
           {bulk.op === "delete" && <span className="text-[11px] font-bold text-red-300">archives the selected leads (recoverable)</span>}
-          <button onClick={runBulk} disabled={!selected.size || (bulk.op !== "delete" && !bulk.val)} className={`rounded-lg px-3 py-1.5 font-extrabold text-white disabled:opacity-40 ${bulk.op === "delete" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600"}`}>Apply to {selected.size}</button>
-          <button onClick={() => { setSelecting(false); setSelected(new Set()); }} className="ml-auto rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Done</button>
+          <button onClick={runBulk} disabled={(!stageScope && !selected.size) || (bulk.op !== "delete" && !bulk.val)} className={`rounded-lg px-3 py-1.5 font-extrabold text-white disabled:opacity-40 ${bulk.op === "delete" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600"}`}>Apply to {stageScope ? stageScope.count.toLocaleString() : selected.size}</button>
+          <button onClick={() => { setSelecting(false); setSelected(new Set()); setStageScope(null); }} className="ml-auto rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Done</button>
         </div>
       )}
     </div>

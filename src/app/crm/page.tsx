@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
@@ -60,28 +61,36 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const busiest = [...pipelines].sort((a, b) => (plCounts[b.name] ?? 0) - (plCounts[a.name] ?? 0))[0]?.name ?? pipelines[0].name;
   const plName = sp.pl && pipelines.some((x) => x.name === sp.pl) ? sp.pl : busiest;
   const pipe = pipelines.find((x) => x.name === plName)!;
-  const whereBase = {
+  // 🐛 fix (Jon 2026-10-13): `who`, tag, and search each wrote an `OR` key on the
+  // same object — duplicate keys overwrite, so combining search + tag + owner
+  // silently dropped filters. Stack them as an AND of ORs so they all apply.
+  const andClauses: Prisma.CrmOpportunityWhereInput[] = [];
+  if (who) andClauses.push({ OR: [
+    { assignedTo: { equals: who.trim(), mode: "insensitive" } },
+    { formData: { path: ["__followers"], array_contains: who.trim() } },
+  ] });
+  if (fTag) andClauses.push({ OR: [
+    { tags: { contains: fTag, mode: "insensitive" } },
+    { contact: { tags: { contains: fTag, mode: "insensitive" } } },
+  ] });
+  if (q) andClauses.push({ OR: [
+    { title: { contains: q, mode: "insensitive" } },
+    { tags: { contains: q, mode: "insensitive" } },
+    { contact: { name: { contains: q, mode: "insensitive" } } },
+    { contact: { phone: { contains: q.replace(/\D/g, "") || q } } },
+    { contact: { email: { contains: q, mode: "insensitive" } } },
+  ] });
+  const whereBase: Prisma.CrmOpportunityWhereInput = {
     archivedAt: null,
     // "War Room" = native leads (empty pipeline) · GHL pipelines match by name
     ...(plName === "War Room" ? { pipeline: { in: ["", "War Room"] } } : { pipeline: plName }),
     ...(roleReps ? { assignedTo: { in: roleReps } } : {}),
-    ...(who ? { OR: [
-      { assignedTo: { equals: who.trim(), mode: "insensitive" as const } },
-      { formData: { path: ["__followers"], array_contains: who.trim() } },
-    ] } : {}),
     ...(fStage ? { stage: fStage } : {}),
-    ...(fTag ? { OR: [{ tags: { contains: fTag, mode: "insensitive" as const } }, { contact: { tags: { contains: fTag, mode: "insensitive" as const } } }] } : {}),
     ...(fDue ? { nextFollowUp: { not: "", lte: today } } : {}),
     ...(fNa ? { nextFollowUp: "" } : {}),
     ...(fQuiet ? { stage: { notIn: ["nurture", "dead", "signed"] }, updatedAt: { lte: new Date(Date.now() - 3 * 86400000) } } : {}),
     ...(fFresh ? { createdAt: { gte: new Date(Date.now() - 7 * 86400000) } } : {}),
-    ...(q ? { OR: [
-      { title: { contains: q, mode: "insensitive" as const } },
-      { tags: { contains: q, mode: "insensitive" as const } },
-      { contact: { name: { contains: q, mode: "insensitive" as const } } },
-      { contact: { phone: { contains: q.replace(/\D/g, "") || q } } },
-      { contact: { email: { contains: q, mode: "insensitive" as const } } },
-    ] } : {}),
+    ...(andClauses.length ? { AND: andClauses } : {}),
   };
   const whoQ = canViewAll ? `&who=${encodeURIComponent(whoRaw || "all")}` : "";
   const page = Math.max(1, Number(sp.p) || 1);
@@ -278,7 +287,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       <DueTodayReminder tasks={myDueTasks} appts={myApptsToday} />
       {view === "kanban" ? (
-        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={pipelines.map((p) => p.name)} /></>
+        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={pipelines.map((p) => p.name)} currentPipeline={plName} who={whoRaw || "all"} /></>
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>

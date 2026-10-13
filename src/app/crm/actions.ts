@@ -757,6 +757,58 @@ export async function bulkOppAction(formData: FormData) {
   revalidatePath("/crm");
 }
 
+// 🗂 Apply a bulk op to EVERY lead in one pipeline stage (Jon 2026-10-13: "select
+// all leads in a stage"), not just the ~60 loaded on the board. Same ops as
+// bulkOppAction but scoped by pipeline+stage (+ optional owner), capped at 3000.
+export async function bulkOppStageAction(formData: FormData) {
+  const me = await getCurrentUser();
+  const { canManageAllLeads } = await import("@/lib/auth");
+  if (!canManageAllLeads(me)) return;
+  const pipeline = String(formData.get("pipeline") ?? "");
+  const stage = String(formData.get("stage") ?? "");
+  const who = String(formData.get("who") ?? "").trim();
+  const op = String(formData.get("op") ?? "");
+  const val = String(formData.get("val") ?? "").trim();
+  if (!stage || (op !== "delete" && !val)) return;
+  const where: import("@prisma/client").Prisma.CrmOpportunityWhereInput = {
+    archivedAt: null,
+    ...(pipeline === "War Room" || pipeline === "" ? { pipeline: { in: ["", "War Room"] } } : { pipeline }),
+    stage,
+    ...(who && who !== "all" && !who.startsWith("role:") ? { OR: [
+      { assignedTo: { equals: who, mode: "insensitive" } },
+      { formData: { path: ["__followers"], array_contains: who } },
+    ] } : {}),
+  };
+  if (op === "assign") {
+    await db.crmOpportunity.updateMany({ where, data: { assignedTo: val } });
+  } else if (op === "stage" && ((await readPipelines()).some((p) => p.stages.some((st) => st.key === val)) || CRM_STAGES.some((s) => s.key === val))) {
+    await db.crmOpportunity.updateMany({ where, data: { stage: val, ...(val === "dead" ? { archivedAt: new Date() } : {}) } });
+  } else if (op === "pipeline") {
+    const target = (await readPipelines()).find((p) => p.name === val);
+    if (!target) return;
+    const first = target.stages[0]?.key ?? "new";
+    const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nick Fair" };
+    await db.crmOpportunity.updateMany({ where, data: { pipeline: val, stage: first, archivedAt: null, ...(OWN[val] ? { assignedTo: OWN[val] } : {}) } });
+  } else if (op === "delete") {
+    await db.crmOpportunity.updateMany({ where, data: { archivedAt: new Date() } });
+  } else if (op === "tag" || op === "untag" || op === "follower") {
+    const rows = await db.crmOpportunity.findMany({ where, select: { id: true, tags: true, formData: true }, take: 3000 });
+    for (const o of rows) {
+      if (op === "tag") {
+        if (!o.tags.toLowerCase().includes(val.toLowerCase())) await db.crmOpportunity.update({ where: { id: o.id }, data: { tags: o.tags ? `${o.tags}, ${val}` : val } });
+      } else if (op === "untag") {
+        const kept = o.tags.split(",").map((t) => t.trim()).filter((t) => t && t.toLowerCase() !== val.toLowerCase()).join(", ");
+        if (kept !== o.tags) await db.crmOpportunity.update({ where: { id: o.id }, data: { tags: kept } });
+      } else {
+        const fd = (o.formData ?? {}) as Record<string, unknown>;
+        const cur = Array.isArray(fd.__followers) ? (fd.__followers as string[]) : [];
+        await db.crmOpportunity.update({ where: { id: o.id }, data: { formData: { ...fd, __followers: [...new Set([...cur, val])] } as never } });
+      }
+    }
+  } else return;
+  revalidatePath("/crm");
+}
+
 /** Enroll a lead in an email sequence (needs email perm; stops on reply). */
 export async function enrollSequenceAction(formData: FormData) {
   const me = await crmUser();
