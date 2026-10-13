@@ -72,7 +72,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const visible = contact && (manager || !contact.assignedTo || contact.assignedTo === me!.name);
   const [events, opps] = contact && visible ? await Promise.all([
     db.crmEvent.findMany({ where: { contactId: contact.id, kind: { in: COMMS } }, orderBy: { at: "desc" }, take: 80 }),
-    db.crmOpportunity.findMany({ where: { contactId: contact.id, archivedAt: null }, orderBy: { createdAt: "asc" }, select: { id: true, title: true, stage: true, pipeline: true, formData: true } }),
+    db.crmOpportunity.findMany({ where: { contactId: contact.id, archivedAt: null }, orderBy: { createdAt: "asc" }, select: { id: true, title: true, stage: true, pipeline: true, formData: true, createdAt: true } }),
   ]) : [[], []];
   const opp = opps[0] ?? null; // first property drives the composer + header link
   const thread = [...events].reverse();
@@ -83,7 +83,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   // each parcel = one opportunity; APN lives in formData.property.apn
   const railProps = opps.map((o) => {
     const fd = (o.formData ?? {}) as { property?: { apn?: string } };
-    return { id: o.id, title: o.title, stage: o.stage, pipeline: o.pipeline, apn: fd.property?.apn ?? "" };
+    return { id: o.id, title: o.title, stage: o.stage, pipeline: o.pipeline, apn: fd.property?.apn ?? "", createdAt: o.createdAt.toISOString() };
   });
 
   return (
@@ -218,7 +218,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
               parcels/notes). Reps who can see the thread can edit it. */}
           {contact && visible && (
             <ConvContactRail
-              contact={{ id: contact.id, name: contact.name, phone: contact.phone, altPhone: contact.altPhone, email: contact.email, address: contact.address, assignedTo: contact.assignedTo, pinnedNote: contact.pinnedNote, source: contact.source }}
+              contact={{ id: contact.id, name: contact.name, phone: contact.phone, altPhone: contact.altPhone, email: contact.email, address: contact.address, assignedTo: contact.assignedTo, pinnedNote: contact.pinnedNote, source: contact.source, createdAt: contact.createdAt.toISOString() }}
               opps={railProps}
               owners={owners}
               canEdit={true}

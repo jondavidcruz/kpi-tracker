@@ -163,10 +163,13 @@ export async function refreshDreiFeed(todayYmd: string): Promise<DreiFeed | null
         const i = counts.indexOf(Math.min(...counts));
         counts[i]++;
         const rep = reps[i].name;
-        const contact = await db.crmContact.create({ data: { name: lead.name, phone: lead.phone ?? "", email: lead.email ?? "", source: "Direct REI (replied)", assignedTo: rep } });
-        const opp = await db.crmOpportunity.create({ data: { contactId: contact.id, title: `${lead.name} — Direct REI seller REPLIED`, stage: "new", assignedTo: rep, nextFollowUp: todayYmd } });
-        await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: "📞 Call now — Direct REI seller REPLIED (warm)", due: todayYmd, assignedTo: rep, createdBy: "automation" } });
-        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `Auto-created from Direct REI (seller replied to campaign) · assigned ${rep}`, actor: "automation" });
+        // Jon 2026-10-13: keep the NAME clean (just the seller) — the fact that
+        // it came from Direct REI lives in the `source` field, and "seller
+        // replied" lives in a note. The rep fills in the property address later.
+        const contact = await db.crmContact.create({ data: { name: lead.name, phone: lead.phone ?? "", email: lead.email ?? "", source: "Direct REI", assignedTo: rep } });
+        const opp = await db.crmOpportunity.create({ data: { contactId: contact.id, title: lead.name || "New Direct REI seller", stage: "new", assignedTo: rep, nextFollowUp: todayYmd } });
+        await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: `📞 Call now — warm seller (replied to our ${lead.channel || "campaign"})`, due: todayYmd, assignedTo: rep, createdBy: "automation" } });
+        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "note", body: `Seller replied — source: Direct REI${lead.campaign ? ` (${lead.campaign})` : ""}. Auto-assigned ${rep}.`, actor: "automation" });
       }
     }
   } catch { /* lead automation never breaks the feed */ }

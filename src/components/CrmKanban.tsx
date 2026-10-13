@@ -266,6 +266,14 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     {c.phone && <div className={`text-[10px] font-semibold text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>📞 {c.phone}</div>}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {show.money && c.money && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{c.money}</span>}
+                      {/* 🕒 how long this lead has been sitting in the system — keep
+                          leads moving (Jon 2026-10-13): green <7d, amber <30d, red 30d+ */}
+                      {c.createdAt && (() => {
+                        const d = Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86400_000);
+                        const cls = d >= 30 ? "bg-red-50 text-red-700" : d >= 7 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700";
+                        const txt = d <= 0 ? "today" : `${d}d in system`;
+                        return <span title={`In the system ${d} day${d === 1 ? "" : "s"} — keep it moving`} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${cls}`}>🕒 {txt}</span>;
+                      })()}
                       {show.badges && c.badges.map((b, i) => (
                         <span key={i} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${b.startsWith("⏳") || b.startsWith("🔴") ? "bg-red-50 text-red-700" : b.startsWith("⏰") ? "bg-amber-50 text-amber-700" : "bg-slate-50 text-slate-600"}`}>{b}</span>
                       ))}

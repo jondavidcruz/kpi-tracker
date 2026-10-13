@@ -1472,6 +1472,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, matched: hit.size, newlyDnced: moved, reparked });
   }
 
+  // 🏷 Direct REI name cleanup (?dreirename=1 — Jon 2026-10-13): strip the ugly
+  // "— Direct REI seller REPLIED" suffix from opp titles the old automation set.
+  // Source already lives in the contact.source field; "seller replied" becomes a
+  // note. Leaves a clean name the rep can replace with the property address.
+  if (url.searchParams.get("dreirename") === "1") {
+    const { logCrmEvent } = await import("@/lib/crm");
+    const bad = await db.crmOpportunity.findMany({ where: { title: { contains: "Direct REI seller REPLIED" } }, select: { id: true, title: true, contactId: true } });
+    let renamed = 0;
+    for (const o of bad) {
+      const cleanName = o.title.replace(/\s*—\s*Direct REI seller REPLIED\s*$/i, "").trim() || "New Direct REI seller";
+      await db.crmOpportunity.update({ where: { id: o.id }, data: { title: cleanName } });
+      await db.crmContact.update({ where: { id: o.contactId }, data: { source: "Direct REI" } }).catch(() => {});
+      await logCrmEvent({ contactId: o.contactId, oppId: o.id, kind: "note", body: "Seller replied — source: Direct REI.", actor: "automation" }).catch(() => {});
+      renamed++;
+    }
+    return NextResponse.json({ ok: true, renamed });
+  }
+
   // 🏠 War Room pipeline retirement (?warroommove=1 — Jon 2026-10-08: "why is
   // War Room its own pipeline?"): every lead sitting in the generic bucket
   // moves to its assigned rep's own pipeline (first stage), Michelle fallback.

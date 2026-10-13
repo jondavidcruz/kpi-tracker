@@ -12,11 +12,17 @@ import { useState } from "react";
 import Link from "next/link";
 import { saveConvContactAction, addPropertyAction, savePropertyAction, addPropertyNoteAction } from "@/app/crm/actions";
 
-type Prop = { id: string; title: string; stage: string; pipeline: string; apn: string };
-type Contact = { id: string; name: string; phone: string; altPhone: string; email: string; address: string; assignedTo: string; pinnedNote: string; source: string };
+type Prop = { id: string; title: string; stage: string; pipeline: string; apn: string; createdAt: string };
+type Contact = { id: string; name: string; phone: string; altPhone: string; email: string; address: string; assignedTo: string; pinnedNote: string; source: string; createdAt: string };
 
 function fmtPhone(p: string) {
   return p.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
+}
+// 🕒 how long the lead/parcel has been sitting — keep leads moving (Jon 2026-10-13)
+function AgeChip({ iso }: { iso: string }) {
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400_000);
+  const cls = d >= 30 ? "bg-red-50 text-red-700 ring-red-100" : d >= 7 ? "bg-amber-50 text-amber-700 ring-amber-100" : "bg-emerald-50 text-emerald-700 ring-emerald-100";
+  return <span title={`In the system ${d} day${d === 1 ? "" : "s"} — keep it moving`} className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${cls}`}>🕒 {d <= 0 ? "New today" : `${d}d in system`}</span>;
 }
 // Split a stored full name into first + last for the edit form. A placeholder
 // name that is really just a phone number starts blank so the rep types fresh.
@@ -38,7 +44,7 @@ export default function ConvContactRail({ contact, opps, owners, canEdit }: { co
 
   return (
     <div className="hidden w-80 shrink-0 overflow-y-auto border-l border-slate-100 bg-white p-4 lg:block">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-extrabold uppercase tracking-wide text-slate-400">Contact details</span>
         {canEdit && (
           <button onClick={() => setEditing((v) => !v)} className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200">
@@ -46,6 +52,7 @@ export default function ConvContactRail({ contact, opps, owners, canEdit }: { co
           </button>
         )}
       </div>
+      <div className="mb-3"><AgeChip iso={contact.createdAt} /></div>
 
       {/* ── CONTACT: read view ── */}
       {!editing && (
@@ -104,6 +111,7 @@ export default function ConvContactRail({ contact, opps, owners, canEdit }: { co
                 <span className="truncate text-[11px] font-bold text-slate-700">{p.pipeline || "War Room"} · {p.stage}</span>
                 <Link href={`/crm/${p.id}`} className="shrink-0 rounded bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100">Open land ↗</Link>
               </div>
+              <div className="mb-1.5"><AgeChip iso={p.createdAt} /></div>
               {canEdit ? (
                 <form action={savePropertyAction} className="space-y-1.5">
                   <input type="hidden" name="id" value={p.id} />
