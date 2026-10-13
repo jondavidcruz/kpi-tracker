@@ -1508,42 +1508,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, probe: await probeCallShape() });
   }
 
-  // 🔎 Probe the GHL recording ENDPOINT directly for one real completed call —
-  // report status/content-type/body so we can see why audio isn't coming back.
+  // 🔎 Dump a specific lead's GHL call messages RAW (?ghlrecprobe=1&phone=…) to
+  // find where a real recording's URL lives (attachments / recordingUrl / etc.)
   if (url.searchParams.get("ghlrecprobe") === "1") {
     const { searchConversations, getMessages } = await import("@/lib/reireply");
     const loc = process.env.REIREPLY_LOCATION_ID ?? "";
     const key = process.env.REIREPLY_API_KEY ?? "";
-    const conv = await searchConversations({ limit: "20" });
+    const phone = (url.searchParams.get("phone") || "4153509115").replace(/\D/g, "").slice(-10);
+    const wr = await db.crmContact.findFirst({ where: { phone: { contains: phone } }, select: { ghlId: true, name: true } });
+    if (!wr?.ghlId) return NextResponse.json({ ok: false, reason: "no War Room contact / ghlId for that phone", name: wr?.name });
+    const conv = await searchConversations({ contactId: wr.ghlId, limit: "5" });
     const convs = ((conv.body as { conversations?: Array<{ id: string }> }).conversations) ?? [];
-    let mid = "";
+    const callMsgs: unknown[] = [];
+    let convId = "";
     for (const c of convs) {
       const m = await getMessages(c.id);
       const mb = m.body as { messages?: { messages?: unknown[] } | unknown[] };
       const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []);
-      const hit = list.find((msg) => { const x = msg as Record<string, unknown>; return /call/i.test(String(x.messageType ?? "")) && String(x.status) === "completed" && Number((x.meta as { call?: { duration?: number } })?.call?.duration ?? 0) > 5; });
-      if (hit) { mid = String((hit as Record<string, unknown>).id ?? ""); break; }
+      for (const msg of list) { const x = msg as Record<string, unknown>; if (/call/i.test(String(x.messageType ?? ""))) { callMsgs.push(x); if (!convId) convId = c.id; } }
     }
-    let convId = "";
-    for (const c of convs) { const m = await getMessages(c.id); const mb = m.body as { messages?: { messages?: unknown[] } | unknown[] }; const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []); if (list.some((msg) => String((msg as Record<string, unknown>).id ?? "") === mid)) { convId = c.id; break; } }
-    if (!mid) return NextResponse.json({ ok: false, reason: "no completed call found" });
-    const B = "https://services.leadconnectorhq.com";
-    const variants = [
-      { tag: "msg-detail", u: `${B}/conversations/messages/${mid}`, audio: false },
-      { tag: "rec-locations", u: `${B}/conversations/locations/${loc}/messages/${mid}/recording`, audio: true },
-      { tag: "rec-conv", u: `${B}/conversations/${convId}/messages/${mid}/recording`, audio: true },
-      { tag: "transcription", u: `${B}/conversations/locations/${loc}/messages/${mid}/transcription`, audio: false },
-    ];
-    const results = [];
-    for (const v of variants) {
+    // for the first recorded-looking call, try the documented recording endpoint
+    const firstCall = callMsgs.find((x) => Number(((x as Record<string, unknown>).meta as { call?: { duration?: number } })?.call?.duration ?? 0) > 3);
+    let recTry: unknown = null;
+    if (firstCall) {
+      const mid = String((firstCall as Record<string, unknown>).id ?? "");
       try {
-        const r = await fetch(v.u, { headers: { Authorization: `Bearer ${key}`, Version: "2021-07-28", Accept: v.audio ? "audio/x-wav, audio/mpeg, */*" : "application/json" }, redirect: "manual", cache: "no-store" });
+        const r = await fetch(`https://services.leadconnectorhq.com/conversations/messages/${mid}/recording`, { headers: { Authorization: `Bearer ${key}`, Version: "2021-04-15", Accept: "audio/x-wav, */*" }, redirect: "manual", cache: "no-store" });
         const ct = r.headers.get("content-type") ?? "";
-        const isAudio = /audio|octet-stream/i.test(ct);
-        results.push({ tag: v.tag, status: r.status, contentType: ct, location: r.headers.get("location") ?? undefined, bodyPreview: isAudio ? `(binary audio ${r.headers.get("content-length") ?? "?"}b)` : (await r.text()).slice(0, v.tag === "msg-detail" ? 2500 : 400) });
-      } catch (e) { results.push({ tag: v.tag, error: String(e).slice(0, 120) }); }
+        recTry = { status: r.status, contentType: ct, length: r.headers.get("content-length"), location: r.headers.get("location"), preview: /audio|octet/i.test(ct) ? "(binary)" : (await r.text()).slice(0, 300) };
+      } catch (e) { recTry = { error: String(e).slice(0, 120) }; }
     }
-    return NextResponse.json({ ok: true, messageId: mid.slice(0, 6) + "…", convId: convId.slice(0, 6) + "…", results });
+    return NextResponse.json({ ok: true, contact: wr.name, ghlId: wr.ghlId.slice(0, 6) + "…", convCount: convs.length, callMsgCount: callMsgs.length, sampleCalls: callMsgs.slice(0, 3), recordingEndpointTry: recTry });
   }
 
   // 🎙 Sync HISTORICAL GHL (REI Reply) call recordings into the War Room
