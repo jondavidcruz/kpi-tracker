@@ -7,6 +7,7 @@ import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-c
 import { readSnippets } from "@/lib/crm-templates";
 import CallButton from "@/components/CallButton";
 import ConvComposerTabs from "@/components/ConvComposerTabs";
+import ConvContactRail from "@/components/ConvContactRail";
 import { startConversationAction, bulkConvAction } from "@/app/crm/actions";
 import { readConvMap, setConvRead } from "@/lib/conv-read";
 
@@ -69,11 +70,21 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   // opening a thread marks it read (clears the red dot everywhere)
   if (cId) setConvRead([cId], true).catch(() => {});
   const visible = contact && (manager || !contact.assignedTo || contact.assignedTo === me!.name);
-  const [events, opp] = contact && visible ? await Promise.all([
+  const [events, opps] = contact && visible ? await Promise.all([
     db.crmEvent.findMany({ where: { contactId: contact.id, kind: { in: COMMS } }, orderBy: { at: "desc" }, take: 80 }),
-    db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null }, select: { id: true, title: true, stage: true, pipeline: true } }),
-  ]) : [[], null];
+    db.crmOpportunity.findMany({ where: { contactId: contact.id, archivedAt: null }, orderBy: { createdAt: "asc" }, select: { id: true, title: true, stage: true, pipeline: true, formData: true } }),
+  ]) : [[], []];
+  const opp = opps[0] ?? null; // first property drives the composer + header link
   const thread = [...events].reverse();
+  // owners for the editable rail's owner dropdown
+  const owners = contact && visible
+    ? (await db.user.findMany({ where: { active: true }, select: { name: true }, orderBy: { name: "asc" } })).map((u) => u.name)
+    : [];
+  // each parcel = one opportunity; APN lives in formData.property.apn
+  const railProps = opps.map((o) => {
+    const fd = (o.formData ?? {}) as { property?: { apn?: string } };
+    return { id: o.id, title: o.title, stage: o.stage, pipeline: o.pipeline, apn: fd.property?.apn ?? "" };
+  });
 
   return (
     <div className="space-y-4">
@@ -203,27 +214,15 @@ export default async function ConversationsPage({ searchParams }: { searchParams
             )}
           </div>
 
-          {/* right: contact details rail */}
+          {/* right: contact details rail — now a full editor (name/phone/APN/
+              parcels/notes). Reps who can see the thread can edit it. */}
           {contact && visible && (
-            <div className="hidden w-64 shrink-0 overflow-y-auto border-l border-slate-100 bg-white p-4 lg:block">
-              <div className="mb-3 text-xs font-extrabold uppercase tracking-wide text-slate-400">Contact details</div>
-              <div className="space-y-2 text-sm">
-                <div><div className="text-[10px] font-bold text-slate-400">Name</div><div className="font-semibold text-slate-800">{contact.name}</div></div>
-                {contact.phone && <div><div className="text-[10px] font-bold text-slate-400">Phone</div><div className="font-mono text-sm font-bold tracking-wide text-slate-800">{contact.phone.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3")}</div></div>}
-                {contact.altPhone && <div><div className="text-[10px] font-bold text-slate-400">Phone 2</div><div className="text-slate-700">{contact.altPhone}</div></div>}
-                {contact.email && <div><div className="text-[10px] font-bold text-slate-400">Email</div><div className="break-all text-slate-700">{contact.email}</div></div>}
-                {contact.address && <div><div className="text-[10px] font-bold text-slate-400">Property</div><div className="text-slate-700">{contact.address}</div></div>}
-                <div><div className="text-[10px] font-bold text-slate-400">Owner</div><div className="text-slate-700">{contact.assignedTo || "Unassigned"}</div></div>
-                {opp && (
-                  <div className="rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-100">
-                    <div className="text-[10px] font-bold text-slate-400">Opportunity</div>
-                    <div className="truncate text-xs font-semibold text-slate-700">{opp.title}</div>
-                    <div className="text-[11px] text-slate-500">{opp.pipeline || "War Room"} · {opp.stage}</div>
-                  </div>
-                )}
-                {contact.pinnedNote && <div className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {contact.pinnedNote}</div>}
-              </div>
-            </div>
+            <ConvContactRail
+              contact={{ id: contact.id, name: contact.name, phone: contact.phone, altPhone: contact.altPhone, email: contact.email, address: contact.address, assignedTo: contact.assignedTo, pinnedNote: contact.pinnedNote, source: contact.source }}
+              opps={railProps}
+              owners={owners}
+              canEdit={true}
+            />
           )}
         </div>
       </Card>

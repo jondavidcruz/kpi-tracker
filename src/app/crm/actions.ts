@@ -1267,3 +1267,86 @@ export async function reorderPipelineAction(formData: FormData) {
   await writeGhlPipelines(list);
   revalidatePath("/crm");
 }
+
+// ── Conversations rail: edit contact + manage multiple properties/parcels ──
+// Jon 2026-10-13: the Conversations right rail is now a full editor so a random
+// inbound number is never lost. Names stay as ONE merged `name` field (so the
+// opportunity card is unchanged — it shows "First Last"); the editor just
+// exposes first + last separately. Each parcel of land is its OWN opportunity
+// (a contact can have many), with its APN in formData.property.apn and its own
+// notes scoped by oppId — so a seller with 10 parcels gets 10 tracked lands.
+export async function saveConvContactAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const first = String(formData.get("firstName") ?? "").trim();
+  const last = String(formData.get("lastName") ?? "").trim();
+  const name = `${first} ${last}`.trim();
+  await db.crmContact.update({ where: { id }, data: {
+    ...(name ? { name } : {}),
+    phone: String(formData.get("phone") ?? "").trim(),
+    altPhone: String(formData.get("altPhone") ?? "").trim(),
+    email: String(formData.get("email") ?? "").trim(),
+    address: String(formData.get("address") ?? "").trim(),
+    assignedTo: String(formData.get("assignedTo") ?? "").trim(),
+    pinnedNote: String(formData.get("pinnedNote") ?? "").trim().slice(0, 300),
+  } });
+  await logCrmEvent({ contactId: id, oppId: "", kind: "system", body: `Contact details updated by ${me.name.split(" ")[0]}`, actor: me.name });
+  revalidatePath("/crm/conversations");
+  revalidatePath("/crm");
+}
+
+// Add another parcel/property for a contact → a brand-new opportunity.
+export async function addPropertyAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const contactId = String(formData.get("contactId") ?? "");
+  if (!contactId) return;
+  const address = String(formData.get("address") ?? "").trim();
+  const apn = String(formData.get("apn") ?? "").trim();
+  const title = address || (apn ? `APN ${apn}` : "New property");
+  const note = String(formData.get("note") ?? "").trim();
+  const c = await db.crmContact.findUnique({ where: { id: contactId }, select: { assignedTo: true } });
+  const opp = await db.crmOpportunity.create({ data: {
+    contactId, title, stage: "new",
+    assignedTo: c?.assignedTo || me.name,
+    ...(apn ? { formData: { property: { apn } } } : {}),
+  } });
+  await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `➕ Property added: ${title}${apn ? ` · APN ${apn}` : ""}`, actor: me.name });
+  if (note) await logCrmEvent({ contactId, oppId: opp.id, kind: "note", body: note, actor: me.name });
+  revalidatePath("/crm/conversations");
+  revalidatePath("/crm");
+}
+
+// Inline-save one parcel's address (opp title) + APN (formData.property.apn).
+export async function savePropertyAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const address = String(formData.get("address") ?? "").trim();
+  const apn = String(formData.get("apn") ?? "").trim();
+  const existing = await db.crmOpportunity.findUnique({ where: { id }, select: { formData: true } });
+  const fd = (existing?.formData ?? {}) as Record<string, unknown>;
+  const prevProp = (fd.property ?? {}) as Record<string, unknown>;
+  await db.crmOpportunity.update({ where: { id }, data: {
+    ...(address ? { title: address } : {}),
+    formData: { ...fd, property: { ...prevProp, apn } },
+  } });
+  revalidatePath("/crm/conversations");
+  revalidatePath(`/crm/${id}`);
+}
+
+// Quick note scoped to ONE parcel (so each land tracks its own history).
+export async function addPropertyNoteAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const body = String(formData.get("body") ?? "").trim().slice(0, 2000);
+  if (!contactId || !body) return;
+  await logCrmEvent({ contactId, oppId, kind: "note", body, actor: me.name });
+  revalidatePath("/crm/conversations");
+  revalidatePath(`/crm/${oppId}`);
+}
