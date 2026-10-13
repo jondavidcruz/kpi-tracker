@@ -1524,22 +1524,26 @@ export async function GET(request: Request) {
       const hit = list.find((msg) => { const x = msg as Record<string, unknown>; return /call/i.test(String(x.messageType ?? "")) && String(x.status) === "completed" && Number((x.meta as { call?: { duration?: number } })?.call?.duration ?? 0) > 5; });
       if (hit) { mid = String((hit as Record<string, unknown>).id ?? ""); break; }
     }
+    let convId = "";
+    for (const c of convs) { const m = await getMessages(c.id); const mb = m.body as { messages?: { messages?: unknown[] } | unknown[] }; const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []); if (list.some((msg) => String((msg as Record<string, unknown>).id ?? "") === mid)) { convId = c.id; break; } }
     if (!mid) return NextResponse.json({ ok: false, reason: "no completed call found" });
+    const B = "https://services.leadconnectorhq.com";
     const variants = [
-      `${"https://services.leadconnectorhq.com"}/conversations/messages/${mid}/recording?locationId=${loc}`,
-      `${"https://services.leadconnectorhq.com"}/conversations/messages/${mid}/recording`,
+      { tag: "msg-detail", u: `${B}/conversations/messages/${mid}`, audio: false },
+      { tag: "rec-locations", u: `${B}/conversations/locations/${loc}/messages/${mid}/recording`, audio: true },
+      { tag: "rec-conv", u: `${B}/conversations/${convId}/messages/${mid}/recording`, audio: true },
+      { tag: "transcription", u: `${B}/conversations/locations/${loc}/messages/${mid}/transcription`, audio: false },
     ];
     const results = [];
-    for (const u of variants) {
+    for (const v of variants) {
       try {
-        const r = await fetch(u, { headers: { Authorization: `Bearer ${key}`, Version: "2021-07-28", Accept: "audio/x-wav, audio/mpeg, */*" }, redirect: "manual", cache: "no-store" });
+        const r = await fetch(v.u, { headers: { Authorization: `Bearer ${key}`, Version: "2021-07-28", Accept: v.audio ? "audio/x-wav, audio/mpeg, */*" : "application/json" }, redirect: "manual", cache: "no-store" });
         const ct = r.headers.get("content-type") ?? "";
-        let bodyPreview = "";
-        if (!/audio|octet-stream/i.test(ct)) { bodyPreview = (await r.text()).slice(0, 300); }
-        results.push({ url: u.replace(mid, "<mid>"), status: r.status, contentType: ct, location: r.headers.get("location") ?? undefined, bodyPreview: bodyPreview || "(binary audio)" });
-      } catch (e) { results.push({ url: u.replace(mid, "<mid>"), error: String(e).slice(0, 120) }); }
+        const isAudio = /audio|octet-stream/i.test(ct);
+        results.push({ tag: v.tag, status: r.status, contentType: ct, location: r.headers.get("location") ?? undefined, bodyPreview: isAudio ? `(binary audio ${r.headers.get("content-length") ?? "?"}b)` : (await r.text()).slice(0, 400) });
+      } catch (e) { results.push({ tag: v.tag, error: String(e).slice(0, 120) }); }
     }
-    return NextResponse.json({ ok: true, messageId: mid.slice(0, 6) + "…", results });
+    return NextResponse.json({ ok: true, messageId: mid.slice(0, 6) + "…", convId: convId.slice(0, 6) + "…", results });
   }
 
   // 🎙 Sync HISTORICAL GHL (REI Reply) call recordings into the War Room
