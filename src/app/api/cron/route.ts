@@ -1684,20 +1684,28 @@ export async function GET(request: Request) {
   if (url.searchParams.get("warroommove") === "1") {
     const { readPipelines } = await import("@/lib/crm");
     const pls = await readPipelines();
+    // fallback = Michelle's acquisitions pipeline (the old /AQM/ regex went
+    // stale after the "💰 AQ:" rename — Jon 2026-10-13).
+    const michelle = pls.find((p) => /michelle/i.test(p.name));
     const pipeFor = (assigned: string) => {
       const f = assigned.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-      return (f && pls.find((p) => p.name.toLowerCase().includes(f))) || pls.find((p) => /AQM/i.test(p.name));
+      return (f && pls.find((p) => p.name.toLowerCase().includes(f))) || michelle;
     };
-    const orphans = await db.crmOpportunity.findMany({ where: { pipeline: { in: ["", "War Room"] } }, select: { id: true, assignedTo: true, stage: true } });
+    const orphans = await db.crmOpportunity.findMany({ where: { pipeline: { in: ["", "War Room"] }, archivedAt: null }, select: { id: true, assignedTo: true, stage: true } });
     let moved = 0;
     for (const o of orphans) {
       const p = pipeFor(o.assignedTo);
       if (!p) continue;
       const stageOk = p.stages.some((st) => st.key === o.stage);
-      await db.crmOpportunity.update({ where: { id: o.id }, data: { pipeline: p.name, ...(stageOk ? {} : { stage: p.stages[0]?.key ?? o.stage }) } });
+      // if we fell back to Michelle's pipeline (the rep had no pipeline), make
+      // Michelle the owner so the pipeline + owner stay consistent.
+      const repFirst = o.assignedTo.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+      const repHasPipe = repFirst && pls.some((pp) => pp.name.toLowerCase().includes(repFirst));
+      const assignMichelle = p === michelle && !repHasPipe;
+      await db.crmOpportunity.update({ where: { id: o.id }, data: { pipeline: p.name, ...(stageOk ? {} : { stage: p.stages[0]?.key ?? o.stage }), ...(assignMichelle ? { assignedTo: "Michelle Lagudas" } : {}) } });
       moved++;
     }
-    return NextResponse.json({ ok: true, moved });
+    return NextResponse.json({ ok: true, moved, fallbackPipeline: michelle?.name });
   }
 
   // 🏷 Pipeline-name fix (?pipefix=1): today's GHL import stamped GHL's own
