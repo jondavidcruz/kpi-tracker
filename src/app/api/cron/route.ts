@@ -903,6 +903,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, ...out });
   }
 
+  // 👤 Set a user's role (?setrole=1&who=sharyn&role=rep): admin|manager|rep.
+  // Jon 2026-10-13: admins = Jon, Enrico, Viktoriia, Marie only.
+  if (url.searchParams.get("setrole") === "1") {
+    const who = (url.searchParams.get("who") ?? "").trim();
+    const role = (url.searchParams.get("role") ?? "").trim();
+    if (!who || !["admin", "manager", "rep"].includes(role)) return NextResponse.json({ ok: false, error: "need who + role(admin|manager|rep)" });
+    const u = await db.user.findFirst({ where: { active: true, name: { startsWith: who, mode: "insensitive" } }, select: { id: true, name: true, role: true } });
+    if (!u) return NextResponse.json({ ok: false, error: `no active user starting "${who}"` });
+    await db.user.update({ where: { id: u.id }, data: { role } });
+    return NextResponse.json({ ok: true, user: u.name, was: u.role, now: role });
+  }
+
   // 🔎 Comms access diag (?commsdiag=1): the saved per-rep map + what each
   // active rep effectively gets, so "why can X still see the phone" is answerable.
   if (url.searchParams.get("commsdiag") === "1") {
@@ -2162,10 +2174,13 @@ export async function GET(request: Request) {
     };
     type Row = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; value: number | null; rep: string; stage: string; pipeline: string; closedAt: string };
     const rows: Row[] = [];
+    const pipeStatus: Record<string, Record<string, number>> = {};
     for (const p of pipelines) {
       const opps = await fetchAllOpps(searchOpportunities, p.id);
+      pipeStatus[p.name] = {};
       for (const o of opps) {
         const status = String(o.status ?? "");
+        pipeStatus[p.name][status] = (pipeStatus[p.name][status] ?? 0) + 1;
         // Signed pipeline also pulls won/lost (Jon 2026-10-08): DEAL WON +
         // DEAL DIED are the company's money history. Other pipelines: open only.
         if (status !== "open" && !(/signed/i.test(p.name) && ["won", "lost", "abandoned"].includes(status))) continue;
@@ -2223,7 +2238,7 @@ export async function GET(request: Request) {
     }
     const perRep: Record<string, number> = {};
     for (const r of rows) perRep[r.rep || "unassigned"] = (perRep[r.rep || "unassigned"] ?? 0) + 1;
-    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pipelinesMatched: pipelines.map((p) => p.name), openOpps: rows.length, perRep, contactsCreated: contacts, oppsCreated: opps, oppsUpdated: updated, strayArchived: archived, notesImported: notes, sample: rows.slice(0, 10) });
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pipelinesMatched: pipelines.map((p) => p.name), openOpps: rows.length, pipeStatusInGhl: pipeStatus, perRep, contactsCreated: contacts, oppsCreated: opps, oppsUpdated: updated, strayArchived: archived, notesImported: notes, sample: rows.slice(0, 10) });
   }
 
   // 💰 GHL DEAL WON → the Deals board (Jon 2026-10-07: closed deals with
