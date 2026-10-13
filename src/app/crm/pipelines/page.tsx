@@ -4,6 +4,7 @@ import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { readPipelines } from "@/lib/crm";
 import { savePipelineAction, reorderPipelineAction } from "../actions";
+import StageListEditor from "@/components/StageListEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function CrmPipelinesPage() {
               <form action={savePipelineAction} className="space-y-1.5">
               <input type="hidden" name="original" value={pp.name} />
               <input name="name" defaultValue={pp.name} className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold" />
-              <textarea name="stages" rows={6} defaultValue={pp.stages.map((st) => st.label).join("\n")} className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+              <StageListEditor initial={pp.stages.map((st) => st.label)} />
               <span className="flex gap-2">
                 <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700">Save</button>
                 <button name="del" value="1" className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:text-red-600" title="Only deletes when the pipeline has no live leads">🗑 delete</button>
