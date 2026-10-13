@@ -40,7 +40,7 @@ const inp = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2 py-1.5 
 
 export default function ConvContactRail({ contact, opps, owners, canEdit }: { contact: Contact; opps: Prop[]; owners: string[]; canEdit: boolean }) {
   const [editing, setEditing] = useState(false);
-  const { first, last } = splitName(contact.name);
+  const { first, last } = splitName(titleCase(contact.name));
   const displayName = titleCase(contact.name?.trim() || "") || fmtPhone(contact.phone) || "Unknown";
 
   return (
