@@ -903,6 +903,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, ...out });
   }
 
+  // 🔢 WarRoom opp counts by pipeline (?pipecount=1): confirms where imported
+  // dispo/acq opps actually landed vs what the board queries.
+  if (url.searchParams.get("pipecount") === "1") {
+    const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { pipeline: true, assignedTo: true } });
+    const byPipe: Record<string, number> = {};
+    for (const o of opps) byPipe[o.pipeline || "(blank)"] = (byPipe[o.pipeline || "(blank)"] ?? 0) + 1;
+    return NextResponse.json({ ok: true, totalOpen: opps.length, byPipeline: byPipe });
+  }
+
   // 👤 Set a user's role (?setrole=1&who=sharyn&role=rep): admin|manager|rep.
   // Jon 2026-10-13: admins = Jon, Enrico, Viktoriia, Marie only.
   if (url.searchParams.get("setrole") === "1") {
