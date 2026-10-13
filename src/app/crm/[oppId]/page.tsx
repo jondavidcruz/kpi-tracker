@@ -7,6 +7,7 @@ import { stripHtml } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
+import EditableNote from "@/components/EditableNote";
 import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, draftContractAction, toggleDndAction, uploadLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
@@ -23,6 +24,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   const { oppId } = await params;
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
+  const manager = isManager(me);
   if (!allowed) return <Card className="p-10 text-center text-slate-400">The Seller CRM is for acquisitions + managers.</Card>;
   const settings = await getSettings();
   const tz = settings.orgTimezone;
@@ -39,7 +41,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   const [pipelines, reps, events, tasks, appts, siblingOpps, parties] = await Promise.all([
     readPipelines(),
     getActiveReps(),
-    db.crmEvent.findMany({ where: { contactId: c.id }, orderBy: { at: "desc" }, take: 80 }),
+    db.crmEvent.findMany({ where: { contactId: c.id }, orderBy: { at: "desc" }, take: 400 }),
     db.crmTask.findMany({ where: { oppId }, orderBy: [{ doneAt: "asc" }, { due: "asc" }] }),
     db.crmAppointment.findMany({ where: { oppId }, orderBy: { at: "asc" } }),
     db.crmOpportunity.findMany({ where: { contactId: c.id, id: { not: oppId } }, select: { id: true, title: true, stage: true } }),
@@ -254,6 +256,51 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             </form>
           </Card>
 
+          {/* 💬 Full conversation — texts + emails + calls combined, oldest→newest
+              so you can scroll up to the very first touch (Jon 2026-10-13). */}
+          {(() => {
+            const commsEv = [...events].reverse().filter((e) => ["sms", "email", "call", "voicemail"].includes(e.kind));
+            if (!commsEv.length) return null;
+            return (
+              <Card className="overflow-hidden p-0">
+                <div className="border-b border-slate-100 bg-slate-50/60 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">💬 Full conversation — every text, email &amp; call</div>
+                <div className="max-h-96 space-y-2 overflow-y-auto p-3">
+                  {commsEv.map((e) => {
+                    const body = stripHtml(e.body);
+                    const inbound = body.startsWith("⬅");
+                    const clean = body.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "");
+                    const when = e.at.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+                    if (e.kind === "call" || e.kind === "voicemail") {
+                      const recLink = (e.meta as { link?: string } | null)?.link;
+                      const isRec = recLink && clean.startsWith("🎙");
+                      return (
+                        <div key={e.id} className="flex justify-center">
+                          <div className={`max-w-[85%] rounded-2xl px-3 py-1.5 text-[11px] font-semibold text-slate-500 ${isRec ? "bg-white ring-1 ring-slate-200" : "rounded-full bg-slate-100"}`}>
+                            <div>{KIND_EMOJI[e.kind] ?? "📞"} {clean.replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}</div>
+                            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                            {isRec && <audio controls preload="none" src={recLink} className="mt-1 h-8 w-64 max-w-full" />}
+                          </div>
+                        </div>
+                      );
+                    }
+                    const imgUrls = clean.match(/https?:\/\/\S+\.(?:png|jpe?g|gif|webp)(?:\?\S*)?/gi) ?? [];
+                    const textOnly = imgUrls.reduce((s, u) => s.replace(u, ""), clean).replace(/[[\]]/g, "").trim();
+                    return (
+                      <div key={e.id} className={`flex ${inbound ? "justify-start" : "justify-end"}`}>
+                        <div className={`max-w-[82%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed shadow-sm ${inbound ? "rounded-bl-sm bg-white text-slate-800 ring-1 ring-slate-200" : "rounded-br-sm bg-brand-navy text-white"}`}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          {imgUrls.map((u) => <a key={u} href={u} target="_blank" rel="noreferrer"><img src={u} alt="photo" className="mb-1 max-h-48 rounded-lg" /></a>)}
+                          {textOnly && <div className="whitespace-pre-line break-words">{textOnly}</div>}
+                          <div className={`mt-0.5 text-right text-[9px] ${inbound ? "text-slate-400" : "text-white/60"}`}>{e.kind === "email" ? "✉️" : "💬"} {when}{!inbound && e.actor ? ` · ${e.actor.split(" ")[0]}` : ""}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })()}
+
           {comms.sms && c.phone && (
             <Card id="compose" className="scroll-mt-4 p-4">
               <SmsComposer history={[...events].reverse().filter((e) => e.kind === "sms").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString() }; })} oppId={opp.id} contactId={c.id} to={c.phone} leadName={c.name} rep={me!.name} snippets={snippets.filter((x) => x.kind === "sms")} />
@@ -275,7 +322,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <Card key={e.id} className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""}`}>
               <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
               <div className="min-w-0 flex-1">
-                <div className="whitespace-pre-line text-[13px] text-slate-800">{e.kind === "note" ? <><b>{e.actor}:</b> {stripHtml(e.body)}</> : <><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</>}</div>
+                {e.kind === "note"
+                  ? <EditableNote id={e.id} oppId={opp.id} actor={e.actor} body={stripHtml(e.body)} canEdit={e.actor === me!.name || manager} />
+                  : <div className="whitespace-pre-line text-[13px] text-slate-800"><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</div>}
                 {/* 🎙 recording → play it right here (Jon 2026-10-12) */}
                 {(() => { const m = e.meta as { link?: string } | null; return m?.link && e.body.startsWith("🎙") ? (
                   // eslint-disable-next-line jsx-a11y/media-has-caption

@@ -399,40 +399,51 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
         })}
       </div>
       {selecting && (
-        <div className="sticky bottom-3 z-30 mt-3 flex flex-wrap items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-xs text-white shadow-2xl">
-          <span className="font-extrabold">{stageScope ? <span className="text-indigo-300">whole stage · {stageScope.count.toLocaleString()} leads</span> : `${selected.size} selected`}</span>
-          <button onClick={() => { setStageScope(null); setSelected(new Set(cards.map((c) => c.id))); }} className="rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Select all visible</button>
-          <select value={bulk.op} onChange={(e) => setBulk({ op: e.target.value, val: "" })} className="rounded-lg px-2 py-1 text-xs font-bold text-slate-800">
-            <option value="stage">→ Move to stage</option>
-            <option value="pipeline">📂 Move to pipeline</option>
-            <option value="assign">👤 Change owner</option>
-            <option value="follower">👥 Add follower</option>
-            <option value="tag">🏷 Add tag</option>
-            <option value="untag">🏷 Remove tag</option>
-            <option value="delete">🗑 Delete (archive)</option>
-          </select>
-          {bulk.op === "stage" && (
-            <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1 text-xs text-slate-800">
-              <option value="">stage…</option>
-              {columns.map((cc) => <option key={cc.key} value={cc.key}>{cc.label}</option>)}
-            </select>
-          )}
-          {bulk.op === "pipeline" && (
-            <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1 text-xs text-slate-800">
-              <option value="">pipeline…</option>
-              {pipelineNames.map((pn) => <option key={pn} value={pn}>{pn}</option>)}
-            </select>
-          )}
-          {(bulk.op === "assign" || bulk.op === "follower") && (
-            <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1 text-xs text-slate-800">
-              <option value="">person…</option>
-              {reps.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          )}
-          {(bulk.op === "tag" || bulk.op === "untag") && <input value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} placeholder="tag…" className="rounded-lg px-2 py-1 text-xs text-slate-800" />}
-          {bulk.op === "delete" && <span className="text-[11px] font-bold text-red-300">archives the selected leads (recoverable)</span>}
-          <button onClick={runBulk} disabled={(!stageScope && !selected.size) || (bulk.op !== "delete" && !bulk.val)} className={`rounded-lg px-3 py-1.5 font-extrabold text-white disabled:opacity-40 ${bulk.op === "delete" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600"}`}>Apply to {stageScope ? stageScope.count.toLocaleString() : selected.size}</button>
-          <button onClick={() => { setSelecting(false); setSelected(new Set()); setStageScope(null); }} className="ml-auto rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Done</button>
+        // 📌 Fixed, always-fully-visible bulk bar (Jon 2026-10-13: the old sticky
+        // bar was cut off at the screen bottom so the action controls were
+        // unreachable). Two rows so nothing clips; selects open upward near the
+        // viewport bottom.
+        <div className="fixed inset-x-0 bottom-4 z-[70] flex justify-center px-4">
+          <div className="w-full max-w-4xl rounded-2xl bg-slate-900 px-4 py-3 text-xs text-white shadow-2xl ring-1 ring-white/10">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-extrabold">{stageScope ? <span className="rounded-full bg-indigo-500/30 px-2 py-0.5 text-indigo-200">whole stage · {stageScope.count.toLocaleString()} leads</span> : `${selected.size} selected`}</span>
+              {!stageScope && <button onClick={() => { setStageScope(null); setSelected(new Set(cards.map((c) => c.id))); }} className="rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">Select all visible</button>}
+              <button onClick={() => { setSelecting(false); setSelected(new Set()); setStageScope(null); }} className="ml-auto rounded bg-white/10 px-2 py-1 font-bold hover:bg-white/20">✕ Cancel</button>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/10 pt-2">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Do this:</span>
+              <select value={bulk.op} onChange={(e) => setBulk({ op: e.target.value, val: "" })} className="rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800">
+                <option value="stage">→ Move to stage</option>
+                <option value="pipeline">📂 Move to pipeline</option>
+                <option value="assign">👤 Change owner</option>
+                <option value="follower">👥 Add follower</option>
+                <option value="tag">🏷 Add tag</option>
+                <option value="untag">🏷 Remove tag</option>
+                <option value="delete">🗑 Delete (archive)</option>
+              </select>
+              {bulk.op === "stage" && (
+                <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1.5 text-xs text-slate-800">
+                  <option value="">pick a stage…</option>
+                  {columns.map((cc) => <option key={cc.key} value={cc.key}>{cc.label}</option>)}
+                </select>
+              )}
+              {bulk.op === "pipeline" && (
+                <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1.5 text-xs text-slate-800">
+                  <option value="">pick a pipeline…</option>
+                  {pipelineNames.map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+                </select>
+              )}
+              {(bulk.op === "assign" || bulk.op === "follower") && (
+                <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg px-2 py-1.5 text-xs text-slate-800">
+                  <option value="">pick a person…</option>
+                  {reps.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              )}
+              {(bulk.op === "tag" || bulk.op === "untag") && <input value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} placeholder="type a tag…" className="rounded-lg px-2 py-1.5 text-xs text-slate-800" />}
+              {bulk.op === "delete" && <span className="text-[11px] font-bold text-red-300">archives the leads (recoverable)</span>}
+              <button onClick={runBulk} disabled={pending || (!stageScope && !selected.size) || (bulk.op !== "delete" && !bulk.val)} className={`ml-auto rounded-lg px-4 py-1.5 font-extrabold text-white disabled:opacity-40 ${bulk.op === "delete" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600"}`}>{pending ? "Applying…" : `Apply to ${stageScope ? stageScope.count.toLocaleString() : selected.size}`}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

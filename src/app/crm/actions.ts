@@ -175,6 +175,24 @@ export async function addCrmNoteAction(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+// ✎ Edit a note you wrote (Jon 2026-10-13). Only the note's author may edit it
+// (managers can fix any). Appends an "(edited)" marker so the timeline is honest.
+export async function editCrmNoteAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const oppId = String(formData.get("oppId") ?? "");
+  const body = String(formData.get("body") ?? "").trim().slice(0, 2000);
+  if (!id || !body) return;
+  const ev = await db.crmEvent.findUnique({ where: { id }, select: { actor: true, kind: true } });
+  if (!ev || ev.kind !== "note") return;
+  const { isManager } = await import("@/lib/auth");
+  if (ev.actor !== me.name && !isManager(me)) return; // only your own note
+  const marked = /\(edited\)\s*$/.test(body) ? body : `${body}  _(edited)_`;
+  await db.crmEvent.update({ where: { id }, data: { body: marked } });
+  revalidatePath(`/crm/${oppId}`);
+}
+
 /** Log a call/sms/email the rep just did manually (Telnyx auto-log comes via webhook). */
 export async function logCrmTouchAction(formData: FormData) {
   const me = await crmUser();

@@ -74,8 +74,11 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   // opening a thread marks it read (clears the red dot everywhere)
   if (cId) setConvRead([cId], true).catch(() => {});
   const visible = contact && (canSeeAll || !contact.assignedTo || contact.assignedTo === me!.name);
+  // 🧾 Jon 2026-10-13: the thread is now a FULL AUDIT — every event (texts,
+  // emails, calls, notes, stage moves, pipeline moves, system) since the lead
+  // entered the system, oldest at top so you can scroll back to the first touch.
   const [events, opps] = contact && visible ? await Promise.all([
-    db.crmEvent.findMany({ where: { contactId: contact.id, kind: { in: COMMS } }, orderBy: { at: "desc" }, take: 80 }),
+    db.crmEvent.findMany({ where: { contactId: contact.id }, orderBy: { at: "desc" }, take: 400 }),
     db.crmOpportunity.findMany({ where: { contactId: contact.id, archivedAt: null }, orderBy: { createdAt: "asc" }, select: { id: true, title: true, stage: true, pipeline: true, formData: true, createdAt: true } }),
   ]) : [[], []];
   const opp = opps[0] ?? null; // first property drives the composer + header link
@@ -185,6 +188,16 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     const inbound = body.startsWith("⬅");
                     const clean = body.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "");
                     const when = e.at.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+                    // 🧾 audit events (notes, stage/pipeline moves, system, tasks,
+                    // files) render as subtle centered chips so the whole history
+                    // of the lead is visible, not just the texts/emails.
+                    if (!["sms", "email", "call", "voicemail"].includes(e.kind)) return (
+                      <div key={i} className="flex justify-center">
+                        <span className="max-w-[88%] rounded-full bg-slate-50 px-3 py-1 text-[10px] font-medium text-slate-400 ring-1 ring-slate-100">
+                          {KIND_EMOJI[e.kind] ?? "•"} {e.kind === "note" ? <><b className="text-slate-500">{e.actor?.split(" ")[0]}:</b> {clean}</> : clean} · {when}
+                        </span>
+                      </div>
+                    );
                     if (e.kind === "call" || e.kind === "voicemail") {
                       // 🎙 a recording event (body starts 🎙, has a Drive link) gets
                       // an inline player right in the thread (Jon 2026-10-13: "no
