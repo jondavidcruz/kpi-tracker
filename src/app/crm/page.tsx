@@ -287,7 +287,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       <DueTodayReminder tasks={myDueTasks} appts={myApptsToday} />
       {view === "kanban" ? (
-        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={pipelines.map((p) => p.name)} currentPipeline={plName} who={whoRaw || "all"} /></>
+        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={pipelines.map((p) => p.name)} pipelineStages={Object.fromEntries(pipelines.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} currentPipeline={plName} who={whoRaw || "all"} /></>
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>

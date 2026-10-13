@@ -133,7 +133,7 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
     </div>
 
     {/* 💻 how it looks when they open it (MacBook / Apple Mail style) */}
-    <div className="w-[360px] shrink-0 select-none max-lg:hidden">
+    <div className="w-[360px] shrink-0 select-none max-xl:hidden">
       <div className="rounded-xl bg-slate-800 p-2 shadow-xl">
         <div className="overflow-hidden rounded-lg bg-white">
           <div className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 px-3 py-2">

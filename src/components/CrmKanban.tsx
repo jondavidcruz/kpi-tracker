@@ -48,7 +48,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [], currentPipeline = "", who = "all" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[]; currentPipeline?: string; who?: string }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [], pipelineStages = {}, currentPipeline = "", who = "all" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[]; pipelineStages?: Record<string, { key: string; label: string }[]>; currentPipeline?: string; who?: string }) {
   const [cards, setCards] = useState(initial);
   // THE 27-vs-112 bug (Jon 2026-10-08): this component stays mounted when you
   // switch pipeline tabs, so the drag-and-drop card state kept showing the
@@ -69,7 +69,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   const [ranges, setRanges] = useState<ColorRange[]>(DEFAULT_RANGES);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulk, setBulk] = useState({ op: "stage", val: "" });
+  const [bulk, setBulk] = useState({ op: "stage", val: "", val2: "" });
   // when the rep clicks a stage's "select all N", we target the WHOLE stage
   // server-side (every lead, not just the loaded ~60). null = id-based select.
   const [stageScope, setStageScope] = useState<{ stage: string; count: number } | null>(null);
@@ -113,13 +113,16 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       const fd = new FormData();
       fd.set("pipeline", currentPipeline); fd.set("stage", stageScope.stage); fd.set("who", who);
       fd.set("op", bulk.op); fd.set("val", bulk.val.trim());
+      if (bulk.op === "pipeline" && bulk.val2) fd.set("targetStage", bulk.val2);
       start(async () => { await bulkOppStageAction(fd); window.location.reload(); });
       return;
     }
     if (!selected.size) return;
     const fd = new FormData();
     for (const id of selected) fd.append("ids", id);
-    fd.set("op", bulk.op); fd.set("val", bulk.val.trim()); if (bulk.op === "delete" && !confirm(`Archive ${selected.size} selected lead(s)? They can be restored.`)) return;
+    fd.set("op", bulk.op); fd.set("val", bulk.val.trim());
+    if (bulk.op === "pipeline" && bulk.val2) fd.set("targetStage", bulk.val2);
+    if (bulk.op === "delete" && !confirm(`Archive ${selected.size} selected lead(s)? They can be restored.`)) return;
     start(async () => { await bulkOppAction(fd); window.location.reload(); });
   };
   // quick-add popover: {cardId, kind} — one open at a time
@@ -412,7 +415,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/10 pt-2">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Do this:</span>
-              <select value={bulk.op} onChange={(e) => setBulk({ op: e.target.value, val: "" })} className="rounded-lg bg-white px-2 py-1.5 text-xs font-bold text-slate-800">
+              <select value={bulk.op} onChange={(e) => setBulk({ op: e.target.value, val: "", val2: "" })} className="rounded-lg bg-white px-2 py-1.5 text-xs font-bold text-slate-800">
                 <option value="stage">→ Move to stage</option>
                 <option value="pipeline">📂 Move to pipeline</option>
                 <option value="assign">👤 Change owner</option>
@@ -427,12 +430,19 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                   {columns.map((cc) => <option key={cc.key} value={cc.key}>{cc.label}</option>)}
                 </select>
               )}
-              {bulk.op === "pipeline" && (
-                <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
+              {bulk.op === "pipeline" && (<>
+                <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value, val2: "" })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
                   <option value="">pick a pipeline…</option>
                   {pipelineNames.map((pn) => <option key={pn} value={pn}>{pn}</option>)}
                 </select>
-              )}
+                {/* and WHICH stage in that pipeline (Jon 2026-10-13); blank = first stage */}
+                {bulk.val && (pipelineStages[bulk.val]?.length ?? 0) > 0 && (
+                  <select value={bulk.val2} onChange={(e) => setBulk({ ...bulk, val2: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
+                    <option value="">→ first stage</option>
+                    {(pipelineStages[bulk.val] ?? []).map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
+                  </select>
+                )}
+              </>)}
               {(bulk.op === "assign" || bulk.op === "follower") && (
                 <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
                   <option value="">pick a person…</option>

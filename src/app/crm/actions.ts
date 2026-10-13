@@ -60,8 +60,13 @@ export async function createCrmLeadAction(formData: FormData) {
       const { readMsgTemplates, fillTokens } = await import("@/lib/msg-templates");
       const tpls = await readMsgTemplates();
       const tok = { first: contact.name.split(" ")[0], rep: contact.assignedTo.split(" ")[0], address: title };
-      const ok = await sendEmailTo([contact.email], fillTokens(tpls.welcome_email_subject, tok), fillTokens(tpls.welcome_email_body, tok));
-      await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "email", body: `➡️ Us: welcome email${ok ? "" : " (SEND FAILED)"}`, actor: "auto-welcome" }).catch(() => {});
+      const subj = fillTokens(tpls.welcome_email_subject, tok);
+      const html = fillTokens(tpls.welcome_email_body, tok);
+      const ok = await sendEmailTo([contact.email], subj, html);
+      // 📧 log the FULL email (subject + body) so the thread shows what the seller
+      // actually received, not just "welcome email" (Jon 2026-10-13).
+      const plain = html.replace(/<\/p>\s*<p>/gi, "\n\n").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "").trim();
+      await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "email", body: `➡️ Us: ✉️ ${subj}\n\n${plain}${ok ? "" : "\n\n(SEND FAILED)"}`, actor: "auto-welcome" }).catch(() => {});
     })().catch(() => {});
   }
   revalidatePath("/crm");
@@ -772,12 +777,13 @@ export async function bulkOppAction(formData: FormData) {
   } else if (op === "stage" && ((await readPipelines()).some((p) => p.stages.some((st) => st.key === val)) || CRM_STAGES.some((s) => s.key === val))) {
     await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { stage: val, ...(val === "dead" ? { archivedAt: new Date() } : {}) } });
   } else if (op === "pipeline") {
-    // move many to another pipeline → that pipeline's first stage + its owner
+    // move many to another pipeline → chosen stage (or first stage) + its owner
     const target = (await readPipelines()).find((p) => p.name === val);
     if (!target) return;
-    const first = target.stages[0]?.key ?? "new";
+    const wantStage = String(formData.get("targetStage") ?? "").trim();
+    const stage = target.stages.some((s) => s.key === wantStage) ? wantStage : (target.stages[0]?.key ?? "new");
     const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nick Fair" };
-    await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { pipeline: val, stage: first, archivedAt: null, ...(OWN[val] ? { assignedTo: OWN[val] } : {}) } });
+    await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { pipeline: val, stage, archivedAt: null, ...(OWN[val] ? { assignedTo: OWN[val] } : {}) } });
   } else if (op === "tag") {
     for (const id of ids) {
       const o = await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } });
@@ -831,9 +837,10 @@ export async function bulkOppStageAction(formData: FormData) {
   } else if (op === "pipeline") {
     const target = (await readPipelines()).find((p) => p.name === val);
     if (!target) return;
-    const first = target.stages[0]?.key ?? "new";
+    const wantStage = String(formData.get("targetStage") ?? "").trim();
+    const stage = target.stages.some((s) => s.key === wantStage) ? wantStage : (target.stages[0]?.key ?? "new");
     const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nick Fair" };
-    await db.crmOpportunity.updateMany({ where, data: { pipeline: val, stage: first, archivedAt: null, ...(OWN[val] ? { assignedTo: OWN[val] } : {}) } });
+    await db.crmOpportunity.updateMany({ where, data: { pipeline: val, stage, archivedAt: null, ...(OWN[val] ? { assignedTo: OWN[val] } : {}) } });
   } else if (op === "delete") {
     await db.crmOpportunity.updateMany({ where, data: { archivedAt: new Date() } });
   } else if (op === "tag" || op === "untag" || op === "follower") {

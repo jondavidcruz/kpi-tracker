@@ -52,6 +52,7 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
   const [tab, setTab] = useState("opp");
   const [saved, setSaved] = useState("");
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
+  const [navMin, setNavMin] = useState(false);
   const [pending, start] = useTransition();
 
   useEffect(() => {
@@ -129,12 +130,16 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
             </div>
 
             <div className="flex min-h-0 flex-1">
-              {/* left section nav, GHL-style */}
-              <nav className="w-48 shrink-0 space-y-0.5 overflow-y-auto border-r border-slate-100 bg-slate-50/60 p-2">
+              {/* left section nav, GHL-style — collapsible to an icon rail (Jon
+                  2026-10-13: "minimize like on a MacBook") for small/iPad screens */}
+              <nav className={`${navMin ? "w-11" : "w-48"} shrink-0 space-y-0.5 overflow-y-auto border-r border-slate-100 bg-slate-50/60 p-2 transition-all`}>
+                <button onClick={() => setNavMin((v) => !v)} title={navMin ? "Expand menu" : "Minimize menu"} className="mb-1 block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-bold text-slate-400 hover:bg-slate-100">
+                  {navMin ? "»" : "« minimize"}
+                </button>
                 {TABS.map((t) => (
-                  <button key={t.key} onClick={() => setTab(t.key)}
-                    className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold ${tab === t.key ? "bg-brand-navy text-white" : "text-slate-600 hover:bg-slate-100"}`}>
-                    {t.emoji} {t.label}
+                  <button key={t.key} onClick={() => setTab(t.key)} title={t.label}
+                    className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold ${navMin ? "text-center" : ""} ${tab === t.key ? "bg-brand-navy text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                    {t.emoji}{navMin ? "" : ` ${t.label}`}
                   </button>
                 ))}
               </nav>

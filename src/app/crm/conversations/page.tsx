@@ -8,6 +8,7 @@ import { readSnippets } from "@/lib/crm-templates";
 import CallButton from "@/components/CallButton";
 import ConvComposerTabs from "@/components/ConvComposerTabs";
 import ConvContactRail from "@/components/ConvContactRail";
+import ScrollAnchor from "@/components/ScrollAnchor";
 import { startConversationAction, bulkConvAction } from "@/app/crm/actions";
 import { readConvMap, setConvRead } from "@/lib/conv-read";
 
@@ -92,6 +93,9 @@ export default async function ConversationsPage({ searchParams }: { searchParams
     const fd = (o.formData ?? {}) as { property?: { apn?: string } };
     return { id: o.id, title: o.title, stage: o.stage, pipeline: o.pipeline, apn: fd.property?.apn ?? "", createdAt: o.createdAt.toISOString() };
   });
+  // notes (newest first) for the rail's "previous notes" list
+  const railNotes = events.filter((e) => e.kind === "note").slice(0, 30).map((e) => ({ id: e.id, body: stripHtml(e.body), actor: e.actor, at: e.at.toISOString() }));
+  const myFirstName = me!.name;
 
   return (
     <div className="space-y-4">
@@ -236,6 +240,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                       </div>
                     );
                   })}
+                  <ScrollAnchor dep={cId} />
                 </div>
                 <ConvComposerTabs contactId={contact.id} oppId={opp?.id ?? ""} phone={contact.phone} email={contact.email} leadName={contact.name} rep={me!.name} fromLabel={fromLabel} signature={mySignature} canSms={comms.sms} canEmail={comms.email} snippets={snippets}
                   smsHistory={thread.filter((e) => e.kind === "sms").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString() }; })}
@@ -252,6 +257,8 @@ export default async function ConversationsPage({ searchParams }: { searchParams
               opps={railProps}
               owners={owners}
               canEdit={true}
+              notes={railNotes}
+              meName={myFirstName}
             />
           )}
         </div>

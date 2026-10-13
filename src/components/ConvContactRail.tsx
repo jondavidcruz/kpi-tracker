@@ -11,7 +11,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { titleCase } from "@/lib/crm-shared";
-import { saveConvContactAction, addPropertyAction, savePropertyAction, addPropertyNoteAction } from "@/app/crm/actions";
+import { saveConvContactAction, addPropertyAction, savePropertyAction, addPropertyNoteAction, editCrmNoteAction, deleteCrmNoteAction } from "@/app/crm/actions";
 
 type Prop = { id: string; title: string; stage: string; pipeline: string; apn: string; createdAt: string };
 type Contact = { id: string; name: string; phone: string; altPhone: string; email: string; address: string; assignedTo: string; pinnedNote: string; source: string; createdAt: string };
@@ -38,8 +38,11 @@ function splitName(name: string): { first: string; last: string } {
 const lbl = "text-[10px] font-bold uppercase tracking-wide text-slate-400";
 const inp = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-800";
 
-export default function ConvContactRail({ contact, opps, owners, canEdit }: { contact: Contact; opps: Prop[]; owners: string[]; canEdit: boolean }) {
+type Note = { id: string; body: string; actor: string; at: string };
+
+export default function ConvContactRail({ contact, opps, owners, canEdit, notes = [], meName = "" }: { contact: Contact; opps: Prop[]; owners: string[]; canEdit: boolean; notes?: Note[]; meName?: string }) {
   const [editing, setEditing] = useState(false);
+  const [editNoteId, setEditNoteId] = useState<string | null>(null);
   const { first, last } = splitName(titleCase(contact.name));
   const displayName = titleCase(contact.name?.trim() || "") || fmtPhone(contact.phone) || "Unknown";
 
@@ -64,6 +67,42 @@ export default function ConvContactRail({ contact, opps, owners, canEdit }: { co
         <textarea name="body" rows={2} placeholder="What did the seller say?" className="w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs" required />
         <button className="mt-1 w-full rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">Save note</button>
       </form>
+
+      {/* 📒 all previous notes — viewable + editable right here (Jon 2026-10-13) */}
+      {notes.length > 0 && (
+        <div className="mb-3">
+          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">📒 Notes ({notes.length})</div>
+          <div className="max-h-64 space-y-1.5 overflow-y-auto pr-0.5">
+            {notes.map((n) => {
+              const mine = n.actor === meName;
+              if (mine && editNoteId === n.id) return (
+                <form key={n.id} action={editCrmNoteAction} onSubmit={() => setEditNoteId(null)} className="rounded-lg bg-white p-1.5 ring-1 ring-indigo-200">
+                  <input type="hidden" name="id" value={n.id} />
+                  <input type="hidden" name="oppId" value={opps[0]?.id ?? ""} />
+                  <textarea name="body" defaultValue={n.body} rows={3} className="w-full rounded border border-slate-200 px-1.5 py-1 text-[11px]" autoFocus />
+                  <div className="mt-1 flex gap-1"><button className="rounded bg-brand-navy px-2 py-0.5 text-[10px] font-bold text-white">Save</button><button type="button" onClick={() => setEditNoteId(null)} className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">Cancel</button></div>
+                </form>
+              );
+              return (
+                <div key={n.id} className="group/rn rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700 ring-1 ring-slate-100">
+                  <div className="whitespace-pre-line break-words">{n.body}</div>
+                  <div className="mt-0.5 flex items-center gap-1 text-[9px] text-slate-400">
+                    <span>{n.actor.split(" ")[0]} · {new Date(n.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                    {mine && <button onClick={() => setEditNoteId(n.id)} title="Edit" className="ml-auto opacity-0 transition group-hover/rn:opacity-100 hover:text-indigo-600">✎</button>}
+                    {mine && (
+                      <form action={deleteCrmNoteAction} className="inline" onSubmit={(e) => { if (!confirm("Delete this note?")) e.preventDefault(); }}>
+                        <input type="hidden" name="id" value={n.id} />
+                        <input type="hidden" name="oppId" value={opps[0]?.id ?? ""} />
+                        <button title="Delete" className="opacity-0 transition group-hover/rn:opacity-100 hover:text-red-600">🗑</button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── CONTACT: read view ── */}
       {!editing && (
