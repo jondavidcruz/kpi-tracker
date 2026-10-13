@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useState, useTransition } from "react";
 import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction, addCrmNoteAction } from "@/app/crm/actions";
 import { STAGE_PROB, titleCase } from "@/lib/crm-shared";
+import { stageHelp } from "@/lib/stage-help";
 
 export type CrmCard = {
   id: string;
@@ -232,7 +233,18 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
               className={`min-w-[270px] flex-1 rounded-2xl p-2.5 ring-1 transition ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : tint}`}
             >
               <div className="mb-0.5 flex items-center justify-between px-1">
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${col.cls}`}>{col.label}</span>
+                <span className="flex items-center gap-1">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${col.cls}`}>{col.label}</span>
+                  {(() => { const h = stageHelp(col.label); return h ? (
+                    <span className="group/help relative">
+                      <span className="grid h-4 w-4 cursor-help place-items-center rounded-full bg-white/80 text-[9px] font-extrabold text-slate-400 ring-1 ring-slate-200 hover:text-slate-600">i</span>
+                      <span className="pointer-events-none absolute left-0 top-5 z-50 hidden w-60 rounded-xl bg-slate-900 p-2.5 text-left text-white shadow-xl group-hover/help:block">
+                        <span className="block text-[11px] font-extrabold">{h.title}</span>
+                        <span className="mt-0.5 block text-[10px] font-medium leading-snug text-slate-200">{h.desc}</span>
+                      </span>
+                    </span>
+                  ) : null; })()}
+                </span>
                 <span className="flex items-center gap-1">
                   <span className="text-xs font-extrabold tabular-nums text-slate-500">{(counts[col.key] ?? colCards.length).toLocaleString()}</span>
                   <button onClick={() => toggleCollapse(col.key)} title="Minimize this stage" className="grid h-5 w-5 place-items-center rounded text-[11px] font-extrabold text-slate-400 hover:bg-white/70 hover:text-slate-600">‹</button>
