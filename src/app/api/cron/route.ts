@@ -1508,6 +1508,40 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, probe: await probeCallShape() });
   }
 
+  // 🔎 Probe the GHL recording ENDPOINT directly for one real completed call —
+  // report status/content-type/body so we can see why audio isn't coming back.
+  if (url.searchParams.get("ghlrecprobe") === "1") {
+    const { searchConversations, getMessages } = await import("@/lib/reireply");
+    const loc = process.env.REIREPLY_LOCATION_ID ?? "";
+    const key = process.env.REIREPLY_API_KEY ?? "";
+    const conv = await searchConversations({ limit: "20" });
+    const convs = ((conv.body as { conversations?: Array<{ id: string }> }).conversations) ?? [];
+    let mid = "";
+    for (const c of convs) {
+      const m = await getMessages(c.id);
+      const mb = m.body as { messages?: { messages?: unknown[] } | unknown[] };
+      const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []);
+      const hit = list.find((msg) => { const x = msg as Record<string, unknown>; return /call/i.test(String(x.messageType ?? "")) && String(x.status) === "completed" && Number((x.meta as { call?: { duration?: number } })?.call?.duration ?? 0) > 5; });
+      if (hit) { mid = String((hit as Record<string, unknown>).id ?? ""); break; }
+    }
+    if (!mid) return NextResponse.json({ ok: false, reason: "no completed call found" });
+    const variants = [
+      `${"https://services.leadconnectorhq.com"}/conversations/messages/${mid}/recording?locationId=${loc}`,
+      `${"https://services.leadconnectorhq.com"}/conversations/messages/${mid}/recording`,
+    ];
+    const results = [];
+    for (const u of variants) {
+      try {
+        const r = await fetch(u, { headers: { Authorization: `Bearer ${key}`, Version: "2021-07-28", Accept: "audio/x-wav, audio/mpeg, */*" }, redirect: "manual", cache: "no-store" });
+        const ct = r.headers.get("content-type") ?? "";
+        let bodyPreview = "";
+        if (!/audio|octet-stream/i.test(ct)) { bodyPreview = (await r.text()).slice(0, 300); }
+        results.push({ url: u.replace(mid, "<mid>"), status: r.status, contentType: ct, location: r.headers.get("location") ?? undefined, bodyPreview: bodyPreview || "(binary audio)" });
+      } catch (e) { results.push({ url: u.replace(mid, "<mid>"), error: String(e).slice(0, 120) }); }
+    }
+    return NextResponse.json({ ok: true, messageId: mid.slice(0, 6) + "…", results });
+  }
+
   // 🎙 Sync HISTORICAL GHL (REI Reply) call recordings into the War Room
   // (?ghlrecsync=1, 2026-10-13). Bounded + idempotent (dedupe by GHL message id
   // in __ghl_rec_synced__). Each recording → Drive + a 🎙 event + AI summary on
