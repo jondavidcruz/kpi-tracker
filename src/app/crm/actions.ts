@@ -1159,3 +1159,39 @@ export async function toggleFollowerAction(formData: FormData) {
   await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: remove ? `👣 ${name.split(" ")[0]} unfollowed` : `👣 ${name.split(" ")[0]} added as follower`, actor: me.name });
   revalidatePath(`/crm/${id}`);
 }
+
+/** 🏷 Call-type disposition → KPI auto-entry (Jon 2026-10-12): after a ≥60s
+ *  call the rep tags WHAT KIND of call it was; that +1s the matching KPI that
+ *  previously had to be typed into the scorecard by hand. */
+export async function logCallTypeKpiAction(formData: FormData): Promise<{ ok: boolean; label?: string; error?: string }> {
+  const me = await crmUser();
+  if (!me) return { ok: false, error: "no access" };
+  const type = String(formData.get("type") ?? "");
+  const MAP: Record<string, { keys: string[]; nameLike: string; label: string }> = {
+    process: { keys: ["completed_process_calls"], nameLike: "process call", label: "Process Call" },
+    followup: { keys: ["follow_up_calls", "followup_calls"], nameLike: "follow", label: "Follow-Up Call" },
+    offer: { keys: ["offer_calls"], nameLike: "offer call", label: "Offer Call" },
+    buyer_convo: { keys: ["dev_conversations", "buyer_conversations"], nameLike: "buyer conversation", label: "Buyer Conversation" },
+    buyer_vetted: { keys: ["buyers_vetted"], nameLike: "vetted", label: "Buyer Vetted" },
+  };
+  const m = MAP[type];
+  if (!m) return { ok: false, error: "unknown type" };
+  let kpi: { id: string; name: string } | null = null;
+  for (const k of m.keys) {
+    kpi = await db.kpi.findUnique({ where: { key: k }, select: { id: true, name: true } });
+    if (kpi) break;
+  }
+  if (!kpi) kpi = await db.kpi.findFirst({ where: { name: { contains: m.nameLike, mode: "insensitive" } }, select: { id: true, name: true } });
+  if (!kpi) return { ok: false, error: `no "${m.label}" KPI found` };
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+  const existing = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: me.id, date } });
+  if (existing) await db.entry.update({ where: { id: existing.id }, data: { value: existing.value + 1 } });
+  else await db.entry.create({ data: { kpiId: kpi.id, userId: me.id, date, value: 1, enteredBy: "dialer" } });
+  // breadcrumb on the lead when we know who the call was with
+  const to10 = String(formData.get("to") ?? "").replace(/\D/g, "").slice(-10);
+  if (to10.length === 10) {
+    const c = await db.crmContact.findFirst({ where: { phone: { contains: to10 } }, select: { id: true } });
+    if (c) await logCrmEvent({ contactId: c.id, kind: "call", body: `🏷 Call type: ${m.label} (+1 ${kpi.name})`, actor: me.name }).catch(() => {});
+  }
+  return { ok: true, label: `${m.label} → +1 ${kpi.name}` };
+}

@@ -903,6 +903,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, ...out });
   }
 
+  // 🎙 One-off: assign "record your voicemail" to every active teammate
+  // (?vmtasks=1, dup-guarded) — Jon 2026-10-12.
+  if (url.searchParams.get("vmtasks") === "1") {
+    const users = await db.user.findMany({ where: { active: true }, select: { name: true } });
+    const title = "🎙 Record your voicemail drop — My Account → 📼 My voicemail drop (takes 2 minutes)";
+    let created = 0;
+    for (const u of users) {
+      if (/cortana/i.test(u.name)) continue;
+      const dup = await db.crmTask.findFirst({ where: { title, assignedTo: u.name, doneAt: null } });
+      if (dup) continue;
+      await db.crmTask.create({ data: { oppId: "", contactId: "", title, due: new Date().toISOString().slice(0, 10), assignedTo: u.name, createdBy: "warroom" } });
+      created++;
+    }
+    return NextResponse.json({ ok: true, created, of: users.length });
+  }
+
   // ✏️ KPI display rename (?kpirename=1&from=…&to=…): changes a KPI's shown
   // name only — keys/targets/entries all hang off the id, so nothing breaks.
   if (url.searchParams.get("kpirename") === "1") {

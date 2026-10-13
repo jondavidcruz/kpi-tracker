@@ -5,7 +5,7 @@
 // contact's area code), and it answers "fo-call" events from opportunity
 // cards so every 📞 in the CRM rings through the browser — never tel:.
 import { useEffect, useRef, useState } from "react";
-import { logBrowserCallAction, dialerOutcomeQuickAction } from "@/app/crm/actions";
+import { logBrowserCallAction, dialerOutcomeQuickAction, logCallTypeKpiAction } from "@/app/crm/actions";
 import { quietHoursWarning } from "@/lib/npa-tz";
 
 type CallState = "idle" | "connecting" | "ringing" | "active" | "error";
@@ -15,7 +15,7 @@ type PhoneData = {
   contacts: Array<{ id: string; name: string; phone: string }>;
   queue: Array<{ oppId: string; contactId: string; name: string; phone: string; title: string; due: string }>;
 };
-type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string; dir?: "in" | "out" };
+type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string; dir?: "in" | "out"; secs?: number };
 
 const areaCode = (e164: string) => e164.replace(/\D/g, "").replace(/^1/, "").slice(0, 3);
 
@@ -39,6 +39,8 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [micOk, setMicOk] = useState<boolean | null>(null); // null = unknown
   const claimUntilRef = useRef(0); // while fresh, the next native ring auto-answers here
   const meFirstRef = useRef("");
+  const mePosRef = useRef("");
+  const [typeLogged, setTypeLogged] = useState("");
   // after a ring ends without ME answering, find out who took it (brief race
   // with the webhook write, so wait a beat)
   const checkWhoAnswered = () => {
@@ -204,7 +206,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     const dur = startRef.current ? Math.round((Date.now() - startRef.current) / 1000) : 0;
     startRef.current = 0;
     setState("idle"); setMuted(false); setSecs(0); setOnCall(null); setDtmfTrail("");
-    if (ctx?.oppId || ctx?.contactId || ctx?.phone) setLastCall(ctx); // keypad dials get the strip too (Jon 2026-10-09)
+    if (ctx?.oppId || ctx?.contactId || ctx?.phone) setLastCall({ ...ctx, secs: dur }); // keypad dials get the strip too (Jon 2026-10-09)
     if (ctx?.phone || ctx?.contactId) {
       // log EVERY call — keypad dials included; the server find-or-creates the
       // contact so it shows in Conversations recents (Jon 2026-10-08)
@@ -360,8 +362,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     } catch { /* older browser — the answer-time prompt still covers it */ }
     fetch("/api/crm/mystats", { cache: "no-store" }).then(async (r) => {
       if (!r.ok) return;
-      const j = (await r.json()) as { who?: string };
+      const j = (await r.json()) as { who?: string; position?: string };
       if (j.who) meFirstRef.current = j.who.toLowerCase();
+      mePosRef.current = j.position ?? "";
     }).catch(() => {});
     // standby detection: still not the leader after 1.5s = another tab has
     // the phone; this tab shows a blue dot + remote answer banners instead
@@ -602,6 +605,31 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
                 ))}
                 <button onClick={() => setLastCall(null)} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600">skip</button>
               </span>
+              {(lastCall.secs ?? 0) >= 60 && (
+                <span className="mt-1 flex flex-col gap-1 border-t border-amber-200/60 pt-1.5">
+                  <span className="text-[10px] font-bold text-amber-800">🏷 What kind of call was it? <span className="font-semibold text-amber-600">(counts your KPI automatically)</span></span>
+                  {typeLogged === lastCall.phone ? (
+                    <span className="text-[10px] font-bold text-emerald-600">✅ logged to your scorecard</span>
+                  ) : (
+                    <span className="flex flex-wrap gap-1">
+                      {(mePosRef.current === "dispositions"
+                        ? ([["buyer_convo", "🤝 Buyer Convo"], ["buyer_vetted", "✅ Buyer Vetted"]] as const)
+                        : mePosRef.current === "acquisitions" || mePosRef.current === "cc_lm"
+                        ? ([["process", "☎️ Process Call"], ["followup", "🔁 Follow-Up"], ["offer", "💰 Offer Call"]] as const)
+                        : ([["process", "☎️ Process Call"], ["followup", "🔁 Follow-Up"], ["offer", "💰 Offer Call"], ["buyer_convo", "🤝 Buyer Convo"], ["buyer_vetted", "✅ Buyer Vetted"]] as const)
+                      ).map(([k, l]) => (
+                        <button key={k} onClick={async () => {
+                          const fd = new FormData();
+                          fd.set("type", k); fd.set("to", lastCall.phone ?? "");
+                          const res = await logCallTypeKpiAction(fd).catch(() => ({ ok: false as const, error: "network" }));
+                          if (res.ok) { setTypeLogged(lastCall.phone ?? "y"); setMsg(`✅ ${res.label}`); }
+                          else setMsg(`⚠️ ${res.error ?? "couldn't log the KPI"}`);
+                        }} className="rounded-md bg-white px-2 py-1 text-[10px] font-bold text-amber-800 ring-1 ring-amber-300 hover:bg-amber-100">{l}</button>
+                      ))}
+                    </span>
+                  )}
+                </span>
+              )}
             </span>
           )}
           {msg && <span className="px-3.5 py-1 text-[10px] font-semibold text-amber-700">{msg}</span>}
