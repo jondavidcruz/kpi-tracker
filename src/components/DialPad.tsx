@@ -333,13 +333,18 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             }
             setState("active"); setMsg("");
             if (audioRef.current && n.call.remoteStream) { audioRef.current.srcObject = n.call.remoteStream; audioRef.current.play().catch(() => {}); }
-            // 🎙 outbound WebRTC calls aren't recorded by the webhook — start the
-            // recording here the moment it connects (Jon 2026-10-13). Inbound
-            // calls are already recorded on the winner bridge.
+            // 🎙 outbound WebRTC calls aren't recorded by the webhook reliably —
+            // start recording here the moment it connects (Jon 2026-10-13). The
+            // server also starts it as a fallback; a 2nd record_start is a no-op.
             if (onCallRef.current?.dir === "out" && !recStartedRef.current) {
-              const cc = callRef.current as unknown as { telnyxIDs?: { telnyxCallControlId?: string }; id?: string } | null;
-              const ccId = cc?.telnyxIDs?.telnyxCallControlId || cc?.id || "";
-              if (ccId) { recStartedRef.current = true; fetch("/api/telnyx/record", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callControlId: ccId }) }).catch(() => {}); }
+              const grabId = (): string => {
+                const cc = callRef.current as unknown as { telnyxIDs?: { telnyxCallControlId?: string }; options?: { telnyxCallControlId?: string }; id?: string } | null;
+                return cc?.telnyxIDs?.telnyxCallControlId || cc?.options?.telnyxCallControlId || cc?.id || "";
+              };
+              const fire = (ccId: string) => { if (ccId && !recStartedRef.current) { recStartedRef.current = true; fetch("/api/telnyx/record", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callControlId: ccId }) }).catch(() => {}); } };
+              const id0 = grabId();
+              if (id0) fire(id0);
+              else setTimeout(() => { if (stateRef.current === "active") fire(grabId()); }, 1500); // id not ready yet → retry once
             }
           }
           if (cs === "active" || ["hangup", "destroy"].includes(cs)) {

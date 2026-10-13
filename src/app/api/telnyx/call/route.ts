@@ -197,11 +197,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, vm: true });
     }
     // 📼 outbound browser call answered → remember the leg so 📼 Drop VM can
-    // speak into it (Jon 2026-10-12). Recording is now started client-side from
-    // the dialer (/api/telnyx/record) the moment it connects, since this webhook
-    // path doesn't reliably fire for WebRTC outbound legs — 2026-10-13.
+    // speak into it (Jon 2026-10-12). RECORDING (2026-10-13): started both
+    // client-side from the dialer (primary, /api/telnyx/record) AND here as a
+    // server-side FALLBACK — whichever fires first wins; a 2nd record_start on
+    // the same call is a no-op, and recording.saved dedupes the event. Belt +
+    // suspenders because recordings are the #1 priority.
     const pd = p as { direction?: string; to?: string };
     if (pd.direction === "outgoing" && (pd.to ?? "").startsWith("+")) {
+      await txCall(p.call_control_id, "record_start", { format: "mp3", channels: "dual" }).catch(() => {});
       try {
         const last10 = (pd.to ?? "").replace(/\D/g, "").slice(-10);
         const row5 = await db.resource.findFirst({ where: { category: "__active_out__" } });
@@ -221,9 +224,17 @@ export async function POST(req: NextRequest) {
   // 🎙 Recording landed → file it on the lead: MP3 → the deal's Drive folder,
   // link + transcript on the timeline (Jon's backlog item #1, 2026-10-12).
   if (ev === "call.recording.saved") {
-    const pr = p as unknown as { recording_urls?: { mp3?: string }; download_urls?: { mp3?: string }; from?: string; to?: string; direction?: string; recording_started_at?: string; recording_ended_at?: string };
+    const pr = p as unknown as { recording_urls?: { mp3?: string }; download_urls?: { mp3?: string }; from?: string; to?: string; direction?: string; call_control_id?: string; recording_started_at?: string; recording_ended_at?: string };
     const url = pr.download_urls?.mp3 || pr.recording_urls?.mp3 || "";
     if (!url) return NextResponse.json({ ok: true, noUrl: true });
+    // 🔁 dedupe: a double record_start (client + webhook fallback) could produce
+    // two recording.saved events for the same call — skip if we already filed one
+    // for this call_control_id (Jon 2026-10-13).
+    const ccId = pr.call_control_id ?? "";
+    if (ccId) {
+      const dupRec = await db.crmEvent.findFirst({ where: { kind: "call", body: { startsWith: "🎙" }, meta: { path: ["ccId"], equals: ccId } }, select: { id: true } }).catch(() => null);
+      if (dupRec) return NextResponse.json({ ok: true, deduped: true });
+    }
     // whoever on the call is in our CRM = the lead
     let contact: { id: string } | null = null;
     for (const num of [pr.from ?? "", pr.to ?? ""]) {
@@ -288,7 +299,7 @@ export async function POST(req: NextRequest) {
           if (summary) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📞 Call summary (AI) — ${secs ? `${Math.floor(secs / 60)}m ${secs % 60}s` : ""}\n${summary}`.slice(0, 2000), actor: "recorder" });
         } catch { /* recording itself is already filed below */ }
       }
-      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, secs, transcript: transcript.slice(0, 12000) }, actor: "recorder" });
+      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, secs, ccId, transcript: transcript.slice(0, 12000) }, actor: "recorder" });
       // 🎯 auto-score every real conversation (≥60s) against the coaching rubric
       if (transcript && secs >= 60) {
         try {
