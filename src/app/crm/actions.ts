@@ -1195,3 +1195,31 @@ export async function logCallTypeKpiAction(formData: FormData): Promise<{ ok: bo
   }
   return { ok: true, label: `${m.label} → +1 ${kpi.name}` };
 }
+
+/** 🔀 Move an opp to a DIFFERENT pipeline (Jon 2026-10-13: team can move
+ *  between pipelines, not just stages). Lands on the target pipeline's first
+ *  stage and auto-assigns to that pipeline's owner when one is defined. */
+const PIPELINE_OWNERS: Record<string, string> = {
+  "🔥 AQM: Michelle Lagudas": "Michelle Lagudas",
+  "🎓 JrAQ: Nick Fair": "Nick Fair",
+};
+export async function setOppPipelineAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  const pipeline = String(formData.get("pipeline") ?? "").trim();
+  if (!id || !pipeline) return;
+  const pipes = await readPipelines();
+  const target = pipes.find((p) => p.name === pipeline);
+  if (!target) return;
+  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, pipeline: true, stage: true, assignedTo: true } });
+  if (!opp) return;
+  const firstStage = target.stages[0]?.key ?? opp.stage;
+  const owner = PIPELINE_OWNERS[pipeline];
+  await db.crmOpportunity.update({ where: { id }, data: {
+    pipeline, stage: firstStage, archivedAt: null,
+    ...(owner ? { assignedTo: owner } : {}),
+  } });
+  await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "stage", body: `📂 Moved ${opp.pipeline || "War Room"} → ${pipeline}${owner ? ` · assigned ${owner}` : ""}`, actor: me.name });
+  revalidatePath("/crm");
+}

@@ -5,7 +5,7 @@
 // without opening the full card page.
 import { useEffect, useState, useTransition } from "react";
 import {
-  setOppStageAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
+  setOppStageAction, setOppPipelineAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
   addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, saveCrmFormAction,
   setOppOwnerAction, toggleFollowerAction, archiveOppAction,
 } from "@/app/crm/actions";
@@ -15,7 +15,7 @@ import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
 
 type Payload = {
-  id: string; title: string; stage: string; pipeline: string; assignedTo: string; tags: string;
+  id: string; title: string; stage: string; pipeline: string; pipelines?: string[]; assignedTo: string; tags: string;
   nextFollowUp: string; value: number | null; askPrice: number | null;
   formData: Record<string, Record<string, string | string[]>>;
   me: { name: string; fromLabel: string; signature: string; canSms: boolean; canEmail: boolean; canCall: boolean };
@@ -82,7 +82,12 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
             <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-3">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-lg font-extrabold tracking-tight text-slate-900">Edit “{d.contact.name}”</div>
-                <div className="truncate text-xs text-slate-500">{d.pipeline} · details, tasks, notes and appointments</div>
+                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+                  <span className="font-semibold text-slate-400">Pipeline:</span>
+                  <select value={d.pipeline} onChange={(e) => { const pipeline = e.target.value; if (pipeline === d.pipeline) return; setData({ ...d, pipeline }); const fd = new FormData(); fd.set("id", d.id); fd.set("pipeline", pipeline); start(async () => { await setOppPipelineAction(fd); if (oppId) await refetch(oppId); }); }} className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-bold text-slate-700">
+                    {(d.pipelines ?? [d.pipeline]).map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+                  </select>
+                </div>
               </div>
               {saved && <span className="text-xs font-bold text-emerald-600">{saved}</span>}
               {pending && <span className="text-xs text-slate-400">saving…</span>}

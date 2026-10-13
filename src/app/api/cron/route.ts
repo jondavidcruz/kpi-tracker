@@ -903,6 +903,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, ...out });
   }
 
+  // 🔀 Auto-assign by pipeline (?assignbypipeline=1[&commit=1]): Michelle's
+  // pipeline → Michelle, Nick's → Nick; blank/"War Room" new leads → Michelle's
+  // acquisitions pipeline. Dispo pipelines: fill BLANK owners with Sharyn (keep
+  // existing Sharyn/Marie). Jon 2026-10-13.
+  if (url.searchParams.get("assignbypipeline") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nick Fair" };
+    const DISPO = ["🏆 DS: Signed Go Close", "🎯 DS: Sell Land Then Sign"];
+    const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { id: true, pipeline: true, assignedTo: true } });
+    const changes: Array<{ id: string; from: string; pipeline: string; to: string; movedPipe?: string }> = [];
+    for (const o of opps) {
+      // blank / War Room → Michelle's acquisitions pipeline, assigned Michelle
+      if (!o.pipeline || o.pipeline === "War Room") {
+        changes.push({ id: o.id, from: o.assignedTo, pipeline: o.pipeline || "(blank)", to: "Michelle Lagudas", movedPipe: "🔥 AQM: Michelle Lagudas" });
+        continue;
+      }
+      const forced = OWN[o.pipeline];
+      if (forced && o.assignedTo !== forced) { changes.push({ id: o.id, from: o.assignedTo, pipeline: o.pipeline, to: forced }); continue; }
+      if (DISPO.includes(o.pipeline) && !o.assignedTo.trim()) changes.push({ id: o.id, from: "(blank)", pipeline: o.pipeline, to: "Sharyn Kayle" });
+    }
+    if (commit) {
+      for (const c of changes) await db.crmOpportunity.update({ where: { id: c.id }, data: { assignedTo: c.to, ...(c.movedPipe ? { pipeline: c.movedPipe } : {}) } }).catch(() => {});
+    }
+    return NextResponse.json({ ok: true, committed: commit, wouldChange: changes.length, byTo: changes.reduce((m, c) => { m[c.to] = (m[c.to] ?? 0) + 1; return m; }, {} as Record<string, number>), sample: changes.slice(0, 12) });
+  }
+
   // 🔢 WarRoom opp counts by pipeline (?pipecount=1): confirms where imported
   // dispo/acq opps actually landed vs what the board queries.
   if (url.searchParams.get("pipecount") === "1") {
