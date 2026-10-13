@@ -1527,18 +1527,27 @@ export async function GET(request: Request) {
       const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []);
       for (const msg of list) { const x = msg as Record<string, unknown>; if (/call/i.test(String(x.messageType ?? ""))) { callMsgs.push(x); if (!convId) convId = c.id; } }
     }
-    // for the first recorded-looking call, try the documented recording endpoint
-    const firstCall = callMsgs.find((x) => Number(((x as Record<string, unknown>).meta as { call?: { duration?: number } })?.call?.duration ?? 0) > 3);
-    let recTry: unknown = null;
-    if (firstCall) {
-      const mid = String((firstCall as Record<string, unknown>).id ?? "");
-      try {
-        const r = await fetch(`https://services.leadconnectorhq.com/conversations/messages/${mid}/recording`, { headers: { Authorization: `Bearer ${key}`, Version: "2021-04-15", Accept: "audio/x-wav, */*" }, redirect: "manual", cache: "no-store" });
-        const ct = r.headers.get("content-type") ?? "";
-        recTry = { status: r.status, contentType: ct, length: r.headers.get("content-length"), location: r.headers.get("location"), preview: /audio|octet/i.test(ct) ? "(binary)" : (await r.text()).slice(0, 300) };
-      } catch (e) { recTry = { error: String(e).slice(0, 120) }; }
+    // target the LONGEST recorded call (most likely to actually have a recording)
+    const recorded = callMsgs.slice().sort((a, b) => Number(((b as Record<string, unknown>).meta as { call?: { duration?: number } })?.call?.duration ?? 0) - Number(((a as Record<string, unknown>).meta as { call?: { duration?: number } })?.call?.duration ?? 0))[0];
+    const B = "https://services.leadconnectorhq.com";
+    const recTries: unknown[] = [];
+    if (recorded) {
+      const mid = String((recorded as Record<string, unknown>).id ?? "");
+      const paths = [
+        { tag: "msg/rec v2021-04-15", u: `${B}/conversations/messages/${mid}/recording`, ver: "2021-04-15" },
+        { tag: "loc/msg/rec", u: `${B}/conversations/locations/${loc}/messages/${mid}/recording`, ver: "2021-07-28" },
+        { tag: "loc/msg/transcription", u: `${B}/conversations/locations/${loc}/messages/${mid}/transcription`, ver: "2021-07-28" },
+        { tag: "msg-detail-0415", u: `${B}/conversations/messages/${mid}`, ver: "2021-04-15" },
+      ];
+      for (const pth of paths) {
+        try {
+          const r = await fetch(pth.u, { headers: { Authorization: `Bearer ${key}`, Version: pth.ver, Accept: "audio/x-wav, application/json, */*" }, redirect: "manual", cache: "no-store" });
+          const ct = r.headers.get("content-type") ?? "";
+          recTries.push({ tag: pth.tag, status: r.status, contentType: ct, length: r.headers.get("content-length"), location: r.headers.get("location"), preview: /audio|octet/i.test(ct) ? "(binary audio ✓)" : (await r.text()).slice(0, 250) });
+        } catch (e) { recTries.push({ tag: pth.tag, error: String(e).slice(0, 100) }); }
+      }
     }
-    return NextResponse.json({ ok: true, contact: wr.name, ghlId: wr.ghlId.slice(0, 6) + "…", convCount: convs.length, callMsgCount: callMsgs.length, sampleCalls: callMsgs.slice(0, 3), recordingEndpointTry: recTry });
+    return NextResponse.json({ ok: true, contact: wr.name, ghlId: wr.ghlId.slice(0, 6) + "…", convCount: convs.length, callMsgCount: callMsgs.length, longestCallSecs: Number((recorded as Record<string, unknown> | undefined ? ((recorded as Record<string, unknown>).meta as { call?: { duration?: number } })?.call?.duration : 0) ?? 0), recordingEndpointTries: recTries });
   }
 
   // 🎙 Sync HISTORICAL GHL (REI Reply) call recordings into the War Room
