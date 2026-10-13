@@ -1502,6 +1502,76 @@ export async function GET(request: Request) {
       telnyxEvents: telnyx });
   }
 
+  // 🎙 Sync HISTORICAL GHL (REI Reply) call recordings into the War Room
+  // (?ghlrecsync=1, 2026-10-13). Bounded + idempotent (dedupe by GHL message id
+  // in __ghl_rec_synced__). Each recording → Drive + a 🎙 event + AI summary on
+  // the matching War Room lead. &cap=N (default 3), &notx=1 skips transcription
+  // (faster, allows a bigger cap). Run repeatedly to work through the backlog.
+  if (url.searchParams.get("ghlrecsync") === "1") {
+    const { reiReplyConfigured, searchConversations, getMessages, getMessageRecording } = await import("@/lib/reireply");
+    const { gdriveConfigured, listFolder, ensureSubfolder, uploadToFolder } = await import("@/lib/gdrive");
+    const { logCrmEvent } = await import("@/lib/crm");
+    if (!reiReplyConfigured()) return NextResponse.json({ ok: false, reason: "REI Reply not configured" });
+    const notx = url.searchParams.get("notx") === "1";
+    const cap = Math.max(1, Math.min(notx ? 15 : 4, Number(url.searchParams.get("cap") || (notx ? 10 : 3))));
+    const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
+    const row = await db.resource.findFirst({ where: { category: "__ghl_rec_synced__" } });
+    let synced: string[] = [];
+    try { synced = row?.description ? JSON.parse(row.description) : []; } catch { /* fresh */ }
+    const syncedSet = new Set(synced);
+    const conv = await searchConversations({ limit: "30" });
+    const convs = ((conv.body as { conversations?: Array<{ id: string; contactId?: string; phone?: string }> }).conversations) ?? [];
+    let found = 0, saved = 0, noContact = 0, noAudio = 0;
+    for (const c of convs) {
+      if (saved >= cap) break;
+      let contact = c.contactId ? await db.crmContact.findFirst({ where: { ghlId: c.contactId }, select: { id: true, address: true, name: true } }) : null;
+      if (!contact && c.phone) { const l10 = c.phone.replace(/\D/g, "").slice(-10); if (l10.length === 10) contact = await db.crmContact.findFirst({ where: { phone: { contains: l10 } }, select: { id: true, address: true, name: true } }); }
+      const m = await getMessages(c.id);
+      const mb = m.body as { messages?: { messages?: unknown[] } | unknown[] };
+      const list: unknown[] = Array.isArray(mb?.messages) ? (mb.messages as unknown[]) : ((mb?.messages as { messages?: unknown[] })?.messages ?? []);
+      for (const msg of list) {
+        if (saved >= cap) break;
+        const x = msg as Record<string, unknown>;
+        if (!/call/i.test(String(x.messageType ?? x.type ?? ""))) continue;
+        const mid = String(x.id ?? "");
+        if (!mid || syncedSet.has(mid)) continue;
+        found++;
+        if (!contact) { noContact++; syncedSet.add(mid); continue; }
+        const rec = await getMessageRecording(mid);
+        if (!rec.ok || !rec.bytes) { noAudio++; continue; } // leave unmarked → retry next run
+        const secs = Number(x.duration ?? 0);
+        let link = "";
+        if (gdriveConfigured() && rec.bytes.length <= 15 * 1024 * 1024) {
+          const label = (contact.address || contact.name || "Unfiled").trim();
+          const streetNo = label.match(/^\d+/)?.[0];
+          let folderId = "";
+          if (streetNo) { const ex = (await listFolder(DEALS_PARENT).catch(() => [])).find((f) => f.name.startsWith(streetNo)); if (ex) folderId = ex.id; }
+          if (!folderId) folderId = await ensureSubfolder(DEALS_PARENT, label.slice(0, 80));
+          const stamp = new Date(Number(x.dateAdded) || Date.parse(String(x.dateAdded ?? "")) || Date.now()).toISOString().slice(0, 16).replace("T", " ");
+          const ext = (rec.contentType || "").includes("wav") ? "wav" : "mp3";
+          const up = await uploadToFolder(folderId, `GHL call ${stamp}.${ext}`, rec.bytes, rec.contentType || "audio/mpeg");
+          link = up.link;
+        }
+        await logCrmEvent({ contactId: contact.id, oppId: "", kind: "call", body: `🎙 Call recording (from GHL)${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : ""}`, meta: { link, secs, ghlMsgId: mid }, actor: "ghl-sync" });
+        if (!notx && process.env.GEMINI_API_KEY && rec.bytes.length < 9 * 1024 * 1024) {
+          try {
+            const b64 = Buffer.from(rec.bytes).toString("base64");
+            const mime = (rec.contentType || "").includes("wav") ? "audio/wav" : "audio/mp3";
+            const tr = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: "Real-estate acquisitions call. Reply EXACTLY:\nSUMMARY:\n- (3-6 short bullets: seller motivation, price/numbers, timeline, property condition, objections, agreed next step)" }] }], generationConfig: { maxOutputTokens: 1200 } }), signal: AbortSignal.timeout(28000) });
+            const tj = (await tr.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+            const summary = (tj.candidates?.[0]?.content?.parts?.map((pp) => pp.text ?? "").join("") || "").replace(/^\s*SUMMARY:\s*\n?/i, "").trim();
+            if (summary) await logCrmEvent({ contactId: contact.id, oppId: "", kind: "note", body: `📞 Call summary (AI, from GHL)\n${summary}`.slice(0, 2000), actor: "ghl-sync" });
+          } catch { /* summary optional */ }
+        }
+        syncedSet.add(mid); saved++;
+      }
+    }
+    const description = JSON.stringify([...syncedSet].slice(-5000));
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "ghl-rec-synced", category: "__ghl_rec_synced__", url: "", description } });
+    return NextResponse.json({ ok: true, convScanned: convs.length, callsFound: found, recordingsSaved: saved, noContact, noAudio, note: saved >= cap ? "hit cap — run again for more" : "caught up on recent conversations" });
+  }
+
   // ⚙️ Seed the GREEN (internal, no-outreach) stage automations Jon approved
   // (?seedautomations=1, 2026-10-13): reads live pipeline stage keys and installs
   // task/follow-up rules per stage for acq + dispo. Also files the 3 ORANGE

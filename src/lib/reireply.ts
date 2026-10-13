@@ -37,6 +37,27 @@ export async function getMessages(conversationId: string) {
   return ghl(`/conversations/${conversationId}/messages`);
 }
 
+// 🎙 Fetch a GHL call message's recording audio (Jon 2026-10-13: sync historical
+// GHL recordings into the War Room). GHL exposes it at
+// /conversations/messages/{messageId}/recording as an audio binary.
+export async function getMessageRecording(messageId: string, locationId?: string): Promise<{ ok: boolean; status: number; bytes?: Uint8Array; contentType?: string }> {
+  const key = process.env.REIREPLY_API_KEY;
+  const loc = locationId ?? process.env.REIREPLY_LOCATION_ID ?? "";
+  const url = new URL(`${BASE}/conversations/messages/${messageId}/recording`);
+  if (loc) url.searchParams.set("locationId", loc);
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${key}`, Version: "2021-07-28", Accept: "audio/x-wav, audio/mpeg, */*" },
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false, status: res.status };
+    const buf = new Uint8Array(await res.arrayBuffer());
+    return { ok: buf.length > 0, status: res.status, bytes: buf, contentType: res.headers.get("content-type") ?? "audio/mpeg" };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
+
 /** Pipelines + their stages (id + name) — to map stage moves → Offers/Contracts KPIs. */
 export async function getPipelines() {
   const loc = process.env.REIREPLY_LOCATION_ID ?? "";
