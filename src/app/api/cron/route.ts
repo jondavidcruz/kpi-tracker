@@ -1459,14 +1459,17 @@ export async function GET(request: Request) {
     const inbound = await db.crmEvent.findMany({ where: { kind: "sms", body: { startsWith: "⬅" } }, orderBy: { at: "desc" }, take: 2000, select: { contactId: true, body: true } });
     const hit = new Map<string, string>();
     for (const e of inbound) if (!hit.has(e.contactId) && DNC_REGEX.test(e.body)) hit.set(e.contactId, e.body.slice(0, 80));
-    let moved = 0;
+    let moved = 0, reparked = 0;
     for (const [cid, why] of hit) {
       const c = await db.crmContact.findUnique({ where: { id: cid }, select: { tags: true } });
-      if (c && /\bdnc\b/i.test(c.tags)) continue;
-      await dncContact(cid, `historical sweep — "${why}"`);
-      moved++;
+      const tagged = c && /\bdnc\b/i.test(c.tags);
+      // not tagged → full DNC. Tagged but opps drifted back to a live pipeline
+      // (e.g. a re-sync) → re-park them in the DNC pipeline.
+      if (!tagged) { await dncContact(cid, `historical sweep — "${why}"`); moved++; continue; }
+      const drifted = await db.crmOpportunity.findMany({ where: { contactId: cid, archivedAt: null, pipeline: { not: "🚫 DNC List" } }, select: { id: true } });
+      if (drifted.length) { for (const o of drifted) await db.crmOpportunity.update({ where: { id: o.id }, data: { pipeline: "🚫 DNC List", stage: "dnc" } }); reparked++; }
     }
-    return NextResponse.json({ ok: true, matched: hit.size, newlyDnced: moved });
+    return NextResponse.json({ ok: true, matched: hit.size, newlyDnced: moved, reparked });
   }
 
   // 🏠 War Room pipeline retirement (?warroommove=1 — Jon 2026-10-08: "why is
@@ -2306,7 +2309,13 @@ export async function GET(request: Request) {
         const dupOpp = await db.crmOpportunity.findFirst({ where: { ghlId: r.ghlOppId } });
         if (dupOpp) {
           const fdPrev = (dupOpp.formData ?? {}) as Record<string, unknown>;
-          await db.crmOpportunity.update({ where: { id: dupOpp.id }, data: { pipeline: r.pipeline, stage: r.stage, assignedTo: r.rep || dupOpp.assignedTo, tags: "ghl-import", archivedAt: null, ...(r.value != null && dupOpp.value == null ? { value: r.value } : {}), ...(r.closedAt ? { formData: { ...fdPrev, __closedAt: r.closedAt } } : {}) } });
+          // 🚫 never resurrect a DNC'd lead (Jon 2026-10-13): if the contact is
+          // tagged dnc, keep it parked in the DNC pipeline and preserve the tag.
+          const dncRow = await db.crmContact.findUnique({ where: { id: contactId }, select: { tags: true } });
+          const isDnc = /\bdnc\b/i.test(dncRow?.tags ?? "");
+          await db.crmOpportunity.update({ where: { id: dupOpp.id }, data: isDnc
+            ? { pipeline: "🚫 DNC List", stage: "dnc", tags: "ghl-import,dnc", archivedAt: null }
+            : { pipeline: r.pipeline, stage: r.stage, assignedTo: r.rep || dupOpp.assignedTo, tags: "ghl-import", archivedAt: null, ...(r.value != null && dupOpp.value == null ? { value: r.value } : {}), ...(r.closedAt ? { formData: { ...fdPrev, __closedAt: r.closedAt } } : {}) } });
           updated++;
           continue;
         }
