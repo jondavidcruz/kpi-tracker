@@ -154,6 +154,16 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                       <input name="title" defaultValue={d.title} className={inputCls} />
                     </div>
                     <div>
+                      <label className={labelCls}>Pipeline (saves instantly)</label>
+                      <select
+                        value={d.pipeline}
+                        onChange={(e) => { const pipeline = e.target.value; if (pipeline === d.pipeline) return; setData({ ...d, pipeline }); const fd = new FormData(); fd.set("id", d.id); fd.set("pipeline", pipeline); start(async () => { await setOppPipelineAction(fd); setSaved("✓ Moved — refreshing"); window.location.reload(); }); }}
+                        className={inputCls}
+                      >
+                        {(d.pipelines ?? [d.pipeline]).map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+                      </select>
+                    </div>
+                    <div>
                       <label className={labelCls}>Stage</label>
                       <select
                         value={d.stage}
