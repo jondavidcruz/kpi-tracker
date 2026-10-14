@@ -30,6 +30,7 @@ export default function InboxBell() {
   const [loading, setLoading] = useState("");
   // list filters (Jon 2026-10-09): All / Unread / ⭐ Starred + search-anyone
   const [view, setView] = useState<"all" | "unread" | "star">("all");
+  const [updateReady, setUpdateReady] = useState(false);
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Thread[]>([]);
   const [stars, setStars] = useState<Record<string, boolean>>({});
@@ -124,7 +125,13 @@ export default function InboxBell() {
         if (!j.sha) return;
         if (!mySha) { mySha = j.sha; return; }
         const onCall = (window as unknown as { __fo_on_call?: boolean }).__fo_on_call;
-        if (j.sha !== mySha && document.visibilityState === "hidden" && !onCall) window.location.reload();
+        if (j.sha !== mySha && !onCall) {
+          // hidden tab → reload silently; VISIBLE tab (someone working/making
+          // calls) → show a reload nudge so they pick up new features like call
+          // recording instead of sitting on stale code (Jon 2026-10-13).
+          if (document.visibilityState === "hidden") window.location.reload();
+          else setUpdateReady(true);
+        }
       } catch { /* next check */ }
     };
     ver();
@@ -189,6 +196,11 @@ export default function InboxBell() {
 
   return (
     <span className="fixed right-16 top-3 z-50">
+      {updateReady && (
+        <button onClick={() => window.location.reload()} title="A new version of the War Room is ready" className="fixed left-1/2 top-3 z-[80] -translate-x-1/2 animate-pulse rounded-full bg-emerald-600 px-4 py-2 text-xs font-extrabold text-white shadow-2xl ring-2 ring-white hover:bg-emerald-700">
+          🔄 Update ready — click to refresh
+        </button>
+      )}
       <button onClick={() => setOpen((v) => !v)} title="Texts — click to open your phone"
         className="relative grid h-10 w-10 place-items-center rounded-full bg-white text-base shadow-lg ring-1 ring-slate-200 hover:bg-slate-50">
         {muted ? "🔕" : "🔔"}

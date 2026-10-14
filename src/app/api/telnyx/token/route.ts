@@ -13,15 +13,16 @@ export async function POST() {
   if (!(await commsFor(me!)).call) return NextResponse.json({ error: "Calling isn't enabled for you — ask Jon (Comms access on /crm)." }, { status: 403 });
   const r = await provisionAndToken(firstOf(me!.name));
   if (r.error) return NextResponse.json({ error: r.error }, { status: 502 });
-  // presence breadcrumb: ?inbounddiag=1 shows who connected a browser, when
+  // presence breadcrumb in its OWN buffer (Jon 2026-10-13: token mints were
+  // drowning out the CALL events in __telnyx_events__, hiding recording issues)
   try {
-    const row = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_tokens__" } });
     let list: unknown[] = [];
     try { list = row?.description ? JSON.parse(row.description) : []; } catch { /* fresh */ }
-    list.unshift({ at: new Date().toISOString(), ev: "browser-token", agent: firstOf(me!.name) });
-    const description = JSON.stringify(list.slice(0, 25));
+    list.unshift({ at: new Date().toISOString(), agent: firstOf(me!.name) });
+    const description = JSON.stringify(list.slice(0, 20));
     if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
-    else await db.resource.create({ data: { title: "telnyx-events", category: "__telnyx_events__", url: "", description } });
+    else await db.resource.create({ data: { title: "telnyx-tokens", category: "__telnyx_tokens__", url: "", description } });
   } catch { /* non-blocking */ }
   return NextResponse.json({ token: r.token, callerId: r.callerId, rep: me!.name });
 }
