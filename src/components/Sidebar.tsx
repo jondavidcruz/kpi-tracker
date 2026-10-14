@@ -93,6 +93,7 @@ export default function Sidebar({
     ] },
     { label: "Acquisitions", items: [
       { href: "/crm", label: "Seller CRM", Icon: Phone },
+      { href: "/crm/next", label: "Next Up", Icon: Zap },
       { href: "/crm/conversations", label: "Conversations", Icon: MessagesSquare },
       { href: "/crm/tasks", label: "Tasks", Icon: ListChecks, badge: dueTasks },
       { href: "/crm/contacts", label: "Contacts", Icon: Contact },
