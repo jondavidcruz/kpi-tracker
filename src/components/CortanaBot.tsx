@@ -21,6 +21,7 @@ function screenHint(path: string): { label: string; prompts: string[] } {
   if (p.startsWith("/internet")) return { label: "Internet Speed", prompts: ["Who's below the 50 Mbps goal?", "Whose speed is trending down?"] };
   if (p.startsWith("/underwriting")) return { label: "Underwriting", prompts: ["Which exit should I use for a distressed house?", "How do I calculate the cash MAO?"] };
   if (p.startsWith("/schedule")) return { label: "Schedule & Time", prompts: ["Who's online right now?", "How does the time card work?"] };
+  if (p.startsWith("/crm/dealboard")) return { label: "Deal Board", prompts: ["How do I use the Deal Board?", "How do I price each parcel so I don't lose money?", "How do I pull a seller's parcels?"] };
   if (p.startsWith("/deals")) return { label: "Deals", prompts: ["How should I work an aging deal?"] };
   if (p.startsWith("/alerts")) return { label: "Alerts", prompts: ["What still needs a justification today?"] };
   if (p.startsWith("/dashboard") || p === "/") return { label: "Dashboard", prompts: ["Who hasn't logged KPIs today?", "What should the team focus on?"] };

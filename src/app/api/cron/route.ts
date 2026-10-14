@@ -730,7 +730,24 @@ export async function GET(request: Request) {
     const description = JSON.stringify(snapshot);
     if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
     else await db.resource.create({ data: { title: "telnyx-spend", category: "__telnyx_spend__", url: "", description } });
-    return NextResponse.json({ ok: true, ...snapshot });
+    // 💳 Low-balance alerts (Jon 2026-10-14). Twilio auto-renew is OFF, so warn
+    // BEFORE it hits zero or calls/texts stop. Telnyx auto-renews, so its ping is
+    // just a heads-up as it runs down. Runs once/day with the spend snapshot, so
+    // a low balance re-pings daily until it's topped up — exactly the reminder Jon
+    // asked for. Posts to the phone-health Google Chat space.
+    const balAlerts: string[] = [];
+    if (twilioBalance != null) {
+      if (twilioBalance < 10) balAlerts.push(`🔴 *Twilio $${twilioBalance.toFixed(2)}* — auto-renew is OFF. Reload now or calls & texts will stop.`);
+      else if (twilioBalance < 30) balAlerts.push(`🟠 Twilio getting low: *$${twilioBalance.toFixed(2)}* (auto-renew OFF — top it up soon).`);
+    }
+    if (snapshot.balance != null) {
+      if (snapshot.balance < 20) balAlerts.push(`🔴 Telnyx low: *$${snapshot.balance.toFixed(2)}* — auto-renew should refill it; confirm it fired.`);
+      else if (snapshot.balance < 50) balAlerts.push(`🟡 Telnyx getting low: *$${snapshot.balance.toFixed(2)}* (auto-renew on — just a heads-up).`);
+    }
+    if (balAlerts.length) {
+      try { const { postToSpace } = await import("@/lib/chat-spaces"); await postToSpace("phonehealth", `💳 *Carrier balance check*\n${balAlerts.join("\n")}`); } catch { /* best-effort */ }
+    }
+    return NextResponse.json({ ok: true, ...snapshot, balAlerts });
   }
 
   // 🗑 Stage removal (?stagedrop=1&match=<regex>&commit=1): delete matching

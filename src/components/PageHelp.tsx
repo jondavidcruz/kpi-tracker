@@ -7,6 +7,19 @@ export type Topic = { title: string; intro: string; steps: string[]; tip?: strin
 
 // One tutorial per section. Keyed by route prefix; longest match wins.
 const HELP: Record<string, Topic> = {
+  "/crm/dealboard": {
+    title: "Deal Board",
+    intro: "A whiteboard for dispositions: lay out one buyer's parcels across many sellers, see what each seller wants, and price every parcel ABOVE their ask so the bundle always makes money — never lose on a single parcel.",
+    steps: [
+      "🏷 Name a board after the BUYER — top of the page, type the name, hit ＋ New board.",
+      "🔗 Pull a seller's parcels — type the seller's name in the 'Pull a seller's parcels…' box → 🔗 Pull. It drops a blue seller header + a yellow note per parcel (address, APN, what they want).",
+      "✍️ Lay it out — 🖱 Move drags notes, ✏️ Pen draws/connects, 🔤 Text adds free notes anywhere (no limit), 🧽 Erase removes.",
+      "💵 Price every parcel — in each yellow note fill 'our price: $___', always higher than what the seller wants.",
+      "📊 Flip to Spreadsheet (top-left toggle) — the same deal as an Excel grid: Seller · Address · APN · Seller wants · Our price (edit inline) · Margin. Keep every Margin GREEN; the footer shows the total margin.",
+      "🎨 Change the board color if black is hard to read (white / cream / blue / gray). Everything autosaves (✓ saved).",
+    ],
+    tip: "The one rule: every parcel's price > what that seller wants. If any margin shows red, raise that parcel's price. The buyer pays one number for the whole bundle — you win on each piece.",
+  },
   "/dashboard": {
     title: "Dashboard",
     intro: "Your daily scoreboard — where the company stands right now.",

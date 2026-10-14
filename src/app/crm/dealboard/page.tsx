@@ -2,6 +2,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import Link from "next/link";
 import DealBoard from "@/components/DealBoard";
+import DealBoardGuide from "@/components/DealBoardGuide";
 import { readBoards, createDealBoardAction, deleteDealBoardAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ export default async function DealBoardPage({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-3">
       <SectionTitle title="🗂 Deal Board" subtitle="A whiteboard for dispositions — draw and type freely to lay out a buyer's parcels across sellers, pull in what each seller wants, and price every parcel above it so no deal loses money." accent="bg-brand-gold" />
+      <DealBoardGuide />
       {/* board tabs + create */}
       <Card className="flex flex-wrap items-center gap-2 p-2.5">
         {list.map((b) => (
