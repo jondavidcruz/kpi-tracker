@@ -11,10 +11,19 @@ export default function OfferPage() {
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [error, setError] = useState("");
   const [ptype, setPtype] = useState("home");
-  // 🌲 land-only embed: /offer?land=1 (used on freedom-offers.com/land) locks
-  // the form to Land — no "Home" option (Jon 2026-10-13).
+  // 🌲 land-only mode (Jon 2026-10-13): lock the form to Land — no "Home"
+  // option — when embedded on the land page. Detected from ?land=1, ?type=land,
+  // OR the referrer being the /land page (the iframe lives on …/land), so it
+  // works no matter how the iframe URL is set on the website.
   const [landOnly, setLandOnly] = useState(false);
-  useEffect(() => { try { if (new URLSearchParams(window.location.search).has("land")) { setLandOnly(true); setPtype("land"); } } catch { /* ok */ } }, []);
+  useEffect(() => {
+    try {
+      const qs = new URLSearchParams(window.location.search);
+      const byParam = qs.has("land") || qs.get("type") === "land";
+      const byReferrer = /\/land(\b|\/|\?|#|$)/i.test(document.referrer || "");
+      if (byParam || byReferrer) { setLandOnly(true); setPtype("land"); }
+    } catch { /* ok */ }
+  }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
