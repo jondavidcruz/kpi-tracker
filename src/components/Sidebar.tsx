@@ -94,7 +94,6 @@ export default function Sidebar({
     { label: "Acquisitions", items: [
       { href: "/crm", label: "Seller CRM", Icon: Phone },
       { href: "/crm/next", label: "Next Up", Icon: Zap },
-      { href: "/crm/dealboard", label: "Deal Board", Icon: Presentation },
       { href: "/crm/conversations", label: "Conversations", Icon: MessagesSquare },
       { href: "/crm/tasks", label: "Tasks", Icon: ListChecks, badge: dueTasks },
       { href: "/crm/contacts", label: "Contacts", Icon: Contact },
@@ -104,6 +103,7 @@ export default function Sidebar({
     ] },
     { label: "Dispositions", items: [
       { href: "/deals", label: "Deals", Icon: Building2 },
+      { href: "/crm/dealboard", label: "Deal Board", Icon: Presentation },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
       { href: "/vetting", label: "Buyer Research", Icon: Search, marketingOnly: true },
       { href: "/closing-calc", label: "Closing Calculator", Icon: Receipt, managerOnly: true },

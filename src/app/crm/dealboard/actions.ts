@@ -10,7 +10,7 @@ const CAT = "__deal_boards__";
 
 export type BoardNote = { id: string; x: number; y: number; text: string; color?: string; w?: number };
 export type BoardStroke = { color: string; width: number; pts: number[] }; // flat [x,y,x,y,...]
-export type DealBoard = { id: string; name: string; notes: BoardNote[]; strokes: BoardStroke[]; updatedAt: string; updatedBy?: string };
+export type DealBoard = { id: string; name: string; notes: BoardNote[]; strokes: BoardStroke[]; bg?: string; updatedAt: string; updatedBy?: string };
 
 async function allowed() {
   const me = await getCurrentUser();
@@ -34,7 +34,7 @@ export async function saveDealBoardAction(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
   const payload = String(formData.get("payload") ?? "");
   if (!id || !payload) return;
-  let parsed: { name?: string; notes?: BoardNote[]; strokes?: BoardStroke[] };
+  let parsed: { name?: string; notes?: BoardNote[]; strokes?: BoardStroke[]; bg?: string };
   try { parsed = JSON.parse(payload); } catch { return; }
   const map = await readBoards();
   const prev = map[id];
@@ -43,6 +43,7 @@ export async function saveDealBoardAction(formData: FormData): Promise<void> {
     name: (parsed.name ?? prev?.name ?? "Untitled board").slice(0, 80),
     notes: (parsed.notes ?? []).slice(0, 400),
     strokes: (parsed.strokes ?? []).slice(0, 800),
+    bg: (parsed.bg ?? prev?.bg ?? "").slice(0, 16),
     updatedAt: new Date().toISOString(),
     updatedBy: me.name,
   };

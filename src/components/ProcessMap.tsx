@@ -197,10 +197,10 @@ const OTHER: Phase[] = [
 // who gets us our purchase price, inside 24 hours.
 const LAND_DISPO: Phase[] = [
   { n: 1, title: "Land lead screened", dept: "Acquisitions", owner: "Michelle (Acquisitions)",
-    summary: "The 7-point land kill-check before dispo ever touches it. The board below removes all doubt: green goes to dispo, amber gets nurtured, red dies with a reason.",
-    steps: ["No wetlands", "Flood zone acceptable", "Occupied / lived-on? → nurture track instead", "No scrub-jay / listed-species flag", "Pre-comped: sales in the last 1–3 years", "Not landlocked — legal access confirmed", "Seller price at/below comps within 1 mi / 1 yr — overpriced → nurture"],
+    summary: "The 8-point land kill-check before dispo ever touches it. The board below removes all doubt: green goes to dispo, amber gets nurtured, red dies with a reason.",
+    steps: ["No wetlands", "Flood zone acceptable", "Zillow + Redfin checked — listing status & price (not sitting listed at/above our number)", "Occupied / lived-on? → nurture track instead", "No scrub-jay / listed-species flag", "Pre-comped: sales in the last 1–3 years", "Not landlocked — legal access confirmed", "Seller price at/below comps within 1 mi / 1 yr — overpriced → nurture"],
     branches: ["✅ Clean → Dispositions", "🌱 Issue / overpriced → nurture", "❌ Dead"],
-    aiAssist: ["The 📦 packet pulls wetlands, flood zone, soils & species automatically from the APN"], aiAuto: [],
+    aiAssist: ["The 📦 packet pulls wetlands, flood zone, soils & species automatically from the APN", "Pull up the parcel on Zillow + Redfin to confirm it isn't already listed and to sanity-check the list price against our comps"], aiAuto: [],
     visual: "triage" },
   { n: 2, title: "Offer packet — 3-5 minutes", dept: "Dispositions", owner: "Sharyn + Marie",
     summary: "APNs in → branded diligence packet out. This is the thing buyers say yes to.",
@@ -253,9 +253,10 @@ function TriageBoard() {
   );
   return (
     <div className="flex flex-col gap-2.5 lg:flex-row">
-      {col("bg-emerald-50 ring-emerald-300 text-emerald-900", "🟢 CLEAN → send to Dispo", "ALL 7 must be true", [
+      {col("bg-emerald-50 ring-emerald-300 text-emerald-900", "🟢 CLEAN → send to Dispo", "ALL 8 must be true", [
         "No wetlands on the parcel",
         "Flood zone acceptable (not building-killing)",
+        "Zillow + Redfin checked — not already listed (or list price still works)",
         "Vacant — nobody living on it",
         "No scrub-jay / listed-species flag",
         "Pre-comped: land sales within 1–3 years",
@@ -264,6 +265,7 @@ function TriageBoard() {
       ])}
       {col("bg-amber-50 ring-amber-300 text-amber-900", "🟡 NURTURE → follow-up track", "Fixable or not-yet — ANY of these", [
         "Seller overpriced vs comps 1 mi / 1 yr (price can come down)",
+        "Currently listed on Zillow / Redfin — confirm it's expired/withdrawn or the list price supports our number",
         "Occupied / lived-on (timing problem, not a land problem)",
         "Seller motivated but timeline 3+ months out",
         "Probate / title issue that IS being worked",
