@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { CONSENT_TEXT, CONSENT_FOOTNOTE } from "@/lib/sms-consent";
 
 const CONTACT_CONSENT_TEXT = "I agree that Freedom Offers LLC may contact me by phone and email about my property inquiry, and I accept the Privacy Policy and Terms of Service.";
@@ -11,6 +11,10 @@ export default function OfferPage() {
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [error, setError] = useState("");
   const [ptype, setPtype] = useState("home");
+  // 🌲 land-only embed: /offer?land=1 (used on freedom-offers.com/land) locks
+  // the form to Land — no "Home" option (Jon 2026-10-13).
+  const [landOnly, setLandOnly] = useState(false);
+  useEffect(() => { try { if (new URLSearchParams(window.location.search).has("land")) { setLandOnly(true); setPtype("land"); } } catch { /* ok */ } }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -94,8 +98,8 @@ export default function OfferPage() {
         </div>
         <div>
           <label className={label} htmlFor="propertyType">Property type</label>
-          <select id="propertyType" name="propertyType" value={ptype} onChange={(e) => setPtype(e.target.value)} className={input}>
-            <option value="home">Home</option>
+          <select id="propertyType" name="propertyType" value={ptype} onChange={(e) => setPtype(e.target.value)} disabled={landOnly} className={input}>
+            {!landOnly && <option value="home">Home</option>}
             <option value="land">Land</option>
           </select>
         </div>
