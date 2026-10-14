@@ -243,6 +243,18 @@
     {
       "path": "/api/cron?daychangelog=1",
       "schedule": "0 3 * * 2-6"
+    },
+    {
+      "path": "/api/cron?newleadnudge=1",
+      "schedule": "0 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron?newleadnudge=1",
+      "schedule": "0 19 * * 1-5"
+    },
+    {
+      "path": "/api/cron?newleadnudge=1",
+      "schedule": "0 22 * * 1-5"
     }
   ]
 }

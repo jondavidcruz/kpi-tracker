@@ -56,6 +56,10 @@ export async function createCrmLeadAction(formData: FormData) {
     assignedTo: owner,
   } });
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: "Lead created", actor: me.name });
+  // 📞 speed-to-lead: an immediate call task so a brand-new lead is worked now,
+  // then ?newleadnudge keeps nudging every few hours until reached (Jon 2026-10-13)
+  const todayPT = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+  await db.crmTask.create({ data: { oppId: opp.id, contactId: contact.id, title: `📞 Call now — new lead ${contact.name.split(" ")[0]}`, due: todayPT, assignedTo: owner, createdBy: "newlead-nudge" } }).catch(() => {});
   // intake notes land on the timeline immediately — no second step (Jon 2026-10-09)
   if (notes) await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "note", body: notes.slice(0, 4000), actor: me.name });
   if (contact.phone) {

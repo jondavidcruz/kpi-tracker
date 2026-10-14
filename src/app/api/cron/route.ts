@@ -1550,6 +1550,31 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, contact: wr.name, ghlId: wr.ghlId.slice(0, 6) + "…", convCount: convs.length, callMsgCount: callMsgs.length, longestCallSecs: Number((recorded as Record<string, unknown> | undefined ? ((recorded as Record<string, unknown>).meta as { call?: { duration?: number } })?.call?.duration : 0) ?? 0), recordingEndpointTries: recTries });
   }
 
+  // 📞 New-lead follow-up nudge (?newleadnudge=1 — Jon 2026-10-13: "call new
+  // leads every few hours until we reach them, not overkill"). Run ~3x/weekday
+  // in business hours. For each still-NEW acq lead from the last 3 days that has
+  // NO open call task, drop ONE "follow up" task for its owner. Because only one
+  // open task exists at a time, completing it (making the call) lets the next
+  // run create the next nudge — a natural every-few-hours cadence that stops
+  // once reached (stage moves off NEW) or after 3 days (goes to nurture).
+  if (url.searchParams.get("newleadnudge") === "1") {
+    const { readPipelines } = await import("@/lib/crm");
+    const acqPipes = (await readPipelines()).filter((p) => /aq:|aqm|jraq/i.test(p.name)).map((p) => p.name);
+    const since = new Date(Date.now() - 3 * 86400000);
+    const fresh = await db.crmOpportunity.findMany({ where: { pipeline: { in: acqPipes }, stage: "new", createdAt: { gte: since }, archivedAt: null }, select: { id: true, contactId: true, assignedTo: true, createdAt: true, contact: { select: { name: true, tags: true } } } });
+    let nudged = 0;
+    for (const o of fresh) {
+      if (/\bdnc\b/i.test(o.contact?.tags ?? "")) continue; // never nudge a DNC'd lead
+      const openCall = await db.crmTask.findFirst({ where: { oppId: o.id, doneAt: null, title: { startsWith: "📞" } }, select: { id: true } });
+      if (openCall) continue; // one open call task at a time — don't pile up
+      const dayN = Math.floor((Date.now() - o.createdAt.getTime()) / 86400000) + 1;
+      const todayPT = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+      await db.crmTask.create({ data: { oppId: o.id, contactId: o.contactId, title: `📞 Follow up — still reaching ${(o.contact?.name ?? "lead").split(" ")[0]} (day ${dayN})`, due: todayPT, assignedTo: o.assignedTo, createdBy: "newlead-nudge" } });
+      nudged++;
+    }
+    return NextResponse.json({ ok: true, freshLeads: fresh.length, nudged });
+  }
+
   // 🎙 Sync HISTORICAL GHL (REI Reply) call recordings into the War Room
   // (?ghlrecsync=1, 2026-10-13). Bounded + idempotent (dedupe by GHL message id
   // in __ghl_rec_synced__). Each recording → Drive + a 🎙 event + AI summary on
