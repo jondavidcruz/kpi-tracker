@@ -1252,13 +1252,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, user: u2.name, kpi: kpi2.name, goal: value2 });
   }
 
-  // 📱 Nick's manual-dial targets (?nicktargets=1): he's 5h on an iPhone with
+  // 📱 Nick's manual-dial targets (?nicktargets=1): he's on an iPhone with
   // no dialer (new acq members don't get system licenses) — the 140/100
   // auto-dialer goals were impossible. Standing per-rep overrides.
+  // Jon 2026-10-14: Nick dropped from a 5h to a 4h shift (8am–12pm), so the
+  // volume goals were rescaled 0.8× (60→48 dials, 15→12 connects).
   if (url.searchParams.get("nicktargets") === "1") {
     const nick = await db.user.findFirst({ where: { active: true, OR: [{ name: { startsWith: "Nick", mode: "insensitive" } }, { name: { startsWith: "Nicholas", mode: "insensitive" } }] }, select: { id: true, name: true } });
     if (!nick) return NextResponse.json({ ok: false, error: "no Nick user" });
-    const GOALS: Record<string, number> = { outbound_calls: 60, connected_calls: 15 };
+    const GOALS: Record<string, number> = { outbound_calls: 48, connected_calls: 12 };
     const set: Record<string, number> = {};
     for (const [key, goalValue] of Object.entries(GOALS)) {
       const kpi = await db.kpi.findUnique({ where: { key }, select: { id: true } });
@@ -1269,6 +1271,45 @@ export async function GET(request: Request) {
       set[key] = goalValue;
     }
     return NextResponse.json({ ok: true, user: nick.name, set });
+  }
+
+  // 👋 Kyle Brown onboarding (?setupkyle=1): Jon creates the login in Admin → Team
+  // (name/email/password — that part is his to do); THEN this op sets Kyle up as an
+  // acquisitions rep and gives him "only underwriting + KPI tracker + scripts, plus
+  // whatever Nick has" (Jon 2026-10-14). Access = MIRROR Nick's navHidden, then force
+  // the 3 named pages visible. If Nick has no restriction on file (sees everything),
+  // fall back to the standard new-rep template so a brand-new hire doesn't start wide
+  // open — and flag it so Jon can hand-pick extras. New-hire dial goals set low
+  // (no auto-dialer, 4h Mon/Wed/Fri). Idempotent — safe to re-run.
+  if (url.searchParams.get("setupkyle") === "1") {
+    const { defaultNewRepNavHidden, parseNavHidden, NAV_GROUPS, isPathHidden } = await import("@/lib/navItems");
+    const kyle = await db.user.findFirst({ where: { name: { startsWith: "Kyle", mode: "insensitive" } }, select: { id: true, name: true } });
+    if (!kyle) return NextResponse.json({ ok: false, error: "No Kyle user yet — create Kyle Brown's login in Admin → Team (name, email, password) first, then hit this again." });
+    const nick = await db.user.findFirst({ where: { active: true, OR: [{ name: { startsWith: "Nick", mode: "insensitive" } }, { name: { startsWith: "Nicholas", mode: "insensitive" } }] }, select: { navHidden: true, name: true } });
+    const ALWAYS_VISIBLE = ["/underwriting", "/entry", "/report", "/scripts"]; // Kyle's named pages
+    let hidden = parseNavHidden(nick?.navHidden);
+    let mirroredFrom = nick?.name ?? "Nick";
+    let note = "mirrored Nick's access";
+    if (hidden.length === 0) { // Nick unrestricted → don't open Kyle wide; use the safe new-rep template
+      hidden = parseNavHidden(defaultNewRepNavHidden());
+      note = `${mirroredFrom} has no page restriction on file (sees everything) — started Kyle on the standard new-rep set instead; tell me which extra pages to add.`;
+      mirroredFrom = "new-rep template";
+    }
+    hidden = hidden.filter((h) => !ALWAYS_VISIBLE.includes(h)); // guarantee the 3 named pages are visible
+    await db.user.update({ where: { id: kyle.id }, data: { position: "acquisitions", role: "rep", active: true, accessMarketing: false, navHidden: JSON.stringify(hidden) } });
+    // starter dial goals for a new, no-dialer 4h Mon/Wed/Fri hire
+    const KGOALS: Record<string, number> = { outbound_calls: 40, connected_calls: 8 };
+    const goals: Record<string, number> = {};
+    for (const [key, goalValue] of Object.entries(KGOALS)) {
+      const kpi = await db.kpi.findUnique({ where: { key }, select: { id: true } });
+      if (!kpi) continue;
+      const existing = await db.target.findFirst({ where: { kpiId: kpi.id, userId: kyle.id, period: null } });
+      if (existing) await db.target.update({ where: { id: existing.id }, data: { goalValue } });
+      else await db.target.create({ data: { kpiId: kpi.id, userId: kyle.id, period: null, goalValue } });
+      goals[key] = goalValue;
+    }
+    const visible = NAV_GROUPS.flatMap((g) => g.items).filter((i) => !isPathHidden(i.href, hidden)).map((i) => i.label);
+    return NextResponse.json({ ok: true, user: kyle.name, position: "acquisitions", mirroredFrom, note, goals, visiblePages: visible });
   }
 
   // 📎 Signed-doc puller (?pdpull=1, daily cron): PandaDoc completed docs from

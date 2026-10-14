@@ -14,6 +14,10 @@
 // Per-person exception: Marie works a 6-hour shift — 12:00–6:00 PM Mon–Thu, and
 // 8:00 AM–1:00 PM on Fridays (the whole team is on the short 8–1 Friday). Pass her
 // name as `who`.
+// Per-person exception: Nick Fair works a 4-hour shift — 8:00 AM–12:00 PM Mon–Fri
+// (Jon 2026-10-14; down from 5h — his dial KPIs were rescaled 0.8× to match).
+// Per-person exception: Kyle Brown (new acquisitions hire) works Mon/Wed/Fri only,
+// 8:00 AM–12:00 PM; off Tue/Thu (Jon 2026-10-14).
 // (Sharyn's temporary reduced 8–1 hardship schedule ended 2026-08-17 — she's back
 // on the standard 8–5 Mon–Thu with the normal lunch, and 8–2 Friday.)
 
@@ -64,6 +68,11 @@ function firstName(who?: string | null): string {
 export function shiftEndHour(dateStr: string, who?: string | null): { hour: number; min: number } | null {
   const dow = dowOf(dateStr);
   if (dow < 1 || dow > 5) return null; //                  Sat/Sun → off
+  // Nick Fair — reduced to a 4-hour shift, 8:00 AM–12:00 PM Mon–Fri (Jon 2026-10-14).
+  // Checked before the Friday return so 8–12 applies Friday too.
+  if (firstName(who) === "nick" || firstName(who) === "nicholas") return { hour: 12, min: 0 };
+  // Kyle Brown — new acquisitions hire, 8:00 AM–12:00 PM Mon/Wed/Fri only; off Tue/Thu (Jon 2026-10-14).
+  if (firstName(who) === "kyle") return dow === 2 || dow === 4 ? null : { hour: 12, min: 0 };
   if (dow === 5) return { hour: 14, min: 0 }; //            Fri     → 2:00 PM (whole team, no lunch — incl. Sharyn)
   // Marie Mon–Thu: 6:00 PM through 2026-10-10; from Mon 2026-10-12 her shift
   // moves to 10:00 AM–4:00 PM (Jon 2026-10-07). Fridays stay whole-team 8–2.
@@ -85,6 +94,10 @@ export function shiftEndAt(dateStr: string, tz: string = DEFAULT_TZ, who?: strin
 export function shiftStartHour(dateStr: string, who?: string | null): { hour: number; min: number } | null {
   const dow = dowOf(dateStr);
   if (dow < 1 || dow > 5) return null; // Sat/Sun → off
+  // Nick Fair — 8:00 AM start, 4-hour shift Mon–Fri (ends 12:00 PM; Jon 2026-10-14).
+  if (firstName(who) === "nick" || firstName(who) === "nicholas") return { hour: 8, min: 0 };
+  // Kyle Brown — new hire, works Mon/Wed/Fri only (8:00 AM–12:00 PM); off Tue/Thu (Jon 2026-10-14).
+  if (firstName(who) === "kyle") return dow === 2 || dow === 4 ? null : { hour: 8, min: 0 };
   if (dow === 5) return { hour: 8, min: 0 }; // Fri → 8:00 AM (whole team)
   // Marie Mon–Thu: noon start through 2026-10-10; 10:00 AM from 2026-10-12.
   if (firstName(who) === "marie") return dateStr >= "2026-10-12" ? { hour: 10, min: 0 } : { hour: 12, min: 0 };
