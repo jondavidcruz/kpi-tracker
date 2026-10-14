@@ -146,6 +146,14 @@ export async function setOppStageAction(formData: FormData) {
         const { postToSpace } = await import("@/lib/chat-spaces");
         if (/contract_signed/i.test(stage)) {
           postToSpace("contracts", `🖊 CONTRACT SIGNED — ${contact?.name ?? "seller"}${addr ? ` · ${addr}` : ""} · by ${(full.assignedTo || me.name)}${full.value != null ? ` · $${full.value.toLocaleString()}` : ""} 🎉`).catch(() => {});
+          // 📦 DISPO SPEED (Jon 2026-10-13 roadmap): the moment a deal is signed,
+          // hand it to dispositions with a kickoff task so it goes to cash buyers
+          // in seconds, not days. (Human arms the cascade — no auto-outreach.)
+          (async () => {
+            const dispoRep = await db.user.findFirst({ where: { active: true, position: "dispositions" }, select: { name: true } });
+            await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `📦 SEND TO BUYERS NOW — ${addr || contact?.name || "signed deal"} is signed. Build the deal + arm the buyer cascade.`, due: today, assignedTo: dispoRep?.name ?? "", createdBy: "dispo-speed" } });
+            await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: "📦 Dispo kickoff task created — get this signed deal to cash buyers fast (arm the cascade).", actor: "dispo-speed" });
+          })().catch(() => {});
           // 📧 auto-create the Gmail deal label + filter in every teammate's
           // inbox (live once the gmail.labels/settings scopes are on the DWD)
           if (addr) {
