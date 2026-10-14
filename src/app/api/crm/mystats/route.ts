@@ -17,10 +17,13 @@ export async function GET() {
   const start = new Date(`${ptYmd}T00:00:00-07:00`);
   const events = await db.crmEvent.findMany({
     where: { kind: "call", actor: me!.name, at: { gte: start } },
-    select: { body: true },
+    select: { body: true, meta: true },
   });
-  const dials = events.filter((e) => e.body.startsWith("Browser call") || e.body.startsWith("Telnyx call ended")).length;
+  const isDial = (b: string) => b.startsWith("Browser call") || b.startsWith("Telnyx call ended") || b.startsWith("Click-to-call");
+  const dials = events.filter((e) => isDial(e.body)).length;
   const connects = events.filter((e) => /^Dialer disposition: (talked|appointment requested|callback requested)/.test(e.body)).length;
+  // ⏱ total talk time today (Jon 2026-10-13: "not tracking the total talk time")
+  const talkSecs = events.reduce((sum, e) => { const s = Number((e.meta as { secs?: number } | null)?.secs ?? 0); return sum + (isDial(e.body) ? s : 0); }, 0);
   // goals from the same Target overrides the KPI scoreboard uses
   const goal = async (key: string) => {
     const kpi = await db.kpi.findFirst({ where: { OR: [{ key }, { name: { equals: key, mode: "insensitive" } }] }, select: { id: true } });
@@ -29,5 +32,5 @@ export async function GET() {
     return t?.goalValue ?? 0;
   };
   const [goalDials, goalConnects] = await Promise.all([goal("outbound_calls"), goal("connected_calls")]);
-  return NextResponse.json({ who: me!.name.split(" ")[0], position: me!.position ?? "", dials, connects, goalDials, goalConnects }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ who: me!.name.split(" ")[0], position: me!.position ?? "", dials, connects, talkSecs, goalDials, goalConnects }, { headers: { "Cache-Control": "private, no-store" } });
 }

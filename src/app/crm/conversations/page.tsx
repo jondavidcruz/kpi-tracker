@@ -29,7 +29,7 @@ function timeAgo(d: Date) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ c?: string; who?: string }> }) {
+export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ c?: string; who?: string; q?: string }> }) {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return <Card className="p-10 text-center text-slate-400">Conversations live inside the Seller CRM (acquisitions + managers).</Card>;
@@ -54,15 +54,31 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   for (const e of recent) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
   const contactIds = [...latestByContact.keys()].slice(0, 120);
   const mineOnly = canSeeAll && sp.who === "me";
+  // 🔎 search the inbox by seller name or phone (Jon 2026-10-13) — searches ALL
+  // contacts, not just the recent 50, so you can jump to any seller's thread.
+  const q = (sp.q ?? "").trim();
+  const qDigits = q.replace(/\D/g, "");
+  const ownerWhere = canSeeAll ? (mineOnly ? { assignedTo: { equals: me!.name, mode: "insensitive" as const } } : {}) : { assignedTo: { in: ["", me!.name] } };
   const contacts = await db.crmContact.findMany({
-    where: { id: { in: contactIds }, ...(canSeeAll ? (mineOnly ? { assignedTo: { equals: me!.name, mode: "insensitive" } } : {}) : { assignedTo: { in: ["", me!.name] } }) },
+    where: q
+      ? { AND: [ownerWhere, { OR: [{ name: { contains: q, mode: "insensitive" } }, ...(qDigits.length >= 3 ? [{ phone: { contains: qDigits } }] : [])] }] }
+      : { id: { in: contactIds }, ...ownerWhere },
     select: { id: true, name: true, phone: true, assignedTo: true },
+    take: q ? 50 : 120,
   });
+  // searched contacts may not be in the recent-600 window → fetch their latest comms
+  if (q) {
+    const missing = contacts.filter((c) => !latestByContact.has(c.id)).map((c) => c.id);
+    if (missing.length) {
+      const more = await db.crmEvent.findMany({ where: { contactId: { in: missing }, kind: { in: COMMS } }, orderBy: { at: "desc" }, take: 500, select: { contactId: true, kind: true, body: true, at: true } });
+      for (const e of more) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
+    }
+  }
   // 👁 red dot = seller wrote last AND the thread hasn't been opened since
   const convRead = await readConvMap();
   const threads = contacts
     .map((c) => {
-      const last = latestByContact.get(c.id)!;
+      const last = latestByContact.get(c.id) ?? { kind: "sms", body: "(no messages yet — open to start)", at: new Date(0) };
       const unseen = !convRead[c.id] || last.at.toISOString() > convRead[c.id];
       return { ...c, last, needsReply: stripHtml(last.body).startsWith("⬅") && unseen };
     })
@@ -136,7 +152,15 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                 </span>
               )}
             </div>
-            {threads.length === 0 && <div className="p-4 text-xs text-slate-400">No conversations yet — texts, emails and calls will appear here.</div>}
+            {/* 🔎 search any seller by name or phone (Jon 2026-10-13) */}
+            <form method="GET" action="/crm/conversations" className="border-b border-slate-100 bg-slate-50 px-2.5 py-2">
+              {mineOnly && <input type="hidden" name="who" value="me" />}
+              <div className="flex items-center gap-1">
+                <input name="q" defaultValue={q} placeholder="🔎 Search name or phone…" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs" />
+                {q && <Link href={mineOnly ? "/crm/conversations?who=me" : "/crm/conversations"} className="shrink-0 rounded-lg bg-slate-200 px-2 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-300">✕</Link>}
+              </div>
+            </form>
+            {threads.length === 0 && <div className="p-4 text-xs text-slate-400">{q ? `No seller matches “${q}”.` : "No conversations yet — texts, emails and calls will appear here."}</div>}
             {/* ☑️ mass selection (Jon 2026-10-08): tick threads → mark read /
                 unread / DNC in one shot. The checkbox stops the row's link. */}
             <form action={bulkConvAction}>

@@ -224,8 +224,8 @@ export default function Sidebar({
           <a href="https://freedom-offers.com" target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className="block" title="Visit freedom-offers.com">
             <Logo size="sm" tagline />
           </a>
-          {/* collapse the rail (desktop only) */}
-          <button onClick={toggleCollapsed} title="Minimize the menu" aria-label="Minimize the menu" className="hidden shrink-0 rounded-lg px-1.5 py-1 text-brand-navy-300 hover:bg-white/5 hover:text-white md:block">«</button>
+          {/* collapse the rail (desktop only) — made obvious (Jon 2026-10-13) */}
+          <button onClick={toggleCollapsed} title="Minimize the menu" aria-label="Minimize the menu" className="hidden shrink-0 items-center gap-1 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] font-bold text-white ring-1 ring-white/20 hover:bg-brand-gold hover:text-brand-navy md:flex">« Hide</button>
         </div>
         {/* 🏷 always-visible company reference (Jon 2026-10-09): what to tell sellers */}
         <div className="mt-1.5 space-y-0.5 text-[11px] font-semibold text-white/90">
