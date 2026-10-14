@@ -1502,6 +1502,21 @@ export async function GET(request: Request) {
       telnyxEvents: telnyx });
   }
 
+  // ☎️ Twilio→Telnyx porting check (?portcheck=1 — Jon 2026-10-14): read-only
+  // portability check on the local Twilio numbers (toll-free 877 ports via a
+  // separate RespOrg flow). Tells us which can move + any carrier issues.
+  if (url.searchParams.get("portcheck") === "1") {
+    const key = process.env.TELNYX_API_KEY;
+    if (!key) return NextResponse.json({ ok: false, reason: "no TELNYX_API_KEY" });
+    const nums = ["+19188183060", "+16292901781", "+19283251723", "+19048677659", "+12107918406", "+16193295883", "+15617097654"];
+    try {
+      const r = await fetch("https://api.telnyx.com/v2/portability_checks", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ phone_numbers: nums }) });
+      const j = (await r.json()) as { data?: Array<Record<string, unknown>>; errors?: unknown };
+      const summary = (j.data ?? []).map((x) => ({ number: x.phone_number, portable: x.portable, fast: x.fast_portable, carrier: x.old_service_provider_ocn, sms: x.messaging_capable }));
+      return NextResponse.json({ ok: r.ok, status: r.status, summary, errors: j.errors });
+    } catch (e) { return NextResponse.json({ ok: false, error: String(e).slice(0, 150) }); }
+  }
+
   // 🔎 Probe GHL call-message shape to find where the recording URL lives
   if (url.searchParams.get("ghlcallprobe") === "1") {
     const { probeCallShape } = await import("@/lib/reireply");
