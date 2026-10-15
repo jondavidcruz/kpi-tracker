@@ -11,8 +11,10 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    // HUD statement uploads (PDF/image) on the deal-close flow.
-    serverActions: { bodySizeLimit: "4mb" },
+    // Lead/roster/HUD document uploads — phone photos & scanned PDFs routinely
+    // exceed 4mb and were REJECTED by Next before the action ran ("uploads don't
+    // work", Jon 2026-10-15). Raised to 16mb to match the 15MB in-action guard.
+    serverActions: { bodySizeLimit: "16mb" },
   },
   // Security headers (Jon 2026-10-07 "protect our data"): no embedding in
   // other sites (clickjacking), no MIME sniffing, no referrer leakage, and

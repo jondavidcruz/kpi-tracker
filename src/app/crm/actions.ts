@@ -700,6 +700,7 @@ export async function uploadLeadDocAction(formData: FormData) {
   if (!me) return;
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
+  const docType = String(formData.get("docType") ?? "").trim(); // Purchase Agreement, Assignment, …
   const file = formData.get("file");
   if (!oppId || !contactId || !(file instanceof File) || file.size === 0) return;
   if (file.size > 15 * 1024 * 1024) {
@@ -707,9 +708,14 @@ export async function uploadLeadDocAction(formData: FormData) {
     revalidatePath(`/crm/${oppId}`);
     return;
   }
+  // Auto-title: the chosen doc type, else the file's own name (team can change it).
+  const title = docType || file.name.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim() || file.name;
   try {
     const { gdriveConfigured, ensureSubfolder, uploadToFolder, listFolder } = await import("@/lib/gdrive");
-    if (!gdriveConfigured()) return;
+    if (!gdriveConfigured()) {
+      await logCrmEvent({ contactId, oppId, kind: "system", body: "📎 Upload couldn't save — document storage isn't configured. Tell Jon.", actor: me.name });
+      revalidatePath(`/crm/${oppId}`); return;
+    }
     const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
     const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contact: { select: { address: true, name: true } } } });
     const label = (opp?.contact.address || opp?.title || opp?.contact.name || "Unfiled").trim();
@@ -721,8 +727,9 @@ export async function uploadLeadDocAction(formData: FormData) {
     }
     if (!folderId) folderId = await ensureSubfolder(DEALS_PARENT, label.slice(0, 80));
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const up = await uploadToFolder(folderId, file.name.slice(0, 120), bytes, file.type || "application/octet-stream");
-    await logCrmEvent({ contactId, oppId, kind: "file", body: `📎 ${file.name} — uploaded to the deal's Drive folder`, meta: { driveId: up.id, link: up.link }, actor: me.name });
+    const driveName = `${docType ? docType + " - " : ""}${file.name}`.slice(0, 120);
+    const up = await uploadToFolder(folderId, driveName, bytes, file.type || "application/octet-stream");
+    await logCrmEvent({ contactId, oppId, kind: "file", body: `📎 ${title} — uploaded to the deal's Drive folder`, meta: { driveId: up.id, link: up.link, docType }, actor: me.name });
   } catch (e) {
     await logCrmEvent({ contactId, oppId, kind: "system", body: `📎 Upload failed: ${String(e).slice(0, 120)}`, actor: me.name }).catch(() => {});
   }

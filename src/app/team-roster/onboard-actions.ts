@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { defaultNewRepNavHidden } from "@/lib/navItems";
 import { buildWelcomeEmail } from "@/lib/welcome-email";
-import { sendEmailTo } from "@/lib/notify";
+import { sendEmailTo, sendEmailWithAttachment } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -40,8 +40,26 @@ export async function sendWelcomeEmailAction(formData: FormData) {
   const u = userId ? await db.user.findUnique({ where: { id: userId }, select: { name: true, email: true, position: true } }) : null;
   if (!u?.email) redirect("/team-roster?welcomeerr=noemail");
   const { subject, html } = await buildWelcomeEmail({ name: u.name, position: u.position ?? "", email: u.email });
+  // Auto-attach their most recent signed agreement (TeamDoc) if one is uploaded,
+  // so Jon doesn't have to attach it by hand (Jon 2026-10-15).
+  let attachment: { filename: string; content: string } | null = null;
+  try {
+    const doc = await db.teamDoc.findFirst({ where: { userId }, orderBy: { createdAt: "desc" }, select: { id: true, filename: true, data: true } });
+    if (doc) {
+      let bytes: Uint8Array | null = doc.data && doc.data.length > 0 ? new Uint8Array(doc.data) : null;
+      if (!bytes) {
+        const { getDriveFile } = await import("@/lib/drive-store");
+        const { downloadFromDrive } = await import("@/lib/gdrive");
+        const driveId = await getDriveFile(`doc:${doc.id}`).catch(() => null);
+        if (driveId) bytes = await downloadFromDrive(driveId);
+      }
+      if (bytes && bytes.length > 0 && bytes.length < 14 * 1024 * 1024) attachment = { filename: doc.filename || "signed-agreement.pdf", content: Buffer.from(bytes).toString("base64") };
+    }
+  } catch { /* attachment best-effort */ }
   const err: { msg?: string } = {};
-  const ok = await sendEmailTo([u.email], subject, html, undefined, undefined, err);
+  const ok = attachment
+    ? await sendEmailWithAttachment([u.email], subject, html, attachment)
+    : await sendEmailTo([u.email], subject, html, undefined, undefined, err);
   revalidatePath("/team-roster");
   redirect(ok ? `/team-roster?welcomed=${encodeURIComponent(u.name)}` : `/team-roster?welcomeerr=${encodeURIComponent(err.msg || "send failed")}`);
 }

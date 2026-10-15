@@ -3378,7 +3378,10 @@ export async function uploadTeamDoc(formData: FormData) {
   const me = await getCurrentUser();
   if (!me || !isAdmin(me)) return;
   const userId = String(formData.get("userId") ?? "");
-  const label = String(formData.get("label") ?? "").trim() || "Signed agreement";
+  const docType = String(formData.get("docType") ?? "").trim();
+  const custom = String(formData.get("label") ?? "").trim();
+  // Title priority: custom label (override) → doc-type dropdown → "Signed agreement".
+  const label = custom || docType || "Signed agreement";
   const file = formData.get("file");
   if (!userId || !(file instanceof File) || file.size === 0) redirect("/team-roster?err=file");
   const f = file as File;

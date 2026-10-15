@@ -90,7 +90,26 @@ export async function buildWelcomeEmail(opts: { name: string; position: string; 
 
         ${payHtml}
 
-        <div style="font-size:13px;color:#64748b;margin-top:14px">Your signed independent-contractor agreement is on file. Questions? Just reply to this email.</div>
+        <div style="font-weight:800;color:#0b1f3a;margin-top:6px">3) Two quick to-dos</div>
+        <ul style="margin:6px 0 10px;padding-left:18px;font-size:14px;line-height:1.5">
+          <li><b>Take your Predictive Index assessment</b> — a short behavioral survey so we put you in your best-fit seat. (Jon will send you the PI link; it takes ~6 minutes.)</li>
+          <li><b>Need help or have an idea?</b> In the War Room, use <b>Requests</b> (left menu) to flag anything broken or confusing, and <b>AI Champion</b> to drop ideas that improve the system.</li>
+        </ul>
+
+        <div style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:8px;padding:12px 14px;margin:12px 0">
+          <div style="font-weight:800;color:#0b1f3a;margin-bottom:6px">📋 Please reply with this info</div>
+          <div style="font-size:14px;line-height:1.6">
+            So we can set you up and pay you, reply to this email with:
+            <ul style="margin:6px 0 0;padding-left:18px">
+              <li>Date of birth</li>
+              <li>Phone number</li>
+              <li>Mailing address (for reward gifts)</li>
+              <li><b>How you want commissions wired</b> — <b>Wise</b>, <b>PayPal</b>, or <b>Venmo</b> (pick one) and the account details/email/handle for it.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="font-size:13px;color:#64748b;margin-top:14px">Your signed independent-contractor agreement is attached / on file. Questions? Just reply to this email.</div>
       </div>
       <div style="text-align:center;color:#94a3b8;font-size:12px;margin-top:14px">Freedom Offers — veteran-owned land wholesaling</div>
     </div>

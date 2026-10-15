@@ -298,7 +298,17 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                 )}
                 <form action={uploadTeamDoc} className="flex flex-wrap items-center gap-2">
                   <input type="hidden" name="userId" value={u.id} />
-                  <input name="label" placeholder="Label (e.g. Contractor Agreement)" defaultValue="Signed agreement" className={`${inputCls} max-w-56`} />
+                  <select name="docType" defaultValue="" className={`${inputCls} max-w-56`} title="Document type">
+                    <option value="">Type…</option>
+                    <option>Independent Contractor Agreement</option>
+                    <option>Bonus Schedule</option>
+                    <option>Pay Schedule</option>
+                    <option>W-9 / Tax Form</option>
+                    <option>ID / Verification</option>
+                    <option>NDA</option>
+                    <option>Miscellaneous</option>
+                  </select>
+                  <input name="label" placeholder="Or custom label…" className={`${inputCls} max-w-56`} />
                   <input type="file" name="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" className="text-xs" required />
                   <button className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Upload</button>
                 </form>

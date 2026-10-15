@@ -148,6 +148,7 @@ const RESTRICTED_NAV: Record<string, string[]> = {
 export const ONBOARDING_NAV: string[] = [
   "/training", "/glossary", "/scripts", "/playbooks",
   "/process", "/entry", "/report", "/underwriting", "/call-scoring", "/account",
+  "/tickets", "/ai-champion", // new hires can ask for help + submit AI ideas (Jon 2026-10-15)
 ];
 
 /** Allowed page prefixes for a restricted user, or null if they see everything. */
