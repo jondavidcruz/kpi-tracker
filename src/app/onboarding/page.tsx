@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
+import OnboardingSystemsChecklist from "@/components/OnboardingSystemsChecklist";
 import { PROFILES, FACTORS, type DiscScore } from "@/lib/assessment";
 import CopyLink from "@/components/CopyLink";
 import { createAssessmentInvite, deleteAssessment, setUserOnboarding } from "@/app/actions";
@@ -116,6 +117,11 @@ export default async function OnboardingPage() {
 
       <Card className="border-l-4 border-brand-gold bg-amber-50/50 p-4 text-sm text-slate-700">
         <b>The philosophy:</b> commission-only means we can&apos;t afford a slow ramp — but we also shouldn&apos;t spend our time training someone who won&apos;t make it. So we <b>front-load the learning, gate hard before they go live, and let the 30/60/90 self-select.</b> The faster they master the material, the faster they earn — that&apos;s the pitch.
+      </Card>
+
+      <Card className="p-5">
+        <SectionTitle title="🧰 Systems Setup Checklist" subtitle="Every account a new hire needs, by role — so anyone can run the setup. Pick the role, enter the hire's name, work down the list." accent="bg-brand-navy" />
+        <div className="mt-3"><OnboardingSystemsChecklist /></div>
       </Card>
 
       {owner && (
