@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 // match a person's real menu exactly.
 const GATE_LABEL: Record<NavGate, string> = { all: "Everyone", manager: "Managers", admin: "Owner-level", marketing: "Marketing crew", csuite: "C-Suite (leadership)", training: "Coaching staff" };
 
-export default async function AccessPreviewPage({ searchParams }: { searchParams: Promise<{ as?: string; saved?: string }> }) {
+export default async function AccessPreviewPage({ searchParams }: { searchParams: Promise<{ as?: string; saved?: string; blank?: string }> }) {
   const me = await getCurrentUser();
   if (!isManager(me)) {
     return (
@@ -49,6 +49,9 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
     gate === "csuite" ? flags.csuite :
     gate === "training" ? trains : false;
   const hiddenSet = new Set(parseNavHidden(selected.navHidden));
+  // Opt-in mode (Jon 2026-10-15): "Start blank" renders every box UNCHECKED so you
+  // tick only what to GRANT, instead of unchecking everything you don't want.
+  const blankStart = sp.blank === "1";
   // Items grantable in the editor. Marketing-gated rows (Vetted Buyers, Buyer
   // Research, Lead Sourcing) are ALWAYS listed — checking one grants the
   // Markets & Buyers flag on save, so the owner can just tick the sections
@@ -122,12 +125,19 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
           <form action={saveUserAccess} className="mt-4 border-t border-slate-100 pt-4">
             <input type="hidden" name="userId" value={selected.id} />
             <input type="hidden" name="navAvailable" value={JSON.stringify(availableHrefs)} />
-            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Edit {firstName}&apos;s access {sp.saved && <span className="ml-2 text-emerald-600">✓ saved</span>}</div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Edit {firstName}&apos;s access {sp.saved && <span className="ml-2 text-emerald-600">✓ saved</span>}</span>
+              <span className="ml-auto flex items-center gap-1.5 text-[11px]">
+                <Link href={`/admin/access-preview?as=${selected.id}&blank=1`} className={`rounded-full px-2.5 py-0.5 font-bold ${blankStart ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>🧹 Start blank — grant only what I check</Link>
+                {blankStart && <Link href={`/admin/access-preview?as=${selected.id}`} className="rounded-full bg-slate-100 px-2.5 py-0.5 font-bold text-slate-600 hover:bg-slate-200">↩ Show current access</Link>}
+              </span>
+            </div>
+            {blankStart && <div className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200">Opt-in mode: everything&apos;s unchecked. Tick only the sections {firstName} should have, then Save. (Unticked = hidden from their sidebar.)</div>}
 
             <div className="mb-1 text-[11px] font-semibold text-slate-500">Sensitive data</div>
             <div className="mb-2 flex flex-wrap items-center gap-x-6 gap-y-2">
               <span className="flex items-center gap-1.5 text-sm text-slate-500">🔒 C-Suite &amp; pay ($ amounts, P&amp;L, payroll, roadmap, roster): <b className={isCSuitePerson(selected) ? "text-emerald-700" : "text-slate-700"}>{isCSuitePerson(selected) ? "Allowed" : "Locked"}</b></span>
-              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessMarketing" defaultChecked={selected.accessMarketing} className="h-4 w-4 accent-brand-navy" /> Markets &amp; Buyers <span className="text-[11px] text-slate-400">(auto-granted when any 🩷 Buyers section below is checked)</span></label>
+              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="accessMarketing" defaultChecked={blankStart ? false : selected.accessMarketing} className="h-4 w-4 accent-brand-navy" /> Markets &amp; Buyers <span className="text-[11px] text-slate-400">(auto-granted when any 🩷 Buyers section below is checked)</span></label>
             </div>
             <p className="mb-3 text-[11px] text-slate-400">C-Suite &amp; pay data is hard-limited to <b>Jon, Enrico &amp; Viktoriia</b> — it can&apos;t be granted to anyone else here, and new hires never get it.</p>
 
@@ -142,7 +152,7 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
                     <div className="space-y-1">
                       {items.map((it) => (
                         <label key={it.href} className="flex items-center gap-2 text-[13px] text-slate-700">
-                          <input type="checkbox" name="navShow" value={it.href} defaultChecked={it.gate === "marketing" ? flags.marketing && !hiddenSet.has(it.href) : !hiddenSet.has(it.href)} className="h-3.5 w-3.5 accent-brand-navy" /> {it.label}
+                          <input type="checkbox" name="navShow" value={it.href} defaultChecked={blankStart ? false : (it.gate === "marketing" ? flags.marketing && !hiddenSet.has(it.href) : !hiddenSet.has(it.href))} className="h-3.5 w-3.5 accent-brand-navy" /> {it.label}
                           {it.gate === "marketing" && <span className="rounded bg-pink-100 px-1 py-0.5 text-[10px] font-bold text-pink-700">Buyers</span>}
                         </label>
                       ))}

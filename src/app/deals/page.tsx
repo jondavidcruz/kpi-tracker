@@ -44,6 +44,10 @@ export default async function DealsPage({
   const [settings, deals, reps, me] = await Promise.all([getSettings(), getActiveDeals(), getActiveReps(), getCurrentUser()]);
   const today = todayStr(settings.orgTimezone);
   const canClose = !!me && (isManager(me) || me.position === "dispositions");
+  // 💵 Deal money (prices, offers, profit) is visible only to managers + the
+  // Dispositions team (Marie, Sharyn) — hidden from acquisitions + new reps
+  // (Jon 2026-10-15: "hide deals money from new reps; deals can be shown to Marie and Sharyn").
+  const seeDealMoney = !!me && (isManager(me) || me.position === "dispositions");
   // Markets & Buyers: surface vetted buyers whose target areas match each deal's address.
   // Read-only — REI Reply stays the CRM; this is just a "who do we already know here?" hint.
   const mktAccess = canAccessMarketing(me);
@@ -195,8 +199,8 @@ export default async function DealsPage({
       status: d.status,
       assignedTo: d.assignedTo,
       buyerName: d.buyerName,
-      money: price != null ? `${money(price)}${d.askingPrice != null ? " asking" : " contract"}` : "",
-      topOffer: offers.length ? money(Math.max(...offers)) : "",
+      money: seeDealMoney && price != null ? `${money(price)}${d.askingPrice != null ? " asking" : " contract"}` : "",
+      topOffer: seeDealMoney && offers.length ? money(Math.max(...offers)) : "",
       agingLabel: a.days != null && live ? `⏱ ${a.days}d on market` : "",
       agingLevel: a.level,
       clock,

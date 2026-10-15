@@ -24,7 +24,12 @@ const SEEN_CAT = "__receipt_scan_seen__";
 const LOG_CAT = "__receipts_log__";
 
 // Vendors whose mail is a receipt even when the subject is vague ("Your Telnyx statement").
-const VENDOR_RX = /(stripe|paypal|telnyx|twilio|vercel|anthropic|openai|apple\.com|resend|postking|directrei|dealmachine|gohighlevel|leadconnector|propstream|batchdialer|batchleads|regrid|rentcast|zoom\.us|pandadoc|supabase|github|canva|godaddy|namecheap|dropbox|adobe|notion|slack|intuit|quickbooks|payments-noreply@google|workspace-noreply@google|aws|amazon|ispeedtolead|dealspeed|investorlift|launchcontrol|calendly|squarespace|wix|mailchimp|docusign)/i;
+// NOTE: pandadoc + docusign REMOVED (Jon 2026-10-15) — they're e-signature tools, not
+// billing; their "Signed copy of …" emails are CONTRACTS, not paid invoices, and were
+// wrongly posting to the invoices chat. See CONTRACT_RX below.
+const VENDOR_RX = /(stripe|paypal|telnyx|twilio|vercel|anthropic|openai|apple\.com|resend|postking|directrei|dealmachine|gohighlevel|leadconnector|propstream|batchdialer|batchleads|regrid|rentcast|zoom\.us|supabase|github|canva|godaddy|namecheap|dropbox|adobe|notion|slack|intuit|quickbooks|payments-noreply@google|workspace-noreply@google|aws|amazon|ispeedtolead|dealspeed|investorlift|launchcontrol|calendly|squarespace|wix|mailchimp)/i;
+// Signed-document / e-signature notifications — NEVER a paid invoice. Skip outright.
+const CONTRACT_RX = /(signed copy|has signed|completed the document|signature request|has been signed|e-?signed|pandadoc|docusign|hellosign|dropbox sign|adobe sign|agreement\b|\bloa\b)/i;
 // Subject words that mean "money changed hands".
 const RECEIPT_RX = /\b(receipt|invoice|payment (?:received|confirmation|successful|succeeded|processed|complete)|your (?:payment|order|purchase|subscription|renewal|bill|statement)|order confirmation|has been (?:charged|renewed|paid|processed)|billing statement|statement (?:is )?(?:ready|available)|thanks? (?:you )?for your (?:payment|purchase|order)|auto-?renew(?:al|ed)?|renewal|was charged|charged \$|paid \$|amount due|tax invoice)\b/i;
 // Marketing noise that uses the same words.
@@ -108,9 +113,13 @@ export async function scanReceipts(opts: { mailboxes?: string[]; days?: number; 
         const amount = pickAmount(`${subject}\n${body}`);
         if (opts.debug) dbg.push({ subject: subject.slice(0, 80), from: from.slice(0, 60), files: acc.files.slice(0, 5), bodyHead: body.slice(0, 400), matched: !NEG_RX.test(subject) && (vendorHit || subjectHit) && (amount != null || pdf) });
         if (NEG_RX.test(subject)) { seenSet.add(m.id); continue; }
+        // Signed agreements / e-sign notifications are CONTRACTS, not paid invoices —
+        // never post them to the invoices chat (Jon 2026-10-15).
+        if (CONTRACT_RX.test(subject) || CONTRACT_RX.test(from)) { seenSet.add(m.id); continue; }
         if (!vendorHit && !subjectHit) { seenSet.add(m.id); continue; }
-        // A receipt has money on it: either a $ amount or an attached PDF.
-        if (amount == null && !pdf) { seenSet.add(m.id); continue; }
+        // This room is for PAID invoices/receipts — require a real $ amount, not just
+        // an attached PDF (a PDF-only email with no amount isn't a confirmed payment).
+        if (amount == null) { seenSet.add(m.id); continue; }
         seenSet.add(m.id);
         receipts.push({
           at: new Date().toISOString(), date: date.slice(0, 40), vendor: vendorOf(from), amount,
