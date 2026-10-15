@@ -149,7 +149,7 @@ export async function downloadFromDrive(fileId: string): Promise<Uint8Array | nu
 
 /** Upload into a SPECIFIC folder (not the default GDRIVE_FOLDER_ID). Private —
  *  backups aren't link-shared. Returns { id, link } (link opens for folder members). */
-export async function uploadToFolder(folderId: string, name: string, bytes: Uint8Array, mime: string): Promise<{ id: string; link: string }> {
+export async function uploadToFolder(folderId: string, name: string, bytes: Uint8Array, mime: string, publicRead = false): Promise<{ id: string; link: string }> {
   const token = await getAccessToken();
   const boundary = "wrb_" + crypto.randomBytes(8).toString("hex");
   const meta = JSON.stringify({ name, parents: [folderId] });
@@ -162,6 +162,17 @@ export async function uploadToFolder(folderId: string, name: string, bytes: Uint
   });
   const j = await up.json();
   if (!j.id) throw new Error("gdrive upload failed: " + JSON.stringify(j).slice(0, 200));
+  // Call recordings need a STREAMABLE, link-readable URL so the in-app <audio>
+  // player works (webViewLink is an HTML page, not a stream). publicRead=true
+  // grants anyone-with-link reader + returns the uc?export=download stream URL.
+  if (publicRead) {
+    await fetch(`https://www.googleapis.com/drive/v3/files/${j.id}/permissions?supportsAllDrives=true`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ role: "reader", type: "anyone" }),
+    }).catch(() => {});
+    return { id: j.id, link: `https://drive.google.com/uc?export=download&id=${j.id}` };
+  }
   return { id: j.id, link: j.webViewLink || `https://drive.google.com/file/d/${j.id}/view` };
 }
 

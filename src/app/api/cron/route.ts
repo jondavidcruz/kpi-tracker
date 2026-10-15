@@ -1399,6 +1399,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, orgTimezone: "America/Los_Angeles", had: !!row });
   }
 
+  // 🎫 Ticket status setter (?ticketset=1&id=..&status=..&note=..) — lets the
+  // nightly ticket-fixer agent flip an approved ticket to in_progress/resolved and
+  // leave a resolution note (e.g. the commit it shipped) after building the fix.
+  // Bearer-gated like every agent op. Jon 2026-10-15: "build the approval trigger."
+  if (url.searchParams.get("ticketset") === "1") {
+    const id = url.searchParams.get("id") ?? "";
+    const status = url.searchParams.get("status") ?? "";
+    const note = (url.searchParams.get("note") ?? "").slice(0, 600);
+    if (!id || !["approved", "in_progress", "resolved", "declined"].includes(status)) return NextResponse.json({ ok: false, error: "bad id/status" });
+    const t = await db.ticket.findUnique({ where: { id } });
+    if (!t) return NextResponse.json({ ok: false, error: "no ticket" });
+    await db.ticket.update({ where: { id }, data: { status, ...(note ? { adminNote: note } : {}) } });
+    return NextResponse.json({ ok: true, id, status });
+  }
+
   // 📎 Signed-doc puller (?pdpull=1, daily cron): PandaDoc completed docs from
   // the last 7 days → signed PDF saved to the Shared Drive "Deal Files"
   // folder → 📎 file event on the matching OPPORTUNITY (metadata.oppId from

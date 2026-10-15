@@ -5,6 +5,28 @@ import { logCrmEvent } from "@/lib/crm";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // recording.saved does a Drive upload + Gemini transcript
 
+// 🔎 Outcome breadcrumb into __telnyx_events__ so ?recdiag=1 shows WHY a recording
+// did or didn't file (Jon 2026-10-15: recordings still not showing).
+async function recCrumb(entry: Record<string, unknown>) {
+  try {
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
+    let list: unknown[] = [];
+    try { list = row?.description ? JSON.parse(row.description) : []; } catch { /* fresh */ }
+    list.unshift({ at: new Date().toISOString(), ...entry });
+    const description = JSON.stringify(list.slice(0, 25));
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "telnyx-events", category: "__telnyx_events__", url: "", description } });
+  } catch { /* logging never blocks */ }
+}
+// Pull the mp3 URL out of whatever shape Telnyx sends (object, array, or string).
+function pickMp3(x: unknown): string {
+  if (!x) return "";
+  if (typeof x === "string") return x;
+  if (Array.isArray(x)) { const hit = x.find((u) => typeof u === "string" && /\.mp3|mp3/i.test(u)); return (hit as string) || (typeof x[0] === "string" ? x[0] : ""); }
+  const o = x as { mp3?: string };
+  return o.mp3 ?? "";
+}
+
 // Telnyx Call Control webhook for CRM click-to-call: we dial the REP first;
 // when they answer, bridge the seller in; when it ends, log duration on the
 // lead's timeline. Armed once TELNYX_CONNECTION_ID points its webhook here.
@@ -224,9 +246,9 @@ export async function POST(req: NextRequest) {
   // 🎙 Recording landed → file it on the lead: MP3 → the deal's Drive folder,
   // link + transcript on the timeline (Jon's backlog item #1, 2026-10-12).
   if (ev === "call.recording.saved") {
-    const pr = p as unknown as { recording_urls?: { mp3?: string }; download_urls?: { mp3?: string }; from?: string; to?: string; direction?: string; call_control_id?: string; recording_started_at?: string; recording_ended_at?: string };
-    const url = pr.download_urls?.mp3 || pr.recording_urls?.mp3 || "";
-    if (!url) return NextResponse.json({ ok: true, noUrl: true });
+    const pr = p as unknown as { recording_urls?: unknown; public_recording_urls?: unknown; download_urls?: unknown; from?: string; to?: string; direction?: string; call_control_id?: string; recording_started_at?: string; recording_ended_at?: string };
+    const url = pickMp3(pr.download_urls) || pickMp3(pr.recording_urls) || pickMp3(pr.public_recording_urls) || "";
+    if (!url) { await recCrumb({ ev: "rec.outcome", result: "noUrl", cc: (pr.call_control_id ?? "").slice(0, 8) }); return NextResponse.json({ ok: true, noUrl: true }); }
     // 🔁 dedupe: a double record_start (client + webhook fallback) could produce
     // two recording.saved events for the same call — skip if we already filed one
     // for this call_control_id (Jon 2026-10-13).
@@ -254,7 +276,7 @@ export async function POST(req: NextRequest) {
         contact = await db.crmContact.create({ data: { name: last10.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3"), phone: e164, source: "Phone call" } });
       }
     }
-    if (!contact) return NextResponse.json({ ok: true, noContact: true });
+    if (!contact) { await recCrumb({ ev: "rec.outcome", result: "noContact", from: (pr.from ?? "").slice(-10), to: (pr.to ?? "").slice(-10) }); return NextResponse.json({ ok: true, noContact: true }); }
     const opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null }, select: { id: true, title: true, contact: { select: { address: true, name: true } } } });
     const secs = pr.recording_started_at && pr.recording_ended_at ? Math.max(0, Math.round((Date.parse(pr.recording_ended_at) - Date.parse(pr.recording_started_at)) / 1000)) : 0;
     try {
@@ -275,7 +297,7 @@ export async function POST(req: NextRequest) {
           }
           if (!folderId) folderId = await ensureSubfolder(DEALS_PARENT, label.slice(0, 80));
           const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
-          const up = await uploadToFolder(folderId, `call ${stamp}.mp3`, bytes, "audio/mpeg");
+          const up = await uploadToFolder(folderId, `call ${stamp}.mp3`, bytes, "audio/mpeg", true); // public + streamable for the player
           link = up.link;
         }
       }
@@ -300,6 +322,7 @@ export async function POST(req: NextRequest) {
         } catch { /* recording itself is already filed below */ }
       }
       await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, secs, ccId, transcript: transcript.slice(0, 12000) }, actor: "recorder" });
+      await recCrumb({ ev: "rec.outcome", result: "filed", hasLink: !!link, secs });
       // 🎯 auto-score every real conversation (≥60s) against the coaching rubric
       if (transcript && secs >= 60) {
         try {
@@ -312,6 +335,7 @@ export async function POST(req: NextRequest) {
         } catch { /* scoring is gravy — transcript already landed */ }
       }
     } catch (e) {
+      await recCrumb({ ev: "rec.outcome", result: "failed", err: String(e).slice(0, 80) });
       await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "system", body: `🎙 Recording save failed: ${String(e).slice(0, 120)}`, actor: "recorder" }).catch(() => {});
     }
     return NextResponse.json({ ok: true });
