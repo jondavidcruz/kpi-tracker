@@ -38,7 +38,11 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   }
   const c = opp.contact;
 
-  const [pipelines, reps, events, tasks, appts, siblingOpps, parties] = await Promise.all([
+  // ⚠️ duplicate-seller guard (nightly ?crmqa=1 found 16 phones split across
+  // reps): any OTHER live contact sharing this phone is flagged on the card so
+  // two reps don't work the same seller blind. Read-only; merging stays manual.
+  const last10 = (c.phone || "").replace(/\D/g, "").slice(-10);
+  const [pipelines, reps, events, tasks, appts, siblingOpps, parties, dupContacts] = await Promise.all([
     readPipelines(),
     getActiveReps(),
     db.crmEvent.findMany({ where: { contactId: c.id }, orderBy: { at: "desc" }, take: 400 }),
@@ -46,6 +50,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
     db.crmAppointment.findMany({ where: { oppId }, orderBy: { at: "asc" } }),
     db.crmOpportunity.findMany({ where: { contactId: c.id, id: { not: oppId } }, select: { id: true, title: true, stage: true, formData: true } }),
     db.crmParty.findMany({ where: { oppId }, orderBy: { createdAt: "asc" } }),
+    last10.length === 10
+      ? db.crmContact.findMany({ where: { id: { not: c.id }, archivedAt: null, OR: [{ phone: { endsWith: last10 } }, { altPhone: { endsWith: last10 } }] }, select: { id: true, name: true, assignedTo: true, opportunities: { where: { archivedAt: null }, select: { id: true, title: true, stage: true }, take: 1 } }, take: 5 })
+      : Promise.resolve([] as Array<{ id: string; name: string; assignedTo: string; opportunities: Array<{ id: string; title: string; stage: string }> }>),
   ]);
   const [snippets, sequences, seqState] = await Promise.all([readSnippets(), readSequences(), readSeqState()]);
   const enrolled = seqState[opp.id];
@@ -114,6 +121,21 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           })}
         </div>
         {c.pinnedNote && <div className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {c.pinnedNote}</div>}
+        {dupContacts.length > 0 && (
+          <div className="mt-2 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 ring-1 ring-rose-200">
+            ⚠️ Same phone is also on{" "}
+            {dupContacts.map((d, i) => (
+              <span key={d.id}>
+                {i > 0 && ", "}
+                {d.opportunities[0]
+                  ? <Link href={`/crm/${d.opportunities[0].id}`} className="underline">{d.name}</Link>
+                  : d.name}
+                {d.assignedTo ? ` (${d.assignedTo.split(" ")[0]})` : ""}
+              </span>
+            ))}
+            {" "}— check before calling; notes may be split across cards.
+          </div>
+        )}
       </Card>
 
       <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[300px_minmax(0,1fr)_330px] xl:items-start">

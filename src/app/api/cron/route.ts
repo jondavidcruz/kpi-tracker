@@ -1211,7 +1211,7 @@ export async function GET(request: Request) {
   if (url.searchParams.get("crmqa") === "1") {
     const staleDays = Math.max(3, Number(url.searchParams.get("days") ?? 14) || 14);
     const { DNC_PIPELINE } = await import("@/lib/crm-dnc");
-    const PARKED = /(dead|lost|won|closed|nurture|dnc|not interested|do not|archived|cold)/i;
+    const PARKED = /(dead|died|lost|won|closed|nurture|dnc|not interested|do not|archived|cold)/i;
     const last10 = (p: string) => (p || "").replace(/\D/g, "").slice(-10);
     const [contacts, opps, openTasks] = await Promise.all([
       db.crmContact.findMany({ where: { archivedAt: null }, select: { id: true, name: true, phone: true, altPhone: true, email: true, assignedTo: true }, take: 40000 }),
@@ -1233,9 +1233,10 @@ export async function GET(request: Request) {
     const today = new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10);
     const noAction = working.filter((o) => !o.nextFollowUp && !taskOpp.has(o.id) && !taskContact.has(o.contactId));
     const overdueFollowUp = working.filter((o) => o.nextFollowUp && o.nextFollowUp.slice(0, 10) < today);
-    // stale = no timeline event in N days (indexed oppId+at groupBy)
+    // stale = no HUMAN touch (note/call/sms/email/appt) in N days — system +
+    // stage rows are excluded because the GHL sync stamps every lead daily.
     const since = new Date(Date.now() - staleDays * 86400_000);
-    const recent = await db.crmEvent.groupBy({ by: ["oppId"], where: { at: { gte: since }, oppId: { not: "" } }, _count: { _all: true } });
+    const recent = await db.crmEvent.groupBy({ by: ["oppId"], where: { at: { gte: since }, oppId: { not: "" }, kind: { in: ["note", "call", "sms", "email", "appt"] } }, _count: { _all: true } });
     const recentSet = new Set(recent.map((r) => r.oppId));
     const stale = working.filter((o) => !recentSet.has(o.id) && o.createdAt < since);
     const perOwner = (list: typeof working) => { const m: Record<string, number> = {}; for (const o of list) m[o.assignedTo || "(unassigned)"] = (m[o.assignedTo || "(unassigned)"] ?? 0) + 1; return m; };
@@ -1259,7 +1260,7 @@ export async function GET(request: Request) {
   if (url.searchParams.get("receiptscan") === "1") {
     const { scanReceipts } = await import("@/lib/gmail-receipts");
     const mailboxes = (url.searchParams.get("as") ?? "info@freedom-offers.com").split(",").map((s) => s.trim()).filter(Boolean);
-    const out = await scanReceipts({ mailboxes, days: Number(url.searchParams.get("days") ?? 2) || 2, post: url.searchParams.get("dry") !== "1" });
+    const out = await scanReceipts({ mailboxes, days: Number(url.searchParams.get("days") ?? 2) || 2, post: url.searchParams.get("dry") !== "1", debug: url.searchParams.get("debug") === "1" });
     return NextResponse.json({ ok: true, ...out });
   }
 

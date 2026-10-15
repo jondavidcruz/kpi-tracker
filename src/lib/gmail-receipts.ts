@@ -52,9 +52,12 @@ function stripHtml(h: string): string {
 
 /** Largest $ amount in the text (receipts print subtotal/tax/total; total is the max). */
 function pickAmount(text: string): number | null {
-  const found = [...text.matchAll(/(?:\$|USD\s?)\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?\b/g)]
-    .map((m) => Number(m[1].replace(/,/g, "")) + (m[2] ? Number(m[2]) / 100 : 0))
-    .filter((n) => n > 0 && n < 100_000);
+  const nums: number[] = [];
+  // "$45.00", "USD 45.00", "US$45" …
+  for (const m of text.matchAll(/(?:\$|USD\s?|US\$\s?)\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?\b/g)) nums.push(Number(m[1].replace(/,/g, "")) + (m[2] ? Number(m[2]) / 100 : 0));
+  // "… 45.00 USD" (Telnyx/Stripe style trailing currency)
+  for (const m of text.matchAll(/\b(\d{1,3}(?:,\d{3})+|\d+)\.(\d{2})\s?(?:USD|US\$)\b/g)) nums.push(Number(m[1].replace(/,/g, "")) + Number(m[2]) / 100);
+  const found = nums.filter((n) => n > 0 && n < 100_000);
   return found.length ? Math.max(...found) : null;
 }
 
@@ -65,9 +68,10 @@ function vendorOf(from: string): string {
   return (dom || from).slice(0, 40);
 }
 
-export async function scanReceipts(opts: { mailboxes?: string[]; days?: number; post?: boolean; max?: number } = {}): Promise<{
-  scanned: number; receipts: Receipt[]; posted: boolean; mailboxErrors: Record<string, string>;
+export async function scanReceipts(opts: { mailboxes?: string[]; days?: number; post?: boolean; max?: number; debug?: boolean } = {}): Promise<{
+  scanned: number; receipts: Receipt[]; posted: boolean; mailboxErrors: Record<string, string>; debug?: Array<{ subject: string; from: string; files: string[]; bodyHead: string; matched: boolean }>;
 }> {
+  const dbg: Array<{ subject: string; from: string; files: string[]; bodyHead: string; matched: boolean }> = [];
   const mailboxes = opts.mailboxes?.length ? opts.mailboxes : ["info@freedom-offers.com"];
   const days = Math.min(30, Math.max(1, opts.days ?? 2));
   const max = Math.min(60, Math.max(5, opts.max ?? 30));
@@ -101,9 +105,10 @@ export async function scanReceipts(opts: { mailboxes?: string[]; days?: number; 
         const pdf = acc.files.some((f) => /\.pdf$/i.test(f));
         const vendorHit = VENDOR_RX.test(from);
         const subjectHit = RECEIPT_RX.test(subject);
+        const amount = pickAmount(`${subject}\n${body}`);
+        if (opts.debug) dbg.push({ subject: subject.slice(0, 80), from: from.slice(0, 60), files: acc.files.slice(0, 5), bodyHead: body.slice(0, 400), matched: !NEG_RX.test(subject) && (vendorHit || subjectHit) && (amount != null || pdf) });
         if (NEG_RX.test(subject)) { seenSet.add(m.id); continue; }
         if (!vendorHit && !subjectHit) { seenSet.add(m.id); continue; }
-        const amount = pickAmount(`${subject}\n${body}`);
         // A receipt has money on it: either a $ amount or an attached PDF.
         if (amount == null && !pdf) { seenSet.add(m.id); continue; }
         seenSet.add(m.id);
@@ -118,7 +123,7 @@ export async function scanReceipts(opts: { mailboxes?: string[]; days?: number; 
 
   // Dry runs (post=false) preview only — nothing persisted, so the real daily
   // post still sees every message.
-  if (!post) return { scanned, receipts, posted: false, mailboxErrors };
+  if (!post) return { scanned, receipts, posted: false, mailboxErrors, ...(opts.debug ? { debug: dbg } : {}) };
 
   // Persist seen ids (rolling) + the receipts log (rolling, newest first).
   const desc = JSON.stringify([...seenSet].slice(-1200));
