@@ -1401,6 +1401,48 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, orgTimezone: "America/Los_Angeles", had: !!row });
   }
 
+  // 🗺 Seed the Roadmap page with the CRM deal-velocity backlog (Jon 2026-10-15:
+  // "do roadmap doc in roadmap page"). Idempotent — dedupes by title.
+  if (url.searchParams.get("seedroadmap") === "1") {
+    const items: Array<{ title: string; detail: string; category: string }> = [
+      { title: "Speed-to-Lead call bridge (auto-ring rep → bridge to seller)", detail: "On a new lead, ring the on-duty acquisitions rep's softphone → on answer auto-dial the seller + context SMS. Biggest acquisitions time-to-contact win; built on the Telnyx stack.", category: "Automation" },
+      { title: "Auto-packet + auto-cascade the moment a deal is marked Signed", detail: "Stage change to Signed fires offer-packet generation + arms the buyer cascade (with a review-before-blast guard). Collapses signed→packet-out lag to seconds.", category: "Automation" },
+      { title: "Missed-call → instant text-back", detail: "Any unanswered inbound seller call auto-sends a recovery SMS. Table-stakes; recovers leads that would evaporate.", category: "Automation" },
+      { title: "AI inbound auto-responder + generative quick-replies (SMS/email)", detail: "Claude/Gemini sends a context-aware first reply on inbound seller texts (auto-ack for new sellers, draft-for-approval after) so sellers stay engaged in the first minutes.", category: "Automation" },
+      { title: "Buyer-intelligence ranking upgrade to the cascade", detail: "Rank vetted buyers by ACTUAL recent matching purchases (acreage/county/price band/exit) so the most-likely-to-close buyer sees the deal first.", category: "Analytics" },
+      { title: "AI call scoring / acquisitions coaching scorecard", detail: "Extend Gemini transcription to score each call (rapport, motivation, price anchoring, next-step, talk-ratio) and surface a coaching tile.", category: "Training" },
+      { title: "Pipeline-velocity & stage-aging analytics", detail: "Time-in-stage, stuck-deal flags, stage→stage conversion from existing timestamps — see exactly where sellers stall.", category: "Analytics" },
+      { title: "One-tap e-sign send for the purchase agreement", detail: "Generate the land purchase agreement from the deal and send for e-signature in one click, status flowing back onto the deal.", category: "Process" },
+      { title: "Buyer engagement tracking (opens/clicks/claim/pass) on the deal", detail: "Show per deal which buyers opened the packet, clicked, claimed or passed — so dispo re-blasts or calls the warm buyers fast.", category: "Analytics" },
+    ];
+    const existing = await db.roadmapItem.findMany({ select: { title: true } });
+    const have = new Set(existing.map((r) => r.title.toLowerCase()));
+    let added = 0; let sort = 1000;
+    for (const it of items) {
+      if (have.has(it.title.toLowerCase())) continue;
+      await db.roadmapItem.create({ data: { title: it.title, detail: it.detail, category: it.category, status: "todo", sortOrder: sort++ } });
+      added++;
+    }
+    return NextResponse.json({ ok: true, added, total: items.length });
+  }
+
+  // 📋 List ACCEPTED AI Updates for the nightly builder agent (?acceptedupdates=1).
+  if (url.searchParams.get("acceptedupdates") === "1") {
+    const rows = await db.suggestion.findMany({ where: { status: "accepted" }, select: { id: true, title: true, rationale: true, category: true, impact: true, effort: true }, orderBy: { createdAt: "asc" }, take: 40 }).catch(() => []);
+    return NextResponse.json({ ok: true, count: rows.length, suggestions: rows });
+  }
+  // ✅ Set an AI Update's status (?suggestionset=1&id=..&status=done&note=..) — for the builder agent to mark built.
+  if (url.searchParams.get("suggestionset") === "1") {
+    const id = url.searchParams.get("id") ?? "";
+    const status = url.searchParams.get("status") ?? "";
+    const note = (url.searchParams.get("note") ?? "").slice(0, 400);
+    if (!id || !["proposed", "accepted", "declined", "done"].includes(status)) return NextResponse.json({ ok: false, error: "bad id/status" });
+    const s = await db.suggestion.findUnique({ where: { id } }).catch(() => null);
+    if (!s) return NextResponse.json({ ok: false, error: "no suggestion" });
+    await db.suggestion.update({ where: { id }, data: { status, ...(note ? { note } : {}) } });
+    return NextResponse.json({ ok: true, id, status });
+  }
+
   // 🔐 Add/update a shared software login (?addsoftware=1, POST JSON) — encrypts the
   // password at rest (AES via VAULT_KEY) so the welcome email can include shared
   // logins (Eric Cline, REI AI, …). Password rides in the POST body, never a URL.
