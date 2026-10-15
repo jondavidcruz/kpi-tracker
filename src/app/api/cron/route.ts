@@ -1415,6 +1415,49 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, orgTimezone: "America/Los_Angeles", had: !!row });
   }
 
+  // 📝 Auto-file signed HR/contractor PandaDocs to the roster (Jon 2026-10-15:
+  // "remove this process where I have to manually upload"). Completed PandaDocs
+  // whose name carries a team member's name + "agreement/contractor" are downloaded
+  // and saved as a TeamDoc on that person's roster card. Dedupes by PandaDoc id.
+  if (url.searchParams.get("pdhrpull") === "1") {
+    const { pandadocConfigured, listCompletedDocs, downloadDocPdf } = await import("@/lib/pandadoc");
+    if (!pandadocConfigured()) return NextResponse.json({ ok: false, error: "no PANDADOC_API_KEY" });
+    const { gdriveConfigured, uploadToDrivePrivate } = await import("@/lib/gdrive");
+    const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true } });
+    const to = new Date().toISOString();
+    const from = new Date(Date.now() - 30 * 86400_000).toISOString();
+    const list = await listCompletedDocs(from, to);
+    const docs = ((list.body as { results?: Array<{ id: string; name?: string }> }).results ?? []).slice(0, 25);
+    const syncedRow = await db.resource.findFirst({ where: { category: "__pdhr_synced__" } });
+    let synced: string[] = [];
+    try { synced = syncedRow?.description ? JSON.parse(syncedRow.description) : []; } catch { synced = []; }
+    const seen = new Set(synced);
+    const filed: string[] = [];
+    for (const doc of docs) {
+      if (seen.has(doc.id)) continue;
+      const name = doc.name ?? "";
+      if (!/agreement|contractor|contract|nda|offer letter/i.test(name)) continue;
+      // match a team member whose full OR first name appears in the doc name
+      const u = users.find((x) => name.toLowerCase().includes(x.name.toLowerCase()) || name.toLowerCase().includes(`(${x.name.split(" ")[0].toLowerCase()}`));
+      if (!u) continue;
+      seen.add(doc.id);
+      try {
+        const pdf = await downloadDocPdf(doc.id); // Uint8Array
+        if (!pdf || pdf.length === 0) continue;
+        const label = /independent contractor/i.test(name) ? "Independent Contractor Agreement" : name.slice(0, 80);
+        let driveId: string | null = null;
+        if (gdriveConfigured()) { try { driveId = await uploadToDrivePrivate(`${u.name} - ${label}.pdf`, pdf, "application/pdf"); } catch { driveId = null; } }
+        const td = await db.teamDoc.create({ data: { userId: u.id, label, filename: `${label}.pdf`, contentType: "application/pdf", size: pdf.length, data: driveId ? new Uint8Array(0) : pdf, uploadedBy: "PandaDoc (auto)" } });
+        if (driveId) { const { setDriveFile } = await import("@/lib/drive-store"); await setDriveFile(`doc:${td.id}`, driveId); }
+        filed.push(`${u.name}: ${label}`);
+      } catch { /* skip this doc */ }
+    }
+    const desc = JSON.stringify([...seen].slice(-500));
+    if (syncedRow) await db.resource.update({ where: { id: syncedRow.id }, data: { description: desc } });
+    else await db.resource.create({ data: { title: "pdhr-synced", category: "__pdhr_synced__", url: "", description: desc } });
+    return NextResponse.json({ ok: true, filed, scanned: docs.length });
+  }
+
   // 🏆 Auto-award a certificate for every closed deal (Jon 2026-10-15: "they get a
   // certificate for every deal they close" — Air Force style). Dedupes by deal id.
   if (url.searchParams.get("dealcerts") === "1") {

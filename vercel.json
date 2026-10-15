@@ -197,6 +197,10 @@
       "schedule": "30 14 * * *"
     },
     {
+      "path": "/api/cron?pdhrpull=1",
+      "schedule": "15 14 * * *"
+    },
+    {
       "path": "/api/cron?pdpull=1",
       "schedule": "30 17 * * *"
     },
