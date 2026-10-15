@@ -2,7 +2,7 @@
 // Phase 3 extends sendAlert() to also deliver to Google Chat + email and adds
 // scheduled pace/missing-entry checks.
 import { db } from "./db";
-import { getActiveReps, getSettings, resolveGoal } from "./data";
+import { getActiveReps, getSettings, resolveGoal, getAllTargets, resolveGoalWith } from "./data";
 import { navAllowlist, tracksSpeedTest } from "./auth";
 import { monthOf, paceFraction, todayStr } from "./date";
 import { formatValue, type Unit } from "./format";
@@ -331,17 +331,21 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
   // No one works weekends — never flag missing entries for a Sat/Sun date.
   const dow = new Date(date + "T12:00:00Z").getUTCDay(); // 0=Sun..6=Sat
   if (dow === 0 || dow === 6) return [];
-  const reps = await getActiveReps();
-  const focusMap = await getFocusMap(date);
-  const kpis = await db.kpi.findMany({
-    where: {
-      active: true,
-      computed: false,
-      scope: "per_rep",
-      cadence: "daily",
-      goalKind: { not: "tracked" },
-    },
-  });
+  const [reps, focusMap, targets, kpis] = await Promise.all([
+    getActiveReps(),
+    getFocusMap(date),
+    getAllTargets(),
+    db.kpi.findMany({
+      where: {
+        active: true,
+        computed: false,
+        scope: "per_rep",
+        cadence: "daily",
+        goalKind: { not: "tracked" },
+      },
+    }),
+  ]);
+  const month = monthOf(date);
 
   const created: NewAlert[] = [];
   for (const kpi of kpis) {
@@ -359,13 +363,16 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
       });
       if (existing) continue; // already flagged (missing or behind)
       const message = `${rep.name} hasn't logged ${kpi.name} today.`;
+      // The rep's OWN goal (per-user/period Target override), not the team default —
+      // Nick's 0.8× dials were showing as "0/<team goal>" in the EOD summary.
+      const goal = resolveGoalWith(targets, kpi, rep.id, month) ?? kpi.goalValue ?? 0;
       await db.alert.create({
-        data: { kpiId: kpi.id, userId: rep.id, date, severity, expected: kpi.goalValue ?? 0, actual: 0, message, status: "open" },
+        data: { kpiId: kpi.id, userId: rep.id, date, severity, expected: goal, actual: 0, message, status: "open" },
       });
       created.push({
-        kpiId: kpi.id, userId: rep.id, date, severity, expected: kpi.goalValue ?? 0, actual: 0, message,
+        kpiId: kpi.id, userId: rep.id, date, severity, expected: goal, actual: 0, message,
         kpiKey: kpi.key, kpiName: kpi.name, unit: kpi.unit, cadence: kpi.cadence,
-        goalKind: kpi.goalKind, goal: kpi.goalValue ?? 0, userName: rep.name,
+        goalKind: kpi.goalKind, goal, userName: rep.name,
       });
     }
   }

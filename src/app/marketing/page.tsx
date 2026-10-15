@@ -31,7 +31,7 @@ function toProspect(r: Record<string, unknown>): Prospect {
   return {
     id: s("id"), name: s("name"), website: s("website"), links: s("links"), email: s("email"), phone: s("phone"), phone2: s("phone2"),
     buyBoxAreas: s("buyBoxAreas"), outreachLog: s("outreachLog"), lastContacted: s("lastContacted"), nextFollowUp: s("nextFollowUp"),
-    vetStage: s("vetStage"), vetStatus: s("vetStatus"), igHandle: s("igHandle"),
+    vetStage: s("vetStage"), vetStatus: s("vetStatus"), igHandle: s("igHandle"), touchOn: s("touchOn"),
     category: s("category"), type: s("type"), title: s("title"), company: s("company"), preferredContact: s("preferredContact"),
     dealType: s("dealType"), buildType: s("buildType"), closingSpeed: s("closingSpeed"), priceRange: s("priceRange"), minLotSize: s("minLotSize"),
     propertyType: s("propertyType"), minBeds: s("minBeds"), maxBaths: s("maxBaths"), conditionTolerance: s("conditionTolerance"), needsView: s("needsView"),
@@ -69,9 +69,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   // Research, grouped by type so it reads consistently across both pages.
   const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
   const vettedRows = rows.filter((r) => VETTED(r) && !isJv(r));
-  const buyerTerms = await readBuyerTerms();
-  const lastBackup = await lastBuyerBackup();
-  const buyerLand = await readBuyerLand();
+  const [buyerTerms, lastBackup, buyerLand, autoMaps] = await Promise.all([readBuyerTerms(), lastBuyerBackup(), readBuyerLand(), readAutoMaps()]);
   const buyers: Buyer[] = rows
     .filter((r) => (r.vetStage === "vetted" || r.vetStage === "active") && !isJv(r))
     .map((r) => {
@@ -120,7 +118,6 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     .sort((a, b) => (b.days ?? 9999) - (a.days ?? 9999))
     .slice(0, 24);
 
-  const autoMaps = await readAutoMaps(); // 🤖 generated coverage maps (sig-cached)
   // ── Section 3: vetting scorecard / tier / coverage (derived, read-only) ──
   const touchRows = await db.buyerTouch.findMany({
     where: { buyerId: { in: vettedRows.map((r) => r.id) } },

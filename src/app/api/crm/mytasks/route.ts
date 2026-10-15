@@ -13,15 +13,16 @@ export async function GET() {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return NextResponse.json({ error: "no access" }, { status: 403 });
-  const today = new Date().toISOString().slice(0, 10);
-  const cutoff = `${today}T23:59`; // include timed-today + overdue
+  // Org-local (Pacific) date — the UTC date flips at 5pm PT and was pulling
+  // TOMORROW's tasks into the end-of-day popup (2026-10-15).
+  const orgDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+  const cutoff = `${orgDate}T23:59`; // include timed-today + overdue
   const lead = isLeadership(me);
   const [mine, leadTasks] = await Promise.all([
     db.crmTask.findMany({ where: { doneAt: null, assignedTo: { equals: me!.name, mode: "insensitive" }, due: { not: "", lte: cutoff } }, select: { id: true, title: true, due: true }, orderBy: { due: "asc" }, take: 50 }),
     lead ? db.crmTask.findMany({ where: { doneAt: null, assignedTo: LEADERSHIP_ASSIGNEE, due: { not: "", lte: cutoff } }, select: { id: true, title: true, due: true }, orderBy: { due: "asc" }, take: 50 }) : Promise.resolve([]),
   ]);
   // Shift-end instant (computed on the org-local date) → when the EOD popup fires.
-  const orgDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
   const endAt = shiftEndAt(orgDate, "America/Los_Angeles", me!.name);
   return NextResponse.json({
     who: me!.name.split(" ")[0],

@@ -169,10 +169,16 @@ export async function signOut() {
  */
 export async function saveDay(formData: FormData) {
   const date = String(formData.get("date") ?? "");
-  const enteredBy = String(formData.get("enteredBy") ?? "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new Error("Invalid date");
   }
+  // Who's saving comes from the session, not the form (2026-10-15): a rep can
+  // only write their own card (or team-scope rows); managers can write anyone's.
+  // Mirrors the /entry page gate (canEditOthers = isManager).
+  const me = await getCurrentUser();
+  if (!me) return;
+  const enteredBy = me.name || String(formData.get("enteredBy") ?? "");
+  const canWriteFor = (userId: string | null) => isManager(me) || userId === null || userId === me.id;
 
   const kpis = await db.kpi.findMany({ where: { active: true } });
   const unitById = new Map(kpis.map((k) => [k.id, k.unit as Unit]));
@@ -188,6 +194,7 @@ export async function saveDay(formData: FormData) {
     const unit = unitById.get(kpiId);
     if (!unit) continue;
     const userId = userIdRaw ? userIdRaw : null;
+    if (!canWriteFor(userId)) continue;
     const value = fromInput(unit, String(raw));
 
     const existing = await db.entry.findFirst({ where: { kpiId, userId, date } });
@@ -244,10 +251,14 @@ function revalidateKpiViews() {
 export async function autoSaveEntry(formData: FormData) {
   const date = String(formData.get("date") ?? "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-  const enteredBy = String(formData.get("enteredBy") ?? "");
   const kpiId = String(formData.get("kpiId") ?? "");
   const userId = String(formData.get("userId") ?? "") || null;
   if (!kpiId) return;
+  // Same ownership rule as saveDay: session decides who you can write for.
+  const me = await getCurrentUser();
+  if (!me) return;
+  if (!(isManager(me) || userId === null || userId === me.id)) return;
+  const enteredBy = me.name || String(formData.get("enteredBy") ?? "");
   const kpi = await db.kpi.findUnique({ where: { id: kpiId }, select: { unit: true } });
   if (!kpi) return;
   const value = fromInput(kpi.unit as Unit, String(formData.get("value") ?? ""));

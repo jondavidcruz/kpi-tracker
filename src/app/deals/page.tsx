@@ -32,6 +32,8 @@ const STATUSES = [
 const inputCls =
   "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lblCls = "block text-[11px] font-semibold text-slate-500 mb-0.5";
+// Long per-deal lists (sends, ranked buyers) show this many, rest behind "show more".
+const LIST_CAP = 10;
 
 export default async function DealsPage({
   searchParams,
@@ -39,17 +41,16 @@ export default async function DealsPage({
   searchParams: Promise<{ saved?: string; closed?: string; err?: string; cascade?: string; sheet?: string }>;
 }) {
   const sp = await searchParams;
-  const settings = await getSettings();
+  const [settings, deals, reps, me] = await Promise.all([getSettings(), getActiveDeals(), getActiveReps(), getCurrentUser()]);
   const today = todayStr(settings.orgTimezone);
-  const deals = await getActiveDeals();
-  const reps = await getActiveReps();
-  const me = await getCurrentUser();
   const canClose = !!me && (isManager(me) || me.position === "dispositions");
   // Markets & Buyers: surface vetted buyers whose target areas match each deal's address.
   // Read-only — REI Reply stays the CRM; this is just a "who do we already know here?" hint.
   const mktAccess = canAccessMarketing(me);
   // Vetted buyers only — JV partners (type "jv_partner") are managed separately on /marketing, not matched here.
-  const buyers = mktAccess ? (await db.marketContact.findMany({ where: { archivedAt: null }, orderBy: { sortOrder: "asc" } })).filter((b) => b.type !== "jv_partner") : [];
+  // Same gate the auto-cascade uses (cascade.ts): vetted/active, not blacklisted —
+  // so what's ranked on screen is exactly what the robot would email.
+  const buyers = mktAccess ? (await db.marketContact.findMany({ where: { archivedAt: null, blacklistedAt: null, vetStage: { in: ["vetted", "active"] } }, orderBy: { sortOrder: "asc" } })).filter((b) => b.type !== "jv_partner") : [];
   const cascade = mktAccess ? await readCascade() : {};
   // Phase 7: every send + response per deal (feeds the buyer track record)
   const sendRows = mktAccess && deals.length
@@ -338,10 +339,11 @@ export default async function DealsPage({
         </Card>
       )}
 
-      {/* Add a deal (compact) */}
-      <Card className="p-5">
-        <h3 className="mb-3 text-sm font-bold text-slate-700">+ Add a deal</h3>
-        <form action={saveDeal} className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Add a deal (collapsed — opens itself only when the board is empty) */}
+      <Card className="p-4">
+        <details open={deals.length === 0}>
+        <summary className="cursor-pointer text-sm font-bold text-slate-700">+ Add a deal</summary>
+        <form action={saveDeal} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <input name="address" placeholder="Property address *" className={`${inputCls} sm:col-span-2`} required />
           <select name="status" defaultValue="under_contract" className={inputCls}>
             {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
@@ -358,6 +360,7 @@ export default async function DealsPage({
             Add deal
           </button>
         </form>
+        </details>
       </Card>
 
       {/* Deal cards (full detail + aging) */}
@@ -407,6 +410,75 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
   const isLive = !["dead", "closed"].includes(deal.status);
   const aging = analyzeDeal(deal, today);
   const defaultLead = /ppl/i.test(deal.source) ? "ppl" : "cold_call";
+
+  // One send row — reused by the capped list and its "show older" fold (Apple pass 2026-10-15).
+  const renderSend = (sd: SendRow) => (
+    <form key={sd.id} action={updateDealSendAction} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-white p-1.5 text-xs ring-1 ring-violet-100">
+      <input type="hidden" name="sendId" value={sd.id} />
+      <span className="font-semibold text-slate-800">{sd.buyer.name}</span>
+      {sd.buyer.blacklistedAt && <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-white">⛔</span>}
+      <span className="text-[10px] text-slate-400">w{sd.wave} · {sd.channel} · {new Date(sd.sentAt).toLocaleDateString()}</span>
+      <select name="outcome" defaultValue={sd.outcome} className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]">
+        <option value="">— outcome —</option>
+        <option value="no_reply">no reply</option>
+        <option value="pass">pass</option>
+        <option value="offer">offer</option>
+        <option value="loi">LOI</option>
+        <option value="closed">closed ✅</option>
+      </select>
+      <input name="offerAmount" defaultValue={sd.offerAmount ?? ""} placeholder="offer $" className="w-20 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
+      <select name="passReason" defaultValue={sd.passReason} className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]">
+        <option value="">pass reason…</option>
+        <option value="price">price</option>
+        <option value="acres">acres</option>
+        <option value="area">area</option>
+        <option value="timing">timing</option>
+        <option value="type">type</option>
+        <option value="other">other</option>
+      </select>
+      <input name="note" defaultValue={sd.note} placeholder="note" className="w-28 flex-1 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
+      <button className="rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-violet-700">Save</button>
+    </form>
+  );
+
+  const renderMatch = (m: BuyerMatch) => {
+    const reach = [m.phone, m.email, m.igHandle].filter(Boolean).join("  ·  ");
+    const kind = /develop|custom|remodel|build/i.test(m.type) ? "Developer" : m.category === "luxury" ? "Developer" : "Flipper";
+    const status = cascadeStatus[m.id];
+    const isNext = m.id === nextId;
+    return (
+      <div key={m.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg p-1.5 text-xs ${isNext ? "bg-white ring-1 ring-emerald-300" : status === "passed" ? "opacity-50" : ""}`}>
+        <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${isNext ? "bg-emerald-600 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}>{m.rank}</span>
+        <span className="font-semibold text-slate-800">{m.name}</span>
+        {heatBadges[m.id] && (
+          <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700" title={`${heatBadges[m.id].pct}% of our sends got a response${heatBadges[m.id].fast ? ", usually within 24h" : ""}${heatBadges[m.id].offers ? ` · ${heatBadges[m.id].offers} offer${heatBadges[m.id].offers > 1 ? "s" : ""} made` : ""}`}>
+            🔥 {heatBadges[m.id].pct}%{heatBadges[m.id].fast ? " ⚡" : ""}{heatBadges[m.id].offers ? ` · ${heatBadges[m.id].offers} offer${heatBadges[m.id].offers > 1 ? "s" : ""}` : ""}
+          </span>
+        )}
+        {isNext && <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">👑 Send next</span>}
+        {status === "sent" && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">✓ sent</span>}
+        {status === "passed" && <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">passed</span>}
+        <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{kind}</span>
+        {m.reasons.map((r, i) => (
+          <span key={i} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200">{r}</span>
+        ))}
+        {reach && <span className="text-brand-navy">{reach}</span>}
+        {/* Cascade controls */}
+        {isNext && (
+          <span className="flex items-center gap-1">
+            {m.email && (
+              <form action={sendCascadeOffer}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><button className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700">📧 Send offer</button></form>
+            )}
+            <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="sent" /><button className="rounded-md bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-300" title="I sent it myself">Mark sent</button></form>
+            <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="passed" /><button className="rounded-md px-2 py-0.5 text-[10px] font-semibold text-slate-400 hover:text-red-600" title="They passed — go to next">Passed →</button></form>
+          </span>
+        )}
+        {(status === "sent" || status === "passed") && (
+          <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="clear" /><button className="text-[10px] text-slate-300 hover:text-slate-600">undo</button></form>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Card className="p-4">
@@ -532,34 +604,13 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
           </summary>
           <p className="mt-1 text-[11px] text-violet-700">Every blast lands here automatically. When a buyer answers, set the outcome — offers + passes build each buyer&apos;s track record (lowballer / tire-kicker flags, hit rate).</p>
           <div className="mt-2 space-y-1.5">
-            {sends.map((sd) => (
-              <form key={sd.id} action={updateDealSendAction} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-white p-1.5 text-xs ring-1 ring-violet-100">
-                <input type="hidden" name="sendId" value={sd.id} />
-                <span className="font-semibold text-slate-800">{sd.buyer.name}</span>
-                {sd.buyer.blacklistedAt && <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-white">⛔</span>}
-                <span className="text-[10px] text-slate-400">w{sd.wave} · {sd.channel} · {new Date(sd.sentAt).toLocaleDateString()}</span>
-                <select name="outcome" defaultValue={sd.outcome} className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]">
-                  <option value="">— outcome —</option>
-                  <option value="no_reply">no reply</option>
-                  <option value="pass">pass</option>
-                  <option value="offer">offer</option>
-                  <option value="loi">LOI</option>
-                  <option value="closed">closed ✅</option>
-                </select>
-                <input name="offerAmount" defaultValue={sd.offerAmount ?? ""} placeholder="offer $" className="w-20 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
-                <select name="passReason" defaultValue={sd.passReason} className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]">
-                  <option value="">pass reason…</option>
-                  <option value="price">price</option>
-                  <option value="acres">acres</option>
-                  <option value="area">area</option>
-                  <option value="timing">timing</option>
-                  <option value="type">type</option>
-                  <option value="other">other</option>
-                </select>
-                <input name="note" defaultValue={sd.note} placeholder="note" className="w-28 flex-1 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
-                <button className="rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-violet-700">Save</button>
-              </form>
-            ))}
+            {sends.slice(0, LIST_CAP).map(renderSend)}
+            {sends.length > LIST_CAP && (
+              <details className="rounded-lg bg-white/60 p-1.5">
+                <summary className="cursor-pointer text-[11px] font-semibold text-violet-700">Show {sends.length - LIST_CAP} older send{sends.length - LIST_CAP === 1 ? "" : "s"}</summary>
+                <div className="mt-1.5 space-y-1.5">{sends.slice(LIST_CAP).map(renderSend)}</div>
+              </details>
+            )}
             {sends.length > 0 && canBlacklist && (
               <form action={toggleBlacklistAction} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-1.5 text-xs ring-1 ring-violet-100">
                 <span className="text-[11px] font-bold text-slate-500">⛔ Blacklist a buyer on this deal:</span>
@@ -630,44 +681,13 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
             )}
           </div>
           <div className="mt-2 space-y-1.5">
-            {matches.map((m) => {
-              const reach = [m.phone, m.email, m.igHandle].filter(Boolean).join("  ·  ");
-              const kind = /develop|custom|remodel|build/i.test(m.type) ? "Developer" : m.category === "luxury" ? "Developer" : "Flipper";
-              const status = cascadeStatus[m.id];
-              const isNext = m.id === nextId;
-              return (
-                <div key={m.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg p-1.5 text-xs ${isNext ? "bg-white ring-1 ring-emerald-300" : status === "passed" ? "opacity-50" : ""}`}>
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${isNext ? "bg-emerald-600 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}>{m.rank}</span>
-                  <span className="font-semibold text-slate-800">{m.name}</span>
-                  {heatBadges[m.id] && (
-                    <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700" title={`${heatBadges[m.id].pct}% of our sends got a response${heatBadges[m.id].fast ? ", usually within 24h" : ""}${heatBadges[m.id].offers ? ` · ${heatBadges[m.id].offers} offer${heatBadges[m.id].offers > 1 ? "s" : ""} made` : ""}`}>
-                      🔥 {heatBadges[m.id].pct}%{heatBadges[m.id].fast ? " ⚡" : ""}{heatBadges[m.id].offers ? ` · ${heatBadges[m.id].offers} offer${heatBadges[m.id].offers > 1 ? "s" : ""}` : ""}
-                    </span>
-                  )}
-                  {isNext && <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">👑 Send next</span>}
-                  {status === "sent" && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">✓ sent</span>}
-                  {status === "passed" && <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">passed</span>}
-                  <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{kind}</span>
-                  {m.reasons.map((r, i) => (
-                    <span key={i} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200">{r}</span>
-                  ))}
-                  {reach && <span className="text-brand-navy">{reach}</span>}
-                  {/* Cascade controls */}
-                  {isNext && (
-                    <span className="flex items-center gap-1">
-                      {m.email && (
-                        <form action={sendCascadeOffer}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><button className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700">📧 Send offer</button></form>
-                      )}
-                      <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="sent" /><button className="rounded-md bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-300" title="I sent it myself">Mark sent</button></form>
-                      <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="passed" /><button className="rounded-md px-2 py-0.5 text-[10px] font-semibold text-slate-400 hover:text-red-600" title="They passed — go to next">Passed →</button></form>
-                    </span>
-                  )}
-                  {(status === "sent" || status === "passed") && (
-                    <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="clear" /><button className="text-[10px] text-slate-300 hover:text-slate-600">undo</button></form>
-                  )}
-                </div>
-              );
-            })}
+            {matches.slice(0, LIST_CAP).map(renderMatch)}
+            {matches.length > LIST_CAP && (
+              <details className="rounded-lg bg-white/60 p-1.5">
+                <summary className="cursor-pointer text-[11px] font-semibold text-emerald-700">Show {matches.length - LIST_CAP} more ranked buyer{matches.length - LIST_CAP === 1 ? "" : "s"}</summary>
+                <div className="mt-1.5 space-y-1.5">{matches.slice(LIST_CAP).map(renderMatch)}</div>
+              </details>
+            )}
           </div>
           <p className="mt-2 text-[11px] text-slate-400">
             Vetted buyers only; dead/on-hold hidden. Sharpen each buyer&apos;s target areas + price box in Markets &amp; Buyers to tighten the ranking.

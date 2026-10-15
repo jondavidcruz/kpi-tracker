@@ -66,9 +66,18 @@ export default function DayTasksModal() {
   }, [data?.shiftEndIso, load]);
 
   const complete = async (id: string) => {
+    // Optimistic — but put the task back if the server says no (403 "not yours" / 500),
+    // otherwise a tick that silently failed looks done until tomorrow's popup.
+    const prevMine = mine, prevLead = lead;
     setMine((xs) => xs.filter((t) => t.id !== id));
     setLead((xs) => xs.filter((t) => t.id !== id));
-    try { await fetch("/api/crm/task-done", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }); } catch {}
+    try {
+      const r = await fetch("/api/crm/task-done", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      if (!r.ok) throw new Error(String(r.status));
+    } catch {
+      setMine(prevMine); setLead(prevLead);
+      alert("Couldn't mark that task done — try again from the Tasks page.");
+    }
   };
 
   const close = () => {

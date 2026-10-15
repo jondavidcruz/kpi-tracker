@@ -84,8 +84,17 @@ export async function setDealSendOutcome(
   patch: { outcome?: string; offerAmount?: number | null; passReason?: string; note?: string },
   actor?: string,
 ): Promise<void> {
+  // respondedAt = when the buyer FIRST answered. Keep it when a save only edits
+  // the note/offer, clear it for "" / "no reply" (no reply is not a reply — it
+  // was inflating the 🔥 heat % and the ⚡ fast badge, 2026-10-15).
+  let respondedAt: Date | null | undefined;
+  if (patch.outcome !== undefined) {
+    const prev = await db.dealSend.findUnique({ where: { id: sendId }, select: { outcome: true, respondedAt: true } });
+    const isReply = !!patch.outcome && patch.outcome !== "no_reply";
+    respondedAt = !isReply ? null : prev?.respondedAt && prev.outcome && prev.outcome !== "no_reply" ? prev.respondedAt : new Date();
+  }
   const row = await db.dealSend.update({ where: { id: sendId }, data: {
-    ...(patch.outcome !== undefined ? { outcome: patch.outcome, respondedAt: patch.outcome ? new Date() : null } : {}),
+    ...(patch.outcome !== undefined ? { outcome: patch.outcome, respondedAt } : {}),
     ...(patch.offerAmount !== undefined ? { offerAmount: patch.offerAmount } : {}),
     ...(patch.passReason !== undefined ? { passReason: patch.passReason } : {}),
     ...(patch.note !== undefined ? { note: patch.note } : {}),

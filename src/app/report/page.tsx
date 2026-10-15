@@ -31,7 +31,8 @@ export default async function ReportPage({
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
-  const today = sp.date ?? todayStr(settings.orgTimezone);
+  // Guard ?date= like the dashboard does — a malformed value threw in toISOString() and blanked the page.
+  const today = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayStr(settings.orgTimezone);
   // Day / week / month view; ?prev=1 shows the previous one (yesterday / last week / last month).
   // Default = DAY (Jon 2026-10-08): the report opens on today's numbers; week/month are a click away.
   const range = sp.range === "week" || sp.range === "month" ? sp.range : "day";

@@ -88,7 +88,7 @@ export default async function EntryPage({
   // ✅ EOD task accountability (Jon 2026-10-08): open tasks due today/overdue
   // stare the rep in the face on their KPI screen — no more forgotten tasks.
   const myOpenTasks = rep
-    ? await db.crmTask.findMany({ where: { assignedTo: { equals: rep.name, mode: "insensitive" }, doneAt: null, due: { not: "", lte: date } }, orderBy: { due: "asc" }, take: 15 })
+    ? await db.crmTask.findMany({ where: { assignedTo: { equals: rep.name, mode: "insensitive" }, doneAt: null, due: { not: "", lte: `${date}T23:59` } }, orderBy: { due: "asc" }, take: 15 })
     : [];
 
   // Internet speed gets its own prominent test card (below), not a plain field.
@@ -129,7 +129,7 @@ export default async function EntryPage({
     mutedKpis = mutedKpis.filter((k) => !isKpiHiddenForRep(rep.name, k.key));
   }
 
-  // Goals are per-rep now (e.g. Nick 60 dials vs Michelle 140), so any
+  // Goals are per-rep now (e.g. Nick 70 dials vs Michelle 140), so any
   // "Goal 140/day"-style copy baked into a shared definition is wrong for
   // someone — strip it and let the personalized goal chip speak instead.
   const stripGoalCopy = (s: string) => s.replace(/\s*\(?goal:?\s[^.;)]*\d[^.;)]*\)?[.;]?/gi, "").replace(/\s{2,}/g, " ").trim();

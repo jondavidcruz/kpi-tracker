@@ -76,18 +76,32 @@ export async function sendRound(dealId: string): Promise<{ sent: number; done: b
   if (!deal) return { sent: 0, done: true };
   const next = ranked.filter((m) => !dc.sent[m.id] && m.email).slice(0, ROUND_SIZE);
   if (next.length === 0) { dc.status = "done"; dc.lastAt = new Date().toISOString(); store[dealId] = dc; await writeAuto(store); return { sent: 0, done: true }; }
+  let sentNow = 0;
   for (const m of next) {
     const claim = `${APP_URL}/api/cascade?d=${dealId}&b=${m.id}&a=claim&s=${sign(dealId, m.id, "claim")}`;
     const pass = `${APP_URL}/api/cascade?d=${dealId}&b=${m.id}&a=pass&s=${sign(dealId, m.id, "pass")}`;
     // reply-to Jon's inbox so an interested buyer's reply reaches a human, not the robot sender
-    await sendEmailTo([m.email], `Off-market deal — ${deal.address}`, offerHtml(deal, m.name, claim, pass), undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com");
+    const err: { msg?: string } = {};
+    const ok = await sendEmailTo([m.email], `Off-market deal — ${deal.address}`, offerHtml(deal, m.name, claim, pass), undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com", err);
+    if (!ok) {
+      // Don't record a send that never left (it was counting as "emailed" and
+      // building a DealSend row even when the mail provider rejected it).
+      console.error(`[cascade] email to ${m.email} failed for deal ${dealId}: ${err.msg ?? "unknown"}`);
+      continue;
+    }
+    sentNow++;
     dc.sent[m.id] = "sent";
     // Phase 7: every send is a DealSend row — the buyer's track record builds itself.
     await logDealSend({ dealId, buyerId: m.id, channel: "email", wave: dc.round + 1, floorPrice: deal.contractPrice, askPrice: deal.askingPrice, actor: "cascade" }).catch(() => {});
   }
+  if (sentNow === 0) {
+    // Nothing went out (mail config down?) — leave the round as-is so the next cron retries the same buyers.
+    dc.lastAt = new Date().toISOString(); store[dealId] = dc; await writeAuto(store);
+    return { sent: 0, done: false };
+  }
   dc.round += 1; dc.lastAt = new Date().toISOString(); dc.status = "armed";
   store[dealId] = dc; await writeAuto(store);
-  return { sent: next.length, done: false };
+  return { sent: sentNow, done: false };
 }
 
 /** Arm (or re-arm) a deal and immediately send round 1. */
