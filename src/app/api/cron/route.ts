@@ -1391,6 +1391,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, moved, total: open.length });
   }
 
+  // ✉️ Remove email(s) from the admin report recipient lists (?rmrecipients=1&emails=a@x,b@y)
+  // — Jon 2026-10-15: drop his + Marie's personal emails from the daily KPI "Daily Results".
+  if (url.searchParams.get("rmrecipients") === "1") {
+    const drop = (url.searchParams.get("emails") ?? "").split(/[,;\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (!drop.length) return NextResponse.json({ ok: false, error: "no emails" });
+    const row = await db.settings.findUnique({ where: { id: 1 } });
+    if (!row) return NextResponse.json({ ok: false, error: "no settings" });
+    const clean = (v: string | null | undefined) => (v ?? "").split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean).filter((e) => !drop.includes(e.toLowerCase())).join(", ");
+    const weeklyEmailRecipients = clean(row.weeklyEmailRecipients);
+    const alertEmailRecipients = clean(row.alertEmailRecipients);
+    await db.settings.update({ where: { id: 1 }, data: { weeklyEmailRecipients, alertEmailRecipients } });
+    return NextResponse.json({ ok: true, removed: drop, weeklyEmailRecipients, alertEmailRecipients });
+  }
+
   // 🕒 Force the org/schedule timezone to Pacific (Jon 2026-10-15: "all schedule
   // times in PST, going off California, not EST"). Updates the live Settings row so
   // every shift/timecard/availability calc (which read settings.orgTimezone) is PT.

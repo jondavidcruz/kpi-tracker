@@ -21,9 +21,13 @@ export default async function NextUpPage({ searchParams }: { searchParams: Promi
   const today = todayStr(settings.orgTimezone);
   const canViewAll = canManageAllLeads(me!);
   const sp = await searchParams;
+  // Who's queue (Jon 2026-10-15): managers can view Everyone, Me, or any rep —
+  // same filters as the CRM, up top-left so it's viewable per person.
+  const reps = canViewAll ? await db.user.findMany({ where: { active: true, position: { in: ["acquisitions", "cc_lm", "dispositions"] } }, select: { name: true }, orderBy: { name: "asc" } }) : [];
   const everyone = canViewAll && sp.who === "all";
+  const who = canViewAll ? (sp.who === "all" ? "" : (sp.who ?? me!.name)) : me!.name;
   const comms = await commsFor(me!);
-  const ownerWhere = everyone ? {} : { assignedTo: { equals: me!.name, mode: "insensitive" as const } };
+  const ownerWhere = everyone ? {} : { assignedTo: { equals: who, mode: "insensitive" as const } };
 
   // candidate opps: new-stage + due follow-ups + stalled working deals (bounded)
   const staleCut = new Date(Date.now() - 3 * 86400000);
@@ -76,14 +80,16 @@ export default async function NextUpPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-4">
-      <SectionTitle title="⚡ Next Up" subtitle="Who to work next — newest uncontacted leads first, sellers who texted back, then overdue follow-ups. Clear the top of the list and deals sign faster." accent="bg-brand-gold"
-        right={canViewAll ? (
-          <div className="flex gap-1">
-            <Link href="/crm/next" className={`rounded-full px-3 py-1.5 text-xs font-bold ${!everyone ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>Mine</Link>
-            <Link href="/crm/next?who=all" className={`rounded-full px-3 py-1.5 text-xs font-bold ${everyone ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>Everyone</Link>
-          </div>
-        ) : undefined}
-      />
+      <SectionTitle title="⚡ Next Up" subtitle="Who to work next — newest uncontacted leads first, sellers who texted back, then overdue follow-ups. Clear the top of the list and deals sign faster." accent="bg-brand-gold" />
+      {canViewAll && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Link href="/crm/next?who=all" className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${everyone ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Everyone</Link>
+          <Link href="/crm/next" className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === me!.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Me</Link>
+          {reps.filter((r) => r.name !== me!.name).map((r) => (
+            <Link key={r.name} href={`/crm/next?who=${encodeURIComponent(r.name)}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{r.name.split(" ")[0]}</Link>
+          ))}
+        </div>
+      )}
       <Section title="💬 Texted us back — reply now" hint="Seller replied and is waiting" items={repliedList} tone="red" reason={() => "replied"} subFn={() => "Hot — they're engaged"} />
       <Section title="🔥 New leads to call" hint="Speed-to-lead — call within minutes" items={uncontacted} tone="amber" reason={(o) => { const h = o.createdAt ? hrsAgo(o.createdAt) : 0; return h < 1 ? "brand new" : `${h}h waiting`; }} subFn={(o) => `In the system ${o.createdAt ? hrsAgo(o.createdAt) : 0}h, never called`} />
       <Section title="⏰ Follow-ups due" hint="You said you'd follow up by today" items={overdue} tone="sky" reason={() => "follow-up due"} subFn={(o) => `Follow-up was due ${o.nextFollowUp ?? ""}`} />
