@@ -1313,6 +1313,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, user: kyle.name, position: "acquisitions", mirroredFrom, note, goals, visiblePages: visible });
   }
 
+  // 🏛 Migrate existing systemic/leadership tasks off Jon's personal list onto the
+  // shared "🏛 Leadership" queue (Jon 2026-10-15) so Jon, Enrico, Viktoriia & Marie
+  // all see them. One-time; idempotent (re-running just re-matches any stragglers).
+  if (url.searchParams.get("leadtasks") === "1") {
+    const { LEADERSHIP_ASSIGNEE } = await import("@/lib/auth");
+    const open = await db.crmTask.findMany({ where: { doneAt: null, createdBy: "flag-watch", OR: [{ title: { startsWith: "📉 Systemic KPI miss" } }, { title: { startsWith: "🔁 Copy-paste flag reasons" } }] }, select: { id: true, assignedTo: true } });
+    let moved = 0;
+    for (const t of open) {
+      if (t.assignedTo !== LEADERSHIP_ASSIGNEE) { await db.crmTask.update({ where: { id: t.id }, data: { assignedTo: LEADERSHIP_ASSIGNEE } }); moved++; }
+    }
+    return NextResponse.json({ ok: true, moved, total: open.length });
+  }
+
   // 📎 Signed-doc puller (?pdpull=1, daily cron): PandaDoc completed docs from
   // the last 7 days → signed PDF saved to the Shared Drive "Deal Files"
   // folder → 📎 file event on the matching OPPORTUNITY (metadata.oppId from
@@ -1894,10 +1907,12 @@ export async function GET(request: Request) {
     });
     let filled = 0;
     const jonTasks: string[] = [];
-    const jon = await db.user.findFirst({ where: { active: true, name: { startsWith: "Jon", mode: "insensitive" } }, select: { name: true } });
+    // Systemic KPI/leadership items go to the SHARED "🏛 Leadership" queue (Jon,
+    // Enrico, Viktoriia, Marie all see them) — not just Jon (Jon 2026-10-15).
+    const { LEADERSHIP_ASSIGNEE } = await import("@/lib/auth");
     const mkJonTask = async (title: string) => {
       const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } });
-      if (!dup) { await db.crmTask.create({ data: { oppId: "", contactId: "", title, due: todayStr2, assignedTo: jon?.name ?? "Jon Cruz", createdBy: "flag-watch" } }); jonTasks.push(title); }
+      if (!dup) { await db.crmTask.create({ data: { oppId: "", contactId: "", title, due: todayStr2, assignedTo: LEADERSHIP_ASSIGNEE, createdBy: "flag-watch" } }); jonTasks.push(title); }
     };
     for (const a of open) {
       if (!a.user) continue;

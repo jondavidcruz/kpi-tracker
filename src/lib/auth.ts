@@ -84,6 +84,16 @@ export function isCSuitePerson(user: { name?: string } | null): boolean {
   return CSUITE_PEOPLE.has(firstNameOf(user));
 }
 
+// Leadership = the C-suite three PLUS Marie (operations). They share the
+// "🏛 Leadership" task queue (systemic KPI misses, etc.) so visibility isn't
+// just on Jon (Jon 2026-10-15). The shared-assignee token on those tasks.
+const LEADERSHIP_PEOPLE = new Set(["jon", "jonathan", "enrico", "viktoriia", "marie"]);
+export const LEADERSHIP_ASSIGNEE = "🏛 Leadership";
+/** Is this person on the leadership team (C-suite + Marie)? */
+export function isLeadership(user: { name?: string } | null): boolean {
+  return LEADERSHIP_PEOPLE.has(firstNameOf(user));
+}
+
 /** Can see PAY ($ rates, gross, bonuses, totals). Locked to Jon/Enrico/Viktoriia. */
 export function canAccessPayroll(user: User | null): boolean {
   return isCSuitePerson(user);

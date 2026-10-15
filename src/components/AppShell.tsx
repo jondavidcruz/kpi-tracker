@@ -159,8 +159,16 @@ export default async function AppShell({ children }: { children: React.ReactNode
       <GlobalPhone me={me} />
       <GlobalBell me={me} />
       <GlobalDayPill me={me} />
+      <GlobalDayTasks me={me} />
     </div>
   );
+}
+
+async function GlobalDayTasks({ me }: { me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }) {
+  // Start-of-day + end-of-day task popups for anyone with task access.
+  const hasTasks = isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? "");
+  if (!hasTasks) return null;
+  try { const { default: DayTasksModal } = await import("./DayTasksModal"); return <DayTasksModal />; } catch { return null; }
 }
 
 async function GlobalBell({ me }: { me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }) {
