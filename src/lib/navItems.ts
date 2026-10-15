@@ -51,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
   ] },
   { group: "Coaching", items: [
     { href: "/training", label: "Training Portal", gate: "training" },
+    { href: "/tutorials", label: "Loom Tutorials", gate: "all" },
     { href: "/ai-training", label: "AI Training", gate: "all" },
     { href: "/onboarding", label: "Onboarding", gate: "manager" },
     { href: "/alerts", label: "Alerts", gate: "manager" },
@@ -101,7 +102,7 @@ export const NAV_GROUPS: NavGroup[] = [
 export const NEW_REP_ALLOWED = new Set<string>([
   "/process", "/underwriting", "/schedule", "/rewards", "/culture",   // Overview
   "/entry", "/report",                                                 // Performance
-  "/ai-training", "/call-scoring", "/scripts", "/glossary",            // Coaching
+  "/ai-training", "/call-scoring", "/scripts", "/glossary", "/tutorials", // Coaching
   "/rocks", "/vto", "/team-360",                                       // EOS
   "/tickets", "/ai-champion",                                          // Requests & Support (no Software & Logins by default — Jon 2026-08-26)
 ]);
