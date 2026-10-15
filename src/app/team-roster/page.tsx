@@ -4,6 +4,7 @@ import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { getRevenueByUser, tierFor, REVENUE_LADDER } from "@/lib/roster-revenue";
 import { saveRevAdjustAction } from "@/app/actions";
+import { addTeamMemberAction, sendWelcomeEmailAction } from "./onboard-actions";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
 import { readCommissionPlans } from "@/lib/commissions";
 import { db } from "@/lib/db";
@@ -34,7 +35,7 @@ function ageFrom(birthday: string, today: string): string {
   return String(age);
 }
 
-export default async function TeamRosterPage({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string }> }) {
+export default async function TeamRosterPage({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string; added?: string; welcomed?: string; welcomeerr?: string; adderr?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessCSuite(me)) {
     return (
@@ -82,6 +83,33 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
         <p className="-mt-1 text-xs font-semibold text-violet-700">👁️ Private — only you (Jon) can open this. Sections marked with 🔒 in the sidebar are owner-only.</p>
       </div>
 
+      {/* ➕ One-step add (Jon 2026-10-15): create the account (LOCKED onboarding mode)
+          + roster card in one go — no more bouncing to Admin → Team + Onboarding. */}
+      <Card className="border-l-4 border-emerald-500 p-4">
+        <div className="mb-1 text-sm font-extrabold text-slate-800">➕ Add a team member</div>
+        <div className="mb-2 text-[11px] text-slate-500">Creates their War Room account <b>locked to newbie basics</b> (onboarding) + their roster card below, in one step. They sign in with a magic link to their email — no password to set.</div>
+        <form action={addTeamMemberAction} className="flex flex-wrap items-end gap-2">
+          {(() => { const fld = "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"; return <>
+          <label className="flex flex-col"><span className={labelCls}>Full name</span><input name="name" required placeholder="Kyle Brown" className={`${fld} w-44`} /></label>
+          <label className="flex flex-col"><span className={labelCls}>Email (personal Gmail)</span><input name="email" type="email" required placeholder="kyle@gmail.com" className={`${fld} w-56`} /></label>
+          <label className="flex flex-col"><span className={labelCls}>Department</span>
+            <select name="position" className={`${fld} w-40`} defaultValue="acquisitions">
+              <option value="acquisitions">Acquisitions</option>
+              <option value="dispositions">Dispositions</option>
+              <option value="cc_lm">Cold Call / LM</option>
+            </select>
+          </label>
+          <label className="flex flex-col"><span className={labelCls}>Role</span>
+            <select name="role" className={`${fld} w-32`} defaultValue="rep">
+              <option value="rep">Rep</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label></>; })()}
+          <button className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700">Create account + card</button>
+        </form>
+      </Card>
+
       {/* 🎯 Commission goals (Jon 2026-10-08): each rep's monthly target +
           their contract structure; MTD math activates once structures are set. */}
       <Card className="p-4">
@@ -103,6 +131,10 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
       </Card>
 
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
+      {sp.added && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ {decodeURIComponent(sp.added)} added — account created in locked onboarding mode + roster card below. Upload their signed agreement on their row, then hit “Send welcome email.”</div>}
+      {sp.welcomed && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✉️ Welcome email sent to {decodeURIComponent(sp.welcomed)}.</div>}
+      {sp.welcomeerr && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">Welcome email didn’t send: {decodeURIComponent(sp.welcomeerr)}</div>}
+      {sp.adderr && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">Add failed — name and email are required.</div>}
       {sp.err && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">{sp.err === "size" ? "That file is over 15MB — compress it and try again." : "Pick a file to upload."}</div>}
 
       {owner && (
@@ -238,6 +270,15 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                 {!isOwner && <label className="sm:col-span-3"><span className={labelCls}>Performance & promotion notes</span><textarea name="performance" defaultValue={p?.performance ?? ""} rows={2} className={inputCls} /></label>}
                 <div className="sm:col-span-3"><button className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">Save</button></div>
               </form>
+
+              {/* ✉️ Role-specific welcome email — logins, systems, pay/bonus schedule */}
+              {!isOwner && (
+                <form action={sendWelcomeEmailAction} className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
+                  <input type="hidden" name="userId" value={u.id} />
+                  <button className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:opacity-90">✉️ Send welcome email</button>
+                  <span className="text-[11px] text-slate-400">Emails {u.name.split(" ")[0]} their War Room sign-in, the {positionLabel(u.position)} systems + shared logins, and their pay/bonus schedule.</span>
+                </form>
+              )}
 
               {/* Signed agreements & documents */}
               <div className="mt-4 border-t border-slate-100 pt-3">

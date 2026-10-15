@@ -6,16 +6,18 @@
 // work down the list and come back. No sensitive data — safe to hand off.
 import { useEffect, useMemo, useState } from "react";
 
-type Sys = { name: string; note: string; tag: "required" | "expires" | "free" | "free-self" };
+type Sys = { name: string; note: string; tag: "required" | "expires" | "free" | "free-self" | "training" | "task" };
 const SYSTEMS: Record<string, { label: string; emoji: string; systems: Sys[] }> = {
   acquisitions: {
     label: "Acquisitions", emoji: "🎯",
     systems: [
       { name: "War Room Account", note: "Their login to this app — create it in Admin → Team, assign Acquisitions + Rep. It starts in locked onboarding mode.", tag: "required" },
       { name: "Regrid Account", note: "Land comps / parcel data.", tag: "required" },
-      { name: "REI AI Login", note: "Comps. ⚠️ Shared login EXPIRES Nov 7, 2026 — don't build a long-term process on it.", tag: "expires" },
+      { name: "REI AI Login", note: "Comps. ⚠️ Shared login EXPIRES Nov 7, 2026 — don't build a long-term process on it. Login is in Software & Logins.", tag: "expires" },
       { name: "Propwire Account", note: "Comps — free; they create their own.", tag: "free-self" },
       { name: "Redfin / Zillow", note: "Comps — free public sites, no account needed.", tag: "free" },
+      { name: "Eric Cline Sales Training", note: "members.theericcline.com — complete the sales course. Shared login is in Software & Logins.", tag: "training" },
+      { name: "Write your own sales script", note: "After the Eric Cline training, they write their own script (don't hand them a canned one — they internalize it by writing it).", tag: "task" },
     ],
   },
   dispositions: {
@@ -33,6 +35,8 @@ const TAG: Record<Sys["tag"], { label: string; cls: string }> = {
   expires: { label: "expires Nov 7", cls: "bg-red-100 text-red-700" },
   free: { label: "free · no account", cls: "bg-emerald-100 text-emerald-700" },
   "free-self": { label: "free · they make it", cls: "bg-sky-100 text-sky-700" },
+  training: { label: "training", cls: "bg-violet-100 text-violet-700" },
+  task: { label: "they do it", cls: "bg-amber-100 text-amber-700" },
 };
 
 export default function OnboardingSystemsChecklist() {

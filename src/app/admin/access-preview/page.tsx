@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canAccessCSuite, canTrackTime, isOwner, isCSuitePerson } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canAccessCSuite, canTrackTime, isOwner, isCSuitePerson, ONBOARDING_NAV } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
@@ -56,6 +56,11 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
   const grantable = (gate: NavGate) => roleAllows(gate) || gate === "marketing";
   const availableHrefs = NAV_GROUPS.flatMap((g) => g.items.filter((it) => grantable(it.gate)).map((it) => it.href));
   const can = (it: { href: string; gate: NavGate }) => roleAllows(it.gate) && !hiddenSet.has(it.href);
+  // Onboarding ramp overrides navHidden: the account only shows ONBOARDING_NAV
+  // (learning + basics). So the LIVE preview must factor that in, not just navHidden.
+  const onboardingLock = !!(selected as { onboarding?: boolean }).onboarding;
+  const inOnboarding = (href: string) => ONBOARDING_NAV.some((p) => href === p || href.startsWith(p + "/"));
+  const visibleItem = (it: { href: string; gate: NavGate }) => onboardingLock ? (roleAllows(it.gate) && inOnboarding(it.href)) : can(it);
   const editable = isAdmin(me); // only the owner edits access
 
   // Sensitive-data confirmations — the things you most want to verify.
@@ -155,7 +160,47 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
         )}
       </Card>
 
-      {/* Their menu */}
+      {/* 📱 Live preview — the real sidebar their account renders */}
+      <Card className="p-5">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">📱 Live preview — exactly what {firstName}&apos;s screen shows</span>
+          {onboardingLock && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-700">🔒 Onboarding — locked to training + daily basics until certified</span>}
+        </div>
+        <div className="flex flex-col gap-4 sm:flex-row">
+          {/* sidebar mockup, styled like the real nav */}
+          <div className="w-60 shrink-0 self-start overflow-hidden rounded-xl bg-brand-navy p-3 text-white shadow-lg">
+            <div className="mb-3 px-1 text-sm font-extrabold tracking-tight">🏠 Freedom Offers</div>
+            <div className="space-y-2.5">
+              {NAV_GROUPS.map((g) => {
+                const vis = g.items.filter(visibleItem);
+                if (!vis.length) return null;
+                return (
+                  <div key={g.group}>
+                    <div className="mb-0.5 px-1 text-[9px] font-bold uppercase tracking-wider text-white/40">{g.group}</div>
+                    {vis.map((it) => (
+                      <div key={it.href} className="flex items-center gap-2 rounded-md px-2 py-1 text-[12px] text-white/85">
+                        <span className="h-1.5 w-1.5 rounded-full bg-brand-gold/70" /> {it.label}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {/* what they land on */}
+          <div className="flex-1 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">What they see</div>
+            <div className="mt-1 text-sm text-slate-600">
+              {onboardingLock
+                ? `${firstName} is a brand-new hire locked to the basics — they see only the sections in the sidebar at left (training, scripts, process, enter KPIs, underwriting, their account). Everything else is hidden until you certify them on the Onboarding page.`
+                : `${firstName} sees exactly the sidebar at left and nothing else. Money figures are hidden unless they're a manager (revenue) or C-suite (profit/pay).`}
+            </div>
+            <div className="mt-3 text-[11px] text-slate-400">This mirrors the real left nav their account renders, grouped exactly like the live sidebar. The detailed ✓/✗ breakdown (and why each item is hidden) is below.</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Their menu — detailed ✓/✗ breakdown */}
       <Card className="p-5">
         <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Menu {selected.name.split(" ")[0]} sees</div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
