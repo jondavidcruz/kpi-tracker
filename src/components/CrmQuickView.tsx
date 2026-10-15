@@ -46,7 +46,7 @@ const TABS = [
 const inputCls = "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm";
 const labelCls = "mb-0.5 block text-[11px] font-bold text-slate-500";
 
-export default function CrmQuickView({ stages }: { stages: Array<{ key: string; label: string }> }) {
+export default function CrmQuickView({ stages, pipelineStages }: { stages: Array<{ key: string; label: string }>; pipelineStages?: Record<string, Array<{ key: string; label: string }>> }) {
   const [oppId, setOppId] = useState<string | null>(null);
   const [data, setData] = useState<Payload | null>(null);
   const [tab, setTab] = useState("opp");
@@ -86,9 +86,7 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                 <div className="truncate text-lg font-extrabold tracking-tight text-slate-900">Edit “{d.contact.name}”</div>
                 <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
                   <span className="font-semibold text-slate-400">Pipeline:</span>
-                  <select value={d.pipeline} onChange={(e) => { const pipeline = e.target.value; if (pipeline === d.pipeline) return; setData({ ...d, pipeline }); const fd = new FormData(); fd.set("id", d.id); fd.set("pipeline", pipeline); start(async () => { await setOppPipelineAction(fd); setSaved("✓ Moved — refreshing"); window.location.reload(); }); }} className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-bold text-slate-700">
-                    {(d.pipelines ?? [d.pipeline]).map((pn) => <option key={pn} value={pn}>{pn}</option>)}
-                  </select>
+                  <PipelineMover d={d} pipelineStages={pipelineStages} setSaved={setSaved} />
                 </div>
               </div>
               {saved && <span className="text-xs font-bold text-emerald-600">{saved}</span>}
@@ -154,14 +152,8 @@ export default function CrmQuickView({ stages }: { stages: Array<{ key: string; 
                       <input name="title" defaultValue={d.title} className={inputCls} />
                     </div>
                     <div>
-                      <label className={labelCls}>Pipeline (saves instantly)</label>
-                      <select
-                        value={d.pipeline}
-                        onChange={(e) => { const pipeline = e.target.value; if (pipeline === d.pipeline) return; setData({ ...d, pipeline }); const fd = new FormData(); fd.set("id", d.id); fd.set("pipeline", pipeline); start(async () => { await setOppPipelineAction(fd); setSaved("✓ Moved — refreshing"); window.location.reload(); }); }}
-                        className={inputCls}
-                      >
-                        {(d.pipelines ?? [d.pipeline]).map((pn) => <option key={pn} value={pn}>{pn}</option>)}
-                      </select>
+                      <label className={labelCls}>Pipeline (pick the destination stage)</label>
+                      <PipelineMover d={d} pipelineStages={pipelineStages} setSaved={setSaved} block />
                     </div>
                     <div>
                       <label className={labelCls}>Stage</label>
@@ -494,5 +486,42 @@ function UnderwriteBlock({ d }: { d: Payload }) {
         </div>
       )}
     </div>
+  );
+}
+
+// 🔀 Pipeline mover (Nick's ticket 2026-10-15): changing a lead's pipeline used
+// to auto-save into the new pipeline's FIRST stage with no choice. Now picking a
+// different pipeline reveals that pipeline's stages so you choose where the lead
+// lands, then hit Move. Defaults to the first stage if you don't pick one.
+function PipelineMover({ d, pipelineStages, setSaved, block }: { d: Payload; pipelineStages?: Record<string, Array<{ key: string; label: string }>>; setSaved: (s: string) => void; block?: boolean }) {
+  const [pendingPipe, setPendingPipe] = useState<string | null>(null);
+  const [pendingStage, setPendingStage] = useState<string>("");
+  const [moving, startMove] = useTransition();
+  const names = d.pipelines ?? [d.pipeline];
+  const targetStages = pendingPipe ? (pipelineStages?.[pendingPipe] ?? []) : [];
+  const selCls = "rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-bold text-slate-700";
+  const doMove = () => {
+    if (!pendingPipe) return;
+    const fd = new FormData(); fd.set("id", d.id); fd.set("pipeline", pendingPipe); if (pendingStage) fd.set("stage", pendingStage);
+    startMove(async () => { await setOppPipelineAction(fd); setSaved("✓ Moved — refreshing"); window.location.reload(); });
+  };
+  return (
+    <span className={block ? "flex flex-wrap items-center gap-1.5" : "flex items-center gap-1.5"}>
+      <select value={pendingPipe ?? d.pipeline} className={block ? `${selCls} w-full` : selCls}
+        onChange={(e) => { const p = e.target.value; if (p === d.pipeline) { setPendingPipe(null); return; } setPendingPipe(p); setPendingStage((pipelineStages?.[p] ?? [])[0]?.key ?? ""); }}>
+        {names.map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+      </select>
+      {pendingPipe && pendingPipe !== d.pipeline && (
+        <>
+          <span className="text-[11px] font-semibold text-slate-400">→ land in:</span>
+          <select value={pendingStage} onChange={(e) => setPendingStage(e.target.value)} className={selCls}>
+            {targetStages.length === 0 && <option value="">(first stage)</option>}
+            {targetStages.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+          <button type="button" onClick={doMove} disabled={moving} className="rounded-md bg-brand-navy px-2.5 py-0.5 text-[11px] font-bold text-white disabled:opacity-50">{moving ? "…" : "Move"}</button>
+          <button type="button" onClick={() => setPendingPipe(null)} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">cancel</button>
+        </>
+      )}
+    </span>
   );
 }

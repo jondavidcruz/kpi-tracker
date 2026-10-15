@@ -78,26 +78,45 @@ export const getActiveReps = cache(async (): Promise<User[]> => {
   return reps.sort((a, b) => repRank(a.name) - repRank(b.name) || a.name.localeCompare(b.name));
 });
 
+// Per-request deduped (React cache): the shell, the page and helpers like
+// pip/trends each ask for users/KPIs/targets during one render — this collapses
+// the repeats into one query each. Callers get a fresh array copy so in-place
+// sorts can't leak between them. (Outside a render, cache() just calls through.)
+const getAllUsersCached = cache(async (): Promise<User[]> =>
+  db.user.findMany({ orderBy: [{ role: "asc" }, { name: "asc" }] }),
+);
 export async function getAllUsers(): Promise<User[]> {
-  return db.user.findMany({ orderBy: [{ role: "asc" }, { name: "asc" }] });
+  return [...(await getAllUsersCached())];
 }
 
+// cache() keys on argument identity, so the object filter is flattened to
+// primitives (a sentinel marks "roleKey not given" vs roleKey === "").
+const NO_ROLE = "\u0000none";
+const getKpisKeyed = cache(async (scope: string, cadence: string, computed: string, roleKey: string): Promise<Kpi[]> =>
+  db.kpi.findMany({
+    where: {
+      active: true,
+      ...(scope ? { scope } : {}),
+      ...(cadence ? { cadence } : {}),
+      ...(computed ? { computed: computed === "true" } : {}),
+      ...(roleKey !== NO_ROLE ? { roleKey } : {}),
+    },
+    orderBy: { sortOrder: "asc" },
+  }),
+);
 export async function getKpis(filter?: {
   scope?: string;
   cadence?: string;
   computed?: boolean;
   roleKey?: string;
 }): Promise<Kpi[]> {
-  return db.kpi.findMany({
-    where: {
-      active: true,
-      ...(filter?.scope ? { scope: filter.scope } : {}),
-      ...(filter?.cadence ? { cadence: filter.cadence } : {}),
-      ...(filter?.computed !== undefined ? { computed: filter.computed } : {}),
-      ...(filter?.roleKey !== undefined ? { roleKey: filter.roleKey } : {}),
-    },
-    orderBy: { sortOrder: "asc" },
-  });
+  const rows = await getKpisKeyed(
+    filter?.scope ?? "",
+    filter?.cadence ?? "",
+    filter?.computed === undefined ? "" : String(filter.computed),
+    filter?.roleKey === undefined ? NO_ROLE : filter.roleKey,
+  );
+  return [...rows];
 }
 
 /** Resolve the goal for a KPI, honoring per-user / per-period Target overrides. */
@@ -111,8 +130,9 @@ export async function resolveGoal(
 }
 
 /** All target overrides (prefetch once, then resolve in-memory per cell). */
+const getAllTargetsCached = cache(async (): Promise<Target[]> => db.target.findMany());
 export async function getAllTargets(): Promise<Target[]> {
-  return db.target.findMany();
+  return [...(await getAllTargetsCached())];
 }
 
 /**

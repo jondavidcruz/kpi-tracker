@@ -6,7 +6,7 @@ import { addrMatch, normAddr } from "@/lib/underwrite-history";
 // finds $ amounts, matches them to the deal by address, and racks the offers
 // on the opportunity so dispo can rack & stack without copy-paste.
 
-async function gmailToken(asUser: string): Promise<string> {
+export async function gmailToken(asUser: string): Promise<string> {
   const crypto = await import("crypto");
   const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "{}");
   const now = Math.floor(Date.now() / 1000);

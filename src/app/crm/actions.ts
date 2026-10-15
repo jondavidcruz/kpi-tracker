@@ -1368,7 +1368,10 @@ export async function setOppPipelineAction(formData: FormData) {
   if (!target) return;
   const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, pipeline: true, stage: true, assignedTo: true } });
   if (!opp) return;
-  const firstStage = target.stages[0]?.key ?? opp.stage;
+  // Honor a chosen destination stage if it's valid for the target pipeline
+  // (Nick's ticket 2026-10-15); otherwise fall back to the pipeline's first stage.
+  const wantStage = String(formData.get("stage") ?? "").trim();
+  const firstStage = (wantStage && target.stages.some((s) => s.key === wantStage) ? wantStage : target.stages[0]?.key) ?? opp.stage;
   const owner = ownerForPipeline(pipeline);
   await db.crmOpportunity.update({ where: { id }, data: {
     pipeline, stage: firstStage, archivedAt: null,

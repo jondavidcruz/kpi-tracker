@@ -1204,6 +1204,17 @@ export async function GET(request: Request) {
     } catch { return NextResponse.json({ ok: false, error: "bad SA json" }); }
   }
 
+  // 🧾 Receipts scanner (?receiptscan=1[&as=info@…][&days=2][&dry=1]): reads
+  // info@ via Gmail DWD, finds subscription receipts/invoices (known vendor or
+  // receipt-ish subject + $ amount or PDF), posts ONE summary to the receipts
+  // Chat room, logs to __receipts_log__. Also chained onto the daily offerscan.
+  if (url.searchParams.get("receiptscan") === "1") {
+    const { scanReceipts } = await import("@/lib/gmail-receipts");
+    const mailboxes = (url.searchParams.get("as") ?? "info@freedom-offers.com").split(",").map((s) => s.trim()).filter(Boolean);
+    const out = await scanReceipts({ mailboxes, days: Number(url.searchParams.get("days") ?? 2) || 2, post: url.searchParams.get("dry") !== "1" });
+    return NextResponse.json({ ok: true, ...out });
+  }
+
   // 💵 Offer capture (?offerscan=1, daily cron — live now that Gmail API is
   // enabled): scans the dispo inboxes for buyer emails with $ amounts, matches
   // them to live DS deals by address, racks the offer on the opportunity
@@ -1212,7 +1223,10 @@ export async function GET(request: Request) {
     const { scanOffers } = await import("@/lib/gmail-offers");
     const boxes = (url.searchParams.get("as") ?? "info@freedom-offers.com,sharyn@freedom-offers.com,marie@freedom-offers.com").split(",").map((s) => s.trim()).filter(Boolean);
     const out = await scanOffers(boxes);
-    return NextResponse.json({ ok: true, ...out });
+    // 🧾 daily receipts sweep rides the same cron (info@ only, best-effort)
+    let receipts: unknown = null;
+    try { const { scanReceipts } = await import("@/lib/gmail-receipts"); receipts = await scanReceipts({}); } catch (e) { receipts = { error: String(e).slice(0, 150) }; }
+    return NextResponse.json({ ok: true, ...out, receipts });
   }
 
   // 📬 Gmail DWD test (?gmailtest=1&as=info@freedom-offers.com): mints a
