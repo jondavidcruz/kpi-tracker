@@ -1326,6 +1326,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, moved, total: open.length });
   }
 
+  // 🕒 Force the org/schedule timezone to Pacific (Jon 2026-10-15: "all schedule
+  // times in PST, going off California, not EST"). Updates the live Settings row so
+  // every shift/timecard/availability calc (which read settings.orgTimezone) is PT.
+  if (url.searchParams.get("setpactz") === "1") {
+    const row = await db.settings.findUnique({ where: { id: 1 } });
+    if (row) await db.settings.update({ where: { id: 1 }, data: { orgTimezone: "America/Los_Angeles" } });
+    else await db.settings.create({ data: { id: 1, orgTimezone: "America/Los_Angeles" } });
+    return NextResponse.json({ ok: true, orgTimezone: "America/Los_Angeles", had: !!row });
+  }
+
   // 📎 Signed-doc puller (?pdpull=1, daily cron): PandaDoc completed docs from
   // the last 7 days → signed PDF saved to the Shared Drive "Deal Files"
   // folder → 📎 file event on the matching OPPORTUNITY (metadata.oppId from

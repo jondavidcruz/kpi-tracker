@@ -21,7 +21,8 @@
 // (Sharyn's temporary reduced 8–1 hardship schedule ended 2026-08-17 — she's back
 // on the standard 8–5 Mon–Thu with the normal lunch, and 8–2 Friday.)
 
-const DEFAULT_TZ = "America/New_York";
+// Pacific — the business runs on California time (Jon 2026-10-15).
+const DEFAULT_TZ = "America/Los_Angeles";
 
 /** How far (minutes) `tz` is offset from UTC at the given instant (DST-safe). */
 function tzOffsetMinutes(date: Date, tz: string): number {

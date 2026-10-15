@@ -21,8 +21,8 @@ export async function GET() {
     lead ? db.crmTask.findMany({ where: { doneAt: null, assignedTo: LEADERSHIP_ASSIGNEE, due: { not: "", lte: cutoff } }, select: { id: true, title: true, due: true }, orderBy: { due: "asc" }, take: 50 }) : Promise.resolve([]),
   ]);
   // Shift-end instant (computed on the org-local date) → when the EOD popup fires.
-  const orgDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
-  const endAt = shiftEndAt(orgDate, "America/New_York", me!.name);
+  const orgDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+  const endAt = shiftEndAt(orgDate, "America/Los_Angeles", me!.name);
   return NextResponse.json({
     who: me!.name.split(" ")[0],
     isLead: lead,

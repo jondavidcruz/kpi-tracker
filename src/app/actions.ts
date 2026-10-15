@@ -637,7 +637,7 @@ export async function saveSettings(formData: FormData) {
     alertEmailRecipients: String(formData.get("alertEmailRecipients") ?? "").trim(),
     emailFromAddress: String(formData.get("emailFromAddress") ?? "").trim(),
     workdayCutoff: String(formData.get("workdayCutoff") ?? "18:00").trim(),
-    orgTimezone: String(formData.get("orgTimezone") ?? "America/New_York").trim(),
+    orgTimezone: String(formData.get("orgTimezone") ?? "America/Los_Angeles").trim(),
     annualRevenueGoal: numOrNull(formData.get("annualRevenueGoal")) ?? 0,
     weeklyEmailRecipients: String(formData.get("weeklyEmailRecipients") ?? "").trim(),
   };

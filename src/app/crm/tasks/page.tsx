@@ -17,15 +17,18 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
   const lead = isLeadership(me);
   const sp = await searchParams;
   const v = ["today", "overdue", "upcoming", "done"].includes(sp.v ?? "") ? sp.v! : "all";
-  // Default = MINE even for managers (Jon 2026-10-08); "Everyone" is ?who=all.
-  // Leadership members (Jon/Enrico/Viktoriia/Marie) can open the shared 🏛 queue.
+  // Default = MINE (Jon 2026-10-08); "Everyone" is ?who=all. Managers AND
+  // leadership (Jon/Enrico/Viktoriia/Marie) can pick anyone / all / the shared 🏛 queue.
+  const canPickWho = manager || lead;
   const who = (sp.who === LEADERSHIP_ASSIGNEE && lead) ? LEADERSHIP_ASSIGNEE
-    : manager ? (sp.who === "all" ? "" : (sp.who ?? me!.name))
+    : canPickWho ? (sp.who === "all" ? "" : (sp.who ?? me!.name))
     : me!.name;
   const today = new Date().toISOString().slice(0, 10);
   // Department filter (Jon 2026-10-15): derive each task's department from the
-  // assignee's position (tasks don't store one). Only meaningful for managers/lead.
-  const dept = (manager || lead) && ["acquisitions", "dispositions", "cc_lm"].includes(sp.dept ?? "") ? sp.dept! : "";
+  // assignee's position/marketing flag (tasks don't store one). 4 departments —
+  // Acquisitions, Dispositions, Marketing, and the shared 🏛 Leadership queue.
+  const deptKeys = ["acquisitions", "dispositions", "marketing", ...(lead ? ["leadership"] : [])];
+  const dept = canPickWho && deptKeys.includes(sp.dept ?? "") ? sp.dept! : "";
 
   const where = {
     ...(who ? { assignedTo: { equals: who, mode: "insensitive" as const } } : {}),
@@ -35,15 +38,24 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
     ...(v === "upcoming" ? { due: { gt: today } } : {}),
   };
   const tasksRaw = await db.crmTask.findMany({ where, orderBy: v === "done" ? { doneAt: "desc" } : [{ due: "asc" }, { id: "desc" }], take: 200 });
-  // position-by-name map → department of a task's assignee
-  const allUsers = (manager || lead) ? await db.user.findMany({ where: { active: true }, select: { name: true, position: true } }) : [];
-  const posByName = new Map(allUsers.map((u) => [u.name.toLowerCase(), u.position ?? ""]));
-  const deptOf = (assignedTo: string) => posByName.get((assignedTo || "").toLowerCase()) ?? "";
+  // user-by-name map → department of a task's assignee (primary position wins;
+  // marketing = the accessMarketing overlay; 🏛 Leadership = the shared-queue token)
+  const allUsers = canPickWho ? await db.user.findMany({ where: { active: true }, select: { name: true, position: true, accessMarketing: true } }) : [];
+  const userByName = new Map(allUsers.map((u) => [u.name.toLowerCase(), u]));
+  const deptOf = (assignedTo: string): string => {
+    if (assignedTo === LEADERSHIP_ASSIGNEE) return "leadership";
+    const u = userByName.get((assignedTo || "").toLowerCase());
+    if (!u) return "";
+    if (u.position === "dispositions") return "dispositions";
+    if (u.position === "acquisitions" || u.position === "cc_lm") return "acquisitions";
+    if (u.accessMarketing) return "marketing";
+    return "";
+  };
   const tasks = dept ? tasksRaw.filter((t) => deptOf(t.assignedTo) === dept) : tasksRaw;
   // per-department totals due today (open) — the "total tasks for the department"
-  const todaysOpen = (manager || lead) ? await db.crmTask.findMany({ where: { doneAt: null, due: today }, select: { assignedTo: true } }) : [];
-  const deptTotals = { acquisitions: 0, dispositions: 0, cc_lm: 0 };
-  for (const t of todaysOpen) { const d = deptOf(t.assignedTo); if (d === "acquisitions") deptTotals.acquisitions++; else if (d === "dispositions") deptTotals.dispositions++; else if (d === "cc_lm") deptTotals.cc_lm++; }
+  const todaysOpen = canPickWho ? await db.crmTask.findMany({ where: { doneAt: null, due: today }, select: { assignedTo: true } }) : [];
+  const deptTotals: Record<string, number> = { acquisitions: 0, dispositions: 0, marketing: 0, leadership: 0 };
+  for (const t of todaysOpen) { const d = deptOf(t.assignedTo); if (d in deptTotals) deptTotals[d]++; }
   const contactIds = [...new Set(tasks.map((t) => t.contactId).filter(Boolean))];
   const contacts = await db.crmContact.findMany({ where: { id: { in: contactIds } }, select: { id: true, name: true, phone: true } });
   const cname = new Map(contacts.map((c) => [c.id, c]));
@@ -62,7 +74,7 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
     sortMode === "due" ? (t.due ? (t.due < today ? "🔴 Overdue" : t.due === today ? "📅 Due today" : "📆 Upcoming") : "🗓 No date")
     : sortMode === "person" ? `👤 ${t.assignedTo.split(" ")[0] || "Unassigned"}`
     : prios[t.id] === "urgent" ? "🔴 Urgent" : prios[t.id] === "low" ? "⚪ Low priority" : "🟡 Pending";
-  const reps = manager ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
+  const reps = canPickWho ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
   const counts = {
     all: await db.crmTask.count({ where: { doneAt: null, ...(who ? { assignedTo: { equals: who, mode: "insensitive" } } : {}) } }),
     overdue: await db.crmTask.count({ where: { doneAt: null, due: { not: "", lt: today }, ...(who ? { assignedTo: { equals: who, mode: "insensitive" } } : {}) } }),
@@ -84,26 +96,26 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
           ))}
         </span>
       </div>
-      {(manager || lead) && (
+      {canPickWho && (
         <div className="space-y-1.5">
+          {/* Who — everyone / me / each rep */}
           <div className="flex flex-wrap items-center gap-1.5">
-            {lead && (
-              <Link prefetch={false} href={`/crm/tasks?v=${v}&who=${encodeURIComponent(LEADERSHIP_ASSIGNEE)}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === LEADERSHIP_ASSIGNEE ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-800 hover:bg-amber-200"}`} title="Shared leadership queue — Jon, Enrico, Viktoriia, Marie">🏛 Leadership</Link>
-            )}
-            {manager && <>
-              <Link prefetch={false} href={`/crm/tasks?v=${v}&who=all`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
-              <Link prefetch={false} href={`/crm/tasks?v=${v}&who=${encodeURIComponent(me!.name)}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === me!.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Me</Link>
-              {reps.map((r) => (
-                <Link key={r.id} prefetch={false} href={`/crm/tasks?v=${v}&who=${encodeURIComponent(r.name)}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>{r.name.split(" ")[0]}</Link>
-              ))}
-            </>}
+            <Link prefetch={false} href={`/crm/tasks?v=${v}&who=all`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who && !dept ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
+            <Link prefetch={false} href={`/crm/tasks?v=${v}&who=${encodeURIComponent(me!.name)}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === me!.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Me</Link>
+            {reps.map((r) => (
+              <Link key={r.id} prefetch={false} href={`/crm/tasks?v=${v}&who=${encodeURIComponent(r.name)}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === r.name ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>{r.name.split(" ")[0]}</Link>
+            ))}
           </div>
-          {/* Department view — total tasks due today per department (Jon 2026-10-15) */}
+          {/* By department — total tasks due today per department (Jon 2026-10-15) */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">By dept:</span>
-            <Link prefetch={false} href={`/crm/tasks?v=${v}&who=${encodeURIComponent(who || "all")}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!dept ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</Link>
+            <Link prefetch={false} href={`/crm/tasks?v=${v}&who=${encodeURIComponent(who || "all")}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!dept && who !== LEADERSHIP_ASSIGNEE ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</Link>
             <Link prefetch={false} href={`/crm/tasks?v=${v}&who=all&dept=acquisitions`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${dept === "acquisitions" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>🎯 Acquisitions · {deptTotals.acquisitions} today</Link>
             <Link prefetch={false} href={`/crm/tasks?v=${v}&who=all&dept=dispositions`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${dept === "dispositions" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📦 Dispositions · {deptTotals.dispositions} today</Link>
+            <Link prefetch={false} href={`/crm/tasks?v=${v}&who=all&dept=marketing`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${dept === "marketing" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📣 Marketing · {deptTotals.marketing} today</Link>
+            {lead && (
+              <Link prefetch={false} href={`/crm/tasks?v=${v}&who=${encodeURIComponent(LEADERSHIP_ASSIGNEE)}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${who === LEADERSHIP_ASSIGNEE ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-800 hover:bg-amber-200"}`} title="Shared leadership queue — Jon, Enrico, Viktoriia, Marie">🏛 Leadership · {deptTotals.leadership} today</Link>
+            )}
           </div>
         </div>
       )}

@@ -17,7 +17,7 @@ export const getSettings = cache(async () => {
       emailFromAddress: "",
       workdayCutoff: "18:00",
       weekStart: "monday",
-      orgTimezone: "America/New_York",
+      orgTimezone: "America/Los_Angeles",
       annualRevenueGoal: 0,
       weeklyEmailRecipients: "",
       homeownersGoal: 24,
