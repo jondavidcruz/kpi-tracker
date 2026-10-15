@@ -3,7 +3,7 @@
 // (left section nav like GHL's opportunity modal). Everything is editable
 // here — details, contact, discovery forms, tasks, appointments, notes —
 // without opening the full card page.
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import {
   setOppStageAction, setOppPipelineAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
   addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, saveCrmFormAction,
@@ -376,7 +376,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                         return (
                           <div key={e.id ?? i} className="group/qn rounded-lg bg-white px-3 py-2 text-xs text-slate-700 ring-1 ring-slate-100">
                             <span className="mr-1">{KIND_EMOJI[e.kind] ?? "•"}</span>
-                            <span className="whitespace-pre-line">{e.body}</span>
+                            <span className="whitespace-pre-line break-words">{cleanLinkify(e.body)}</span>
                             <span className="ml-1 text-[9px] text-slate-400">{e.actor} · {new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
                             {mine && <button onClick={() => { setEditNoteId(e.id!); }} title="Edit this note" className="ml-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-indigo-600">✎ edit</button>}
                             {mine && <button onClick={() => { if (confirm("Delete this note?")) { const fd = new FormData(); fd.set("id", e.id!); fd.set("oppId", d.id); submit(deleteCrmNoteAction)(fd); } }} title="Delete this note" className="ml-1 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-red-600">🗑</button>}
@@ -524,4 +524,30 @@ function PipelineMover({ d, pipelineStages, setSaved, block }: { d: Payload; pip
       )}
     </span>
   );
+}
+
+// 🧹🔗 GHL-imported notes carry raw HTML (e.g. <p style="margin:0px…">) that showed
+// as literal text, and URLs weren't clickable (Jon 2026-10-15). Strip the HTML down
+// to plain text (block tags → newlines, decode entities) and turn URLs into links.
+function cleanLinkify(raw: string): ReactNode {
+  const text = (raw || "")
+    .replace(/<\s*(br|\/p|\/div|\/li|\/tr|\/h[1-6])\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&#39;|&rsquo;|&apos;/gi, "'").replace(/&quot;|&ldquo;|&rdquo;/gi, '"')
+    .replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  const parts: ReactNode[] = [];
+  const re = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  let last = 0, m: RegExpExecArray | null, k = 0;
+  while ((m = re.exec(text))) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    let url = m[0];
+    const trail = url.match(/[.,);:!?]+$/); // don't swallow trailing punctuation
+    if (trail) url = url.slice(0, -trail[0].length);
+    const href = url.startsWith("http") ? url : `https://${url}`;
+    parts.push(<a key={`l${k++}`} href={href} target="_blank" rel="noopener noreferrer" onClick={(ev) => ev.stopPropagation()} className="font-semibold text-indigo-600 underline decoration-indigo-300 break-all hover:text-indigo-800">{url}</a>);
+    last = m.index + url.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length ? parts : text;
 }
