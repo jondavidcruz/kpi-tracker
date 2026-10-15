@@ -1255,12 +1255,13 @@ export async function GET(request: Request) {
   // 📱 Nick's manual-dial targets (?nicktargets=1): he's on an iPhone with
   // no dialer (new acq members don't get system licenses) — the 140/100
   // auto-dialer goals were impossible. Standing per-rep overrides.
-  // Jon 2026-10-14: Nick dropped from a 5h to a 4h shift (8am–12pm), so the
-  // volume goals were rescaled 0.8× (60→48 dials, 15→12 connects).
+  // Jon 2026-10-14: Nick dropped to a 4h shift (8am–12pm). First tried 0.8×
+  // (48/12) but Jon says he already hits ~60 dials in a day and wants the goal
+  // to PUSH him — so it's set as a stretch ABOVE his usual: 70 dials / 16 connects.
   if (url.searchParams.get("nicktargets") === "1") {
     const nick = await db.user.findFirst({ where: { active: true, OR: [{ name: { startsWith: "Nick", mode: "insensitive" } }, { name: { startsWith: "Nicholas", mode: "insensitive" } }] }, select: { id: true, name: true } });
     if (!nick) return NextResponse.json({ ok: false, error: "no Nick user" });
-    const GOALS: Record<string, number> = { outbound_calls: 48, connected_calls: 12 };
+    const GOALS: Record<string, number> = { outbound_calls: 70, connected_calls: 16 };
     const set: Record<string, number> = {};
     for (const [key, goalValue] of Object.entries(GOALS)) {
       const kpi = await db.kpi.findUnique({ where: { key }, select: { id: true } });

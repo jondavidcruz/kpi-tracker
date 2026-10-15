@@ -329,18 +329,26 @@ export default async function DashboardPage({
       <DashSection id="scoreboard" label="📊 Company scoreboard">
       {/* Company scoreboard — acquisitions output (this month) + closings (this year) */}
       <section>
-        <SectionTitle title="📊 Company scoreboard" subtitle={`Closings & money year-to-date (${year}) · expenses this month`} accent="bg-brand-gold" />
+        <SectionTitle title="📊 Company scoreboard" subtitle={showMoney ? `Closings & money year-to-date (${year}) · expenses this month` : `Closings year-to-date (${year})`} accent="bg-brand-gold" />
+        {/* Money visibility (Jon 2026-10-15): reps — especially brand-new hires —
+            see NO dollar figures anywhere on the dashboard. Non-managers see only
+            the closed-deal COUNT (motivational, not money) as a plain, non-clickable
+            card so there's no click-through into /closing. Revenue → managers;
+            expenses + net profit → C-suite. The only money a rep ever sees is the
+            Underwriting calculator, which is a tool, not company financials. */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <Link href="/closing" className="block"><MetricCard label={`Deals closed (${year})`} value={closedCount} icon={<Building2 size={18} />} hint={falloutYTD ? `${falloutYTD} fell through` : "dispositions"} hintTone={falloutYTD ? "bad" : "neutral"} /></Link>
+          {showMoney ? (
+            <Link href="/closing" className="block"><MetricCard label={`Deals closed (${year})`} value={closedCount} icon={<Building2 size={18} />} hint={falloutYTD ? `${falloutYTD} fell through` : "dispositions"} hintTone={falloutYTD ? "bad" : "neutral"} /></Link>
+          ) : (
+            <MetricCard label={`Deals closed (${year})`} value={closedCount} icon={<Building2 size={18} />} hint="dispositions" hintTone="neutral" />
+          )}
           {showMoney && <Link href="/closing" className="block"><MetricCard label="Gross revenue (YTD)" value={usd(grossRevenue)} icon={<Banknote size={18} />} /></Link>}
           {cSuite && (
             <Link href="/expenses" className="block"><MetricCard label="Expenses (mo)" value={usd(monthExp.reduce((a, b) => a + (b.actual ?? 0), 0))} icon={<Banknote size={18} />} hint="salaries + software + marketing" /></Link>
           )}
-          {cSuite ? (
+          {cSuite && (
             <Link href="/expenses" className="block"><MetricCard label="Net profit (YTD)" value={usd(netProfit)} icon={<Banknote size={18} />} hint="after expenses · C-suite" hintTone={netProfit >= 0 ? "good" : "bad"} /></Link>
-          ) : !showMoney ? (
-            <Card className="flex items-center justify-center p-3 text-center text-[11px] text-slate-400 lg:col-span-2">Revenue &amp; profit are visible to leadership.</Card>
-          ) : null}
+          )}
         </div>
         {showMoney && closedCount === 0 && (
           <p className="mt-2 text-[11px] text-slate-400">No closed deals recorded for {year} yet — add them in <Link href="/closing" className="font-semibold text-slate-500 underline">Escrow &amp; Closing</Link> (set status to “Closed”) and they&apos;ll tally here with net profit.</p>
@@ -526,7 +534,9 @@ export default async function DashboardPage({
       <section>
         <SectionTitle title={`This Month: Pace (${month})`} accent="bg-emerald-400" />
         <Card className="divide-y divide-slate-100 p-0">
-          {teamMonthly.map((k) => {
+          {/* Hide financial KPIs (revenue, spend, cost/lead, margin) from reps who
+              can't see money — only managers see dollar/financial figures here. */}
+          {teamMonthly.filter((k) => showMoney || (k.unit !== "currency" && k.key !== "net_margin")).map((k) => {
             const mtd = mtdSums.get(k.id) ?? 0;
             const goal = resolveGoalWith(targets, k, null, month);
             const status: Status = statusVsPace(k.goalKind, mtd, goal, fraction);

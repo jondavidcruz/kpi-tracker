@@ -76,7 +76,9 @@ export function shiftEndHour(dateStr: string, who?: string | null): { hour: numb
   if (dow === 5) return { hour: 14, min: 0 }; //            Fri     → 2:00 PM (whole team, no lunch — incl. Sharyn)
   // Marie Mon–Thu: 6:00 PM through 2026-10-10; from Mon 2026-10-12 her shift
   // moves to 10:00 AM–4:00 PM (Jon 2026-10-07). Fridays stay whole-team 8–2.
-  if (firstName(who) === "marie") return dateStr >= "2026-10-12" ? { hour: 16, min: 0 } : { hour: 18, min: 0 };
+  // Marie came in early on Thu 2026-10-15 (8:00 AM–2:00 PM instead of her usual
+  // 10–4) — one-day override so the time clock counts her full early day.
+  if (firstName(who) === "marie") return dateStr === "2026-10-15" ? { hour: 14, min: 0 } : dateStr >= "2026-10-12" ? { hour: 16, min: 0 } : { hour: 18, min: 0 };
   return { hour: 17, min: 0 }; //                           Mon–Thu → 5:00 PM
 }
 
@@ -100,7 +102,7 @@ export function shiftStartHour(dateStr: string, who?: string | null): { hour: nu
   if (firstName(who) === "kyle") return dow === 2 || dow === 4 ? null : { hour: 8, min: 0 };
   if (dow === 5) return { hour: 8, min: 0 }; // Fri → 8:00 AM (whole team)
   // Marie Mon–Thu: noon start through 2026-10-10; 10:00 AM from 2026-10-12.
-  if (firstName(who) === "marie") return dateStr >= "2026-10-12" ? { hour: 10, min: 0 } : { hour: 12, min: 0 };
+  if (firstName(who) === "marie") return dateStr === "2026-10-15" ? { hour: 8, min: 0 } : dateStr >= "2026-10-12" ? { hour: 10, min: 0 } : { hour: 12, min: 0 };
   return { hour: 8, min: 0 }; //                                 8:00 AM default
 }
 
