@@ -77,16 +77,20 @@ export async function getRevenueByUser(year: number): Promise<{ byUserId: Map<st
       if (yr === year) row.revenueYtd += profit;
     }
   }
-  // Manual adjustments (Jon edits on the roster) — added to lifetime.
+  // Manual override (Jon sets it on the roster) — a value (including 0) REPLACES
+  // the computed revenue, lifetime AND this-year, so Jon can zero out or hand-set
+  // a rep. Blank = no override (use the computed number). Jon/Enrico handled below.
   for (const u of users) {
-    const adj = adjustments[firstOf(u.name)] ?? 0;
-    if (adj) { const row = byUserId.get(u.id); if (row) row.revenue += adj; }
+    const ov = adjustments[firstOf(u.name)];
+    if (ov != null) { const row = byUserId.get(u.id); if (row) { row.revenue = ov; row.revenueYtd = Math.min(ov, row.revenueYtd); } }
   }
-  // Enrico & Jonathan carry the WHOLE company's profit since the start.
+  // Enrico & Jonathan carry the WHOLE company's profit since the start (an override
+  // on them replaces that figure outright).
   for (const u of users) {
     const f = firstOf(u.name);
     if (["enrico", "jonathan", "jon"].includes(f)) {
-      byUserId.set(u.id, { revenue: companyTotal + (adjustments[f] ?? 0), revenueYtd: companyYtd, deals: companyDeals });
+      const ov = adjustments[f];
+      byUserId.set(u.id, ov != null ? { revenue: ov, revenueYtd: ov, deals: companyDeals } : { revenue: companyTotal, revenueYtd: companyYtd, deals: companyDeals });
     }
   }
   return { byUserId, unattributed, adjustments, companyTotal };

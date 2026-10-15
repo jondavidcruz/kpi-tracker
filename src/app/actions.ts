@@ -2697,16 +2697,21 @@ export async function saveRevAdjustAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isOwner(me)) return;
   const first = String(formData.get("first") ?? "").toLowerCase().trim();
-  const amount = Number(String(formData.get("amount") ?? "").replace(/[$,\s]/g, "")) || 0;
+  // OVERRIDE semantics (Jon 2026-10-15): a value — including 0 — REPLACES the
+  // computed revenue so Jon can zero out or hand-set a rep. BLANK clears it back
+  // to the auto-computed number.
+  const raw = String(formData.get("amount") ?? "").replace(/[$,\s]/g, "").trim();
   if (!first) return;
   const row = await db.resource.findFirst({ where: { category: "__roster_rev_adjust__" } });
   let map: Record<string, number> = {};
   try { map = row?.description ? JSON.parse(row.description) : {}; } catch { /* fresh */ }
-  if (amount === 0) delete map[first]; else map[first] = amount;
+  if (raw === "") delete map[first];
+  else { const n = Number(raw); if (!isNaN(n)) map[first] = n; }
   const description = JSON.stringify(map);
   if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
   else await db.resource.create({ data: { title: "roster-rev-adjust", category: "__roster_rev_adjust__", url: "", description } });
   revalidatePath("/team-roster");
+  redirect("/team-roster?saved=1");
 }
 
 /** Google Sheet hybrid sync — the ↻ button on /deals. */

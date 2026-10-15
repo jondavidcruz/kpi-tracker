@@ -133,7 +133,11 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
       <div className="space-y-4">
         {active.map((u) => {
           const p = byUser.get(u.id);
-          const isOwner = u.role === "admin";
+          // C-suite OWNERS (Jon + Enrico only) get the distinct card — no pay/
+          // promotion fields (their "revenue" is whole-company profit). EVERYONE
+          // else — incl. Marie (admin) and Viktoriia (salary) — gets the same full
+          // card with pay fields (Jon 2026-10-15: "make all cards the same except C-suite").
+          const isOwner = ["jon", "jonathan", "enrico"].includes(u.name.trim().split(/\s+/)[0].toLowerCase());
           const myDocs = docsByUser.get(u.id) ?? [];
           const wins = board.champions.find((c) => c.rep === u.name)?.wins ?? 0;
           const aiProven = ai.find((c) => c.rep === u.name)?.count ?? 0;
@@ -179,9 +183,10 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                         <div className="text-2xl font-extrabold text-violet-900">{usd(rev.revenue)} <span className="text-xs font-semibold text-violet-500">lifetime · {usd(rev.revenueYtd)} this year · {rev.deals} deal{rev.deals === 1 ? "" : "s"}</span></div>
                         <form action={saveRevAdjustAction} className="mt-1 flex items-center gap-1.5">
                           <input type="hidden" name="first" value={u.name.trim().split(/\s+/)[0].toLowerCase()} />
-                          <span className="text-[10px] font-semibold text-violet-500">± manual adjustment $</span>
-                          <input name="amount" defaultValue={adjustments[u.name.trim().split(/\s+/)[0].toLowerCase()] ?? ""} placeholder="0" className="w-24 rounded-md border border-violet-200 px-2 py-0.5 text-xs" />
+                          <span className="text-[10px] font-semibold text-violet-500">set revenue $ (blank = auto)</span>
+                          <input name="amount" defaultValue={adjustments[u.name.trim().split(/\s+/)[0].toLowerCase()] ?? ""} placeholder="auto" className="w-24 rounded-md border border-violet-200 px-2 py-0.5 text-xs" />
                           <button className="rounded-md bg-violet-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-violet-700">Save</button>
+                          <span className="text-[9px] text-violet-400">type 0 to zero out · blank to use deals</span>
                         </form>
                       </div>
                       <div className="text-right">
