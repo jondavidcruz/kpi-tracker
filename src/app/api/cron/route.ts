@@ -1442,12 +1442,13 @@ export async function GET(request: Request) {
       if (!u) continue;
       seen.add(doc.id);
       try {
-        const pdf = await downloadDocPdf(doc.id); // Uint8Array
-        if (!pdf || pdf.length === 0) continue;
+        const dl = await downloadDocPdf(doc.id);
+        if (!dl || dl.length === 0) continue;
+        const pdf = Buffer.from(dl); // normalize to a Buffer for Drive + Prisma Bytes
         const label = /independent contractor/i.test(name) ? "Independent Contractor Agreement" : name.slice(0, 80);
         let driveId: string | null = null;
         if (gdriveConfigured()) { try { driveId = await uploadToDrivePrivate(`${u.name} - ${label}.pdf`, pdf, "application/pdf"); } catch { driveId = null; } }
-        const td = await db.teamDoc.create({ data: { userId: u.id, label, filename: `${label}.pdf`, contentType: "application/pdf", size: pdf.length, data: driveId ? new Uint8Array(0) : pdf, uploadedBy: "PandaDoc (auto)" } });
+        const td = await db.teamDoc.create({ data: { userId: u.id, label, filename: `${label}.pdf`, contentType: "application/pdf", size: pdf.length, data: driveId ? Buffer.from([]) : pdf, uploadedBy: "PandaDoc (auto)" } });
         if (driveId) { const { setDriveFile } = await import("@/lib/drive-store"); await setDriveFile(`doc:${td.id}`, driveId); }
         filed.push(`${u.name}: ${label}`);
       } catch { /* skip this doc */ }
