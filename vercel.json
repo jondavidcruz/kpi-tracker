@@ -193,6 +193,10 @@
       "schedule": "45 13 * * *"
     },
     {
+      "path": "/api/cron?dealcerts=1",
+      "schedule": "30 14 * * *"
+    },
+    {
       "path": "/api/cron?pdpull=1",
       "schedule": "30 17 * * *"
     },

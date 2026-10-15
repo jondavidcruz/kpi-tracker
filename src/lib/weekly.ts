@@ -125,7 +125,10 @@ async function reportCfg() {
     .split(/[,;\s]+/)
     .map((x) => x.trim())
     .filter(Boolean);
-  return list.length ? { ...cfg, emailRecipients: list } : cfg;
+  // Use ONLY the report recipient list — do NOT fall back to the general alert
+  // recipients (Jon 2026-10-15: removing himself + Marie from the daily KPI email
+  // must actually stop it, not silently reroute to the company aliases). Empty = no send.
+  return { ...cfg, emailRecipients: list };
 }
 
 /** End-of-day team performance review — full per-rep block for TODAY.

@@ -1415,6 +1415,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, orgTimezone: "America/Los_Angeles", had: !!row });
   }
 
+  // 🏆 Auto-award a certificate for every closed deal (Jon 2026-10-15: "they get a
+  // certificate for every deal they close" — Air Force style). Dedupes by deal id.
+  if (url.searchParams.get("dealcerts") === "1") {
+    const { awardCert } = await import("@/lib/certs");
+    const deals = await db.deal.findMany({ where: { soldDate: { not: "" } }, select: { id: true, address: true, assignedTo: true, soldDate: true } }).catch(() => []);
+    const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true } });
+    const byFirst = new Map(users.map((u) => [u.name.trim().split(/\s+/)[0].toLowerCase(), u]));
+    let awarded = 0;
+    for (const d of deals) {
+      const first = (d.assignedTo ?? "").trim().split(/\s+/)[0]?.toLowerCase();
+      const u = first ? byFirst.get(first) : null;
+      if (!u) continue;
+      const ok = await awardCert(u.id, `Deal Closed — ${d.address}`, `Closed a deal on ${d.address} (${d.soldDate}). Every close earns one.`, "deal", `deal_${d.id}`);
+      if (ok) awarded++;
+    }
+    return NextResponse.json({ ok: true, awarded, deals: deals.length });
+  }
+
   // 🗺 Seed the Roadmap page with the CRM deal-velocity backlog (Jon 2026-10-15:
   // "do roadmap doc in roadmap page"). Idempotent — dedupes by title.
   if (url.searchParams.get("seedroadmap") === "1") {
