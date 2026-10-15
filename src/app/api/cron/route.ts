@@ -1401,6 +1401,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, orgTimezone: "America/Los_Angeles", had: !!row });
   }
 
+  // 🔐 Add/update a shared software login (?addsoftware=1, POST JSON) — encrypts the
+  // password at rest (AES via VAULT_KEY) so the welcome email can include shared
+  // logins (Eric Cline, REI AI, …). Password rides in the POST body, never a URL.
+  if (url.searchParams.get("addsoftware") === "1") {
+    const { vaultConfigured, encryptSecret } = await import("@/lib/crypto");
+    if (!vaultConfigured()) return NextResponse.json({ ok: false, error: "no VAULT_KEY — add logins via the /software page instead" });
+    let b: { name?: string; category?: string; url?: string; loginEmail?: string; pw?: string; accessList?: string } = {};
+    try { b = await request.json(); } catch { /* no body */ }
+    const name = (b.name ?? "").trim();
+    if (!name) return NextResponse.json({ ok: false, error: "no name" });
+    const secret = b.pw ? encryptSecret(b.pw) : "";
+    const data = { name, category: b.category ?? "Other", url: b.url ?? "", loginEmail: b.loginEmail ?? "", accessList: b.accessList ?? "", ...(secret ? { secret } : {}) };
+    const existing = await db.software.findFirst({ where: { name } });
+    if (existing) await db.software.update({ where: { id: existing.id }, data });
+    else await db.software.create({ data });
+    return NextResponse.json({ ok: true, name, hasSecret: !!secret });
+  }
+
   // 🎫 Ticket status setter (?ticketset=1&id=..&status=..&note=..) — lets the
   // nightly ticket-fixer agent flip an approved ticket to in_progress/resolved and
   // leave a resolution note (e.g. the commit it shipped) after building the fix.
