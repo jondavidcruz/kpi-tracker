@@ -116,6 +116,10 @@ export async function scanReceipts(opts: { mailboxes?: string[]; days?: number; 
     } catch (e) { mailboxErrors[mb] = String(e).slice(0, 150); }
   }
 
+  // Dry runs (post=false) preview only — nothing persisted, so the real daily
+  // post still sees every message.
+  if (!post) return { scanned, receipts, posted: false, mailboxErrors };
+
   // Persist seen ids (rolling) + the receipts log (rolling, newest first).
   const desc = JSON.stringify([...seenSet].slice(-1200));
   if (seenRow) await db.resource.update({ where: { id: seenRow.id }, data: { description: desc } });

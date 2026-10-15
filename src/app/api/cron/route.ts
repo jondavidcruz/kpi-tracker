@@ -1204,6 +1204,54 @@ export async function GET(request: Request) {
     } catch { return NextResponse.json({ ok: false, error: "bad SA json" }); }
   }
 
+  // 🔍 CRM data-quality audit (?crmqa=1[&days=14]) — READ-ONLY report the
+  // crm-enhancer runs nightly: duplicate contacts by phone, working leads with
+  // no next action (no follow-up date + no open task), leads quiet N+ days in a
+  // working stage, contacts with no phone/email. Nothing is changed here.
+  if (url.searchParams.get("crmqa") === "1") {
+    const staleDays = Math.max(3, Number(url.searchParams.get("days") ?? 14) || 14);
+    const { DNC_PIPELINE } = await import("@/lib/crm-dnc");
+    const PARKED = /(dead|lost|won|closed|nurture|dnc|not interested|do not|archived|cold)/i;
+    const last10 = (p: string) => (p || "").replace(/\D/g, "").slice(-10);
+    const [contacts, opps, openTasks] = await Promise.all([
+      db.crmContact.findMany({ where: { archivedAt: null }, select: { id: true, name: true, phone: true, altPhone: true, email: true, assignedTo: true }, take: 40000 }),
+      db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { id: true, title: true, contactId: true, pipeline: true, stage: true, assignedTo: true, nextFollowUp: true, createdAt: true }, take: 40000 }),
+      db.crmTask.findMany({ where: { doneAt: null }, select: { oppId: true, contactId: true } }),
+    ]);
+    // duplicates by phone (last 10 digits; alt phones count too)
+    const byPhone = new Map<string, Array<{ id: string; name: string; owner: string }>>();
+    for (const c of contacts) for (const p of [c.phone, c.altPhone]) {
+      const k = last10(p); if (k.length < 10) continue;
+      const arr = byPhone.get(k) ?? []; if (!arr.some((x) => x.id === c.id)) arr.push({ id: c.id, name: c.name, owner: c.assignedTo }); byPhone.set(k, arr);
+    }
+    const dupes = [...byPhone.entries()].filter(([, a]) => a.length > 1).map(([phone, a]) => ({ phone, contacts: a })).slice(0, 100);
+    const noContactInfo = contacts.filter((c) => last10(c.phone).length < 10 && last10(c.altPhone).length < 10 && !c.email.includes("@")).length;
+    // working leads = not parked + not DNC pipeline
+    const working = opps.filter((o) => o.pipeline !== DNC_PIPELINE && !PARKED.test(o.stage) && !PARKED.test(o.pipeline));
+    const taskOpp = new Set(openTasks.map((t) => t.oppId).filter(Boolean));
+    const taskContact = new Set(openTasks.map((t) => t.contactId).filter(Boolean));
+    const today = new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10);
+    const noAction = working.filter((o) => !o.nextFollowUp && !taskOpp.has(o.id) && !taskContact.has(o.contactId));
+    const overdueFollowUp = working.filter((o) => o.nextFollowUp && o.nextFollowUp.slice(0, 10) < today);
+    // stale = no timeline event in N days (indexed oppId+at groupBy)
+    const since = new Date(Date.now() - staleDays * 86400_000);
+    const recent = await db.crmEvent.groupBy({ by: ["oppId"], where: { at: { gte: since }, oppId: { not: "" } }, _count: { _all: true } });
+    const recentSet = new Set(recent.map((r) => r.oppId));
+    const stale = working.filter((o) => !recentSet.has(o.id) && o.createdAt < since);
+    const perOwner = (list: typeof working) => { const m: Record<string, number> = {}; for (const o of list) m[o.assignedTo || "(unassigned)"] = (m[o.assignedTo || "(unassigned)"] ?? 0) + 1; return m; };
+    const perStage = (list: typeof working) => { const m: Record<string, number> = {}; for (const o of list) { const k = `${o.pipeline || "War Room"} › ${o.stage}`; m[k] = (m[k] ?? 0) + 1; } return Object.fromEntries(Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 25)); };
+    const brief = (list: typeof working, n = 40) => list.slice(0, n).map((o) => ({ id: o.id, title: o.title.slice(0, 50), owner: o.assignedTo, pipeline: o.pipeline, stage: o.stage, nextFollowUp: o.nextFollowUp }));
+    return NextResponse.json({
+      ok: true, staleDays, today,
+      totals: { contacts: contacts.length, opps: opps.length, working: working.length, openTasks: openTasks.length },
+      duplicatesByPhone: { groups: dupes.length, sample: dupes.slice(0, 30) },
+      noContactInfo,
+      noNextAction: { count: noAction.length, perOwner: perOwner(noAction), perStage: perStage(noAction), sample: brief(noAction) },
+      overdueFollowUp: { count: overdueFollowUp.length, perOwner: perOwner(overdueFollowUp), sample: brief(overdueFollowUp, 20) },
+      stale: { count: stale.length, perOwner: perOwner(stale), perStage: perStage(stale), sample: brief(stale) },
+    });
+  }
+
   // 🧾 Receipts scanner (?receiptscan=1[&as=info@…][&days=2][&dry=1]): reads
   // info@ via Gmail DWD, finds subscription receipts/invoices (known vendor or
   // receipt-ish subject + $ amount or PDF), posts ONE summary to the receipts
