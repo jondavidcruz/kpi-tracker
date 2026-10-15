@@ -1360,7 +1360,9 @@ export async function GET(request: Request) {
       mirroredFrom = "new-rep template";
     }
     hidden = hidden.filter((h) => !ALWAYS_VISIBLE.includes(h)); // guarantee the 3 named pages are visible
-    await db.user.update({ where: { id: kyle.id }, data: { position: "acquisitions", role: "rep", active: true, accessMarketing: false, navHidden: JSON.stringify(hidden) } });
+    // onboarding:true locks Kyle to the newbie basics (ONBOARDING_NAV) until Jon
+    // certifies him; navHidden (acquisitions access) takes over once onboarding is off.
+    await db.user.update({ where: { id: kyle.id }, data: { position: "acquisitions", role: "rep", active: true, accessMarketing: false, onboarding: true, navHidden: JSON.stringify(hidden) } });
     // starter dial goals for a new, no-dialer 4h Mon/Wed/Fri hire
     const KGOALS: Record<string, number> = { outbound_calls: 40, connected_calls: 8 };
     const goals: Record<string, number> = {};

@@ -147,7 +147,7 @@ const RESTRICTED_NAV: Record<string, string[]> = {
 // First entry is their landing page when they hit anything disallowed.
 export const ONBOARDING_NAV: string[] = [
   "/training", "/glossary", "/scripts", "/playbooks",
-  "/process", "/entry", "/call-scoring", "/account",
+  "/process", "/entry", "/report", "/underwriting", "/call-scoring", "/account",
 ];
 
 /** Allowed page prefixes for a restricted user, or null if they see everything. */
