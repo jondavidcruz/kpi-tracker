@@ -12,6 +12,7 @@ const SYSTEMS: Record<string, { label: string; emoji: string; systems: Sys[] }> 
     label: "Acquisitions", emoji: "🎯",
     systems: [
       { name: "War Room Account", note: "Their login to this app — create it in Admin → Team, assign Acquisitions + Rep. It starts in locked onboarding mode.", tag: "required" },
+      { name: "Predictive Index / personality assessment", note: "Have them take the Predictive Index (behavioral/personality) test so we put them in their best-fit seat. The link is in their welcome email.", tag: "training" },
       { name: "Regrid Account", note: "Land comps / parcel data.", tag: "required" },
       { name: "REI AI Login", note: "Comps. ⚠️ Shared login EXPIRES Nov 7, 2026 — don't build a long-term process on it. Login is in Software & Logins.", tag: "expires" },
       { name: "Propwire Account", note: "Comps — free; they create their own.", tag: "free-self" },
@@ -24,6 +25,7 @@ const SYSTEMS: Record<string, { label: string; emoji: string; systems: Sys[] }> 
     label: "Dispositions", emoji: "📦",
     systems: [
       { name: "War Room Account", note: "Their login to this app — create it in Admin → Team, assign Dispositions + Rep. Starts in locked onboarding mode.", tag: "required" },
+      { name: "Predictive Index / personality assessment", note: "Have them take the Predictive Index (behavioral/personality) test so we put them in their best-fit seat. The link is in their welcome email.", tag: "training" },
       { name: "Regrid Account", note: "Land comps / parcel data.", tag: "required" },
       { name: "iSpeedToLead", note: "Lead-speed / disposition tooling.", tag: "required" },
       { name: "LinkedIn / Facebook / Craigslist", note: "Buyer outreach + passive marketing channels — their own accounts.", tag: "free-self" },
