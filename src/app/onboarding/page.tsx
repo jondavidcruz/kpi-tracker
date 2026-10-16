@@ -20,6 +20,7 @@ const TRACKS: { role: string; bootcamp: { task: string; href?: string; label?: s
   {
     role: "🎯 Junior Acquisitions",
     bootcamp: [
+      { task: "Take your behavioral / personality assessment (our in-house Predictive Index) — your personal link is in your welcome email" },
       { task: "Watch EVERY training video in the portal + take notes on each", href: "/training", label: "Video Library" },
       { task: "Learn the language — every key term", href: "/glossary", label: "Glossary" },
       { task: "Memorize the seller call scripts (word-for-word)", href: "/scripts", label: "Scripts" },
@@ -35,6 +36,7 @@ const TRACKS: { role: string; bootcamp: { task: string; href?: string; label?: s
   {
     role: "🤝 Junior Dispositions",
     bootcamp: [
+      { task: "Take your behavioral / personality assessment (our in-house Predictive Index) — your personal link is in your welcome email" },
       { task: "Work the Developer Sourcing Track — all 5 modules", href: "/training", label: "Training Portal" },
       { task: "Learn the language — key terms + the Lux Blueprint", href: "/glossary", label: "Glossary" },
       { task: "Memorize the buyer / developer + agent-sourcing scripts", href: "/scripts", label: "Scripts" },

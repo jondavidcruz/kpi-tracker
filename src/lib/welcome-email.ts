@@ -31,7 +31,7 @@ function esc(s: string): string {
 /** Build the role-specific welcome email for a new hire. Includes War Room sign-in,
  *  the systems they need (with shared logins pulled from Software & Logins where
  *  available), and their pay + bonus schedule from the commission plan. */
-export async function buildWelcomeEmail(opts: { name: string; position: string; email: string }): Promise<{ subject: string; html: string }> {
+export async function buildWelcomeEmail(opts: { name: string; position: string; email: string; assessUrl?: string }): Promise<{ subject: string; html: string }> {
   const first = opts.name.trim().split(/\s+/)[0] || "there";
   const role = opts.position === "dispositions" ? "dispositions" : "acquisitions";
   const sys = SYSTEMS[role];
@@ -47,9 +47,13 @@ export async function buildWelcomeEmail(opts: { name: string; position: string; 
     return { email: s.loginEmail || "", pw, url: s.url || "" };
   };
 
-  // Predictive Index assessment link (stored in a Resource via ?setpilink=1)
-  let piUrl = "";
-  try { const r = await db.resource.findFirst({ where: { category: "__pi_link__" } }); piUrl = (r?.url || r?.description || "").trim(); } catch { /* none */ }
+  // Behavioral / personality assessment link. We use our OWN in-house DISC
+  // assessment (/assess/[token]) — the caller passes the hire's personal token
+  // link. Fall back to a stored external link only if no in-house link was made.
+  let piUrl = (opts.assessUrl || "").trim();
+  if (!piUrl) {
+    try { const r = await db.resource.findFirst({ where: { category: "__pi_link__" } }); piUrl = (r?.url || r?.description || "").trim(); } catch { /* none */ }
+  }
 
   // pay + bonus from the commission plan
   const plans = await readCommissionPlans();
@@ -96,7 +100,7 @@ export async function buildWelcomeEmail(opts: { name: string; position: string; 
 
         <div style="font-weight:800;color:#0b1f3a;margin-top:6px">3) Two quick to-dos</div>
         <ul style="margin:6px 0 10px;padding-left:18px;font-size:14px;line-height:1.5">
-          <li><b>Take your Predictive Index assessment</b> — a short (~6 min) behavioral survey so we put you in your best-fit seat.${piUrl ? ` <a href="${esc(piUrl)}" style="color:#2563eb;font-weight:700">Start it here →</a>` : " (Jon will send you the PI link.)"}</li>
+          <li><b>Take your personality assessment</b> — a short (~6 min) behavioral survey (our in-house Predictive Index) so we put you in your best-fit seat. No login needed.${piUrl ? ` <a href="${esc(piUrl)}" style="color:#2563eb;font-weight:700">Start your assessment →</a>` : " (Jon will send you your personal assessment link.)"}</li>
           <li><b>Need help or have an idea?</b> In the War Room, use <b>Requests</b> (left menu) to flag anything broken or confusing, and <b>AI Champion</b> to drop ideas that improve the system.</li>
         </ul>
 

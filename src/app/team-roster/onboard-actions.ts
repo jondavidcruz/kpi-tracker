@@ -39,7 +39,27 @@ export async function sendWelcomeEmailAction(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
   const u = userId ? await db.user.findUnique({ where: { id: userId }, select: { name: true, email: true, position: true } }) : null;
   if (!u?.email) redirect("/team-roster?welcomeerr=noemail");
-  const { subject, html } = await buildWelcomeEmail({ name: u.name, position: u.position ?? "", email: u.email });
+  // Find or create this hire's IN-HOUSE behavioral assessment invite (our own
+  // DISC/Predictive Index at /assess/[token]) so the welcome email carries their
+  // personal no-login test link automatically (Jon 2026-10-16: "I don't have a
+  // link — you built us our own in the system").
+  let assessUrl = "";
+  try {
+    let a = await db.assessment.findFirst({
+      where: { OR: [{ userId }, { email: u.email }] },
+      orderBy: { createdAt: "desc" },
+      select: { token: true },
+    });
+    if (!a) {
+      const { randomUUID } = await import("crypto");
+      a = await db.assessment.create({
+        data: { token: randomUUID().replace(/-/g, "").slice(0, 20), name: u.name, email: u.email, userId, createdBy: me?.name ?? "onboarding" },
+        select: { token: true },
+      });
+    }
+    if (a?.token) assessUrl = `https://kpi-tracker-lovat.vercel.app/assess/${a.token}`;
+  } catch { /* assessment best-effort — email still sends without the link */ }
+  const { subject, html } = await buildWelcomeEmail({ name: u.name, position: u.position ?? "", email: u.email, assessUrl });
   // Auto-attach their most recent signed agreement (TeamDoc) if one is uploaded,
   // so Jon doesn't have to attach it by hand (Jon 2026-10-15).
   let attachment: { filename: string; content: string } | null = null;
