@@ -4,7 +4,8 @@ import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { getRevenueByUser, tierFor, REVENUE_LADDER } from "@/lib/roster-revenue";
 import { saveRevAdjustAction } from "@/app/actions";
-import { addTeamMemberAction, sendWelcomeEmailAction } from "./onboard-actions";
+import { addTeamMemberAction, sendWelcomeEmailAction, toggleOnboardingStepAction } from "./onboard-actions";
+import { getOnboardingStore, buildMilestones } from "@/lib/onboarding-progress";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
 import { readCommissionPlans } from "@/lib/commissions";
 import { db } from "@/lib/db";
@@ -55,19 +56,44 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
   const { byUserId: revByUser, unattributed, adjustments } = owner
     ? await getRevenueByUser(Number(today.slice(0, 4)))
     : { byUserId: new Map(), unattributed: 0, adjustments: {} as Record<string, number> };
-  const [users, profiles, board, ai, seats, docs] = await Promise.all([
+  const [users, profiles, board, ai, seats, docs, assessments, onbStore] = await Promise.all([
     getAllUsers(),
     db.teamProfile.findMany(),
     getAwardBoard(),
     getAiChampions(),
     db.seat.findMany({ orderBy: { sortOrder: "asc" } }),
     db.teamDoc.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, userId: true, label: true, filename: true, size: true, createdAt: true } }),
+    db.assessment.findMany({ select: { userId: true, name: true, email: true, workStylesResult: true, wordSurveyResult: true } }).catch(() => [] as { userId: string | null; name: string; email: string; workStylesResult: string; wordSurveyResult: string }[]),
+    getOnboardingStore(),
   ]);
   const active = users.filter((u) => u.active);
   const byUser = new Map(profiles.map((p) => [p.userId ?? "", p]));
   const docsByUser = new Map<string, typeof docs>();
   for (const d of docs) { const arr = docsByUser.get(d.userId) ?? []; arr.push(d); docsByUser.set(d.userId, arr); }
   const fmtSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+  // 📋 Onboarding Progress — hires still in locked onboarding mode. Auto-detects
+  // what's done; manual training milestones are check-off boxes saved centrally.
+  const assessmentDoneFor = (u: { id: string; name: string; email: string }) => assessments.some((a) =>
+    ((a.userId && a.userId === u.id) ||
+     (a.email && u.email && a.email.toLowerCase() === u.email.toLowerCase()) ||
+     a.name.trim().toLowerCase() === u.name.trim().toLowerCase())
+    && (!!a.workStylesResult || !!a.wordSurveyResult));
+  const onboardingHires = active
+    .filter((u) => u.onboarding && u.role !== "manager" && u.role !== "admin")
+    .map((u) => {
+      const entry = onbStore[u.id] ?? {};
+      const milestones = buildMilestones({
+        position: u.position,
+        welcomeSentAt: entry.welcomeSentAt,
+        assessmentDone: assessmentDoneFor(u),
+        hasAgreement: (docsByUser.get(u.id)?.length ?? 0) > 0,
+        certified: !u.onboarding,
+        manual: entry.steps ?? {},
+      });
+      const done = milestones.filter((m) => m.done).length;
+      return { u, milestones, done, total: milestones.length, pct: Math.round((done / milestones.length) * 100) };
+    });
 
   // commission plans (real structures from the signed agreements — C-suite view)
   const commPlans = await readCommissionPlans();
@@ -108,6 +134,59 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
           </label></>; })()}
           <button className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700">Create account + card</button>
         </form>
+      </Card>
+
+      {/* 📋 Onboarding Progress (Jon 2026-10-16): one place to see how far each new
+          hire has gotten. Auto-detects account / welcome email / assessment /
+          signed agreement / certified; the training milestones are check-offs
+          saved centrally (not per-browser) so you see it from anywhere. */}
+      <Card id="onboarding" className="border-l-4 border-sky-500 p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="text-sm font-extrabold text-slate-800">📋 Onboarding Progress</span>
+          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-700">{onboardingHires.length} in onboarding</span>
+          <Link href="/onboarding" className="ml-auto text-[11px] font-semibold text-sky-600 hover:underline">Full onboarding playbook →</Link>
+        </div>
+        <div className="mb-3 text-[11px] text-slate-500">What each new hire has completed. ✅ auto-detected · ⬜ tick off the training milestones as they finish — saved here so you see it from any device. Certify them below once they clear the gates.</div>
+        {onboardingHires.length === 0 ? (
+          <p className="rounded-lg bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">No one is in onboarding right now. New hires you add start here until you certify them.</p>
+        ) : (
+          <div className="space-y-3">
+            {onboardingHires.map(({ u, milestones, done, total, pct }) => (
+              <div key={u.id} className="rounded-xl border border-slate-200 p-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-brand-navy text-[10px] font-bold text-brand-gold-soft">{u.name.split(" ").map((x) => x[0]).slice(0, 2).join("")}</span>
+                  <span className="font-bold text-slate-800">{u.name}</span>
+                  <span className="text-[11px] text-slate-400">{positionLabel(u.position)}</span>
+                  <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${pct === 100 ? "bg-emerald-100 text-emerald-700" : "bg-sky-100 text-sky-700"}`}>{done}/{total} done · {pct}%</span>
+                </div>
+                <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div className={`h-full rounded-full ${pct === 100 ? "bg-emerald-500" : "bg-sky-500"}`} style={{ width: `${pct}%` }} />
+                </div>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {milestones.map((m) => (
+                    m.auto ? (
+                      <div key={m.key} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] ${m.done ? "bg-emerald-50 text-emerald-800" : "bg-slate-50 text-slate-500"}`}>
+                        <span>{m.done ? "✅" : "⏳"}</span>
+                        <span className="flex-1">{m.label}</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">auto</span>
+                      </div>
+                    ) : (
+                      <form key={m.key} action={toggleOnboardingStepAction} className="contents">
+                        <input type="hidden" name="userId" value={u.id} />
+                        <input type="hidden" name="key" value={m.key} />
+                        <input type="hidden" name="done" value={m.done ? "0" : "1"} />
+                        <button className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] ${m.done ? "bg-emerald-50 text-emerald-800" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:ring-sky-300"}`}>
+                          <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border text-[10px] ${m.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}>✓</span>
+                          <span className="flex-1">{m.label}</span>
+                        </button>
+                      </form>
+                    )
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* 🎯 Commission goals (Jon 2026-10-08): each rep's monthly target +

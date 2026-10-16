@@ -8,8 +8,22 @@ import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { defaultNewRepNavHidden } from "@/lib/navItems";
 import { buildWelcomeEmail } from "@/lib/welcome-email";
 import { sendEmailTo, sendEmailWithAttachment } from "@/lib/notify";
+import { markWelcomeSent, setOnboardingStep } from "@/lib/onboarding-progress";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+
+// Toggle a manual onboarding training milestone for a hire (saved server-side so
+// Jon sees it from any device — Onboarding Progress tracker on /team-roster).
+export async function toggleOnboardingStepAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const key = String(formData.get("key") ?? "");
+  const done = String(formData.get("done") ?? "") === "1";
+  if (userId && key) await setOnboardingStep(userId, key, done);
+  revalidatePath("/team-roster");
+  redirect("/team-roster#onboarding");
+}
 
 export async function addTeamMemberAction(formData: FormData) {
   const me = await getCurrentUser();
@@ -80,6 +94,7 @@ export async function sendWelcomeEmailAction(formData: FormData) {
   const ok = attachment
     ? await sendEmailWithAttachment([u.email], subject, html, attachment)
     : await sendEmailTo([u.email], subject, html, undefined, undefined, err);
+  if (ok) await markWelcomeSent(userId).catch(() => {});
   revalidatePath("/team-roster");
   redirect(ok ? `/team-roster?welcomed=${encodeURIComponent(u.name)}` : `/team-roster?welcomeerr=${encodeURIComponent(err.msg || "send failed")}`);
 }
