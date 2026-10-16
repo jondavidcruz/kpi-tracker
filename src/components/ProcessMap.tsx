@@ -355,14 +355,19 @@ const STORE_KEY = "fo_process_checks";
 
 // `allowedDepts` scopes the whole map to a subset of departments — onboarding hires
 // only see the steps for their own lane (e.g. Acquisitions), never the full pipeline.
-export default function ProcessMap({ allowedDepts = null }: { allowedDepts?: string[] | null } = {}) {
-  const [procKey, setProcKey] = useState("landdispo"); // land is the business now — lead with Jon's land SOP
+export default function ProcessMap({ allowedDepts = null, acqOnly = false }: { allowedDepts?: string[] | null; acqOnly?: boolean } = {}) {
+  // acqOnly (Jon 2026-10-16): a pure acquisitions rep sees ONLY their sales process,
+  // not the full deal-type menu / dispo land play / business structure.
+  const [procKey, setProcKey] = useState(acqOnly ? "standard" : "landdispo");
   const [sel, setSel] = useState(1);
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [checks, setChecks] = useState<Record<string, boolean>>({});
-  const PROC_LIST = allowedDepts
+  const scoped = allowedDepts
     ? PROCESSES.map((p) => ({ ...p, phases: p.phases.filter((ph) => allowedDepts.includes(ph.dept)) })).filter((p) => p.phases.length > 0)
     : PROCESSES;
+  // Pure acquisitions reps get a single "your sales process" view (the standard
+  // lead→contract flow), no deal-type tabs.
+  const PROC_LIST = acqOnly ? (scoped.filter((p) => p.key === "standard").length ? scoped.filter((p) => p.key === "standard") : scoped.slice(0, 1)) : scoped;
 
   useEffect(() => {
     try { setChecks(JSON.parse(localStorage.getItem(STORE_KEY) || "{}")); } catch { /* ignore */ }
@@ -387,8 +392,9 @@ export default function ProcessMap({ allowedDepts = null }: { allowedDepts?: str
 
   return (
     <div className="space-y-5">
-      {/* Process picker — choose the workflow */}
-      <div>
+      {/* Process picker — choose the workflow (hidden for pure acquisitions reps:
+          they just see their sales process) */}
+      <div className={acqOnly ? "hidden" : ""}>
         <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">Choose a process</div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {PROC_LIST.map((p) => {

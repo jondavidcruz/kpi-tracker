@@ -173,7 +173,7 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
       {/* 📱 Live preview — the real sidebar their account renders */}
       <Card className="p-5">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">📱 Live preview — exactly what {firstName}&apos;s screen shows</span>
+          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">📱 Live preview — exactly what {firstName}&apos;s screen shows · click any item to open that window</span>
           {onboardingLock && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-700">🔒 Onboarding — locked to training + daily basics until certified</span>}
         </div>
         <div className="flex flex-col gap-4 sm:flex-row">
@@ -188,9 +188,9 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
                   <div key={g.group}>
                     <div className="mb-0.5 px-1 text-[9px] font-bold uppercase tracking-wider text-white/40">{g.group}</div>
                     {vis.map((it) => (
-                      <div key={it.href} className="flex items-center gap-2 rounded-md px-2 py-1 text-[12px] text-white/85">
+                      <a key={it.href} href={it.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md px-2 py-1 text-[12px] text-white/85 hover:bg-white/10" title={`Open ${it.label}`}>
                         <span className="h-1.5 w-1.5 rounded-full bg-brand-gold/70" /> {it.label}
-                      </div>
+                      </a>
                     ))}
                   </div>
                 );

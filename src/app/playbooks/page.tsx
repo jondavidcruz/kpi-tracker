@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { SectionTitle, Card } from "@/components/ui";
 import { PLAYBOOKS, PLAYBOOK_CATEGORIES } from "@/lib/playbooks-data";
 import PlaybookDiagram from "@/components/PlaybookDiagram";
@@ -20,6 +20,7 @@ function hi(text: string): React.ReactNode {
 export default async function PlaybooksPage() {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
+  if (!canAccessCSuite(me)) return <Card className="mx-auto max-w-md p-10 text-center text-slate-400">🔒 Playbooks are C-suite only.</Card>;
 
   return (
     <div className="space-y-5">

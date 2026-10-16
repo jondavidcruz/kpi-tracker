@@ -1391,6 +1391,31 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, moved, total: open.length });
   }
 
+  // 🔒 Lock acquisitions reps to "just sales" (?lockacq=1) — hide dispositions,
+  // developer sourcing, the dispo land play, and the business structure from
+  // acquisitions/cc_lm reps (Jon 2026-10-16). Adds to their navHidden; doesn't
+  // touch managers or dispo. (Onboarding reps are already locked to the basics.)
+  if (url.searchParams.get("lockacq") === "1") {
+    const { parseNavHidden } = await import("@/lib/navItems");
+    const ACQ_HIDE = [
+      "/deals", "/crm/dealboard", "/marketing", "/vetting", "/closing-calc", // dispositions
+      "/lead-sourcing", // developer sourcing
+      "/land-master", "/playbooks", // dispo land play / strategy (now C-suite anyway)
+      "/vto", "/leadership", "/issues", "/meeting", "/blueprint", "/rocks", // business structure / EOS
+      "/analytics", "/lead-roi", "/kpi-sources", "/internet", // money/analytics
+      "/compliance", "/phone-health", "/email-health", "/alerts", "/pip", "/onboarding", "/benchmarks",
+    ];
+    const reps = await db.user.findMany({ where: { active: true, role: "rep", position: { in: ["acquisitions", "cc_lm"] } }, select: { id: true, name: true, navHidden: true } });
+    const touched: string[] = [];
+    for (const r of reps) {
+      const cur = new Set(parseNavHidden(r.navHidden));
+      ACQ_HIDE.forEach((h) => cur.add(h));
+      await db.user.update({ where: { id: r.id }, data: { navHidden: JSON.stringify([...cur]) } });
+      touched.push(r.name);
+    }
+    return NextResponse.json({ ok: true, lockedReps: touched });
+  }
+
   // 🧠 Store the Predictive Index assessment link (?setpilink=1&url=...) so the
   // welcome email auto-includes it for every new hire (Jon 2026-10-16).
   if (url.searchParams.get("setpilink") === "1") {

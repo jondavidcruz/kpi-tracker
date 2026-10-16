@@ -19,12 +19,16 @@ export default async function ProcessPage() {
   const me = await getCurrentUser();
   const fullView = !me || isManager(me) || isCSuitePerson(me);
   let allowedDepts: string[] | null = null;
+  let acqOnly = false;
   if (!fullView && me) {
     const base = ROLE_DEPTS[me.position ?? ""] ?? ROLE_DEPTS.acquisitions;
     const sec = secondaryPositionOf(me);
     const extra = sec ? ROLE_DEPTS[sec] ?? [] : [];
     const mkt = canAccessMarketing(me) ? ["Marketing"] : [];
     allowedDepts = [...new Set([...base, ...extra, ...mkt])];
+    // A PURE acquisitions rep (no dispo secondary, no marketing) sees only their
+    // sales process — not the dispo land play or the whole deal-type menu (Jon 2026-10-16).
+    acqOnly = me.position === "acquisitions" && !sec && !canAccessMarketing(me);
   }
 
   return (
@@ -36,7 +40,7 @@ export default async function ProcessPage() {
           : "Pick the right workflow for the deal — standard close, rejected→listing, cash-for-keys, pre-foreclosure, probate, or other issues. Each is a step-by-step checklist."}
         accent="bg-brand-gold"
       />
-      <ProcessMap allowedDepts={allowedDepts} />
+      <ProcessMap allowedDepts={allowedDepts} acqOnly={acqOnly} />
     </div>
   );
 }

@@ -59,8 +59,6 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/call-scoring", label: "Call scoring", gate: "all" },
     { href: "/scripts", label: "Scripts", gate: "all" },
     { href: "/glossary", label: "Glossary", gate: "all" },
-    { href: "/playbooks", label: "Playbooks", gate: "all" },
-    { href: "/land-master", label: "Land Master Plan", gate: "all" },
   ] },
   { group: "EOS", items: [
     { href: "/meeting", label: "Monday Meeting", gate: "manager" },
@@ -84,6 +82,8 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/roadmap", label: "Roadmap", gate: "csuite" },
     { href: "/team-roster", label: "Team Roster", gate: "csuite" },
     { href: "/blueprint", label: "Blueprint", gate: "csuite" },
+    { href: "/playbooks", label: "Playbooks", gate: "csuite" },
+    { href: "/land-master", label: "Land Master Plan", gate: "csuite" },
   ] },
   { group: "Requests & Support", items: [
     { href: "/tickets", label: "Requests", gate: "all" },
