@@ -416,9 +416,9 @@ export async function submitTicket(formData: FormData) {
   const shot = formData.get("screenshot");
   if (shot instanceof File && shot.size > 0 && shot.size <= 15 * 1024 * 1024) {
     try {
-      const { gdriveConfigured, ensureSubfolder, uploadToFolder } = await import("@/lib/gdrive");
-      if (gdriveConfigured() && process.env.GDRIVE_FOLDER_ID) {
-        const folderId = await ensureSubfolder(process.env.GDRIVE_FOLDER_ID, "Tickets");
+      const { gdriveConfigured, ensureSubfolder, uploadToFolder, rootFolderId } = await import("@/lib/gdrive");
+      if (gdriveConfigured() && rootFolderId()) {
+        const folderId = await ensureSubfolder(rootFolderId(), "Tickets");
         const bytes = new Uint8Array(await shot.arrayBuffer());
         const up = await uploadToFolder(folderId, `ticket ${Date.now()} - ${shot.name}`.slice(0, 120), bytes, shot.type || "image/png", true);
         body = `${body}\n\n[[screenshot:${up.link}]]`.trim();

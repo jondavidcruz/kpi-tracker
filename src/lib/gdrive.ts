@@ -9,6 +9,17 @@ export function gdriveConfigured(): boolean {
   return Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GDRIVE_FOLDER_ID);
 }
 
+/** Accept a bare folder id OR a pasted Drive URL and return the bare id (Jon
+ *  2026-10-16: GDRIVE_FOLDER_ID was set to a full folder URL → every upload 404'd). */
+export function sanitizeFolderId(raw?: string | null): string {
+  const s = (raw ?? "").trim();
+  if (!s) return "";
+  const m = s.match(/\/folders\/([A-Za-z0-9_-]+)/) || s.match(/[?&]id=([A-Za-z0-9_-]+)/) || s.match(/\/d\/([A-Za-z0-9_-]+)/);
+  return (m ? m[1] : s.replace(/[?#].*$/, "")).trim();
+}
+/** The configured root folder id, URL-safe. */
+export function rootFolderId(): string { return sanitizeFolderId(process.env.GDRIVE_FOLDER_ID); }
+
 type SA = { client_email: string; private_key: string };
 function serviceAccount(): SA {
   return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "{}");
@@ -81,7 +92,7 @@ export async function createSharedDrive(name: string): Promise<{ id?: string; er
 export async function driveCheck(): Promise<{ ok: boolean; folder?: string; error?: string }> {
   try {
     const token = await getAccessToken();
-    const id = process.env.GDRIVE_FOLDER_ID;
+    const id = rootFolderId();
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,name,driveId&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token}` } });
     const j = await res.json();
     if (!res.ok) return { ok: false, error: JSON.stringify(j).slice(0, 300) };
@@ -94,7 +105,7 @@ export async function driveCheck(): Promise<{ ok: boolean; folder?: string; erro
 /** Upload bytes to the Drive folder, make it link-readable, return a playable URL. */
 export async function uploadToDrive(name: string, bytes: Uint8Array, mime: string): Promise<string> {
   const token = await getAccessToken();
-  const folderId = process.env.GDRIVE_FOLDER_ID;
+  const folderId = rootFolderId();
   const boundary = "wrb_" + crypto.randomBytes(8).toString("hex");
   const meta = JSON.stringify({ name, parents: [folderId] });
   const pre = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`;
@@ -120,7 +131,7 @@ export async function uploadToDrive(name: string, bytes: Uint8Array, mime: strin
  *  it, so the app streams it back server-side (owner-gated) via downloadFromDrive. */
 export async function uploadToDrivePrivate(name: string, bytes: Uint8Array, mime: string): Promise<string> {
   const token = await getAccessToken();
-  const folderId = process.env.GDRIVE_FOLDER_ID;
+  const folderId = rootFolderId();
   const boundary = "wrb_" + crypto.randomBytes(8).toString("hex");
   const meta = JSON.stringify({ name, parents: [folderId] });
   const pre = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`;
@@ -195,9 +206,9 @@ export async function listFolder(folderId: string): Promise<{ id: string; name: 
 let _dealsParent: string | null = null;
 export async function dealsParent(): Promise<string> {
   if (_dealsParent) return _dealsParent;
-  const explicit = process.env.DEALS_FOLDER_ID;
+  const explicit = sanitizeFolderId(process.env.DEALS_FOLDER_ID);
   if (explicit) { _dealsParent = explicit; return explicit; }
-  const root = process.env.GDRIVE_FOLDER_ID;
+  const root = rootFolderId();
   if (!root) throw new Error("GDRIVE_FOLDER_ID not set");
   _dealsParent = await ensureSubfolder(root, "Deals");
   return _dealsParent;
