@@ -12,6 +12,28 @@ const AREAS = ["Enter KPIs", "Dashboard", "Alerts", "Speed test", "Deals", "Logi
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lbl = "mb-0.5 block text-[11px] font-semibold text-slate-500";
 
+// Renders a ticket's details plus any attached screenshot (stored as a
+// [[screenshot:URL]] marker in the body — Jon 2026-10-16).
+function TicketBody({ body, muted }: { body: string; muted?: boolean }) {
+  if (!body) return null;
+  const m = body.match(/\[\[screenshot:([^\]]+)\]\]/);
+  const text = body.replace(/\n*\[\[screenshot:[^\]]+\]\]/, "").trim();
+  const link = m?.[1];
+  const fileId = (link?.match(/[?&]id=([^&]+)/) || link?.match(/\/d\/([^/]+)/))?.[1];
+  const thumb = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w800` : null;
+  return (
+    <div className={muted ? "mt-0.5" : undefined}>
+      {text && <p className={`whitespace-pre-line text-sm ${muted ? "text-slate-500" : "text-slate-600"}`}>{text}</p>}
+      {link && (
+        <a href={link} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-block" title="Open screenshot">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {thumb ? <img src={thumb} alt="screenshot" className="max-h-52 rounded-lg border border-slate-200 hover:opacity-90" /> : <span className="text-xs font-semibold text-sky-700 underline">📎 View screenshot</span>}
+        </a>
+      )}
+    </div>
+  );
+}
+
 // iSpeedToLead-style status pills (Jon 2026-10-08)
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   new: { label: "VIEWED BY SUPPORT", cls: "bg-indigo-100 text-indigo-700" },
@@ -85,6 +107,10 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
             <span className={lbl}>Details <span className="font-normal text-slate-400">(what you did, what happened, what you expected)</span></span>
             <textarea name="body" rows={4} placeholder="Steps to reproduce help a lot…" className={inputCls} />
           </label>
+          <label className="sm:col-span-2">
+            <span className={lbl}>📎 Screenshot <span className="font-normal text-slate-400">(optional — a picture of the issue helps a lot)</span></span>
+            <input type="file" name="screenshot" accept="image/*" className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-200" />
+          </label>
           <div className="sm:col-span-2">
             <TicketSubmitButton />
             <span className="ml-3 text-xs text-slate-400">This files a report only — it can&apos;t change the system.</span>
@@ -141,7 +167,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
                       </div>
                     </summary>
                     <div className="space-y-3 border-t border-slate-100 px-4 py-3">
-                      {t.body && <p className="whitespace-pre-line text-sm text-slate-600">{t.body}</p>}
+                      <TicketBody body={t.body} />
                       {t.adminNote && <p className="rounded-md bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 ring-1 ring-slate-100"><strong>Resolution note:</strong> {t.adminNote}</p>}
                       <TicketThread id={t.id} msgs={msgs} meName={me.name} status={t.status} />
                     </div>
@@ -226,7 +252,7 @@ function AdminTicket({ t, stage, thread }: { t: { id: string; title: string; bod
             <span className="text-xs text-slate-400">from {t.submittedBy}</span>
           </div>
           <p className="mt-1 font-semibold text-slate-800">{t.title}</p>
-          {t.body && <p className="mt-0.5 whitespace-pre-line text-sm text-slate-500">{t.body}</p>}
+          <TicketBody body={t.body} muted />
           {t.adminNote && <p className="mt-2 rounded-md bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 ring-1 ring-slate-100"><strong>Note:</strong> {t.adminNote}</p>}
         </div>
         <form action={deleteTicket} className="shrink-0">

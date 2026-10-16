@@ -400,7 +400,7 @@ export async function submitTicket(formData: FormData) {
   const me = await getCurrentUser();
   if (!me) return; // must be signed in
   const rawTitle = String(formData.get("title") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  let body = String(formData.get("body") ?? "").trim();
   const area = String(formData.get("area") ?? "").trim();
   const severity = String(formData.get("severity") ?? "normal").trim();
   // Forgiving: if they typed everything into Details and left the summary blank,
@@ -408,6 +408,22 @@ export async function submitTicket(formData: FormData) {
   const title = rawTitle || body.split("\n")[0].slice(0, 80);
   if (!title) {
     redirect("/tickets?empty=1");
+  }
+
+  // 📎 Optional screenshot (Jon 2026-10-16: "let them upload a screenshot to show
+  // the issue"). Store it in Drive (Tickets folder, link-readable) and append the
+  // link to the body as a [[screenshot:URL]] marker the ticket card renders.
+  const shot = formData.get("screenshot");
+  if (shot instanceof File && shot.size > 0 && shot.size <= 15 * 1024 * 1024) {
+    try {
+      const { gdriveConfigured, ensureSubfolder, uploadToFolder } = await import("@/lib/gdrive");
+      if (gdriveConfigured() && process.env.GDRIVE_FOLDER_ID) {
+        const folderId = await ensureSubfolder(process.env.GDRIVE_FOLDER_ID, "Tickets");
+        const bytes = new Uint8Array(await shot.arrayBuffer());
+        const up = await uploadToFolder(folderId, `ticket ${Date.now()} - ${shot.name}`.slice(0, 120), bytes, shot.type || "image/png", true);
+        body = `${body}\n\n[[screenshot:${up.link}]]`.trim();
+      }
+    } catch { /* screenshot is best-effort — never block the ticket */ }
   }
 
   const ticket = await db.ticket.create({

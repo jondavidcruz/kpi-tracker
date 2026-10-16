@@ -187,18 +187,31 @@ export async function listFolder(folderId: string): Promise<{ id: string; name: 
   return j.files ?? [];
 }
 
-// 📁 Auto-surface a deal's existing Google Drive files in the War Room (Jon
-// 2026-10-13: "files saved in Drive under the property address aren't showing
-// under Documents"). Finds the deal folder under DEALS_PARENT by street number
-// (same match as the recording/upload path) and lists its files. Best-effort.
-const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
+// 📁 The deal-documents parent folder. The old hardcoded ID
+// (1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub) 404'd for the service account — every CRM/
+// recording upload failed (Jon 2026-10-16: "file uploads still not working").
+// Now it's a "Deals" subfolder under the known-good GDRIVE_FOLDER_ID (or an
+// explicit DEALS_FOLDER_ID env override). Cached per instance.
+let _dealsParent: string | null = null;
+export async function dealsParent(): Promise<string> {
+  if (_dealsParent) return _dealsParent;
+  const explicit = process.env.DEALS_FOLDER_ID;
+  if (explicit) { _dealsParent = explicit; return explicit; }
+  const root = process.env.GDRIVE_FOLDER_ID;
+  if (!root) throw new Error("GDRIVE_FOLDER_ID not set");
+  _dealsParent = await ensureSubfolder(root, "Deals");
+  return _dealsParent;
+}
+
+// Auto-surface a deal's existing Google Drive files in the War Room. Finds the
+// deal folder under the deals parent by street number and lists its files.
 export async function listDealFiles(label: string): Promise<{ id: string; name: string; link: string; mimeType: string }[]> {
   if (!gdriveConfigured()) return [];
   const clean = (label || "").trim();
   const streetNo = clean.match(/^\d+/)?.[0];
   const firstTok = clean.toLowerCase().split(",")[0].slice(0, 18);
   try {
-    const top = await listFolder(DEALS_PARENT);
+    const top = await listFolder(await dealsParent());
     const folders = top.filter((x) => x.mimeType.includes("folder"));
     let folder = streetNo ? folders.find((x) => x.name.startsWith(streetNo)) : undefined;
     if (!folder && firstTok) folder = folders.find((x) => x.name.toLowerCase().includes(firstTok));

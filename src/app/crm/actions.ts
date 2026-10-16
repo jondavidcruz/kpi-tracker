@@ -728,12 +728,12 @@ export async function uploadLeadDocAction(formData: FormData) {
   // Auto-title: the chosen doc type, else the file's own name (team can change it).
   const title = docType || file.name.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim() || file.name;
   try {
-    const { gdriveConfigured, ensureSubfolder, uploadToFolder, listFolder } = await import("@/lib/gdrive");
+    const { gdriveConfigured, ensureSubfolder, uploadToFolder, listFolder, dealsParent } = await import("@/lib/gdrive");
     if (!gdriveConfigured()) {
       await logCrmEvent({ contactId, oppId, kind: "system", body: "📎 Upload couldn't save — document storage isn't configured. Tell Jon.", actor: me.name });
       revalidatePath(`/crm/${oppId}`); return;
     }
-    const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
+    const DEALS_PARENT = await dealsParent();
     const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contact: { select: { address: true, name: true } } } });
     const label = (opp?.contact.address || opp?.title || opp?.contact.name || "Unfiled").trim();
     const streetNo = label.match(/^\d+/)?.[0];
