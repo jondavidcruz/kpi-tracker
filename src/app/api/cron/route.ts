@@ -1767,13 +1767,13 @@ export async function GET(request: Request) {
   // can actually reach Google Drive (the only blob store). Reports config + a
   // real round-trip upload error if any.
   if (url.searchParams.get("drivetest") === "1") {
-    const { gdriveConfigured, ensureSubfolder, uploadToFolder } = await import("@/lib/gdrive");
+    const { gdriveConfigured, ensureSubfolder, uploadToFolder, dealsParent } = await import("@/lib/gdrive");
     if (!gdriveConfigured()) return NextResponse.json({ ok: false, configured: false, hint: "GOOGLE_SERVICE_ACCOUNT_JSON or GDRIVE_FOLDER_ID missing in Vercel env" });
     try {
-      const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
-      const folderId = await ensureSubfolder(DEALS_PARENT, "__drivetest");
+      const parent = await dealsParent();
+      const folderId = await ensureSubfolder(parent, "__drivetest");
       const up = await uploadToFolder(folderId, `test-${Date.now()}.txt`, new TextEncoder().encode("hello from drivetest"), "text/plain");
-      return NextResponse.json({ ok: true, configured: true, folderId, uploaded: up });
+      return NextResponse.json({ ok: true, configured: true, dealsParent: parent, folderId, uploaded: up });
     } catch (e) { return NextResponse.json({ ok: false, configured: true, error: String(e).slice(0, 400) }); }
   }
 
