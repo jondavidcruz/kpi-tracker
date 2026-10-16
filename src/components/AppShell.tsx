@@ -34,8 +34,19 @@ export default async function AppShell({ children }: { children: React.ReactNode
 
   // Restricted users (e.g. Ethan — listings only) can only reach their allowed
   // pages; bounce them to their home page if they land anywhere else.
-  const allow = navAllowlist(me);
+  let allow = navAllowlist(me);
   const hiddenNav = [...parseNavHidden(me.navHidden), ...(isSoftwareBlocked(me) ? ["/software"] : [])];
+  // 🔒 A rep with a pipeline assigned gets the Seller CRM — even a new hire still
+  // in onboarding (Jon 2026-10-16: "allow new reps CRM access when a pipeline is
+  // assigned to them"). They only ever see that pipeline's board + its leads
+  // (pipeline lock, enforced in /crm). The lead-wide CRM sub-tools (which aren't
+  // pipeline-scoped) stay blocked so no other leads leak.
+  const { pipelineLockFor } = await import("@/lib/crm");
+  const hasAssignedPipeline = !!(await pipelineLockFor(me))?.length;
+  if (hasAssignedPipeline) {
+    if (allow && !allow.includes("/crm")) allow = [...allow, "/crm"];
+    hiddenNav.push("/crm/contacts", "/crm/conversations", "/crm/dialer", "/crm/next", "/crm/dealboard", "/crm/tasks", "/crm/automations", "/crm/pipelines", "/crm/calendar", "/crm/access");
+  }
   if (allow && !isPathAllowed(reqPath, allow)) redirect(allow[0]);
   // Per-user hidden sections are blocked by URL too — not just removed from the menu.
   if (isPathHidden(reqPath, hiddenNav)) redirect("/dashboard");
