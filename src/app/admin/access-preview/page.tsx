@@ -5,6 +5,7 @@ import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
 import { saveUserAccess } from "@/app/actions";
 import { NAV_GROUPS, parseNavHidden, type NavGate } from "@/lib/navItems";
+import PreviewPane from "./PreviewPane";
 
 export const dynamic = "force-dynamic";
 
@@ -170,44 +171,22 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
         )}
       </Card>
 
-      {/* 📱 Live preview — the real sidebar their account renders */}
+      {/* 📱 Live preview — the teammate's REAL screen, embedded. Click a sidebar
+          item → it loads that page in the pane rendered AS them (?viewas). */}
       <Card className="p-5">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">📱 Live preview — exactly what {firstName}&apos;s screen shows · click any item to open that window</span>
+          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">📱 Live preview — click any item to open it right here, exactly as {firstName} sees it</span>
           {onboardingLock && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-700">🔒 Onboarding — locked to training + daily basics until certified</span>}
         </div>
-        <div className="flex flex-col gap-4 sm:flex-row">
-          {/* sidebar mockup, styled like the real nav */}
-          <div className="w-60 shrink-0 self-start overflow-hidden rounded-xl bg-brand-navy p-3 text-white shadow-lg">
-            <div className="mb-3 px-1 text-sm font-extrabold tracking-tight">🏠 Freedom Offers</div>
-            <div className="space-y-2.5">
-              {NAV_GROUPS.map((g) => {
-                const vis = g.items.filter(visibleItem);
-                if (!vis.length) return null;
-                return (
-                  <div key={g.group}>
-                    <div className="mb-0.5 px-1 text-[9px] font-bold uppercase tracking-wider text-white/40">{g.group}</div>
-                    {vis.map((it) => (
-                      <a key={it.href} href={it.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md px-2 py-1 text-[12px] text-white/85 hover:bg-white/10" title={`Open ${it.label}`}>
-                        <span className="h-1.5 w-1.5 rounded-full bg-brand-gold/70" /> {it.label}
-                      </a>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          {/* what they land on */}
-          <div className="flex-1 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">What they see</div>
-            <div className="mt-1 text-sm text-slate-600">
-              {onboardingLock
-                ? `${firstName} is a brand-new hire locked to the basics — they see only the sections in the sidebar at left (training, scripts, process, enter KPIs, underwriting, their account). Everything else is hidden until you certify them on the Onboarding page.`
-                : `${firstName} sees exactly the sidebar at left and nothing else. Money figures are hidden unless they're a manager (revenue) or C-suite (profit/pay).`}
-            </div>
-            <div className="mt-3 text-[11px] text-slate-400">This mirrors the real left nav their account renders, grouped exactly like the live sidebar. The detailed ✓/✗ breakdown (and why each item is hidden) is below.</div>
-          </div>
-        </div>
+        {(() => {
+          const groups = NAV_GROUPS.map((g) => ({
+            group: g.group,
+            items: g.items.filter(visibleItem).map((it) => ({ href: it.href, label: it.label })),
+          })).filter((g) => g.items.length > 0);
+          const startHref = groups[0]?.items[0]?.href ?? "/dashboard";
+          return <PreviewPane userId={selected.id} firstName={firstName} groups={groups} startHref={startHref} />;
+        })()}
+        <div className="mt-3 text-[11px] text-slate-400">This loads each real page rendered as {firstName} — their menu, their hidden money, their access redirects. It&apos;s read-only: nothing you click here changes their account. The detailed ✓/✗ breakdown is below.</div>
       </Card>
 
       {/* Their menu — detailed ✓/✗ breakdown */}
