@@ -926,7 +926,7 @@ export async function GET(request: Request) {
   // existing Sharyn/Marie). Jon 2026-10-13.
   if (url.searchParams.get("assignbypipeline") === "1") {
     const commit = url.searchParams.get("commit") === "1";
-    const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nick Fair" };
+    const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nicholas Fair" };
     const DISPO = ["🏆 DS: Signed Go Close", "🎯 DS: Sell Land Then Sign"];
     const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { id: true, pipeline: true, assignedTo: true } });
     const changes: Array<{ id: string; from: string; pipeline: string; to: string; movedPipe?: string }> = [];
@@ -1500,6 +1500,27 @@ export async function GET(request: Request) {
       added++;
     }
     return NextResponse.json({ ok: true, added, total: items.length });
+  }
+
+  // 🔤 Rename Nick Fair → Nicholas Fair everywhere (Jon 2026-10-15). User + profile +
+  // every assignedTo string on leads/tasks/deals, so nothing orphans. Idempotent.
+  if (url.searchParams.get("renamenick") === "1") {
+    const OLD = "Nick Fair", NEW = "Nicholas Fair";
+    const user = await db.user.findFirst({ where: { name: OLD } });
+    if (user) await db.user.update({ where: { id: user.id }, data: { name: NEW } });
+    await db.teamProfile.updateMany({ where: { name: OLD }, data: { name: NEW } });
+    const [o, t, d] = await Promise.all([
+      db.crmOpportunity.updateMany({ where: { assignedTo: OLD }, data: { assignedTo: NEW } }),
+      db.crmTask.updateMany({ where: { assignedTo: OLD }, data: { assignedTo: NEW } }),
+      db.deal.updateMany({ where: { assignedTo: OLD }, data: { assignedTo: NEW } }),
+    ]);
+    return NextResponse.json({ ok: true, renamedUser: !!user, opps: o.count, tasks: t.count, deals: d.count });
+  }
+  // ✅ Accept ALL proposed AI Updates (?acceptall=1) → the nightly optimizer auto-builds
+  // the safe ones (Jon 2026-10-15: "start all ai updates").
+  if (url.searchParams.get("acceptall") === "1") {
+    const r = await db.suggestion.updateMany({ where: { status: "proposed" }, data: { status: "accepted" } });
+    return NextResponse.json({ ok: true, accepted: r.count });
   }
 
   // 📋 List ACCEPTED AI Updates for the nightly builder agent (?acceptedupdates=1).

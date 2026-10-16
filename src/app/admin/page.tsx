@@ -199,7 +199,8 @@ export default async function AdminPage({
 
       {/* ════ LOGINS & PASSWORDS ════ */}
       <section id="access" className="scroll-mt-20">
-        <SectionTitle title="🔑 Logins & passwords" subtitle="The team signs in with email + password — no email links needed" accent="bg-brand-gold" />
+        <SectionTitle title="🔑 Logins & passwords" subtitle="The team signs in with email + password — no email links needed" accent="bg-brand-gold"
+          right={owner ? <Link href="/admin/access-preview" className="inline-flex items-center gap-2 rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:opacity-90">🕵️ Member access preview</Link> : undefined} />
 
         {sp.pwok && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Password set for {sp.pwok === "you" ? "you" : sp.pwok}.</div>}
         {sp.pwerr === "nokey" && <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">Add <code>SUPABASE_SERVICE_ROLE_KEY</code> in Vercel to set team passwords here (see note below).</div>}
@@ -263,13 +264,6 @@ export default async function AdminPage({
           </form>
         </Card>
 
-        {/* Access preview link */}
-        {owner && (
-          <Card className="mt-4 p-5">
-            <Link href="/admin/access-preview" className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">🕵️ Preview what each member sees</Link>
-            <span className="ml-2 text-xs text-slate-500">Confirm nobody can see sections they shouldn&apos;t.</span>
-          </Card>
-        )}
       </section>
 
           </div>,

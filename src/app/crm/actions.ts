@@ -1361,7 +1361,7 @@ export async function logCallTypeKpiAction(formData: FormData): Promise<{ ok: bo
 function ownerForPipeline(name: string): string {
   const n = (name || "").toLowerCase();
   if (n.includes("michelle")) return "Michelle Lagudas";
-  if (n.includes("nick")) return "Nick Fair";
+  if (n.includes("nick")) return "Nicholas Fair"; // renamed from Nick → Nicholas (Jon 2026-10-15)
   return "";
 }
 export async function setOppPipelineAction(formData: FormData) {
