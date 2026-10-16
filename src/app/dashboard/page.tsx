@@ -22,6 +22,7 @@ import { getAwardBoard, getAiChampions } from "@/lib/awards";
 import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
+import OnboardingProgressCard from "@/components/OnboardingProgressCard";
 import DealFunnel from "@/components/DealFunnel";
 import { readDreiFeed } from "@/lib/directrei-sync";
 import DashWidgets, { DashSection } from "@/components/DashWidgets";
@@ -291,8 +292,14 @@ export default async function DashboardPage({
   if (pipCandidates.length > 0) priorities.push({ Icon: ShieldAlert, text: `${pipCandidates.length} rep-KPI${pipCandidates.length === 1 ? "" : "s"} PIP-eligible`, href: "/pip", tone: "text-orange-700 bg-orange-50 ring-orange-200" });
   if (agingDeals.length > 0) priorities.push({ Icon: Building2, text: `${agingDeals.length} deal${agingDeals.length === 1 ? "" : "s"} need attention`, href: "/report", tone: "text-violet-700 bg-violet-50 ring-violet-200" });
 
+  const inOnboarding = !!(me as { onboarding?: boolean } | null)?.onboarding;
+
   return (
     <div className="space-y-7">
+      {/* New hires: their own onboarding checklist up top so they always know
+          what's left to finish before certification (Jon 2026-10-16). */}
+      {inOnboarding && me && <OnboardingProgressCard userId={me.id} name={me.name} position={me.position} />}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>

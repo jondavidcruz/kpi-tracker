@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { getSessionEmail, getCurrentUser, isManager, isAdmin, isOwner, canAccessMarketing, canAccessPayroll, canAccessCSuite, navAllowlist, isPathAllowed , isSoftwareBlocked, tracksSpeedTest} from "@/lib/auth";
+import { getSessionEmail, getCurrentUser, isManager, isAdmin, isOwner, canAccessMarketing, canAccessPayroll, canAccessCSuite, navAllowlist, isPathAllowed , isSoftwareBlocked, tracksSpeedTest, isLeadership} from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
@@ -108,7 +108,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
         </div>
       )}
       <ThemeToggle />
-      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} dueTasks={dueTasks} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} leadershipMeetLink={meetSettings.leadershipMeetLink} navOrder={navOrder} />
+      <Sidebar name={me.name} manager={manager} admin={admin} owner={isOwner(me)} marketing={marketing} timecard={timecard} csuite={csuite} training={training} allowedPaths={allow} hiddenNav={hiddenNav} newTickets={newTickets} newSuggestions={newSuggestions} dueTasks={dueTasks} officeMeetLink={meetSettings.huddleMeetLink} mondayMeetLink={meetSettings.teamMeetLink} leadershipMeetLink={isLeadership(me) ? meetSettings.leadershipMeetLink : ""} navOrder={navOrder} />
       <main className="min-w-0 flex-1">
         <ContentWrap>
           {openOffboarding && (
