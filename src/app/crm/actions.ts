@@ -445,9 +445,10 @@ export async function saveCrmPipelineLockAction(formData: FormData) {
   const { readPipelineLocks, writePipelineLocks } = await import("@/lib/crm");
   const map = await readPipelineLocks();
   const first = String(formData.get("first") ?? "").toLowerCase().trim();
-  const pipeline = String(formData.get("pipeline") ?? "").trim();
   if (!first) return;
-  if (pipeline) map[first] = pipeline; else delete map[first];
+  // Multi-select: every ticked pipeline arrives as a "pipeline" entry.
+  const picked = [...new Set(formData.getAll("pipeline").map((v) => String(v).trim()).filter(Boolean))];
+  if (picked.length) map[first] = picked; else delete map[first];
   await writePipelineLocks(map);
   revalidatePath("/crm");
   revalidatePath("/crm/access");

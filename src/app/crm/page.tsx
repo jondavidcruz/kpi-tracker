@@ -32,11 +32,12 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // everyone; a rep's board is scoped to THEIR leads — their own pipeline.
   const manager = isManager(me!);
   const canViewAll = canManageAllLeads(me!);
-  // 🔒 Pipeline lock (Jon 2026-10-16): a locked rep (e.g. Kyle) is confined to ONE
-  // pipeline and sees EVERY lead in it but NOTHING outside it. Forces the pipeline,
-  // drops the per-rep assignee filter (the pipeline itself is the boundary), and
-  // hides every other pipeline tab. Managers are never locked.
-  const lockPipe = await pipelineLockFor(me);
+  // 🔒 Pipeline lock (Jon 2026-10-16): a locked rep (e.g. Kyle) is confined to one
+  // or more pipelines and sees EVERY lead in them but NOTHING outside. Forces the
+  // pipeline set, drops the per-rep assignee filter (the pipelines ARE the
+  // boundary), and hides every other pipeline tab. Managers are never locked.
+  const lockPipes = await pipelineLockFor(me); // string[] | null
+  const isLocked = !!lockPipes?.length;
   // Managers default to EVERYONE (Jon 2026-10-09 — "I don't have leads
   // assigned to me"); the dropdown narrows it. Reps stay locked to their own.
   const whoRaw = canViewAll ? (sp.who === "all" || sp.who == null ? "" : sp.who) : me!.name;
@@ -45,7 +46,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const roleReps = whoRaw.startsWith("role:")
     ? (await db.user.findMany({ where: { active: true, position: whoRaw.slice(5) }, select: { name: true } })).map((u) => u.name)
     : null;
-  const who = lockPipe ? "" : (roleReps ? "" : whoRaw);
+  const who = isLocked ? "" : (roleReps ? "" : whoRaw);
   const q = (sp.q ?? "").trim();
   const fStage = sp.stage ?? "";
   const fTag = (sp.tag ?? "").trim();
@@ -64,14 +65,15 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const plCounts: Record<string, number> = {};
   for (const g of plGroup) plCounts[g.pipeline === "" ? "War Room" : g.pipeline] = (plCounts[g.pipeline === "" ? "War Room" : g.pipeline] ?? 0) + g._count._all;
   const busiest = [...pipelines].sort((a, b) => (plCounts[b.name] ?? 0) - (plCounts[a.name] ?? 0))[0]?.name ?? pipelines[0].name;
-  // Locked reps: force their pipeline + hide every other tab.
-  const visiblePipelines = lockPipe ? pipelines.filter((p) => p.name === lockPipe) : pipelines;
-  const plName = lockPipe && pipelines.some((x) => x.name === lockPipe)
-    ? lockPipe
+  // Locked reps: restrict the tabs to their allowed pipelines + default to one of them.
+  const lockedSet = new Set(lockPipes ?? []);
+  const visiblePipelines = isLocked ? pipelines.filter((p) => lockedSet.has(p.name)) : pipelines;
+  const plName = isLocked
+    ? (sp.pl && lockedSet.has(sp.pl) ? sp.pl : (visiblePipelines[0]?.name ?? lockPipes![0]))
     : (sp.pl && pipelines.some((x) => x.name === sp.pl) ? sp.pl : busiest);
   const pipe = pipelines.find((x) => x.name === plName);
-  // A locked rep whose pipeline hasn't been created yet: don't leak the default board.
-  if (lockPipe && !pipe) {
+  // A locked rep whose pipeline(s) aren't created yet: don't leak the default board.
+  if (isLocked && !pipe) {
     return <Card className="p-10 text-center text-slate-400">🔒 Your pipeline isn&apos;t set up yet. Your manager will add it — check back shortly.</Card>;
   }
   if (!pipe) return <Card className="p-10 text-center text-slate-400">No pipeline found.</Card>;
@@ -237,7 +239,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
             // it always STATES whose leads are on screen, so nothing feels missing
             <CrmOwnerSelect current={whoRaw || "all"} meName={me!.name} reps={reps.map((r) => r.name)} hrefTemplate={qs({ who: "__WHO__" })} />
           ) : (
-            <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">{lockPipe ? `🔒 ${lockPipe} — your pipeline only` : `👤 Your pipeline — ${me!.name.split(" ")[0]}'s leads only`}</span>
+            <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">{isLocked ? `🔒 ${lockPipes!.length > 1 ? `${lockPipes!.length} pipelines` : lockPipes![0]} — your pipelines only` : `👤 Your pipeline — ${me!.name.split(" ")[0]}'s leads only`}</span>
           )}
           <span className="ml-auto text-[11px] text-slate-400">{totalCount.toLocaleString()} leads · 💀 {deadOpps} archived — never deleted</span>
         </div>

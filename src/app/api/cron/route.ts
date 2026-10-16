@@ -2951,6 +2951,72 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pipelinesMatched: pipelines.map((p) => p.name), openOpps: rows.length, pipeStatusInGhl: pipeStatus, perRep, contactsCreated: contacts, oppsCreated: opps, oppsUpdated: updated, strayArchived: archived, notesImported: notes, sample: rows.slice(0, 10) });
   }
 
+  // 🪦→🆕 Revive Dead → Kyle's pipeline (Jon 2026-10-16): import GHL "JrAQ:
+  // Revive Dead" leads from ONLY the 5 DQ/ABANDON stages in his screenshot, land
+  // them in Kyle's War Room pipeline at the FIRST (NEW) stage. ?kyledead=1 dry /
+  // &commit=1. Tagged "revive-dead" (NOT "ghl-import") so the ghlimport stray
+  // sweep never archives them. Idempotent by ghlId.
+  if (url.searchParams.get("kyledead") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const { searchOpportunities, getPipelines } = await import("@/lib/reireply");
+    const { logCrmEvent, readPipelines } = await import("@/lib/crm");
+    const pls = await getPipelines();
+    const plBody = pls.body as { pipelines?: Array<{ id: string; name: string; stages?: Array<{ id: string; name: string }> }> };
+    const src = (plBody.pipelines ?? []).find((p) => /revive\s*dead/i.test(p.name));
+    if (!src) return NextResponse.json({ ok: false, error: "GHL 'Revive Dead' pipeline not found", ghlPipelines: (plBody.pipelines ?? []).map((p) => p.name) });
+    const stageName = new Map<string, string>();
+    for (const st of src.stages ?? []) stageName.set(st.id, st.name);
+    // ONLY the 5 stages Jon screenshotted:
+    const TARGETS = [/overpriced|rejected\s*listing/i, /changed\s*mind|no\s*urgency/i, /no\s*comps|bad\s*area|bad\s*lot/i, /heavy\s*resistance/i, /no\s*interest/i];
+    const matchTarget = (n: string) => TARGETS.some((rx) => rx.test(n));
+    // Kyle's War Room pipeline + its first (NEW) stage key.
+    const wrPipes = await readPipelines();
+    const kyle = wrPipes.find((p) => /kyle/i.test(p.name));
+    if (!kyle) return NextResponse.json({ ok: false, error: "Kyle's War Room pipeline not found", warRoomPipelines: wrPipes.map((p) => p.name) });
+    const newStage = kyle.stages[0]?.key ?? "new";
+    const allOpps = await fetchAllOpps(searchOpportunities, src.id);
+    const perStage: Record<string, number> = {};
+    const matchedStages: Record<string, number> = {};
+    type RRow = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; origStage: string };
+    const rows: RRow[] = [];
+    for (const o of allOpps) {
+      const sname = stageName.get(String(o.pipelineStageId ?? "")) ?? "(unknown)";
+      perStage[sname] = (perStage[sname] ?? 0) + 1;
+      if (!matchTarget(sname)) continue;
+      matchedStages[sname] = (matchedStages[sname] ?? 0) + 1;
+      const contact = (o.contact ?? {}) as { id?: string; name?: string; phone?: string; email?: string };
+      rows.push({
+        ghlOppId: String(o.id ?? ""), ghlContactId: String(contact.id ?? o.contactId ?? ""),
+        name: String(contact.name ?? o.name ?? "—"), phone: String(contact.phone ?? ""), email: String(contact.email ?? ""),
+        title: String(o.name ?? contact.name ?? "Imported lead"), origStage: sname,
+      });
+    }
+    let contacts = 0, created = 0, updated = 0;
+    if (commit) {
+      const byGhlContact = new Map<string, string>();
+      for (const r of rows) {
+        if (!r.ghlOppId) continue;
+        let contactId = r.ghlContactId ? byGhlContact.get(r.ghlContactId) : undefined;
+        if (!contactId) {
+          const ex = r.ghlContactId ? await db.crmContact.findFirst({ where: { ghlId: r.ghlContactId } }) : null;
+          if (ex) contactId = ex.id;
+          else { const c = await db.crmContact.create({ data: { name: r.name, phone: r.phone, email: r.email, source: "GHL Revive Dead", assignedTo: "Kyle Brown", ghlId: r.ghlContactId } }); contactId = c.id; contacts++; }
+          if (r.ghlContactId) byGhlContact.set(r.ghlContactId, contactId);
+        }
+        const dup = await db.crmOpportunity.findFirst({ where: { ghlId: r.ghlOppId } });
+        if (dup) {
+          await db.crmOpportunity.update({ where: { id: dup.id }, data: { pipeline: kyle.name, stage: newStage, assignedTo: "Kyle Brown", tags: "revive-dead", archivedAt: null } });
+          updated++;
+        } else {
+          const opp = await db.crmOpportunity.create({ data: { contactId, title: r.title.slice(0, 160), pipeline: kyle.name, stage: newStage, assignedTo: "Kyle Brown", ghlId: r.ghlOppId, tags: "revive-dead" } });
+          await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `Imported from GHL Revive Dead — was "${r.origStage}"`, actor: "revive-import" });
+          created++;
+        }
+      }
+    }
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", sourcePipeline: src.name, kylePipeline: kyle.name, newStageKey: newStage, totalInGhlPipeline: allOpps.length, ghlStageBreakdown: perStage, matchedStages, matchedForImport: rows.length, contactsCreated: contacts, oppsCreated: created, oppsUpdated: updated, sample: rows.slice(0, 8).map((r) => ({ name: r.name, wasStage: r.origStage })) });
+  }
+
   // 💰 GHL DEAL WON → the Deals board (Jon 2026-10-07: closed deals with
   // value per lead belong in the deals CRM). ?ghlwonimport=1 dry / &commit=1.
   if (url.searchParams.get("ghlwonimport") === "1") {

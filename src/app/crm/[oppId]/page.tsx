@@ -34,12 +34,12 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   if (!opp) return <Card className="p-10 text-center text-slate-400">Lead not found. <Link href="/crm" className="font-bold text-sky-700 underline">Back to the pipeline</Link></Card>;
   // Reps open only leads in THEIR pipeline (managers see everything).
   const followersList = Array.isArray((opp.formData as Record<string, unknown> | null)?.__followers) ? ((opp.formData as Record<string, unknown>).__followers as string[]) : [];
-  // 🔒 Pipeline-locked rep (Jon 2026-10-16): can open ANY lead in their pipeline
-  // but NOTHING outside it — overrides the per-assignee guard below.
-  const lockPipe = await pipelineLockFor(me);
-  if (lockPipe) {
+  // 🔒 Pipeline-locked rep (Jon 2026-10-16): can open ANY lead in their allowed
+  // pipeline(s) but NOTHING outside — overrides the per-assignee guard below.
+  const lockPipes = await pipelineLockFor(me);
+  if (lockPipes?.length) {
     const oppPipe = opp.pipeline || "War Room";
-    if (oppPipe !== lockPipe) {
+    if (!lockPipes.includes(oppPipe)) {
       return <Card className="p-10 text-center text-slate-400">This lead isn&apos;t in your pipeline. <Link href="/crm" className="font-bold text-sky-700 underline">Back to your pipeline</Link></Card>;
     }
   } else if (!canManageAllLeads(me!) && opp.assignedTo && opp.assignedTo !== me!.name && !followersList.includes(me!.name)) {

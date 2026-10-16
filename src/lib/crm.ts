@@ -37,12 +37,21 @@ export async function readPipelines(): Promise<CrmPipeline[]> {
 }
 
 // 🔒 Per-rep pipeline lock (Jon 2026-10-16: "give Kyle a new pipeline he can see
-// but don't let him see any of our other leads"). Maps a first name → the single
-// pipeline that rep is confined to. A locked rep sees ONLY that pipeline's tab and
-// ONLY the leads inside it — every other pipeline and lead is hidden, server-side.
-// Managers/admins are never locked. Stored in Resource __crm_pipeline_lock__.
+// but don't let him see any of our other leads" → then "let me choose MULTIPLE
+// pipelines"). Maps a first name → the pipeline(s) that rep is confined to. A
+// locked rep sees ONLY those pipelines' tabs and ONLY the leads inside them —
+// every other pipeline and lead is hidden, server-side. Managers/admins are never
+// locked. Stored in Resource __crm_pipeline_lock__. Value may be a single string
+// (legacy rows) or an array — always read it through locksToArray().
 const PIPE_LOCK_CAT = "__crm_pipeline_lock__";
-export type PipeLockMap = Record<string, string>; // firstNameLower → pipeline name
+export type PipeLockMap = Record<string, string | string[]>; // firstNameLower → pipeline name(s)
+
+/** Normalize a stored lock value (string | string[] | undefined) to a clean array. */
+export function locksToArray(v: string | string[] | undefined | null): string[] {
+  if (!v) return [];
+  const arr = Array.isArray(v) ? v : [v];
+  return [...new Set(arr.map((s) => String(s).trim()).filter(Boolean))];
+}
 
 export async function readPipelineLocks(): Promise<PipeLockMap> {
   const row = await db.resource.findFirst({ where: { category: PIPE_LOCK_CAT } }).catch(() => null);
@@ -56,13 +65,14 @@ export async function writePipelineLocks(map: PipeLockMap): Promise<void> {
   else await db.resource.create({ data: { title: "crm-pipeline-lock", category: PIPE_LOCK_CAT, url: "", description } });
 }
 
-/** The pipeline a user is confined to, or null if unrestricted (managers never locked). */
-export async function pipelineLockFor(user: { name?: string | null; role?: string | null } | null): Promise<string | null> {
+/** The pipeline(s) a user is confined to, or null if unrestricted (managers never locked). */
+export async function pipelineLockFor(user: { name?: string | null; role?: string | null } | null): Promise<string[] | null> {
   if (!user?.name) return null;
   if (user.role === "manager" || user.role === "admin") return null;
   const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   const map = await readPipelineLocks();
-  return map[first] || null;
+  const arr = locksToArray(map[first]);
+  return arr.length ? arr : null;
 }
 
 export async function readGhlPipelinesRaw(): Promise<Array<{ name: string; stages: Array<{ key: string; label: string }> }>> {
