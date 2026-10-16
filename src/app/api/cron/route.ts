@@ -1391,6 +1391,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, moved, total: open.length });
   }
 
+  // 🧠 Store the Predictive Index assessment link (?setpilink=1&url=...) so the
+  // welcome email auto-includes it for every new hire (Jon 2026-10-16).
+  if (url.searchParams.get("setpilink") === "1") {
+    const u = (url.searchParams.get("url") ?? "").trim();
+    if (!/^https?:\/\//i.test(u)) return NextResponse.json({ ok: false, error: "bad url" });
+    const row = await db.resource.findFirst({ where: { category: "__pi_link__" } });
+    if (row) await db.resource.update({ where: { id: row.id }, data: { url: u } });
+    else await db.resource.create({ data: { title: "predictive-index-link", category: "__pi_link__", url: u, description: "" } });
+    return NextResponse.json({ ok: true, url: u });
+  }
+
   // ✉️ Remove email(s) from the admin report recipient lists (?rmrecipients=1&emails=a@x,b@y)
   // — Jon 2026-10-15: drop his + Marie's personal emails from the daily KPI "Daily Results".
   if (url.searchParams.get("rmrecipients") === "1") {

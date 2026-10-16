@@ -149,6 +149,7 @@ export default async function AdminPage({
           { key: "pay", label: "💵 Pay & Reviews" },
           { key: "kpis", label: "🎯 KPIs & Alerts" },
           { key: "system", label: "⚙️ System" },
+          ...(owner ? [{ key: "preview", label: "🕵️ Member Preview" }] : []),
         ]}
       >
         {[
@@ -560,6 +561,15 @@ export default async function AdminPage({
           </Card>
         </section>
       )}          </div>,
+          ...(owner ? [(
+            <div key="preview" className="space-y-4">
+              <Card className="p-6 text-center">
+                <div className="text-lg font-extrabold text-slate-800">🕵️ Member access preview</div>
+                <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">See exactly what each person&apos;s account shows — their real sidebar — and grant/remove sections. Confirm nobody sees anything they shouldn&apos;t.</p>
+                <Link href="/admin/access-preview" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand-navy px-5 py-2.5 text-sm font-bold text-white hover:opacity-90">Open member access preview →</Link>
+              </Card>
+            </div>
+          )] : []),
         ]}
       </PageTabs>
 
