@@ -18,6 +18,27 @@ async function recCrumb(entry: Record<string, unknown>) {
     else await db.resource.create({ data: { title: "telnyx-events", category: "__telnyx_events__", url: "", description } });
   } catch { /* logging never blocks */ }
 }
+// 🧭 Per-call from/to store (Jon 2026-10-15): recording.saved sometimes arrives with
+// EMPTY from/to → the handler couldn't match a seller (noContact). We stash the
+// numbers keyed by call_control_id while the call is live, and recover them here.
+async function recCtxSet(ccId: string, from: string, to: string) {
+  if (!ccId || (!from && !to)) return;
+  try {
+    const row = await db.resource.findFirst({ where: { category: "__rec_ctx__" } });
+    let map: Record<string, { from: string; to: string }> = {};
+    try { map = row?.description ? JSON.parse(row.description) : {}; } catch { /* fresh */ }
+    map[ccId] = { from, to };
+    const keys = Object.keys(map);
+    if (keys.length > 80) for (const k of keys.slice(0, keys.length - 80)) delete map[k];
+    const description = JSON.stringify(map);
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "rec-ctx", category: "__rec_ctx__", url: "", description } });
+  } catch { /* best-effort */ }
+}
+async function recCtxGet(ccId: string): Promise<{ from: string; to: string } | null> {
+  if (!ccId) return null;
+  try { const row = await db.resource.findFirst({ where: { category: "__rec_ctx__" } }); const map = row?.description ? JSON.parse(row.description) : {}; return map[ccId] ?? null; } catch { return null; }
+}
 // Pull the mp3 URL out of whatever shape Telnyx sends (object, array, or string).
 function pickMp3(x: unknown): string {
   if (!x) return "";
@@ -46,6 +67,8 @@ export async function POST(req: NextRequest) {
     if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
     else await db.resource.create({ data: { title: "telnyx-events", category: "__telnyx_events__", url: "", description } });
   } catch { /* logging never blocks call handling */ }
+  // Stash this call's from/to so recording.saved can recover them if its payload omits them.
+  try { const pp2 = p as { from?: string; to?: string; call_control_id?: string }; if (pp2.call_control_id && (pp2.from || pp2.to)) await recCtxSet(pp2.call_control_id, pp2.from ?? "", pp2.to ?? ""); } catch { /* best-effort */ }
   let st: { bridgeTo?: string; oppId?: string; contactId?: string; rep?: string; ring?: string } = {};
   try { st = p.client_state ? JSON.parse(Buffer.from(p.client_state, "base64").toString()) : {}; } catch { /* none */ }
   const key = process.env.TELNYX_API_KEY;
@@ -257,9 +280,12 @@ export async function POST(req: NextRequest) {
       const dupRec = await db.crmEvent.findFirst({ where: { kind: "call", body: { startsWith: "🎙" }, meta: { path: ["ccId"], equals: ccId } }, select: { id: true } }).catch(() => null);
       if (dupRec) return NextResponse.json({ ok: true, deduped: true });
     }
+    // Recover from/to if Telnyx omitted them on recording.saved (the noContact bug).
+    let fromN = pr.from ?? "", toN = pr.to ?? "";
+    if (!fromN && !toN && ccId) { const ctx = await recCtxGet(ccId); if (ctx) { fromN = ctx.from; toN = ctx.to; } }
     // whoever on the call is in our CRM = the lead
     let contact: { id: string } | null = null;
-    for (const num of [pr.from ?? "", pr.to ?? ""]) {
+    for (const num of [fromN, toN]) {
       const last10 = num.replace(/\D/g, "").slice(-10);
       if (last10.length !== 10) continue;
       contact = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true } });
@@ -269,7 +295,7 @@ export async function POST(req: NextRequest) {
     // inbound caller, or a test call), create one from the seller-side number so
     // the recording never vanishes. Inbound → caller is `from`; outbound → `to`.
     if (!contact) {
-      const sellerNum = pr.direction === "incoming" ? (pr.from ?? "") : pr.direction === "outgoing" ? (pr.to ?? "") : (pr.from ?? "");
+      const sellerNum = pr.direction === "incoming" ? fromN : pr.direction === "outgoing" ? toN : (fromN || toN);
       const last10 = sellerNum.replace(/\D/g, "").slice(-10);
       if (last10.length === 10) {
         const e164 = sellerNum.startsWith("+") ? sellerNum : `+1${last10}`;
