@@ -1763,6 +1763,20 @@ export async function GET(request: Request) {
   // 📍 Address backfill (?ghladdrfix=1): GHL-imported contacts came over with
   // no property address — pull address1/city/state/zip from GHL per contact
   // (time-budgeted; run repeatedly until remaining=0).
+  // 🔧 Drive upload diagnostic (?drivetest=1): confirms CRM/ticket file uploads
+  // can actually reach Google Drive (the only blob store). Reports config + a
+  // real round-trip upload error if any.
+  if (url.searchParams.get("drivetest") === "1") {
+    const { gdriveConfigured, ensureSubfolder, uploadToFolder } = await import("@/lib/gdrive");
+    if (!gdriveConfigured()) return NextResponse.json({ ok: false, configured: false, hint: "GOOGLE_SERVICE_ACCOUNT_JSON or GDRIVE_FOLDER_ID missing in Vercel env" });
+    try {
+      const DEALS_PARENT = "1pfZAlmeoaa3lkP7lboWHeHkppgFjc7Ub";
+      const folderId = await ensureSubfolder(DEALS_PARENT, "__drivetest");
+      const up = await uploadToFolder(folderId, `test-${Date.now()}.txt`, new TextEncoder().encode("hello from drivetest"), "text/plain");
+      return NextResponse.json({ ok: true, configured: true, folderId, uploaded: up });
+    } catch (e) { return NextResponse.json({ ok: false, configured: true, error: String(e).slice(0, 400) }); }
+  }
+
   if (url.searchParams.get("ghladdrfix") === "1") {
     const { ghlGet } = await import("@/lib/reireply");
     const deadline = Date.now() + 45_000;

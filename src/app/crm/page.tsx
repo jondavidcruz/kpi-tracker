@@ -65,12 +65,21 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const plCounts: Record<string, number> = {};
   for (const g of plGroup) plCounts[g.pipeline === "" ? "War Room" : g.pipeline] = (plCounts[g.pipeline === "" ? "War Room" : g.pipeline] ?? 0) + g._count._all;
   const busiest = [...pipelines].sort((a, b) => (plCounts[b.name] ?? 0) - (plCounts[a.name] ?? 0))[0]?.name ?? pipelines[0].name;
+  // 🏠 Default to the VIEWER'S OWN busiest pipeline, not the global busiest (Jon
+  // 2026-10-16: "it keeps opening on Nick's for everyone — show THEIR pipeline").
+  // Pick the pipeline holding the most of this person's assigned leads; fall back
+  // to the global busiest only when they have no leads of their own.
+  const myGroup = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null, assignedTo: { equals: me!.name, mode: "insensitive" } }, _count: { _all: true } });
+  const myCounts: Record<string, number> = {};
+  for (const g of myGroup) { const n = g.pipeline === "" ? "War Room" : g.pipeline; myCounts[n] = (myCounts[n] ?? 0) + g._count._all; }
+  const myBusiest = [...pipelines].filter((p) => (myCounts[p.name] ?? 0) > 0).sort((a, b) => (myCounts[b.name] ?? 0) - (myCounts[a.name] ?? 0))[0]?.name;
+  const homePipe = myBusiest ?? busiest;
   // Locked reps: restrict the tabs to their allowed pipelines + default to one of them.
   const lockedSet = new Set(lockPipes ?? []);
   const visiblePipelines = isLocked ? pipelines.filter((p) => lockedSet.has(p.name)) : pipelines;
   const plName = isLocked
     ? (sp.pl && lockedSet.has(sp.pl) ? sp.pl : (visiblePipelines[0]?.name ?? lockPipes![0]))
-    : (sp.pl && pipelines.some((x) => x.name === sp.pl) ? sp.pl : busiest);
+    : (sp.pl && pipelines.some((x) => x.name === sp.pl) ? sp.pl : homePipe);
   const pipe = pipelines.find((x) => x.name === plName);
   // A locked rep whose pipeline(s) aren't created yet: don't leak the default board.
   if (isLocked && !pipe) {
