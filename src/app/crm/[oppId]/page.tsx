@@ -2,12 +2,13 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { getActiveReps, getSettings } from "@/lib/data";
-import { readPipelines, parseTags, KIND_EMOJI } from "@/lib/crm";
+import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
 import { stripHtml } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import EditableNote from "@/components/EditableNote";
+import AutoSaveForm from "@/components/AutoSaveForm";
 import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, draftContractAction, toggleDndAction, uploadLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
@@ -33,7 +34,15 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   if (!opp) return <Card className="p-10 text-center text-slate-400">Lead not found. <Link href="/crm" className="font-bold text-sky-700 underline">Back to the pipeline</Link></Card>;
   // Reps open only leads in THEIR pipeline (managers see everything).
   const followersList = Array.isArray((opp.formData as Record<string, unknown> | null)?.__followers) ? ((opp.formData as Record<string, unknown>).__followers as string[]) : [];
-  if (!canManageAllLeads(me!) && opp.assignedTo && opp.assignedTo !== me!.name && !followersList.includes(me!.name)) {
+  // 🔒 Pipeline-locked rep (Jon 2026-10-16): can open ANY lead in their pipeline
+  // but NOTHING outside it — overrides the per-assignee guard below.
+  const lockPipe = await pipelineLockFor(me);
+  if (lockPipe) {
+    const oppPipe = opp.pipeline || "War Room";
+    if (oppPipe !== lockPipe) {
+      return <Card className="p-10 text-center text-slate-400">This lead isn&apos;t in your pipeline. <Link href="/crm" className="font-bold text-sky-700 underline">Back to your pipeline</Link></Card>;
+    }
+  } else if (!canManageAllLeads(me!) && opp.assignedTo && opp.assignedTo !== me!.name && !followersList.includes(me!.name)) {
     return <Card className="p-10 text-center text-slate-400">This lead is in {opp.assignedTo.split(" ")[0]}&apos;s pipeline. <Link href="/crm" className="font-bold text-sky-700 underline">Back to yours</Link></Card>;
   }
   const c = opp.contact;
@@ -145,7 +154,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           <Card className="p-4">
             <details open id="contact" className="scroll-mt-4">
               <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">👤 Contact — all phones &amp; emails (edit)</summary>
-              <form action={saveCrmContactAction} className="mt-2 space-y-2">
+              <AutoSaveForm action={saveCrmContactAction} className="mt-2 space-y-2">
                 <input type="hidden" name="id" value={c.id} />
                 <input type="hidden" name="oppId" value={opp.id} />
                 <div className="grid grid-cols-2 gap-2">
@@ -162,7 +171,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 <label><span className={lbl}>Contact tags</span><input name="ctags" defaultValue={c.tags} placeholder="motivated, probate…" className={inputCls} /></label>
                 <label><span className={lbl}>📌 Pinned note (always visible)</span><input name="pinnedNote" defaultValue={c.pinnedNote} className={inputCls} /></label>
                 <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">Save contact</button>
-              </form>
+              </AutoSaveForm>
             </details>
             <div className="mt-2 space-y-1 text-[13px] text-slate-700">
               {c.phone && <div>📱 {c.phone}{c.altPhone ? ` · ${c.altPhone}` : ""}</div>}
@@ -270,7 +279,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           {/* opportunity meta */}
           <Card className="p-4">
             <div id="opp" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">🎯 Opportunity</div>
-            <form action={saveOppMetaAction} className="space-y-2">
+            <AutoSaveForm action={saveOppMetaAction} className="space-y-2">
               <input type="hidden" name="id" value={opp.id} />
               <label><span className={lbl}>Title / property</span><input name="title" defaultValue={opp.title} className={inputCls} /></label>
               <label><span className={lbl}>Pipeline</span>
@@ -289,7 +298,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               </div>
               <label><span className={lbl}>Tags</span><input name="tags" defaultValue={opp.tags} placeholder="hot, novation, flood-check…" className={inputCls} /></label>
               <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">Save</button>
-            </form>
+            </AutoSaveForm>
           </Card>
 
         </div>
@@ -496,7 +505,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                       {form.emoji} {form.name}
                       <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold ${count ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{count}/{form.fields.length}</span>
                     </summary>
-                    <form action={saveCrmFormAction} className="space-y-2 px-3 pb-3">
+                    <AutoSaveForm action={saveCrmFormAction} className="space-y-2 px-3 pb-3">
                       <input type="hidden" name="oppId" value={opp.id} />
                       <input type="hidden" name="contactId" value={c.id} />
                       <input type="hidden" name="formKey" value={form.key} />
@@ -523,7 +532,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                         </label>
                       ))}
                       <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700">Save {form.name}</button>
-                    </form>
+                    </AutoSaveForm>
                   </details>
                 );
               });

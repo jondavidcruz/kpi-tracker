@@ -3,7 +3,8 @@ import { getCurrentUser, canAccessCSuite, isManager } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import { readCommsMap, firstOf } from "@/lib/crm-comms";
-import { saveCommsPermsAction } from "../actions";
+import { readPipelines, readPipelineLocks } from "@/lib/crm";
+import { saveCommsPermsAction, saveCrmPipelineLockAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,11 @@ export default async function CrmAccessPage() {
   // Show the WHOLE active roster except Jon himself (several teammates carry
   // the admin role, so filtering by role hid them — 2026-10-12). Only the
   // owner is excluded: he can never lock himself out.
-  const [allUsers, commsMap] = await Promise.all([
+  const [allUsers, commsMap, pipelines, lockMap] = await Promise.all([
     db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     readCommsMap(),
+    readPipelines(),
+    readPipelineLocks(),
   ]);
   const users = allUsers; // Jon 2026-10-12: show EVERYONE — his own row renders as always-on
 
@@ -44,6 +47,29 @@ export default async function CrmAccessPage() {
                 <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="sms" defaultChecked={p.sms} disabled={owner} /> 💬 SMS</label>
                 <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="email" defaultChecked={p.email} disabled={owner} /> ✉️ email</label>
                 {owner ? <span className="ml-auto text-[10px] font-bold text-slate-400">owner — always on</span> : <button className="ml-auto rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-700">Save</button>}
+              </form>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* 🔒 Pipeline lock — confine a rep to ONE pipeline (Jon 2026-10-16: Kyle). */}
+      <Card className="p-4">
+        <div className="mb-1 text-sm font-extrabold text-slate-800">🔒 Pipeline lock</div>
+        <p className="mb-3 text-xs text-slate-500">Confine a rep to a single pipeline — they&apos;ll see <b>only that pipeline and every lead in it</b>, and <b>none</b> of our other leads or pipelines (enforced server-side, on the board and on every lead). Leave a rep on &quot;— all pipelines&quot; for normal own-leads access. Managers are never locked.</p>
+        <div className="space-y-1.5">
+          {users.filter((r) => firstOf(r.name) !== "jon" && firstOf(r.name) !== "jonathan" && r.role !== "manager").map((r) => {
+            const first = firstOf(r.name);
+            return (
+              <form key={r.id} action={saveCrmPipelineLockAction} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs ring-1 ring-slate-100">
+                <input type="hidden" name="first" value={first} />
+                <span className="w-28 font-bold text-slate-700">{r.name.split(" ")[0]}</span>
+                <select name="pipeline" defaultValue={lockMap[first] ?? ""} className="rounded-md border border-slate-300 px-2 py-1 font-semibold text-slate-700">
+                  <option value="">— all pipelines (no lock)</option>
+                  {pipelines.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                </select>
+                <button className="ml-auto rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-700">Save</button>
+                {lockMap[first] && <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">locked → {lockMap[first]}</span>}
               </form>
             );
           })}

@@ -36,6 +36,35 @@ export async function readPipelines(): Promise<CrmPipeline[]> {
   return [warroom, ...ghl.map((p) => ({ name: p.name, stages: p.stages.map((st, i) => ({ key: st.key, label: st.label, cls: PALETTE[i % PALETTE.length] })) }))];
 }
 
+// 🔒 Per-rep pipeline lock (Jon 2026-10-16: "give Kyle a new pipeline he can see
+// but don't let him see any of our other leads"). Maps a first name → the single
+// pipeline that rep is confined to. A locked rep sees ONLY that pipeline's tab and
+// ONLY the leads inside it — every other pipeline and lead is hidden, server-side.
+// Managers/admins are never locked. Stored in Resource __crm_pipeline_lock__.
+const PIPE_LOCK_CAT = "__crm_pipeline_lock__";
+export type PipeLockMap = Record<string, string>; // firstNameLower → pipeline name
+
+export async function readPipelineLocks(): Promise<PipeLockMap> {
+  const row = await db.resource.findFirst({ where: { category: PIPE_LOCK_CAT } }).catch(() => null);
+  try { return row?.description ? JSON.parse(row.description) : {}; } catch { return {}; }
+}
+
+export async function writePipelineLocks(map: PipeLockMap): Promise<void> {
+  const row = await db.resource.findFirst({ where: { category: PIPE_LOCK_CAT } });
+  const description = JSON.stringify(map);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { title: "crm-pipeline-lock", category: PIPE_LOCK_CAT, url: "", description } });
+}
+
+/** The pipeline a user is confined to, or null if unrestricted (managers never locked). */
+export async function pipelineLockFor(user: { name?: string | null; role?: string | null } | null): Promise<string | null> {
+  if (!user?.name) return null;
+  if (user.role === "manager" || user.role === "admin") return null;
+  const first = user.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const map = await readPipelineLocks();
+  return map[first] || null;
+}
+
 export async function readGhlPipelinesRaw(): Promise<Array<{ name: string; stages: Array<{ key: string; label: string }> }>> {
   const row = await db.resource.findFirst({ where: { category: PIPES_CAT } }).catch(() => null);
   try { return row?.description ? JSON.parse(row.description) : []; } catch { return []; }

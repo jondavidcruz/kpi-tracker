@@ -437,6 +437,22 @@ export async function saveCommsPermsAction(formData: FormData) {
   revalidatePath("/crm");
 }
 
+/** Owner: confine a rep to ONE pipeline (they see only that pipeline + its leads). */
+export async function saveCrmPipelineLockAction(formData: FormData) {
+  const me = await getCurrentUser();
+  const { canAccessCSuite } = await import("@/lib/auth");
+  if (!me || !canAccessCSuite(me)) return;
+  const { readPipelineLocks, writePipelineLocks } = await import("@/lib/crm");
+  const map = await readPipelineLocks();
+  const first = String(formData.get("first") ?? "").toLowerCase().trim();
+  const pipeline = String(formData.get("pipeline") ?? "").trim();
+  if (!first) return;
+  if (pipeline) map[first] = pipeline; else delete map[first];
+  await writePipelineLocks(map);
+  revalidatePath("/crm");
+  revalidatePath("/crm/access");
+}
+
 /** Anyone: save their own email signature (used on every CRM email they send). */
 export async function saveSignatureAction(formData: FormData) {
   const me = await getCurrentUser();
