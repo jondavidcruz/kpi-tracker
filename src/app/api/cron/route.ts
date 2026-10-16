@@ -2991,7 +2991,7 @@ export async function GET(request: Request) {
         title: String(o.name ?? contact.name ?? "Imported lead"), origStage: sname,
       });
     }
-    let contacts = 0, created = 0, updated = 0;
+    let contacts = 0, created = 0, updated = 0, skippedDnc = 0;
     if (commit) {
       const byGhlContact = new Map<string, string>();
       for (const r of rows) {
@@ -2999,6 +2999,8 @@ export async function GET(request: Request) {
         let contactId = r.ghlContactId ? byGhlContact.get(r.ghlContactId) : undefined;
         if (!contactId) {
           const ex = r.ghlContactId ? await db.crmContact.findFirst({ where: { ghlId: r.ghlContactId } }) : null;
+          // 🚫 compliance: never hand Kyle a contact we've DNC'd (they told us to stop).
+          if (ex && /\bdnc\b/i.test(ex.tags ?? "")) { skippedDnc++; continue; }
           if (ex) contactId = ex.id;
           else { const c = await db.crmContact.create({ data: { name: r.name, phone: r.phone, email: r.email, source: "GHL Revive Dead", assignedTo: "Kyle Brown", ghlId: r.ghlContactId } }); contactId = c.id; contacts++; }
           if (r.ghlContactId) byGhlContact.set(r.ghlContactId, contactId);
@@ -3014,7 +3016,7 @@ export async function GET(request: Request) {
         }
       }
     }
-    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", sourcePipeline: src.name, kylePipeline: kyle.name, newStageKey: newStage, totalInGhlPipeline: allOpps.length, ghlStageBreakdown: perStage, matchedStages, matchedForImport: rows.length, contactsCreated: contacts, oppsCreated: created, oppsUpdated: updated, sample: rows.slice(0, 8).map((r) => ({ name: r.name, wasStage: r.origStage })) });
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", sourcePipeline: src.name, kylePipeline: kyle.name, newStageKey: newStage, totalInGhlPipeline: allOpps.length, ghlStageBreakdown: perStage, matchedStages, matchedForImport: rows.length, contactsCreated: contacts, oppsCreated: created, oppsUpdated: updated, skippedDnc, sample: rows.slice(0, 8).map((r) => ({ name: r.name, wasStage: r.origStage })) });
   }
 
   // 💰 GHL DEAL WON → the Deals board (Jon 2026-10-07: closed deals with
