@@ -9,6 +9,7 @@ import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import EditableNote from "@/components/EditableNote";
 import AutoSaveForm from "@/components/AutoSaveForm";
+import OppPipelineMover from "@/components/OppPipelineMover";
 import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, draftContractAction, toggleDndAction, uploadLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
@@ -279,13 +280,16 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           {/* opportunity meta */}
           <Card className="p-4">
             <div id="opp" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">🎯 Opportunity</div>
+            {/* Pipeline lives OUTSIDE the autosave form: changing it reveals the
+                target pipeline's stages + an explicit Move button (Nick's ticket). */}
+            <div className="mb-2">
+              <span className={lbl}>Pipeline</span>
+              <OppPipelineMover id={opp.id} pipeline={opp.pipeline || "War Room"} pipelineNames={pipelines.map((pp) => pp.name)}
+                pipelineStages={Object.fromEntries(pipelines.map((pp) => [pp.name, pp.stages.map((s) => ({ key: s.key, label: s.label }))]))} selectCls={inputCls} />
+            </div>
             <AutoSaveForm action={saveOppMetaAction} className="space-y-2">
               <input type="hidden" name="id" value={opp.id} />
               <label><span className={lbl}>Title / property</span><input name="title" defaultValue={opp.title} className={inputCls} /></label>
-              <label><span className={lbl}>Pipeline</span>
-                <select name="pipeline" defaultValue={opp.pipeline || "War Room"} className={inputCls}>
-                  {pipelines.map((pp) => <option key={pp.name} value={pp.name}>{pp.name}</option>)}
-                </select></label>
               <div className="grid grid-cols-2 gap-2">
                 <label><span className={lbl}>Seller wants $</span><input name="askPrice" defaultValue={opp.askPrice ?? ""} className={inputCls} /></label>
                 <label><span className={lbl}>Est. value / fee $</span><input name="value" defaultValue={opp.value ?? ""} className={inputCls} /></label>
