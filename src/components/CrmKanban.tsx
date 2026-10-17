@@ -48,7 +48,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [], pipelineStages = {}, currentPipeline = "", who = "all" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[]; pipelineStages?: Record<string, { key: string; label: string }[]>; currentPipeline?: string; who?: string }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [], pipelineStages = {}, currentPipeline = "", who = "all", dialerBase = "" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[]; pipelineStages?: Record<string, { key: string; label: string }[]>; currentPipeline?: string; who?: string; dialerBase?: string }) {
   const [cards, setCards] = useState(initial);
   // THE 27-vs-112 bug (Jon 2026-10-08): this component stays mounted when you
   // switch pipeline tabs, so the drag-and-drop card state kept showing the
@@ -269,6 +269,11 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                   ) : null; })()}
                 </span>
                 <span className="flex items-center gap-1">
+                  {dialerBase && (counts[col.key] ?? colCards.length) > 0 && (
+                    // ☎ power-dial this whole column (crm-enhancer 2026-10-16) — the
+                    // one-click answer to "hundreds of never-called leads in NEW"
+                    <a href={`${dialerBase}&stage=${encodeURIComponent(col.key)}`} title={`Power-dial every lead in "${col.label}" — least-recently touched first`} className="grid h-5 w-5 place-items-center rounded bg-white/70 text-[11px] font-bold text-emerald-600 hover:bg-emerald-500 hover:text-white">☎</a>
+                  )}
                   {(counts[col.key] ?? colCards.length) > 0 && (
                     <button onClick={() => selectWholeStage(col.key)} title={`Select all ${(counts[col.key] ?? colCards.length).toLocaleString()} leads in this stage for a bulk action`} className={`grid h-5 w-5 place-items-center rounded text-[11px] font-bold ${stageScope?.stage === col.key ? "bg-indigo-600 text-white" : "bg-white/70 text-slate-400 hover:text-indigo-600"}`}>☑</button>
                   )}

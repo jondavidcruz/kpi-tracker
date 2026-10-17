@@ -121,11 +121,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const page = Math.max(1, Number(sp.p) || 1);
   const PER_COL = 60, PER_PAGE = 50;
   const stages = pipe.stages;
-  const [reps, grouped, totalCount, tasks, appts] = await Promise.all([
+  const [reps, grouped, totalCount, appts] = await Promise.all([
     getActiveReps(),
     db.crmOpportunity.groupBy({ by: ["stage"], where: whereBase, _count: { _all: true }, _sum: { value: true } }),
     db.crmOpportunity.count({ where: whereBase }),
-    db.crmTask.findMany({ where: { doneAt: null }, select: { oppId: true, due: true, title: true, assignedTo: true }, take: 2000 }),
     db.crmAppointment.findMany({ where: { at: { gte: new Date() } }, orderBy: { at: "asc" }, take: 10 }),
   ]);
   const stageCounts: Record<string, number> = {};
@@ -134,6 +133,18 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const opps = view === "list"
     ? await db.crmOpportunity.findMany({ where: whereBase, include: { contact: { select: { name: true, phone: true, address: true, email: true } } }, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PER_PAGE, take: PER_PAGE })
     : (await Promise.all(stages.map((st) => db.crmOpportunity.findMany({ where: { ...whereBase, stage: st.key }, include: { contact: { select: { name: true, phone: true, address: true, email: true } } }, orderBy: { updatedAt: "desc" }, take: PER_COL })))).flat();
+  // Open tasks — scoped (crm-enhancer 2026-10-16): only the loaded cards' tasks
+  // (badges) + the viewer's own due/overdue ones (reminder popup). The old query
+  // pulled EVERY open task in the CRM on each board load; with automations
+  // seeding tasks per stage that grows with the lead count, this stays flat.
+  const myFirst = (me!.name || "").split(" ")[0].toLowerCase();
+  const tasks = await db.crmTask.findMany({
+    where: { doneAt: null, OR: [
+      { oppId: { in: opps.map((o) => o.id) } },
+      ...(myFirst ? [{ due: { not: "", lt: `${today}~` }, assignedTo: { contains: myFirst, mode: "insensitive" as const } }] : []),
+    ] },
+    select: { oppId: true, due: true, title: true, assignedTo: true }, take: 2000,
+  });
   const qs = (over: Record<string, string>) => {
     const p = new URLSearchParams({ view, pl: plName, ...(canViewAll ? { who: whoRaw || "all" } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
@@ -202,7 +213,6 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
   // 🔔 due-today reminder popup for the signed-in user: their own tasks +
   // appointments due today (so the person in charge of the lead can't miss it).
-  const myFirst = (me!.name || "").split(" ")[0].toLowerCase();
   const myDueTasks = tasks.filter((t) => t.due && t.due.slice(0, 10) <= today && (t.assignedTo || "").toLowerCase().includes(myFirst)).map((t) => ({ title: t.title, oppId: t.oppId, due: t.due }));
   const myApptsToday = apptsToday.filter((a) => (a.withWho || "").toLowerCase().includes(myFirst)).map((a) => ({ title: a.title, oppId: a.oppId, at: a.at.toISOString() }));
 
@@ -313,7 +323,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       <DueTodayReminder tasks={myDueTasks} appts={myApptsToday} />
       {view === "kanban" ? (
-        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} pipelineStages={Object.fromEntries(pipelines.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={pipelines.map((p) => p.name)} pipelineStages={Object.fromEntries(pipelines.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} currentPipeline={plName} who={whoRaw || "all"} /></>
+        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} pipelineStages={Object.fromEntries(pipelines.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={pipelines.map((p) => p.name)} pipelineStages={Object.fromEntries(pipelines.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} currentPipeline={plName} who={whoRaw || "all"} dialerBase={!isLocked && comms.call ? `/crm/dialer?pl=${encodeURIComponent(plName)}` : ""} /></>
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>

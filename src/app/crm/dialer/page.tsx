@@ -4,6 +4,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { commsFor } from "@/lib/crm-comms";
+import { readPipelines } from "@/lib/crm";
 import { Card, SectionTitle } from "@/components/ui";
 import { stripHtml } from "@/lib/crm-shared";
 import CallButton from "@/components/CallButton";
@@ -14,8 +15,15 @@ export const dynamic = "force-dynamic";
 // ☎️ Power dialer (Close-style): one screen, the day's call queue in priority
 // order — due follow-ups first, then due tasks' leads, then quiet leads.
 // Call → pick an outcome → it logs, reschedules, and serves the next lead.
-export default async function DialerPage({ searchParams }: { searchParams: Promise<{ i?: string }> }) {
+export default async function DialerPage({ searchParams }: { searchParams: Promise<{ i?: string; pl?: string; stage?: string }> }) {
   const sp = await searchParams;
+  // ☎ Stage mode (crm-enhancer 2026-10-16): `?pl=<pipeline>&stage=<key>` dials
+  // EVERY lead in one board column, oldest-touched first — the fix for the
+  // hundreds of never-called imports sitting in "new" stages. Each outcome
+  // bumps updatedAt, so worked leads fall to the back and the column cycles.
+  const stagePl = (sp.pl ?? "").trim();
+  const stageKey = (sp.stage ?? "").trim();
+  const stageMode = !!(stagePl && stageKey);
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return <Card className="p-10 text-center text-slate-400">The dialer is for acquisitions + managers.</Card>;
@@ -25,7 +33,7 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
   const comms = await commsFor(me!);
   const mine = manager ? {} : { assignedTo: { equals: me!.name, mode: "insensitive" as const } };
 
-  const [due, quiet] = await Promise.all([
+  const [due, quiet] = stageMode ? [[], []] : await Promise.all([
     db.crmOpportunity.findMany({
       where: { archivedAt: null, ...mine, nextFollowUp: { not: "", lte: today }, stage: { notIn: ["dead", "signed"] } },
       include: { contact: true }, orderBy: { nextFollowUp: "asc" }, take: 60,
@@ -35,25 +43,33 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
       include: { contact: true }, orderBy: { updatedAt: "asc" }, take: 30,
     }),
   ]);
+  const stageList = stageMode
+    ? await db.crmOpportunity.findMany({
+        where: { archivedAt: null, ...mine, stage: stageKey, ...(stagePl === "War Room" ? { pipeline: { in: ["", "War Room"] } } : { pipeline: stagePl }), contact: { AND: [{ tags: { not: { contains: "dnc" } } }, { tags: { not: { contains: "dnd_all" } } }, { tags: { not: { contains: "dnd_call" } } }] } },
+        include: { contact: true }, orderBy: { updatedAt: "asc" }, take: 300,
+      })
+    : [];
+  const stageLabel = stageMode ? ((await readPipelines()).find((p) => p.name === stagePl)?.stages.find((st) => st.key === stageKey)?.label ?? stageKey) : "";
+  const modeQs = stageMode ? `&pl=${encodeURIComponent(stagePl)}&stage=${encodeURIComponent(stageKey)}` : "";
   const seen = new Set<string>();
-  const queue = [...due, ...quiet].filter((o) => o.contact.phone && !seen.has(o.id) && (seen.add(o.id), true));
+  const queue = [...stageList, ...due, ...quiet].filter((o) => o.contact.phone && !seen.has(o.id) && (seen.add(o.id), true));
   const i = Math.min(Math.max(0, Number(sp.i) || 0), Math.max(0, queue.length - 1));
   const cur = queue[i];
 
   return (
     <div className="space-y-4">
       <SectionTitle
-        title="☎️ Power Dialer"
-        subtitle="Your call queue, priority-ordered: due follow-ups → quiet leads. Call, log the outcome, next."
+        title={stageMode ? `☎️ Dialing: ${stageLabel}` : "☎️ Power Dialer"}
+        subtitle={stageMode ? `${stagePl} › ${stageLabel} — every lead in this stage, least-recently touched first. Call, log the outcome, next.` : "Your call queue, priority-ordered: due follow-ups → quiet leads. Call, log the outcome, next."}
         accent="bg-emerald-500"
-        right={<span className="flex items-center gap-2"><Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">← Pipeline</Link></span>}
+        right={<span className="flex items-center gap-2">{stageMode && <Link href="/crm/dialer" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">📞 My due queue</Link>}<Link href={stageMode ? `/crm?pl=${encodeURIComponent(stagePl)}` : "/crm"} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">← Pipeline</Link></span>}
       />
 
       {!cur ? (
         <Card className="p-12 text-center">
           <div className="text-3xl">🎉</div>
-          <div className="mt-2 text-sm font-bold text-slate-700">Queue cleared — every due lead has been worked.</div>
-          <p className="mt-1 text-xs text-slate-400">New follow-ups land here automatically as they come due.</p>
+          <div className="mt-2 text-sm font-bold text-slate-700">{stageMode ? "Nothing to dial in this stage — no leads with a phone number here." : "Queue cleared — every due lead has been worked."}</div>
+          <p className="mt-1 text-xs text-slate-400">{stageMode ? "Pick another column's ☎ on the board, or work your due queue." : "New follow-ups land here automatically as they come due."}</p>
         </Card>
       ) : (
         <>
@@ -81,6 +97,8 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
               <input type="hidden" name="oppId" value={cur.id} />
               <input type="hidden" name="contactId" value={cur.contactId} />
               <input type="hidden" name="next" value={i} />
+              <input type="hidden" name="pl" value={stagePl} />
+              <input type="hidden" name="stage" value={stageKey} />
               <input name="note" placeholder="what they said… (optional)" className="mb-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
               <div className="flex flex-wrap gap-1.5">
                 <button name="outcome" value="no_answer" className="rounded-xl bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">📵 No answer <span className="font-normal text-slate-400">(+1d)</span></button>
@@ -88,7 +106,7 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
                 <button name="outcome" value="callback" className="rounded-xl bg-amber-100 px-3.5 py-2 text-xs font-bold text-amber-800 hover:bg-amber-200">📞 Callback today</button>
                 <button name="outcome" value="talked" className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700">✅ Talked <span className="font-normal text-emerald-100">(+3d)</span></button>
                 <button name="outcome" value="not_interested" className="rounded-xl bg-slate-200 px-3.5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-300">🌱 Not interested → nurture</button>
-                <Link href={`/crm/dialer?i=${i + 1}`} className="ml-auto rounded-xl bg-white px-3.5 py-2 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-600">skip →</Link>
+                <Link href={`/crm/dialer?i=${i + 1}${modeQs}`} className="ml-auto rounded-xl bg-white px-3.5 py-2 text-xs font-bold text-slate-400 ring-1 ring-slate-200 hover:text-slate-600">skip →</Link>
               </div>
             </form>
           </Card>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { parseTags, CRM_STAGES } from "@/lib/crm-shared";
 import SelectAllBox from "@/components/SelectAllBox";
@@ -8,6 +8,7 @@ import { bulkContactsAction } from "../actions";
 import CallButton from "@/components/CallButton";
 import { commsFor } from "@/lib/crm-comms";
 import { readPipelines } from "@/lib/crm";
+import { findDuplicateContacts } from "@/lib/crm-dupes";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 // paginated table (name / phone / email / owner / tags / last activity).
 const PAGE = 50;
 
-export default async function CrmContactsPage({ searchParams }: { searchParams: Promise<{ q?: string; p?: string; who?: string }> }) {
+export default async function CrmContactsPage({ searchParams }: { searchParams: Promise<{ q?: string; p?: string; who?: string; dupes?: string }> }) {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return <Card className="p-10 text-center text-slate-400">Contacts live inside the Seller CRM (acquisitions + managers).</Card>;
@@ -24,6 +25,49 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   const q = (sp.q ?? "").trim();
   const who = manager ? (sp.who ?? "") : me!.name;
   const page = Math.max(1, Number(sp.p) || 1);
+
+  // 🔁 Duplicates view (?dupes=1): contacts sharing a phone number. Managers
+  // and full-access reps see every group; a plain rep sees only groups that
+  // include one of THEIR contacts. Read-only — resolve by keeping one card and
+  // archiving the other from its quick view (🗑 = archive, never delete).
+  if (sp.dupes === "1") {
+    const fullAccess = canManageAllLeads(me!);
+    const { groups, scanned } = await findDuplicateContacts({ owner: fullAccess ? undefined : me!.name });
+    return (
+      <div className="space-y-4">
+        <SectionTitle title="🔁 Duplicate contacts" subtitle={`${groups.length} seller${groups.length === 1 ? "" : "s"} appear more than once (same phone) · ${scanned.toLocaleString()} contacts scanned`} accent="bg-rose-400"
+          right={<span className="flex items-center gap-2"><Link href="/crm/contacts" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">← All contacts</Link></span>} />
+        <Card className="border-l-4 border-rose-300 p-3 text-xs text-slate-600">
+          <b>Why it matters:</b> two cards for one seller = two reps calling the same person. <b>How to fix:</b> open both, keep the one with the real history, copy anything missing into it, then 🗑 on the other card&apos;s quick view (archive-only — nothing is ever deleted). If the two cards are different parcels from one seller, keep both and make sure they share ONE owner.
+        </Card>
+        {groups.length === 0 && <Card className="p-10 text-center text-sm text-slate-400">🎉 No duplicates{fullAccess ? "" : " among your contacts"}.</Card>}
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {groups.map((g) => {
+            const owners = new Set(g.members.map((m) => (m.owner || "").split(" ")[0]).filter(Boolean));
+            return (
+              <Card key={g.phone} className="p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-mono text-sm font-extrabold text-slate-800">({g.phone.slice(0, 3)}) {g.phone.slice(3, 6)}-{g.phone.slice(6)}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${owners.size > 1 ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{owners.size > 1 ? `⚠️ ${owners.size} different owners` : "same owner · exact dupe"}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {g.members.map((m) => (
+                    <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs ring-1 ring-slate-100">
+                      {m.opp ? <Link href={`/crm/${m.opp.id}`} className="font-bold text-slate-800 hover:text-indigo-600">{m.name}</Link> : <span className="font-bold text-slate-800">{m.name}</span>}
+                      <span className="text-[11px] font-semibold text-slate-500">{m.owner.split(" ")[0] || "— unassigned"}</span>
+                      {m.opp ? <span className="text-[10px] text-slate-400">{m.opp.pipeline} › {m.opp.stage}</span> : <span className="text-[10px] text-slate-300">no open lead</span>}
+                      <span className="ml-auto text-[10px] text-slate-400">touched {m.updatedAt.toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                      <Link prefetch={false} href={`/crm/conversations?c=${m.id}`} title="Open conversation" className="rounded bg-white px-2 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">💬</Link>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   const where = {
     archivedAt: null,
@@ -52,7 +96,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-4">
       <SectionTitle title="👤 Contacts" subtitle={`${total.toLocaleString()} sellers — search by name, phone, email, property or tag.`} accent="bg-brand-gold"
-        right={<span className="flex items-center gap-2"><Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link></span>} />
+        right={<span className="flex items-center gap-2"><Link prefetch={false} href="/crm/contacts?dupes=1" title="Sellers who appear more than once (same phone)" className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">🔁 Duplicates</Link><Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link></span>} />
 
       <Card className="space-y-2 p-3">
         <form className="flex flex-wrap items-center gap-2" action="/crm/contacts" method="get">

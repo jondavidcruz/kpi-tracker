@@ -950,6 +950,10 @@ export async function dialerOutcomeAction(formData: FormData) {
   const outcome = String(formData.get("outcome") ?? "");
   const note = String(formData.get("note") ?? "").trim().slice(0, 300);
   const next = Number(formData.get("next")) || 0;
+  // stage-mode dialer (?pl=&stage=) keeps its column after every outcome
+  const pl = String(formData.get("pl") ?? "").trim();
+  const stage = String(formData.get("stage") ?? "").trim();
+  const modeQs = pl && stage ? `&pl=${encodeURIComponent(pl)}&stage=${encodeURIComponent(stage)}` : "";
   if (!oppId || !contactId) return;
   const NEXT_DAYS: Record<string, number> = { no_answer: 1, voicemail: 2, callback: 0, talked: 3, not_interested: 30 };
   const label: Record<string, string> = { no_answer: "no answer", voicemail: "left voicemail", callback: "callback requested", talked: "talked — good convo", not_interested: "not interested (nurture)" };
@@ -959,7 +963,7 @@ export async function dialerOutcomeAction(formData: FormData) {
     await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer: ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`, actor: me.name });
   }
   revalidatePath("/crm");
-  redirect(`/crm/dialer?i=${next}`);
+  redirect(`/crm/dialer?i=${next}${modeQs}`);
 }
 
 /** Managers: create / toggle / delete automation rules. */
