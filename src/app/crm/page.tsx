@@ -218,6 +218,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           <div className="flex items-center gap-2">
             
             <Link href="/crm/conversations" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">💬 Conversations</Link>
+            {manager && <Link href="/crm/velocity" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">📊 Velocity</Link>}
             <Link href={`/crm?view=kanban${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "kanban" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>🗂 Board</Link>
             <Link href={`/crm?view=list${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "list" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📋 List</Link>
             <Link href={`/crm?view=cal${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "cal" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📅 Week</Link>
