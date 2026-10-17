@@ -1,5 +1,6 @@
 // Bridges Supabase Auth (who is logged in) to the app's User table (their role).
 import { cache } from "react";
+import { headers } from "next/headers";
 import { createClient } from "./supabase/server";
 import { db } from "./db";
 import type { User } from "@prisma/client";
@@ -19,7 +20,22 @@ export const getSessionEmail = cache(async (): Promise<string | null> => {
 export const getCurrentUser = cache(async (): Promise<User | null> => {
   const email = await getSessionEmail();
   if (!email) return null;
-  return db.user.findUnique({ where: { email } });
+  const real = await db.user.findUnique({ where: { email } });
+  if (!real) return null;
+  // 🕵️ Owner-only, read-only "view as" for the Member Preview (Jon 2026-10-16):
+  // the proxy sets x-viewas=<userId> ONLY on GET requests that carry ?viewas, so
+  // server actions (POST) never impersonate — fail-safe. Only an admin (Jon) can
+  // impersonate, and we return the REAL user unless all checks pass. This makes an
+  // embedded page render exactly as that teammate sees it (their sidebar, hidden
+  // money, access redirects) without touching their account or any mutation.
+  try {
+    const viewAs = (await headers()).get("x-viewas");
+    if (viewAs && viewAs !== real.id && real.role === "admin") {
+      const target = await db.user.findUnique({ where: { id: viewAs } });
+      if (target) return target;
+    }
+  } catch { /* headers() not available (build / non-request context) — use real user */ }
+  return real;
 });
 
 // 👁 Veteran reps Jon trusts to see AND edit EVERY lead (2026-10-13), on top of

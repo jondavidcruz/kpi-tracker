@@ -9,6 +9,13 @@ export async function updateSession(request: NextRequest) {
   // Expose the current path to server components (AppShell route guard reads it).
   const reqHeaders = new Headers(request.headers);
   reqHeaders.set("x-pathname", request.nextUrl.pathname);
+  // 🕵️ Member Preview "view as": only honor ?viewas on GET (never on POST/server
+  // actions). Strip any client-forged x-viewas header first, then set it from the
+  // query. getCurrentUser enforces that the REAL user is an admin before it takes
+  // effect, so this cannot escalate privilege.
+  reqHeaders.delete("x-viewas");
+  const viewAs = request.nextUrl.searchParams.get("viewas");
+  if (viewAs && request.method === "GET") reqHeaders.set("x-viewas", viewAs);
   let response = NextResponse.next({ request: { headers: reqHeaders } });
 
   const supabase = createServerClient(

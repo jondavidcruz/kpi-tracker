@@ -313,11 +313,15 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       const titleIsName = !!nTitle && !!nName && (nTitle === nName || nTitle.includes(nName) || nName.includes(nTitle));
                       const addr = (c.address ?? "").trim();
                       const blur = privacy ? "select-none blur-[3px]" : "";
+                      // Show ONE address only (Jon 2026-10-16: imported leads showed
+                      // both the opp title AND the contact address). If the title is
+                      // itself an address, that's the property line; otherwise fall
+                      // back to the 📍 contact address. Never both.
+                      const titleIsAddress = show.title && !!t && !titleIsName;
                       return (<>
-                        {show.title && t && !titleIsName && <div className={`text-[11px] text-slate-500 ${blur}`}>{t}</div>}
-                        {addr
-                          ? (addr !== t && <div className={`truncate text-[10px] text-slate-400 ${blur}`}>📍 {addr}</div>)
-                          : (titleIsName && c.apn && <div className={`truncate text-[10px] font-semibold text-slate-500 ${blur}`}>🧭 APN {c.apn}</div>)}
+                        {titleIsAddress && <div className={`truncate text-[11px] text-slate-500 ${blur}`}>📍 {t}</div>}
+                        {!titleIsAddress && addr && <div className={`truncate text-[10px] text-slate-400 ${blur}`}>📍 {addr}</div>}
+                        {!titleIsAddress && !addr && titleIsName && c.apn && <div className={`truncate text-[10px] font-semibold text-slate-500 ${blur}`}>🧭 APN {c.apn}</div>}
                       </>);
                     })()}
                     {c.phone && <div className={`text-[10px] font-semibold text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>📞 {c.phone}</div>}
