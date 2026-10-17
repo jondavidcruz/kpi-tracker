@@ -4,6 +4,7 @@
 import { db } from "./db";
 import { getActiveReps, getSettings, resolveGoal, getAllTargets, resolveGoalWith } from "./data";
 import { navAllowlist, tracksSpeedTest } from "./auth";
+import { shiftStartHour } from "./shift";
 import { monthOf, paceFraction, todayStr } from "./date";
 import { formatValue, type Unit } from "./format";
 import { alertSeverity, statusVsGoal, statusVsPace } from "./kpi";
@@ -354,6 +355,7 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
     for (const rep of reps.filter((r) => (kpi.roleKey === "internet" ? tracksSpeedTest(r) : r.position === kpi.roleKey))) {
       if (rep.role === "admin") continue; // the owner manages the team; no missing-entry nags
       if (rep.irregularSchedule) continue; // no set schedule, don't nag on off days
+      if (shiftStartHour(date, rep.name) === null) continue; // scheduled off day (Kyle Tue/Thu)
       if (navAllowlist(rep)) continue; // restricted/part-time reps (Ethan) — not on the daily scorecard
       if (exemptForFocus(kpi.key, focusMap.get(rep.id))) continue; // off-focus KPI today
       const entry = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: rep.id, date } });
@@ -402,6 +404,7 @@ export async function sendMissingKpiEmail(date: string): Promise<boolean> {
   for (const rep of reps) {
     if (rep.role === "admin") continue; // owner isn't nagged
     if (rep.irregularSchedule) continue; // no set schedule (e.g. part-time) — don't nag
+    if (shiftStartHour(date, rep.name) === null) continue; // scheduled off day (Kyle Tue/Thu)
     if (navAllowlist(rep)) continue; // restricted/part-time reps (Ethan) — off the scorecard
     const roleKpis = dailyKpis
       .filter((k) => (k.roleKey === "internet" ? tracksSpeedTest(rep) : k.roleKey === rep.position))

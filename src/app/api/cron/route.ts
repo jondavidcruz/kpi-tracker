@@ -1495,6 +1495,40 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, filed, scanned: docs.length });
   }
 
+  // 💤 Stale buyer sends → "no reply" after 72h (?stalesends=1, daily). Sends that never
+  // got an outcome sat blank forever, so the tire-kicker flag and the Friday "gone dark"
+  // list only filled if someone set no-reply by hand. Flips them + queues ONE follow-up
+  // task per deal for the dispo rep. Never deletes; a later real reply overwrites.
+  if (url.searchParams.get("stalesends") === "1") {
+    const { setDealSendOutcome } = await import("@/lib/buyers/feedback");
+    const cutoff = new Date(Date.now() - 72 * 3600_000);
+    const stale = await db.dealSend.findMany({ where: { outcome: "", sentAt: { lt: cutoff } }, select: { id: true, dealId: true, buyerId: true, sentAt: true }, orderBy: { sentAt: "asc" }, take: 60 }).catch(() => []);
+    if (!stale.length) return NextResponse.json({ ok: true, flipped: 0, tasks: 0 });
+    const dealIds = [...new Set(stale.map((s) => s.dealId))];
+    const deals = await db.deal.findMany({ where: { id: { in: dealIds } }, select: { id: true, address: true, assignedTo: true, status: true, soldDate: true } }).catch(() => []);
+    const dealById = new Map(deals.map((d) => [d.id, d]));
+    let flipped = 0;
+    for (const s of stale) {
+      try { await setDealSendOutcome(s.id, { outcome: "no_reply" }, "auto-72h"); flipped++; } catch (e) { console.error("stalesends", s.id, e); }
+    }
+    const today = new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10);
+    let tasks = 0;
+    for (const dealId of dealIds) {
+      const d = dealById.get(dealId);
+      if (!d || d.status === "dead" || d.soldDate) continue; // flipped silently — no follow-up on dead/sold deals
+      const mine = stale.filter((s) => s.dealId === dealId);
+      const newest = Math.max(...mine.map((s) => s.sentAt.getTime()));
+      if (Date.now() - newest > 14 * 86400_000) continue; // historical backlog: flip only, don't nag
+      const n = mine.length;
+      const title = `Follow up: ${n} buyer${n > 1 ? "s" : ""} went quiet on ${d.address} (no reply in 72h)`;
+      const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } }).catch(() => null);
+      if (dup) continue;
+      await db.crmTask.create({ data: { oppId: "", contactId: "", title, due: today, assignedTo: d.assignedTo || "Sharyn Kayle", createdBy: "stale-sends" } }).catch(() => null);
+      tasks++;
+    }
+    return NextResponse.json({ ok: true, flipped, tasks, remaining: stale.length === 60 ? "more next run" : 0 });
+  }
+
   // 🏆 Auto-award a certificate for every closed deal (Jon 2026-10-15: "they get a
   // certificate for every deal they close" — Air Force style). Dedupes by deal id.
   if (url.searchParams.get("dealcerts") === "1") {
@@ -1775,6 +1809,81 @@ export async function GET(request: Request) {
       const up = await uploadToFolder(folderId, `test-${Date.now()}.txt`, new TextEncoder().encode("hello from drivetest"), "text/plain");
       return NextResponse.json({ ok: true, configured: true, dealsParent: parent, folderId, uploaded: up });
     } catch (e) { return NextResponse.json({ ok: false, configured: true, error: String(e).slice(0, 400) }); }
+  }
+
+  // ⛏️ Mine OUR OWN data for cash buyers → Vetted Buyers (Jon 2026-10-16 overnight:
+  // grow the buyer list with ZERO DealMachine credits). Sources, all free: past
+  // closed-deal buyers (Deal.buyerName), buyer parties on deals (CrmParty role
+  // buyer), and Direct REI buyer-side contacts (their API, not DealMachine).
+  // ?minebuyers=1 dry / &commit=1.
+  if (url.searchParams.get("minebuyers") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const { createBuyer } = await import("@/lib/buyers/write");
+    type Cand = { name: string; company?: string; phone?: string; email?: string; notes?: string; source: string };
+    const cands: Cand[] = [];
+    // 1) past closed-deal buyers
+    const deals = await db.deal.findMany({ where: { buyerName: { not: "" } }, select: { buyerName: true, address: true } }).catch(() => []);
+    for (const d of deals) cands.push({ name: d.buyerName, company: d.buyerName, notes: `Bought a deal from us${d.address ? ` (${d.address})` : ""}.`, source: "closed deal" });
+    // 2) buyer parties on deals
+    const parties = await db.crmParty.findMany({ where: { role: { contains: "buy", mode: "insensitive" } }, select: { name: true, phone: true, email: true, note: true } }).catch(() => []);
+    for (const p of parties) if (p.name) cands.push({ name: p.name, phone: p.phone ?? "", email: p.email ?? "", notes: p.note ?? "", source: "deal party (buyer)" });
+    // 3) Direct REI buyer-side contacts (free — their API, NOT DealMachine)
+    let dreiPulled = 0;
+    try {
+      const { directReiConfigured, directReiContacts } = await import("@/lib/directrei");
+      if (directReiConfigured()) {
+        const BUYER_T = /buyer|builder|developer|investor|flipper/i;
+        for (let page = 0; page < 8; page++) {
+          const r = await directReiContacts({ page: String(page), limit: "200" });
+          const rows = ((r.body as { rows?: Array<Record<string, unknown>> })?.rows) ?? [];
+          for (const c of rows) {
+            const t = `${c.contact_type ?? ""} ${c.role ?? ""}`;
+            if (!BUYER_T.test(t)) continue;
+            dreiPulled++;
+            cands.push({ name: String(c.name ?? ""), company: String(c.name ?? ""), phone: String(c.phone ?? ""), email: String(c.email ?? ""), notes: "Direct REI buyer-side contact.", source: "Direct REI" });
+          }
+          if (!(r.body as { has_more?: boolean })?.has_more || rows.length === 0) break;
+        }
+      }
+    } catch { /* drei mine best-effort */ }
+    let created = 0, dup = 0, skipped = 0;
+    if (commit) {
+      for (const c of cands) {
+        if (!c.name.trim()) { skipped++; continue; }
+        const res = await createBuyer({ name: c.name, company: c.company, phone: c.phone, email: c.email, notes: c.notes, status: "Mined — our data", source: c.source, vetStage: "to_vet" }, "buyer-miner", { isLand: true });
+        if (res.created) created++; else if (res.dup) dup++; else skipped++;
+      }
+    }
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", candidates: cands.length, fromClosedDeals: deals.length, fromDealParties: parties.length, fromDirectRei: dreiPulled, created, dup, skipped });
+  }
+
+  // 🏛️ Ingest RESEARCHED buyers (institutional / national / funds) → Vetted Buyers
+  // (?addbuyers=1, POST JSON {buyers:[...]}). Free web research, no credits. Deduped.
+  if (url.searchParams.get("addbuyers") === "1") {
+    const { createBuyer } = await import("@/lib/buyers/write");
+    let body: { buyers?: unknown } = {};
+    try { body = await request.json(); } catch { /* none */ }
+    const list = Array.isArray(body.buyers) ? (body.buyers as Array<Record<string, unknown>>) : [];
+    if (!list.length) return NextResponse.json({ ok: false, error: "no buyers in body" });
+    let created = 0, dup = 0, skipped = 0;
+    for (const b of list) {
+      const name = String(b.name ?? b.company ?? "").trim();
+      if (!name) { skipped++; continue; }
+      const states = Array.isArray(b.states) ? (b.states as string[]) : [];
+      const links = [b.website, b.acqUrl, b.linkedin].map((x) => String(x ?? "").trim()).filter(Boolean).join("\n");
+      const res = await createBuyer({
+        name, company: String(b.company ?? b.name ?? ""), phone: String(b.phone ?? ""), email: String(b.email ?? ""),
+        website: String(b.website ?? ""), links,
+        companySize: String(b.companySize ?? ""), region: states.join(", "), market: states.join(", "),
+        buyBox: String(b.buys ?? ""), type: String(b.type ?? "developer"),
+        status: "Institutional (research)", vetStage: "to_vet",
+        decisionMaker: String(b.acqUrl ?? "") ? "Submit-a-deal page" : "",
+        notes: `${String(b.note ?? "")}${b.acqUrl ? `\nSubmit a deal: ${b.acqUrl}` : ""}${b.source ? `\nSource: ${b.source}` : ""}`.trim(),
+        source: String(b.source ?? "research"),
+      }, "buyer-research", { isLand: true, targetStates: states });
+      if (res.created) created++; else if (res.dup) dup++; else skipped++;
+    }
+    return NextResponse.json({ ok: true, received: list.length, created, dup, skipped });
   }
 
   // 💰 Cash-buyer sheet drop (?buyerdrop=1, POST JSON {rows:[...],label?}) — the

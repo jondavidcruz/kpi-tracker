@@ -167,6 +167,15 @@ export async function signOut() {
  * Save a day's entries. Form fields are named `v|<kpiId>|<userId>` where an
  * empty userId means a team-scope KPI. Duration inputs arrive in minutes.
  */
+/** Find the entry for (kpi, user, date) — and if the team-scope race (autosave vs
+ *  Save day; null userId isn't covered by the unique index) left duplicates, keep the
+ *  newest and remove the extras so month totals stop double-counting. */
+async function findEntryCollapsed(kpiId: string, userId: string | null, date: string) {
+  const rows = await db.entry.findMany({ where: { kpiId, userId, date }, orderBy: { enteredAt: "desc" } });
+  if (rows.length > 1) await db.entry.deleteMany({ where: { id: { in: rows.slice(1).map((r) => r.id) } } }).catch(() => {});
+  return rows[0] ?? null;
+}
+
 export async function saveDay(formData: FormData) {
   const date = String(formData.get("date") ?? "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -197,7 +206,7 @@ export async function saveDay(formData: FormData) {
     if (!canWriteFor(userId)) continue;
     const value = fromInput(unit, String(raw));
 
-    const existing = await db.entry.findFirst({ where: { kpiId, userId, date } });
+    const existing = await findEntryCollapsed(kpiId, userId, date);
     if (value === null) {
       // Blank clears an existing entry.
       if (existing) await db.entry.delete({ where: { id: existing.id } });
@@ -264,7 +273,7 @@ export async function autoSaveEntry(formData: FormData) {
   const value = fromInput(kpi.unit as Unit, String(formData.get("value") ?? ""));
   const noteRaw = formData.get("note");
   const note = noteRaw == null ? undefined : String(noteRaw).trim().slice(0, 200);
-  const existing = await db.entry.findFirst({ where: { kpiId, userId, date } });
+  const existing = await findEntryCollapsed(kpiId, userId, date);
   if (value === null) {
     if (existing) await db.entry.delete({ where: { id: existing.id } }); // blank clears it
   } else if (existing) {

@@ -47,7 +47,7 @@ export default async function TvPage() {
   const month = monthOf(date);
   const fraction = paceFraction(date);
 
-  const [reps, perRep, teamMonthly, dailyValues, mtdSums, targets, openAlerts, streaks, awardBoard, aiChampions] =
+  const [reps, perRepAll, teamMonthlyAll, dailyValues, mtdSums, targets, openAlerts, streaks, awardBoard, aiChampions] =
     await Promise.all([
       getActiveReps(),
       getKpis({ scope: "per_rep", computed: false }),
@@ -60,6 +60,12 @@ export default async function TvPage() {
       getAwardBoard(),
       getAiChampions(),
     ]);
+
+  // 💵 Same money gate as the dashboard: /tv is public (no viewer to check), so dollar
+  // KPIs never show on the wall — reps don't see company money (Jon 2026-10-15).
+  const notMoney = (k: { unit: string; key: string }) => k.unit !== "currency" && k.key !== "net_margin";
+  const perRep = perRepAll.filter(notMoney);
+  const teamMonthly = teamMonthlyAll.filter(notMoney);
 
   // Team pulse: count goal-bearing per-rep entries on/behind goal today.
   let onGoal = 0;

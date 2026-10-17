@@ -93,13 +93,12 @@ export default async function DashboardPage({
   const monthStart = `${month}-01`;
   const year = date.slice(0, 4);
   const yearStart = `${year}-01-01`;
-  const [closings, closedDeals, ytdOpExAgg] = await Promise.all([
+  const [closings, closedDeals, ytdOpExAgg, layoutRow] = await Promise.all([
     db.closing.findMany({ where: { status: { in: ["fell_through", "closed"] } }, select: { status: true, closeDate: true, revenue: true, address: true } }),
     db.closedDeal.findMany({ where: { year: Number(year) }, select: { profit: true, month: true, address: true } }), // HUD-backed ledger
     db.expenseLine.aggregate({ where: { month: { startsWith: year } }, _sum: { actual: true } }), // YTD operating expenses (P&L)
+    db.resource.findFirst({ where: { category: "__dash_layout__" } }).catch(() => null), // per-user widget layout (keyed by user id)
   ]);
-  // Per-user widget layout (Resource __dash_layout__ keyed by user id)
-  const layoutRow = await db.resource.findFirst({ where: { category: "__dash_layout__" } }).catch(() => null);
   let dashLayout = { hidden: [] as string[], order: [] as string[] };
   try { const lm = JSON.parse(layoutRow?.description || "{}"); if (me && lm[me.id]) dashLayout = lm[me.id]; } catch { /* default */ }
 

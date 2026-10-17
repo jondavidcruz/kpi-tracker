@@ -107,6 +107,17 @@ export function shiftStartHour(dateStr: string, who?: string | null): { hour: nu
   return { hour: 8, min: 0 }; //                                 8:00 AM default
 }
 
+/** Scheduled workdays for one person in an inclusive date range — honors per-person
+ *  off days (Kyle Mon/Wed/Fri) and weekends, so goals/pace stop assuming Mon–Fri. */
+export function workdaysFor(start: string, end: string, who?: string | null): number {
+  let n = 0;
+  const e = new Date(end + "T12:00:00Z");
+  for (const d = new Date(start + "T12:00:00Z"); d <= e; d.setUTCDate(d.getUTCDate() + 1)) {
+    if (shiftStartHour(d.toISOString().slice(0, 10), who) !== null) n++;
+  }
+  return n;
+}
+
 /** The scheduled shift-start instant for `dateStr` (pay floor), or null on weekends. */
 export function shiftStartAt(dateStr: string, tz: string = DEFAULT_TZ, who?: string | null): Date | null {
   const s = shiftStartHour(dateStr, who);

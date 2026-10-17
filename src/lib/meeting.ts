@@ -7,6 +7,7 @@ import {
   getAllTargets, resolveGoalWith,
 } from "./data";
 import { lastWeekRange, currentWeekRange, monthBounds, monthOf, friendlyDate } from "./date";
+import { workdaysFor } from "./shift";
 import { formatValue, type Unit } from "./format";
 import { POSITIONS, positionLabel } from "./roles";
 import { analyzeDeal } from "./deals";
@@ -111,7 +112,7 @@ function buildRoleTables(
   reps: { id: string; name: string; position: string }[],
   perRepKpis: { id: string; key: string; name: string; unit: string; roleKey: string; category: string; goalKind: string; goalValue: number | null; cadence: string }[],
   sums: Map<string, number>,
-  pace: { targets: Parameters<typeof resolveGoalWith>[0]; month: string; workdays: number },
+  pace: { targets: Parameters<typeof resolveGoalWith>[0]; month: string; workdays: number | ((repName: string) => number) },
 ): RoleTable[] {
   const tables: RoleTable[] = [];
   for (const pos of POSITIONS) {
@@ -135,7 +136,8 @@ function buildRoleTables(
           if (k.category === "green" && k.goalKind === "at_least" && k.cadence === "daily") {
             const goal = resolveGoalWith(pace.targets, k, rep.id, pace.month) ?? 0;
             if (goal > 0) {
-              const short = goal * pace.workdays - raw;
+              const wd = typeof pace.workdays === "function" ? pace.workdays(rep.name) : pace.workdays;
+              const short = goal * wd - raw;
               return short > 0
                 ? { v, behind: formatValue(k.unit as Unit, short), met: false }
                 : { v, behind: null, met: true };
@@ -316,7 +318,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
 
   // ---- Last week: at-a-glance + per-role tables ----
   const lastGlance = glanceFrom(teamKpis, perRepKpis, reps, wkSums);
-  const roleTables = buildRoleTables(reps, perRepKpis, wkSums, { targets, month: monthOf(wk.start), workdays: 5 });
+  const roleTables = buildRoleTables(reps, perRepKpis, wkSums, { targets, month: monthOf(wk.start), workdays: (name) => workdaysFor(wk.start, wk.end, name) });
 
   // ---- Month-to-date: same KPI breakdown, summed across the whole month ----
   const monthSums = await getRangeSums(mb.start, today);
@@ -324,7 +326,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   // Pace through YESTERDAY: the deck is read Monday morning before anyone has logged
   // today, so counting today as an expected workday painted everyone red by one day.
   const paceEnd = (() => { const d = new Date(today + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - 1); const y = d.toISOString().slice(0, 10); return y < mb.start ? mb.start : y; })();
-  const monthRoleTables = buildRoleTables(reps, perRepKpis, monthSums, { targets, month: monthOf(today), workdays: today === mb.start ? 0 : workdaysBetween(mb.start, paceEnd) });
+  const monthRoleTables = buildRoleTables(reps, perRepKpis, monthSums, { targets, month: monthOf(today), workdays: today === mb.start ? 0 : (name) => workdaysFor(mb.start, paceEnd, name) });
   // Lead with the month's core money KPIs (PPL leads, revenue, spend, closes) — these are
   // entered monthly so they weren't in the daily-summed glance; that's why they showed blank.
   const coreMonthly = CORE_MONTHLY_KPIS.map((key) => financials.find((f) => f.key === key)).filter((f): f is Glance => !!f);

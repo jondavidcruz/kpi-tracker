@@ -11,6 +11,7 @@ import {
   getSettings,
 } from "./data";
 import { lastWeekRange, datesInRange, friendlyDate } from "./date";
+import { workdaysFor } from "./shift";
 import { formatValue, type Unit } from "./format";
 import { statusVsGoal } from "./kpi";
 import { POSITIONS, positionLabel, secondaryPositionOf } from "./roles";
@@ -65,7 +66,7 @@ export async function sendWeeklyTeamEmail(today: string): Promise<boolean> {
           })
           .join("");
         const active = daysActiveByUser.get(rep.id)?.size ?? 0;
-        return `<tr style="border-top:1px solid #eef2f7;"><td style="padding:6px 8px;font-weight:600;color:#0b1f3a;">${esc(rep.name)} <span style="color:#94a3b8;font-weight:400;">(${active}/${workdays}d)</span></td>${cells}</tr>`;
+        return `<tr style="border-top:1px solid #eef2f7;"><td style="padding:6px 8px;font-weight:600;color:#0b1f3a;">${esc(rep.name)} <span style="color:#94a3b8;font-weight:400;">(${active}/${workdaysFor(wk.start, wk.end, rep.name) || workdays}d)</span></td>${cells}</tr>`;
       })
       .join("");
 

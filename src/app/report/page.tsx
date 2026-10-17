@@ -13,6 +13,7 @@ import { formatValue, type Unit } from "@/lib/format";
 import { POSITIONS } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import { getCurrentUser, isManager } from "@/lib/auth";
+import { workdaysFor } from "@/lib/shift";
 import { Card, SectionTitle } from "@/components/ui";
 import RepRoleBars from "@/components/RepRoleBars";
 
@@ -29,8 +30,7 @@ export default async function ReportPage({
 }: {
   searchParams: Promise<{ date?: string; week?: string; range?: string; prev?: string; synced?: string }>;
 }) {
-  const sp = await searchParams;
-  const settings = await getSettings();
+  const [sp, settings] = await Promise.all([searchParams, getSettings()]);
   // Guard ?date= like the dashboard does — a malformed value threw in toISOString() and blanked the page.
   const today = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayStr(settings.orgTimezone);
   // Day / week / month view; ?prev=1 shows the previous one (yesterday / last week / last month).
@@ -63,31 +63,34 @@ export default async function ReportPage({
   const curAnchor = range === "day" ? todayAnchorS : range === "month" ? `${monthOf(todayAnchorS)}-01` : currentWeekRange(todayAnchorS).start;
   const nextDisabled = stepDate(1) > curAnchor; // don't let Next walk into the future
 
-  const [reps, perRepKpis, teamKpis, sums, targets] = await Promise.all([
+  const [reps, perRepKpis, teamKpis, sums, targets, signedNotes, drei, me] = await Promise.all([
     getActiveReps(),
     getKpis({ scope: "per_rep", computed: false }),
     getKpis({ scope: "team", computed: false, cadence: "daily" }),
     getRangeSums(wk.start, wk.end),
     getAllTargets(),
+    // ✍️ Signed Contract type notes for the period ("novation — Flores" chips)
+    db.entry.findMany({
+      where: { date: { gte: wk.start, lte: wk.end }, note: { not: "" }, kpi: { key: "acq_signed" } },
+      select: { date: true, note: true, user: { select: { name: true } } },
+      orderBy: { date: "desc" }, take: 20,
+    }),
+    readDreiFeed().catch(() => null),
+    getCurrentUser(),
   ]);
   // Working days in the week → turns each rep's per-day goal into a weekly target,
   // so the scoreboard shows % against each person's OWN goal (fair across hours).
   const month = wk.start.slice(0, 7);
-  // ✍️ Signed Contract type notes for the period ("novation — Flores" chips)
-  const signedNotes = await db.entry.findMany({
-    where: { date: { gte: wk.start, lte: wk.end }, note: { not: "" }, kpi: { key: "acq_signed" } },
-    select: { date: true, note: true, user: { select: { name: true } } },
-    orderBy: { date: "desc" }, take: 20,
-  });
-  const drei = await readDreiFeed().catch(() => null);
   const workdays = Math.max(1, datesInRange(wk.start, wk.end).filter((d) => {
     const dow = new Date(d + "T00:00:00Z").getUTCDay();
     return dow >= 1 && dow <= 5;
   }).length);
+  // Per-rep working days (Kyle is Mon/Wed/Fri — his weekly goal was inflated 5/3 by the Mon–Fri count).
+  const repNameById = new Map(reps.map((r) => [r.id, r.name]));
+  const workdaysOf = (repId: string) => Math.max(1, workdaysFor(wk.start, wk.end, repNameById.get(repId)) || workdays);
 
   // The activity scoreboard stays visible to everyone; the company-money
   // sections below (revenue pipeline, active-deal profits) are managers-only.
-  const me = await getCurrentUser();
   const manager = isManager(me);
 
   // ---- Page 4 data: KPIs at a glance (team totals for the week) ----
@@ -252,7 +255,7 @@ export default async function ReportPage({
                   cell={(repId, k) => {
                     const val = sums.get(`${k.id}|${repId}`) ?? 0;
                     const dailyGoal = k.goalKind === "at_least" ? resolveGoalWith(targets, k, repId, month) : null;
-                    const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdays : null;
+                    const weeklyGoal = dailyGoal != null && dailyGoal > 0 ? dailyGoal * workdaysOf(repId) : null;
                     const pct = weeklyGoal ? Math.min(100, (val / weeklyGoal) * 100) : null;
                     const status = weeklyGoal ? (val >= weeklyGoal ? "hit" : val >= weeklyGoal * 0.7 ? "close" : "miss") : "tracked";
                     return { value: val, pct, status, goalText: weeklyGoal ? `/ ${formatValue(k.unit as Unit, weeklyGoal)} ${rangeNoun === "day" ? "day" : rangeNoun}` : undefined };
