@@ -89,3 +89,70 @@ export async function logTouch(
     });
   });
 }
+
+// ── CREATE a buyer (MarketContact), deduped, with a BuyerHistory "create" row.
+// The sanctioned insert path (Jon 2026-10-16 overnight: grow Vetted Buyers from
+// free sources — our own data + public research — never DealMachine credits).
+type NewBuyer = {
+  name: string; company?: string; phone?: string; phone2?: string; email?: string;
+  website?: string; links?: string; category?: string; type?: string; companySize?: string;
+  region?: string; market?: string; buyBox?: string; priceRange?: string; status?: string;
+  vetStage?: string; decisionMaker?: string; notes?: string; source?: string;
+};
+const last10 = (p?: string) => (p || "").replace(/\D/g, "").slice(-10);
+const norm = (s?: string) => (s || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Find an existing (non-archived) buyer that matches by phone, company, or name+email. */
+export async function findBuyerDup(b: { name?: string; company?: string; phone?: string; email?: string }): Promise<string | null> {
+  const ph = last10(b.phone);
+  const nm = norm(b.company) || norm(b.name);
+  const em = (b.email || "").trim().toLowerCase();
+  if (!ph && !nm && !em) return null;
+  const rows = await db.marketContact.findMany({
+    where: { archivedAt: null },
+    select: { id: true, name: true, company: true, phone: true, phone2: true, email: true },
+    take: 5000,
+  });
+  for (const r of rows) {
+    if (ph && (last10(r.phone) === ph || last10(r.phone2) === ph)) return r.id;
+    if (em && (r.email || "").trim().toLowerCase() === em && em.length > 3) return r.id;
+    if (nm && (norm(r.company) === nm || norm(r.name) === nm) && nm.length > 3) return r.id;
+  }
+  return null;
+}
+
+/** Create a buyer if not already present. Returns {created, id, dup}. */
+export async function createBuyer(b: NewBuyer, actor: Actor, opts?: { isLand?: boolean; targetStates?: string[] }): Promise<{ created: boolean; id: string | null; dup: boolean }> {
+  if (!b.name?.trim() && !b.company?.trim()) return { created: false, id: null, dup: false };
+  const dupId = await findBuyerDup(b);
+  if (dupId) return { created: false, id: dupId, dup: true };
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const row = await db.marketContact.create({
+    data: {
+      name: (b.name || b.company || "").slice(0, 160),
+      company: b.company ?? "", phone: b.phone ?? "", phone2: b.phone2 ?? "", email: b.email ?? "",
+      website: b.website ?? "", links: b.links ?? "",
+      category: b.category ?? "land", type: b.type ?? "developer",
+      companySize: b.companySize ?? "", region: b.region ?? "", market: b.market ?? "",
+      buyBox: b.buyBox ?? "", priceRange: b.priceRange ?? "", decisionMaker: b.decisionMaker ?? "",
+      status: b.status ?? "", vetStage: b.vetStage ?? "to_vet", vetStatus: "to_contact",
+      notes: b.notes ?? "", addedById: "system", addedOn: today,
+      bestContact: b.source ? `Source: ${b.source}` : "",
+    },
+  });
+  await db.buyerHistory.create({
+    data: { buyerId: row.id, actor: who(actor), action: "create", after: { name: row.name, company: row.company, source: b.source ?? "" } as Prisma.InputJsonValue },
+  });
+  // Land flag (so it shows in the land buyer map/match) — Resource __buyer_land__.
+  if (opts?.isLand) {
+    try {
+      const r = await db.resource.findFirst({ where: { category: "__buyer_land__" } });
+      const flags: Record<string, unknown> = r?.description ? JSON.parse(r.description) : {};
+      flags[row.id] = { isLandBuyer: true, ...(opts.targetStates?.length ? { targetStates: opts.targetStates } : {}) };
+      const description = JSON.stringify(flags);
+      if (r) await db.resource.update({ where: { id: r.id }, data: { description } });
+      else await db.resource.create({ data: { title: "buyer-land", category: "__buyer_land__", url: "", description } });
+    } catch { /* flag best-effort */ }
+  }
+  return { created: true, id: row.id, dup: false };
+}
