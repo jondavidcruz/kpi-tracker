@@ -1777,6 +1777,54 @@ export async function GET(request: Request) {
     } catch (e) { return NextResponse.json({ ok: false, configured: true, error: String(e).slice(0, 400) }); }
   }
 
+  // 💰 Cash-buyer sheet drop (?buyerdrop=1, POST JSON {rows:[...],label?}) — the
+  // daily DealMachine scheduled task POSTs sourced cash land buyers here; we
+  // dedupe (all-time + market), build a Direct-REI-ready CSV, save it to Drive,
+  // email it to the team, and store it for the /cash-buyers page. (The app can't
+  // call the DealMachine MCP, so sourcing happens in the scheduled task.)
+  if (url.searchParams.get("buyerdrop") === "1") {
+    const { dedupeNewBuyers, buildBuyerCsv, storeBuyerFeed } = await import("@/lib/buyer-sheet");
+    let body: { rows?: unknown; label?: string } = {};
+    try { body = await request.json(); } catch { /* no body */ }
+    const rows = Array.isArray(body.rows) ? (body.rows as import("@/lib/buyer-sheet").BuyerRow[]) : [];
+    if (!rows.length) return NextResponse.json({ ok: false, error: "no rows in body" });
+    const { fresh, skippedDup, skippedMarket } = await dedupeNewBuyers(rows);
+    const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const byState: Record<string, number> = {};
+    for (const r of fresh) { const s = (r.state || r.mailingState || "?").toUpperCase(); byState[s] = (byState[s] ?? 0) + 1; }
+    if (!fresh.length) {
+      await storeBuyerFeed({ date, count: 0, link: "", byState, rows: [] });
+      return NextResponse.json({ ok: true, received: rows.length, fresh: 0, skippedDup, skippedMarket, note: "no NEW buyers today — nothing emailed" });
+    }
+    const csv = buildBuyerCsv(fresh);
+    const filename = `cash-buyers-${date}.csv`;
+    // save to Drive (Cash Buyers folder, link-readable)
+    let link = "";
+    try {
+      const { gdriveConfigured, ensureSubfolder, uploadToFolder, rootFolderId } = await import("@/lib/gdrive");
+      if (gdriveConfigured() && rootFolderId()) {
+        const folderId = await ensureSubfolder(rootFolderId(), "Cash Buyers");
+        const up = await uploadToFolder(folderId, filename, new TextEncoder().encode(csv), "text/csv", true);
+        link = up.link;
+      }
+    } catch { /* drive best-effort */ }
+    // email the sheet (CSV attached) to the team inbox
+    const summary = Object.entries(byState).map(([s, n]) => `${s}: ${n}`).join(" · ");
+    const html = `<div style="font-family:-apple-system,Arial,sans-serif;color:#1f2937">
+      <h2 style="color:#0b1f3a;margin:0 0 6px">💰 ${fresh.length} new cash land buyers — ${date}</h2>
+      <p style="margin:0 0 10px;font-size:14px">Fresh buyers to load into the Direct REI dialer / SMS / email. ${summary ? `By market: <b>${summary}</b>.` : ""}</p>
+      <p style="font-size:13px;color:#475569">The CSV is attached and ready to import.${link ? ` Also on Drive: <a href="${link}">open</a>.` : ""} Dedupe skipped ${skippedDup} already-sourced${skippedMarket ? ` and ${skippedMarket} outside our markets` : ""}.</p>
+      <p style="font-size:12px;color:#94a3b8">Vacant-land owners who recently bought cash/arms-length in TX/FL/CA/TN/OK (DealMachine). Scrub against DNC before dialing.</p>
+    </div>`;
+    try {
+      const { sendEmailWithAttachment } = await import("@/lib/notify");
+      const recipient = url.searchParams.get("to") || "info@freedom-offers.com";
+      await sendEmailWithAttachment([recipient], `💰 ${fresh.length} new cash land buyers — ${date}`, html, { filename, content: Buffer.from(csv).toString("base64") });
+    } catch { /* email best-effort */ }
+    await storeBuyerFeed({ date, count: fresh.length, link, byState, rows: fresh });
+    return NextResponse.json({ ok: true, received: rows.length, fresh: fresh.length, skippedDup, skippedMarket, byState, driveLink: link });
+  }
+
   // 🔎 Direct REI contact field probe (?dreicontactprobe=1): dumps a sample
   // contact's keys so we know the real address field names.
   if (url.searchParams.get("dreicontactprobe") === "1") {

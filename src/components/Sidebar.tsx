@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
   Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap, Landmark,
-  Smartphone, Play,
+  Smartphone, Play, Banknote,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -110,6 +110,7 @@ export default function Sidebar({
     ] },
     { label: "Marketing", items: [
       { href: "/lead-sourcing", label: "Lead Sourcing", Icon: TrendingUp, marketingOnly: true },
+      { href: "/cash-buyers", label: "Cash Buyers", Icon: Banknote, marketingOnly: true },
     ] },
     { label: "Business Heartbeat", items: [
       { href: "/compliance", label: "Compliance", Icon: ShieldCheck },
