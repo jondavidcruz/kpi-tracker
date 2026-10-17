@@ -12,12 +12,19 @@ export const dynamic = "force-dynamic";
 // certifiedOn: the day they actually earned it (Jon can correct any of these —
 // defaults to the issue date). started: real start date with the company when
 // known; otherwise falls back to their War Room account date.
+// Grandfathered veterans who keep the Mastery cert regardless. New reps (incl.
+// Nick + Kyle) must EARN it by closing a deal (Jon 2026-10-16: "remove Nick's
+// certification until he closes a deal") — that's handled dynamically below.
 const CERTS: Array<{ first: string; title: string; track: string; criteria: string; started?: string; certifiedOn?: string }> = [
   { first: "michelle", title: "Certified Acquisitions Specialist", track: "Acquisitions", criteria: "Mastered the full seller journey — first call to signed contract" },
-  { first: "nick", title: "Certified Acquisitions Specialist", track: "Acquisitions", criteria: "Completed the A→Z acquisitions process independently — first contract signed solo" },
   { first: "sharyn", title: "Certified Dispositions Specialist", track: "Dispositions", criteria: "Mastered the 24-hour dispo machine — comp to closed" },
   { first: "marie", title: "Certified Dispositions Specialist", track: "Dispositions", criteria: "Mastered the 24-hour dispo machine — comp to closed" },
 ];
+const TRACK_CERT: Record<string, { title: string; track: string; criteria: string }> = {
+  acquisitions: { title: "Certified Acquisitions Specialist", track: "Acquisitions", criteria: "Completed the A→Z acquisitions process independently — first contract signed solo" },
+  cc_lm: { title: "Certified Acquisitions Specialist", track: "Acquisitions", criteria: "Completed the A→Z acquisitions process independently — first contract signed solo" },
+  dispositions: { title: "Certified Dispositions Specialist", track: "Dispositions", criteria: "Mastered the 24-hour dispo machine — comp to closed" },
+};
 
 function tenure(from: Date): string {
   const months = Math.max(1, Math.round((Date.now() - from.getTime()) / (30.44 * 86400_000)));
@@ -29,14 +36,37 @@ export default async function CertificatesPage({ searchParams }: { searchParams:
   if (!me || !isManager(me)) return <Card className="p-10 text-center text-slate-400">Certificates are issued by leadership.</Card>;
   const sp = await searchParams;
   const owner = isAdmin(me);
-  const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, createdAt: true } });
+  const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, createdAt: true, position: true } });
   const certMap = await readCerts();
+  // 🏅 Certified = closed a deal (Jon 2026-10-16). Build the set of reps who have
+  // a closed Deal (matched by first name) + their first-close date. Any rep NOT
+  // grandfathered earns their Mastery cert the moment their first deal closes.
+  const closedDeals = await db.deal.findMany({ where: { soldDate: { not: "" } }, select: { assignedTo: true, soldDate: true } }).catch(() => [] as { assignedTo: string; soldDate: string }[]);
+  const firstCloseByFirst = new Map<string, string>();
+  for (const d of closedDeals) {
+    const f = (d.assignedTo || "").trim().split(/\s+/)[0]?.toLowerCase();
+    if (!f) continue;
+    const cur = firstCloseByFirst.get(f);
+    if (!cur || (d.soldDate && d.soldDate < cur)) firstCloseByFirst.set(f, d.soldDate || "");
+  }
   const byFirst = new Map(users.map((u) => [u.name.trim().split(/\s+/)[0].toLowerCase(), u]));
   // Real joined dates live on the roster (TeamProfile.startDate) — the War Room
   // account date is only the fallback (Jon 2026-10-08: "the joined date was wrong").
   const profiles = await db.teamProfile.findMany({ select: { userId: true, startDate: true } });
   const startByUser = new Map(profiles.filter((p) => p.userId && p.startDate).map((p) => [p.userId as string, p.startDate]));
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  // Reps (not already grandfathered) who EARNED the Mastery cert by closing a deal.
+  const staticFirsts = new Set(CERTS.map((c) => c.first));
+  const earnedCerts = users
+    .filter((u) => {
+      const f = u.name.trim().split(/\s+/)[0].toLowerCase();
+      return !staticFirsts.has(f) && firstCloseByFirst.has(f) && TRACK_CERT[u.position ?? ""];
+    })
+    .map((u) => {
+      const f = u.name.trim().split(/\s+/)[0].toLowerCase();
+      const t = TRACK_CERT[u.position ?? ""];
+      return { first: f, title: t.title, track: t.track, criteria: t.criteria, started: undefined as string | undefined, certifiedOn: firstCloseByFirst.get(f) || today };
+    });
 
   return (
     <div className="space-y-6">
@@ -104,7 +134,7 @@ export default async function CertificatesPage({ searchParams }: { searchParams:
         </div>
       )))}
 
-      {CERTS.map((c) => {
+      {[...CERTS, ...earnedCerts].map((c) => {
         const u = byFirst.get(c.first);
         if (!u) return null;
         const startRaw = c.started ?? startByUser.get(u.id) ?? "";
@@ -148,7 +178,7 @@ export default async function CertificatesPage({ searchParams }: { searchParams:
       })}
 
       <Card className="p-4 text-xs text-slate-500 print:hidden">
-        🪜 The ladder for new acquisitions reps (iPhone trial period): survive the ramp → run the A→Z process solo → first signed contract → certified, and the team celebrates it. Nick earned his in month two.
+        🪜 The ladder for new acquisitions reps: survive the ramp → run the A→Z process solo → <b>close their first deal</b> → the Certified Specialist certificate generates automatically, and the team celebrates it. (No certificate until that first close.)
       </Card>
     </div>
   );

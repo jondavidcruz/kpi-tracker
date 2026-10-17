@@ -1777,6 +1777,39 @@ export async function GET(request: Request) {
     } catch (e) { return NextResponse.json({ ok: false, configured: true, error: String(e).slice(0, 400) }); }
   }
 
+  // 🔎 Direct REI contact field probe (?dreicontactprobe=1): dumps a sample
+  // contact's keys so we know the real address field names.
+  if (url.searchParams.get("dreicontactprobe") === "1") {
+    const { directReiContacts, directReiConfigured } = await import("@/lib/directrei");
+    const { dreiAddress } = await import("@/lib/directrei-sync");
+    if (!directReiConfigured()) return NextResponse.json({ ok: false, configured: false });
+    const r = await directReiContacts({ limit: "8" });
+    const rows = ((r.body as { rows?: Array<Record<string, unknown>> })?.rows) ?? [];
+    return NextResponse.json({ ok: true, status: r.status, count: rows.length, keys: rows[0] ? Object.keys(rows[0]) : [], samples: rows.slice(0, 4).map((c) => ({ name: c.name, resolved: dreiAddress(c as never), raw: { address: c.address, address1: c.address1, street: c.street, city: c.city, state: c.state, zip: c.zip, postal_code: c.postal_code, property_address: c.property_address, property: c.property } })) });
+  }
+
+  // 🏠→🎯 Route existing blank/War-Room leads to their rep's pipeline (Jon
+  // 2026-10-16). Each lead → the pipeline named for its assignee, else Michelle's.
+  // ?warroomroute=1 dry / &commit=1.
+  if (url.searchParams.get("warroomroute") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const { readPipelines } = await import("@/lib/crm");
+    const pls = await readPipelines();
+    const michellePipe = pls.find((p) => /michelle/i.test(p.name));
+    const blanks = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: ["", "War Room"] } }, select: { id: true, assignedTo: true, pipeline: true, title: true, stage: true } });
+    const plan: Array<{ id: string; who: string; to: string; stage: string }> = [];
+    for (const o of blanks) {
+      const first = (o.assignedTo || "").trim().split(/\s+/)[0]?.toLowerCase();
+      const repPipe = first ? pls.find((p) => p.name.toLowerCase().includes(first)) : undefined;
+      const target = repPipe ?? michellePipe;
+      if (!target) continue;
+      const stage = target.stages.some((s) => s.key === o.stage) ? o.stage : (target.stages[0]?.key ?? "new");
+      plan.push({ id: o.id, who: o.assignedTo || "(unassigned)", to: target.name, stage });
+    }
+    if (commit) for (const p of plan) await db.crmOpportunity.update({ where: { id: p.id }, data: { pipeline: p.to, stage: p.stage } });
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", candidates: blanks.length, willMove: plan.length, sample: plan.slice(0, 25) });
+  }
+
   if (url.searchParams.get("ghladdrfix") === "1") {
     const { ghlGet } = await import("@/lib/reireply");
     const deadline = Date.now() + 45_000;

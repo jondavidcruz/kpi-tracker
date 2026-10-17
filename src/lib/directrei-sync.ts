@@ -11,7 +11,7 @@ export const DREI_FEED_CAT = "__directrei_feed__";
 
 export type DreiReply = {
   name: string; campaign: string; channel: string; side: "seller" | "buyer" | "other";
-  at: string; needsAttention: boolean; phone: string; email: string;
+  at: string; needsAttention: boolean; phone: string; email: string; address?: string;
 };
 export type DreiSide = { newToday: number; new7d: number; repliesToday: number; replies7d: number; smsRepliesToday: number; smsReplies7d: number; emailRepliesToday?: number; emailReplies7d: number };
 export type DreiFeed = {
@@ -29,7 +29,21 @@ type Contact = {
   name?: string; campaign_id?: string; role?: string; contact_type?: string; status?: string;
   phone?: string; email?: string; added_date?: string; last_reply_at?: string | null;
   sms_opted_out_at?: string | null; email_opted_out_at?: string | null; needs_attention?: boolean;
+  // property address — Direct REI exposes it under one of these (names vary by
+  // account); we read whichever is present (Jon 2026-10-16: "no addresses on
+  // Direct REI leads"). Confirmed via ?dreicontactprobe=1.
+  address?: string; address1?: string; street?: string; city?: string; state?: string;
+  postal_code?: string; zip?: string; property_address?: string; property?: { address?: string } | null;
 };
+
+/** Build a "street, City, ST zip" address from whatever fields a Direct REI
+ *  contact carries. Empty string if it has none. */
+export function dreiAddress(c: Contact): string {
+  const direct = (c.property_address || c.address || c.property?.address || "").trim();
+  if (direct) return direct.slice(0, 250);
+  const parts = [c.address1 || c.street, c.city, c.state, c.postal_code || c.zip].map((x) => (x || "").trim()).filter(Boolean);
+  return parts.join(", ").slice(0, 250);
+}
 
 const BUYER_TYPES = new Set(["buyer", "builder", "flipper", "developer", "investor"]);
 
@@ -91,7 +105,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
           else if (/email/i.test(ch)) bucket.emailReplies7d++;
           replies.push({
             name: c.name ?? "—", campaign: camp?.name ?? "(no campaign)", channel: camp?.channel ?? "",
-            side, at: c.last_reply_at!, needsAttention: !!c.needs_attention, phone: c.phone ?? "", email: c.email ?? "",
+            side, at: c.last_reply_at!, needsAttention: !!c.needs_attention, phone: c.phone ?? "", email: c.email ?? "", address: dreiAddress(c),
           });
         }
       }
@@ -151,23 +165,30 @@ export async function refreshDreiFeed(todayYmd: string): Promise<DreiFeed | null
   // Now only sellers who actually REPLY become CRM leads (they're warm), with
   // a call-now task. Dedupe by phone/name.
   try {
-    const { logCrmEvent } = await import("@/lib/crm");
+    const { logCrmEvent, readPipelines } = await import("@/lib/crm");
+    // 🎯 Jon 2026-10-16: Direct REI seller leads were landing in the generic
+    // War Room pipeline (no pipeline set). Route them all to MICHELLE's pipeline
+    // and owner (she runs seller acquisitions). Fall back to the first acq rep
+    // only if Michelle has no account/pipeline.
+    const pls = await readPipelines();
+    const michellePipe = pls.find((p) => /michelle/i.test(p.name));
+    const michelleUser = await db.user.findFirst({ where: { active: true, name: { contains: "Michelle", mode: "insensitive" } }, select: { name: true } });
     const reps = await db.user.findMany({ where: { active: true, position: { in: ["acquisitions", "cc_lm"] } }, select: { name: true } });
     const replied = (feed.recentReplies ?? []).filter((r) => r.side === "seller" && (r.at ?? "").slice(0, 10) === todayYmd);
-    if (reps.length && replied.length) {
-      const counts = await Promise.all(reps.map((r) => db.crmOpportunity.count({ where: { assignedTo: r.name, archivedAt: null } })));
+    if ((michelleUser || reps.length) && replied.length) {
+      const rep = michelleUser?.name ?? reps[0]?.name ?? "";
+      const pipeName = michellePipe?.name ?? "";
+      const stageKey = michellePipe?.stages[0]?.key ?? "new";
       for (const lead of replied) {
         const last10 = (lead.phone ?? "").replace(/\D/g, "").slice(-10);
         const dup = await db.crmContact.findFirst({ where: { OR: [...(last10.length === 10 ? [{ phone: { contains: last10 } }] : []), { name: { equals: lead.name, mode: "insensitive" as const } }] }, select: { id: true } });
         if (dup) continue;
-        const i = counts.indexOf(Math.min(...counts));
-        counts[i]++;
-        const rep = reps[i].name;
         // Jon 2026-10-13: keep the NAME clean (just the seller) — the fact that
         // it came from Direct REI lives in the `source` field, and "seller
         // replied" lives in a note. The rep fills in the property address later.
-        const contact = await db.crmContact.create({ data: { name: lead.name, phone: lead.phone ?? "", email: lead.email ?? "", source: "Direct REI", assignedTo: rep } });
-        const opp = await db.crmOpportunity.create({ data: { contactId: contact.id, title: lead.name || "New Direct REI seller", stage: "new", assignedTo: rep, nextFollowUp: todayYmd } });
+        const addr = (lead.address ?? "").trim();
+        const contact = await db.crmContact.create({ data: { name: lead.name, phone: lead.phone ?? "", email: lead.email ?? "", address: addr, source: "Direct REI", assignedTo: rep } });
+        const opp = await db.crmOpportunity.create({ data: { contactId: contact.id, title: addr || lead.name || "New Direct REI seller", stage: stageKey, pipeline: pipeName, assignedTo: rep, nextFollowUp: todayYmd } });
         await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: `📞 Call now — warm seller (replied to our ${lead.channel || "campaign"})`, due: todayYmd, assignedTo: rep, createdBy: "automation" } });
         await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "note", body: `Seller replied — source: Direct REI${lead.campaign ? ` (${lead.campaign})` : ""}. Auto-assigned ${rep}.`, actor: "automation" });
       }
