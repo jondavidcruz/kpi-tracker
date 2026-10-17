@@ -67,6 +67,9 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
         }
       />
 
+      {/* The deck itself comes first — on Monday morning "Present" must be above the fold. */}
+      <MeetingDeckView deck={deck} />
+
       {/* Auto talking points — same structure every week, content changes. Your script. */}
       <Card className="p-5 ring-2 ring-brand-gold/30">
         <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -108,8 +111,6 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
           </ul>
         )}
       </Card>
-
-      <MeetingDeckView deck={deck} />
 
       {/* Recordings archive (Fathom links) */}
       <RecordingsCard meeting="monday" recordings={recordings} fmtWhen={fmtWhen} />
@@ -232,7 +233,7 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
         <Card className="p-6">
           <form action={saveMeetingSettings} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <div className="sm:col-span-2 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500 ring-1 ring-slate-200">
-              🎯 The annual goal is fixed for the year and shown on the Annual Goal slide — it&apos;s set once and not editable here on purpose. The progress bar still updates live from closed deals.
+              🎯 The annual goal is fixed for the year and drives the goal line in the talking points — it&apos;s set once and not editable here on purpose. Progress updates live from closed deals.
             </div>
             <label className="sm:col-span-2">
               <span className={labelCls}>Team Announcements (one per line)</span>

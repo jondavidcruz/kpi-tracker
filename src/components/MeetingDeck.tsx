@@ -261,7 +261,7 @@ function buildSlides(d: MeetingDeck): Slide[] {
       <div className="text-emerald-300" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>BEFORE WE GO — TEAM TIME</div>
       <div className="mt-[2.5%] font-extrabold" style={{ fontSize: "clamp(20px,3.6cqw,48px)" }}>🎉 {d.activity.title}</div>
       <div className="mt-[2.5%] max-w-[82%] leading-snug text-white/90" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>{d.activity.how}</div>
-      <div className="mt-[3%] rounded-full bg-white/10 px-5 py-1.5 font-bold text-emerald-200 ring-1 ring-white/20" style={{ fontSize: "clamp(10px,1.4cqw,17px)" }}>⏱ {d.activity.minutes} min — then we're out</div>
+      <div className="mt-[3%] rounded-full bg-white/10 px-5 py-1.5 font-bold text-emerald-200 ring-1 ring-white/20" style={{ fontSize: "clamp(10px,1.4cqw,17px)" }}>⏱ {d.activity.minutes} min — then we&apos;re out</div>
     </div>
   )});
 

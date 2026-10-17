@@ -125,7 +125,7 @@ export default async function LandCoursePage({ searchParams }: { searchParams: P
         <span className="text-3xl">🏔️</span>
         <span className="min-w-0 flex-1">
           <span className="block font-extrabold text-slate-900 dark:text-slate-100">Land Master Plan — the visual one-pager</span>
-          <span className="block text-[13px] text-slate-600 dark:text-slate-300">All 3 systems on one page: the 10-second snapshot, each lane's 4 steps, target ZIPs, buy boxes, offer rules, golden rules + today&apos;s action list.</span>
+          <span className="block text-[13px] text-slate-600 dark:text-slate-300">All 3 systems on one page: the 10-second snapshot, each lane&apos;s 4 steps, target ZIPs, buy boxes, offer rules, golden rules + today&apos;s action list.</span>
         </span>
         <span className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-[13px] font-bold text-white">Open ↗</span>
       </a>

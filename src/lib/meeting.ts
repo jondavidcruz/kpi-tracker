@@ -87,6 +87,12 @@ const CORE_DECK_KPIS: Record<string, string[]> = {
 // The month's core money KPIs (entered monthly, so not in the daily-summed glance).
 const CORE_MONTHLY_KPIS = ["ppl_leads", "gross_revenue", "marketing_spend", "deals_closed"];
 
+/** "Oct 1" — short label for slide headings. */
+function shortDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" }).format(new Date(Date.UTC(y, m - 1, d)));
+}
+
 /** Mon–Fri days in an inclusive date range — the expected workdays for goal pace. */
 function workdaysBetween(start: string, end: string): number {
   let n = 0;
@@ -315,7 +321,10 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   // ---- Month-to-date: same KPI breakdown, summed across the whole month ----
   const monthSums = await getRangeSums(mb.start, today);
   const monthGlance = glanceFrom(teamKpis, perRepKpis, reps, monthSums);
-  const monthRoleTables = buildRoleTables(reps, perRepKpis, monthSums, { targets, month: monthOf(today), workdays: workdaysBetween(mb.start, today) });
+  // Pace through YESTERDAY: the deck is read Monday morning before anyone has logged
+  // today, so counting today as an expected workday painted everyone red by one day.
+  const paceEnd = (() => { const d = new Date(today + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - 1); const y = d.toISOString().slice(0, 10); return y < mb.start ? mb.start : y; })();
+  const monthRoleTables = buildRoleTables(reps, perRepKpis, monthSums, { targets, month: monthOf(today), workdays: today === mb.start ? 0 : workdaysBetween(mb.start, paceEnd) });
   // Lead with the month's core money KPIs (PPL leads, revenue, spend, closes) — these are
   // entered monthly so they weren't in the daily-summed glance; that's why they showed blank.
   const coreMonthly = CORE_MONTHLY_KPIS.map((key) => financials.find((f) => f.key === key)).filter((f): f is Glance => !!f);
@@ -374,7 +383,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   ];
   const acqPool = buildPool("acquisitions", ACQ_TIPS);
   const dispoPool = buildPool("dispositions", DISPO_TIPS);
-  let acqText = acqPool[seed % acqPool.length];
+  const acqText = acqPool[seed % acqPool.length];
   let dispoText = dispoPool[(seed * 7 + 3) % dispoPool.length];
   if (dispoText === acqText && dispoPool.length > 1) dispoText = dispoPool[(seed * 7 + 4) % dispoPool.length];
   const trainingTips: MeetingDeck["trainingTips"] = [
@@ -409,7 +418,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     talkingPoints: bullets(settings.mtgTalkingPoints ?? ""),
     lastWeek: { glance: lastGlance, roleTables },
     monthly: {
-      label: `${friendlyDate(mb.start).replace(/,.*/, "")} – ${friendlyDate(today).replace(/,.*/, "")}`,
+      label: `${shortDate(mb.start)} – ${shortDate(today)}`,
       financials, glance: monthDeckGlance, roleTables: monthRoleTables,
       revenueClosed: closedRevenueYTD,
       revenuePending: dealMetrics.revenuePendingEscrow,
@@ -417,7 +426,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
       closedCount: homeownersDone,
       goalRemaining,
     },
-    pipeline: deals.slice(0, 12).map((d) => {
+    pipeline: deals.slice(0, 36).map((d) => { // deck paginates 6/slide — cap only guards runaway lists
       const a = analyzeDeal(d, today);
       return {
         address: d.address,
@@ -499,12 +508,13 @@ export async function buildMeetingSummary(today: string, deck: MeetingDeck): Pro
 
   const wins: string[] = [];
   for (const r of deck.recognition.slice(0, 3)) wins.push(`🏆 ${r.rep} led ${r.role} — ${r.kpi} ${r.value}`);
-  if (deck.monthly.closedCount > 0) wins.push(`Closed ${deck.monthly.closedCount} deal${deck.monthly.closedCount > 1 ? "s" : ""} for ${usd(deck.monthly.revenueClosed)} so far this month.`);
+  if (deck.monthly.closedCount > 0) wins.push(`Closed ${deck.monthly.closedCount} deal${deck.monthly.closedCount > 1 ? "s" : ""} for ${usd(deck.monthly.revenueClosed)} so far this year.`);
   if (wins.length === 0) wins.push("Set the tone — call out one thing the team did well last week.");
 
   const pipeline: string[] = [];
-  if (deck.monthly.inEscrow > 0) pipeline.push(`${usd(deck.monthly.inEscrow)} in escrow / pending.`);
-  const closingSoon = deck.pipeline.filter((p) => p.days != null && p.days < 21).slice(0, 4);
+  if (deck.monthly.inEscrow > 0) pipeline.push(`${deck.monthly.inEscrow} deal${deck.monthly.inEscrow > 1 ? "s" : ""} in escrow — ${usd(deck.monthly.revenuePending)} pending.`);
+  // "Closing soon" = actually in escrow (days is days-on-market, so <21d meant the FRESHEST listings, not the closest closes).
+  const closingSoon = deck.pipeline.filter((p) => p.status === "in_escrow").slice(0, 4);
   for (const p of closingSoon) pipeline.push(`${p.address} — ${p.status}${p.days != null ? ` (${p.days}d)` : ""}`);
   const stale = deck.pipeline.filter((p) => p.days != null && p.days >= 30).slice(0, 4);
   for (const p of stale) attention.push(`${p.address} stale at ${p.days}d — price reduction or switch buyers.`);
@@ -512,7 +522,7 @@ export async function buildMeetingSummary(today: string, deck: MeetingDeck): Pro
 
   const focus: string[] = [];
   for (const t of deck.trainingTips) focus.push(`${t.role} skill focus: ${t.text}`);
-  if (deck.goal.revenueGoal > 0) focus.push(`Goal: ${usd(deck.goal.revenueClosed)} of ${usd(deck.goal.revenueGoal)} (${deck.goal.pct}%) — keep the board moving.`);
+  if (deck.goal.revenueGoal > 0) focus.push(`Goal: ${usd(deck.goal.revenueClosed)} of ${usd(deck.goal.revenueGoal)} (${Math.round(deck.goal.pct * 100)}%) — keep the board moving.`);
   if (focus.length === 0) focus.push("Pick one number to move this week and make it the rallying point.");
 
   const shoutouts: string[] = [];

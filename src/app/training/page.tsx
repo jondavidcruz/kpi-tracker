@@ -81,10 +81,46 @@ export default async function TrainingPage() {
   const schedBy = (id: string) => schedules.filter((s) => s.userId === id);
   const sessBy = (id: string) => sessions.filter((s) => s.userId === id).slice(0, 6);
 
+  // "Today" strip — the one thing to run today + how the plans are tracking.
+  const RHYTHM = [
+    { day: "Mon", emoji: "📞", title: "Call Audit", desc: "Score 2–3 recorded calls each + debrief. Sets the week's focus.", cls: "bg-sky-50 ring-sky-200" },
+    { day: "Tue", emoji: "🧮", title: "Underwriting", desc: "MAO / numbers drills. Marie leads; Michelle on offer structuring.", cls: "bg-violet-50 ring-violet-200" },
+    { day: "Wed", emoji: "🤝", title: "Rapport & Objections", desc: "Role-play exercises — rapport, gatekeepers, objection handling.", cls: "bg-amber-50 ring-amber-200" },
+    { day: "Thu", emoji: "📞", title: "Call Audit #2", desc: "Re-audit targeting the week's weak spot from Monday.", cls: "bg-sky-50 ring-sky-200" },
+    { day: "Fri", emoji: "🎯", title: "Closing Drills", desc: "Price negotiation + closing exercises, then week recap.", cls: "bg-emerald-50 ring-emerald-200" },
+  ];
+  const dow = new Date(`${today}T12:00:00`).getDay(); // 0=Sun … 6=Sat (noon avoids TZ edge)
+  const todayRhythm = dow >= 1 && dow <= 5 ? RHYTHM[dow - 1] : null;
+  const visibleIds = new Set(visibleTeam.map((r) => r.id));
+  const activeFocus = focuses.filter((f) => visibleIds.has(f.userId) && f.status !== "mastered").length;
+  const weekAgo = new Date(`${today}T12:00:00`); weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekAgoStr = weekAgo.toISOString().slice(0, 10);
+  const sessionsThisWeek = sessions.filter((s) => visibleIds.has(s.userId) && s.date >= weekAgoStr).length;
+  const drillCount = DRILL_LANES.reduce((n, l) => n + l.drills.length, 0);
+
   return (
     <div className="space-y-5">
       <SectionTitle title="🎓 Training Portal" subtitle="Per-rep coaching plans, schedule, an AI coaching assistant, and a log of every session." accent="bg-brand-gold"
         right={<Link href="/call-scoring" className="text-sm font-semibold text-brand-navy hover:underline">🎧 Score a call →</Link>} />
+
+      {/* Above the fold: today's session + plan health. Everything else is collapsed below. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className={`rounded-2xl p-4 ring-1 ${todayRhythm?.cls ?? "bg-slate-50 ring-slate-200"}`}>
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Today · {todayRhythm?.day ?? "Weekend"}</div>
+          <div className="mt-0.5 text-lg font-extrabold text-slate-800">{todayRhythm ? `${todayRhythm.emoji} ${todayRhythm.title}` : "🛌 No session"}</div>
+          <p className="mt-1 text-xs leading-snug text-slate-600">{todayRhythm?.desc ?? "Training rhythm runs Mon–Fri. Plus daily live whisper coaching on real calls."}</p>
+        </div>
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Focus skills in progress</div>
+          <div className="mt-0.5 text-3xl font-extrabold text-brand-navy">{activeFocus}</div>
+          <p className="mt-1 text-xs text-slate-500">{manager ? `across ${visibleTeam.length} reps` : "on your plan"} · mastered ones drop off</p>
+        </div>
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Sessions logged · last 7 days</div>
+          <div className={`mt-0.5 text-3xl font-extrabold ${sessionsThisWeek === 0 ? "text-amber-600" : "text-emerald-700"}`}>{sessionsThisWeek}</div>
+          <p className="mt-1 text-xs text-slate-500">{sessionsThisWeek === 0 ? "nothing logged this week — log today's below" : `${schedules.length} standing session${schedules.length === 1 ? "" : "s"} scheduled`}</p>
+        </div>
+      </div>
 
       {/* Video training library — external portal (acquisitions sales training). New
           hires: watch every video, take notes. Shared team login shown below.
@@ -114,108 +150,8 @@ export default async function TrainingPage() {
       </div>
       )}
 
-      {/* AI coaching assistant — managers run it */}
-      {manager && <AICoach reps={team.map((r) => ({ name: r.name, role: r.position, skills: focusBy(r.id).map((f) => f.skill) }))} />}
-
-      {/* Developer Sourcing Track — the dispo team's #1 skill: sign developers + capture buy boxes */}
-      <DevSourcingTrack />
-
-      {/* Set weekly training rhythm — what we run each day */}
-      <Card className="p-4">
-        <div className="mb-1 text-sm font-bold text-slate-700">🗓️ Weekly Training Rhythm</div>
-        <p className="mb-3 text-xs text-slate-500">The set cadence for the whole team. Everyone also gets <span className="font-semibold text-emerald-700">daily live coaching</span> — we unmute their live calls and whisper feedback in real time.</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
-          {[
-            { day: "Mon", emoji: "📞", title: "Call Audit", desc: "Score 2–3 recorded calls each + debrief. Sets the week's focus.", cls: "bg-sky-50 ring-sky-200" },
-            { day: "Tue", emoji: "🧮", title: "Underwriting", desc: "MAO / numbers drills. Marie leads; Michelle on offer structuring.", cls: "bg-violet-50 ring-violet-200" },
-            { day: "Wed", emoji: "🤝", title: "Rapport & Objections", desc: "Role-play exercises — rapport, gatekeepers, objection handling.", cls: "bg-amber-50 ring-amber-200" },
-            { day: "Thu", emoji: "📞", title: "Call Audit #2", desc: "Re-audit targeting the week's weak spot from Monday.", cls: "bg-sky-50 ring-sky-200" },
-            { day: "Fri", emoji: "🎯", title: "Closing Drills", desc: "Price negotiation + closing exercises, then week recap.", cls: "bg-emerald-50 ring-emerald-200" },
-          ].map((d) => (
-            <div key={d.day} className={`rounded-xl p-3 ring-1 ${d.cls}`}>
-              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{d.day}</div>
-              <div className="mt-0.5 text-sm font-bold text-slate-800">{d.emoji} {d.title}</div>
-              <p className="mt-1 text-[11px] leading-snug text-slate-600">{d.desc}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
-          <span>🎧 <span className="font-semibold text-emerald-700">Daily:</span> live whisper coaching on real calls (all reps)</span>
-          <span>📞 <span className="font-semibold">Call audits:</span> everyone, twice weekly</span>
-          <span>🧮 <span className="font-semibold">Underwriting:</span> Marie + Michelle</span>
-          <span>🤝 <span className="font-semibold">Rapport:</span> Marie, Sharyn, Michelle</span>
-        </div>
-      </Card>
-
-      {/* Role-specific drills library — ready-to-run exercises per lane */}
-      <Card className="p-4">
-        <div className="mb-1 text-sm font-bold text-slate-700">🏋️ Exercises &amp; Drills by role</div>
-        <p className="mb-3 text-xs text-slate-500">Ready-to-run reps — repeat them daily/weekly. (Need something tailored to a person or a real call? Use the AI Training Designer above.)</p>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {DRILL_LANES.map((lane) => (
-            <div key={lane.key} className={`rounded-xl p-3 ring-1 ${lane.cls}`}>
-              <div className="mb-0.5 text-sm font-bold text-slate-800">{lane.emoji} {lane.title}</div>
-              <div className="mb-2 text-[11px] font-semibold text-slate-500">{lane.who}</div>
-              <div className="space-y-2">
-                {lane.drills.map((d) => (
-                  <div key={d.name} className="rounded-lg bg-white/70 p-2.5 ring-1 ring-slate-200">
-                    <div className="text-[13px] font-bold text-slate-800">{d.name}</div>
-                    <div className="text-[12px] leading-snug text-slate-600">{d.how}</div>
-                    <div className="mt-0.5 text-[11px] text-emerald-700">✅ {d.win}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Weekly schedule board */}
-      <Card className="p-4">
-        <div className="mb-2 text-sm font-bold text-slate-700">🗓 Training schedule</div>
-        {schedules.length === 0 ? <p className="text-sm text-slate-400">No sessions scheduled yet — add one on a rep below.</p> : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {schedules.map((s) => {
-              const rep = reps.find((r) => r.id === s.userId);
-              return (
-                <div key={s.id} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
-                  <span className="rounded-md bg-brand-navy px-1.5 py-0.5 text-[10px] font-bold text-white">{CADENCE_LABEL[s.cadence] ?? s.cadence}{s.time ? ` · ${s.time}` : ""} · 30 min</span>
-                  <div className="min-w-0 flex-1"><div className="font-semibold text-slate-700">{rep?.name?.split(" ")[0] ?? "—"}</div><div className="text-xs text-slate-500">{s.focus}</div></div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      {/* Coaching-method guide — when to audit calls vs. other drills */}
-      <Card className="p-4">
-        <div className="mb-1 text-sm font-bold text-slate-700">💡 When to audit calls vs. other coaching</div>
-        <p className="mb-2 text-xs text-slate-500">All sessions are 30 min — pick the method that fits the skill so you&apos;re not just listening to recordings for everything.</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="rounded-lg bg-slate-50 p-2.5 text-sm ring-1 ring-slate-200">
-            <div className="font-bold text-emerald-700">🎧 Audit recordings when…</div>
-            <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
-              <li>• It shows up on a <b>call</b> — rapport, objection handling, negotiating, the close, the developer gatekeeper.</li>
-              <li>• Cadence: <b>1–2 calls/week per rep</b> — their best + their worst, not every call.</li>
-              <li>• Pick calls that <b>didn&apos;t convert</b> (offer that didn&apos;t sign, gatekeeper that blocked) — that&apos;s where the lesson is.</li>
-              <li>• Score it in <Link href="/call-scoring" className="underline">Call Scoring</Link> first, then debrief from the score.</li>
-            </ul>
-          </div>
-          <div className="rounded-lg bg-slate-50 p-2.5 text-sm ring-1 ring-slate-200">
-            <div className="font-bold text-sky-700">🧠 Use a different method when…</div>
-            <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
-              <li>• <b>Underwriting / numbers</b> (Marie) → 🧮 review 2–3 real deals and re-underwrite live, not a recording.</li>
-              <li>• <b>Leadership</b> (Marie) → 🧑‍🏫 1:1 + role-play the hard conversation.</li>
-              <li>• <b>Rapport / closing</b> (Michelle) → 🎧 live-coach her live calls in the moment, then audit one after.</li>
-              <li>• <b>On-the-spot habits</b> → drill a 5-minute rep before the shift, not a 30-min review.</li>
-            </ul>
-          </div>
-        </div>
-        <p className="mt-2 text-[11px] text-slate-400">Each focus skill below shows its suggested method automatically.</p>
-      </Card>
-
-      {/* Per-rep coaching plans */}
+      {/* Per-rep coaching plans — the actionable part, right under the strip */}
+      <div className="text-xs font-bold uppercase tracking-wide text-slate-400">{manager ? "Coaching plans" : "Your coaching plan"}</div>
       {visibleTeam.map((rep) => {
         const repFocuses = focusBy(rep.id);
         const repSched = schedBy(rep.id);
@@ -240,7 +176,7 @@ export default async function TrainingPage() {
                         <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-navy text-[10px] font-bold text-white">{i + 1}</span>
                         <span className="flex-1 text-sm font-semibold text-slate-700">{f.skill}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_CLS[f.status] ?? "bg-slate-100"}`}>{f.status}</span>
-                        {manager && <form action={deleteTrainingFocus}><input type="hidden" name="id" value={f.id} /><button className="text-slate-300 hover:text-red-600">×</button></form>}
+                        {manager && <form action={deleteTrainingFocus}><input type="hidden" name="id" value={f.id} /><button aria-label="Remove" title="Remove" className="text-slate-300 hover:text-red-600">×</button></form>}
                       </div>
                       {f.notes && <div className="mt-0.5 pl-7 text-xs text-slate-500">{f.notes}</div>}
                       <div className="mt-0.5 pl-7 text-[11px] text-emerald-700">{methodFor(f.skill)}</div>
@@ -271,7 +207,7 @@ export default async function TrainingPage() {
                 <details className="mt-2">
                   <summary className="cursor-pointer text-[11px] font-semibold text-slate-400 hover:text-brand-navy">🗓 Edit schedule</summary>
                   <div className="mt-1 space-y-1">
-                    {repSched.map((s) => <div key={s.id} className="flex items-center gap-2 text-xs text-slate-500"><span className="flex-1">{CADENCE_LABEL[s.cadence] ?? s.cadence}{s.time ? ` ${s.time}` : ""} — {s.focus}</span><form action={deleteTrainingSchedule}><input type="hidden" name="id" value={s.id} /><button className="text-slate-300 hover:text-red-600">×</button></form></div>)}
+                    {repSched.map((s) => <div key={s.id} className="flex items-center gap-2 text-xs text-slate-500"><span className="flex-1">{CADENCE_LABEL[s.cadence] ?? s.cadence}{s.time ? ` ${s.time}` : ""} — {s.focus}</span><form action={deleteTrainingSchedule}><input type="hidden" name="id" value={s.id} /><button aria-label="Remove" title="Remove" className="text-slate-300 hover:text-red-600">×</button></form></div>)}
                   </div>
                   <form action={addTrainingSchedule} className="mt-1 flex flex-wrap items-end gap-1.5">
                     <input type="hidden" name="userId" value={rep.id} />
@@ -312,7 +248,7 @@ export default async function TrainingPage() {
                         {s.skill && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{s.skill}</span>}
                         {s.rating != null && <span className="text-amber-500">{"★".repeat(s.rating)}</span>}
                         <span className="ml-auto text-[10px] text-slate-300">{friendlyDate(s.date)}</span>
-                        {manager && <form action={deleteCoachingSession}><input type="hidden" name="id" value={s.id} /><button className="text-slate-300 hover:text-red-600">×</button></form>}
+                        {manager && <form action={deleteCoachingSession}><input type="hidden" name="id" value={s.id} /><button aria-label="Remove" title="Remove" className="text-slate-300 hover:text-red-600">×</button></form>}
                       </div>
                       <div className="mt-0.5 text-slate-600">{s.notes}</div>
                       {s.nextStep && <div className="mt-0.5 text-emerald-700">→ {s.nextStep}</div>}
@@ -324,6 +260,107 @@ export default async function TrainingPage() {
           </Card>
         );
       })}
+
+      {/* ── Secondary: reference + tools, collapsed so the page stays glanceable ── */}
+      {manager && (
+      <details className="group rounded-2xl bg-white ring-1 ring-slate-200">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-700 hover:text-brand-navy">🤖 AI Training Designer <span className="ml-1 text-xs font-normal text-slate-400">— tailor a drill to a rep or a real call</span><span className="float-right text-slate-300 group-open:rotate-180">▾</span></summary>
+        <div className="px-4 pb-4"><AICoach reps={team.map((r) => ({ name: r.name, role: r.position, skills: focusBy(r.id).map((f) => f.skill) }))} /></div>
+      </details>
+      )}
+
+      <details className="group rounded-2xl bg-white ring-1 ring-slate-200">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-700 hover:text-brand-navy">🗓️ Weekly Training Rhythm <span className="ml-1 text-xs font-normal text-slate-400">— {todayRhythm ? `today: ${todayRhythm.title}` : "Mon–Fri cadence"} · {schedules.length} standing session{schedules.length === 1 ? "" : "s"}</span><span className="float-right text-slate-300 group-open:rotate-180">▾</span></summary>
+        <div className="px-4 pb-4">
+          <p className="mb-3 text-xs text-slate-500">The set cadence for the whole team. Everyone also gets <span className="font-semibold text-emerald-700">daily live coaching</span> — we unmute their live calls and whisper feedback in real time.</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+            {RHYTHM.map((d) => (
+              <div key={d.day} className={`rounded-xl p-3 ring-1 ${d.cls} ${todayRhythm?.day === d.day ? "ring-2 ring-brand-navy" : ""}`}>
+                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{d.day}{todayRhythm?.day === d.day ? " · today" : ""}</div>
+                <div className="mt-0.5 text-sm font-bold text-slate-800">{d.emoji} {d.title}</div>
+                <p className="mt-1 text-[11px] leading-snug text-slate-600">{d.desc}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+            <span>🎧 <span className="font-semibold text-emerald-700">Daily:</span> live whisper coaching on real calls (all reps)</span>
+            <span>📞 <span className="font-semibold">Call audits:</span> everyone, twice weekly</span>
+            <span>🧮 <span className="font-semibold">Underwriting:</span> Marie + Michelle</span>
+            <span>🤝 <span className="font-semibold">Rapport:</span> Marie, Sharyn, Michelle</span>
+          </div>
+          <div className="mt-3 text-xs font-bold text-slate-700">Standing sessions</div>
+          {schedules.length === 0 ? <p className="mt-1 text-xs text-slate-400">No sessions scheduled yet — add one on a rep above (🗓 Edit schedule).</p> : (
+            <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {schedules.map((s) => {
+                const rep = reps.find((r) => r.id === s.userId);
+                return (
+                  <div key={s.id} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
+                    <span className="rounded-md bg-brand-navy px-1.5 py-0.5 text-[10px] font-bold text-white">{CADENCE_LABEL[s.cadence] ?? s.cadence}{s.time ? ` · ${s.time}` : ""} · 30 min</span>
+                    <div className="min-w-0 flex-1"><div className="font-semibold text-slate-700">{rep?.name?.split(" ")[0] ?? "—"}</div><div className="text-xs text-slate-500">{s.focus}</div></div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </details>
+
+      <details className="group rounded-2xl bg-white ring-1 ring-slate-200">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-700 hover:text-brand-navy">🏋️ Exercises &amp; Drills by role <span className="ml-1 text-xs font-normal text-slate-400">— {drillCount} ready-to-run drills (seller calls · buyer/developer calls)</span><span className="float-right text-slate-300 group-open:rotate-180">▾</span></summary>
+        <div className="px-4 pb-4">
+          <p className="mb-3 text-xs text-slate-500">Ready-to-run reps — repeat them daily/weekly. (Need something tailored to a person or a real call? Use the AI Training Designer above.)</p>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {DRILL_LANES.map((lane) => (
+              <div key={lane.key} className={`rounded-xl p-3 ring-1 ${lane.cls}`}>
+                <div className="mb-0.5 text-sm font-bold text-slate-800">{lane.emoji} {lane.title}</div>
+                <div className="mb-2 text-[11px] font-semibold text-slate-500">{lane.who}</div>
+                <div className="space-y-2">
+                  {lane.drills.map((d) => (
+                    <div key={d.name} className="rounded-lg bg-white/70 p-2.5 ring-1 ring-slate-200">
+                      <div className="text-[13px] font-bold text-slate-800">{d.name}</div>
+                      <div className="text-[12px] leading-snug text-slate-600">{d.how}</div>
+                      <div className="mt-0.5 text-[11px] text-emerald-700">✅ {d.win}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </details>
+
+      <details className="group rounded-2xl bg-white ring-1 ring-slate-200">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-700 hover:text-brand-navy">🏗️ Developer Sourcing Track <span className="ml-1 text-xs font-normal text-slate-400">— the dispo curriculum: sign developers + capture buy boxes</span><span className="float-right text-slate-300 group-open:rotate-180">▾</span></summary>
+        <div className="px-4 pb-4"><DevSourcingTrack /></div>
+      </details>
+
+      <details className="group rounded-2xl bg-white ring-1 ring-slate-200">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-700 hover:text-brand-navy">💡 When to audit calls vs. other coaching <span className="ml-1 text-xs font-normal text-slate-400">— pick the method that fits the skill</span><span className="float-right text-slate-300 group-open:rotate-180">▾</span></summary>
+        <div className="px-4 pb-4">
+          <p className="mb-2 text-xs text-slate-500">All sessions are 30 min — pick the method that fits the skill so you&apos;re not just listening to recordings for everything.</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="rounded-lg bg-slate-50 p-2.5 text-sm ring-1 ring-slate-200">
+              <div className="font-bold text-emerald-700">🎧 Audit recordings when…</div>
+              <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+                <li>• It shows up on a <b>call</b> — rapport, objection handling, negotiating, the close, the developer gatekeeper.</li>
+                <li>• Cadence: <b>1–2 calls/week per rep</b> — their best + their worst, not every call.</li>
+                <li>• Pick calls that <b>didn&apos;t convert</b> (offer that didn&apos;t sign, gatekeeper that blocked) — that&apos;s where the lesson is.</li>
+                <li>• Score it in <Link href="/call-scoring" className="underline">Call Scoring</Link> first, then debrief from the score.</li>
+              </ul>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-2.5 text-sm ring-1 ring-slate-200">
+              <div className="font-bold text-sky-700">🧠 Use a different method when…</div>
+              <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+                <li>• <b>Underwriting / numbers</b> (Marie) → 🧮 review 2–3 real deals and re-underwrite live, not a recording.</li>
+                <li>• <b>Leadership</b> (Marie) → 🧑‍🏫 1:1 + role-play the hard conversation.</li>
+                <li>• <b>Rapport / closing</b> (Michelle) → 🎧 live-coach her live calls in the moment, then audit one after.</li>
+                <li>• <b>On-the-spot habits</b> → drill a 5-minute rep before the shift, not a 30-min review.</li>
+              </ul>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">Each focus skill above shows its suggested method automatically.</p>
+        </div>
+      </details>
     </div>
   );
 }
