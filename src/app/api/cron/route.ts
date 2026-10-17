@@ -1811,6 +1811,18 @@ export async function GET(request: Request) {
     } catch (e) { return NextResponse.json({ ok: false, configured: true, error: String(e).slice(0, 400) }); }
   }
 
+  // 💬 Set the Google Chat webhook that new buyer lists post to (?setbuyerhook=1,
+  // POST JSON {url}). Stored in a Resource (secret) — no redeploy needed.
+  if (url.searchParams.get("setbuyerhook") === "1") {
+    const { setBuyersChatWebhook, readBuyersChatWebhook } = await import("@/lib/buyers-chat");
+    let b: { url?: string } = {};
+    try { b = await request.json(); } catch { /* none */ }
+    if (!b.url || !/^https:\/\/chat\.googleapis\.com\//.test(b.url)) return NextResponse.json({ ok: false, error: "pass a chat.googleapis.com webhook url in the POST body {url}" });
+    await setBuyersChatWebhook(b.url);
+    const saved = await readBuyersChatWebhook();
+    return NextResponse.json({ ok: true, saved: saved ? saved.slice(0, 48) + "…" : "" });
+  }
+
   // 📝 Export the overnight-sourced TO-VET buyers as a clean list for the girls
   // to call + capture a buy box (Jon 2026-10-17). These are vetStage "to_vet"
   // (NOT vetted — vetted = girls called + got the buy box), identified by their
@@ -1839,6 +1851,8 @@ export async function GET(request: Request) {
         link = (await uploadToFolder(folderId, filename, new TextEncoder().encode(csv), "text/csv", true)).link;
       }
     } catch { /* drive best-effort */ }
+    const byState: Record<string, number> = {};
+    for (const r of rows) { const st = (r.region || r.market || "?").split(/[,\s]+/)[0].toUpperCase() || "?"; byState[st] = (byState[st] ?? 0) + 1; }
     if (url.searchParams.get("commit") === "1" && rows.length) {
       try {
         const { sendEmailWithAttachment } = await import("@/lib/notify");
@@ -1846,14 +1860,25 @@ export async function GET(request: Request) {
         const html = `<div style="font-family:-apple-system,Arial,sans-serif;color:#1f2937"><h2 style="color:#0b1f3a">📞 ${rows.length} cash buyers to VET</h2><p>Overnight-sourced cash land buyers in TX/FL/CA/TN/OK. The team calls each, captures their buy box, then marks them <b>Vetted</b> on the Buyer Research page. CSV attached.${link ? ` Drive: <a href="${link}">open</a>.` : ""}</p><p style="font-size:12px;color:#94a3b8">Many deed-record LLCs have no phone yet — look up the registered agent on the state SOS. Scrub DNC before dialing.</p></div>`;
         await sendEmailWithAttachment([recipient], `📞 ${rows.length} cash buyers to vet — ${date}`, html, { filename, content: Buffer.from(csv).toString("base64") });
       } catch { /* email best-effort */ }
+      // Native Google Sheet (opens in Excel/Sheets) + post the list to Chat.
+      let sheetLink = "";
+      try {
+        const { gdriveConfigured, ensureSubfolder, uploadCsvAsSheet, rootFolderId } = await import("@/lib/gdrive");
+        if (gdriveConfigured() && rootFolderId()) {
+          const folderId = await ensureSubfolder(rootFolderId(), "Buyers To Vet");
+          sheetLink = (await uploadCsvAsSheet(folderId, `Buyers to vet — ${date}`, csv)).link;
+        }
+      } catch { /* sheet best-effort */ }
+      try {
+        const { postBuyerListToChat } = await import("@/lib/buyers-chat");
+        await postBuyerListToChat({ title: `Buyers to vet — ${date}`, count: rows.length, sheetLink: sheetLink || link, csvLink: link, byState, note: "Call each, capture their buy box, then mark Vetted in Buyer Research. Scrub DNC first." });
+      } catch { /* chat best-effort */ }
       const existingFeed = await db.resource.findFirst({ where: { category: "__buyers_to_vet__" } }).catch(() => null);
-      const feedDesc = JSON.stringify({ date, count: rows.length, link });
+      const feedDesc = JSON.stringify({ date, count: rows.length, link, sheetLink });
       if (existingFeed) await db.resource.update({ where: { id: existingFeed.id }, data: { description: feedDesc } }).catch(() => {});
       else await db.resource.create({ data: { title: "buyers-to-vet", category: "__buyers_to_vet__", url: "", description: feedDesc } }).catch(() => {});
     }
-    const byState: Record<string, number> = {};
-    for (const r of rows) { const st = (r.region || r.market || "?").split(/[,\s]+/)[0].toUpperCase() || "?"; byState[st] = (byState[st] ?? 0) + 1; }
-    return NextResponse.json({ ok: true, mode: url.searchParams.get("commit") === "1" ? "COMMITTED (emailed + Drive)" : "DRY RUN", toVetCount: rows.length, byFirstMarket: byState, driveLink: link });
+    return NextResponse.json({ ok: true, mode: url.searchParams.get("commit") === "1" ? "COMMITTED (emailed + Drive + Chat)" : "DRY RUN", toVetCount: rows.length, byFirstMarket: byState, driveLink: link });
   }
 
   // ⛏️ Mine OUR OWN data for cash buyers → Vetted Buyers (Jon 2026-10-16 overnight:
@@ -1975,8 +2000,18 @@ export async function GET(request: Request) {
       const recipient = url.searchParams.get("to") || "info@freedom-offers.com";
       await sendEmailWithAttachment([recipient], `💰 ${fresh.length} new cash land buyers — ${date}`, html, { filename, content: Buffer.from(csv).toString("base64") });
     } catch { /* email best-effort */ }
+    // Google Sheet + post the new list to the buyers Chat space (Jon 2026-10-17).
+    let sheetLink = "";
+    try {
+      const { gdriveConfigured, ensureSubfolder, uploadCsvAsSheet, rootFolderId } = await import("@/lib/gdrive");
+      if (gdriveConfigured() && rootFolderId()) sheetLink = (await uploadCsvAsSheet(await ensureSubfolder(rootFolderId(), "Cash Buyers"), `Cash buyers — ${date}`, csv)).link;
+    } catch { /* sheet best-effort */ }
+    try {
+      const { postBuyerListToChat } = await import("@/lib/buyers-chat");
+      await postBuyerListToChat({ title: `Cash land buyers — ${date}`, count: fresh.length, sheetLink: sheetLink || link, csvLink: link, byState, note: "Fresh DealMachine cash buyers — ready for the Direct REI dialer/SMS/email. Scrub DNC first." });
+    } catch { /* chat best-effort */ }
     await storeBuyerFeed({ date, count: fresh.length, link, byState, rows: fresh });
-    return NextResponse.json({ ok: true, received: rows.length, fresh: fresh.length, skippedDup, skippedMarket, byState, driveLink: link });
+    return NextResponse.json({ ok: true, received: rows.length, fresh: fresh.length, skippedDup, skippedMarket, byState, driveLink: link, sheetLink });
   }
 
   // 🔎 Direct REI contact field probe (?dreicontactprobe=1): dumps a sample

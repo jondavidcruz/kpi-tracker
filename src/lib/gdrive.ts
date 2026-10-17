@@ -187,6 +187,29 @@ export async function uploadToFolder(folderId: string, name: string, bytes: Uint
   return { id: j.id, link: j.webViewLink || `https://drive.google.com/file/d/${j.id}/view` };
 }
 
+/** Upload CSV text as a NATIVE Google Sheet (Drive converts it), link-readable.
+ *  Returns the Sheets webViewLink — opens/edits in Google Sheets or Excel. */
+export async function uploadCsvAsSheet(folderId: string, name: string, csv: string): Promise<{ id: string; link: string }> {
+  const token = await getAccessToken();
+  const boundary = "wrb_" + crypto.randomBytes(8).toString("hex");
+  const meta = JSON.stringify({ name, parents: [folderId], mimeType: "application/vnd.google-apps.spreadsheet" });
+  const pre = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: text/csv\r\n\r\n`;
+  const body = Buffer.concat([Buffer.from(pre), Buffer.from(csv), Buffer.from(`\r\n--${boundary}--`)]);
+  const up = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  const j = await up.json();
+  if (!j.id) throw new Error("gdrive sheet upload failed: " + JSON.stringify(j).slice(0, 200));
+  await fetch(`https://www.googleapis.com/drive/v3/files/${j.id}/permissions?supportsAllDrives=true`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ role: "reader", type: "anyone" }),
+  }).catch(() => {});
+  return { id: j.id, link: j.webViewLink || `https://docs.google.com/spreadsheets/d/${j.id}` };
+}
+
 /** List files directly inside a folder (id, name, createdTime). */
 export async function listFolder(folderId: string): Promise<{ id: string; name: string; createdTime: string; mimeType: string }[]> {
   const token = await getAccessToken();
