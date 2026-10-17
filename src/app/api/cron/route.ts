@@ -1785,7 +1785,7 @@ export async function GET(request: Request) {
     if (!directReiConfigured()) return NextResponse.json({ ok: false, configured: false });
     const r = await directReiContacts({ limit: "8" });
     const rows = ((r.body as { rows?: Array<Record<string, unknown>> })?.rows) ?? [];
-    return NextResponse.json({ ok: true, status: r.status, count: rows.length, keys: rows[0] ? Object.keys(rows[0]) : [], samples: rows.slice(0, 4).map((c) => ({ name: c.name, resolved: dreiAddress(c as never), raw: { address: c.address, address1: c.address1, street: c.street, city: c.city, state: c.state, zip: c.zip, postal_code: c.postal_code, property_address: c.property_address, property: c.property } })) });
+    return NextResponse.json({ ok: true, status: r.status, count: rows.length, keys: rows[0] ? Object.keys(rows[0]) : [], samples: rows.slice(0, 4).map((c) => ({ name: c.name, resolved: dreiAddress(c as never), raw: { mailing_street: c.mailing_street, mailing_city: c.mailing_city, mailing_state: c.mailing_state, mailing_zip: c.mailing_zip } })) });
   }
 
   // 🏠→🎯 Route existing blank/War-Room leads to their rep's pipeline (Jon

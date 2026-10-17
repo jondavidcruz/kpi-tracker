@@ -29,19 +29,15 @@ type Contact = {
   name?: string; campaign_id?: string; role?: string; contact_type?: string; status?: string;
   phone?: string; email?: string; added_date?: string; last_reply_at?: string | null;
   sms_opted_out_at?: string | null; email_opted_out_at?: string | null; needs_attention?: boolean;
-  // property address — Direct REI exposes it under one of these (names vary by
-  // account); we read whichever is present (Jon 2026-10-16: "no addresses on
-  // Direct REI leads"). Confirmed via ?dreicontactprobe=1.
-  address?: string; address1?: string; street?: string; city?: string; state?: string;
-  postal_code?: string; zip?: string; property_address?: string; property?: { address?: string } | null;
+  // Direct REI stores the address as mailing_* (confirmed via ?dreicontactprobe=1,
+  // 2026-10-16). Jon: "no addresses on Direct REI leads" — they were never read.
+  mailing_street?: string; mailing_city?: string; mailing_state?: string; mailing_zip?: string;
 };
 
-/** Build a "street, City, ST zip" address from whatever fields a Direct REI
- *  contact carries. Empty string if it has none. */
+/** Build a "street, City, ST zip" address from a Direct REI contact's mailing
+ *  fields. Empty string if it has none. */
 export function dreiAddress(c: Contact): string {
-  const direct = (c.property_address || c.address || c.property?.address || "").trim();
-  if (direct) return direct.slice(0, 250);
-  const parts = [c.address1 || c.street, c.city, c.state, c.postal_code || c.zip].map((x) => (x || "").trim()).filter(Boolean);
+  const parts = [c.mailing_street, c.mailing_city, c.mailing_state, c.mailing_zip].map((x) => (x || "").trim()).filter(Boolean);
   return parts.join(", ").slice(0, 250);
 }
 
