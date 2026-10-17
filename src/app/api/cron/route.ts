@@ -1811,6 +1811,51 @@ export async function GET(request: Request) {
     } catch (e) { return NextResponse.json({ ok: false, configured: true, error: String(e).slice(0, 400) }); }
   }
 
+  // 📝 Export the overnight-sourced TO-VET buyers as a clean list for the girls
+  // to call + capture a buy box (Jon 2026-10-17). These are vetStage "to_vet"
+  // (NOT vetted — vetted = girls called + got the buy box), identified by their
+  // BuyerHistory "create" actor. Builds a CSV → Drive + email + a feed for a page.
+  if (url.searchParams.get("vetlist") === "1") {
+    const ids = await db.buyerHistory.findMany({ where: { action: "create", actor: { in: ["buyer-miner", "buyer-research", "web-intake"] } }, select: { buyerId: true } }).catch(() => []);
+    const idSet = [...new Set(ids.map((x) => x.buyerId))];
+    const rows = idSet.length
+      ? await db.marketContact.findMany({ where: { id: { in: idSet }, archivedAt: null }, orderBy: [{ region: "asc" }, { name: "asc" }] })
+      : [];
+    const esc = (s: string) => { const v = String(s ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+    const cols: Array<[string, (r: typeof rows[number]) => string]> = [
+      ["Company / Name", (r) => r.company || r.name], ["Type", (r) => r.type], ["Markets", (r) => r.region || r.market],
+      ["Phone", (r) => r.phone], ["Phone 2", (r) => r.phone2], ["Email", (r) => r.email], ["Website", (r) => r.website],
+      ["Submit-a-deal / links", (r) => (r.links || "").replace(/\n/g, " | ")], ["Known buy box", (r) => r.buyBox],
+      ["Source", (r) => r.status], ["Notes", (r) => (r.notes || "").replace(/\n/g, " ")], ["Vet status", (r) => r.vetStage],
+    ];
+    const csv = [cols.map((c) => c[0]).join(","), ...rows.map((r) => cols.map((c) => esc(c[1](r))).join(","))].join("\n") + "\n";
+    const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const filename = `buyers-to-vet-${date}.csv`;
+    let link = "";
+    try {
+      const { gdriveConfigured, ensureSubfolder, uploadToFolder, rootFolderId } = await import("@/lib/gdrive");
+      if (gdriveConfigured() && rootFolderId()) {
+        const folderId = await ensureSubfolder(rootFolderId(), "Buyers To Vet");
+        link = (await uploadToFolder(folderId, filename, new TextEncoder().encode(csv), "text/csv", true)).link;
+      }
+    } catch { /* drive best-effort */ }
+    if (url.searchParams.get("commit") === "1" && rows.length) {
+      try {
+        const { sendEmailWithAttachment } = await import("@/lib/notify");
+        const recipient = url.searchParams.get("to") || "info@freedom-offers.com";
+        const html = `<div style="font-family:-apple-system,Arial,sans-serif;color:#1f2937"><h2 style="color:#0b1f3a">📞 ${rows.length} cash buyers to VET</h2><p>Overnight-sourced cash land buyers in TX/FL/CA/TN/OK. The team calls each, captures their buy box, then marks them <b>Vetted</b> on the Buyer Research page. CSV attached.${link ? ` Drive: <a href="${link}">open</a>.` : ""}</p><p style="font-size:12px;color:#94a3b8">Many deed-record LLCs have no phone yet — look up the registered agent on the state SOS. Scrub DNC before dialing.</p></div>`;
+        await sendEmailWithAttachment([recipient], `📞 ${rows.length} cash buyers to vet — ${date}`, html, { filename, content: Buffer.from(csv).toString("base64") });
+      } catch { /* email best-effort */ }
+      const existingFeed = await db.resource.findFirst({ where: { category: "__buyers_to_vet__" } }).catch(() => null);
+      const feedDesc = JSON.stringify({ date, count: rows.length, link });
+      if (existingFeed) await db.resource.update({ where: { id: existingFeed.id }, data: { description: feedDesc } }).catch(() => {});
+      else await db.resource.create({ data: { title: "buyers-to-vet", category: "__buyers_to_vet__", url: "", description: feedDesc } }).catch(() => {});
+    }
+    const byState: Record<string, number> = {};
+    for (const r of rows) { const st = (r.region || r.market || "?").split(/[,\s]+/)[0].toUpperCase() || "?"; byState[st] = (byState[st] ?? 0) + 1; }
+    return NextResponse.json({ ok: true, mode: url.searchParams.get("commit") === "1" ? "COMMITTED (emailed + Drive)" : "DRY RUN", toVetCount: rows.length, byFirstMarket: byState, driveLink: link });
+  }
+
   // ⛏️ Mine OUR OWN data for cash buyers → Vetted Buyers (Jon 2026-10-16 overnight:
   // grow the buyer list with ZERO DealMachine credits). Sources, all free: past
   // closed-deal buyers (Deal.buyerName), buyer parties on deals (CrmParty role
