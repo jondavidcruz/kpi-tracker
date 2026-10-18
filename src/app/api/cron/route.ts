@@ -1911,8 +1911,24 @@ export async function GET(request: Request) {
     } catch { /* drei best-effort */ }
     let created = 0;
     for (const c of cands) { if (!c.name.trim()) continue; const res = await createBuyer({ name: c.name, company: c.company, phone: c.phone, email: c.email, notes: c.notes, status: "Mined — our data", source: c.source, vetStage: "to_vet" }, "buyer-miner", { isLand: true }); if (res.created) created++; }
-    // post ONLY buyers newly added today (deduped so we never re-post the same list)
-    const newRows = await db.marketContact.findMany({ where: { addedById: "system", addedOn: todayPT, archivedAt: null }, orderBy: [{ region: "asc" }, { name: "asc" }] });
+    // post ONLY buyers we've never posted to Chat before (so re-runs never spam
+    // the space). A rolling Resource tracks posted buyer IDs.
+    const postedRow = await db.resource.findFirst({ where: { category: "__buyers_posted__" } }).catch(() => null);
+    let postedIds: string[] = [];
+    try { postedIds = postedRow?.description ? JSON.parse(postedRow.description) : []; } catch { postedIds = []; }
+    const postedSet = new Set(postedIds);
+    // One-time seed: mark all CURRENT system buyers as already-posted so the first
+    // real nightly run only posts genuinely new buyers (run ?buyernightly=1&seed=1 once).
+    if (url.searchParams.get("seed") === "1") {
+      const all = await db.marketContact.findMany({ where: { addedById: "system", archivedAt: null }, select: { id: true } });
+      const merged = [...new Set([...postedSet, ...all.map((r) => r.id)])].slice(-60000);
+      const desc = JSON.stringify(merged);
+      if (postedRow) await db.resource.update({ where: { id: postedRow.id }, data: { description: desc } }).catch(() => {});
+      else await db.resource.create({ data: { title: "buyers-posted", category: "__buyers_posted__", url: "", description: desc } }).catch(() => {});
+      return NextResponse.json({ ok: true, seeded: merged.length, createdTonight: created });
+    }
+    const todaysRows = await db.marketContact.findMany({ where: { addedById: "system", addedOn: todayPT, archivedAt: null }, orderBy: [{ region: "asc" }, { name: "asc" }] });
+    const newRows = todaysRows.filter((r) => !postedSet.has(r.id));
     let posted = false, sheetLink = "";
     if (newRows.length > 0) {
       const esc = (s: string) => { const v = String(s ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
@@ -1925,8 +1941,14 @@ export async function GET(request: Request) {
         if (gdriveConfigured() && rootFolderId()) sheetLink = (await uploadCsvAsSheet(await ensureSubfolder(rootFolderId(), "Buyers To Vet"), `New buyers to vet — ${todayPT}`, csv)).link;
       } catch { /* sheet best-effort */ }
       try { const { postBuyerListToChat } = await import("@/lib/buyers-chat"); posted = await postBuyerListToChat({ title: `New buyers to vet — ${todayPT}`, count: newRows.length, sheetLink, byState, note: "Call each, capture their buy box, then mark Vetted in Buyer Research. Scrub DNC first." }); } catch { /* chat best-effort */ }
+      if (posted) {
+        const merged = [...postedSet, ...newRows.map((r) => r.id)].slice(-60000);
+        const desc = JSON.stringify(merged);
+        if (postedRow) await db.resource.update({ where: { id: postedRow.id }, data: { description: desc } }).catch(() => {});
+        else await db.resource.create({ data: { title: "buyers-posted", category: "__buyers_posted__", url: "", description: desc } }).catch(() => {});
+      }
     }
-    return NextResponse.json({ ok: true, candidates: cands.length, createdTonight: created, postedToday: newRows.length, chatPosted: posted, sheetLink });
+    return NextResponse.json({ ok: true, candidates: cands.length, createdTonight: created, newToPost: newRows.length, chatPosted: posted, sheetLink });
   }
 
   // ⛏️ Mine OUR OWN data for cash buyers → Vetted Buyers (Jon 2026-10-16 overnight:
