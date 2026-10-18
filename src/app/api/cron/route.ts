@@ -1881,6 +1881,54 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: url.searchParams.get("commit") === "1" ? "COMMITTED (emailed + Drive + Chat)" : "DRY RUN", toVetCount: rows.length, byFirstMarket: byState, driveLink: link });
   }
 
+  // 🌙 Nightly FREE buyer growth — NO agent, NO tool approvals (Jon 2026-10-18:
+  // "the dispo optimizer task isn't working"). The scheduled Claude task hangs on
+  // a one-time permission prompt; this app cron does the reliable part by itself:
+  // mine our own data for new buyers, then post ONLY tonight's new buyers to the
+  // Chat space as a Sheet. Runs daily via vercel.json. (Web-research expansion
+  // still lives in the optional dispo-optimizer task.)
+  if (url.searchParams.get("buyernightly") === "1") {
+    const { createBuyer } = await import("@/lib/buyers/write");
+    const todayPT = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    // gather candidates from our own free data (same sources as ?minebuyers=1)
+    type Cand = { name: string; company?: string; phone?: string; email?: string; notes?: string; source: string };
+    const cands: Cand[] = [];
+    const deals = await db.deal.findMany({ where: { buyerName: { not: "" } }, select: { buyerName: true, address: true } }).catch(() => []);
+    for (const d of deals) cands.push({ name: d.buyerName, company: d.buyerName, notes: `Bought a deal from us${d.address ? ` (${d.address})` : ""}.`, source: "closed deal" });
+    const parties = await db.crmParty.findMany({ where: { role: { contains: "buy", mode: "insensitive" } }, select: { name: true, phone: true, email: true, note: true } }).catch(() => []);
+    for (const p of parties) if (p.name) cands.push({ name: p.name, phone: p.phone ?? "", email: p.email ?? "", notes: p.note ?? "", source: "deal party (buyer)" });
+    try {
+      const { directReiConfigured, directReiContacts } = await import("@/lib/directrei");
+      if (directReiConfigured()) {
+        const BUYER_T = /buyer|builder|developer|investor|flipper/i;
+        for (let page = 0; page < 8; page++) {
+          const r = await directReiContacts({ page: String(page), limit: "200" });
+          const rrows = ((r.body as { rows?: Array<Record<string, unknown>> })?.rows) ?? [];
+          for (const c of rrows) { if (BUYER_T.test(`${c.contact_type ?? ""} ${c.role ?? ""}`)) cands.push({ name: String(c.name ?? ""), company: String(c.name ?? ""), phone: String(c.phone ?? ""), email: String(c.email ?? ""), notes: "Direct REI buyer-side contact.", source: "Direct REI" }); }
+          if (!(r.body as { has_more?: boolean })?.has_more || rrows.length === 0) break;
+        }
+      }
+    } catch { /* drei best-effort */ }
+    let created = 0;
+    for (const c of cands) { if (!c.name.trim()) continue; const res = await createBuyer({ name: c.name, company: c.company, phone: c.phone, email: c.email, notes: c.notes, status: "Mined — our data", source: c.source, vetStage: "to_vet" }, "buyer-miner", { isLand: true }); if (res.created) created++; }
+    // post ONLY buyers newly added today (deduped so we never re-post the same list)
+    const newRows = await db.marketContact.findMany({ where: { addedById: "system", addedOn: todayPT, archivedAt: null }, orderBy: [{ region: "asc" }, { name: "asc" }] });
+    let posted = false, sheetLink = "";
+    if (newRows.length > 0) {
+      const esc = (s: string) => { const v = String(s ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+      const cols: Array<[string, (r: typeof newRows[number]) => string]> = [["Company / Name", (r) => r.company || r.name], ["Type", (r) => r.type], ["Markets", (r) => r.region || r.market], ["Phone", (r) => r.phone], ["Email", (r) => r.email], ["Website", (r) => r.website], ["Submit-a-deal / links", (r) => (r.links || "").replace(/\n/g, " | ")], ["Source", (r) => r.status], ["Notes", (r) => (r.notes || "").replace(/\n/g, " ")]];
+      const csv = [cols.map((c) => c[0]).join(","), ...newRows.map((r) => cols.map((c) => esc(c[1](r))).join(","))].join("\n") + "\n";
+      const byState: Record<string, number> = {};
+      for (const r of newRows) { const st = (r.region || r.market || "?").split(/[,\s]+/)[0].toUpperCase() || "?"; byState[st] = (byState[st] ?? 0) + 1; }
+      try {
+        const { gdriveConfigured, ensureSubfolder, uploadCsvAsSheet, rootFolderId } = await import("@/lib/gdrive");
+        if (gdriveConfigured() && rootFolderId()) sheetLink = (await uploadCsvAsSheet(await ensureSubfolder(rootFolderId(), "Buyers To Vet"), `New buyers to vet — ${todayPT}`, csv)).link;
+      } catch { /* sheet best-effort */ }
+      try { const { postBuyerListToChat } = await import("@/lib/buyers-chat"); posted = await postBuyerListToChat({ title: `New buyers to vet — ${todayPT}`, count: newRows.length, sheetLink, byState, note: "Call each, capture their buy box, then mark Vetted in Buyer Research. Scrub DNC first." }); } catch { /* chat best-effort */ }
+    }
+    return NextResponse.json({ ok: true, candidates: cands.length, createdTonight: created, postedToday: newRows.length, chatPosted: posted, sheetLink });
+  }
+
   // ⛏️ Mine OUR OWN data for cash buyers → Vetted Buyers (Jon 2026-10-16 overnight:
   // grow the buyer list with ZERO DealMachine credits). Sources, all free: past
   // closed-deal buyers (Deal.buyerName), buyer parties on deals (CrmParty role
@@ -2555,6 +2603,25 @@ export async function GET(request: Request) {
     if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
     else await db.resource.create({ data: { title: "daily-updates", category: "__daily_updates__", url: "", description } });
     return NextResponse.json({ ok: true, lines: list.length });
+  }
+  // 💡 Queue an AI Update (?suggestadd=1&title=…&rationale=…&category=&impact=&effort=)
+  // — lets the nightly agents file proposals without a DB connection (crm-enhancer 2026-10-18).
+  // Idempotent by title: re-filing the same title just returns the existing row.
+  if (url.searchParams.get("suggestadd") === "1") {
+    const title = (url.searchParams.get("title") ?? "").trim().slice(0, 200);
+    if (!title) return NextResponse.json({ ok: false, error: "title required" });
+    const dup = await db.suggestion.findFirst({ where: { title }, select: { id: true, status: true } }).catch(() => null);
+    if (dup) return NextResponse.json({ ok: true, id: dup.id, status: dup.status, existed: true });
+    const impact = url.searchParams.get("impact") ?? "med";
+    const effort = url.searchParams.get("effort") ?? "M";
+    const row = await db.suggestion.create({ data: {
+      title, rationale: (url.searchParams.get("rationale") ?? "").slice(0, 2000),
+      category: (url.searchParams.get("category") ?? "CRM").slice(0, 40),
+      impact: ["high", "med", "low"].includes(impact) ? impact : "med",
+      effort: ["S", "M", "L"].includes(effort) ? effort : "M",
+      status: "proposed",
+    } });
+    return NextResponse.json({ ok: true, id: row.id, status: row.status });
   }
   if (url.searchParams.get("daychangelog") === "1") {
     const row = await db.resource.findFirst({ where: { category: "__daily_updates__" } });

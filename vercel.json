@@ -267,6 +267,10 @@
     {
       "path": "/api/cron?newleadnudge=1",
       "schedule": "0 22 * * 1-5"
+    },
+    {
+      "path": "/api/cron?buyernightly=1",
+      "schedule": "0 10 * * *"
     }
   ]
 }
