@@ -39,13 +39,19 @@ export default async function AppShell({ children }: { children: React.ReactNode
   // 🔒 A rep with a pipeline assigned gets the Seller CRM — even a new hire still
   // in onboarding (Jon 2026-10-16: "allow new reps CRM access when a pipeline is
   // assigned to them"). They only ever see that pipeline's board + its leads
-  // (pipeline lock, enforced in /crm). The lead-wide CRM sub-tools (which aren't
-  // pipeline-scoped) stay blocked so no other leads leak.
+  // (pipeline lock, enforced in /crm).
+  //
+  // The day-to-day work tools — Next Up, Tasks, Contacts, Calendar — are now
+  // pipeline/owner-scoped for non-managers (they only show the rep's own leads), so
+  // they follow the OWNER'S per-person grant instead of being force-hidden
+  // (Jon 2026-10-19: "I gave Kyle/Nick Acquisitions access but Next Up/Tasks/
+  // Contacts/Calendar still don't show"). Only the cross-pipeline / comms / config
+  // sub-tools stay force-blocked so no other pipeline's leads leak.
   const { pipelineLockFor } = await import("@/lib/crm");
   const hasAssignedPipeline = !!(await pipelineLockFor(me))?.length;
   if (hasAssignedPipeline) {
     if (allow && !allow.includes("/crm")) allow = [...allow, "/crm"];
-    hiddenNav.push("/crm/contacts", "/crm/conversations", "/crm/dialer", "/crm/next", "/crm/dealboard", "/crm/tasks", "/crm/automations", "/crm/pipelines", "/crm/calendar", "/crm/access");
+    hiddenNav.push("/crm/conversations", "/crm/dialer", "/crm/dealboard", "/crm/automations", "/crm/pipelines", "/crm/access");
   }
   if (allow && !isPathAllowed(reqPath, allow)) redirect(allow[0]);
   // Per-user hidden sections are blocked by URL too — not just removed from the menu.

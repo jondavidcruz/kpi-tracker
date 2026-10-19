@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
+import { pipelineLockFor } from "@/lib/crm";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
@@ -28,14 +29,20 @@ export default async function NextUpPage({ searchParams }: { searchParams: Promi
   const who = canViewAll ? (sp.who === "all" ? "" : (sp.who ?? me!.name)) : me!.name;
   const comms = await commsFor(me!);
   const ownerWhere = everyone ? {} : { assignedTo: { equals: who, mode: "insensitive" as const } };
+  // 🔒 Pipeline isolation (Jon 2026-10-19): a pipeline-locked rep (e.g. Kyle, Nick)
+  // only ever sees leads from their own pipeline(s) — here too, not just the board —
+  // so Next Up can be shown to them without leaking everyone else's leads.
+  const lockPipes = await pipelineLockFor(me!);
+  const pipeIn = lockPipes?.length ? (lockPipes.includes("War Room") ? [...lockPipes, ""] : lockPipes) : null;
+  const pipeWhere = pipeIn ? { pipeline: { in: pipeIn } } : {};
 
   // candidate opps: new-stage + due follow-ups + stalled working deals (bounded)
   const staleCut = new Date(Date.now() - 3 * 86400000);
   const [newLeads, dueFollowups, stalled] = await Promise.all([
-    db.crmOpportunity.findMany({ where: { stage: "new", archivedAt: null, ...ownerWhere }, orderBy: { createdAt: "asc" }, take: 80, select: { id: true, contactId: true, createdAt: true, contact: { select: { name: true, phone: true, address: true } } } }),
-    db.crmOpportunity.findMany({ where: { nextFollowUp: { not: "", lte: today }, archivedAt: null, ...ownerWhere }, orderBy: { nextFollowUp: "asc" }, take: 60, select: { id: true, contactId: true, nextFollowUp: true, contact: { select: { name: true, phone: true, address: true } } } }),
+    db.crmOpportunity.findMany({ where: { stage: "new", archivedAt: null, ...ownerWhere, ...pipeWhere }, orderBy: { createdAt: "asc" }, take: 80, select: { id: true, contactId: true, createdAt: true, contact: { select: { name: true, phone: true, address: true } } } }),
+    db.crmOpportunity.findMany({ where: { nextFollowUp: { not: "", lte: today }, archivedAt: null, ...ownerWhere, ...pipeWhere }, orderBy: { nextFollowUp: "asc" }, take: 60, select: { id: true, contactId: true, nextFollowUp: true, contact: { select: { name: true, phone: true, address: true } } } }),
     // 🕸 working deals with no activity in 3+ days (losing momentum → slower close)
-    db.crmOpportunity.findMany({ where: { stage: { notIn: ["new", "nurture", "dead"] }, updatedAt: { lte: staleCut }, archivedAt: null, ...ownerWhere }, orderBy: { updatedAt: "asc" }, take: 40, select: { id: true, contactId: true, stage: true, updatedAt: true, contact: { select: { name: true, phone: true, address: true } } } }),
+    db.crmOpportunity.findMany({ where: { stage: { notIn: ["new", "nurture", "dead"] }, updatedAt: { lte: staleCut }, archivedAt: null, ...ownerWhere, ...pipeWhere }, orderBy: { updatedAt: "asc" }, take: 40, select: { id: true, contactId: true, stage: true, updatedAt: true, contact: { select: { name: true, phone: true, address: true } } } }),
   ]);
   const stalledClean = stalled.filter((o) => !/sign|won|dead|nurtur/i.test(o.stage));
   const daysStale = (d: Date) => Math.floor((Date.now() - d.getTime()) / 86400000);

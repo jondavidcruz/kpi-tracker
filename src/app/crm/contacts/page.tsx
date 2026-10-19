@@ -7,7 +7,7 @@ import SelectAllBox from "@/components/SelectAllBox";
 import { bulkContactsAction } from "../actions";
 import CallButton from "@/components/CallButton";
 import { commsFor } from "@/lib/crm-comms";
-import { readPipelines } from "@/lib/crm";
+import { readPipelines, pipelineLockFor } from "@/lib/crm";
 import { findDuplicateContacts } from "@/lib/crm-dupes";
 
 export const dynamic = "force-dynamic";
@@ -69,9 +69,14 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
     );
   }
 
+  // 🔒 Pipeline isolation (Jon 2026-10-19): a pipeline-locked rep only sees contacts
+  // tied to their own pipeline(s), so Contacts is safe to show them.
+  const lockPipes = await pipelineLockFor(me!);
+  const pipeIn = lockPipes?.length ? (lockPipes.includes("War Room") ? [...lockPipes, ""] : lockPipes) : null;
   const where = {
     archivedAt: null,
     ...(who ? { assignedTo: { equals: who, mode: "insensitive" as const } } : {}),
+    ...(pipeIn ? { opportunities: { some: { pipeline: { in: pipeIn } } } } : {}),
     ...(q ? { OR: [
       { name: { contains: q, mode: "insensitive" as const } },
       { phone: { contains: q.replace(/\D/g, "") || q } },
