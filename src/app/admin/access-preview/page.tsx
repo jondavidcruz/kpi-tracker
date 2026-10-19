@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canAccessCSuite, canTrackTime, isOwner, isCSuitePerson, ONBOARDING_NAV } from "@/lib/auth";
+import { getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayroll, canAccessCSuite, canTrackTime, isOwner, isCSuitePerson, navAllowlist } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
@@ -65,12 +65,20 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
   // instead of hunting for the separate toggle.
   const grantable = (gate: NavGate) => roleAllows(gate) || gate === "marketing";
   const availableHrefs = NAV_GROUPS.flatMap((g) => g.items.filter((it) => grantable(it.gate)).map((it) => it.href));
-  const can = (it: { href: string; gate: NavGate }) => roleAllows(it.gate) && !isHiddenPath(it.href);
+  // Mirror the REAL sidebar's visibility EXACTLY: role gate + hidden (sub-path) +
+  // the nav allowlist (onboarding ramp or a per-person RESTRICTED_NAV). The
+  // breakdown used to ignore the allowlist, so it could show a ✓ the person's real
+  // sidebar actually blocks (Jon 2026-10-19: "preview says he has it but shows
+  // nothing"). navAllowlist returns null = unrestricted.
+  const allowList = navAllowlist(selected as { name: string; onboarding?: boolean });
+  const isAllowed = (href: string) => !allowList || allowList.some((p) => href === p || href.startsWith(p + "/"));
+  const can = (it: { href: string; gate: NavGate }) => roleAllows(it.gate) && !isHiddenPath(it.href) && isAllowed(it.href);
   // Onboarding ramp overrides navHidden: the account only shows ONBOARDING_NAV
   // (learning + basics). So the LIVE preview must factor that in, not just navHidden.
   const onboardingLock = !!(selected as { onboarding?: boolean }).onboarding;
-  const inOnboarding = (href: string) => ONBOARDING_NAV.some((p) => href === p || href.startsWith(p + "/"));
-  const visibleItem = (it: { href: string; gate: NavGate }) => onboardingLock ? (roleAllows(it.gate) && inOnboarding(it.href)) : can(it);
+  // The jump list mirrors the real sidebar via can() (which already honors the
+  // onboarding ramp through navAllowlist).
+  const visibleItem = (it: { href: string; gate: NavGate }) => can(it);
   const editable = isAdmin(me); // only the owner edits access
 
   // Sensitive-data confirmations — the things you most want to verify.
