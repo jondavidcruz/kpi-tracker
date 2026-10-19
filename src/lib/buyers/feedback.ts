@@ -78,6 +78,31 @@ export async function logDealSend(input: {
   return row.id;
 }
 
+/** One send ledger (AI Update 2026-10-19): the manual cascade buttons (Send offer /
+ *  Mark sent / Passed) and the "Log a manual send" form all come through here, so
+ *  a buyer who already has an OPEN row (sent, no outcome yet) for this deal is not
+ *  logged twice — that was inflating the heat % and the tire-kicker count. A fresh
+ *  send AFTER a pass/offer is still a new row (re-sending on purpose is allowed). */
+export async function logDealSendOnce(input: Parameters<typeof logDealSend>[0]): Promise<{ id: string; existed: boolean }> {
+  const open = await openSendFor(input.dealId, input.buyerId);
+  if (open) return { id: open, existed: true };
+  return { id: await logDealSend(input), existed: false };
+}
+
+/** "undo" on a hand-marked cascade row: only a fresh (≤15 min), un-answered,
+ *  hand-logged send can be removed — a mis-click fix, not a history edit.
+ *  Robot sends ("cascade") and anything with an outcome stay forever. */
+export async function undoFreshDealSend(dealId: string, buyerId: string): Promise<boolean> {
+  const row = await db.dealSend.findFirst({
+    where: { dealId, buyerId, outcome: "", actor: { not: "cascade" }, sentAt: { gte: new Date(Date.now() - 15 * 60_000) } },
+    orderBy: { sentAt: "desc" }, select: { id: true },
+  });
+  if (!row) return false;
+  await db.dealSend.delete({ where: { id: row.id } });
+  await recomputeBuyerFlags(buyerId).catch(() => {});
+  return true;
+}
+
 /** Record what came back: outcome / offer amount / pass reason. Never deletes. */
 export async function setDealSendOutcome(
   sendId: string,

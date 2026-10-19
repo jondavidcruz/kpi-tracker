@@ -74,7 +74,11 @@ export async function sendRound(dealId: string): Promise<{ sent: number; done: b
   if (dc.status === "claimed" || dc.status === "stopped") return { sent: 0, done: true };
   const { deal, ranked } = await rankedForDeal(dealId);
   if (!deal) return { sent: 0, done: true };
-  const next = ranked.filter((m) => !dc.sent[m.id] && m.email).slice(0, ROUND_SIZE);
+  // One send ledger (AI Update 2026-10-19): a buyer already reached by hand
+  // (📧 Send offer / Mark sent / Log a manual send → DealSend row) is not
+  // emailed again by the robot. Was the reverse double-email path.
+  const already = new Set((await db.dealSend.findMany({ where: { dealId }, select: { buyerId: true } }).catch(() => [])).map((r) => r.buyerId));
+  const next = ranked.filter((m) => !dc.sent[m.id] && !already.has(m.id) && m.email).slice(0, ROUND_SIZE);
   if (next.length === 0) { dc.status = "done"; dc.lastAt = new Date().toISOString(); store[dealId] = dc; await writeAuto(store); return { sent: 0, done: true }; }
   let sentNow = 0;
   for (const m of next) {

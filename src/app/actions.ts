@@ -1162,6 +1162,21 @@ export async function markCascade(formData: FormData) {
   if (status === "clear") delete map[dealId][buyerId];
   else if (status === "sent" || status === "passed") map[dealId][buyerId] = status;
   await writeCascade(map);
+  // One send ledger (AI Update 2026-10-19): hand-marked sends/passes are DealSend
+  // rows too, so the heat %, first-send clock, lowballer/tire-kicker flags and the
+  // auto-cascade's "already contacted" check all see them.
+  try {
+    const { logDealSendOnce, setDealSendOutcome, undoFreshDealSend } = await import("@/lib/buyers/feedback");
+    const actor = me?.name ?? "";
+    if (status === "sent" || status === "passed") {
+      const deal = await db.deal.findUnique({ where: { id: dealId }, select: { contractPrice: true, askingPrice: true } });
+      // logDealSendOnce returns the buyer's OPEN row for this deal if one exists, else a new one.
+      const { id } = await logDealSendOnce({ dealId, buyerId, channel: "manual", floorPrice: deal?.contractPrice ?? null, askPrice: deal?.askingPrice ?? null, actor });
+      if (status === "passed") await setDealSendOutcome(id, { outcome: "pass" }, actor);
+    } else if (status === "clear") {
+      await undoFreshDealSend(dealId, buyerId);
+    }
+  } catch (e) { console.error("[cascade] DealSend ledger write failed", e); }
   revalidatePath("/deals");
 }
 function offerEmail(deal: { address: string; contractPrice: number | null; askingPrice: number | null; nextSteps: string }, buyerName: string, from: string): string {
@@ -1188,10 +1203,17 @@ export async function sendCascadeOffer(formData: FormData) {
   if (!deal || !buyer) redirect("/deals?cascade=err");
   let sent = false;
   if (buyer.email) sent = await sendEmailTo([buyer.email], `Off-market deal — ${deal.address}`, offerEmail(deal, buyer.name, me?.name ?? "Freedom Offers"));
-  const map = await readCascade();
-  map[dealId] = map[dealId] || {};
-  map[dealId][buyerId] = "sent";
-  await writeCascade(map);
+  // Only record a send that actually left (it used to mark "sent" even on
+  // "nomail", so the buyer looked contacted when nobody had reached them).
+  if (sent) {
+    const map = await readCascade();
+    map[dealId] = map[dealId] || {};
+    map[dealId][buyerId] = "sent";
+    await writeCascade(map);
+    // One send ledger: the hand-sent offer is a DealSend row like the robot's.
+    const { logDealSendOnce } = await import("@/lib/buyers/feedback");
+    await logDealSendOnce({ dealId, buyerId, channel: "email", floorPrice: deal.contractPrice, askPrice: deal.askingPrice, actor: me?.name ?? "" }).catch((e) => console.error("[cascade] DealSend ledger write failed", e));
+  }
   revalidatePath("/deals");
   redirect(`/deals?cascade=${sent ? "sent" : "nomail"}`);
 }
@@ -2924,8 +2946,10 @@ export async function logDealSendAction(formData: FormData) {
   const buyerId = String(formData.get("buyerId") ?? "");
   if (!dealId || !buyerId) return;
   const deal = await db.deal.findUnique({ where: { id: dealId }, select: { contractPrice: true, askingPrice: true } });
-  const { logDealSend } = await import("@/lib/buyers/feedback");
-  await logDealSend({
+  // One send ledger: dedupe against an OPEN row for this deal+buyer (a double
+  // click or "I already marked it sent" no longer counts as two sends).
+  const { logDealSendOnce } = await import("@/lib/buyers/feedback");
+  await logDealSendOnce({
     dealId, buyerId, channel: String(formData.get("channel") ?? "email"),
     floorPrice: deal?.contractPrice ?? null, askPrice: deal?.askingPrice ?? null, actor: me?.name ?? "",
   });

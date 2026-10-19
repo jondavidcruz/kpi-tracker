@@ -408,8 +408,17 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
   const lFlags = landFlags(land);
   // Jon's 6-point screen — only scored once any land diligence exists
   const screen = land ? landScreen(land) : null;
+  // One send ledger (AI Update 2026-10-19): a buyer's status comes from the
+  // DealSend rows (robot sends, hand-sent offers, "Log a manual send"), the
+  // auto-cascade store, AND the legacy hand-marked map — so the robot's top 3
+  // and a hand-logged send no longer leave "👑 Send next" on a buyer already emailed.
+  const sendStatus: Record<string, string> = { ...cascadeStatus };
+  for (const [bId, s] of Object.entries(auto?.sent ?? {})) if (!sendStatus[bId]) sendStatus[bId] = s === "passed" ? "passed" : "sent";
+  const newestByBuyer = new Map<string, SendRow>();
+  for (const sd of sends) { const prev = newestByBuyer.get(sd.buyerId); if (!prev || new Date(sd.sentAt).getTime() > new Date(prev.sentAt).getTime()) newestByBuyer.set(sd.buyerId, sd); }
+  for (const [bId, sd] of newestByBuyer) if (!sendStatus[bId]) sendStatus[bId] = sd.outcome === "pass" ? "passed" : "sent";
   // The next buyer to send to = highest-ranked one not already sent or passed.
-  const nextId = matches.find((m) => cascadeStatus[m.id] !== "sent" && cascadeStatus[m.id] !== "passed")?.id ?? null;
+  const nextId = matches.find((m) => sendStatus[m.id] !== "sent" && sendStatus[m.id] !== "passed")?.id ?? null;
   const st = STATUSES.find((s) => s.key === deal.status) ?? STATUSES[0];
   const isLive = !["dead", "closed"].includes(deal.status);
   const aging = analyzeDeal(deal, today);
@@ -448,7 +457,7 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
   const renderMatch = (m: BuyerMatch) => {
     const reach = [m.phone, m.email, m.igHandle].filter(Boolean).join("  ·  ");
     const kind = /develop|custom|remodel|build/i.test(m.type) ? "Developer" : m.category === "luxury" ? "Developer" : "Flipper";
-    const status = cascadeStatus[m.id];
+    const status = sendStatus[m.id];
     const isNext = m.id === nextId;
     return (
       <div key={m.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg p-1.5 text-xs ${isNext ? "bg-white ring-1 ring-emerald-300" : status === "passed" ? "opacity-50" : ""}`}>
@@ -477,7 +486,8 @@ function DealCard({ deal, today, repNames, canClose, matches, cascadeStatus, aut
             <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="passed" /><button className="rounded-md px-2 py-0.5 text-[10px] font-semibold text-slate-400 hover:text-red-600" title="They passed — go to next">Passed →</button></form>
           </span>
         )}
-        {(status === "sent" || status === "passed") && (
+        {/* undo only for hand-marked rows (fresh mis-clicks); robot + logged sends are history */}
+        {(cascadeStatus[m.id] === "sent" || cascadeStatus[m.id] === "passed") && (
           <form action={markCascade}><input type="hidden" name="dealId" value={deal.id} /><input type="hidden" name="buyerId" value={m.id} /><input type="hidden" name="status" value="clear" /><button className="text-[10px] text-slate-300 hover:text-slate-600">undo</button></form>
         )}
       </div>
