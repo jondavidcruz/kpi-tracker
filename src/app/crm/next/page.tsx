@@ -1,11 +1,12 @@
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
-import { pipelineLockFor } from "@/lib/crm";
+import { pipelineLockFor, readPipelines } from "@/lib/crm";
 import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import { commsFor } from "@/lib/crm-comms";
 import NextUpRow from "@/components/NextUpRow";
+import CrmQuickView from "@/components/CrmQuickView";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,11 @@ export default async function NextUpPage({ searchParams }: { searchParams: Promi
   const lockPipes = await pipelineLockFor(me!);
   const pipeIn = lockPipes?.length ? (lockPipes.includes("War Room") ? [...lockPipes, ""] : lockPipes) : null;
   const pipeWhere = pipeIn ? { pipeline: { in: pipeIn } } : {};
+  // Pipeline stages for the slide-in quick-view (so it can render the stage dropdown
+  // for whichever pipeline a lead belongs to).
+  const pipelines = await readPipelines();
+  const pipelineStages = Object.fromEntries(pipelines.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]));
+  const qvStages = pipelines[0]?.stages.map((s) => ({ key: s.key, label: s.label })) ?? [];
 
   // candidate opps: new-stage + due follow-ups + stalled working deals (bounded)
   const staleCut = new Date(Date.now() - 3 * 86400000);
@@ -87,6 +93,9 @@ export default async function NextUpPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-4">
+      {/* 🪟 Same slide-in quick-view the pipeline cards use — opened by the row's
+          name / 📝 / 💬 buttons via the fo-quickview event. */}
+      <CrmQuickView stages={qvStages} pipelineStages={pipelineStages} />
       <SectionTitle title="⚡ Next Up" subtitle="Who to work next — newest uncontacted leads first, sellers who texted back, then overdue follow-ups. Clear the top of the list and deals sign faster." accent="bg-brand-gold" />
       {canViewAll && (
         <div className="flex flex-wrap items-center gap-1.5">

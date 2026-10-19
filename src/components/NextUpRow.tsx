@@ -17,7 +17,9 @@ export default function NextUpRow({ id, contactId, name, phone, address, reason,
     <div className={`flex items-center gap-3 rounded-xl p-3 ring-1 ${ring}`}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <a href={`/crm/${id}`} className="truncate text-sm font-bold text-slate-800 hover:text-indigo-600 hover:underline">{titleCase(name)}</a>
+          {/* Open the SAME quick-view panel as the pipeline cards (Jon 2026-10-19:
+              "make Next Up leads viewable from quick notes") — no full page load. */}
+          <button onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id } }))} className="truncate text-left text-sm font-bold text-slate-800 hover:text-indigo-600 hover:underline">{titleCase(name)}</button>
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${chip}`}>{reason}</span>
         </div>
         {address && <div className="truncate text-[11px] text-slate-500">📍 {address}</div>}
@@ -30,7 +32,8 @@ export default function NextUpRow({ id, contactId, name, phone, address, reason,
         {canSms && phone && (
           <button onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id, tab: "sms" } }))} title="Text" className="grid h-9 w-9 place-items-center rounded-lg bg-sky-100 text-sky-700 ring-1 ring-sky-200 hover:bg-sky-200">💬</button>
         )}
-        <a href={`/crm/${id}`} title="Open lead" className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50">↗</a>
+        <button onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id, tab: "notes" } }))} title="Quick notes & activity" className="grid h-9 w-9 place-items-center rounded-lg bg-amber-100 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-200">📝</button>
+        <a href={`/crm/${id}`} title="Open full lead" className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50">↗</a>
       </div>
     </div>
   );
