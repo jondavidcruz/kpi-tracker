@@ -3491,11 +3491,13 @@ export async function GET(request: Request) {
     const missingWithGhl = missing.filter((o) => (o.contact?.ghlId ?? "").trim());
     const missingNoGhl = missing.length - missingWithGhl.length;
 
-    // Build "street, City, ST ZIP" from a GHL contact record.
+    // Build "street, City, ST ZIP" from a GHL contact record. GHL sometimes returns
+    // the literal strings "undefined"/"null" for empty fields — treat those as blank
+    // (otherwise they get written as a bogus address, e.g. address1 "undefined").
+    const g = (c: Record<string, unknown>, k: string) => { const v = String((c?.[k] ?? "") || "").trim(); return /^(undefined|null)$/i.test(v) ? "" : v; };
     const buildAddr = (c: Record<string, unknown>): string => {
-      const g = (k: string) => String((c?.[k] ?? "") || "").trim();
-      const line1 = g("address1");
-      const csz = [g("city"), [g("state"), g("postalCode")].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+      const line1 = g(c, "address1");
+      const csz = [g(c, "city"), [g(c, "state"), g(c, "postalCode")].filter(Boolean).join(" ")].filter(Boolean).join(", ");
       return [line1, csz].filter(Boolean).join(", ").trim();
     };
 
@@ -3518,8 +3520,7 @@ export async function GET(request: Request) {
 
     // COMMIT: backfill up to `limit` contacts this run (dedupe by contactId).
     const seen = new Set<string>();
-    let fetched = 0, updatedContacts = 0, updatedTitles = 0, stillBlankInGhl = 0, ghlErrors = 0;
-    let firstWriteId = "", firstWriteAddr = "", updateErr = "";
+    let fetched = 0, updatedContacts = 0, updatedTitles = 0, stillBlankInGhl = 0, ghlErrors = 0, cleanedJunk = 0;
     for (const o of missingWithGhl) {
       if (updatedContacts + stillBlankInGhl + ghlErrors >= limit) break;
       const cid = o.contact!.id;
@@ -3530,21 +3531,21 @@ export async function GET(request: Request) {
       if (!r.ok) { ghlErrors++; continue; }
       const c = ((r.body as { contact?: Record<string, unknown> })?.contact ?? {}) as Record<string, unknown>;
       const addr = buildAddr(c);
-      if (!addr) { stillBlankInGhl++; continue; }
-      try {
-        const upd = await db.crmContact.update({ where: { id: cid }, data: { address: addr }, select: { id: true, address: true } });
-        if (!firstWriteId) { firstWriteId = cid; firstWriteAddr = upd.address; }
-      } catch (e) { updateErr = String(e).slice(0, 200); ghlErrors++; continue; }
-      updatedContacts++;
-      // Put the address on the card title too when the title is a placeholder/name.
-      const titleIsPlaceholder = !o.title || o.title === o.contact!.name || /imported lead/i.test(o.title);
-      if (titleIsPlaceholder) { await db.crmOpportunity.update({ where: { id: o.id }, data: { title: addr.slice(0, 160) } }); updatedTitles++; }
+      if (isRealAddr(addr)) {
+        await db.crmContact.update({ where: { id: cid }, data: { address: addr } });
+        updatedContacts++;
+        const titleIsPlaceholder = !o.title || o.title === o.contact!.name || /imported lead/i.test(o.title);
+        if (titleIsPlaceholder) { await db.crmOpportunity.update({ where: { id: o.id }, data: { title: addr.slice(0, 160) } }); updatedTitles++; }
+      } else {
+        // GHL has no real address for this lead. Scrub any junk placeholder we have
+        // (e.g. a literal "undefined") so the card shows a clean blank, not garbage.
+        stillBlankInGhl++;
+        const cur = (o.contact!.address ?? "").trim();
+        if (cur && !isRealAddr(cur)) { await db.crmContact.update({ where: { id: cid }, data: { address: "" } }); cleanedJunk++; }
+      }
     }
-    // Read-back verification: fetch the first contact we wrote by id — does the
-    // change survive a fresh query? (If this comes back blank, writes aren't sticking.)
-    const verify = firstWriteId ? await db.crmContact.findUnique({ where: { id: firstWriteId }, select: { id: true, address: true, assignedTo: true } }) : null;
     const remaining = Math.max(0, missingWithGhl.length - seen.size);
-    return NextResponse.json({ ok: true, mode: "COMMITTED", pipeline: plName, total, hadAddressBefore: withAddr, processedThisRun: fetched, addressesWritten: updatedContacts, titlesUpdated: updatedTitles, blankInGhl: stillBlankInGhl, ghlErrors, updateErr: updateErr || undefined, writeProbe: { id: firstWriteId, wroteInUpdate: firstWriteAddr, readBack: verify }, contactsRemaining: remaining, note: remaining > 0 ? `Re-run ?kyleaddr=1&commit=1 — ${remaining} contacts still to process.` : "All contacts processed." });
+    return NextResponse.json({ ok: true, mode: "COMMITTED", pipeline: plName, total, hadRealAddressBefore: withAddr, processedThisRun: fetched, addressesRecovered: updatedContacts, titlesUpdated: updatedTitles, noAddressInGhl: stillBlankInGhl, junkCleaned: cleanedJunk, ghlErrors, contactsRemaining: remaining, note: remaining > 0 ? `Re-run ?kyleaddr=1&commit=1 — ${remaining} contacts still to process.` : "All contacts processed." });
   }
 
   // 💰 GHL DEAL WON → the Deals board (Jon 2026-10-07: closed deals with
