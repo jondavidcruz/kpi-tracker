@@ -10,6 +10,7 @@ import {
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
 } from "@/app/crm/actions";
 import { KIND_EMOJI } from "@/lib/crm-shared";
+import { formatAddress } from "@/lib/address";
 import { CRM_FORMS } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
@@ -149,7 +150,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                   <form action={submit(saveOppMetaAction, { id: d.id })} className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className={labelCls}>Opportunity name</label>
-                      <input name="title" defaultValue={d.title} className={inputCls} />
+                      <input name="title" defaultValue={formatAddress(d.title)} className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Pipeline (pick the destination stage)</label>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { formatAddress } from "@/lib/address";
 import { logCrmEvent } from "@/lib/crm";
 import { sendWelcomeText } from "@/lib/website-lead";
 
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
   const { toE164US } = await import("@/lib/crm-shared");
   const phone = toE164US(S("phone") || S("smart_number") || S("phones"));
   const email = S("email") || S("emails");
-  const addr = [S("address"), S("city"), S("state"), S("zip") || S("postal_code")].filter(Boolean).join(", ");
+  const addr = formatAddress([S("address"), S("city"), S("state"), S("zip") || S("postal_code")].filter(Boolean).join(", "));
   const price = S("price") || S("lead_price") || S("leadPrice");
   const acq = await db.user.findFirst({ where: { active: true, position: "acquisitions" }, orderBy: { name: "asc" }, select: { name: true } });
   const owner = acq?.name ?? "";

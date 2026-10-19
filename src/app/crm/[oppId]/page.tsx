@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
@@ -85,7 +86,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           <Link href="/crm" className="text-sm font-bold text-slate-400 hover:text-slate-600">←</Link>
           <div>
             <div className="text-lg font-extrabold tracking-tight text-slate-900">{c.name}</div>
-            <div className="text-xs text-slate-500">{opp.title}</div>
+            <div className="text-xs text-slate-500">{formatAddress(opp.title)}</div>
           </div>
           <form action={setOppStageAction} className="flex items-center gap-1.5">
             <input type="hidden" name="id" value={opp.id} />
@@ -289,7 +290,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             </div>
             <AutoSaveForm action={saveOppMetaAction} className="space-y-2">
               <input type="hidden" name="id" value={opp.id} />
-              <label><span className={lbl}>Title / property</span><input name="title" defaultValue={opp.title} className={inputCls} /></label>
+              <label><span className={lbl}>Title / property</span><input name="title" defaultValue={formatAddress(opp.title)} className={inputCls} /></label>
               <div className="grid grid-cols-2 gap-2">
                 <label><span className={lbl}>Seller wants $</span><input name="askPrice" defaultValue={opp.askPrice ?? ""} className={inputCls} /></label>
                 <label><span className={lbl}>Est. value / fee $</span><input name="value" defaultValue={opp.value ?? ""} className={inputCls} /></label>

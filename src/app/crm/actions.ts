@@ -121,7 +121,8 @@ export async function addOpportunityAction(formData: FormData) {
   if (!me) return;
   const contactId = String(formData.get("contactId") ?? "");
   const apn = String(formData.get("apn") ?? "").trim();
-  const title = String(formData.get("title") ?? "").trim() || (apn ? `APN ${apn}` : "");
+  const { formatAddress } = await import("@/lib/address");
+  const title = formatAddress(String(formData.get("title") ?? "")) || (apn ? `APN ${apn}` : "");
   if (!contactId || !title) return;
   const opp = await db.crmOpportunity.create({ data: { contactId, title, stage: "new", assignedTo: me.name, ...(apn ? { formData: { property: { apn } } } : {}) } });
   await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `New opportunity: ${title}${apn ? ` · APN ${apn}` : ""}`, actor: me.name });
@@ -287,9 +288,11 @@ export async function saveOppMetaAction(formData: FormData) {
   if (!id) return;
   const num = (k: string) => { const s = String(formData.get(k) ?? "").replace(/[$,\s]/g, ""); return s === "" ? null : Number(s) || null; };
   const plRaw = formData.get("pipeline");
+  const { formatAddress } = await import("@/lib/address");
   await db.crmOpportunity.update({ where: { id }, data: {
     ...(plRaw != null ? { pipeline: String(plRaw) === "War Room" ? "" : String(plRaw) } : {}),
-    title: String(formData.get("title") ?? "").trim() || undefined,
+    // the Opportunity-name box is scrubbed on every save: "Street, City, ST ZIP" once
+    title: formatAddress(String(formData.get("title") ?? "")) || undefined,
     assignedTo: String(formData.get("assignedTo") ?? "").trim(),
     tags: String(formData.get("tags") ?? "").trim().slice(0, 300),
     nextFollowUp: String(formData.get("nextFollowUp") ?? "").trim(),
@@ -1493,7 +1496,8 @@ export async function addPropertyAction(formData: FormData) {
   if (!me) return;
   const contactId = String(formData.get("contactId") ?? "");
   if (!contactId) return;
-  const address = String(formData.get("address") ?? "").trim();
+  const { formatAddress } = await import("@/lib/address");
+  const address = formatAddress(String(formData.get("address") ?? ""));
   const apn = String(formData.get("apn") ?? "").trim();
   const title = address || (apn ? `APN ${apn}` : "New property");
   const note = String(formData.get("note") ?? "").trim();
@@ -1515,7 +1519,8 @@ export async function savePropertyAction(formData: FormData) {
   if (!me) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  const address = String(formData.get("address") ?? "").trim();
+  const { formatAddress } = await import("@/lib/address");
+  const address = formatAddress(String(formData.get("address") ?? ""));
   const apn = String(formData.get("apn") ?? "").trim();
   const existing = await db.crmOpportunity.findUnique({ where: { id }, select: { formData: true } });
   const fd = (existing?.formData ?? {}) as Record<string, unknown>;

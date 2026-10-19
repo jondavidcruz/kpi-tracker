@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useState, useTransition } from "react";
 import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction, bulkOppStageAction, addCrmNoteAction } from "@/app/crm/actions";
 import { STAGE_PROB, titleCase } from "@/lib/crm-shared";
+import { formatAddress } from "@/lib/address";
 import { stageHelp } from "@/lib/stage-help";
 
 export type CrmCard = {
@@ -313,10 +314,12 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     {(() => {
                       const norm = (x: string) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
                       const nName = norm(c.contactName);
-                      const t = (c.title ?? "").trim();
+                      // rendered through formatAddress so even an old doubled
+                      // "…, TX 75069, McKinney, TX, 75069" title reads clean (2026-10-19)
+                      const t = formatAddress(c.title ?? "");
                       const nTitle = norm(t);
                       const titleIsName = !!nTitle && !!nName && (nTitle === nName || nTitle.includes(nName) || nName.includes(nTitle));
-                      const addr = (c.address ?? "").trim();
+                      const addr = formatAddress(c.address ?? "");
                       const blur = privacy ? "select-none blur-[3px]" : "";
                       // Show ONE address only (Jon 2026-10-16: imported leads showed
                       // both the opp title AND the contact address). If the title is

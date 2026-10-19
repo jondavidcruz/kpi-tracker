@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { parseTags, CRM_STAGES } from "@/lib/crm-shared";
@@ -158,7 +159,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                   {manager && <td className="px-3 py-2.5"><input type="checkbox" name="ids" value={c.id} /></td>}
                   <td className="px-4 py-2.5">
                     {opp ? <Link href={`/crm/${opp.id}`} className="font-bold text-slate-800 hover:text-indigo-600">{c.name}</Link> : <span className="font-bold text-slate-800">{c.name}</span>}
-                    {c.address && <div className="max-w-[200px] truncate text-[11px] text-slate-400">{c.address}</div>}
+                    {c.address && <div className="max-w-[200px] truncate text-[11px] text-slate-400">{formatAddress(c.address)}</div>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{c.phone}</td>
                   <td className="max-w-[180px] truncate px-3 py-2.5 text-slate-600">{c.email}</td>
