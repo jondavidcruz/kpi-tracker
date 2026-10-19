@@ -140,6 +140,10 @@ export async function saveUserAccess(formData: FormData) {
       // Jon/Enrico/Viktoriia by name in auth.ts, so we leave those stored flags untouched.
       accessMarketing,
       navHidden,
+      // Configuring a rep's real access takes them OFF the onboarding lock —
+      // otherwise onboarding forces ONBOARDING_NAV and silently ignores the
+      // grant (Jon 2026-10-19: "I give access + save but they still can't see it").
+      onboarding: false,
     },
   });
   revalidatePath("/admin/access-preview");
@@ -165,7 +169,9 @@ export async function applyDeptAccessAction(formData: FormData) {
   const navHidden = JSON.stringify(allHrefs.filter((h) => !allow.has(h)));
   // Dispositions works the buyer side → grant Markets & Buyers; acquisitions doesn't.
   const accessMarketing = dept === "dispositions";
-  await db.user.update({ where: { id: userId }, data: { navHidden, accessMarketing } });
+  // Also clear the onboarding lock so the granted pages actually show (otherwise
+  // ONBOARDING_NAV overrides everything — Jon 2026-10-19).
+  await db.user.update({ where: { id: userId }, data: { navHidden, accessMarketing, onboarding: false } });
   revalidatePath("/admin/access-preview");
   redirect(`/admin/access-preview?as=${userId}&saved=${dept}`);
 }
