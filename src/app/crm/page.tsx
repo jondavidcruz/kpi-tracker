@@ -195,7 +195,12 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     }
     const due = (tasksByOpp.get(o.id) ?? []).filter((t) => t.due && t.due.slice(0, 10) <= today);
     if (due.length) badges.push(`⏰ ${due.length} task${due.length > 1 ? "s" : ""} due`);
-    if (o.nextFollowUp && o.nextFollowUp <= today) badges.push("📞 follow-up due");
+    if (o.nextFollowUp && o.nextFollowUp <= today) {
+      // how LATE, not just "due" — 17 overdue follow-ups sat invisible behind one
+      // generic chip (crm-enhancer audit 2026-10-18)
+      const late = Math.round((Date.parse(today) - Date.parse(o.nextFollowUp)) / 86400000);
+      badges.push(late > 0 ? `🔴 follow-up ${late}d overdue` : "📞 follow-up due today");
+    }
     if (!["nurture", "dead", "signed"].includes(o.stage) && Date.now() - o.updatedAt.getTime() > 3 * 86400000) badges.push("🕸 quiet 3d+");
     const apptToday = apptTodayByOpp.get(o.id) ?? [];
     if (apptToday.length) badges.push(`📅 appt today${apptToday[0].at ? ` ${apptToday[0].at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`);

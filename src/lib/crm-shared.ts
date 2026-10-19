@@ -32,6 +32,33 @@ export function parseTags(s: string): string[] {
   return s.split(",").map((t) => t.trim()).filter(Boolean);
 }
 
+/**
+ * ☎ One phone normalizer for EVERY place a contact gets created by hand
+ * (new-lead form, bell quick-text, intake webhooks). Returns +1XXXXXXXXXX or "".
+ * Handles the real inputs the team pastes: "(305) 607-6099", "1-305-607-6099",
+ * "+13056076099", and spreadsheet floats like "3056076099.0" — that last one
+ * used to become +10560760990 (digits-then-last-10 kept the trailing 0 and
+ * dropped the area code's 3), i.e. a contact whose texts went to a wrong
+ * number (crm-enhancer audit 2026-10-19). Non-US / wrong-length → "".
+ */
+export function toE164US(raw: string | null | undefined): string {
+  let s = String(raw ?? "").trim();
+  if (!s) return "";
+  // spreadsheet export artefacts: "3056076099.0", "3.056076099E9"
+  if (/^\d+\.\d+e\+?\d+$/i.test(s)) { const n = Number(s); if (Number.isFinite(n)) s = String(Math.round(n)); }
+  s = s.replace(/\.0+$/, "");
+  const digits = s.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return "";
+}
+
+/** "(305) 607-6099" for display when a contact has no name yet. */
+export function prettyPhone(e164: string): string {
+  const d = (e164 || "").replace(/\D/g, "").slice(-10);
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : e164;
+}
+
 export function stageSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "stage";
 }

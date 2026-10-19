@@ -97,13 +97,17 @@ export async function POST(req: NextRequest) {
   // find the contact by last-10 or create one, return its id for openThread.
   const b2 = body as { op?: string; phone?: string; name?: string };
   if (b2.op === "ensure" && b2.phone) {
-    const phone = String(b2.phone).replace(/[^+\d]/g, "");
-    const last10 = phone.replace(/\D/g, "").slice(-10);
-    if (last10.length !== 10) return NextResponse.json({ ok: false, error: "need a 10-digit number" });
-    let contact = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true } });
+    // toE164US guards against pasted spreadsheet floats ("3056076099.0") that
+    // used to create a contact under the WRONG number (crm-enhancer 2026-10-19)
+    const { toE164US, prettyPhone } = await import("@/lib/crm-shared");
+    const phone = toE164US(String(b2.phone));
+    const last10 = phone.slice(-10);
+    if (!phone) return NextResponse.json({ ok: false, error: "need a 10-digit US number" });
+    let contact = await db.crmContact.findFirst({ where: { archivedAt: null, OR: [{ phone: { endsWith: last10 } }, { altPhone: { endsWith: last10 } }] }, orderBy: { updatedAt: "desc" }, select: { id: true } });
     if (!contact) {
+      const nm = String(b2.name ?? "").trim();
       contact = await db.crmContact.create({
-        data: { name: String(b2.name ?? "").trim() || `(${last10.slice(0, 3)}) ${last10.slice(3, 6)}-${last10.slice(6)}`, phone: phone.startsWith("+") ? phone : `+1${last10}`, source: "Manual (bell quick text)", assignedTo: me!.name },
+        data: { name: nm && !/^[\d()+\-.\s]+$/.test(nm) ? nm : prettyPhone(phone), phone, source: "Manual (bell quick text)", assignedTo: me!.name },
         select: { id: true },
       });
     }

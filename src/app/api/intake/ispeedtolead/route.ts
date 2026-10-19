@@ -22,8 +22,10 @@ export async function POST(req: Request) {
 
   const S = (k: string) => String(raw[k] ?? "").trim();
   const name = [S("first_name") || S("firstName"), S("last_name") || S("lastName")].filter(Boolean).join(" ") || S("name") || "iSpeedToLead lead";
-  const digits = (S("phone") || S("smart_number") || S("phones")).replace(/\D/g, "");
-  const phone = digits.length >= 10 ? `+1${digits.slice(-10)}` : "";
+  // toE164US: tolerant of "1-xxx", "+1", and spreadsheet floats ("…099.0");
+  // the old digits-then-last-10 mangled the float case (crm-enhancer 2026-10-19)
+  const { toE164US } = await import("@/lib/crm-shared");
+  const phone = toE164US(S("phone") || S("smart_number") || S("phones"));
   const email = S("email") || S("emails");
   const addr = [S("address"), S("city"), S("state"), S("zip") || S("postal_code")].filter(Boolean).join(", ");
   const price = S("price") || S("lead_price") || S("leadPrice");

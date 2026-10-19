@@ -29,16 +29,44 @@ export async function createCrmLeadAction(formData: FormData) {
   if (!name) return;
   // phone saved as E.164 — "(909) 395-6195" raw broke the welcome text,
   // Telnyx rejects anything that isn't +1XXXXXXXXXX (Jon 2026-10-09)
-  const rawPhone = String(formData.get("phone") ?? "").replace(/[^+\d]/g, "");
+  // toE164US (crm-shared) also survives spreadsheet floats like "3056076099.0"
+  // which the old strip-then-last-10 turned into a WRONG number (2026-10-19).
+  const { toE164US } = await import("@/lib/crm-shared");
+  const rawPhoneIn = String(formData.get("phone") ?? "").trim();
+  const rawPhone = toE164US(rawPhoneIn) || rawPhoneIn.replace(/[^+\d]/g, "");
   const p10 = rawPhone.replace(/\D/g, "").slice(-10);
-  const contact = await db.crmContact.create({ data: {
-    name,
-    phone: rawPhone ? (rawPhone.startsWith("+") ? rawPhone : p10.length === 10 ? `+1${p10}` : rawPhone) : "",
-    email: String(formData.get("email") ?? "").trim(),
-    source: String(formData.get("source") ?? "").trim(),
-    assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name,
-    address: title === "New opportunity" ? "" : title,
-  } });
+  const emailIn = String(formData.get("email") ?? "").trim();
+  // 🔁 Dedupe at the door (crm-enhancer 2026-10-18): the nightly audit keeps
+  // finding the same seller as two contacts (26 phone-duplicate groups) = two
+  // reps calling one person. If a LIVE contact already has this phone (last 10,
+  // main or alt) or this email, hang the new property off THAT contact instead
+  // of creating a twin. Blanks on the existing card get filled in; nothing is
+  // overwritten. Welcome text/email are SKIPPED for a known seller (they were
+  // already welcomed — re-sending reads as spam).
+  const existing = (p10.length === 10 || emailIn)
+    ? await db.crmContact.findFirst({
+        where: { archivedAt: null, OR: [
+          ...(p10.length === 10 ? [{ phone: { endsWith: p10 } }, { altPhone: { endsWith: p10 } }] : []),
+          ...(emailIn ? [{ email: { equals: emailIn, mode: "insensitive" as const } }] : []),
+        ] },
+        orderBy: { updatedAt: "desc" },
+      }).catch(() => null)
+    : null;
+  const contact = existing
+    ? await db.crmContact.update({ where: { id: existing.id }, data: {
+        ...(existing.email ? {} : emailIn ? { email: emailIn } : {}),
+        ...(existing.address || title === "New opportunity" ? {} : { address: title }),
+        ...(existing.source ? {} : { source: String(formData.get("source") ?? "").trim() }),
+        ...(existing.assignedTo ? {} : { assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name }),
+      } })
+    : await db.crmContact.create({ data: {
+        name,
+        phone: rawPhone ? (rawPhone.startsWith("+") ? rawPhone : p10.length === 10 ? `+1${p10}` : rawPhone) : "",
+        email: emailIn,
+        source: String(formData.get("source") ?? "").trim(),
+        assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name,
+        address: title === "New opportunity" ? "" : title,
+      } });
   // land in the ASSIGNED REP'S pipeline; if that rep has no pipeline (e.g. a
   // dispo rep or unassigned) default to MICHELLE's acquisitions pipeline, NEVER
   // the generic War Room tab (Jon 2026-10-13). Fire welcome SMS + email too.
@@ -55,18 +83,20 @@ export async function createCrmLeadAction(formData: FormData) {
     contactId: contact.id, title, stage: landPipe?.stages[0]?.key ?? "new", pipeline: landPipe?.name ?? "",
     assignedTo: owner,
   } });
-  await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: "Lead created", actor: me.name });
+  await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: existing
+    ? `Lead created — matched EXISTING contact "${existing.name}" by ${p10.length === 10 && (existing.phone.endsWith(p10) || existing.altPhone.endsWith(p10)) ? "phone" : "email"} (no duplicate card made${name && name.toLowerCase() !== existing.name.toLowerCase() ? `; entered as "${name}"` : ""})`
+    : "Lead created", actor: me.name });
   // 📞 speed-to-lead: an immediate call task so a brand-new lead is worked now,
   // then ?newleadnudge keeps nudging every few hours until reached (Jon 2026-10-13)
   const todayPT = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
   await db.crmTask.create({ data: { oppId: opp.id, contactId: contact.id, title: `📞 Call now — new lead ${contact.name.split(" ")[0]}`, due: todayPT, assignedTo: owner, createdBy: "newlead-nudge" } }).catch(() => {});
   // intake notes land on the timeline immediately — no second step (Jon 2026-10-09)
   if (notes) await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "note", body: notes.slice(0, 4000), actor: me.name });
-  if (contact.phone) {
+  if (contact.phone && !existing) {
     const { sendWelcomeText } = await import("@/lib/website-lead");
     sendWelcomeText({ contactId: contact.id, oppId: opp.id, phone: contact.phone, name: contact.name, repName: contact.assignedTo }).catch(() => {});
   }
-  if (contact.email) {
+  if (contact.email && !existing) {
     (async () => {
       const { sendEmailTo } = await import("@/lib/notify");
       const { readMsgTemplates, fillTokens } = await import("@/lib/msg-templates");
