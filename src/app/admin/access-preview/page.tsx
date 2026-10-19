@@ -3,7 +3,7 @@ import { getCurrentUser, isManager, isAdmin, canAccessMarketing, canAccessPayrol
 import { getAllUsers } from "@/lib/data";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
-import { saveUserAccess } from "@/app/actions";
+import { saveUserAccess, applyDeptAccessAction } from "@/app/actions";
 import { NAV_GROUPS, parseNavHidden, type NavGate } from "@/lib/navItems";
 import PreviewPane from "./PreviewPane";
 
@@ -123,7 +123,20 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
 
         {/* Editable access — owner only */}
         {editable && (
-          <form action={saveUserAccess} className="mt-4 border-t border-slate-100 pt-4">
+         <div className="mt-4 border-t border-slate-100 pt-4">
+          {/* ⚡ Department presets — one click grants everything in that department
+              + the universal sections (Jon 2026-10-19). Separate form from Save. */}
+          <div className="mb-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">⚡ Department preset — grant {firstName} a whole department at once</div>
+            <form action={applyDeptAccessAction} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="userId" value={selected.id} />
+              <button name="dept" value="acquisitions" className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">🎯 Acquisitions access</button>
+              <button name="dept" value="dispositions" className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">📦 Dispositions access</button>
+              <span className="text-[11px] text-slate-500">Grants that department&apos;s pages + Dashboard/KPIs/Coaching/Requests; hides the rest. Dispositions also gets Markets &amp; Buyers. You can fine-tune the checkboxes after.</span>
+            </form>
+          </div>
+
+          <form key={`${selected.id}:${blankStart ? "blank" : "cur"}`} action={saveUserAccess}>
             <input type="hidden" name="userId" value={selected.id} />
             <input type="hidden" name="navAvailable" value={JSON.stringify(availableHrefs)} />
             <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -168,6 +181,7 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
               <span className="text-[11px] text-slate-400">Manager / Admin level is set by their <strong>Role</strong> on the Admin page.</span>
             </div>
           </form>
+         </div>
         )}
       </Card>
 

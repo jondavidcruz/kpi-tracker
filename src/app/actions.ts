@@ -146,6 +146,30 @@ export async function saveUserAccess(formData: FormData) {
   redirect(`/admin/access-preview?as=${userId}&saved=1`);
 }
 
+/** One-click department access preset (Jon 2026-10-19: "choose by department — give
+ *  Kyle & Nick everything in Acquisitions"). Grants that department's nav group +
+ *  the universal sections, hides the rest. Dispositions also gets Markets & Buyers. */
+const DEPT_ACCESS_GROUPS: Record<string, string[]> = {
+  acquisitions: ["Team Overview", "Acquisitions", "Performance", "Coaching", "EOS", "Requests & Support"],
+  dispositions: ["Team Overview", "Dispositions", "Marketing", "Performance", "Coaching", "EOS", "Requests & Support"],
+};
+export async function applyDeptAccessAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me)) return;
+  const userId = String(formData.get("userId") ?? "");
+  const dept = String(formData.get("dept") ?? "");
+  const groups = DEPT_ACCESS_GROUPS[dept];
+  if (!userId || !groups) return;
+  const allow = new Set(NAV_GROUPS.filter((g) => groups.includes(g.group)).flatMap((g) => g.items.map((i) => i.href)));
+  const allHrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
+  const navHidden = JSON.stringify(allHrefs.filter((h) => !allow.has(h)));
+  // Dispositions works the buyer side → grant Markets & Buyers; acquisitions doesn't.
+  const accessMarketing = dept === "dispositions";
+  await db.user.update({ where: { id: userId }, data: { navHidden, accessMarketing } });
+  revalidatePath("/admin/access-preview");
+  redirect(`/admin/access-preview?as=${userId}&saved=${dept}`);
+}
+
 /** Save (or clear) the rep's own Gemini API key for call transcription (BYOK), so
  *  their uploads run on their quota instead of the shared key. */
 export async function saveGeminiKey(formData: FormData) {
