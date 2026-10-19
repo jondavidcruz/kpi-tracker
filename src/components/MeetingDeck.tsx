@@ -213,19 +213,24 @@ function buildSlides(d: MeetingDeck): Slide[] {
 
   // 9. Recognition
   s.push({ name: "Recognition", node: (
-    <Light title="🏆 Last Week's Standouts">
+    <Light title="🏆 Person of the Week">
       {d.recognition.length ? (
-        <div className="flex h-full items-center justify-center gap-[4%]">
-          {d.recognition.map((r) => (
-            <div key={r.role} className="rounded-2xl bg-gradient-to-br from-amber-50 to-white p-[4%] text-center ring-2 ring-brand-gold/40" style={{ minWidth: "26%" }}>
-              <div className="text-brand-gold" style={{ fontSize: "clamp(20px,3cqw,40px)" }}>★</div>
-              <div className="font-extrabold text-slate-900" style={{ fontSize: "clamp(16px,2.4cqw,32px)" }}>{r.rep}</div>
-              <div className="text-slate-500" style={{ fontSize: "clamp(10px,1.2cqw,15px)" }}>{r.role}</div>
-              <div className="mt-2 font-bold text-brand-navy" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>{r.value} · {r.kpi}</div>
+        <div className="flex h-full items-center justify-center">
+          {d.recognition.slice(0, 1).map((r) => (
+            <div key={r.role} className="rounded-3xl bg-gradient-to-br from-amber-50 to-white p-[5%] text-center ring-2 ring-brand-gold/50 shadow-sm" style={{ minWidth: "46%" }}>
+              <div className="text-brand-gold" style={{ fontSize: "clamp(28px,4.5cqw,64px)" }}>★</div>
+              <div className="font-extrabold uppercase tracking-[0.22em] text-brand-gold" style={{ fontSize: "clamp(9px,1.1cqw,14px)" }}>{r.role}</div>
+              <div className="mt-1 font-extrabold text-slate-900" style={{ fontSize: "clamp(22px,3.4cqw,46px)" }}>{r.rep}</div>
+              <div className="mt-2 font-bold text-brand-navy" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>{r.kpi}</div>
             </div>
           ))}
         </div>
-      ) : <p className="mt-6 text-center text-slate-400" style={{ fontSize: "clamp(13px,1.8cqw,22px)" }}>No standout numbers logged last week yet.</p>}
+      ) : (
+        <div className="flex h-full flex-col items-center justify-center text-center">
+          <p className="text-slate-400" style={{ fontSize: "clamp(13px,1.8cqw,22px)" }}>No clear standout last week — no signed contracts or deals assigned.</p>
+          <p className="mt-1 text-slate-300" style={{ fontSize: "clamp(11px,1.4cqw,17px)" }}>Let&apos;s put someone on this slide this week. 💪</p>
+        </div>
+      )}
     </Light>
   )});
 

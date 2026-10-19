@@ -340,24 +340,42 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const revenueGoal = settings.annualRevenueGoal ?? 0;
   const goalRemaining = Math.max(0, revenueGoal - closedRevenueYTD);
 
-  // ---- Recognition: top performer per role on a signature KPI ----
+  // ---- Person of the Week: the biggest MONEY-GENERATING result last week ----
+  // Jon 2026-10-19: reward real revenue drivers — signed contracts (acquisitions)
+  // and assigned/closed deals (dispositions) — NOT activity (dials, verbal offers).
+  // ONE standout only, and only when someone genuinely stuck out (no participation
+  // trophies: they must have a real money event AND clearly lead the pack).
   const byKey = new Map(perRepKpis.map((k) => [k.key, k]));
-  const SIGNATURE: Record<string, string[]> = {
-    acquisitions: ["offers_made", "appts_taken", "deals_sold"],
-    dispositions: ["new_buyers", "deals_sent", "buyers_contacted"],
-  };
-  const recognition: Recognition[] = [];
-  for (const pos of POSITIONS) {
-    const roleReps = reps.filter((r) => r.position === pos.key);
-    const sigKey = (SIGNATURE[pos.key] ?? []).find((k) => byKey.has(k));
-    const k = sigKey ? byKey.get(sigKey)! : null;
-    if (!k || !roleReps.length) continue;
-    let best: { rep: string; val: number } | null = null;
-    for (const r of roleReps) {
+  const MONEY_KPIS: { key: string; one: string; many: string }[] = [
+    { key: "contracts_assigned", one: "Deal Assigned", many: "Deals Assigned" },      // dispo: closed assignment = we get paid
+    { key: "acq_signed_assignment", one: "Contract Signed", many: "Contracts Signed" }, // acq: contract locked
+    { key: "acq_signed_novation", one: "Contract Signed", many: "Contracts Signed" },
+    { key: "acq_signed_creative", one: "Contract Signed", many: "Contracts Signed" },
+  ];
+  // Tally each rep's real money events last week across every money KPI.
+  const moneyByRep = new Map<string, { rep: string; dept: string; total: number; parts: Map<string, number> }>();
+  for (const mk of MONEY_KPIS) {
+    const k = byKey.get(mk.key);
+    if (!k) continue;
+    for (const r of reps) {
       const v = wkSums.get(`${k.id}|${r.id}`) ?? 0;
-      if (v > 0 && (!best || v > best.val)) best = { rep: r.name, val: v };
+      if (v <= 0) continue;
+      const cur = moneyByRep.get(r.id) ?? { rep: r.name, dept: positionLabel(r.position), total: 0, parts: new Map<string, number>() };
+      cur.total += v;
+      // group by the plural noun so "Signed — Assignment/Novation/Creative" merge into "Contracts Signed"
+      cur.parts.set(mk.many, (cur.parts.get(mk.many) ?? 0) + v);
+      moneyByRep.set(r.id, cur);
     }
-    if (best) recognition.push({ role: pos.label, rep: best.rep, kpi: k.name, value: formatValue(k.unit as Unit, best.val) });
+  }
+  const recognition: Recognition[] = [];
+  const ranked = [...moneyByRep.values()].sort((a, b) => b.total - a.total);
+  const top = ranked[0];
+  // Crown only if they produced ≥1 money event AND no one tied them (clear standout).
+  if (top && top.total >= 1 && (ranked.length === 1 || ranked[1].total < top.total)) {
+    const parts = [...top.parts.entries()]
+      .map(([many, n]) => `${n} ${n === 1 ? (MONEY_KPIS.find((m) => m.many === many)?.one ?? many) : many}`)
+      .join(" · ");
+    recognition.push({ role: "Person of the Week", rep: top.rep, kpi: `${top.dept} · ${parts}`, value: `${top.total}` });
   }
 
   // ---- Weakest KPI → training tip ----
