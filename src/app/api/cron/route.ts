@@ -3519,6 +3519,7 @@ export async function GET(request: Request) {
     // COMMIT: backfill up to `limit` contacts this run (dedupe by contactId).
     const seen = new Set<string>();
     let fetched = 0, updatedContacts = 0, updatedTitles = 0, stillBlankInGhl = 0, ghlErrors = 0;
+    let firstWriteId = "", firstWriteAddr = "", updateErr = "";
     for (const o of missingWithGhl) {
       if (updatedContacts + stillBlankInGhl + ghlErrors >= limit) break;
       const cid = o.contact!.id;
@@ -3530,14 +3531,20 @@ export async function GET(request: Request) {
       const c = ((r.body as { contact?: Record<string, unknown> })?.contact ?? {}) as Record<string, unknown>;
       const addr = buildAddr(c);
       if (!addr) { stillBlankInGhl++; continue; }
-      await db.crmContact.update({ where: { id: cid }, data: { address: addr } });
+      try {
+        const upd = await db.crmContact.update({ where: { id: cid }, data: { address: addr }, select: { id: true, address: true } });
+        if (!firstWriteId) { firstWriteId = cid; firstWriteAddr = upd.address; }
+      } catch (e) { updateErr = String(e).slice(0, 200); ghlErrors++; continue; }
       updatedContacts++;
       // Put the address on the card title too when the title is a placeholder/name.
       const titleIsPlaceholder = !o.title || o.title === o.contact!.name || /imported lead/i.test(o.title);
       if (titleIsPlaceholder) { await db.crmOpportunity.update({ where: { id: o.id }, data: { title: addr.slice(0, 160) } }); updatedTitles++; }
     }
+    // Read-back verification: fetch the first contact we wrote by id — does the
+    // change survive a fresh query? (If this comes back blank, writes aren't sticking.)
+    const verify = firstWriteId ? await db.crmContact.findUnique({ where: { id: firstWriteId }, select: { id: true, address: true, assignedTo: true } }) : null;
     const remaining = Math.max(0, missingWithGhl.length - seen.size);
-    return NextResponse.json({ ok: true, mode: "COMMITTED", pipeline: plName, total, hadAddressBefore: withAddr, processedThisRun: fetched, addressesWritten: updatedContacts, titlesUpdated: updatedTitles, blankInGhl: stillBlankInGhl, ghlErrors, contactsRemaining: remaining, note: remaining > 0 ? `Re-run ?kyleaddr=1&commit=1 — ${remaining} contacts still to process.` : "All contacts processed." });
+    return NextResponse.json({ ok: true, mode: "COMMITTED", pipeline: plName, total, hadAddressBefore: withAddr, processedThisRun: fetched, addressesWritten: updatedContacts, titlesUpdated: updatedTitles, blankInGhl: stillBlankInGhl, ghlErrors, updateErr: updateErr || undefined, writeProbe: { id: firstWriteId, wroteInUpdate: firstWriteAddr, readBack: verify }, contactsRemaining: remaining, note: remaining > 0 ? `Re-run ?kyleaddr=1&commit=1 — ${remaining} contacts still to process.` : "All contacts processed." });
   }
 
   // 💰 GHL DEAL WON → the Deals board (Jon 2026-10-07: closed deals with
