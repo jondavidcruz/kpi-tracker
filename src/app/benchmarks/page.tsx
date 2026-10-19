@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canAccessPayroll } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { todayStr, monthOf, friendlyDate } from "@/lib/date";
+import { addrMatch } from "@/lib/underwrite-history";
 import { saveBenchmarkInputs } from "@/app/actions";
 import { Card, SectionTitle, MetricCard } from "@/components/ui";
 import HubTabs from "@/components/HubTabs";
@@ -56,7 +57,7 @@ export default async function BenchmarksPage() {
     db.closing.findMany({ include: { expenses: true } }),
     db.marketContact.findMany({ where: { archivedAt: null, type: { not: "jv_partner" } }, select: { vetStage: true } }),
     db.deal.findMany({ select: { contractDate: true, soldDate: true } }),
-    db.closedDeal.findMany({ select: { profit: true, leadSource: true } }),
+    db.closedDeal.findMany({ select: { profit: true, leadSource: true, address: true } }),
   ]);
   const sumBy = (rows: { kpiId: string; value: number }[]) => {
     const m: Record<string, number> = {};
@@ -114,7 +115,9 @@ export default async function BenchmarksPage() {
     bySource.set(k, a);
   };
   for (const d of ledger) addSrc(d.leadSource, d.profit);
-  for (const c of closings.filter((c) => c.status === "closed")) addSrc(c.source, netOf(c));
+  // A deal recorded in BOTH ledgers (HUD + escrow tracker) counts once — same
+  // address dedupe the dashboard uses (2026-10-19: was double-counting those).
+  for (const c of closings.filter((c) => c.status === "closed" && !ledger.some((d) => addrMatch(d.address, c.address)))) addSrc(c.source, netOf(c));
   const sourceRows = [...bySource.entries()].map(([k, a]) => ({ key: k, ...a, avg: a.count ? a.net / a.count : 0 })).sort((x, y) => y.net - x.net);
   const bestByTotal = sourceRows[0]?.key;
   const bestByAvg = [...sourceRows].sort((a, b) => b.avg - a.avg)[0]?.key;

@@ -19,7 +19,10 @@ export default function DashWidgets({ layout, children }: { layout: DashLayout; 
   const [pending, start] = useTransition();
 
   const pos = new Map(order.map((k, i) => [k, i]));
-  const sorted = [...kids].sort((a, b) => (pos.get(a.props.id) ?? 999) - (pos.get(b.props.id) ?? 999));
+  // A widget that isn't in the saved order yet (a NEW section) sits near its natural
+  // place in the page instead of being dumped at the very bottom (was `?? 999`).
+  const rank = (kid: (typeof kids)[number]) => pos.get(kid.props.id) ?? kids.indexOf(kid) + 0.5;
+  const sorted = [...kids].sort((a, b) => rank(a) - rank(b));
 
   const persist = (h: Set<string>, o: string[]) => {
     const fd = new FormData();

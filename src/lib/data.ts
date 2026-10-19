@@ -174,6 +174,23 @@ export async function getMonthToDateSums(date: string): Promise<Map<string, numb
   return sums;
 }
 
+/** Team-monthly COUNT KPIs that nobody types by hand — "Contracts sent" and
+ *  "Contracts signed" — roll up from the per-rep acquisitions entries for the month.
+ *  Shared by /dashboard and /tv so the wall shows the same number as the dashboard
+ *  (2026-10-19: /tv read the raw monthly entry → 0 in red while the dashboard said 4). */
+export function rollupMonthlyFromPerRep(
+  mtdSums: Map<string, number>,
+  teamMonthly: { id: string; key: string }[],
+  perRepKpis: { id: string; key: string }[],
+): void {
+  const monthlyIdByKey = new Map(teamMonthly.map((k) => [k.key, k.id]));
+  const perRepIdByKey = new Map(perRepKpis.map((k) => [k.key, k.id]));
+  const perRepMtd = (key: string) => { const id = perRepIdByKey.get(key); return id ? (mtdSums.get(id) ?? 0) : 0; };
+  const set = (key: string, val: number) => { const id = monthlyIdByKey.get(key); if (id != null) mtdSums.set(id, val); };
+  set("contracts_sent", perRepMtd("acq_contracts_sent"));
+  set("contracts_signed", ["acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"].reduce((s, k) => s + perRepMtd(k), 0));
+}
+
 /** Monthly KPIs are stored as a single entry per month, dated to month start. */
 export async function getMonthlyValues(date: string): Promise<Map<string, number>> {
   const { start } = monthBounds(date);

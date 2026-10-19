@@ -37,7 +37,8 @@ export default async function EntryPage({
   const sp = await searchParams;
   const settings = await getSettings();
   const me = await getCurrentUser();
-  const date = sp.date ?? todayStr(settings.orgTimezone);
+  // Same ?date= guard as the dashboard — a malformed value broke the date math below.
+  const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayStr(settings.orgTimezone);
   const month = monthOf(date);
 
   // Reps only see + enter their OWN KPIs here, to minimize mis-entry onto someone

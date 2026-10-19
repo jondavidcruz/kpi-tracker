@@ -8,6 +8,7 @@ import {
   getOpenDeals,
   getSettings,
   resolveGoalWith,
+  rollupMonthlyFromPerRep,
 } from "@/lib/data";
 import { todayStr, friendlyDate, paceFraction, monthOf, datesInRange } from "@/lib/date";
 import { quarterOf } from "@/lib/eos";
@@ -194,11 +195,9 @@ export default async function DashboardPage({
   setMtd("spend_ppl", chSpend(/ppl|pay.?per.?lead|inbound/i));
   setMtd("spend_sms", chSpend(/sms|text/i));
   setMtd("spend_mail", chSpend(/mail|postcard|letter/i));
-  // Contracts sent + signed roll up the per-rep acquisitions KPIs for the month (already in mtdSums).
-  const perRepIdByKey = new Map(perRepKpis.map((k) => [k.key, k.id]));
-  const perRepMtd = (key: string) => { const id = perRepIdByKey.get(key); return id ? (mtdSums.get(id) ?? 0) : 0; };
-  setMtd("contracts_sent", perRepMtd("acq_contracts_sent"));
-  setMtd("contracts_signed", ["acq_signed_assignment", "acq_signed_novation", "acq_signed_listing", "acq_signed_creative"].reduce((s, k) => s + perRepMtd(k), 0));
+  // Contracts sent + signed roll up the per-rep acquisitions KPIs for the month
+  // (shared helper — /tv uses the same one so the wall matches this page).
+  rollupMonthlyFromPerRep(mtdSums, teamMonthly, perRepKpis);
 
   // --- Internet speed: today's reading per rep + 14-day trend (fetched in the batch above) ---
   const speedMap = new Map<string, number>();
@@ -318,7 +317,7 @@ export default async function DashboardPage({
       {/* Team 360 nudge — shows until this person finishes their peer reviews for the quarter */}
       {t360Remaining > 0 && (
         <Link href="/team-360" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 transition hover:bg-indigo-100">
-          <span className="text-sm font-semibold text-indigo-900">🦸 Team 360 is open — rate your teammates&apos; superpowers &amp; growth areas. <span className="font-normal text-indigo-700">You have {t360Remaining} left to complete today.</span></span>
+          <span className="text-sm font-semibold text-indigo-900">🦸 Team 360 is open — rate your teammates&apos; superpowers &amp; growth areas. <span className="font-normal text-indigo-700">You have {t360Remaining} left to complete this quarter.</span></span>
           <span className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">Complete now →</span>
         </Link>
       )}
@@ -355,31 +354,9 @@ export default async function DashboardPage({
 
 
       </DashSection>
-      <DashSection id="funnels" label="🫙 Deal funnels">
-      {/* Deal funnels — this month, one per side of the business */}
-      <section>
-        <SectionTitle title="🫙 Deal funnels" subtitle="This month · acquisitions turns leads into signed contracts; dispositions turns signed contracts into closings (% = conversion from the stage above)" accent="bg-brand-navy" />
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <Card className="p-5">
-            <div className="mb-2 text-sm font-bold text-slate-700">🎯 Acquisitions — seller side</div>
-            <DealFunnel stages={acqFunnel} />
-          </Card>
-          <Card className="p-5">
-            <div className="mb-2 text-sm font-bold text-slate-700">🤝 Dispositions — buyer side</div>
-            <DealFunnel stages={dispoFunnel} />
-          </Card>
-        </div>
-        {!funnelHasData && (
-          <p className="mt-2 text-[11px] text-slate-400">Nothing logged this month yet — the funnels fill in as the team logs KPIs and deals close in Escrow &amp; Closing.</p>
-        )}
-      </section>
-
-      {/* Gamified recognition */}
-
-      </DashSection>
-      <DashSection id="recognition" label="🏆 Recognition boards">
-      <RecognitionBoards champions={awardBoard.champions} aiChampions={aiChampions} variant="light" />
-
+      <DashSection id="today" label="🎯 Today: priorities & gaps">
+      {/* Pulled out of Recognition boards (2026-10-19): hiding the trophies used to hide
+          who's behind too. This is the act-on-it-now list — keep it near the top. */}
       {/* Today's priorities — the short list worth acting on now */}
       {priorities.length > 0 && (
         <Card className="p-4">
@@ -457,7 +434,31 @@ export default async function DashboardPage({
           )}
         </Card>
       </section>
+      </DashSection>
+      <DashSection id="funnels" label="🫙 Deal funnels">
+      {/* Deal funnels — this month, one per side of the business */}
+      <section>
+        <SectionTitle title="🫙 Deal funnels" subtitle="This month · acquisitions turns leads into signed contracts; dispositions turns signed contracts into closings (% = conversion from the stage above)" accent="bg-brand-navy" />
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <Card className="p-5">
+            <div className="mb-2 text-sm font-bold text-slate-700">🎯 Acquisitions — seller side</div>
+            <DealFunnel stages={acqFunnel} />
+          </Card>
+          <Card className="p-5">
+            <div className="mb-2 text-sm font-bold text-slate-700">🤝 Dispositions — buyer side</div>
+            <DealFunnel stages={dispoFunnel} />
+          </Card>
+        </div>
+        {!funnelHasData && (
+          <p className="mt-2 text-[11px] text-slate-400">Nothing logged this month yet — the funnels fill in as the team logs KPIs and deals close in Escrow &amp; Closing.</p>
+        )}
+      </section>
 
+      {/* Gamified recognition */}
+
+      </DashSection>
+      <DashSection id="recognition" label="🏆 Recognition boards">
+      <RecognitionBoards champions={awardBoard.champions} aiChampions={aiChampions} variant="light" />
 
       </DashSection>
       <DashSection id="leadsources" label="📣 Lead sources">
@@ -478,7 +479,7 @@ export default async function DashboardPage({
         };
         return (
           <section>
-            <SectionTitle title="Lead Sources: Today" accent="bg-sky-400" />
+            <SectionTitle title={date === todayStr(settings.orgTimezone) ? "Lead Sources: Today" : `Lead Sources: ${friendlyDate(date)}`} accent="bg-sky-400" />
             <div className="space-y-4">
               {econ.length > 0 && (
                 <div>

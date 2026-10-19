@@ -6,7 +6,9 @@ import {
   getMonthToDateSums,
   getSettings,
   resolveGoalWith,
+  rollupMonthlyFromPerRep,
 } from "@/lib/data";
+import { addrMatch } from "@/lib/underwrite-history";
 import { todayStr, friendlyDate, paceFraction, monthOf } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { statusVsGoal, statusVsPace, type Status } from "@/lib/kpi";
@@ -47,7 +49,8 @@ export default async function TvPage() {
   const month = monthOf(date);
   const fraction = paceFraction(date);
 
-  const [reps, perRepAll, teamMonthlyAll, dailyValues, mtdSums, targets, openAlerts, streaks, awardBoard, aiChampions] =
+  const year = date.slice(0, 4);
+  const [reps, perRepAll, teamMonthlyAll, dailyValues, mtdSums, targets, openAlerts, streaks, awardBoard, aiChampions, closings, ledgerDeals] =
     await Promise.all([
       getActiveReps(),
       getKpis({ scope: "per_rep", computed: false }),
@@ -59,7 +62,18 @@ export default async function TvPage() {
       computeStreaks(date),
       getAwardBoard(),
       getAiChampions(),
+      db.closing.findMany({ where: { status: "closed", closeDate: { startsWith: `${year}-${month.slice(5, 7)}` } }, select: { address: true, revenue: true } }),
+      db.closedDeal.findMany({ where: { year: Number(year), month: Number(month.slice(5, 7)) }, select: { address: true } }),
     ]);
+  // Same live rollups as the dashboard (2026-10-19): the team-monthly COUNT KPIs
+  // nobody types — contracts sent/signed (from per-rep entries) and deals closed
+  // (HUD ledger ∪ escrow tracker, deduped by address) — otherwise the wall showed 0.
+  rollupMonthlyFromPerRep(mtdSums, teamMonthlyAll, perRepAll);
+  const dealsClosedKpi = teamMonthlyAll.find((k) => k.key === "deals_closed");
+  if (dealsClosedKpi) {
+    const escrowOnly = closings.filter((c) => c.revenue > 0 && !ledgerDeals.some((d) => addrMatch(d.address, c.address)));
+    mtdSums.set(dealsClosedKpi.id, ledgerDeals.length + escrowOnly.length);
+  }
 
   // 💵 Same money gate as the dashboard: /tv is public (no viewer to check), so dollar
   // KPIs never show on the wall — reps don't see company money (Jon 2026-10-15).
