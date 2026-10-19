@@ -3459,6 +3459,81 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", sourcePipeline: src.name, kylePipeline: kyle.name, newStageKey: newStage, totalInGhlPipeline: allOpps.length, ghlStageBreakdown: perStage, matchedStages, matchedForImport: rows.length, contactsCreated: contacts, oppsCreated: created, oppsUpdated: updated, skippedDnc, sample: rows.slice(0, 8).map((r) => ({ name: r.name, wasStage: r.origStage })) });
   }
 
+  // 🏠 Backfill ADDRESSES on Kyle's revive-dead leads (Jon 2026-10-19: "a lot of
+  // addresses still not on his leads — they should've synced from GHL"). The
+  // kyledead import only pulled name/phone/email, never the property address. This
+  // pulls each GHL contact's full record and writes the address onto our contact +
+  // the opp card title. ?kyleaddr=1 = DRY (coverage + sample GHL fields);
+  // &commit=1 = backfill. &limit=N (default 60) keeps each run under Vercel's 60s;
+  // re-run until remaining=0. &pl=<pipeline name> to target a different pipeline.
+  if (url.searchParams.get("kyleaddr") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const limit = Math.max(1, Math.min(120, Number(url.searchParams.get("limit")) || 60));
+    const { readPipelines } = await import("@/lib/crm");
+    const { ghlGet } = await import("@/lib/reireply");
+    const wrPipes = await readPipelines();
+    const plName = url.searchParams.get("pl") || wrPipes.find((p) => /kyle/i.test(p.name))?.name;
+    if (!plName) return NextResponse.json({ ok: false, error: "Kyle's pipeline not found", pipelines: wrPipes.map((p) => p.name) });
+    // All opps in the pipeline + their contact's current address/ghlId.
+    const opps = await db.crmOpportunity.findMany({
+      where: { pipeline: plName, archivedAt: null },
+      select: { id: true, title: true, contactId: true, contact: { select: { id: true, name: true, address: true, ghlId: true } } },
+    });
+    const total = opps.length;
+    const withAddr = opps.filter((o) => (o.contact?.address ?? "").trim()).length;
+    const missing = opps.filter((o) => !(o.contact?.address ?? "").trim());
+    const missingWithGhl = missing.filter((o) => (o.contact?.ghlId ?? "").trim());
+    const missingNoGhl = missing.length - missingWithGhl.length;
+
+    // Build "street, City, ST ZIP" from a GHL contact record.
+    const buildAddr = (c: Record<string, unknown>): string => {
+      const g = (k: string) => String((c?.[k] ?? "") || "").trim();
+      const line1 = g("address1");
+      const csz = [g("city"), [g("state"), g("postalCode")].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+      return [line1, csz].filter(Boolean).join(", ").trim();
+    };
+
+    if (!commit) {
+      // DRY: show coverage + fetch a few GHL contacts so we can see where the
+      // address actually lives (standard fields vs custom fields).
+      const sample: Array<Record<string, unknown>> = [];
+      for (const o of missingWithGhl.slice(0, 5)) {
+        const r = await ghlGet(`/contacts/${o.contact!.ghlId}`);
+        const c = ((r.body as { contact?: Record<string, unknown> })?.contact ?? {}) as Record<string, unknown>;
+        sample.push({
+          name: o.contact!.name, ghlStatus: r.status,
+          address1: c.address1 ?? null, city: c.city ?? null, state: c.state ?? null, postalCode: c.postalCode ?? null,
+          built: buildAddr(c),
+          customFieldCount: Array.isArray(c.customFields) ? (c.customFields as unknown[]).length : 0,
+        });
+      }
+      return NextResponse.json({ ok: true, mode: "DRY RUN", pipeline: plName, total, withAddress: withAddr, missingAddress: missing.length, missingButHaveGhlId: missingWithGhl.length, missingNoGhlId: missingNoGhl, sampleFromGhl: sample });
+    }
+
+    // COMMIT: backfill up to `limit` contacts this run (dedupe by contactId).
+    const seen = new Set<string>();
+    let fetched = 0, updatedContacts = 0, updatedTitles = 0, stillBlankInGhl = 0, ghlErrors = 0;
+    for (const o of missingWithGhl) {
+      if (updatedContacts + stillBlankInGhl + ghlErrors >= limit) break;
+      const cid = o.contact!.id;
+      if (seen.has(cid)) continue;
+      seen.add(cid);
+      const r = await ghlGet(`/contacts/${o.contact!.ghlId}`);
+      fetched++;
+      if (!r.ok) { ghlErrors++; continue; }
+      const c = ((r.body as { contact?: Record<string, unknown> })?.contact ?? {}) as Record<string, unknown>;
+      const addr = buildAddr(c);
+      if (!addr) { stillBlankInGhl++; continue; }
+      await db.crmContact.update({ where: { id: cid }, data: { address: addr } });
+      updatedContacts++;
+      // Put the address on the card title too when the title is a placeholder/name.
+      const titleIsPlaceholder = !o.title || o.title === o.contact!.name || /imported lead/i.test(o.title);
+      if (titleIsPlaceholder) { await db.crmOpportunity.update({ where: { id: o.id }, data: { title: addr.slice(0, 160) } }); updatedTitles++; }
+    }
+    const remaining = Math.max(0, missingWithGhl.length - seen.size);
+    return NextResponse.json({ ok: true, mode: "COMMITTED", pipeline: plName, total, hadAddressBefore: withAddr, processedThisRun: fetched, addressesWritten: updatedContacts, titlesUpdated: updatedTitles, blankInGhl: stillBlankInGhl, ghlErrors, contactsRemaining: remaining, note: remaining > 0 ? `Re-run ?kyleaddr=1&commit=1 — ${remaining} contacts still to process.` : "All contacts processed." });
+  }
+
   // 💰 GHL DEAL WON → the Deals board (Jon 2026-10-07: closed deals with
   // value per lead belong in the deals CRM). ?ghlwonimport=1 dry / &commit=1.
   if (url.searchParams.get("ghlwonimport") === "1") {
