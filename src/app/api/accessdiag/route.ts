@@ -21,6 +21,7 @@ export async function POST(req: Request) {
   const u = users.find((x) => x.name.toLowerCase().split(/\s+/)[0] === first) || users.find((x) => x.name.toLowerCase().includes(first));
   if (!u) return NextResponse.json({ ok: false, error: "not found", names: users.map((x) => x.name) });
   const allow = new Set(NAV_GROUPS.filter((g) => groups.includes(g.group)).flatMap((g) => g.items.map((i) => i.href)));
+  if (b.dept === "acquisitions") allow.delete("/crm/conversations"); // notes-only reps don't get the comms inbox
   const navHidden = JSON.stringify(NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href)).filter((h) => !allow.has(h)));
   await db.user.update({ where: { id: u.id }, data: { navHidden, accessMarketing: b.dept === "dispositions", onboarding: false } });
   return NextResponse.json({ ok: true, fixed: u.name, dept: b.dept, onboardingCleared: true, granted: [...allow] });

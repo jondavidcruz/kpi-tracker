@@ -165,6 +165,10 @@ export async function applyDeptAccessAction(formData: FormData) {
   const groups = DEPT_ACCESS_GROUPS[dept];
   if (!userId || !groups) return;
   const allow = new Set(NAV_GROUPS.filter((g) => groups.includes(g.group)).flatMap((g) => g.items.map((i) => i.href)));
+  // Acquisitions reps are notes-only (no phone/SMS/email) → the Conversations
+  // inbox is useless to them, so the preset leaves it off (Jon 2026-10-19). Tick
+  // it manually for anyone who does get comms.
+  if (dept === "acquisitions") allow.delete("/crm/conversations");
   const allHrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
   const navHidden = JSON.stringify(allHrefs.filter((h) => !allow.has(h)));
   // Dispositions works the buyer side → grant Markets & Buyers; acquisitions doesn't.
