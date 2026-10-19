@@ -3315,6 +3315,9 @@ export async function GET(request: Request) {
     type Row = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; value: number | null; rep: string; stage: string; pipeline: string; closedAt: string };
     const rows: Row[] = [];
     const pipeStatus: Record<string, Record<string, number>> = {};
+    // GHL hands back spreadsheet-float phones ("6154573917.0") for list uploads —
+    // 57 live contacts were unreachable that way (crm-enhancer 2026-10-19).
+    const { toE164US } = await import("@/lib/crm-shared");
     for (const p of pipelines) {
       const opps = await fetchAllOpps(searchOpportunities, p.id);
       pipeStatus[p.name] = {};
@@ -3330,7 +3333,7 @@ export async function GET(request: Request) {
         const rep = resolveOwner(String(o.assignedTo ?? ""), p.name);
         rows.push({
           ghlOppId: String(o.id ?? ""), ghlContactId: String(contact.id ?? o.contactId ?? ""),
-          name: String(contact.name ?? o.name ?? "—"), phone: String(contact.phone ?? ""), email: String(contact.email ?? ""),
+          name: String(contact.name ?? o.name ?? "—"), phone: toE164US(contact.phone) || String(contact.phone ?? ""), email: String(contact.email ?? ""),
           title: String(o.name ?? contact.name ?? "Imported opportunity"),
           value: o.monetaryValue != null ? Number(o.monetaryValue) : null,
           rep, stage: mapStage(ghlStage, p.name), pipeline: plAlias[p.name] ?? p.name,
@@ -3415,6 +3418,7 @@ export async function GET(request: Request) {
     const matchedStages: Record<string, number> = {};
     type RRow = { ghlOppId: string; ghlContactId: string; name: string; phone: string; email: string; title: string; origStage: string };
     const rows: RRow[] = [];
+    const { toE164US } = await import("@/lib/crm-shared");
     for (const o of allOpps) {
       const sname = stageName.get(String(o.pipelineStageId ?? "")) ?? "(unknown)";
       perStage[sname] = (perStage[sname] ?? 0) + 1;
