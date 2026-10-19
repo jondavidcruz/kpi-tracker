@@ -3480,8 +3480,14 @@ export async function GET(request: Request) {
       select: { id: true, title: true, contactId: true, contact: { select: { id: true, name: true, address: true, ghlId: true } } },
     });
     const total = opps.length;
-    const withAddr = opps.filter((o) => (o.contact?.address ?? "").trim()).length;
-    const missing = opps.filter((o) => !(o.contact?.address ?? "").trim());
+    // A REAL address has a street number + a letter (e.g. "123 Main St, …"); a bare
+    // "—", "N/A", a ZIP alone, or a person's name does NOT count (Jon 2026-10-19:
+    // the cards show a placeholder, not a real address).
+    const isRealAddr = (s: string) => { const t = (s || "").trim(); return t.length >= 6 && /\d/.test(t) && /[a-z]/i.test(t) && !/^n\/?a$/i.test(t); };
+    const withAddr = opps.filter((o) => isRealAddr(o.contact?.address ?? "")).length;
+    const placeholderAddr = opps.filter((o) => { const a = (o.contact?.address ?? "").trim(); return a && !isRealAddr(a); }).length;
+    const sampleAddrs = opps.slice(0, 12).map((o) => ({ name: o.contact?.name, address: o.contact?.address || "(blank)", real: isRealAddr(o.contact?.address ?? "") }));
+    const missing = opps.filter((o) => !isRealAddr(o.contact?.address ?? ""));
     const missingWithGhl = missing.filter((o) => (o.contact?.ghlId ?? "").trim());
     const missingNoGhl = missing.length - missingWithGhl.length;
 
@@ -3507,7 +3513,7 @@ export async function GET(request: Request) {
           customFieldCount: Array.isArray(c.customFields) ? (c.customFields as unknown[]).length : 0,
         });
       }
-      return NextResponse.json({ ok: true, mode: "DRY RUN", pipeline: plName, total, withAddress: withAddr, missingAddress: missing.length, missingButHaveGhlId: missingWithGhl.length, missingNoGhlId: missingNoGhl, sampleFromGhl: sample });
+      return NextResponse.json({ ok: true, mode: "DRY RUN", pipeline: plName, total, realAddress: withAddr, placeholderAddress: placeholderAddr, missingOrPlaceholder: missing.length, missingButHaveGhlId: missingWithGhl.length, missingNoGhlId: missingNoGhl, sampleCurrentAddresses: sampleAddrs, sampleFromGhl: sample });
     }
 
     // COMMIT: backfill up to `limit` contacts this run (dedupe by contactId).
