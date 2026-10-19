@@ -1204,6 +1204,48 @@ export async function GET(request: Request) {
     } catch { return NextResponse.json({ ok: false, error: "bad SA json" }); }
   }
 
+  // ☎ Phone-format scrub (?phonescrub=1[&commit=1]) — DRY RUN by default.
+  // Lists live contacts whose phone isn't +1XXXXXXXXXX and what toE164US would
+  // make of them (spreadsheet "…099.0" pastes, "1-xxx", bare 10-digit). Only
+  // with &commit=1 does it rewrite — and ONLY the ones it can normalize with
+  // certainty; anything else (intl, short) is left untouched. Originals are
+  // kept in __phone_scrub_log__ (archive-never-delete). crm-enhancer 2026-10-19.
+  if (url.searchParams.get("phonescrub") === "1") {
+    const commit = url.searchParams.get("commit") === "1";
+    const { toE164US, prettyPhone } = await import("@/lib/crm-shared");
+    const rows = await db.crmContact.findMany({ where: { archivedAt: null, phone: { not: "" } }, select: { id: true, name: true, phone: true, altPhone: true, source: true, assignedTo: true }, take: 40000 });
+    const OK = /^\+1\d{10}$/;
+    const plan: Array<{ id: string; name: string; owner: string; from: string; to: string; nameTo?: string; alt?: { from: string; to: string } }> = [];
+    const unfixable: Array<{ id: string; name: string; phone: string }> = [];
+    for (const c of rows) {
+      const item: (typeof plan)[number] = { id: c.id, name: c.name, owner: c.assignedTo, from: c.phone, to: c.phone };
+      let touched = false;
+      if (!OK.test(c.phone)) {
+        const fixed = toE164US(c.phone);
+        if (fixed) { item.to = fixed; touched = true; } else { unfixable.push({ id: c.id, name: c.name, phone: c.phone }); }
+      }
+      // a contact NAMED after a garbled paste ("3056076099.0") gets a readable placeholder
+      if (/^[\d()+\-.\s]+$/.test(c.name.trim()) && /\.\d+$/.test(c.name.trim())) { item.nameTo = prettyPhone(item.to); touched = true; }
+      if (c.altPhone && !OK.test(c.altPhone)) { const f2 = toE164US(c.altPhone); if (f2) { item.alt = { from: c.altPhone, to: f2 }; touched = true; } }
+      if (touched) plan.push(item);
+    }
+    let changed = 0;
+    if (commit && plan.length) {
+      for (const p of plan) {
+        await db.crmContact.update({ where: { id: p.id }, data: { ...(p.to !== p.from ? { phone: p.to } : {}), ...(p.nameTo ? { name: p.nameTo } : {}), ...(p.alt ? { altPhone: p.alt.to } : {}) } }).catch(() => null);
+        changed++;
+      }
+      const row = await db.resource.findFirst({ where: { category: "__phone_scrub_log__" } });
+      let log: unknown[] = [];
+      try { log = row?.description ? JSON.parse(row.description) : []; } catch { log = []; }
+      log.push({ at: new Date().toISOString(), changed: plan });
+      const description = JSON.stringify(log.slice(-20));
+      if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+      else await db.resource.create({ data: { title: "phone-scrub-log", category: "__phone_scrub_log__", url: "", description } });
+    }
+    return NextResponse.json({ ok: true, commit, scanned: rows.length, fixable: plan.length, changed, unfixable: unfixable.length, plan: plan.slice(0, 200), unfixableSample: unfixable.slice(0, 50) });
+  }
+
   // 🔍 CRM data-quality audit (?crmqa=1[&days=14]) — READ-ONLY report the
   // crm-enhancer runs nightly: duplicate contacts by phone, working leads with
   // no next action (no follow-up date + no open task), leads quiet N+ days in a
@@ -1821,6 +1863,27 @@ export async function GET(request: Request) {
     await setBuyersChatWebhook(b.url);
     const saved = await readBuyersChatWebhook();
     return NextResponse.json({ ok: true, saved: saved ? saved.slice(0, 48) + "…" : "" });
+  }
+
+  // 👀 Set the Chat webhook that PandaDoc "agreement viewed" alerts post to
+  // (?setpdhook=1, POST JSON {url}). Stored in a Resource (secret) — no redeploy.
+  if (url.searchParams.get("setpdhook") === "1") {
+    const { setPandaDocWebhook, readPandaDocWebhook } = await import("@/lib/pandadoc-chat");
+    let b: { url?: string } = {};
+    try { b = await request.json(); } catch { /* none */ }
+    if (!b.url || !/^https:\/\/chat\.googleapis\.com\//.test(b.url)) return NextResponse.json({ ok: false, error: "pass a chat.googleapis.com webhook url in the POST body {url}" });
+    await setPandaDocWebhook(b.url);
+    const saved = await readPandaDocWebhook();
+    return NextResponse.json({ ok: true, saved: saved ? saved.slice(0, 48) + "…" : "" });
+  }
+
+  // 🧪 Fire a sample "agreement viewed" card so Jon can confirm it lands in the
+  // acquisitions space (?pdviewtest=1). Bypasses the first-view dedupe by using a
+  // unique docId each run.
+  if (url.searchParams.get("pdviewtest") === "1") {
+    const { postPandaDocView } = await import("@/lib/pandadoc-chat");
+    const ok = await postPandaDocView({ docId: `test-${Date.now()}`, docName: "Cash Agreement (CRPA) — TEST", viewer: "Mauro Castro", kindLabel: "cash" });
+    return NextResponse.json({ ok, posted: ok, note: ok ? "test card sent to acquisitions chat" : "no webhook set — run ?setpdhook=1 first" });
   }
 
   // 📝 Export the overnight-sourced TO-VET buyers as a clean list for the girls

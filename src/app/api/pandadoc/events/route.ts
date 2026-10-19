@@ -22,14 +22,30 @@ export async function POST(req: NextRequest) {
   try { const parsed = JSON.parse(raw); events = Array.isArray(parsed) ? parsed : [parsed]; } catch { return NextResponse.json({ ok: false }, { status: 400 }); }
 
   for (const ev of events) {
-    const d = (ev.data ?? {}) as { id?: string; name?: string; status?: string; metadata?: Record<string, string> };
+    const d = (ev.data ?? {}) as { id?: string; name?: string; status?: string; metadata?: Record<string, string>; recipients?: Array<{ first_name?: string; last_name?: string; email?: string; has_completed?: boolean }> };
     const status = String(d.status ?? "");
     const meta = d.metadata ?? {};
     const oppId = meta.oppId ?? "";
     const contactId = meta.contactId ?? "";
-    if (!contactId) continue; // not one of our CRM drafts
     const docName = d.name ?? "contract";
     const kindLabel = meta.kind === "novation" ? "NOVATION" : meta.kind === "cash" ? "CASH" : "";
+
+    // 👀 Team visibility: PandaDoc emails only the doc owner when a seller opens an
+    // agreement — the team never saw it (Jon 2026-10-19). Announce the FIRST view to
+    // the acquisitions Chat space. This runs for EVERY viewed doc, including ones not
+    // created through our CRM (no contactId metadata, e.g. a doc sent from PandaDoc
+    // directly), so it must happen BEFORE the CRM-only guard below.
+    if (status === "document.viewed") {
+      const ext = (d.recipients ?? []).filter((r) => !r.has_completed);
+      const pick = (ext.length ? ext : (d.recipients ?? []))
+        .map((r) => [r.first_name, r.last_name].filter(Boolean).join(" ").trim())
+        .filter(Boolean);
+      const viewer = pick.join(" & ");
+      const { postPandaDocView } = await import("@/lib/pandadoc-chat");
+      await postPandaDocView({ docId: String(d.id ?? ""), docName, viewer, oppId, kindLabel: meta.kind === "novation" ? "novation" : meta.kind === "cash" ? "cash" : "" });
+    }
+
+    if (!contactId) continue; // the rest is CRM-timeline work; skip docs not in our CRM
 
     if (status === "document.completed") {
       // ✍️ signed by everyone → timeline + move to a signed stage + rep task
