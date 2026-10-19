@@ -15,7 +15,6 @@ import { parseNavHidden, isPathHidden } from "@/lib/navItems";
 import { NAV_ORDER_CAT, parseNavOrder } from "@/lib/nav-order";
 import { SPEED_CHECKS_CATEGORY, speedChecksTitle, parseSpeedChecks, hasAfternoonCheck, afternoonCheckRequired, AFTERNOON_CHECK_MINUTES } from "@/lib/speed-checks";
 import ClientWidgets from "./ClientWidgets";
-import UpdateBanner from "./UpdateBanner";
 
 export default async function AppShell({ children }: { children: React.ReactNode }) {
   const email = await getSessionEmail();
@@ -172,9 +171,6 @@ export default async function AppShell({ children }: { children: React.ReactNode
       <GlobalBell me={me} />
       <GlobalDayPill me={me} />
       <GlobalDayTasks me={me} />
-      {/* 🔄 "New version ready — refresh" banner (Jon 2026-10-19): stops reps from
-          getting stuck on a stale cached bundle after a deploy. */}
-      <UpdateBanner currentSha={process.env.VERCEL_GIT_COMMIT_SHA ?? "local"} />
     </div>
   );
 }
