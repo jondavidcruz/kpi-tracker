@@ -49,7 +49,13 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
     gate === "marketing" ? flags.marketing :
     gate === "csuite" ? flags.csuite :
     gate === "training" ? trains : false;
-  const hiddenSet = new Set(parseNavHidden(selected.navHidden));
+  const hiddenArr = parseNavHidden(selected.navHidden);
+  const hiddenSet = new Set(hiddenArr);
+  // Match the REAL sidebar's hide rule exactly: a hidden parent (e.g. /crm) also
+  // hides its children (/crm/next …). The editor checkboxes stay exact-match, but
+  // the preview + ✓/✗ breakdown must mirror what actually renders, or they drift
+  // from the live menu (Jon 2026-10-19: "it's not syncing with what they see").
+  const isHiddenPath = (href: string) => hiddenArr.some((h) => href === h || href.startsWith(h + "/"));
   // Opt-in mode (Jon 2026-10-15): "Start blank" renders every box UNCHECKED so you
   // tick only what to GRANT, instead of unchecking everything you don't want.
   const blankStart = sp.blank === "1";
@@ -59,7 +65,7 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
   // instead of hunting for the separate toggle.
   const grantable = (gate: NavGate) => roleAllows(gate) || gate === "marketing";
   const availableHrefs = NAV_GROUPS.flatMap((g) => g.items.filter((it) => grantable(it.gate)).map((it) => it.href));
-  const can = (it: { href: string; gate: NavGate }) => roleAllows(it.gate) && !hiddenSet.has(it.href);
+  const can = (it: { href: string; gate: NavGate }) => roleAllows(it.gate) && !isHiddenPath(it.href);
   // Onboarding ramp overrides navHidden: the account only shows ONBOARDING_NAV
   // (learning + basics). So the LIVE preview must factor that in, not just navHidden.
   const onboardingLock = !!(selected as { onboarding?: boolean }).onboarding;
