@@ -1359,6 +1359,22 @@ async function draftContract(oppId: string, kind: string, actor: string): Promis
   return { ok: false, msg: r.error ?? "failed" };
 }
 
+/** 🔗 Shorten every long URL in an SMS draft into a trackable /l/<code> link tied
+ *  to this lead (Jon 2026-10-20). Returns the rewritten text. */
+export async function shortenTextLinksAction(text: string, contactId: string, oppId: string): Promise<string> {
+  const me = await crmUser();
+  if (!me || !text) return text;
+  const { createShortLink, SHORT_BASE } = await import("@/lib/shortlinks");
+  const urls = [...new Set(text.match(/\bhttps?:\/\/[^\s<>()]+/gi) ?? [])]
+    .filter((u) => !u.includes("/l/") && !u.startsWith(`${SHORT_BASE}/l/`)); // skip already-short
+  let out = text;
+  for (const u of urls) {
+    const code = await createShortLink(u.replace(/[.,!?)]+$/, ""), { contactId, oppId, by: me.name }).catch(() => "");
+    if (code) out = out.split(u.replace(/[.,!?)]+$/, "")).join(`${SHORT_BASE}/l/${code}`);
+  }
+  return out;
+}
+
 /** Card buttons: 📝 Draft cash / novation contract on demand. */
 export async function draftContractAction(formData: FormData) {
   const me = await crmUser();

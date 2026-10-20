@@ -4,7 +4,7 @@
 // preview, segment counter, and a "send from" picker over our Telnyx lines.
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { sendCrmSmsAction } from "@/app/crm/actions";
+import { sendCrmSmsAction, shortenTextLinksAction } from "@/app/crm/actions";
 import { GOOGLE_REVIEW_LINK } from "@/lib/crm-shared";
 
 type Snip = { id: string; name: string; kind: string; subject?: string; body: string };
@@ -108,6 +108,9 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
               <option value="">📋 snippet…</option>
               {allSnips.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+          )}
+          {/\bhttps?:\/\/[^\s]+/i.test(text) && !text.includes("/l/") && (
+            <button onClick={() => start(async () => { const out = await shortenTextLinksAction(text, contactId, oppId); setText(out); })} disabled={pending} title="Shorten the link(s) & track when the seller clicks" className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50">🔗 Shorten</button>
           )}
           <span className={`text-[10px] font-bold ${segs > 1 ? "text-amber-600" : "text-slate-400"}`}>{len} chars · {segs || "—"} text{segs === 1 ? "" : "s"}{segs > 1 ? " (they'll see it stitched together)" : ""}</span>
           {sent && <span className="text-[11px] font-bold text-emerald-600">{sent}</span>}
