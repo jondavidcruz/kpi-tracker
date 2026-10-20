@@ -1373,12 +1373,13 @@ export async function sendToMatchingBuyersAction(_prev: { ok: boolean; count: nu
   if (!opp) return { ok: false, count: 0, msg: "lead not found" };
   const addr = opp.contact.address || opp.title || "the property";
   const price = opp.value ?? opp.askPrice;
+  const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
+  const featuresArr = Array.isArray(fd.land?.features) ? (fd.land!.features as string[]) : [];
   const { getBuyerMatchesForLead } = await import("@/lib/buyer-match-lead");
-  const matches = await getBuyerMatchesForLead(addr, price);
+  const matches = await getBuyerMatchesForLead(addr, price, featuresArr);
   if (!matches.length) return { ok: false, count: 0, msg: "No vetted buyers match this area/price yet — add buyers in Buyer Research." };
 
-  const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
-  const feats = Array.isArray(fd.land?.features) ? (fd.land!.features as string[]).join(", ") : "";
+  const feats = featuresArr.join(", ");
   const lot = String(fd.land?.lot ?? "");
   const blast = `🏞 Land available: ${addr}${price != null ? ` — asking ${`$${price.toLocaleString()}`}` : ""}${lot ? ` · ${lot}` : ""}${feats ? `\nFeatures: ${feats}` : ""}\nCash/fast close preferred. Interested or want details? Reply here.`;
   const list = matches.map((b, i) => `${i + 1}. ${b.name}${b.topPrice != null ? ` (to $${Math.round(b.topPrice / 1000)}k)` : ""}${b.phone ? ` · ${b.phone}` : ""}${b.email ? ` · ${b.email}` : ""}${b.reasons.length ? ` — ${b.reasons.join(", ")}` : ""}`).join("\n");

@@ -11,6 +11,7 @@ import {
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
 import StatusDot from "./StatusDot";
+import WorldClock from "./WorldClock";
 
 type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
 
@@ -235,6 +236,7 @@ export default function Sidebar({
           <div>🌐 freedom-offers.com</div>
           <div className="font-mono tracking-wider">☎️ 1-877-652-8991</div>
         </div>
+        <WorldClock />
         {owner && <div className="mt-2"><StatusDot /></div>}
         {(officeMeetLink || mondayMeetLink || leadershipMeetLink) && (
           // 🎛 compact meeting tiles (Jon 2026-10-09): three small squares —
