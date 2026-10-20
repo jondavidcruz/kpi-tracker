@@ -8,10 +8,11 @@ import { stripHtml } from "@/lib/crm-shared";
 import { CRM_FORMS } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
+import DraftOfferButton from "@/components/DraftOfferButton";
 import EditableNote from "@/components/EditableNote";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import OppPipelineMover from "@/components/OppPipelineMover";
-import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, draftContractAction, toggleDndAction, uploadLeadDocAction } from "../actions";
+import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, toggleDndAction, uploadLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
@@ -417,16 +418,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
         <div className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
           <Card className="flex flex-wrap items-center gap-2 p-3">
             <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📝 Contracts</span>
-            <form action={draftContractAction}>
-              <input type="hidden" name="oppId" value={opp.id} />
-              <input type="hidden" name="kind" value="cash" />
-              <button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700" title="Quick close, 30–60 days — no disclosures">💵 Draft cash offer</button>
-            </form>
-            <form action={draftContractAction}>
-              <input type="hidden" name="oppId" value={opp.id} />
-              <input type="hidden" name="kind" value="novation" />
-              <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700" title="Disclosures to list, 90–180 days">🏷 Draft novation offer</button>
-            </form>
+            <DraftOfferButton oppId={opp.id} kind="cash" label="💵 Draft cash offer" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700" />
+            <DraftOfferButton oppId={opp.id} kind="novation" label="🏷 Draft novation offer" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700" />
             <span className="text-[10px] text-slate-400">drafts in PandaDoc with seller, address &amp; price pre-filled — link lands on the timeline. Moving to an offer stage auto-drafts cash (tag the lead <b>novation</b> first to flip it).</span>
           </Card>
 

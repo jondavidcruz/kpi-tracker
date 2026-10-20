@@ -1325,7 +1325,7 @@ export async function telnyxCallAction(formData: FormData): Promise<{ ok: boolea
 }
 
 /** Shared PandaDoc drafter: cash vs novation template, timeline log + task. */
-async function draftContract(oppId: string, kind: string, actor: string): Promise<{ ok: boolean; msg: string }> {
+async function draftContract(oppId: string, kind: string, actor: string): Promise<{ ok: boolean; msg: string; url?: string }> {
   const { pandadocConfigured, createOfferDraft, PANDADOC_TEMPLATES } = await import("@/lib/pandadoc");
   if (!pandadocConfigured()) return { ok: false, msg: "PandaDoc key missing" };
   const tpl = PANDADOC_TEMPLATES[kind] ?? PANDADOC_TEMPLATES.cash;
@@ -1351,7 +1351,7 @@ async function draftContract(oppId: string, kind: string, actor: string): Promis
     await logCrmEvent({ contactId: c.id, oppId: opp.id, kind: "system", body: `📝 ${kind === "novation" ? "NOVATION" : "CASH"} contract DRAFTED (${tpl.label}) — review & send: https://app.pandadoc.com/a/#/documents/${r.id}`, actor: "pandadoc" });
     await db.crmTask.create({ data: { oppId: opp.id, contactId: c.id, title: `📝 Review & send the drafted ${kind} contract (PandaDoc)`, due: new Date().toISOString().slice(0, 10), assignedTo: opp.assignedTo || actor, createdBy: "pandadoc" } }).catch(() => {});
     revalidatePath(`/crm/${opp.id}`);
-    return { ok: true, msg: "drafted" };
+    return { ok: true, msg: "drafted", url: `https://app.pandadoc.com/a/#/documents/${r.id}` };
   }
   await logCrmEvent({ contactId: c.id, oppId: opp.id, kind: "system", body: `PandaDoc ${kind} draft failed: ${r.error}`, actor: "pandadoc" });
   revalidatePath(`/crm/${opp.id}`);
@@ -1366,6 +1366,23 @@ export async function draftContractAction(formData: FormData) {
   const kind = String(formData.get("kind") ?? "cash") === "novation" ? "novation" : "cash";
   if (!oppId) return;
   await draftContract(oppId, kind, me.name);
+}
+
+/** useActionState variant → surfaces the result so the button shows success +
+ *  the PandaDoc link, or the real error (e.g. "out of document credits"), instead
+ *  of failing silently (Jon 2026-10-20). */
+export async function draftOfferAction(_prev: { ok: boolean; msg: string; url?: string } | null, formData: FormData): Promise<{ ok: boolean; msg: string; url?: string }> {
+  const me = await crmUser();
+  if (!me) return { ok: false, msg: "not signed in" };
+  const oppId = String(formData.get("oppId") ?? "");
+  const kind = String(formData.get("kind") ?? "cash") === "novation" ? "novation" : "cash";
+  if (!oppId) return { ok: false, msg: "no lead" };
+  const r = await draftContract(oppId, kind, me.name);
+  // Make the common out-of-credits case read in plain English.
+  if (!r.ok && /402|credit|limit|quota|payment/i.test(r.msg)) {
+    return { ...r, msg: "PandaDoc is out of document credits — add credits / upgrade the plan in PandaDoc, then try again." };
+  }
+  return r;
 }
 
 /** 📦 Contacts page mass edit (managers): owner / tags / stage / pipeline
