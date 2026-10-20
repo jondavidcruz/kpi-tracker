@@ -166,7 +166,14 @@ export async function setOppStageAction(formData: FormData) {
         // one merged comp stage (2026-10-08 streamline) fires the whole flow:
         // acq underwrites NOW + dispo prices with developers + acq calls back.
         // (The old /comp to offer/ space-regexes never matched the slug keys.)
-        await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `🧮 UNDERWRITE NOW (15-min clock) — ${contact?.name ?? "lead"}`, due: today, assignedTo: full.assignedTo || me.name, createdBy: "comp-flow" } }).catch(() => {});
+        // ⏰ Reminders (Jon 2026-10-20): comp within 15 min, offer SAME DAY — leads
+        // must not sit here >1 day. Give the tasks real times so the pop-up fires.
+        const { setTaskTime } = await import("@/lib/task-times");
+        const hhmm = (ms: number) => new Date(Date.now() + ms).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour12: false, hour: "2-digit", minute: "2-digit" });
+        const uw = await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `🧮 UNDERWRITE NOW (15-min clock) — ${contact?.name ?? "lead"}`, due: today, assignedTo: full.assignedTo || me.name, createdBy: "comp-flow" } }).catch(() => null);
+        if (uw) await setTaskTime(uw.id, hhmm(15 * 60000)).catch(() => {});
+        const offer = await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `📞 MAKE THE OFFER TODAY — ${contact?.name ?? "lead"} (comp → offer, same-day)`, due: today, assignedTo: full.assignedTo || me.name, createdBy: "comp-flow" } }).catch(() => null);
+        if (offer) await setTaskTime(offer.id, hhmm(3 * 3600000)).catch(() => {}); // nudge ~3h later to get the offer out same day
         const dispo = await db.user.findFirst({ where: { active: true, position: "dispositions" }, select: { name: true } });
         await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `💰 PRICE CHECK w/ developers — ${contact?.name ?? "lead"}${addr ? ` (${addr})` : ""} → tell ${(full.assignedTo || me.name).split(" ")[0]} the number`, due: today, assignedTo: dispo?.name ?? "", createdBy: "comp-flow" } }).catch(() => {});
         await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `🧮 Comp → Offer (24h clock): underwrite now (/underwriting${addr ? `?address=${encodeURIComponent(addr)}` : ""}) · dispo pricing task created`, actor: "comp-flow" });

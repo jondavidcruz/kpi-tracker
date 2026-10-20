@@ -209,6 +209,12 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     if (!["nurture", "dead", "signed"].includes(o.stage) && Date.now() - o.updatedAt.getTime() > 3 * 86400000) badges.push("🕸 quiet 3d+");
     const apptToday = apptTodayByOpp.get(o.id) ?? [];
     if (apptToday.length) badges.push(`📅 appt today${apptToday[0].at ? ` ${apptToday[0].at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`);
+    // ⏱ Comp → Offer must move same-day — flag any lead sitting here (Jon 2026-10-20).
+    if (/comp.to.offer/i.test(o.stage)) {
+      const hrs = (Date.now() - o.updatedAt.getTime()) / 3_600_000;
+      if (hrs >= 24) badges.push(`🔴 ${Math.round(hrs / 24)}d in comp — OFFER OVERDUE`);
+      else if (hrs >= 3) badges.push(`⏳ ${Math.round(hrs)}h in comp — offer today`);
+    }
     // APN/parcel for land with no street address (shows on the card in place of address)
     const fd = (o.formData ?? {}) as { property?: { apn?: string } };
     return {

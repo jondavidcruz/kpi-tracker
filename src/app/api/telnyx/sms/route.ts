@@ -38,38 +38,52 @@ export async function POST(req: NextRequest) {
         select: { id: true, assignedTo: true, tags: true, name: true },
       });
     }
-    let wasDnced = false;
+    let wasDnced = false, declined = false;
     const text = String(p.text ?? "").slice(0, 900);
     const mediaUrls = (p.media ?? []).map((m) => m.url).filter(Boolean) as string[];
     const bodyTxt = [text, ...mediaUrls].filter(Boolean).join("\n") || "(empty message)";
-    const opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null }, select: { id: true } });
+    const opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null }, select: { id: true, pipeline: true, stage: true, tags: true } });
     await logCrmEvent({
       contactId: contact.id, oppId: opp?.id ?? "", kind: "sms",
       body: `⬅️ Seller: ${bodyTxt}`,
       meta: { msgId, dir: "inbound", via: "telnyx", line: p.to?.[0]?.phone_number ?? "", ...(mediaUrls.length ? { media: mediaUrls } : {}) },
       actor: "inbound-sms",
     }).catch(() => {});
-    // 🚫 real-time STOP / hostile guard
+    // 🚫 Classify the reply (Jon 2026-10-20): STOP/hostile/cussing → DNC + off the
+    // list; a civil "no / not interested / not selling" → move the lead to a
+    // Not-Interested stage (NOT a full DNC); anything else → a reply task.
     try {
       const { DNC_REGEX, dncContact } = await import("@/lib/crm-dnc");
+      const DECLINE_REGEX = /\b(not\s*(interested|selling)|no\s*thank|already\s*sold|we\s*sold|don'?t\s*(want|wish|need)\s*to\s*sell|\bpass\b)\b|^\s*(no|nope)\b[.! ]*$/i;
       if (DNC_REGEX.test(text)) { wasDnced = true; await dncContact(contact.id, `inbound text matched the STOP/hostile filter: "${text.slice(0, 80)}"`); }
+      else if (DECLINE_REGEX.test(text)) { declined = true; }
       else if (text.length >= 12) {
-        // 🤖 AI opt-out screen (Jon 2026-10-12): catches the polite-but-firm
-        // "I'm not looking to sell, please lose my information" texts the
-        // regex can't — any clear stop/not-interested goes straight to DNC.
+        // 🤖 AI screen — one call, three buckets.
         try {
           const { aiText } = await import("@/lib/ai");
           const verdict = await aiText({
-            maxTokens: 10,
-            messages: [{ role: "user", content: `A homeowner replied to a real-estate investor's text:\n"""${text.slice(0, 400)}"""\nDoes this message clearly ask us to STOP contacting them, say the property is NOT for sale, or express firm disinterest or hostility? Answer with exactly one word: YES or NO.` }],
+            maxTokens: 6,
+            messages: [{ role: "user", content: `A homeowner replied to a real-estate investor's text:\n"""${text.slice(0, 400)}"""\nClassify their intent in ONE word:\nSTOP = demands we stop contacting, hostile/abusive/cussing, or "remove me from the list".\nDECLINE = simply not interested / not selling / already sold, but not hostile.\nREPLY = anything else (a question, interest, price, neutral).\nAnswer with exactly one word: STOP, DECLINE, or REPLY.` }],
           });
-          if (/^\s*yes/i.test(verdict)) { wasDnced = true; await dncContact(contact.id, `AI opt-out screen — seller said stop/not interested: "${text.slice(0, 80)}"`); }
+          if (/stop/i.test(verdict)) { wasDnced = true; await dncContact(contact.id, `AI screen — seller said stop/hostile: "${text.slice(0, 80)}"`); }
+          else if (/decline/i.test(verdict)) { declined = true; }
         } catch { /* screen is best-effort; the rep task still fires */ }
       }
+      // 📴 Civil decline → move the opp to a Not-Interested (or dead/nurture) stage + tag.
+      if (declined && opp) {
+        const { readPipelines } = await import("@/lib/crm");
+        const pls = await readPipelines();
+        const pl = pls.find((x) => x.name === (opp.pipeline || "War Room")) ?? pls[0];
+        const match = (rx: RegExp) => pl?.stages.find((s) => rx.test(`${s.key} ${s.label}`));
+        const target = match(/not.?interest|no.?interest/i) ?? match(/\bdead\b|lost/i) ?? match(/nurture/i);
+        const tags = /not-interested/i.test(opp.tags || "") ? (opp.tags || "") : [opp.tags, "not-interested"].filter(Boolean).join(",");
+        await db.crmOpportunity.update({ where: { id: opp.id }, data: { ...(target && target.key !== opp.stage ? { stage: target.key } : {}), tags } }).catch(() => {});
+        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `📴 Seller replied not interested${target ? ` → moved to "${target.label}"` : ""}: "${text.slice(0, 60)}"`, actor: "inbound-sms" }).catch(() => {});
+      }
     } catch { /* guard never breaks intake */ }
-    // 📣 nudge the owner: a task so the reply never slips (dup-guarded per day)
+    // 📣 nudge the owner only if they're actually engaged (dup-guarded per day)
     try {
-      if (!wasDnced && contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags)) {
+      if (!wasDnced && !declined && contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags)) {
         const today = new Date().toISOString().slice(0, 10);
         const title = `💬 ${contact.name.split(" ")[0]} texted back — reply (${fromNum})`;
         const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } });
