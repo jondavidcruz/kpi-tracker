@@ -533,7 +533,10 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">📋 Discovery — fill as you talk <span className="normal-case text-slate-300">(click to open)</span></summary>
             {(() => {
               const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
-              return CRM_FORMS.map((form) => {
+              // 🏞 Land Details form shows only on the land-selling pipeline (Jon
+              // 2026-10-20: "remove land details from all other pipelines").
+              const isLandOpp = /\bland\b/i.test(opp.pipeline || "");
+              return CRM_FORMS.filter((form) => form.key !== "land" || isLandOpp).map((form) => {
                 const answers = fd[form.key] ?? {};
                 const count = Object.keys(answers).length;
                 return (

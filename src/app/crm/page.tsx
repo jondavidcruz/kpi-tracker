@@ -86,6 +86,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     return <Card className="p-10 text-center text-slate-400">🔒 Your pipeline isn&apos;t set up yet. Your manager will add it — check back shortly.</Card>;
   }
   if (!pipe) return <Card className="p-10 text-center text-slate-400">No pipeline found.</Card>;
+  // 🏞 Land features (waterfront etc.) only matter on the land-selling pipeline —
+  // show the land filter chips + feature dropdown there only (Jon 2026-10-20:
+  // "remove land details from all other pipelines, only the one for sell land").
+  const isLandPipe = /\bland\b/i.test(plName);
   // 🐛 fix (Jon 2026-10-13): `who`, tag, and search each wrote an `OR` key on the
   // same object — duplicate keys overwrite, so combining search + tag + owner
   // silently dropped filters. Stack them as an AND of ORs so they all apply.
@@ -291,6 +295,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           base={{ view, pl: plName, ...(canViewAll ? { who: whoRaw || "all" } : {}) }}
           q={q} stage={fStage} tag={fTag} due={fDue}
           stages={stages.map((st) => ({ key: st.key, label: st.label }))}
+          isLand={isLandPipe}
         />
         <div className="flex flex-wrap items-center gap-2">
           {canViewAll ? (
@@ -319,7 +324,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         })}
       </div>
 
-      {/* 🏞 Land-feature chips (Jon 2026-10-20) — one tap to find waterfront etc. */}
+      {/* 🏞 Land-feature chips (Jon 2026-10-20) — land-selling pipeline only. */}
+      {isLandPipe && (
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] font-bold text-slate-400">🏞 Land:</span>
         {([
@@ -331,6 +337,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           return <Link key={val} prefetch={false} href={qs({ q: active ? "" : val })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${active ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"}`}>{label}</Link>;
         })}
       </div>
+      )}
 
       {upcoming.length > 0 && (
         <Card className="border-l-4 border-indigo-400 p-3">

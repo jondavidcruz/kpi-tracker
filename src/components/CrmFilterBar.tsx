@@ -9,9 +9,10 @@ type Props = {
   base: Record<string, string>; // view, pl, who…
   q: string; stage: string; tag: string; due: boolean;
   stages: Array<{ key: string; label: string }>;
+  isLand?: boolean; // show land-feature search only on the land-selling pipeline
 };
 
-export default function CrmFilterBar({ base, q: q0, stage: s0, tag: t0, due: d0, stages }: Props) {
+export default function CrmFilterBar({ base, q: q0, stage: s0, tag: t0, due: d0, stages, isLand = false }: Props) {
   const router = useRouter();
   const [q, setQ] = useState(q0);
   const [tag, setTag] = useState(t0);
@@ -34,7 +35,7 @@ export default function CrmFilterBar({ base, q: q0, stage: s0, tag: t0, due: d0,
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="🔎 Search name, phone, address, tag, NOTES & land details (e.g. waterfront) — filters as you type"
+        placeholder={isLand ? "🔎 Search name, phone, address, tag, NOTES & land details (e.g. waterfront) — filters as you type" : "🔎 Search name, phone, address, tag, NOTES — filters as you type"}
         className="min-w-[260px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
       />
       <select value={s0} onChange={(e) => go({ stage: e.target.value })} className="rounded-xl border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-600">
@@ -42,11 +43,13 @@ export default function CrmFilterBar({ base, q: q0, stage: s0, tag: t0, due: d0,
         {stages.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
       </select>
       <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="tag…" className="w-24 rounded-xl border border-slate-200 px-2 py-2 text-xs" />
-      {/* 🏞 One-click land-feature filter (Jon 2026-10-20) — drives the deep search. */}
-      <select value="" onChange={(e) => { const v = e.target.value; if (v) { setQ(v); go({ q: v }); } }} title="Find land by a buyer sell-point" className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-2 text-xs font-semibold text-emerald-700">
-        <option value="">🏞 Land feature…</option>
-        {LAND_FEATURES.map((f) => <option key={f} value={f}>{f}</option>)}
-      </select>
+      {/* 🏞 One-click land-feature filter (Jon 2026-10-20) — land pipeline only. */}
+      {isLand && (
+        <select value="" onChange={(e) => { const v = e.target.value; if (v) { setQ(v); go({ q: v }); } }} title="Find land by a buyer sell-point" className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-2 text-xs font-semibold text-emerald-700">
+          <option value="">🏞 Land feature…</option>
+          {LAND_FEATURES.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+      )}
       <label className="flex items-center gap-1 text-xs font-semibold text-slate-600">
         <input type="checkbox" checked={d0} onChange={(e) => go({ due: e.target.checked ? "1" : "" })} /> 📞 follow-up due
       </label>
