@@ -9,6 +9,7 @@ import CallButton from "@/components/CallButton";
 import ConvComposerTabs from "@/components/ConvComposerTabs";
 import ConvContactRail from "@/components/ConvContactRail";
 import ScrollAnchor from "@/components/ScrollAnchor";
+import ConvLive from "@/components/ConvLive";
 import { startConversationAction, bulkConvAction } from "@/app/crm/actions";
 import { readConvMap, setConvRead } from "@/lib/conv-read";
 
@@ -54,6 +55,8 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   for (const e of recent) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
   const contactIds = [...latestByContact.keys()].slice(0, 120);
   const mineOnly = canSeeAll && sp.who === "me";
+  // 🔴 Unread chip (queued since 2026-10-08): only threads where the seller wrote last
+  const unreadOnly = sp.who === "unread";
   // 🔎 search the inbox by seller name or phone (Jon 2026-10-13) — searches ALL
   // contacts, not just the recent 50, so you can jump to any seller's thread.
   const q = (sp.q ?? "").trim();
@@ -82,8 +85,10 @@ export default async function ConversationsPage({ searchParams }: { searchParams
       const unseen = !convRead[c.id] || last.at.toISOString() > convRead[c.id];
       return { ...c, last, needsReply: stripHtml(last.body).startsWith("⬅") && unseen };
     })
+    .filter((t) => !unreadOnly || t.needsReply)
     .sort((a, b) => (Number(b.needsReply) - Number(a.needsReply)) || (b.last.at.getTime() - a.last.at.getTime()))
     .slice(0, 50);
+  const unreadCount = contacts.filter((c) => { const l = latestByContact.get(c.id); return !!l && stripHtml(l.body).startsWith("⬅") && (!convRead[c.id] || l.at.toISOString() > convRead[c.id]); }).length;
 
   // selected thread
   const cId = sp.c || threads[0]?.id || "";
@@ -100,6 +105,8 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   ]) : [[], []];
   const opp = opps[0] ?? null; // first property drives the composer + header link
   const thread = [...events].reverse();
+  // newest text in the open thread → ConvLive refreshes the page when a newer one lands
+  const lastSmsAt = events.find((e) => e.kind === "sms")?.at.toISOString() ?? "";
   // owners for the editable rail's owner dropdown
   const owners = contact && visible
     ? (await db.user.findMany({ where: { active: true }, select: { name: true }, orderBy: { name: "asc" } })).map((u) => u.name)
@@ -139,28 +146,28 @@ export default async function ConversationsPage({ searchParams }: { searchParams
         </form>
       </details>
 
+      <ConvLive cid={contact && visible ? contact.id : ""} lastAt={lastSmsAt} />
       <Card className="overflow-hidden p-0">
         <div className="flex h-[84vh]">
           {/* left: thread list */}
           <div className="w-72 shrink-0 overflow-y-auto border-r border-slate-100 bg-slate-50/50">
             <div className="sticky top-0 flex items-center gap-2 border-b border-slate-100 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">
               <span>Team inbox · {threads.length}</span>
-              {canSeeAll && (
-                <span className="ml-auto flex gap-1 normal-case tracking-normal">
-                  <Link prefetch={false} href="/crm/conversations" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${!mineOnly ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>All</Link>
-                  <Link prefetch={false} href="/crm/conversations?who=me" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${mineOnly ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>Mine</Link>
-                </span>
-              )}
+              <span className="ml-auto flex gap-1 normal-case tracking-normal">
+                <Link prefetch={false} href="/crm/conversations" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${!mineOnly && !unreadOnly ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>All</Link>
+                {canSeeAll && <Link prefetch={false} href="/crm/conversations?who=me" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${mineOnly ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-500"}`}>Mine</Link>}
+                <Link prefetch={false} href="/crm/conversations?who=unread" title="Only threads where the seller wrote last" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${unreadOnly ? "bg-red-600 text-white" : "bg-slate-100 text-slate-500"}`}>Unread{unreadCount ? ` ${unreadCount}` : ""}</Link>
+              </span>
             </div>
             {/* 🔎 search any seller by name or phone (Jon 2026-10-13) */}
             <form method="GET" action="/crm/conversations" className="border-b border-slate-100 bg-slate-50 px-2.5 py-2">
-              {mineOnly && <input type="hidden" name="who" value="me" />}
+              {(mineOnly || unreadOnly) && <input type="hidden" name="who" value={mineOnly ? "me" : "unread"} />}
               <div className="flex items-center gap-1">
                 <input name="q" defaultValue={q} placeholder="🔎 Search name or phone…" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs" />
                 {q && <Link href={mineOnly ? "/crm/conversations?who=me" : "/crm/conversations"} className="shrink-0 rounded-lg bg-slate-200 px-2 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-300">✕</Link>}
               </div>
             </form>
-            {threads.length === 0 && <div className="p-4 text-xs text-slate-400">{q ? `No seller matches “${q}”.` : "No conversations yet — texts, emails and calls will appear here."}</div>}
+            {threads.length === 0 && <div className="p-4 text-xs text-slate-400">{q ? `No seller matches “${q}”.` : unreadOnly ? "Inbox zero — nobody is waiting on a reply. 🎉" : "No conversations yet — texts, emails and calls will appear here."}</div>}
             {/* ☑️ mass selection (Jon 2026-10-08): tick threads → mark read /
                 unread / DNC in one shot. The checkbox stops the row's link. */}
             <form action={bulkConvAction}>
@@ -264,7 +271,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                       </div>
                     );
                   })}
-                  <ScrollAnchor dep={cId} />
+                  <ScrollAnchor dep={`${cId}:${lastSmsAt}`} />
                 </div>
                 <ConvComposerTabs contactId={contact.id} oppId={opp?.id ?? ""} phone={contact.phone} email={contact.email} leadName={contact.name} rep={me!.name} fromLabel={fromLabel} signature={mySignature} canSms={comms.sms} canEmail={comms.email} snippets={snippets}
                   smsHistory={thread.filter((e) => e.kind === "sms").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString() }; })}

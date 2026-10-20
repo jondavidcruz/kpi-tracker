@@ -2692,6 +2692,15 @@ export async function GET(request: Request) {
   // 💡 Queue an AI Update (?suggestadd=1&title=…&rationale=…&category=&impact=&effort=)
   // — lets the nightly agents file proposals without a DB connection (crm-enhancer 2026-10-18).
   // Idempotent by title: re-filing the same title just returns the existing row.
+  // 📋 Read-only AI Updates queue (?sugglist=1[&status=proposed,accepted][&n=80])
+  // — lets the overnight crm-enhancer/optimizer runs see what Jon accepted or
+  // declined without a local DB (crm-enhancer 2026-10-20).
+  if (url.searchParams.get("sugglist") === "1") {
+    const statuses = (url.searchParams.get("status") ?? "proposed,accepted").split(",").map((x) => x.trim()).filter(Boolean);
+    const n = Math.min(200, Math.max(1, Number(url.searchParams.get("n") ?? 80) || 80));
+    const rows = await db.suggestion.findMany({ where: { status: { in: statuses } }, orderBy: { createdAt: "desc" }, take: n, select: { id: true, title: true, status: true, category: true, impact: true, effort: true, note: true, createdAt: true, updatedAt: true } });
+    return NextResponse.json({ ok: true, count: rows.length, rows });
+  }
   if (url.searchParams.get("suggestadd") === "1") {
     const title = (url.searchParams.get("title") ?? "").trim().slice(0, 200);
     if (!title) return NextResponse.json({ ok: false, error: "title required" });
