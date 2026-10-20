@@ -128,7 +128,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   };
   // quick-add popover: {cardId, kind} — one open at a time
   const [quick, setQuick] = useState<{ id: string; contactId?: string; kind: "task" | "appt" | "tag" | "sms" | "note"; phone?: string } | null>(null);
-  const [qa, setQa] = useState({ title: "", due: "", when: "", tag: "", sms: "", note: "" });
+  const [qa, setQa] = useState({ title: "", due: "", when: "", tag: "", sms: "", note: "", assignee: "", dueTime: "" });
   const [, startQuick] = useTransition();
   const submitQuick = () => {
     if (!quick) return;
@@ -136,10 +136,13 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     if (quick.kind === "task") {
       if (!qa.title.trim()) return;
       fd.set("oppId", quick.id); fd.set("contactId", quick.contactId ?? ""); fd.set("title", qa.title); fd.set("due", qa.due);
+      if (qa.dueTime) fd.set("dueTime", qa.dueTime);
+      if (qa.assignee) fd.set("assignedTo", qa.assignee);
       startQuick(async () => { await addCrmTaskAction(fd); });
     } else if (quick.kind === "appt") {
       if (!qa.title.trim() || !qa.when) return;
       fd.set("oppId", quick.id); fd.set("contactId", quick.contactId ?? ""); fd.set("title", qa.title); fd.set("at", qa.when);
+      if (qa.assignee) fd.set("withWho", qa.assignee);
       startQuick(async () => { await addCrmApptAction(fd); });
     } else if (quick.kind === "tag") {
       if (!qa.tag.trim()) return;
@@ -155,7 +158,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       fd.set("oppId", quick.id); fd.set("contactId", quick.contactId ?? ""); fd.set("to", quick.phone); fd.set("text", qa.sms);
       startQuick(async () => { await sendCrmSmsAction(fd); });
     }
-    setQuick(null); setQa({ title: "", due: "", when: "", tag: "", sms: "", note: "" });
+    setQuick(null); setQa({ title: "", due: "", when: "", tag: "", sms: "", note: "", assignee: "", dueTime: "" });
   };
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // useLayoutEffect = restore the saved collapse state BEFORE first paint, so
@@ -376,11 +379,16 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         <span className="absolute left-0 top-9 z-30 flex w-60 flex-col gap-1.5 rounded-xl bg-white p-2.5 shadow-xl ring-1 ring-slate-200">
                           {quick.kind === "task" && (<>
                             <input autoFocus value={qa.title} onChange={(e) => setQa({ ...qa, title: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submitQuick()} placeholder="Task…" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
-                            <input type="date" value={qa.due} onChange={(e) => setQa({ ...qa, due: e.target.value })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                            <div className="flex gap-1.5">
+                              <input type="date" value={qa.due} onChange={(e) => setQa({ ...qa, due: e.target.value })} className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                              <input type="time" value={qa.dueTime} onChange={(e) => setQa({ ...qa, dueTime: e.target.value })} title="Time (optional) — drives the reminder" className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                            </div>
+                            {reps.length > 0 && <select value={qa.assignee} onChange={(e) => setQa({ ...qa, assignee: e.target.value })} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"><option value="">Assign to… (me)</option>{reps.map((r) => <option key={r} value={r}>{r.split(" ")[0]}</option>)}</select>}
                           </>)}
                           {quick.kind === "appt" && (<>
                             <input autoFocus value={qa.title} onChange={(e) => setQa({ ...qa, title: e.target.value })} placeholder="Appointment…" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
                             <input type="datetime-local" value={qa.when} onChange={(e) => setQa({ ...qa, when: e.target.value })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                            {reps.length > 0 && <select value={qa.assignee} onChange={(e) => setQa({ ...qa, assignee: e.target.value })} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"><option value="">Assign to… (me)</option>{reps.map((r) => <option key={r} value={r}>{r.split(" ")[0]}</option>)}</select>}
                           </>)}
                           {quick.kind === "note" && (
                             <textarea autoFocus value={qa.note} onChange={(e) => setQa({ ...qa, note: e.target.value })} rows={3} placeholder="Note… (saves to the timeline)" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
