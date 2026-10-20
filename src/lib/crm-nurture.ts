@@ -10,13 +10,16 @@ import { readPipelines } from "./crm";
 
 const LOG_CAT = "__nurture_park_log__";
 const ACTOR = "nurture-park";
-// a human touch = any of these in the window (notes only when a person wrote them)
-const TOUCH_KINDS = ["call", "sms", "email", "voicemail", "stage", "appointment", "task", "file"];
-const SYSTEM_ACTOR = /import|ghl|system|warroom|cron|sync|nurture-park|comp-flow|flag-watch|perf-watchdog/i;
+// a human touch = real comms (any actor) or a person-made note/stage/task/appt/file.
+// updatedAt is deliberately NOT a signal — bulk ops (address polish, message sync
+// round-robin, owner fixes) bump it on every lead without anyone touching the seller.
+const COMMS_KINDS = ["call", "sms", "email", "voicemail"];
+const PERSON_KINDS = ["note", "stage", "appointment", "task", "file"];
+const SYSTEM_ACTOR = /^$|import|ghl|system|warroom|cron|sync|nurture-park|comp-flow|flag-watch|perf-watchdog|migrat|pipefix|scrub|fix|bot|auto/i;
 
 export type ParkMove = { id: string; from: string; to: string; pipeline: string; owner: string; title: string };
 
-export async function parkNeverCalled(opts: { commit?: boolean; days?: number } = {}) {
+export async function parkNeverCalled(opts: { commit?: boolean; days?: number; diag?: boolean } = {}) {
   const days = Math.max(7, Math.min(365, opts.days ?? 30));
   const cutoff = new Date(Date.now() - days * 86400_000);
   const today = new Date().toISOString().slice(0, 10);
@@ -31,11 +34,15 @@ export async function parkNeverCalled(opts: { commit?: boolean; days?: number } 
   const pipelineNames = [...plan.keys()];
   if (!pipelineNames.length) return { ok: true, committed: false, days, candidates: 0, moved: 0, perPipeline: {}, perOwner: {}, sample: [], note: "no pipeline has both a new + nurture stage" };
   const raw = await db.crmOpportunity.findMany({
-    where: { archivedAt: null, pipeline: { in: pipelineNames }, createdAt: { lt: cutoff }, updatedAt: { lt: cutoff } },
+    where: { archivedAt: null, pipeline: { in: pipelineNames }, createdAt: { lt: cutoff } },
     select: { id: true, contactId: true, title: true, pipeline: true, stage: true, assignedTo: true, nextFollowUp: true },
     take: 20000,
   });
-  let cands = raw.filter((o) => plan.get(o.pipeline)?.newKeys.includes(o.stage) && (!o.nextFollowUp || o.nextFollowUp < today));
+  const diag: Record<string, unknown> = { plan: Object.fromEntries([...plan.entries()].map(([k, v]) => [k || "War Room", v])), rawOlderThanCutoff: raw.length };
+  const inNew = raw.filter((o) => plan.get(o.pipeline)?.newKeys.includes(o.stage));
+  diag.inNewStage = inNew.length;
+  let cands = inNew.filter((o) => !o.nextFollowUp || o.nextFollowUp < today);
+  diag.noFutureFollowUp = cands.length;
   if (cands.length) {
     const ids = cands.map((o) => o.id);
     const cids = [...new Set(cands.map((o) => o.contactId))];
@@ -45,12 +52,15 @@ export async function parkNeverCalled(opts: { commit?: boolean; days?: number } 
     ]);
     const busyOpp = new Set(openTasks.map((t) => t.oppId));
     const touchedOpp = new Set<string>(); const touchedContact = new Set<string>();
+    const kindCounts: Record<string, number> = {};
     for (const e of touches) {
-      const human = TOUCH_KINDS.includes(e.kind) || (e.kind === "note" && !SYSTEM_ACTOR.test(e.actor || ""));
+      const human = COMMS_KINDS.includes(e.kind) || (PERSON_KINDS.includes(e.kind) && !SYSTEM_ACTOR.test(e.actor || ""));
       if (!human) continue;
+      kindCounts[e.kind] = (kindCounts[e.kind] ?? 0) + 1;
       if (e.oppId) touchedOpp.add(e.oppId);
       if (e.contactId) touchedContact.add(e.contactId);
     }
+    diag.openTaskOpps = busyOpp.size; diag.humanTouchEvents = kindCounts; diag.touchedOpps = touchedOpp.size; diag.touchedContacts = touchedContact.size;
     cands = cands.filter((o) => !busyOpp.has(o.id) && !touchedOpp.has(o.id) && !touchedContact.has(o.contactId));
   }
   const moves: ParkMove[] = cands.map((o) => ({ id: o.id, from: o.stage, to: plan.get(o.pipeline)!.nurture, pipeline: o.pipeline || "War Room", owner: o.assignedTo || "—", title: o.title }));
@@ -71,7 +81,7 @@ export async function parkNeverCalled(opts: { commit?: boolean; days?: number } 
     })) }).catch(() => {});
     await appendLog({ at: new Date().toISOString(), days, moved, moves });
   }
-  return { ok: true, committed: !!opts.commit, days, candidates: moves.length, moved, perPipeline, perOwner, sample: moves.slice(0, 12).map((m) => `${m.owner.split(" ")[0]} · ${m.title} · ${m.pipeline} ${m.from} → ${m.to}`) };
+  return { ok: true, committed: !!opts.commit, days, candidates: moves.length, moved, perPipeline, perOwner, sample: moves.slice(0, 12).map((m) => `${m.owner.split(" ")[0]} · ${m.title} · ${m.pipeline} ${m.from} → ${m.to}`), ...(opts.diag ? { diag } : {}) };
 }
 
 /** Put the LAST run's leads back where they were (only those still sitting in nurture). */

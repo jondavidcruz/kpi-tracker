@@ -2699,7 +2699,7 @@ export async function GET(request: Request) {
     const { parkNeverCalled, undoLastPark } = await import("@/lib/crm-nurture");
     if (url.searchParams.get("undo") === "1") return NextResponse.json(await undoLastPark());
     const days = Number(url.searchParams.get("days") ?? 30) || 30;
-    return NextResponse.json(await parkNeverCalled({ commit: url.searchParams.get("commit") === "1", days }));
+    return NextResponse.json(await parkNeverCalled({ commit: url.searchParams.get("commit") === "1", days, diag: url.searchParams.get("diag") === "1" }));
   }
 
   // 📋 Read-only AI Updates queue (?sugglist=1[&status=proposed,accepted][&n=80])
