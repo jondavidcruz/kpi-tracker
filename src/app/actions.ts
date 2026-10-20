@@ -4425,11 +4425,23 @@ export async function importMarketContactsMapped(formData: FormData) {
   const today = orgToday(settings.orgTimezone);
   const g = (row: string[], k: string) => { const i = map[k]; return i != null && i >= 0 && i < row.length ? String(row[i] ?? "").trim() : ""; };
 
-  let n = 0;
+  // 🔁 Idempotent import (Jon 2026-10-20): skip developers we already have so the
+  // nightly research sheets can be re-uploaded safely with no duplicates. Match on
+  // lowercased name + last-10 phone digits (or email when there's no phone).
+  const digits = (s: string) => s.replace(/[^0-9]/g, "").slice(-10);
+  const keyOf = (name: string, phone: string, email: string) => `${name.toLowerCase().trim()}|${digits(phone) || email.toLowerCase().trim()}`;
+  const existing = await db.marketContact.findMany({ where: { archivedAt: null }, select: { name: true, phone: true, phone2: true, email: true } }).catch(() => []);
+  const seen = new Set<string>();
+  for (const e of existing) { seen.add(keyOf(e.name, e.phone || e.phone2, e.email)); if (e.phone2) seen.add(keyOf(e.name, e.phone2, e.email)); }
+
+  let n = 0, skipped = 0;
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     const name = g(row, "name");
     if (!name) continue;
+    const k = keyOf(name, g(row, "phone"), g(row, "email"));
+    if (seen.has(k)) { skipped++; continue; }
+    seen.add(k);
     await db.marketContact.create({ data: {
       name,
       company: g(row, "company"),
@@ -4452,7 +4464,7 @@ export async function importMarketContactsMapped(formData: FormData) {
   await rollupResearchKpis(me!.id, today); // credits New Buyers Added for dispo reps
   revalidatePath("/vetting");
   revalidatePath("/marketing");
-  redirect(`/vetting?imp=${n}`);
+  redirect(`/vetting?imp=${n}${skipped ? `&dup=${skipped}` : ""}`);
 }
 
 /** Mark a scored call as reviewed for training: a 1–5 star rating and/or a

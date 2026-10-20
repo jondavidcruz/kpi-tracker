@@ -10,7 +10,7 @@ import { saveProspect } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function VettingPage({ searchParams }: { searchParams: Promise<{ imp?: string }> }) {
+export default async function VettingPage({ searchParams }: { searchParams: Promise<{ imp?: string; dup?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) {
@@ -117,7 +117,7 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
         </div>
       )}
 
-      {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} buyer{sp.imp === "1" ? "" : "s"} into the research pool.</div>}
+      {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} buyer{sp.imp === "1" ? "" : "s"} into the research pool.{sp.dup && /^\d+$/.test(sp.dup) ? ` Skipped ${sp.dup} already in the system (no duplicates).` : ""}</div>}
       {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
       {sp.imp === "noname" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Map the Name column before importing.</div>}
 
