@@ -15,6 +15,8 @@ import { CRM_FORMS } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
 import LienBuilder from "@/components/LienBuilder";
+import NoteComposer from "@/components/NoteComposer";
+import { sanitizeNoteHtml, isHtmlNote } from "@/lib/note-html";
 
 type Payload = {
   id: string; title: string; stage: string; pipeline: string; pipelines?: string[]; assignedTo: string; tags: string;
@@ -395,10 +397,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <span className="text-[11px] font-semibold text-red-800">Seller signed but won&apos;t close? Compile everything into a recordable lien.</span>
                       <button type="button" onClick={() => setLienOpen(true)} className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-red-700">🔴 File a Lien</button>
                     </div>
-                    <form action={submit(addCrmNoteAction, { oppId: d.id, contactId: d.contact.id })} className="flex gap-2">
-                      <input name="body" placeholder="Add a note…" required className={inputCls} />
-                      <button className="rounded-xl bg-brand-navy px-3 py-1.5 text-xs font-bold text-white">📝 Add</button>
-                    </form>
+                    <NoteComposer onSubmit={(html) => { const fd = new FormData(); fd.set("body", html); submit(addCrmNoteAction, { oppId: d.id, contactId: d.contact.id })(fd); }} />
                     <div className="space-y-1.5">
                       {d.events.map((e, i) => {
                         const mine = e.kind === "note" && !!e.id && e.actor === d.me.name;
@@ -418,7 +417,9 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                         return (
                           <div key={e.id ?? i} className={`group/qn rounded-lg px-3 py-2 text-xs ring-1 ${isNote ? "border-l-4 border-amber-400 bg-amber-50 text-slate-800 ring-amber-200" : "bg-white text-slate-700 ring-slate-100"}`}>
                             <span className="mr-1">{isNote ? "🟡" : (KIND_EMOJI[e.kind] ?? "•")}</span>
-                            <span className={`whitespace-pre-line break-words ${isNote ? "font-medium" : ""}`}>{cleanLinkify(e.body)}</span>
+                            {isNote && isHtmlNote(e.body)
+                              ? <div className="mt-1 text-[13px] leading-relaxed [&_a]:text-indigo-600 [&_a]:underline [&_b]:font-bold [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-bold [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(e.body) }} />
+                              : <span className={`whitespace-pre-line break-words ${isNote ? "font-medium" : ""}`}>{cleanLinkify(e.body)}</span>}
                             <span className="ml-1 text-[9px] text-slate-400">{e.actor} · {new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
                             {mine && <button onClick={() => { setEditNoteId(e.id!); }} title="Edit this note" className="ml-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-indigo-600">✎ edit</button>}
                             {mine && <button onClick={() => { if (confirm("Delete this note?")) { const fd = new FormData(); fd.set("id", e.id!); fd.set("oppId", d.id); submit(deleteCrmNoteAction)(fd); } }} title="Delete this note" className="ml-1 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-red-600">🗑</button>}

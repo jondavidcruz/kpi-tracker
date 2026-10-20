@@ -226,8 +226,11 @@ export async function addCrmNoteAction(formData: FormData) {
   if (!me) return;
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
-  const body = String(formData.get("body") ?? "").trim().slice(0, 2000);
-  if (!contactId || !body) return;
+  // Rich notes (Jon 2026-10-20): sanitize the HTML to our tag whitelist and allow a
+  // bigger body. A plain-text note passes through unchanged (no tags → sanitize noop).
+  const { sanitizeNoteHtml } = await import("@/lib/note-html");
+  const body = sanitizeNoteHtml(String(formData.get("body") ?? "").trim()).slice(0, 8000);
+  if (!contactId || !body.replace(/<[^>]*>/g, "").trim()) return;
   await logCrmEvent({ contactId, oppId, kind: "note", body, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
 }
