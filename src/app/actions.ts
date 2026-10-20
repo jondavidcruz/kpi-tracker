@@ -1576,10 +1576,11 @@ export async function saveBuyerLand(formData: FormData) {
   // Full standard-interview record (Jon 2026-09-21) — the form submits every
   // field, so a wholesale replace both saves and clears correctly.
   const landTypes = formData.getAll("landTypes").map(String).map((s) => s.trim()).filter(Boolean).join(", ") || undefined;
+  const featuresWanted = formData.getAll("featuresWanted").map(String).map((s) => s.trim()).filter(Boolean).join(", ") || undefined;
   const rec: BuyerLand = {
     isLandBuyer: formData.get("isLandBuyer") === "on" ? true : undefined,
     buyStates: str("buyStates"), buyCounties: str("buyCounties"), buyCities: str("buyCities"), targetZips: str("targetZips"),
-    landTypes, lotMin: num("lotMin"), lotMax: num("lotMax"), acresTypical: str("acresTypical"),
+    landTypes, featuresWanted, lotMin: num("lotMin"), lotMax: num("lotMax"), acresTypical: str("acresTypical"),
     utilities: str("utilities"), zoningPref: str("zoningPref"),
     priceMin: num("priceMin"), priceMax: num("priceMax"), pricePerLot: num("pricePerLot"), closeSpeed: str("closeSpeed"),
     lotsPerYear: num("lotsPerYear"), permits12mo: num("permits12mo"),

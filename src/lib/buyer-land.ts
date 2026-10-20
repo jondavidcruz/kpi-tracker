@@ -15,6 +15,7 @@ export type BuyerLand = {
   targetZips?: string;    // comma-separated
   // ── WHAT they buy ──
   landTypes?: string;     // comma list from LAND_TYPES
+  featuresWanted?: string; // comma list from LAND_FEATURES — matched to a lead's land features
   lotMin?: number;        // acres
   lotMax?: number;        // acres
   acresTypical?: string;  // total/typical acreage sought ("40–100 ac for phase 1")

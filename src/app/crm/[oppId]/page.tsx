@@ -55,7 +55,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   // 🎯 Matching cash buyers for this lead (marketing access only) — who dispo should
   // send it to, ranked, before it's even signed (Jon 2026-10-20).
   const mktAccess = canAccessMarketing(me);
-  const buyerMatches = mktAccess ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice) : [];
+  const leadFeatures = (() => { const f = (opp.formData as { land?: { features?: unknown } } | null)?.land?.features; return Array.isArray(f) ? (f as string[]) : []; })();
+  const buyerMatches = mktAccess ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures) : [];
 
   // ⚠️ duplicate-seller guard (nightly ?crmqa=1 found 16 phones split across
   // reps): any OTHER live contact sharing this phone is flagged on the card so

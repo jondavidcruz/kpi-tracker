@@ -5,6 +5,7 @@ import {
   type BuyerLand, BUILDER_TYPES, LAND_TYPES, UTILITY_OPTS, ZONING_OPTS, CLOSE_OPTS,
   interviewScore, demandAreas, effectiveLand, type CrmSeed,
 } from "@/lib/buyer-land";
+import { LAND_FEATURES } from "@/lib/crm-forms";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const labCls = "mb-0.5 block text-[11px] font-semibold text-slate-500";
@@ -172,6 +173,18 @@ export default function DevInterviews({
                       {LAND_TYPES.map((t) => (
                         <label key={t} className="flex items-center gap-1.5 text-[13px] text-slate-700">
                           <input type="checkbox" name="landTypes" value={t} defaultChecked={(l.landTypes ?? "").includes(t)} className="h-4 w-4" /> {t}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Features they want — matched to a lead's Land features */}
+                  <div>
+                    <div className={qCls}>2b · Land features they want (matches seller leads)</div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5">
+                      {LAND_FEATURES.map((t) => (
+                        <label key={t} className="flex items-center gap-1.5 text-[13px] text-slate-700">
+                          <input type="checkbox" name="featuresWanted" value={t} defaultChecked={(l.featuresWanted ?? "").includes(t)} className="h-4 w-4" /> {t}
                         </label>
                       ))}
                     </div>
