@@ -344,6 +344,8 @@ export async function addCrmTaskAction(formData: FormData) {
   } });
   const note = String(formData.get("note") ?? "").trim();
   if (note) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(created.id, note); }
+  const dueTime = String(formData.get("dueTime") ?? "").trim(); // "HH:MM" — drives reminders
+  if (dueTime) { const { setTaskTime } = await import("@/lib/task-times"); await setTaskTime(created.id, dueTime); }
   let prio = String(formData.get("priority") ?? "");
   if (!prio) {
     // 🤖 predicted priority — the rep can always flip the dot afterwards
@@ -1470,9 +1472,21 @@ export async function logCallTypeKpiAction(formData: FormData): Promise<{ ok: bo
 // "💰 AQ:"). Only the per-rep acquisitions pipelines auto-assign an owner.
 function ownerForPipeline(name: string): string {
   const n = (name || "").toLowerCase();
+  // Dispositions pipelines (the "DS: …" boards) are owned by Sharyn — the deal is
+  // signed and handed off to dispo (Jon 2026-10-20). The acquisitions rep who moved
+  // it + Marie (backup dispo) are added as followers in setOppPipelineAction.
+  if (isDispoPipeline(name)) return "Sharyn Kayle";
   if (n.includes("michelle")) return "Michelle Lagudas";
   if (n.includes("nick")) return "Nicholas Fair"; // renamed from Nick → Nicholas (Jon 2026-10-15)
   return "";
+}
+
+// A "DS: …" pipeline = dispositions (e.g. "DS: Signed Go Close", "DS: Sell Land
+// Then Sign"). Owner → Sharyn, backup follower → Marie.
+const DISPO_OWNER = "Sharyn Kayle";
+const DISPO_BACKUP = "Marie Badayos";
+function isDispoPipeline(name: string): boolean {
+  return /^\s*ds[:\s]/i.test(name || "");
 }
 export async function setOppPipelineAction(formData: FormData) {
   const me = await crmUser();
@@ -1483,18 +1497,31 @@ export async function setOppPipelineAction(formData: FormData) {
   const pipes = await readPipelines();
   const target = pipes.find((p) => p.name === pipeline);
   if (!target) return;
-  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, pipeline: true, stage: true, assignedTo: true } });
+  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, pipeline: true, stage: true, assignedTo: true, formData: true } });
   if (!opp) return;
   // Honor a chosen destination stage if it's valid for the target pipeline
   // (Nick's ticket 2026-10-15); otherwise fall back to the pipeline's first stage.
   const wantStage = String(formData.get("stage") ?? "").trim();
   const firstStage = (wantStage && target.stages.some((s) => s.key === wantStage) ? wantStage : target.stages[0]?.key) ?? opp.stage;
   const owner = ownerForPipeline(pipeline);
-  await db.crmOpportunity.update({ where: { id }, data: {
-    pipeline, stage: firstStage, archivedAt: null,
-    ...(owner ? { assignedTo: owner } : {}),
-  } });
-  await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "stage", body: `📂 Moved ${opp.pipeline || "War Room"} → ${pipeline}${owner ? ` · assigned ${owner}` : ""}`, actor: me.name });
+
+  // 🤝 Dispo handoff (Jon 2026-10-20): moving a lead into a "DS: …" pipeline means
+  // the contract is signed and it's handed to dispositions. Owner → Sharyn; the
+  // acquisitions rep who moved it (= whoever signed/owns the lead) becomes a
+  // follower, and Marie (backup dispo) is always added. Followers live in
+  // formData.__followers — no schema change.
+  let data: Record<string, unknown> = { pipeline, stage: firstStage, archivedAt: null, ...(owner ? { assignedTo: owner } : {}) };
+  let followNote = "";
+  if (isDispoPipeline(pipeline)) {
+    const fd = (opp.formData ?? {}) as Record<string, unknown>;
+    const cur = Array.isArray(fd.__followers) ? (fd.__followers as string[]) : [];
+    const add = [me.name, DISPO_BACKUP].filter((n) => n && n !== DISPO_OWNER); // don't follow yourself if Sharyn moved it
+    const next = [...new Set([...cur, ...add])];
+    data = { ...data, formData: { ...fd, __followers: next } };
+    followNote = ` · acq rep ${me.name.split(" ")[0]}${add.includes(DISPO_BACKUP) ? " · +Marie backup" : ""}`;
+  }
+  await db.crmOpportunity.update({ where: { id }, data: data as never });
+  await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "stage", body: `📂 Moved ${opp.pipeline || "War Room"} → ${pipeline}${owner ? ` · owner ${owner}` : ""}${followNote}`, actor: me.name });
   revalidatePath("/crm");
 }
 

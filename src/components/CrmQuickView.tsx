@@ -295,9 +295,15 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
 
                 {tab === "tasks" && (
                   <div className="space-y-3">
-                    <form action={submit(addCrmTaskAction, { oppId: d.id, contactId: d.contact.id })} className="flex gap-2">
-                      <input name="title" placeholder="New task…" required className={inputCls} />
+                    {/* Assign tasks to anyone on the team (Jon 2026-10-20), not just
+                        yourself — defaults to this lead's owner. */}
+                    <form action={submit(addCrmTaskAction, { oppId: d.id, contactId: d.contact.id })} className="flex flex-wrap items-center gap-2">
+                      <input name="title" placeholder="New task…" required className="min-w-[140px] flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm" />
                       <input name="due" type="date" className="w-36 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+                      <input name="dueTime" type="time" title="Time (optional) — drives the reminder" className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+                      <select name="assignedTo" defaultValue={d.assignedTo} title="Assign to" className="w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+                        {[...new Set([d.assignedTo, ...d.reps].filter(Boolean))].map((r) => <option key={r} value={r}>{r.split(" ")[0]}</option>)}
+                      </select>
                       <button className="rounded-xl bg-brand-navy px-3 py-1.5 text-xs font-bold text-white">Add</button>
                     </form>
                     {d.tasks.length === 0 && <div className="text-xs text-slate-400">No open tasks.</div>}
@@ -330,7 +336,10 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       </select>
                       <input name="purposeCustom" placeholder="custom purpose (if ✏️)" className={inputCls} />
                       <input name="at" type="datetime-local" required className={inputCls} />
-                      <input name="note" placeholder="Note (optional)" className={inputCls} />
+                      <select name="withWho" defaultValue={d.assignedTo} title="Assign to" className={inputCls}>
+                        {[...new Set([d.assignedTo, ...d.reps].filter(Boolean))].map((r) => <option key={r} value={r}>{r.split(" ")[0]}</option>)}
+                      </select>
+                      <input name="note" placeholder="Note (optional)" className={`${inputCls} col-span-2`} />
                       <div className="col-span-2"><button className="rounded-xl bg-brand-navy px-3 py-1.5 text-xs font-bold text-white">Book appointment</button></div>
                     </form>
                     {d.appts.length === 0 && <div className="text-xs text-slate-400">Nothing booked.</div>}
