@@ -336,13 +336,15 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       // itself an address, that's the property line; otherwise fall
                       // back to the 📍 contact address. Never both.
                       const titleIsAddress = show.title && !!t && !titleIsName;
+                      // Address + phone are the two things reps act on — make them
+                      // big and colored so they pop off the card (Jon 2026-10-20).
                       return (<>
-                        {titleIsAddress && <div className={`truncate text-[11px] text-slate-500 ${blur}`}>📍 {t}</div>}
-                        {!titleIsAddress && addr && <div className={`truncate text-[10px] text-slate-400 ${blur}`}>📍 {addr}</div>}
-                        {!titleIsAddress && !addr && titleIsName && c.apn && <div className={`truncate text-[10px] font-semibold text-slate-500 ${blur}`}>🧭 APN {c.apn}</div>}
+                        {titleIsAddress && <div className={`truncate text-[13px] font-semibold text-brand-navy ${blur}`}>📍 {t}</div>}
+                        {!titleIsAddress && addr && <div className={`truncate text-[13px] font-semibold text-brand-navy ${blur}`}>📍 {addr}</div>}
+                        {!titleIsAddress && !addr && titleIsName && c.apn && <div className={`truncate text-[12px] font-semibold text-brand-navy ${blur}`}>🧭 APN {c.apn}</div>}
                       </>);
                     })()}
-                    {c.phone && <div className={`text-[10px] font-semibold text-slate-500 ${privacy ? "select-none blur-[3px]" : ""}`}>📞 {c.phone}</div>}
+                    {c.phone && <div className={`text-[13px] font-bold text-emerald-600 ${privacy ? "select-none blur-[3px]" : ""}`}>📞 {c.phone}</div>}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {show.money && c.money && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{c.money}</span>}
                       {/* 🕒 how long this lead has been sitting in the system — keep
