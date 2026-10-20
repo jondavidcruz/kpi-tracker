@@ -109,7 +109,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
               {allSnips.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           )}
-          {/\bhttps?:\/\/[^\s]+/i.test(text) && !text.includes("/l/") && (
+          {/\bhttps?:\/\/[^\s]+/i.test(text) && !text.includes("/offer/") && !text.includes("/l/") && (
             <button onClick={() => start(async () => { const out = await shortenTextLinksAction(text, contactId, oppId); setText(out); })} disabled={pending} title="Shorten the link(s) & track when the seller clicks" className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50">🔗 Shorten</button>
           )}
           <span className={`text-[10px] font-bold ${segs > 1 ? "text-amber-600" : "text-slate-400"}`}>{len} chars · {segs || "—"} text{segs === 1 ? "" : "s"}{segs > 1 ? " (they'll see it stitched together)" : ""}</span>

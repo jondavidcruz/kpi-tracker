@@ -26,15 +26,23 @@ function gen(): string {
   let s = ""; for (let i = 0; i < 6; i++) s += a[Math.floor(Math.random() * a.length)];
   return s;
 }
+// Readable slug from the property address → links read /offer/<address> (Jon
+// 2026-10-20) instead of a random code.
+export function slugify(s: string): string {
+  return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48).replace(/-+$/g, "");
+}
 
-/** Create (or reuse) a short code for a URL, optionally tied to a lead for tracking. */
-export async function createShortLink(url: string, meta: { contactId?: string; oppId?: string; by?: string } = {}): Promise<string> {
+/** Create (or reuse) a short code for a URL, optionally tied to a lead + a readable
+ *  slug hint (e.g. the property address). */
+export async function createShortLink(url: string, meta: { contactId?: string; oppId?: string; by?: string; slug?: string } = {}): Promise<string> {
   const clean = url.trim();
   const map = await readAll();
   const existing = Object.values(map).find((l) => l.url === clean && l.contactId === (meta.contactId || undefined));
   if (existing) return existing.code;
-  let code = gen(); let tries = 0;
-  while (map[code] && tries++ < 10) code = gen();
+  const base = meta.slug ? slugify(meta.slug) : "";
+  let code = base || gen(); let n = 1; let tries = 0;
+  // keep going until the code is free (or maps to this exact URL, which we'd reuse)
+  while (map[code] && map[code].url !== clean && tries++ < 50) { n++; code = base ? `${base}-${n}` : gen(); }
   map[code] = { code, url: clean, contactId: meta.contactId, oppId: meta.oppId, by: meta.by, created: new Date().toISOString(), clicks: 0 };
   await writeAll(map);
   return code;

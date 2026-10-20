@@ -1365,12 +1365,17 @@ export async function shortenTextLinksAction(text: string, contactId: string, op
   const me = await crmUser();
   if (!me || !text) return text;
   const { createShortLink, SHORT_BASE } = await import("@/lib/shortlinks");
+  // Slug from the property address → the link reads /offer/<address>.
+  const addr = (oppId ? (await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contact: { select: { address: true } } } }).catch(() => null)) : null);
+  const slug = (addr?.contact?.address || addr?.title || "").trim();
   const urls = [...new Set(text.match(/\bhttps?:\/\/[^\s<>()]+/gi) ?? [])]
-    .filter((u) => !u.includes("/l/") && !u.startsWith(`${SHORT_BASE}/l/`)); // skip already-short
+    .filter((u) => !u.includes("/offer/") && !u.includes("/l/")); // skip already-short
   let out = text;
+  let first = true;
   for (const u of urls) {
-    const code = await createShortLink(u.replace(/[.,!?)]+$/, ""), { contactId, oppId, by: me.name }).catch(() => "");
-    if (code) out = out.split(u.replace(/[.,!?)]+$/, "")).join(`${SHORT_BASE}/l/${code}`);
+    const bare = u.replace(/[.,!?)]+$/, "");
+    const code = await createShortLink(bare, { contactId, oppId, by: me.name, slug: first ? slug : "" }).catch(() => "");
+    if (code) { out = out.split(bare).join(`${SHORT_BASE}/offer/${code}`); first = false; }
   }
   return out;
 }
