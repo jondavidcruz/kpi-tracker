@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { formatAddress } from "@/lib/address";
-import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
+import { getCurrentUser, isManager, canManageAllLeads, canAccessMarketing } from "@/lib/auth";
+import { getBuyerMatchesForLead } from "@/lib/buyer-match-lead";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
 import { stripHtml } from "@/lib/crm-shared";
@@ -50,6 +51,10 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
     return <Card className="p-10 text-center text-slate-400">This lead is in {opp.assignedTo.split(" ")[0]}&apos;s pipeline. <Link href="/crm" className="font-bold text-sky-700 underline">Back to yours</Link></Card>;
   }
   const c = opp.contact;
+  // 🎯 Matching cash buyers for this lead (marketing access only) — who dispo should
+  // send it to, ranked, before it's even signed (Jon 2026-10-20).
+  const mktAccess = canAccessMarketing(me);
+  const buyerMatches = mktAccess ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice) : [];
 
   // ⚠️ duplicate-seller guard (nightly ?crmqa=1 found 16 phones split across
   // reps): any OTHER live contact sharing this phone is flagged on the card so
@@ -427,6 +432,33 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <span className="text-[11px] text-slate-500">Auto-drafting is <b>off</b> — PandaDoc&apos;s API charges per document. Create the cash/novation contract directly in PandaDoc for this lead.</span>
             )}
           </Card>
+
+          {/* 🎯 Matching cash buyers — who to send this land to, ranked (marketing only) */}
+          {mktAccess && buyerMatches.length > 0 && (
+            <Card className="p-3">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Matching cash buyers</span>
+                <a href="/marketing" className="ml-auto text-[10px] font-bold text-indigo-600 hover:underline">Full cascade →</a>
+              </div>
+              <div className="space-y-1.5">
+                {buyerMatches.map((b) => (
+                  <div key={b.id} className="flex items-start gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 ring-1 ring-slate-100">
+                    <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-navy text-[10px] font-extrabold text-white">{b.rank}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-[12px] font-bold text-slate-800">{b.name}</span>
+                        {b.fast && <span className="shrink-0 rounded bg-emerald-50 px-1 text-[9px] font-bold text-emerald-700">fast</span>}
+                        {b.topPrice != null && <span className="shrink-0 text-[10px] font-semibold text-slate-400">to ${Math.round(b.topPrice / 1000)}k</span>}
+                      </div>
+                      {b.reasons.length > 0 && <div className="truncate text-[10px] text-slate-500">{b.reasons.join(" · ")}</div>}
+                      {(b.phone || b.email) && <div className="truncate text-[10px] font-semibold text-slate-400">{b.phone}{b.phone && b.email ? " · " : ""}{b.email}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-1.5 text-[10px] text-slate-400">Ranked by area + price fit from your vetted buyers. Send top-down.</div>
+            </Card>
+          )}
 
           {comms.email && c.email && (
             <Card className="p-0">
