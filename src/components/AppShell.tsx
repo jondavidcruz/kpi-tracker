@@ -177,6 +177,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
       <GlobalBell me={me} />
       <GlobalDayPill me={me} />
       <GlobalDayTasks me={me} />
+      <GlobalReminders me={me} />
     </div>
   );
 }
@@ -186,6 +187,13 @@ async function GlobalDayTasks({ me }: { me: NonNullable<Awaited<ReturnType<typeo
   const hasTasks = isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? "");
   if (!hasTasks) return null;
   try { const { default: DayTasksModal } = await import("./DayTasksModal"); return <DayTasksModal />; } catch { return null; }
+}
+
+async function GlobalReminders({ me }: { me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }) {
+  // 🔔 App-wide due-soon pop-ups so no task/appointment is ever missed (Jon 2026-10-20).
+  const hasTasks = isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? "");
+  if (!hasTasks) return null;
+  try { const { default: DueReminders } = await import("./DueReminders"); return <DueReminders />; } catch { return null; }
 }
 
 async function GlobalBell({ me }: { me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }) {
