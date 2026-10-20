@@ -1,0 +1,73 @@
+// 📇 Per-deal buyer-agent + developer follow-up tracker (Jon 2026-10-20).
+// Process 1 ("DS: Sell Land Then Sign"): dispo sends an uncontracted deal to
+// vetted developers + buyer agents in the area, then CHASES them to learn what
+// they'll pay — the biggest hurdle is the follow-up sequence, and there was no
+// way to see which buyer attaches to which deal. This stores that list ON the
+// deal (CrmOpportunity.formData.__dispoBuyers) so no schema migration is needed.
+// Pure + client-safe: types, stages, and read/normalize helpers only.
+
+export type DispoBuyerKind = "developer" | "buyer_agent";
+export type DispoBuyerStage = "to_contact" | "contacted" | "following_up" | "offer_in" | "passed";
+
+export type DispoBuyer = {
+  id: string;               // entry id (not the MarketContact id)
+  name: string;
+  kind: DispoBuyerKind;
+  phone?: string;
+  email?: string;
+  stage: DispoBuyerStage;
+  lastContact?: string;     // YYYY-MM-DD
+  nextFollowUp?: string;    // YYYY-MM-DD — drives the "due" highlight
+  price?: string;           // what they said they'd pay
+  notes?: string;
+  buyerId?: string;         // link back to a MarketContact (vetted developer), if any
+  addedAt?: string;         // YYYY-MM-DD
+};
+
+// The follow-up SEQUENCE (left→right). Moving a card right = progress.
+export const DISPO_BUYER_STAGES: { key: DispoBuyerStage; label: string; cls: string; dot: string }[] = [
+  { key: "to_contact", label: "To reach out", cls: "bg-slate-100 text-slate-600", dot: "bg-slate-400" },
+  { key: "contacted", label: "Contacted", cls: "bg-sky-100 text-sky-700", dot: "bg-sky-500" },
+  { key: "following_up", label: "Following up", cls: "bg-amber-100 text-amber-700", dot: "bg-amber-500" },
+  { key: "offer_in", label: "💵 Price / offer in", cls: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
+  { key: "passed", label: "✕ Passed", cls: "bg-rose-100 text-rose-600", dot: "bg-rose-400" },
+];
+
+export const DISPO_BUYER_KINDS: { key: DispoBuyerKind; label: string; emoji: string }[] = [
+  { key: "developer", label: "Developer / cash buyer", emoji: "🏗" },
+  { key: "buyer_agent", label: "Buyer agent", emoji: "🧑‍💼" },
+];
+
+export function stageMeta(s: string) {
+  return DISPO_BUYER_STAGES.find((x) => x.key === s) ?? DISPO_BUYER_STAGES[0];
+}
+
+/** Read + normalize the tracker off an opp's formData (never throws). */
+export function readDispoBuyers(formData: unknown): DispoBuyer[] {
+  const fd = formData as Record<string, unknown> | null;
+  const raw = fd?.__dispoBuyers;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+    .map((r) => ({
+      id: String(r.id ?? ""),
+      name: String(r.name ?? ""),
+      kind: (r.kind === "buyer_agent" ? "buyer_agent" : "developer") as DispoBuyerKind,
+      phone: r.phone ? String(r.phone) : undefined,
+      email: r.email ? String(r.email) : undefined,
+      stage: (DISPO_BUYER_STAGES.some((s) => s.key === r.stage) ? r.stage : "to_contact") as DispoBuyerStage,
+      lastContact: r.lastContact ? String(r.lastContact) : undefined,
+      nextFollowUp: r.nextFollowUp ? String(r.nextFollowUp) : undefined,
+      price: r.price ? String(r.price) : undefined,
+      notes: r.notes ? String(r.notes) : undefined,
+      buyerId: r.buyerId ? String(r.buyerId) : undefined,
+      addedAt: r.addedAt ? String(r.addedAt) : undefined,
+    }))
+    .filter((r) => r.id && r.name);
+}
+
+/** Is this a dispositions pipeline (where the tracker belongs)? */
+export function isDispoPipeline(name: string | null | undefined): boolean {
+  const n = (name ?? "").toLowerCase();
+  return /^ds[:\s]/.test(n) || n.includes("sell land") || n.includes("go close") || n.includes("dispo");
+}

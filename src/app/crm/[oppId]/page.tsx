@@ -4,6 +4,8 @@ import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads, canAccessMarketing } from "@/lib/auth";
 import { getBuyerMatchesForLead } from "@/lib/buyer-match-lead";
 import SendToBuyersButton from "@/components/SendToBuyersButton";
+import DispoBuyerTracker from "@/components/DispoBuyerTracker";
+import { readDispoBuyers, isDispoPipeline } from "@/lib/dispo-buyers";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
 import { stripHtml } from "@/lib/crm-shared";
@@ -460,6 +462,11 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               </div>
               <div className="mt-1.5 text-[10px] text-slate-400">Ranked by area + price fit from your vetted buyers. Send top-down.</div>
             </Card>
+          )}
+
+          {/* 📇 Per-deal buyer/agent follow-up tracker — dispo pipelines only (Jon 2026-10-20) */}
+          {mktAccess && isDispoPipeline(opp.pipeline) && (
+            <DispoBuyerTracker oppId={opp.id} buyers={readDispoBuyers(opp.formData)} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} />
           )}
 
           {comms.email && c.email && (

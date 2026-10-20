@@ -1388,6 +1388,18 @@ export async function sendToMatchingBuyersAction(_prev: { ok: boolean; count: nu
   const task = await db.crmTask.create({ data: { oppId: opp.id, contactId: opp.contactId, title: `📤 Send ${addr} to ${matches.length} matching buyer${matches.length > 1 ? "s" : ""} — top-down`, due: today, assignedTo: opp.assignedTo || me.name, createdBy: "buyer-send" } }).catch(() => null);
   if (task) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(task.id, `Ready-to-send message:\n${blast}\n\nMatching buyers (send top-down):\n${list}`).catch(() => {}); }
   await logCrmEvent({ contactId: opp.contactId, oppId: opp.id, kind: "system", body: `📤 Queued send to ${matches.length} matching cash buyers (${matches.slice(0, 3).map((b) => b.name.split(" ")[0]).join(", ")}${matches.length > 3 ? "…" : ""}) — task created for ${opp.assignedTo || me.name}`, actor: "buyer-send" }).catch(() => {});
+  // 📇 Auto-seed the per-deal follow-up tracker so the chase starts itself — these
+  // buyers land as "contacted", next follow-up in 2 days (Jon 2026-10-20).
+  await mutateDispoBuyers(opp.id, (cur) => {
+    const have = new Set(cur.map((r) => String(r.name).toLowerCase()));
+    const add = matches.filter((b) => !have.has(b.name.toLowerCase())).map((b) => ({
+      id: `db_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      name: b.name, kind: "developer", phone: b.phone || undefined, email: b.email || undefined,
+      buyerId: b.id, stage: "contacted", lastContact: today, nextFollowUp: ymdAdd(2), addedAt: today,
+      price: b.topPrice != null ? `to $${Math.round(b.topPrice / 1000)}k` : undefined,
+    }));
+    return [...cur, ...add];
+  }).catch(() => {});
   revalidatePath(`/crm/${opp.id}`);
   return { ok: true, count: matches.length };
 }
@@ -1687,5 +1699,86 @@ export async function addPropertyNoteAction(formData: FormData) {
   if (!contactId || !body) return;
   await logCrmEvent({ contactId, oppId, kind: "note", body, actor: me.name });
   revalidatePath("/crm/conversations");
+  revalidatePath(`/crm/${oppId}`);
+}
+
+// ===== 📇 Per-deal buyer-agent + developer follow-up tracker (Jon 2026-10-20) =====
+// Stored on CrmOpportunity.formData.__dispoBuyers (no migration). This is dispo's
+// own follow-up "pipeline" for the buyers/agents they've sent an uncontracted deal
+// to — so they always know which buyer attaches to which deal and what's due next.
+const PT_TODAY = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+const ymdAdd = (days: number) => new Date(Date.now() + days * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+
+async function mutateDispoBuyers(oppId: string, fn: (list: Record<string, unknown>[]) => Record<string, unknown>[]) {
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true, contactId: true } });
+  if (!o) return null;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  const cur = Array.isArray(fd.__dispoBuyers) ? (fd.__dispoBuyers as Record<string, unknown>[]) : [];
+  const next = fn([...cur]);
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __dispoBuyers: next } as never } });
+  return o;
+}
+
+/** Add a buyer agent / developer we're working this deal. */
+export async function addDispoBuyerAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!oppId || !name) return;
+  const kind = String(formData.get("kind") ?? "developer") === "buyer_agent" ? "buyer_agent" : "developer";
+  const entry: Record<string, unknown> = {
+    id: `db_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    name, kind,
+    phone: String(formData.get("phone") ?? "").trim() || undefined,
+    email: String(formData.get("email") ?? "").trim() || undefined,
+    price: String(formData.get("price") ?? "").trim() || undefined,
+    buyerId: String(formData.get("buyerId") ?? "").trim() || undefined,
+    stage: "to_contact", addedAt: PT_TODAY(), nextFollowUp: ymdAdd(1),
+  };
+  const o = await mutateDispoBuyers(oppId, (list) => { if (list.some((r) => String(r.name).toLowerCase() === name.toLowerCase())) return list; return [...list, entry]; });
+  if (o?.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "system", body: `📇 Added ${kind === "buyer_agent" ? "buyer agent" : "developer"} to the follow-up tracker: ${name}`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** Update one field on a tracked buyer (stage / price / nextFollowUp / notes). */
+export async function updateDispoBuyerAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const entryId = String(formData.get("entryId") ?? "");
+  const field = String(formData.get("field") ?? "");
+  const value = String(formData.get("value") ?? "").trim();
+  if (!oppId || !entryId || !["stage", "price", "nextFollowUp", "notes", "phone", "email"].includes(field)) return;
+  await mutateDispoBuyers(oppId, (list) => list.map((r) => r.id === entryId ? { ...r, [field]: value || undefined } : r));
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** Log a touch: stamp last contact today, advance to "contacted", bump next follow-up. */
+export async function logDispoBuyerTouchAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const entryId = String(formData.get("entryId") ?? "");
+  if (!oppId || !entryId) return;
+  let touchedName = "";
+  const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => {
+    if (r.id !== entryId) return r;
+    touchedName = String(r.name);
+    const stage = r.stage === "to_contact" ? "contacted" : r.stage === "contacted" ? "following_up" : r.stage;
+    return { ...r, lastContact: PT_TODAY(), nextFollowUp: ymdAdd(3), stage };
+  }));
+  if (o?.contactId && touchedName) await logCrmEvent({ contactId: o.contactId, oppId, kind: "call", body: `📞 Followed up with ${touchedName} (deal buyer tracker) — next touch ${ymdAdd(3)}`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** Remove a tracked buyer from this deal. */
+export async function removeDispoBuyerAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const entryId = String(formData.get("entryId") ?? "");
+  if (!oppId || !entryId) return;
+  await mutateDispoBuyers(oppId, (list) => list.filter((r) => r.id !== entryId));
   revalidatePath(`/crm/${oppId}`);
 }

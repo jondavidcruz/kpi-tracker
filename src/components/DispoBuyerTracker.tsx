@@ -1,0 +1,110 @@
+"use client";
+// 📇 Per-deal buyer-agent + developer follow-up tracker (Jon 2026-10-20).
+// Lives on each dispo deal (right panel of the opp card). Shows the follow-up
+// SEQUENCE as a strip, lists everyone we've sent this deal to, and makes the
+// next-follow-up + "what they'll pay" one tap each — so the biggest hurdle (the
+// follow-up) is never dropped and every buyer is tied to its deal.
+import { useState } from "react";
+import { addDispoBuyerAction, updateDispoBuyerAction, logDispoBuyerTouchAction, removeDispoBuyerAction } from "@/app/crm/actions";
+import { DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, stageMeta, type DispoBuyer } from "@/lib/dispo-buyers";
+
+export default function DispoBuyerTracker({ oppId, buyers, today }: { oppId: string; buyers: DispoBuyer[]; today: string }) {
+  const [adding, setAdding] = useState(false);
+  const counts = DISPO_BUYER_STAGES.map((s) => ({ ...s, n: buyers.filter((b) => b.stage === s.key).length }));
+  const dueCount = buyers.filter((b) => b.nextFollowUp && b.nextFollowUp <= today && b.stage !== "passed" && b.stage !== "offer_in").length;
+
+  return (
+    <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📇 Buyers &amp; agents on this deal</span>
+        {dueCount > 0 && <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold text-red-700">{dueCount} follow-up due</span>}
+        <span className="ml-auto text-[10px] font-semibold text-slate-400">{buyers.length}</span>
+      </div>
+
+      {/* sequence strip */}
+      {buyers.length > 0 && (
+        <div className="mb-2 flex items-stretch gap-1">
+          {counts.map((s) => (
+            <div key={s.key} className={`flex-1 rounded-md px-1 py-1 text-center ${s.cls}`} title={s.label}>
+              <div className="text-[13px] font-extrabold leading-none tabular-nums">{s.n}</div>
+              <div className="mt-0.5 text-[7.5px] font-bold uppercase leading-tight">{s.label.replace(/^[^ ]+ /, "")}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* rows */}
+      <div className="space-y-1.5">
+        {buyers.length === 0 && <p className="py-1 text-[11px] text-slate-400">No buyers yet. Add the developers + buyer agents you send this deal to, then work the follow-ups.</p>}
+        {buyers.map((b) => {
+          const overdue = b.nextFollowUp && b.nextFollowUp <= today && b.stage !== "passed" && b.stage !== "offer_in";
+          const km = DISPO_BUYER_KINDS.find((k) => k.key === b.kind);
+          return (
+            <div key={b.id} className={`rounded-lg px-2 py-1.5 ring-1 ${overdue ? "bg-red-50 ring-red-200" : "bg-slate-50 ring-slate-100"}`}>
+              <div className="flex items-start gap-1.5">
+                <span className="text-[13px] leading-none" title={km?.label}>{km?.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12px] font-bold text-slate-800">{b.name}</div>
+                  {(b.phone || b.email) && <div className="truncate text-[10px] font-semibold text-slate-400">{b.phone}{b.phone && b.email ? " · " : ""}{b.email}</div>}
+                </div>
+                <form action={removeDispoBuyerAction}>
+                  <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} />
+                  <button className="rounded px-1 text-[11px] text-slate-300 hover:bg-rose-50 hover:text-rose-600" title="Remove from this deal">✕</button>
+                </form>
+              </div>
+
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                {/* stage */}
+                <form action={updateDispoBuyerAction} className="contents">
+                  <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="stage" />
+                  <select name="value" defaultValue={b.stage} onChange={(e) => e.currentTarget.form?.requestSubmit()} className={`rounded px-1 py-0.5 text-[10px] font-bold ${stageMeta(b.stage).cls}`}>
+                    {DISPO_BUYER_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                  </select>
+                </form>
+                {/* price */}
+                <form action={updateDispoBuyerAction} className="contents">
+                  <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="price" />
+                  <input name="value" defaultValue={b.price ?? ""} placeholder="💵 will pay…" onBlur={(e) => { if (e.currentTarget.value !== (b.price ?? "")) e.currentTarget.form?.requestSubmit(); }} className="w-20 rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] font-semibold" />
+                </form>
+                {/* next follow-up */}
+                <form action={updateDispoBuyerAction} className="contents">
+                  <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="nextFollowUp" />
+                  <input type="date" name="value" defaultValue={b.nextFollowUp ?? ""} onChange={(e) => e.currentTarget.form?.requestSubmit()} title="Next follow-up" className={`rounded border px-1 py-0.5 text-[10px] font-semibold ${overdue ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-500"}`} />
+                </form>
+                {/* log touch */}
+                <form action={logDispoBuyerTouchAction} className="contents">
+                  <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} />
+                  <button className="rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-sky-700" title="Stamp a touch today + bump the next follow-up">📞 Touch</button>
+                </form>
+              </div>
+              {b.lastContact && <div className="mt-0.5 text-[9px] text-slate-400">last touch {b.lastContact}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* add */}
+      {adding ? (
+        <form action={addDispoBuyerAction} className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200" onSubmit={() => setAdding(false)}>
+          <input type="hidden" name="oppId" value={oppId} />
+          <div className="flex gap-1">
+            <input name="name" placeholder="Name / company *" required className="min-w-0 flex-1 rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
+            <select name="kind" className="rounded border border-slate-300 px-1 py-1 text-[11px] font-semibold">
+              {DISPO_BUYER_KINDS.map((k) => <option key={k.key} value={k.key}>{k.emoji} {k.key === "buyer_agent" ? "Agent" : "Developer"}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-1">
+            <input name="phone" placeholder="Phone" className="min-w-0 flex-1 rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
+            <input name="price" placeholder="💵 will pay" className="w-24 rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
+          </div>
+          <div className="flex gap-1">
+            <button className="flex-1 rounded bg-brand-navy px-2 py-1 text-[11px] font-bold text-white hover:bg-brand-navy-700">Add to deal</button>
+            <button type="button" onClick={() => setAdding(false)} className="rounded bg-slate-200 px-2 py-1 text-[11px] font-bold text-slate-600">Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <button onClick={() => setAdding(true)} className="mt-2 w-full rounded-lg border border-dashed border-slate-300 py-1.5 text-[11px] font-bold text-slate-500 hover:border-brand-navy hover:text-brand-navy">+ Add buyer / agent to this deal</button>
+      )}
+    </div>
+  );
+}
