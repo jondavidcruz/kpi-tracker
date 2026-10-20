@@ -6,6 +6,12 @@ export function pandadocConfigured(): boolean {
   return Boolean(process.env.PANDADOC_API_KEY);
 }
 
+// 🔌 API DRAFTING OFF by default (Jon 2026-10-20: PandaDoc's API uses paid "usage
+// credits" and he doesn't want to be charged). Creating documents via the API is
+// disabled unless PANDADOC_DRAFTING=1 is set in the env. Inbound webhooks + reading
+// signed docs are unaffected — this only gates document CREATION (the paid part).
+export const PANDADOC_DRAFTING_ENABLED = process.env.PANDADOC_DRAFTING === "1";
+
 type Res = { ok: boolean; status: number; body: unknown };
 async function pd(path: string, params?: Record<string, string>): Promise<Res> {
   const url = new URL(BASE + path);

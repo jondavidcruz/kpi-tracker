@@ -9,6 +9,7 @@ import { CRM_FORMS } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import DraftOfferButton from "@/components/DraftOfferButton";
+import { PANDADOC_DRAFTING_ENABLED } from "@/lib/pandadoc";
 import EditableNote from "@/components/EditableNote";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import OppPipelineMover from "@/components/OppPipelineMover";
@@ -418,9 +419,13 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
         <div className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
           <Card className="flex flex-wrap items-center gap-2 p-3">
             <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📝 Contracts</span>
-            <DraftOfferButton oppId={opp.id} kind="cash" label="💵 Draft cash offer" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700" />
-            <DraftOfferButton oppId={opp.id} kind="novation" label="🏷 Draft novation offer" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700" />
-            <span className="text-[10px] text-slate-400">drafts in PandaDoc with seller, address &amp; price pre-filled — link lands on the timeline. Moving to an offer stage auto-drafts cash (tag the lead <b>novation</b> first to flip it).</span>
+            {PANDADOC_DRAFTING_ENABLED ? (<>
+              <DraftOfferButton oppId={opp.id} kind="cash" label="💵 Draft cash offer" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700" />
+              <DraftOfferButton oppId={opp.id} kind="novation" label="🏷 Draft novation offer" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700" />
+              <span className="text-[10px] text-slate-400">drafts in PandaDoc with seller, address &amp; price pre-filled — link lands on the timeline. Moving to an offer stage auto-drafts cash (tag the lead <b>novation</b> first to flip it).</span>
+            </>) : (
+              <span className="text-[11px] text-slate-500">Auto-drafting is <b>off</b> — PandaDoc&apos;s API charges per document. Create the cash/novation contract directly in PandaDoc for this lead.</span>
+            )}
           </Card>
 
           {comms.email && c.email && (

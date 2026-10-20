@@ -1326,7 +1326,8 @@ export async function telnyxCallAction(formData: FormData): Promise<{ ok: boolea
 
 /** Shared PandaDoc drafter: cash vs novation template, timeline log + task. */
 async function draftContract(oppId: string, kind: string, actor: string): Promise<{ ok: boolean; msg: string; url?: string }> {
-  const { pandadocConfigured, createOfferDraft, PANDADOC_TEMPLATES } = await import("@/lib/pandadoc");
+  const { pandadocConfigured, createOfferDraft, PANDADOC_TEMPLATES, PANDADOC_DRAFTING_ENABLED } = await import("@/lib/pandadoc");
+  if (!PANDADOC_DRAFTING_ENABLED) return { ok: false, msg: "PandaDoc contract drafting is turned off (its API charges per document). Create the contract directly in PandaDoc, or re-enable drafting once credits are added." };
   if (!pandadocConfigured()) return { ok: false, msg: "PandaDoc key missing" };
   const tpl = PANDADOC_TEMPLATES[kind] ?? PANDADOC_TEMPLATES.cash;
   const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, include: { contact: true } });
