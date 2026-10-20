@@ -135,6 +135,7 @@ export default function Sidebar({
       { href: "/call-scoring", label: "Call scoring", Icon: Headphones },
       { href: "/scripts", label: "Scripts", Icon: ScrollText },
       { href: "/glossary", label: "Glossary", Icon: BookOpen },
+      { href: "/playbooks", label: "Playbooks", Icon: Lightbulb },
     ] },
     { label: "EOS", items: [
       { href: "/meeting", label: "Monday Meeting", Icon: Presentation, managerOnly: true },
@@ -158,7 +159,6 @@ export default function Sidebar({
       { href: "/roadmap", label: "Roadmap", Icon: Map, csuiteOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, csuiteOnly: true },
       { href: "/blueprint", label: "Blueprint", Icon: Compass, csuiteOnly: true },
-      { href: "/playbooks", label: "Playbooks", Icon: Lightbulb, csuiteOnly: true },
       { href: "/land-master", label: "Land Master Plan", Icon: Map, csuiteOnly: true },
     ] },
     { label: "Requests & Support", items: [

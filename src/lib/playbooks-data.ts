@@ -16,7 +16,15 @@ export interface Playbook {
   diagram?: string;              // key of an inline how-it-works diagram (assignment | double_close | subject_to | novation)
 }
 
-export const PLAYBOOK_CATEGORIES = ["Deal Analysis", "Scripts & Outreach", "Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing", "Training Library", "Land Courses"] as const;
+// Team-facing playbook categories (shared with the whole company, Jon 2026-10-19).
+// NOTE: "Land Courses" is intentionally NOT here — those are our proprietary land
+// plays and live ONLY in the C-suite Land Master Plan (see LAND_COURSE_CATEGORY).
+export const PLAYBOOK_CATEGORIES = ["Deal Analysis", "Scripts & Outreach", "Our Contracts", "Real Closings (HUDs)", "Contracts & Terms", "Escrow & Closing", "Training Library"] as const;
+
+// The proprietary land-course playbooks (John Duong infill / Hunter P. recreational /
+// Tyson Smith Lux goldmine + the market-research cheat sheet). Kept for ourselves —
+// rendered on /land-master (C-suite only), never in the team Playbooks.
+export const LAND_COURSE_CATEGORY = "Land Courses";
 
 export const PLAYBOOKS: Playbook[] = [
   {
