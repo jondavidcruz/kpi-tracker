@@ -38,18 +38,25 @@ export default function DueReminders() {
   const now = Date.now();
   const snoozedUntil = (id: string): number => { try { return Number(localStorage.getItem(`fo_rem_snz_${id}`) || 0); } catch { return 0; } };
   const snooze = (id: string, mins: number) => { try { localStorage.setItem(`fo_rem_snz_${id}`, String(Date.now() + mins * 60000)); } catch { /* ok */ } setSnoozeBump((n) => n + 1); };
+  // Global close — Jon 2026-10-20: "don't force me to take action, let me close it."
+  // Hides the whole popup for a while; timed items still come back as their time nears.
+  const hiddenUntil = (): number => { try { return Number(localStorage.getItem("fo_rem_hide_until") || 0); } catch { return 0; } };
+  const closeAll = () => { try { localStorage.setItem("fo_rem_hide_until", String(Date.now() + 45 * 60000)); } catch { /* ok */ } setSnoozeBump((n) => n + 1); };
 
-  // Build the candidate items with their fire-time.
+  // Only TIMED items nag here — appointments and tasks that have a time. Plain
+  // "due today" tasks (no time) are NOT forced into this popup (they'd flood it);
+  // they live in the once-a-day start/end popup, the Tasks page, and the green card.
   const all: Item[] = [
     ...(data?.appts ?? []).map((a): Item => ({ key: `a_${a.id}`, kind: "appt", id: a.id, title: a.title, lead: a.lead, oppId: a.oppId, ms: Date.parse(a.atIso), timed: true })),
-    ...(data?.tasks ?? []).map((t): Item => ({ key: `t_${t.id}`, kind: "task", id: t.id, title: t.title, lead: t.lead, oppId: t.oppId, ms: t.time ? Date.parse(`${t.due}T${t.time}:00`) : null, timed: !!t.time })),
+    ...(data?.tasks ?? []).filter((t) => t.time).map((t): Item => ({ key: `t_${t.id}`, kind: "task", id: t.id, title: t.title, lead: t.lead, oppId: t.oppId, ms: Date.parse(`${t.due}T${t.time}:00`), timed: true })),
   ];
 
-  // Which are "active" right now (within the window and not snoozed)?
-  const active = all.filter((it) => {
+  // Which are "active" right now (within the window, not snoozed, not globally hidden)?
+  const active = hiddenUntil() > now ? [] : all.filter((it) => {
     if (snoozedUntil(it.id) > now) return false;
-    if (it.timed && it.ms) { const mins = (it.ms - now) / 60000; return mins <= WINDOW_MIN && mins >= -PAST_GRACE_MIN; }
-    return true; // untimed task due today — always eligible (nags on a longer snooze)
+    if (it.ms == null) return false;
+    const mins = (it.ms - now) / 60000;
+    return mins <= WINDOW_MIN && mins >= -PAST_GRACE_MIN;
   });
 
   const isUrgent = (it: Item) => it.timed && it.ms != null && (it.ms - now) / 60000 <= 15;
@@ -83,6 +90,7 @@ export default function DueReminders() {
           <span className="text-base">🔔</span>
           <span className="text-sm font-extrabold text-slate-900">Coming up — don&apos;t miss it</span>
           <span className="ml-auto text-[10px] font-bold text-slate-400">{active.length} to do</span>
+          <button onClick={closeAll} title="Hide for a while" className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-500 hover:bg-slate-200">✕</button>
         </div>
         <div className="max-h-[60vh] space-y-1.5 overflow-y-auto">
           {active.sort((a, b) => (a.ms ?? Infinity) - (b.ms ?? Infinity)).map((it) => {
