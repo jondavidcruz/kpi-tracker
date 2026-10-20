@@ -185,6 +185,10 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
 
   const drop = (stage: string) => {
     const c = cards.find((x) => x.id === dragId);
+    // Clear the drag state HERE, not only in onDragEnd — moving the card to a new
+    // column re-renders it before onDragEnd can fire, which left the card stuck at
+    // opacity-50 ("grayed out") after a move (Jon 2026-10-20).
+    setDragId(null); setOverCol(null);
     if (!c || c.stage === stage) return;
     setCards(cards.map((x) => (x.id === c.id ? { ...x, stage } : x)));
     const fd = new FormData();
