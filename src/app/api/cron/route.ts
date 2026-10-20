@@ -2105,8 +2105,23 @@ export async function GET(request: Request) {
     const byState: Record<string, number> = {};
     for (const r of fresh) { const s = (r.state || r.mailingState || "?").toUpperCase(); byState[s] = (byState[s] ?? 0) + 1; }
     if (!fresh.length) {
-      await storeBuyerFeed({ date, count: 0, link: "", byState, rows: [] });
-      return NextResponse.json({ ok: true, received: rows.length, fresh: 0, skippedDup, skippedMarket, note: "no NEW buyers today — nothing emailed" });
+      return NextResponse.json({ ok: true, received: rows.length, fresh: 0, skippedDup, skippedMarket, note: "no NEW buyers today" });
+    }
+    // 🎯 ONE location (Jon 2026-10-20): sourced buyers land in Buyer Research as
+    // to-vet records so the team vets them in-app — not in a separate Cash Buyers
+    // page or a Google Sheet. Tagged by source + market.
+    const { createBuyer } = await import("@/lib/buyers/write");
+    let addedToPool = 0;
+    for (const r of fresh) {
+      const st = (r.state || r.mailingState || "").toUpperCase();
+      const res = await createBuyer({
+        name: `${r.firstName || ""} ${r.lastName || ""}`.trim() || (r.company || ""),
+        company: r.company || "", phone: r.phone || "", phone2: r.phone2 || "", email: r.email || "",
+        category: "land", type: "developer", region: st, market: st,
+        notes: [r.propertyAddress ? `Owns/bought: ${r.propertyAddress}` : "", r.lastSaleDate ? `Last sale ${r.lastSaleDate}` : "", r.notes || ""].filter(Boolean).join(" · "),
+        vetStage: "to_vet", source: "Cash buyer sourcing (DealMachine)",
+      }, "buyer-miner", { isLand: true, targetStates: st ? [st] : undefined }).catch(() => ({ created: false } as { created: boolean }));
+      if (res.created) addedToPool++;
     }
     const csv = buildBuyerCsv(fresh);
     const filename = `cash-buyers-${date}.csv`;
@@ -2133,18 +2148,15 @@ export async function GET(request: Request) {
       const recipient = url.searchParams.get("to") || "info@freedom-offers.com";
       await sendEmailWithAttachment([recipient], `💰 ${fresh.length} new cash land buyers — ${date}`, html, { filename, content: Buffer.from(csv).toString("base64") });
     } catch { /* email best-effort */ }
-    // Google Sheet + post the new list to the buyers Chat space (Jon 2026-10-17).
-    let sheetLink = "";
-    try {
-      const { gdriveConfigured, ensureSubfolder, uploadCsvAsSheet, rootFolderId } = await import("@/lib/gdrive");
-      if (gdriveConfigured() && rootFolderId()) sheetLink = (await uploadCsvAsSheet(await ensureSubfolder(rootFolderId(), "Cash Buyers"), `Cash buyers — ${date}`, csv)).link;
-    } catch { /* sheet best-effort */ }
+    // Point the team to the ONE hub — Buyer Research — not a Google Sheet
+    // (Jon 2026-10-20: retire the sheet; vet in-app). The CSV stays on Drive +
+    // email only as a dialer-load convenience.
     try {
       const { postBuyerListToChat } = await import("@/lib/buyers-chat");
-      await postBuyerListToChat({ title: `Cash land buyers — ${date}`, count: fresh.length, sheetLink: sheetLink || link, csvLink: link, byState, note: "Fresh DealMachine cash buyers — ready for the Direct REI dialer/SMS/email. Scrub DNC first." });
+      await postBuyerListToChat({ title: `New buyers to vet — ${date}`, count: addedToPool || fresh.length, sheetLink: "https://kpi-tracker-lovat.vercel.app/vetting", csvLink: link, byState, note: "Added to Buyer Research — call each, capture their buy box, then mark Vetted. Scrub DNC first." });
     } catch { /* chat best-effort */ }
     await storeBuyerFeed({ date, count: fresh.length, link, byState, rows: fresh });
-    return NextResponse.json({ ok: true, received: rows.length, fresh: fresh.length, skippedDup, skippedMarket, byState, driveLink: link, sheetLink });
+    return NextResponse.json({ ok: true, received: rows.length, fresh: fresh.length, addedToBuyerResearch: addedToPool, skippedDup, skippedMarket, byState, driveLink: link });
   }
 
   // 🔎 Direct REI contact field probe (?dreicontactprobe=1): dumps a sample

@@ -158,7 +158,10 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       fd.set("oppId", quick.id); fd.set("contactId", quick.contactId ?? ""); fd.set("to", quick.phone); fd.set("text", qa.sms);
       startQuick(async () => { await sendCrmSmsAction(fd); });
     }
-    setQuick(null); setQa({ title: "", due: "", when: "", tag: "", sms: "", note: "", assignee: "", dueTime: "" });
+    // Notes: stay put so you can keep jotting (Jon 2026-10-20: "it goes back to the
+    // pipeline — make it stay in the same field"). Everything else closes the popover.
+    if (quick.kind === "note") { setQa((p) => ({ ...p, note: "" })); }
+    else { setQuick(null); setQa({ title: "", due: "", when: "", tag: "", sms: "", note: "", assignee: "", dueTime: "" }); }
   };
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // useLayoutEffect = restore the saved collapse state BEFORE first paint, so

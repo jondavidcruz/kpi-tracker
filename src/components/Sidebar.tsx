@@ -110,7 +110,6 @@ export default function Sidebar({
     ] },
     { label: "Marketing", items: [
       { href: "/lead-sourcing", label: "Lead Sourcing", Icon: TrendingUp, marketingOnly: true },
-      { href: "/cash-buyers", label: "Cash Buyers", Icon: Banknote, marketingOnly: true },
     ] },
     { label: "Business Heartbeat", items: [
       { href: "/compliance", label: "Compliance", Icon: ShieldCheck },

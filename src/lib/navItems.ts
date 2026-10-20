@@ -35,7 +35,6 @@ export const NAV_GROUPS: NavGroup[] = [
   ] },
   { group: "Marketing", items: [
     { href: "/lead-sourcing", label: "Lead Sourcing", gate: "marketing" },
-    { href: "/cash-buyers", label: "Cash Buyers", gate: "marketing" },
   ] },
   { group: "Business Heartbeat", items: [
     { href: "/compliance", label: "Compliance", gate: "all" },
