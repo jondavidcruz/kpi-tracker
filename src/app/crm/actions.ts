@@ -1359,6 +1359,38 @@ async function draftContract(oppId: string, kind: string, actor: string): Promis
   return { ok: false, msg: r.error ?? "failed" };
 }
 
+/** 📤 Queue the send to matching cash buyers from a land lead (Jon 2026-10-20). Does
+ *  NOT auto-email (the land flow markets before signing + a human sends): it creates a
+ *  tracked dispo task with a ready-to-send blast message + the ranked buyers' contacts,
+ *  and logs the timeline. Marketing-access gated. Returns {ok, count}. */
+export async function sendToMatchingBuyersAction(_prev: { ok: boolean; count: number; msg?: string } | null, formData: FormData): Promise<{ ok: boolean; count: number; msg?: string }> {
+  const me = await crmUser();
+  const { canAccessMarketing } = await import("@/lib/auth");
+  if (!me || !canAccessMarketing(me)) return { ok: false, count: 0, msg: "no access" };
+  const oppId = String(formData.get("oppId") ?? "");
+  if (!oppId) return { ok: false, count: 0, msg: "no lead" };
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { id: true, title: true, assignedTo: true, value: true, askPrice: true, contactId: true, formData: true, contact: { select: { name: true, address: true } } } });
+  if (!opp) return { ok: false, count: 0, msg: "lead not found" };
+  const addr = opp.contact.address || opp.title || "the property";
+  const price = opp.value ?? opp.askPrice;
+  const { getBuyerMatchesForLead } = await import("@/lib/buyer-match-lead");
+  const matches = await getBuyerMatchesForLead(addr, price);
+  if (!matches.length) return { ok: false, count: 0, msg: "No vetted buyers match this area/price yet — add buyers in Buyer Research." };
+
+  const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
+  const feats = Array.isArray(fd.land?.features) ? (fd.land!.features as string[]).join(", ") : "";
+  const lot = String(fd.land?.lot ?? "");
+  const blast = `🏞 Land available: ${addr}${price != null ? ` — asking ${`$${price.toLocaleString()}`}` : ""}${lot ? ` · ${lot}` : ""}${feats ? `\nFeatures: ${feats}` : ""}\nCash/fast close preferred. Interested or want details? Reply here.`;
+  const list = matches.map((b, i) => `${i + 1}. ${b.name}${b.topPrice != null ? ` (to $${Math.round(b.topPrice / 1000)}k)` : ""}${b.phone ? ` · ${b.phone}` : ""}${b.email ? ` · ${b.email}` : ""}${b.reasons.length ? ` — ${b.reasons.join(", ")}` : ""}`).join("\n");
+
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const task = await db.crmTask.create({ data: { oppId: opp.id, contactId: opp.contactId, title: `📤 Send ${addr} to ${matches.length} matching buyer${matches.length > 1 ? "s" : ""} — top-down`, due: today, assignedTo: opp.assignedTo || me.name, createdBy: "buyer-send" } }).catch(() => null);
+  if (task) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(task.id, `Ready-to-send message:\n${blast}\n\nMatching buyers (send top-down):\n${list}`).catch(() => {}); }
+  await logCrmEvent({ contactId: opp.contactId, oppId: opp.id, kind: "system", body: `📤 Queued send to ${matches.length} matching cash buyers (${matches.slice(0, 3).map((b) => b.name.split(" ")[0]).join(", ")}${matches.length > 3 ? "…" : ""}) — task created for ${opp.assignedTo || me.name}`, actor: "buyer-send" }).catch(() => {});
+  revalidatePath(`/crm/${opp.id}`);
+  return { ok: true, count: matches.length };
+}
+
 /** Card buttons: 📝 Draft cash / novation contract on demand. */
 export async function draftContractAction(formData: FormData) {
   const me = await crmUser();

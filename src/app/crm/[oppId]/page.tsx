@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads, canAccessMarketing } from "@/lib/auth";
 import { getBuyerMatchesForLead } from "@/lib/buyer-match-lead";
+import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
 import { stripHtml } from "@/lib/crm-shared";
@@ -438,7 +439,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <Card className="p-3">
               <div className="mb-1.5 flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Matching cash buyers</span>
-                <a href="/marketing" className="ml-auto text-[10px] font-bold text-indigo-600 hover:underline">Full cascade →</a>
+                <SendToBuyersButton oppId={opp.id} />
               </div>
               <div className="space-y-1.5">
                 {buyerMatches.map((b) => (
