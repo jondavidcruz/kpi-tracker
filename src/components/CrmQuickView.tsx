@@ -428,7 +428,9 @@ function UnderwriteBlock({ d }: { d: Payload }) {
   const resp = String(fin.sellerResponse ?? "");
   const rejected = resp.includes("Rejected") || resp.includes("Countered");
   const addr = d.contact.address || d.title;
-  const calcHref = `/underwriting?address=${encodeURIComponent(addr)}`;
+  // Pass the oppId so an exported cash/novation/assignment offer links straight back
+  // to THIS card (Jon 2026-10-20) — not just address-matched.
+  const calcHref = `/underwriting?address=${encodeURIComponent(addr)}&opp=${encodeURIComponent(d.id)}`;
 
   // negotiation playbook (rule-based, uses the real numbers on this lead)
   const tips: string[] = [];

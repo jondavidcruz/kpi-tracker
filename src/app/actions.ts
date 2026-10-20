@@ -1254,7 +1254,7 @@ export async function readUnderwrites(): Promise<UwRec[]> {
   if (!row) return [];
   try { const a = JSON.parse(row.description || "[]"); return Array.isArray(a) ? a : []; } catch { return []; }
 }
-export async function saveUnderwrite(snap: { tab: string; market: string; address: string; mao: number; fee: number; confidence: number; seconds: number | null }) {
+export async function saveUnderwrite(snap: { tab: string; market: string; address: string; mao: number; fee: number; confidence: number; seconds: number | null; oppId?: string }) {
   const me = await getCurrentUser();
   if (!me) return;
   const clean = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? Math.round(x) : 0);
@@ -1269,6 +1269,7 @@ export async function saveUnderwrite(snap: { tab: string; market: string; addres
     fee: clean(snap.fee),
     confidence: Math.min(100, Math.max(0, clean(snap.confidence))),
     seconds: snap.seconds != null && Number.isFinite(snap.seconds) ? Math.round(snap.seconds) : null,
+    ...(snap.oppId ? { oppId: String(snap.oppId).slice(0, 40) } : {}),
   };
   const list = await readUnderwrites();
   list.unshift(rec);

@@ -391,11 +391,16 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV(k, e.target.value);
 
   // CRM "🧮 Underwrite" links pass ?address= — prefill the subject once,
-  // without starting the comp timer (no edit happened yet).
+  // without starting the comp timer (no edit happened yet). They also pass ?opp=
+  // so an exported offer links straight back to that lead's card (Jon 2026-10-20:
+  // "cash + novation exports should save on the opportunity card").
+  const oppIdRef = useRef("");
   useEffect(() => {
     try {
-      const addr = new URLSearchParams(window.location.search).get("address");
+      const qs = new URLSearchParams(window.location.search);
+      const addr = qs.get("address");
       if (addr && !f.subject) setF((p) => (p.subject ? p : { ...p, subject: addr }));
+      oppIdRef.current = qs.get("opp") || "";
     } catch { /* no URL access */ }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -998,7 +1003,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
       tab === "assignment" ? aFee : isNovTab ? nMinFee : tab === "developer" ? devFeeAtMao :
       tab === "cash_land" ? Math.max(0, clLandAvg - clMao) : tab === "creative" ? cMargin :
       tab === "listing" ? mktFee : 0;
-    if (tab !== "note_land") saveUnderwrite({ tab, market: "", address: v("subject") || "", mao: dealMax, fee: predFee, confidence: confPct, seconds: compSeconds ?? null }).catch(() => {});
+    if (tab !== "note_land") saveUnderwrite({ tab, market: "", address: v("subject") || "", oppId: oppIdRef.current, mao: dealMax, fee: predFee, confidence: confPct, seconds: compSeconds ?? null }).catch(() => {});
 
     const w = window.open("", "_blank", "width=860,height=940");
     if (!w) return;

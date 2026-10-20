@@ -12,6 +12,7 @@ export interface UwRec {
   fee: number;         // predicted fee / spread / profit for us
   confidence: number;  // 0–100 evidence + checks score at export
   seconds: number | null; // underwrite time
+  oppId?: string;      // the CRM opportunity this was run from (exact link → shows on its card)
 }
 
 /** Normalize an address for matching: lowercase, strip punctuation + unit noise. */

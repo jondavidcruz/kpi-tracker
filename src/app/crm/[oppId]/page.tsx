@@ -103,7 +103,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             {comms.call && c.altPhone && <CallButton phone={c.altPhone} name={c.name} oppId={opp.id} contactId={c.id} label="📞 Alt" subtle />}
             
             {!comms.call && !comms.sms && !comms.email && <span className="rounded-lg bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-400" title="Notes, tasks, stages & appointments are all yours — paid channels are off for your account">📝 notes-only access</span>}
-            <a href={`/underwriting?address=${encodeURIComponent(opp.title)}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">🧮 Underwrite</a>
+            <a href={`/underwriting?address=${encodeURIComponent(opp.title)}&opp=${encodeURIComponent(opp.id)}`} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">🧮 Underwrite</a>
           </span>
         </div>
 

@@ -34,8 +34,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { addrMatch } = await import("@/lib/underwrite-history");
   const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
   const leadAddr = opp.contact.address || String(fd.discovery?.address ?? "") || opp.title;
+  // Match an exported offer to this card by its exact oppId link first (reliable —
+  // Jon 2026-10-20), then fall back to address match for offers run before the link.
   const underwrites = (await readUnderwrites().catch(() => []))
-    .filter((u) => u.address && addrMatch(u.address, leadAddr))
+    .filter((u) => u.oppId === opp.id || (u.address && addrMatch(u.address, leadAddr)))
     .slice(0, 8)
     .map((u) => ({ tab: u.tab, mao: u.mao, fee: u.fee, confidence: u.confidence, by: u.by, at: u.at }));
 
