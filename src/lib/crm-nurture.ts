@@ -25,20 +25,26 @@ export async function parkNeverCalled(opts: { commit?: boolean; days?: number; d
   const today = new Date().toISOString().slice(0, 10);
   const pipes = await readPipelines();
   // pipeline → { newKeys, nurtureKey } (only pipelines that HAVE a nurture stage)
+  // ACQUISITIONS pipelines only ("AQ:", "AQjr:", "AQM:" …) — dispo boards have
+  // their own rhythm and "overpriced_nurture" there means something else.
   const plan = new Map<string, { newKeys: string[]; nurture: string }>();
+  const noNurture: string[] = [];
+  const NURTURE_RX = /nurture|long.?term|follow.?up.?later|parked|cold/i;
   for (const p of pipes) {
-    const nurture = p.stages.find((s) => /nurture/i.test(s.key) || /nurture/i.test(s.label))?.key;
+    if (!/\bAQ/i.test(p.name)) continue;
+    const nurture = p.stages.find((s) => NURTURE_RX.test(s.key) || NURTURE_RX.test(s.label))?.key;
     const newKeys = p.stages.filter((s) => /^new/i.test(s.key)).map((s) => s.key);
-    if (nurture && newKeys.length) plan.set(p.name === "War Room" ? "" : p.name, { newKeys, nurture });
+    if (nurture && newKeys.length) plan.set(p.name, { newKeys, nurture });
+    else noNurture.push(p.name);
   }
   const pipelineNames = [...plan.keys()];
-  if (!pipelineNames.length) return { ok: true, committed: false, days, candidates: 0, moved: 0, perPipeline: {}, perOwner: {}, sample: [], note: "no pipeline has both a new + nurture stage" };
+  if (!pipelineNames.length) return { ok: true, committed: false, days, candidates: 0, moved: 0, perPipeline: {}, perOwner: {}, sample: [], note: "no AQ pipeline has both a new + nurture stage", noNurtureStage: noNurture, ...(opts.diag ? { allPipelines: pipes.map((p) => ({ name: p.name, keys: p.stages.map((s) => s.key) })) } : {}) };
   const raw = await db.crmOpportunity.findMany({
     where: { archivedAt: null, pipeline: { in: pipelineNames }, createdAt: { lt: cutoff } },
     select: { id: true, contactId: true, title: true, pipeline: true, stage: true, assignedTo: true, nextFollowUp: true },
     take: 20000,
   });
-  const diag: Record<string, unknown> = { plan: Object.fromEntries([...plan.entries()].map(([k, v]) => [k || "War Room", v])), rawOlderThanCutoff: raw.length };
+  const diag: Record<string, unknown> = { plan: Object.fromEntries(plan.entries()), noNurtureStage: noNurture, allPipelines: pipes.map((p) => ({ name: p.name, keys: p.stages.map((s) => s.key) })), rawOlderThanCutoff: raw.length };
   const inNew = raw.filter((o) => plan.get(o.pipeline)?.newKeys.includes(o.stage));
   diag.inNewStage = inNew.length;
   let cands = inNew.filter((o) => !o.nextFollowUp || o.nextFollowUp < today);
