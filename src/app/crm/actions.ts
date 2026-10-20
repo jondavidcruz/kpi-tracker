@@ -1359,27 +1359,6 @@ async function draftContract(oppId: string, kind: string, actor: string): Promis
   return { ok: false, msg: r.error ?? "failed" };
 }
 
-/** 🔗 Shorten every long URL in an SMS draft into a trackable /l/<code> link tied
- *  to this lead (Jon 2026-10-20). Returns the rewritten text. */
-export async function shortenTextLinksAction(text: string, contactId: string, oppId: string): Promise<string> {
-  const me = await crmUser();
-  if (!me || !text) return text;
-  const { createShortLink, SHORT_BASE } = await import("@/lib/shortlinks");
-  // Slug from the property address → the link reads /offer/<address>.
-  const addr = (oppId ? (await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contact: { select: { address: true } } } }).catch(() => null)) : null);
-  const slug = (addr?.contact?.address || addr?.title || "").trim();
-  const urls = [...new Set(text.match(/\bhttps?:\/\/[^\s<>()]+/gi) ?? [])]
-    .filter((u) => !u.includes("/offer/") && !u.includes("/l/")); // skip already-short
-  let out = text;
-  let first = true;
-  for (const u of urls) {
-    const bare = u.replace(/[.,!?)]+$/, "");
-    const code = await createShortLink(bare, { contactId, oppId, by: me.name, slug: first ? slug : "" }).catch(() => "");
-    if (code) { out = out.split(bare).join(`${SHORT_BASE}/offer/${code}`); first = false; }
-  }
-  return out;
-}
-
 /** Card buttons: 📝 Draft cash / novation contract on demand. */
 export async function draftContractAction(formData: FormData) {
   const me = await crmUser();
