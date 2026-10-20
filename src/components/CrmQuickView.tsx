@@ -81,12 +81,22 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
     (d?.formData?.property as Record<string, string> | undefined)?.legal ??
     (d?.formData?.property as Record<string, string> | undefined)?.apn ?? "",
   );
+  // Signed agreements on this lead = file-kind timeline events (uploads + PandaDoc).
+  const lienDocs = (d?.events ?? [])
+    .filter((e) => e.kind === "file")
+    .map((e) => {
+      const m = (e.body || "").match(/https?:\/\/\S+/);
+      const label = (e.body || "").replace(/https?:\/\/\S+/g, "").replace(/[📎🔗]+/g, "").replace(/[\s·—–-]+$/, "").trim() || "Document";
+      return { label: label.slice(0, 80), url: m ? m[0] : "" };
+    })
+    .filter((x) => x.url);
 
   return (
     <>
       {d && lienOpen && (
         <LienBuilder open={lienOpen} onClose={() => setLienOpen(false)}
-          seller={d.contact.name} property={d.contact.address || d.title} legal={lienLegal} contractDate="" events={d.events} />
+          seller={d.contact.name} property={d.contact.address || d.title} legal={lienLegal} contractDate=""
+          signer={d.me.name} events={d.events} documents={lienDocs} />
       )}
       <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px]" onClick={() => setOppId(null)} />
       <div className="fixed inset-x-0 top-[4vh] z-50 mx-auto flex h-[88vh] w-[min(60rem,95vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
