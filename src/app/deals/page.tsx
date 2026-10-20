@@ -1,5 +1,4 @@
-import { logBuyerOutreach, toggleDispoStepAction, archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction, syncDispoSheetAction } from "@/app/actions";
-import { readSheetInfo } from "@/lib/gsheets";
+import { toggleDispoStepAction, archiveDeal, saveDeal, closeDeal, markCascade, sendCascadeOffer, readCascade, readBuyerTerms, armCascade, stopCascade, saveDealLand, readDealLand, readBuyerLand, logDealSendAction, updateDealSendAction, toggleBlacklistAction } from "@/app/actions";
 import { readAuto, type DealCascade } from "@/lib/cascade";
 import PacketPanel, { type PacketRow } from "@/components/PacketPanel";
 import { DISPO_STEPS, readDispoChecklists } from "@/lib/dispo-checklist";
@@ -80,17 +79,6 @@ export default async function DealsPage({
     packetsByDeal.set(r.dealId, arr);
   }
   const dispoChecklists = mktAccess ? await readDispoChecklists() : {};
-  const sheetInfo = mktAccess ? await readSheetInfo() : null;
-  // 📞 Follow-ups due — developers/agents we sent deals to (moved here from
-  // Vetted Buyers, Jon 2026-10-06: the follow-up IS about the deals they sent).
-  const dueFollowUps = mktAccess
-    ? await db.marketContact.findMany({
-        where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, nextFollowUp: { not: "", lte: today } },
-        orderBy: { nextFollowUp: "asc" },
-        take: 30,
-        select: { id: true, name: true, type: true, phone: true, email: true, nextFollowUp: true, outreachLog: true, category: true },
-      })
-    : [];
   const sendsByDeal = new Map<string, typeof sendRows>();
   for (const r of sendRows) {
     const arr = sendsByDeal.get(r.dealId) ?? [];
@@ -118,26 +106,6 @@ export default async function DealsPage({
 
   const openCount = deals.filter((d) => !["dead", "closed"].includes(d.status)).length;
 
-  // 📞 Which deals is each follow-up contact assigned to? Their DealSends —
-  // what we sent them and what they offered (Jon 2026-10-06).
-  const fuSendRows = dueFollowUps.length
-    ? await db.dealSend.findMany({
-        where: { buyerId: { in: dueFollowUps.map((r) => r.id) } },
-        orderBy: { sentAt: "desc" },
-        select: { buyerId: true, dealId: true, outcome: true, offerAmount: true, passReason: true },
-      })
-    : [];
-  const fuDealIds = Array.from(new Set(fuSendRows.map((r) => r.dealId)));
-  const fuDealAddr = new Map(
-    (fuDealIds.length ? await db.deal.findMany({ where: { id: { in: fuDealIds } }, select: { id: true, address: true } }) : []).map((d) => [d.id, d.address] as const)
-  );
-  // latest send per (contact, deal) only
-  const fuSendsByContact = new Map<string, typeof fuSendRows>();
-  for (const r of fuSendRows) {
-    const arr = fuSendsByContact.get(r.buyerId) ?? [];
-    if (!arr.some((x) => x.dealId === r.dealId)) arr.push(r);
-    fuSendsByContact.set(r.buyerId, arr);
-  }
   const money = (n: number | null | undefined) =>
     n == null ? "" : n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M` : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`;
 
@@ -264,84 +232,9 @@ export default async function DealsPage({
 
       <DealKanban columns={STATUSES} deals={kanbanDeals} canMove={canClose} />
 
-      {sp.sheet === "ok" && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">📊 Sheet synced — the girls&apos; typed cells were pulled in, fresh data pushed out.</div>}
-      {sp.sheet === "disabled" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">⚠️ The Google Sheets API isn&apos;t enabled yet — one click at <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" className="underline">console.cloud.google.com</a> (free), then hit Sync again.</div>}
-      {sp.sheet === "err" && <div className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200">⚠️ Sheet sync failed — try again, or tell Jon.</div>}
-
-      {/* 📊 THE Google Sheet, embedded (Jon 2026-10-07: "use the Google Sheet
-          internally" — the real sheet lives right here, edits sync back in). */}
-      {mktAccess && (
-        <Card className="p-3.5">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-bold text-slate-800">📊 Excel-style board</span>
-            <span className="text-xs text-slate-500">The real Google Sheet, right here — sort &amp; filter like Excel. Type in the 💬 / 📅 / ✍️ columns (+ YOUR NAME for KPI credit) and Sync pulls it into the War Room.</span>
-            <span className="ml-auto flex items-center gap-2">
-              {sheetInfo?.lastSync && <span className="text-[11px] text-slate-400">synced {new Date(sheetInfo.lastSync).toLocaleString()}</span>}
-              {sheetInfo?.url && <a href={sheetInfo.url} target="_blank" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Open full screen ↗</a>}
-              <form action={syncDispoSheetAction}><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">{sheetInfo ? "↻ Sync now" : "✨ Create the sheet"}</button></form>
-            </span>
-          </div>
-          {sheetInfo?.url && (
-            <details open className="mt-2.5">
-              <summary className="cursor-pointer text-[11px] font-semibold text-slate-500">hide / show the sheet</summary>
-              <iframe
-                src={`https://docs.google.com/spreadsheets/d/${sheetInfo.id}/edit?widget=true&headers=false&rm=minimal`}
-                className="mt-2 h-[70vh] w-full rounded-xl border border-slate-200 bg-white"
-                title="War Room — Dispo Board (Google Sheet)"
-              />
-              <p className="mt-1 text-[10px] text-slate-400">Editing needs a Google account with access to the War Room Vault — if it shows &ldquo;request access&rdquo;, tell Jon and sign in with your work Google account via &ldquo;Open full screen&rdquo;.</p>
-            </details>
-          )}
-        </Card>
-      )}
-
-      {/* 📞 Follow-ups due — the retired Excel's job, on the page where deals live */}
-      {dueFollowUps.length > 0 && (
-        <Card className="border-l-4 border-amber-400 p-4">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="text-sm font-bold text-slate-800">📞 Follow-ups due</span>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">{dueFollowUps.length} to work today</span>
-            <span className="text-[11px] text-slate-400">developers &amp; agents we sent deals to — 📇 Touched logs it to your KPIs and pushes 3 days</span>
-          </div>
-          <div className="space-y-1.5">
-            {dueFollowUps.map((r) => {
-              const theirSends = fuSendsByContact.get(r.id) ?? [];
-              return (
-                <div key={r.id} className="rounded-lg bg-amber-50/60 px-2.5 py-1.5 text-xs ring-1 ring-amber-100">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-slate-800">{r.name}</span>
-                    <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">{r.type === "agent" ? "🏘 agent" : r.type === "developer" || r.category === "luxury" ? "🏗 developer" : "🔨 buyer"}</span>
-                    {[r.phone, r.email].filter(Boolean).length > 0 && <span className="text-brand-navy">{[r.phone, r.email].filter(Boolean).join(" · ")}</span>}
-                    {r.outreachLog && <span className="hidden max-w-xs truncate text-[11px] text-slate-400 lg:inline" title={r.outreachLog}>💬 {r.outreachLog.split("\n")[0].slice(0, 70)}</span>}
-                    <span className={`ml-auto text-[10px] font-bold ${r.nextFollowUp < today ? "text-red-600" : "text-amber-600"}`}>{r.nextFollowUp < today ? `overdue ${r.nextFollowUp}` : "today"}</span>
-                    <form action={logBuyerOutreach} className="flex items-center gap-1">
-                      <input type="hidden" name="id" value={r.id} />
-                      <input name="note" placeholder="what they said…" className="w-36 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px]" />
-                      <button className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-emerald-700">📇 Touched</button>
-                    </form>
-                  </div>
-                  {theirSends.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1.5 pl-0.5">
-                      {theirSends.slice(0, 4).map((s) => (
-                        <span key={s.dealId} className="inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
-                          📦 {fuDealAddr.get(s.dealId) ?? "deal"}
-                          {s.offerAmount != null ? (
-                            <span className="font-bold text-emerald-700">💵 offered {money(s.offerAmount)}</span>
-                          ) : s.outcome === "pass" ? (
-                            <span className="font-bold text-red-500">passed{s.passReason ? ` (${s.passReason})` : ""}</span>
-                          ) : (
-                            <span className="text-slate-400">sent — no offer yet</span>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
+      {/* 📊 Excel-style board + 📞 Follow-ups due REMOVED (Jon 2026-10-20): the
+          spreadsheet is retired and the follow-up now lives on each deal's own
+          buyer/agent tracker in the DS dispo pipelines (/crm). */}
 
       {/* Add a deal (collapsed — opens itself only when the board is empty) */}
       <Card className="p-4">
