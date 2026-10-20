@@ -28,6 +28,50 @@ export const LAND_COURSE_CATEGORY = "Land Courses";
 
 export const PLAYBOOKS: Playbook[] = [
   {
+    key: "k_dispo_sell_land_then_sign", title: "Dispositions SOP — Sell Land Then Sign", emoji: "🎯", category: "Scripts & Outreach",
+    summary: "The full Marie & Sharyn playbook for an uncontracted land deal: vet developers with the interview cards, send the deal to developers + buyer agents, work the follow-up tracker on the deal until you know what they'll pay, then go back to the seller and get it signed.",
+    flow: [
+      { emoji: "📥", label: "Deal lands (no buyer yet)" }, { emoji: "🔎", label: "Vet developers (interview)" }, { emoji: "📤", label: "Send to devs + buyer agents" },
+      { emoji: "📇", label: "Work the follow-up tracker" }, { emoji: "💵", label: "Learn what they'll pay" }, { emoji: "✍️", label: "Back to seller → sign" },
+    ],
+    stats: [
+      { value: "10", label: "interview questions / developer" }, { value: "2 days", label: "first follow-up after a send" },
+      { value: "3 days", label: "between follow-ups after a touch" }, { value: "DS", label: "pipeline prefix = dispositions" },
+    ],
+    sections: [
+      { heading: "🎯 The whole game", body: "On a “Sell Land Then Sign” deal we DON'T have the property under contract yet. Before we tie up the seller, we find out what real cash buyers (developers) will actually pay. We do that by sending the deal to vetted developers and to buyer agents in the area, then chasing them for a number. Once we know what the market will pay, we go back to the seller and get it signed at a price that leaves us a spread. The follow-up is the whole job — it's where deals are won or lost." },
+      { heading: "Step 1 — Vet your developers (Buyer Research → interview cards)", bullets: [
+        "Go to Buyer Research (/vetting). Your unvetted developers are grouped by deal / area.",
+        "Click the ⊕ on a developer's row, then open “🧾 Vetting interview.”",
+        "Ask the SAME 10 questions every time, top to bottom — where they buy, land types, lot size, price, how fast they close, utilities/zoning, volume, deal breakers. Fill it in as they answer; hit Save interview.",
+        "Good fit → set their status to ✓ Vetted. That graduates them to Vetted Buyers and into the deal cascade automatically.",
+      ], tip: "The interview fills the buy-box in for you — those answers power the demand board AND the matching-buyers list on every deal. Vetting IS the interview; don't skip it." },
+      { heading: "Step 2 — Find who to send this deal to", bullets: [
+        "Open the deal in the DS: Sell Land Then Sign pipeline.",
+        "On the right you'll see “🎯 Matching cash buyers” — vetted developers ranked by area + price fit. Send top-down.",
+        "Also line up buyer AGENTS in the pulled area (agents who sell to builders there) — they bring their own buyers.",
+      ] },
+      { heading: "Step 3 — Send + start the tracker", bullets: [
+        "Hit “Send to buyers” on the matching list — it drops those developers straight into the deal's follow-up tracker as “Contacted,” with a follow-up due in 2 days.",
+        "Add any buyer agents you contacted with “+ Add buyer / agent to this deal” (pick Agent).",
+        "Everyone you're working this deal is now in ONE place, tied to THIS deal.",
+      ] },
+      { heading: "Step 4 — Work the follow-up tracker (the hurdle)", bullets: [
+        "Each buyer/agent moves along the sequence: To reach out → Contacted → Following up → 💵 Price/offer in → Passed.",
+        "When you follow up, hit “📞 Touch” — it stamps today and auto-sets the next follow-up 3 days out. Overdue rows turn RED so nothing slips.",
+        "When they give you a number, type it in the 💵 “will pay” box and move them to “Price / offer in.”",
+        "Not a fit → move to Passed (keeps the list clean but doesn't lose the record).",
+      ], tip: "Red = overdue. Clear the red every day. The deal card also shows the next follow-up so you can see it from the board." },
+      { heading: "Step 5 — Back to the seller → sign", body: "Once a couple of developers/agents have given you real numbers, you know the true market price. Take the best defensible number, subtract our spread, and go back to the seller to get it under contract (that moves it to DS: Signed Go Close). Now it's a real deal with a buyer already warm." },
+      { heading: "🚫 Common mistakes", bullets: [
+        "Sending to developers you never vetted — you don't know if they buy that area or that price.",
+        "Letting follow-ups go red — a buyer who went quiet usually just needs one more nudge.",
+        "Not writing down the price they said — if it's not in the tracker, it didn't happen.",
+        "Tying up the seller before you know what buyers will pay — that's the whole reason this pipeline exists.",
+      ] },
+    ],
+  },
+  {
     key: "k_analyze_deal", title: "How To Analyze A Developer Deal (SOP)", emoji: "🏗️", category: "Deal Analysis",
     summary: "The Lux Blueprint step-by-step: how to look at a lot and figure out the most we should offer (the MAO) for a land-for-luxury-builds deal.",
     flow: [
