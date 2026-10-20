@@ -2677,6 +2677,17 @@ export async function GET(request: Request) {
 
   // 📰 Daily change-log (?updateslog=add&text=… appends · ?daychangelog=1
   // posts tonight's bullets to the War Room Updates room at 8pm and clears).
+  // 🧽 Drop a queued changelog line before tonight's post (?updateslog=remove&match=<substring>)
+  if (url.searchParams.get("updateslog") === "remove") {
+    const match = (url.searchParams.get("match") ?? "").trim();
+    if (match.length < 6) return NextResponse.json({ ok: false, error: "match too short" });
+    const row = await db.resource.findFirst({ where: { category: "__daily_updates__" } });
+    let list: string[] = [];
+    try { list = row?.description ? JSON.parse(row.description) : []; } catch { list = []; }
+    const kept = list.filter((l) => !l.includes(match));
+    if (row && kept.length !== list.length) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(kept) } });
+    return NextResponse.json({ ok: true, removed: list.length - kept.length, remaining: kept.length });
+  }
   if (url.searchParams.get("updateslog") === "add") {
     const text = (url.searchParams.get("text") ?? "").slice(0, 400);
     if (!text) return NextResponse.json({ ok: false, error: "text required" });
