@@ -59,6 +59,9 @@ export const CRM_FORMS: CrmForm[] = [
       { key: "develop", label: "What can be developed?", type: "text" },
       { key: "hoa", label: "HOA/POA restrictions?", type: "text" },
       { key: "special", label: "Anything special about the land?", type: "textarea" },
+      // 🏞 Buyer sell-points (Jon 2026-10-20) — checked uniformly so Marie can find
+      // e.g. "waterfront" fast (search picks these up; one-click filter-ready).
+      { key: "features", label: "Land features (buyer sell-points)", type: "checks", options: ["Waterfront / lake frontage", "Water view", "Creek / river on property", "Pond on property", "Paved road frontage", "Dirt / gravel road access", "Corner lot", "Cleared / build-ready", "Wooded / treed", "Flat / level", "Gentle slope", "Mountain / hill views", "Fenced", "Flood zone", "Wetlands", "Mineral rights included", "Off-grid", "Gated community"] },
       { key: "utilities", label: "Utilities & access", type: "checks", options: ["Street/road access", "City water", "Well", "City electric", "Utility lines nearby", "City sewage", "Septic", "No water", "No sewage", "No electric", "Near water/lake", "Near hiking/rec", "Near RVs/houses"] },
     ],
   },
