@@ -14,6 +14,7 @@ import { formatAddress } from "@/lib/address";
 import { CRM_FORMS } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
+import LienBuilder from "@/components/LienBuilder";
 
 type Payload = {
   id: string; title: string; stage: string; pipeline: string; pipelines?: string[]; assignedTo: string; tags: string;
@@ -54,6 +55,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
   const [saved, setSaved] = useState("");
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
   const [navMin, setNavMin] = useState(false);
+  const [lienOpen, setLienOpen] = useState(false);
   const [pending, start] = useTransition();
 
   useEffect(() => {
@@ -74,8 +76,18 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
     start(async () => { await action(fd); setSaved("✓ Saved"); setTimeout(() => setSaved(""), 2000); if (oppId) await refetch(oppId); });
   };
 
+  const lienLegal = String(
+    (d?.formData?.land as Record<string, string> | undefined)?.legalDescription ??
+    (d?.formData?.property as Record<string, string> | undefined)?.legal ??
+    (d?.formData?.property as Record<string, string> | undefined)?.apn ?? "",
+  );
+
   return (
     <>
+      {d && lienOpen && (
+        <LienBuilder open={lienOpen} onClose={() => setLienOpen(false)}
+          seller={d.contact.name} property={d.contact.address || d.title} legal={lienLegal} contractDate="" events={d.events} />
+      )}
       <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px]" onClick={() => setOppId(null)} />
       <div className="fixed inset-x-0 top-[4vh] z-50 mx-auto flex h-[88vh] w-[min(60rem,95vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {!d ? (
@@ -367,6 +379,12 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
 
                 {tab === "notes" && (
                   <div className="space-y-3">
+                    {/* 🔴 File a Lien — compiles this seller's whole timeline into the
+                        recordable Memorandum / Affidavit of Interest (Jon 2026-10-20). */}
+                    <div className="flex items-center justify-between rounded-xl bg-red-50 px-3 py-2 ring-1 ring-red-200">
+                      <span className="text-[11px] font-semibold text-red-800">Seller signed but won&apos;t close? Compile everything into a recordable lien.</span>
+                      <button type="button" onClick={() => setLienOpen(true)} className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-red-700">🔴 File a Lien</button>
+                    </div>
                     <form action={submit(addCrmNoteAction, { oppId: d.id, contactId: d.contact.id })} className="flex gap-2">
                       <input name="body" placeholder="Add a note…" required className={inputCls} />
                       <button className="rounded-xl bg-brand-navy px-3 py-1.5 text-xs font-bold text-white">📝 Add</button>
