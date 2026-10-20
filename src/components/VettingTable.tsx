@@ -3,6 +3,8 @@
 import { Fragment, useMemo, useRef, useState } from "react";
 import { setBuyerStatus, logBuyerOutreach, saveProspectField, saveProspect, saveBuyerBox, deleteProspect } from "@/app/actions";
 import MultiSelect from "@/components/MultiSelect";
+import DevInterviewForm from "@/components/DevInterviewForm";
+import type { BuyerLand } from "@/lib/buyer-land";
 
 export type Prospect = {
   id: string; name: string; website: string; links: string; email: string; phone: string; phone2: string;
@@ -211,11 +213,12 @@ function BuyBoxPanel({ p }: { p: Prospect }) {
   );
 }
 
-export default function VettingTable({ areas, canEdit, today, allowAdd = true }: {
+export default function VettingTable({ areas, canEdit, today, allowAdd = true, land = {} }: {
   areas: { area: string; prospects: Prospect[] }[];
   canEdit: boolean;
   today: string;
   allowAdd?: boolean;
+  land?: Record<string, BuyerLand>;
 }) {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -366,7 +369,16 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true }:
                       </tr>
                       {canEdit && expanded && (
                         <tr key={p.id + "-box"}>
-                          <td colSpan={9} className="border-b border-slate-200 p-0"><BuyBoxPanel p={p} /></td>
+                          <td colSpan={9} className="border-b border-slate-200 p-0">
+                            <BuyBoxPanel p={p} />
+                            {/* 🧾 Interview during vetting (Jon 2026-10-20): the same
+                                10 developer questions as /marketing — ask them on the
+                                call and it fills the buy-box in. */}
+                            <details className="border-t border-slate-200 bg-emerald-50/30 px-3 py-2">
+                              <summary className="cursor-pointer text-[12px] font-bold text-emerald-700">🧾 Vetting interview — the 10 questions to ask {isDev(p) ? "this developer" : "them"}</summary>
+                              <div className="mt-2"><DevInterviewForm buyerId={p.id} seed={p} saved={land[p.id]} /></div>
+                            </details>
+                          </td>
                         </tr>
                       )}
                     </Fragment>

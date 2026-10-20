@@ -6,7 +6,7 @@ import { Card, SectionTitle } from "@/components/ui";
 import VettingTable, { type Prospect } from "@/components/VettingTable";
 import CsvMapImport from "@/components/CsvMapImport";
 import ArchivedBuyers from "@/components/ArchivedBuyers";
-import { saveProspect } from "@/app/actions";
+import { saveProspect, readBuyerLand } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +48,9 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
     db.marketContact.count({ where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } } }),
     db.marketContact.findMany({ where: { archivedAt: { not: null } }, orderBy: { archivedAt: "desc" }, take: 120, select: { id: true, name: true, archivedAt: true, archivedBy: true, archiveReason: true } }),
   ]);
+  // Saved interview answers (BuyerLand) so each prospect's vetting interview
+  // pre-fills what we already know (Jon 2026-10-20).
+  const buyerLand = await readBuyerLand().catch(() => ({} as Record<string, import("@/lib/buyer-land").BuyerLand>));
   const UNASSIGNED = "Unassigned / general buyers";
   const toProspect = (r: typeof rows[number]): Prospect => ({
     id: r.id, name: r.name, website: r.website, links: r.links, email: r.email, phone: r.phone, phone2: r.phone2,
@@ -128,7 +131,7 @@ export default async function VettingPage({ searchParams }: { searchParams: Prom
         <CsvMapImport />
       </details>
 
-      <VettingTable areas={areas} canEdit={canAccessMarketing(me)} today={today} />
+      <VettingTable areas={areas} canEdit={canAccessMarketing(me)} today={today} land={buyerLand} />
 
       <ArchivedBuyers rows={archivedRows} />
 

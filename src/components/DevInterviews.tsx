@@ -1,15 +1,9 @@
 import Link from "next/link";
-import { saveBuyerLand } from "@/app/actions";
 import { Card } from "@/components/ui";
+import DevInterviewForm from "@/components/DevInterviewForm";
 import {
-  type BuyerLand, BUILDER_TYPES, LAND_TYPES, UTILITY_OPTS, ZONING_OPTS, CLOSE_OPTS,
-  interviewScore, demandAreas, effectiveLand, type CrmSeed,
+  type BuyerLand, CLOSE_OPTS, interviewScore, demandAreas, effectiveLand, type CrmSeed,
 } from "@/lib/buyer-land";
-import { LAND_FEATURES } from "@/lib/crm-forms";
-
-const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
-const labCls = "mb-0.5 block text-[11px] font-semibold text-slate-500";
-const qCls = "text-[12px] font-extrabold uppercase tracking-wide text-emerald-700";
 
 // The STANDARD developer interview (Jon 2026-09-21): every developer gets the
 // same 10 questions, in the same order, so the team can compare buy-boxes and
@@ -152,83 +146,9 @@ export default function DevInterviews({
                   {buddies.length > 0 && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200" title="Developers buying in the same areas">🤝 {buddies.join(", ")}</span>}
                 </summary>
 
-                <form action={saveBuyerLand} className="mt-3 space-y-4 rounded-xl bg-emerald-50/40 p-3.5 ring-1 ring-emerald-100">
-                  <input type="hidden" name="buyerId" value={r.id} />
-
-                  {/* Q1 — WHERE (the goldmine) */}
-                  <div>
-                    <div className={qCls}>1 · Where do you buy land? <span className="font-normal normal-case text-slate-400">— counties are the goldmine; get specific</span></div>
-                    <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-4">
-                      <label><span className={labCls}>States</span><input name="buyStates" defaultValue={l.buyStates ?? ""} placeholder="TN, TX" className={inputCls} /></label>
-                      <label><span className={labCls}>Counties (one per line)</span><textarea name="buyCounties" rows={3} defaultValue={l.buyCounties ?? ""} placeholder={"Davidson, TN\nWilliamson, TN"} className={inputCls} /></label>
-                      <label><span className={labCls}>Cities / areas (one per line)</span><textarea name="buyCities" rows={3} defaultValue={l.buyCities ?? ""} placeholder={"Nashville\nAntioch"} className={inputCls} /></label>
-                      <label><span className={labCls}>Target ZIPs</span><textarea name="targetZips" rows={3} defaultValue={l.targetZips ?? ""} placeholder="37013, 37115" className={inputCls} /></label>
-                    </div>
-                  </div>
-
-                  {/* Q2 — land types */}
-                  <div>
-                    <div className={qCls}>2 · What types of land?</div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5">
-                      {LAND_TYPES.map((t) => (
-                        <label key={t} className="flex items-center gap-1.5 text-[13px] text-slate-700">
-                          <input type="checkbox" name="landTypes" value={t} defaultChecked={(l.landTypes ?? "").includes(t)} className="h-4 w-4" /> {t}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Features they want — matched to a lead's Land features */}
-                  <div>
-                    <div className={qCls}>2b · Land features they want (matches seller leads)</div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5">
-                      {LAND_FEATURES.map((t) => (
-                        <label key={t} className="flex items-center gap-1.5 text-[13px] text-slate-700">
-                          <input type="checkbox" name="featuresWanted" value={t} defaultChecked={(l.featuresWanted ?? "").includes(t)} className="h-4 w-4" /> {t}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Q3–Q5 — size + money */}
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
-                    <label><span className={labCls}>3 · Lot size MIN (acres)</span><input name="lotMin" type="number" step="any" defaultValue={l.lotMin ?? ""} placeholder="0.25" className={inputCls} /></label>
-                    <label><span className={labCls}>Lot size MAX (acres)</span><input name="lotMax" type="number" step="any" defaultValue={l.lotMax ?? ""} placeholder="5" className={inputCls} /></label>
-                    <label className="col-span-2"><span className={labCls}>4 · How many acres are you looking for?</span><input name="acresTypical" defaultValue={l.acresTypical ?? ""} placeholder="e.g. 40–100 ac for next phase" className={inputCls} /></label>
-                    <label><span className={labCls}>5 · Price MIN per deal</span><input name="priceMin" type="number" defaultValue={l.priceMin ?? ""} placeholder="$50,000" className={inputCls} /></label>
-                    <label><span className={labCls}>Price MAX per deal</span><input name="priceMax" type="number" defaultValue={l.priceMax ?? ""} placeholder="$500,000" className={inputCls} /></label>
-                  </div>
-
-                  {/* Q6–Q8 — speed + requirements */}
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-                    <label><span className={labCls}>6 · How fast can you close?</span>
-                      <select name="closeSpeed" defaultValue={l.closeSpeed ?? ""} className={inputCls}><option value="">—</option>{CLOSE_OPTS.map((o) => <option key={o}>{o}</option>)}</select>
-                    </label>
-                    <label><span className={labCls}>7 · Utilities requirement</span>
-                      <select name="utilities" defaultValue={l.utilities ?? (l.utilitiesRequired ? UTILITY_OPTS[0] : "")} className={inputCls}><option value="">—</option>{UTILITY_OPTS.map((o) => <option key={o}>{o}</option>)}</select>
-                    </label>
-                    <label><span className={labCls}>8 · Zoning / entitlement</span>
-                      <select name="zoningPref" defaultValue={l.zoningPref ?? ""} className={inputCls}><option value="">—</option>{ZONING_OPTS.map((o) => <option key={o}>{o}</option>)}</select>
-                    </label>
-                    <label><span className={labCls}>$ per finished/paper lot</span><input name="pricePerLot" type="number" defaultValue={l.pricePerLot ?? ""} placeholder="$" className={inputCls} /></label>
-                  </div>
-
-                  {/* Q9–Q10 — volume + deal breakers */}
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
-                    <label><span className={labCls}>9 · Lots / deals per year</span><input name="lotsPerYear" type="number" defaultValue={l.lotsPerYear ?? ""} placeholder="12" className={inputCls} /></label>
-                    <label><span className={labCls}>Permits last 12 mo</span><input name="permits12mo" type="number" defaultValue={l.permits12mo ?? ""} className={inputCls} /></label>
-                    <label><span className={labCls}>Builder type</span>
-                      <select name="builderType" defaultValue={l.builderType ?? ""} className={inputCls}>{BUILDER_TYPES.map((b) => <option key={b} value={b}>{b || "—"}</option>)}</select>
-                    </label>
-                    <label className="col-span-2 sm:col-span-3"><span className={labCls}>10 · Deal breakers</span><input name="dealBreakers" defaultValue={l.dealBreakers ?? ""} placeholder="wetlands, HOA, no legal access, power lines…" className={inputCls} /></label>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-1.5 text-[13px] text-slate-700"><input type="checkbox" name="isLandBuyer" defaultChecked={!!l.isLandBuyer} className="h-4 w-4" /> 🌱 Active land buyer (boosts them in the deal cascade)</label>
-                    <input name="notes" defaultValue={l.notes ?? ""} placeholder="anything else from the call…" className={`${inputCls} min-w-56 flex-1`} />
-                    <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Save interview</button>
-                  </div>
-                </form>
+                <div className="mt-3">
+                  <DevInterviewForm buyerId={r.id} seed={r} saved={saved} />
+                </div>
               </details>
             );
           })}
