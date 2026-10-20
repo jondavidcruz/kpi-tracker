@@ -789,6 +789,62 @@ export async function uploadLeadDocAction(formData: FormData) {
 /** 🗑 "Delete" a lead = archive it (archive-never-delete rule): the opp is
  *  archived and, when nothing else references the contact, the contact too.
  *  Recoverable from the archived list. Manager or the lead's owner. */
+/** 🔁 Merge duplicate contacts (accepted AI Update 2026-10-15; built by crm-enhancer
+ *  2026-10-20). One ⭐ Keep click on /crm/contacts?dupes=1: every opportunity, text,
+ *  call, note, task and appointment of the other cards moves onto the kept card,
+ *  blanks on the kept card are filled from the others, and the others are ARCHIVED
+ *  (never deleted) with a timeline receipt + an entry in __crm_merge_log__. */
+export async function mergeContactsAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const { canManageAllLeads } = await import("@/lib/auth");
+  if (!canManageAllLeads(me)) return;
+  const keep = String(formData.get("keep") ?? "");
+  const ids = [...new Set(formData.getAll("ids").map(String))].filter((x) => x && x !== keep);
+  if (!keep || !ids.length) return;
+  const K = await db.crmContact.findUnique({ where: { id: keep } });
+  if (!K || K.archivedAt) return;
+  const others = await db.crmContact.findMany({ where: { id: { in: ids }, archivedAt: null } });
+  if (!others.length) return;
+  const last10 = (p: string) => (p || "").replace(/\D/g, "").slice(-10);
+  const patch: Record<string, string> = {};
+  const tagSet = new Set(K.tags.split(",").map((t) => t.trim()).filter(Boolean));
+  const merged: Array<{ id: string; name: string; phone: string; email: string; ghlId: string; assignedTo: string }> = [];
+  for (const D of others) {
+    await db.crmOpportunity.updateMany({ where: { contactId: D.id }, data: { contactId: K.id } });
+    await db.crmEvent.updateMany({ where: { contactId: D.id }, data: { contactId: K.id } });
+    await db.crmTask.updateMany({ where: { contactId: D.id }, data: { contactId: K.id } });
+    await db.crmAppointment.updateMany({ where: { contactId: D.id }, data: { contactId: K.id } });
+    // fill the kept card's blanks — never overwrite what it already has
+    if (!K.email && !patch.email && D.email) patch.email = D.email;
+    else if (D.email && D.email !== (patch.email || K.email) && !K.altEmail && !patch.altEmail) patch.altEmail = D.email;
+    if (D.phone && last10(D.phone) !== last10(K.phone) && !K.altPhone && !patch.altPhone) patch.altPhone = D.phone;
+    if (!K.address && !patch.address && D.address) patch.address = D.address;
+    if (!K.source && !patch.source && D.source) patch.source = D.source;
+    if (!K.pinnedNote && !patch.pinnedNote && D.pinnedNote) patch.pinnedNote = D.pinnedNote;
+    if (!K.assignedTo && !patch.assignedTo && D.assignedTo) patch.assignedTo = D.assignedTo;
+    for (const t of D.tags.split(",").map((x) => x.trim()).filter(Boolean)) tagSet.add(t);
+    // GHL id rides along so a re-import lands on the kept card, not a resurrected dupe
+    if (!K.ghlId && !patch.ghlId && D.ghlId) { patch.ghlId = D.ghlId; await db.crmContact.update({ where: { id: D.id }, data: { ghlId: "" } }).catch(() => {}); }
+    await db.crmContact.update({ where: { id: D.id }, data: { archivedAt: new Date() } });
+    merged.push({ id: D.id, name: D.name, phone: D.phone, email: D.email, ghlId: D.ghlId, assignedTo: D.assignedTo });
+  }
+  const tags = [...tagSet].join(", ");
+  await db.crmContact.update({ where: { id: K.id }, data: { ...patch, ...(tags !== K.tags ? { tags } : {}) } });
+  for (const D of merged) {
+    await logCrmEvent({ contactId: K.id, kind: "system", actor: me.name, body: `🔁 Merged duplicate "${D.name}" (${D.phone || D.email || "no phone"}) into this contact — their leads, texts, calls, notes and tasks now live here; the other card is archived (recoverable). By ${me.name}.` });
+  }
+  try {
+    const row = await db.resource.findFirst({ where: { category: "__crm_merge_log__" } });
+    const prev: unknown[] = row?.description ? JSON.parse(row.description) : [];
+    const description = JSON.stringify([{ at: new Date().toISOString(), by: me.name, keep: K.id, keepName: K.name, patch, merged }, ...prev].slice(0, 100));
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "crm-merge-log", category: "__crm_merge_log__", url: "", description } });
+  } catch { /* log is best-effort */ }
+  revalidatePath("/crm/contacts"); revalidatePath("/crm"); revalidatePath("/crm/conversations");
+  redirect("/crm/contacts?dupes=1");
+}
+
 export async function archiveOppAction(formData: FormData) {
   const me = await crmUser();
   if (!me) return;

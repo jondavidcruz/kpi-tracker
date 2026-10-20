@@ -2692,6 +2692,16 @@ export async function GET(request: Request) {
   // 💡 Queue an AI Update (?suggestadd=1&title=…&rationale=…&category=&impact=&effort=)
   // — lets the nightly agents file proposals without a DB connection (crm-enhancer 2026-10-18).
   // Idempotent by title: re-filing the same title just returns the existing row.
+  // 🌙 Auto-park never-called NEW leads → Nurture (?nurturepark=1 dry-run /
+  // &commit=1 applies / &undo=1 restores the last run / &days=30). Accepted AI
+  // Update 2026-10-19; also chained onto the daily ?crm=1 cron (crm-enhancer 2026-10-20).
+  if (url.searchParams.get("nurturepark") === "1") {
+    const { parkNeverCalled, undoLastPark } = await import("@/lib/crm-nurture");
+    if (url.searchParams.get("undo") === "1") return NextResponse.json(await undoLastPark());
+    const days = Number(url.searchParams.get("days") ?? 30) || 30;
+    return NextResponse.json(await parkNeverCalled({ commit: url.searchParams.get("commit") === "1", days }));
+  }
+
   // 📋 Read-only AI Updates queue (?sugglist=1[&status=proposed,accepted][&n=80])
   // — lets the overnight crm-enhancer/optimizer runs see what Jon accepted or
   // declined without a local DB (crm-enhancer 2026-10-20).
@@ -4360,7 +4370,10 @@ export async function GET(request: Request) {
     const calls = await writeDay(yesterday, tz);
     const opps = await writeOpps(yesterday, tz);
     const activity = await writeActivity(yesterday, calls.wrote, opps);
-    return NextResponse.json({ ok: true, date: yesterday, calls: calls.wrote, offersContracts: opps.counts, activity });
+    // 🌙 daily auto-park of never-called NEW leads untouched 30+ days (best-effort)
+    let nurturePark: unknown = null;
+    try { const { parkNeverCalled } = await import("@/lib/crm-nurture"); nurturePark = await parkNeverCalled({ commit: true, days: 30 }); } catch (e) { nurturePark = { error: String(e).slice(0, 150) }; }
+    return NextResponse.json({ ok: true, date: yesterday, calls: calls.wrote, offersContracts: opps.counts, activity, nurturePark });
   }
 
   // Daily huddle brief — 9:45am PT, Mon–Fri (after the 9am huddle, so the team has

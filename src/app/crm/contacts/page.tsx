@@ -5,7 +5,7 @@ import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { parseTags, CRM_STAGES } from "@/lib/crm-shared";
 import SelectAllBox from "@/components/SelectAllBox";
-import { bulkContactsAction } from "../actions";
+import { bulkContactsAction, mergeContactsAction } from "../actions";
 import CallButton from "@/components/CallButton";
 import { commsFor } from "@/lib/crm-comms";
 import { readPipelines, pipelineLockFor } from "@/lib/crm";
@@ -39,7 +39,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
         <SectionTitle title="🔁 Duplicate contacts" subtitle={`${groups.length} seller${groups.length === 1 ? "" : "s"} appear more than once (same phone) · ${scanned.toLocaleString()} contacts scanned`} accent="bg-rose-400"
           right={<span className="flex items-center gap-2"><Link href="/crm/contacts" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">← All contacts</Link></span>} />
         <Card className="border-l-4 border-rose-300 p-3 text-xs text-slate-600">
-          <b>Why it matters:</b> two cards for one seller = two reps calling the same person. <b>How to fix:</b> open both, keep the one with the real history, copy anything missing into it, then 🗑 on the other card&apos;s quick view (archive-only — nothing is ever deleted). If the two cards are different parcels from one seller, keep both and make sure they share ONE owner.
+          <b>Why it matters:</b> two cards for one seller = two reps calling the same person. <b>How to fix:</b> {fullAccess ? <>press <b>⭐ Keep</b> on the card with the real history — every lead, text, call, note and task from the other card(s) moves onto it, blank fields get filled in, and the other card is archived (never deleted; the kept card&apos;s timeline shows a receipt). If both leads stay open under two reps, pick ONE owner afterwards.</> : <>open both, keep the one with the real history, copy anything missing into it, then 🗑 on the other card&apos;s quick view (archive-only — nothing is ever deleted).</>} If the two cards are different parcels from one seller, keep both and make sure they share ONE owner.
         </Card>
         {groups.length === 0 && <Card className="p-10 text-center text-sm text-slate-400">🎉 No duplicates{fullAccess ? "" : " among your contacts"}.</Card>}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -47,6 +47,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
             const owners = new Set(g.members.map((m) => (m.owner || "").split(" ")[0]).filter(Boolean));
             return (
               <Card key={g.phone} className="p-3">
+                <form action={mergeContactsAction} id={`merge-${g.phone}`}>{g.members.map((m) => <input key={m.id} type="hidden" name="ids" value={m.id} />)}</form>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="font-mono text-sm font-extrabold text-slate-800">({g.phone.slice(0, 3)}) {g.phone.slice(3, 6)}-{g.phone.slice(6)}</span>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${owners.size > 1 ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{owners.size > 1 ? `⚠️ ${owners.size} different owners` : "same owner · exact dupe"}</span>
@@ -59,6 +60,9 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                       {m.opp ? <span className="text-[10px] text-slate-400">{m.opp.pipeline} › {m.opp.stage}</span> : <span className="text-[10px] text-slate-300">no open lead</span>}
                       <span className="ml-auto text-[10px] text-slate-400">touched {m.updatedAt.toLocaleDateString([], { month: "short", day: "numeric" })}</span>
                       <Link prefetch={false} href={`/crm/conversations?c=${m.id}`} title="Open conversation" className="rounded bg-white px-2 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">💬</Link>
+                      {fullAccess && g.members.length > 1 && (
+                        <button form={`merge-${g.phone}`} name="keep" value={m.id} title="Keep THIS card — merge the other card(s) into it (archive-only)" className="rounded bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200 hover:bg-amber-200">⭐ Keep</button>
+                      )}
                     </div>
                   ))}
                 </div>
