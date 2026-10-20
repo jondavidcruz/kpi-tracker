@@ -98,12 +98,32 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     { tags: { contains: fTag, mode: "insensitive" } },
     { contact: { tags: { contains: fTag, mode: "insensitive" } } },
   ] });
+  // 🔎 Deep search (Jon 2026-10-20: Marie needs to find "waterfront" land): besides
+  // name/phone/email, also match the property ADDRESS, the lead's NOTES & activity,
+  // and the discovery/land answers (where features like "waterfront" live). One
+  // parameterized raw query collects those opp ids; the field search below is the
+  // fallback. Pipeline scoping still applies via whereBase.
+  let deepOppIds: string[] = [];
+  if (q) {
+    try {
+      const like = `%${q}%`;
+      const rows = await db.$queryRaw<{ id: string }[]>`
+        SELECT DISTINCT o.id FROM "CrmOpportunity" o
+        WHERE o."archivedAt" IS NULL AND (
+          o."formData"::text ILIKE ${like}
+          OR EXISTS (SELECT 1 FROM "CrmEvent" e WHERE e."oppId" = o.id AND e.body ILIKE ${like})
+        ) LIMIT 3000`;
+      deepOppIds = rows.map((r) => r.id);
+    } catch { /* fall back to the field search below */ }
+  }
   if (q) andClauses.push({ OR: [
     { title: { contains: q, mode: "insensitive" } },
     { tags: { contains: q, mode: "insensitive" } },
     { contact: { name: { contains: q, mode: "insensitive" } } },
     { contact: { phone: { contains: q.replace(/\D/g, "") || q } } },
     { contact: { email: { contains: q, mode: "insensitive" } } },
+    { contact: { address: { contains: q, mode: "insensitive" } } },
+    ...(deepOppIds.length ? [{ id: { in: deepOppIds } }] : []),
   ] });
   const whereBase: Prisma.CrmOpportunityWhereInput = {
     archivedAt: null,

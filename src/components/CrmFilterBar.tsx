@@ -33,7 +33,7 @@ export default function CrmFilterBar({ base, q: q0, stage: s0, tag: t0, due: d0,
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="🔎 Search name, phone, email, property, tag — filters as you type"
+        placeholder="🔎 Search name, phone, address, tag, NOTES & land details (e.g. waterfront) — filters as you type"
         className="min-w-[260px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
       />
       <select value={s0} onChange={(e) => go({ stage: e.target.value })} className="rounded-xl border border-slate-200 px-2 py-2 text-xs font-semibold text-slate-600">
