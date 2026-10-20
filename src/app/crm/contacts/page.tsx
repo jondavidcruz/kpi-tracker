@@ -78,6 +78,21 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   // tied to their own pipeline(s), so Contacts is safe to show them.
   const lockPipes = await pipelineLockFor(me!);
   const pipeIn = lockPipes?.length ? (lockPipes.includes("War Room") ? [...lockPipes, ""] : lockPipes) : null;
+  // 🔎 Deep search (Jon 2026-10-20): also match contacts by their leads' NOTES and
+  // land/discovery answers (e.g. "waterfront"), like the board search.
+  let deepContactIds: string[] = [];
+  if (q) {
+    try {
+      const like = `%${q}%`;
+      const rows = await db.$queryRaw<{ contactId: string }[]>`
+        SELECT DISTINCT o."contactId" FROM "CrmOpportunity" o
+        WHERE o."archivedAt" IS NULL AND o."contactId" <> '' AND (
+          o."formData"::text ILIKE ${like}
+          OR EXISTS (SELECT 1 FROM "CrmEvent" e WHERE e."oppId" = o.id AND e.body ILIKE ${like})
+        ) LIMIT 3000`;
+      deepContactIds = rows.map((r) => r.contactId);
+    } catch { /* fall back to field search */ }
+  }
   const where = {
     archivedAt: null,
     ...(who ? { assignedTo: { equals: who, mode: "insensitive" as const } } : {}),
@@ -89,6 +104,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
       { email: { contains: q, mode: "insensitive" as const } },
       { address: { contains: q, mode: "insensitive" as const } },
       { tags: { contains: q, mode: "insensitive" as const } },
+      ...(deepContactIds.length ? [{ id: { in: deepContactIds } }] : []),
     ] } : {}),
   };
   const [total, contacts] = await Promise.all([

@@ -3,6 +3,7 @@
 // dropdown/checkbox changes apply instantly — no Filter button to forget.
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { LAND_FEATURES } from "@/lib/crm-forms";
 
 type Props = {
   base: Record<string, string>; // view, pl, who…
@@ -41,6 +42,11 @@ export default function CrmFilterBar({ base, q: q0, stage: s0, tag: t0, due: d0,
         {stages.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
       </select>
       <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="tag…" className="w-24 rounded-xl border border-slate-200 px-2 py-2 text-xs" />
+      {/* 🏞 One-click land-feature filter (Jon 2026-10-20) — drives the deep search. */}
+      <select value="" onChange={(e) => { const v = e.target.value; if (v) { setQ(v); go({ q: v }); } }} title="Find land by a buyer sell-point" className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-2 text-xs font-semibold text-emerald-700">
+        <option value="">🏞 Land feature…</option>
+        {LAND_FEATURES.map((f) => <option key={f} value={f}>{f}</option>)}
+      </select>
       <label className="flex items-center gap-1 text-xs font-semibold text-slate-600">
         <input type="checkbox" checked={d0} onChange={(e) => go({ due: e.target.checked ? "1" : "" })} /> 📞 follow-up due
       </label>
