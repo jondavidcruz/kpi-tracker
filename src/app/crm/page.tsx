@@ -165,6 +165,11 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const apptsToday = await db.crmAppointment.findMany({ where: { at: { gte: dayStart, lte: dayEnd } }, select: { oppId: true, title: true, at: true, withWho: true } });
   const apptTodayByOpp = new Map<string, { title: string; at: Date; withWho: string }[]>();
   for (const a of apptsToday) { if (!a.oppId) continue; const arr = apptTodayByOpp.get(a.oppId) ?? []; arr.push(a); apptTodayByOpp.set(a.oppId, arr); }
+  // 📅 next UPCOMING appointment (after today) per opp → a small date chip on the
+  // card so a soon-but-not-today appointment is visible (Jon 2026-10-20).
+  const apptUpcoming = await db.crmAppointment.findMany({ where: { at: { gt: dayEnd } }, orderBy: { at: "asc" }, select: { oppId: true, at: true }, take: 3000 });
+  const nextApptByOpp = new Map<string, Date>();
+  for (const a of apptUpcoming) { if (a.oppId && !nextApptByOpp.has(a.oppId)) nextApptByOpp.set(a.oppId, a.at); }
 
   // 🔴 unread-SMS counts per contact (Jon 2026-10-08): inbound texts newer
   // than the last outbound reply AND newer than the thread's last-read stamp.
@@ -213,6 +218,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       email: o.contact.email, smsUnread: smsUnread.get(o.contactId) ?? 0,
       valueNum: o.value ?? o.askPrice ?? 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
       apn: fd.property?.apn ?? "", apptDueToday: apptToday.length > 0, taskDueToday: due.length > 0,
+      // next upcoming (after today) task + appointment dates for the card chips
+      nextTask: (tasksByOpp.get(o.id) ?? []).map((t) => (t.due || "").slice(0, 10)).filter((d) => d > today).sort()[0] ?? "",
+      nextAppt: nextApptByOpp.get(o.id)?.toISOString() ?? "",
     };
   });
 

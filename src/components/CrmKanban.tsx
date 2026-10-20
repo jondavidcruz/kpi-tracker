@@ -28,6 +28,8 @@ export type CrmCard = {
   apn?: string;         // parcel number — shown in place of address for land
   apptDueToday?: boolean; // 📅 appointment due today → red card
   taskDueToday?: boolean; // ⏰ task due today → green card
+  nextTask?: string;      // next upcoming (after today) task due date — green chip
+  nextAppt?: string;      // next upcoming (after today) appointment ISO — red chip
 };
 // 🎨 GHL-style age coloring (Jon 2026-10-08): customizable ranges + colors,
 // saved per device. Days since last stage activity (updatedAt).
@@ -416,6 +418,15 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       )}
                     </div>
                     {/* 📅 when this lead entered the system — bottom-right (Jon 2026-10-13) */}
+                    {/* ⏭ next upcoming task / appointment (not today) — small colored
+                        chips so what's COMING is visible at a glance (Jon 2026-10-20):
+                        appointment red, task green. */}
+                    {(c.nextAppt || c.nextTask) && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        {c.nextAppt && <span title="Next appointment" className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700 ring-1 ring-red-100">📅 {new Date(c.nextAppt).toLocaleDateString([], { month: "short", day: "numeric" })} · {new Date(c.nextAppt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
+                        {c.nextTask && <span title="Next task due" className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-100">✅ {new Date(`${c.nextTask}T00:00:00`).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}
+                      </div>
+                    )}
                     {c.createdAt && <div className="mt-1.5 text-right text-[9px] font-medium text-slate-400">📅 Entered {new Date(c.createdAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</div>}
                   </div>
                 ))}
