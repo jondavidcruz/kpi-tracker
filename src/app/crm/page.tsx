@@ -319,6 +319,19 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         })}
       </div>
 
+      {/* 🏞 Land-feature chips (Jon 2026-10-20) — one tap to find waterfront etc. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-bold text-slate-400">🏞 Land:</span>
+        {([
+          ["🌊 Waterfront", "Waterfront / lake frontage"], ["👀 Water view", "Water view"], ["🏞 Creek/river", "Creek / river on property"],
+          ["🛣 Road frontage", "Paved road frontage"], ["📐 Corner lot", "Corner lot"], ["🌲 Cleared", "Cleared / build-ready"],
+          ["⚠️ Flood zone", "Flood zone"], ["🔌 Off-grid", "Off-grid"], ["⛰ Mountain views", "Mountain / hill views"],
+        ] as const).map(([label, val]) => {
+          const active = q === val;
+          return <Link key={val} prefetch={false} href={qs({ q: active ? "" : val })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${active ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"}`}>{label}</Link>;
+        })}
+      </div>
+
       {upcoming.length > 0 && (
         <Card className="border-l-4 border-indigo-400 p-3">
           <span className="text-xs font-bold text-slate-700">📅 Next 24h: </span>

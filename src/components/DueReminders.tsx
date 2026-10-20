@@ -14,6 +14,22 @@ type Item = { key: string; kind: "appt" | "task"; id: string; title: string; lea
 const WINDOW_MIN = 60;      // start reminding this many minutes before
 const PAST_GRACE_MIN = 25;  // keep nagging this long after the time passes
 
+// Task times are entered in Pacific (the whole team works PST — Jon 2026-10-20), so
+// interpret "YYYY-MM-DD HH:MM" as America/Los_Angeles regardless of the viewer's
+// machine timezone (PH reps' laptops aren't on PT). Appointments use a real ISO
+// instant already, so they need no conversion.
+function ptOffsetMin(atUtcMs: number): number {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(atUtcMs)).map((p) => [p.type, p.value]));
+  const asUtcOfPT = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour === 24 ? 0 : +parts.hour, +parts.minute);
+  return (asUtcOfPT - atUtcMs) / 60000;
+}
+function ptToMs(due: string, time: string): number {
+  const [Y, M, D] = due.split("-").map(Number);
+  const [h, m] = time.split(":").map(Number);
+  const guess = Date.UTC(Y, (M || 1) - 1, D || 1, h || 0, m || 0);
+  return guess - ptOffsetMin(guess) * 60000;
+}
+
 export default function DueReminders() {
   const [data, setData] = useState<{ appts: Appt[]; tasks: Task[] } | null>(null);
   const [, setTick] = useState(0);
@@ -48,7 +64,7 @@ export default function DueReminders() {
   // they live in the once-a-day start/end popup, the Tasks page, and the green card.
   const all: Item[] = [
     ...(data?.appts ?? []).map((a): Item => ({ key: `a_${a.id}`, kind: "appt", id: a.id, title: a.title, lead: a.lead, oppId: a.oppId, ms: Date.parse(a.atIso), timed: true })),
-    ...(data?.tasks ?? []).filter((t) => t.time).map((t): Item => ({ key: `t_${t.id}`, kind: "task", id: t.id, title: t.title, lead: t.lead, oppId: t.oppId, ms: Date.parse(`${t.due}T${t.time}:00`), timed: true })),
+    ...(data?.tasks ?? []).filter((t) => t.time).map((t): Item => ({ key: `t_${t.id}`, kind: "task", id: t.id, title: t.title, lead: t.lead, oppId: t.oppId, ms: ptToMs(t.due, t.time), timed: true })),
   ];
 
   // Which are "active" right now (within the window, not snoozed, not globally hidden)?
