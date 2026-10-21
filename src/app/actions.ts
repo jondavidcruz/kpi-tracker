@@ -4464,7 +4464,11 @@ export async function importMarketContactsMapped(formData: FormData) {
   await rollupResearchKpis(me!.id, today); // credits New Buyers Added for dispo reps
   revalidatePath("/vetting");
   revalidatePath("/marketing");
-  redirect(`/vetting?imp=${n}${skipped ? `&dup=${skipped}` : ""}`);
+  revalidatePath("/dispo");
+  // Return to where the import was launched (e.g. the Dispo CRM), default Buyer Research.
+  const returnTo = String(formData.get("returnTo") ?? "");
+  const base = returnTo.startsWith("/") ? `${returnTo}${returnTo.includes("?") ? "&" : "?"}imp=${n}` : `/vetting?imp=${n}`;
+  redirect(`${base}${skipped ? `&dup=${skipped}` : ""}`);
 }
 
 /** Mark a scored call as reviewed for training: a 1–5 star rating and/or a

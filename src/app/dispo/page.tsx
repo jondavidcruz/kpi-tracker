@@ -99,7 +99,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     <details className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
       <summary className="cursor-pointer text-sm font-bold text-slate-700">📥 Import from a CSV <span className="font-normal text-slate-400">— the Excel unvetted list; auto-maps columns, skips anyone already here</span></summary>
       <p className="mt-2 mb-3 text-xs text-slate-500">Upload the <b>unvetted-developers-backfill.csv</b> (or any CSV). We auto-guess the columns, you confirm, then import. Buyer agents and developers split into their tabs automatically by the Type column. Re-uploading is safe — duplicates are skipped.</p>
-      <CsvMapImport />
+      <CsvMapImport returnTo={`/dispo?tab=${tab}`} />
     </details>
   );
 
