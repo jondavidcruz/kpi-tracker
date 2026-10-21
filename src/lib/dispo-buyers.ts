@@ -66,8 +66,39 @@ export function readDispoBuyers(formData: unknown): DispoBuyer[] {
     .filter((r) => r.id && r.name);
 }
 
-/** Is this a dispositions pipeline (where the tracker belongs)? */
+/** Is this a dispositions pipeline (DS: … / dispo)? */
 export function isDispoPipeline(name: string | null | undefined): boolean {
   const n = (name ?? "").toLowerCase();
   return /^ds[:\s]/.test(n) || n.includes("sell land") || n.includes("go close") || n.includes("dispo");
 }
+
+/** A dispo DEAL pipeline (a property deal) — where the per-deal buyer/agent tracker
+ *  + matching-buyers + DEAL WON → Deal generation belong. NOT the buyer-network
+ *  pipelines (developers / agents), which are contacts, not deals. */
+export function isDispoDealPipeline(name: string | null | undefined): boolean {
+  const n = (name ?? "").toLowerCase();
+  return n.includes("sell land") || n.includes("go close");
+}
+
+// 🏗 / 🧑‍💼 The two dispo buyer-NETWORK pipelines (developers + buyer agents) —
+// real CrmOpportunity pipelines so each lead is a card with notes + stages, like
+// the Acquisitions CRM (Jon 2026-10-20).
+export const DISPO_DEV_PIPELINE = "DS: Unvetted Developers";
+export const DISPO_AGENT_PIPELINE = "DS: Buyer Agents";
+export const DISPO_NETWORK_PIPELINES: { name: string; stages: { key: string; label: string }[] }[] = [
+  { name: DISPO_DEV_PIPELINE, stages: [
+    { key: "new", label: "🆕 New / to research" },
+    { key: "researching", label: "🔎 Researching" },
+    { key: "reached_out", label: "📞 Reached out" },
+    { key: "following_up", label: "🔁 Following up" },
+    { key: "vetted", label: "✅ Vetted" },
+    { key: "not_fit", label: "✕ Not a fit" },
+  ] },
+  { name: DISPO_AGENT_PIPELINE, stages: [
+    { key: "new", label: "🆕 New" },
+    { key: "reached_out", label: "📞 Reached out" },
+    { key: "following_up", label: "🔁 Following up" },
+    { key: "active", label: "🤝 Active partner" },
+    { key: "not_fit", label: "✕ Not a fit" },
+  ] },
+];

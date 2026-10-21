@@ -5,7 +5,7 @@ import { getCurrentUser, isManager, canManageAllLeads, canAccessMarketing } from
 import { getBuyerMatchesForLead } from "@/lib/buyer-match-lead";
 import SendToBuyersButton from "@/components/SendToBuyersButton";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
-import { readDispoBuyers, isDispoPipeline } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
 import { stripHtml } from "@/lib/crm-shared";
@@ -465,7 +465,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           )}
 
           {/* 📇 Per-deal buyer/agent follow-up tracker — dispo pipelines only (Jon 2026-10-20) */}
-          {mktAccess && isDispoPipeline(opp.pipeline) && (
+          {mktAccess && isDispoDealPipeline(opp.pipeline) && (
             <DispoBuyerTracker oppId={opp.id} buyers={readDispoBuyers(opp.formData)} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} />
           )}
 

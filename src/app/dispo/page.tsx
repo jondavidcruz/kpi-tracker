@@ -5,34 +5,20 @@ import { getSettings } from "@/lib/data";
 import { readPipelines } from "@/lib/crm";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
-import { readDispoBuyers, isDispoPipeline, DISPO_BUYER_STAGES } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline, DISPO_BUYER_STAGES, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } from "@/lib/dispo-buyers";
 import DispoFollowupKanban, { type FollowupCard } from "@/components/DispoFollowupKanban";
-import VettingTable, { type Prospect } from "@/components/VettingTable";
 import CsvMapImport from "@/components/CsvMapImport";
-import { readBuyerLand } from "@/app/actions";
+import { importDispoNetworkCsv } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
 type Tab = "deals" | "developers" | "agents";
 
-// 🎯 Dispositions CRM — the dispo department's home, built like the Acquisitions
-// CRM but for dispo (Jon 2026-10-20). One spot, three tabs: Developers + Buyer
-// Agents (the unvetted pool, vetted with the interview cards) and Deals (the
-// follow-up Kanban for everyone we've sent a deal to).
-const PROSPECT_SELECT = {
-  id: true, name: true, website: true, links: true, email: true, phone: true, phone2: true,
-  buyBoxAreas: true, outreachLog: true, lastContacted: true, nextFollowUp: true,
-  vetStage: true, vetStatus: true, igHandle: true, touchOn: true, vetArea: true,
-  category: true, type: true, title: true, company: true, preferredContact: true,
-  dealType: true, buildType: true, closingSpeed: true, priceRange: true, minLotSize: true,
-  propertyType: true, minBeds: true, maxBaths: true, conditionTolerance: true, needsView: true,
-  marketDetails: true, decisionMaker: true, buyingFrequency: true, bestContact: true, companySize: true,
-} as const;
-
-// A buyer AGENT vs a DEVELOPER / cash buyer — split the unvetted pool by this.
-const isAgentType = (t: string, cat: string) => /agent|broker|buyer.?rep|realtor|listing/i.test(t) && cat !== "luxury";
-
-export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; imp?: string; dup?: string }> }) {
+// 🎯 Dispositions CRM — dispo's home, built like the Acquisitions CRM but for the
+// BUYER side (Jon 2026-10-20). Three tabs: Developers + Buyer Agents are real CRM
+// pipelines (each lead is a card with notes + stages), and Deals is the follow-up
+// Kanban for everyone we've sent a deal to.
+export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; imp?: string; dev?: string; agent?: string; dup?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me) && !isManager(me)) {
     return (
@@ -46,41 +32,20 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   }
   const sp = await searchParams;
   const tab: Tab = sp.tab === "developers" || sp.tab === "agents" ? sp.tab : "deals";
-  const canEdit = canAccessMarketing(me) || isManager(me);
   const settings = await getSettings();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
 
-  // ── The unvetted pool (developers + buyer agents), split by type ──
-  const pool = await db.marketContact.findMany({
-    where: { archivedAt: null, vetStage: { notIn: ["vetted", "active"] } },
-    orderBy: [{ vetArea: "asc" }, { name: "asc" }],
-    select: PROSPECT_SELECT,
-  });
-  const toProspect = (r: typeof pool[number]): Prospect => ({
-    id: r.id, name: r.name, website: r.website, links: r.links, email: r.email, phone: r.phone, phone2: r.phone2,
-    buyBoxAreas: r.buyBoxAreas, outreachLog: r.outreachLog, lastContacted: r.lastContacted,
-    nextFollowUp: r.nextFollowUp, vetStage: r.vetStage, vetStatus: r.vetStatus, igHandle: r.igHandle, touchOn: r.touchOn,
-    category: r.category, type: r.type, title: r.title, company: r.company, preferredContact: r.preferredContact,
-    dealType: r.dealType, buildType: r.buildType, closingSpeed: r.closingSpeed, priceRange: r.priceRange, minLotSize: r.minLotSize,
-    propertyType: r.propertyType, minBeds: r.minBeds, maxBaths: r.maxBaths, conditionTolerance: r.conditionTolerance, needsView: r.needsView,
-    marketDetails: r.marketDetails, decisionMaker: r.decisionMaker, buyingFrequency: r.buyingFrequency, bestContact: r.bestContact, companySize: r.companySize,
-  });
-  const agents = pool.filter((r) => isAgentType(r.type, r.category));
-  const developers = pool.filter((r) => !isAgentType(r.type, r.category));
-  const UNASSIGNED = "Unassigned / general";
-  const groupByArea = (rows: typeof pool) => {
-    const m = new Map<string, Prospect[]>();
-    for (const r of rows) { const k = r.vetArea || UNASSIGNED; const a = m.get(k) ?? []; a.push(toProspect(r)); m.set(k, a); }
-    return Array.from(m.entries()).map(([area, prospects]) => ({ area, prospects }))
-      .sort((a, b) => (a.area === UNASSIGNED ? 1 : b.area === UNASSIGNED ? -1 : b.prospects.length - a.prospects.length));
-  };
-  const buyerLand = await readBuyerLand().catch(() => ({} as Record<string, import("@/lib/buyer-land").BuyerLand>));
+  // Counts per network pipeline (cards = CrmOpportunity leads).
+  const counts = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null, pipeline: { in: [DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE] } }, _count: { _all: true } }).catch(() => [] as { pipeline: string; _count: { _all: number } }[]);
+  const countOf = (p: string) => counts.find((c) => c.pipeline === p)?._count._all ?? 0;
+  const devCount = countOf(DISPO_DEV_PIPELINE);
+  const agentCount = countOf(DISPO_AGENT_PIPELINE);
 
-  // ── Deals tab: the follow-up Kanban across all DS-pipeline deals ──
+  // Deals tab: the follow-up Kanban across all dispo DEAL pipelines.
   const pipelines = await readPipelines();
-  const dispoNames = pipelines.map((p) => p.name).filter((n) => isDispoPipeline(n));
-  const opps = dispoNames.length
-    ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dispoNames } }, select: { id: true, title: true, formData: true, contact: { select: { name: true, address: true } } } })
+  const dealNames = pipelines.map((p) => p.name).filter((n) => isDispoDealPipeline(n));
+  const opps = dealNames.length
+    ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, select: { id: true, title: true, formData: true, contact: { select: { name: true, address: true } } } })
     : [];
   const cards: FollowupCard[] = [];
   for (const o of opps) {
@@ -91,30 +56,46 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
 
   const TABS: { key: Tab; label: string; n: number }[] = [
     { key: "deals", label: "📇 Deals & follow-ups", n: cards.length },
-    { key: "developers", label: "🏗 Developers", n: developers.length },
-    { key: "agents", label: "🧑‍💼 Buyer agents", n: agents.length },
+    { key: "developers", label: "🏗 Developers", n: devCount },
+    { key: "agents", label: "🧑‍💼 Buyer agents", n: agentCount },
   ];
 
-  const importPanel = (
-    <details className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-      <summary className="cursor-pointer text-sm font-bold text-slate-700">📥 Import from a CSV <span className="font-normal text-slate-400">— the Excel unvetted list; auto-maps columns, skips anyone already here</span></summary>
-      <p className="mt-2 mb-3 text-xs text-slate-500">Upload the <b>unvetted-developers-backfill.csv</b> (or any CSV). We auto-guess the columns, you confirm, then import. Buyer agents and developers split into their tabs automatically by the Type column. Re-uploading is safe — duplicates are skipped.</p>
-      <CsvMapImport returnTo={`/dispo?tab=${tab}`} />
-    </details>
-  );
+  const importHref = (t: Tab) => `/dispo?tab=${t}`;
+  const networkTab = (kind: "developers" | "agents") => {
+    const pipeline = kind === "developers" ? DISPO_DEV_PIPELINE : DISPO_AGENT_PIPELINE;
+    const n = kind === "developers" ? devCount : agentCount;
+    const boardHref = `/crm?pl=${encodeURIComponent(pipeline)}`;
+    return (
+      <>
+        <Card className="flex flex-wrap items-center gap-3 p-4">
+          <div>
+            <div className="text-sm font-extrabold text-slate-800">{kind === "developers" ? "🏗 Unvetted Developers" : "🧑‍💼 Buyer Agents"} — {n} lead{n === 1 ? "" : "s"}</div>
+            <div className="text-[12px] text-slate-500">Each is a full CRM lead — a card with notes you can drag between stages, same as the Acquisitions CRM.</div>
+          </div>
+          <Link href={boardHref} className="ml-auto rounded-lg bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:bg-brand-navy-700">Open the board →</Link>
+        </Card>
+        <details className="rounded-2xl bg-white p-4 ring-1 ring-slate-200" open={n === 0}>
+          <summary className="cursor-pointer text-sm font-bold text-slate-700">📥 Import the Excel list <span className="font-normal text-slate-400">— developers + buyer agents, auto-split by Type, duplicates skipped</span></summary>
+          <p className="mt-2 mb-3 text-xs text-slate-500">Upload the <b>unvetted-developers-backfill.csv</b> I sent you. Each row becomes a CRM lead card (with its notes) in the right pipeline — developers here, buyer agents in the Buyer Agents tab. Re-uploading is safe.</p>
+          <CsvMapImport action={importDispoNetworkCsv} returnTo={importHref(kind)} />
+        </details>
+      </>
+    );
+  };
 
   return (
     <div className="space-y-5">
       <SectionTitle
         title="🎯 Dispositions CRM"
-        subtitle="Dispo's home base — like the Acquisitions CRM, but for dispositions. Developers + buyer agents in one spot (vet them with the interview cards), and every deal's buyer follow-up on the Deals board."
+        subtitle="Dispo's home base — like the Acquisitions CRM, but for the buyer side. Developers + buyer agents are full CRM leads (cards, notes, stages); the Deals board tracks every buyer follow-up per deal."
         accent="bg-emerald-500"
         right={<Link href="/crm?pl=DS%3A%20Sell%20Land%20Then%20Sign" className="rounded-lg bg-brand-navy px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-navy-700">→ Deal pipelines</Link>}
       />
 
-      {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} into the pool.{sp.dup && /^\d+$/.test(sp.dup) ? ` Skipped ${sp.dup} already here.` : ""} They&apos;re split into Developers / Buyer agents by type.</div>}
+      {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} lead{sp.imp === "1" ? "" : "s"} as CRM cards{sp.dev && sp.agent ? ` (${sp.dev} developers, ${sp.agent} buyer agents)` : ""}.{sp.dup && /^\d+$/.test(sp.dup) ? ` Skipped ${sp.dup} already here.` : ""}</div>}
+      {sp.imp === "empty" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Choose a CSV file or paste rows first.</div>}
+      {sp.imp === "noname" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Map the Name column before importing.</div>}
 
-      {/* tab bar */}
       <div className="flex flex-wrap gap-1.5">
         {TABS.map((t) => (
           <Link key={t.key} href={`/dispo?tab=${t.key}`} prefetch={false}
@@ -135,7 +116,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
             <Card className="p-8 text-center text-slate-500">
               <div className="mb-2 text-3xl">📇</div>
               <p className="text-sm font-semibold text-slate-700">No buyers on the board yet.</p>
-              <p className="mx-auto mt-1 max-w-md text-[13px] text-slate-500">Open a deal in the <b>DS: Sell Land Then Sign</b> pipeline, hit <b>Send to buyers</b> (or add buyer agents + developers by hand) on the deal&apos;s <b>📇 Buyers &amp; agents</b> panel, and they show up here to work.</p>
+              <p className="mx-auto mt-1 max-w-md text-[13px] text-slate-500">Open a deal in the <b>DS: Sell Land Then Sign</b> pipeline, hit <b>Send to buyers</b> (or add buyer agents + developers) on the deal&apos;s <b>📇 Buyers &amp; agents</b> panel, and they show up here to work.</p>
               <Link href="/crm?pl=DS%3A%20Sell%20Land%20Then%20Sign" className="mt-4 inline-block rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white">Open the deal pipeline</Link>
             </Card>
           ) : (
@@ -149,21 +130,8 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
         </>
       )}
 
-      {tab === "developers" && (
-        <>
-          {importPanel}
-          {developers.length === 0 && <Card className="p-6 text-center text-sm text-slate-400">No developers in the pool yet — import the Excel list above.</Card>}
-          <VettingTable areas={groupByArea(developers)} canEdit={canEdit} today={today} land={buyerLand} />
-        </>
-      )}
-
-      {tab === "agents" && (
-        <>
-          {importPanel}
-          {agents.length === 0 && <Card className="p-6 text-center text-sm text-slate-400">No buyer agents in the pool yet — import the Excel list above (rows with an agent/broker Type land here).</Card>}
-          <VettingTable areas={groupByArea(agents)} canEdit={canEdit} today={today} land={buyerLand} />
-        </>
-      )}
+      {tab === "developers" && networkTab("developers")}
+      {tab === "agents" && networkTab("agents")}
     </div>
   );
 }

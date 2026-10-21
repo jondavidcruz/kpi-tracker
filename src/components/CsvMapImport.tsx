@@ -60,7 +60,7 @@ function autoGuess(headers: string[]): Record<string, number> {
   return m;
 }
 
-export default function CsvMapImport({ returnTo = "" }: { returnTo?: string }) {
+export default function CsvMapImport({ returnTo = "", action = importMarketContactsMapped }: { returnTo?: string; action?: (fd: FormData) => void | Promise<void> }) {
   const [text, setText] = useState("");
   const [map, setMap] = useState<Record<string, number>>({});
   const [fileName, setFileName] = useState("");
@@ -154,7 +154,7 @@ export default function CsvMapImport({ returnTo = "" }: { returnTo?: string }) {
             </div>
           )}
 
-          <form action={importMarketContactsMapped} className="flex items-center gap-3">
+          <form action={action} className="flex items-center gap-3">
             <input type="hidden" name="csv" value={text} />
             <input type="hidden" name="map" value={JSON.stringify(map)} />
             {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}

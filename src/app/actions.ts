@@ -4596,3 +4596,89 @@ export async function applyGoalRecalibration(formData: FormData) {
   revalidatePath("/dashboard");
   redirect(`/admin/recalibrate?applied=${applied}`);
 }
+
+// ===== 🏗/🧑‍💼 Dispo buyer-network CSV import → CRM leads (Jon 2026-10-20) =====
+// Imports the Excel unvetted list as REAL CrmOpportunity leads (cards with notes +
+// stages, like the Acquisitions CRM) into two dispo pipelines — developers vs buyer
+// agents, split by Type. Creates the pipelines if missing. Idempotent: skips a
+// contact already in those pipelines (name + last-10 phone). CsvMapImport posts the
+// same {csv, map} shape as the MarketContact importer.
+export async function importDispoNetworkCsv(formData: FormData) {
+  const me = await getCurrentUser();
+  const { canAccessMarketing, isManager } = await import("@/lib/auth");
+  if (!canAccessMarketing(me) && !isManager(me)) return;
+  const { DISPO_NETWORK_PIPELINES, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } = await import("@/lib/dispo-buyers");
+  const { logCrmEvent } = await import("@/lib/crm");
+
+  const text = String(formData.get("csv") ?? "");
+  let map: Record<string, number> = {};
+  try { map = JSON.parse(String(formData.get("map") ?? "{}")); } catch { map = {}; }
+  const returnTo = String(formData.get("returnTo") ?? "");
+  const back = (q: string) => redirect(returnTo.startsWith("/") ? `${returnTo}${returnTo.includes("?") ? "&" : "?"}${q}` : `/dispo?${q}`);
+  if (!text.trim()) back("imp=empty");
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) back("imp=empty");
+  if (map.name == null || map.name < 0) back("imp=noname");
+
+  // Ensure the two network pipelines exist in __crm_pipelines__.
+  const PIPES_CAT = "__crm_pipelines__";
+  const pRow = await db.resource.findFirst({ where: { category: PIPES_CAT } }).catch(() => null);
+  let ghl: Array<{ name: string; stages: Array<{ key: string; label: string }> }> = [];
+  try { ghl = pRow?.description ? JSON.parse(pRow.description) : []; } catch { ghl = []; }
+  let changed = false;
+  for (const np of DISPO_NETWORK_PIPELINES) {
+    if (!ghl.some((p) => p.name === np.name)) { ghl.push({ name: np.name, stages: np.stages }); changed = true; }
+  }
+  if (changed) {
+    if (pRow) await db.resource.update({ where: { id: pRow.id }, data: { description: JSON.stringify(ghl) } });
+    else await db.resource.create({ data: { title: "crm-pipelines", category: PIPES_CAT, url: "", description: JSON.stringify(ghl) } });
+  }
+
+  const g = (row: string[], k: string) => { const i = map[k]; return i != null && i >= 0 && i < row.length ? String(row[i] ?? "").trim() : ""; };
+  const digits = (s: string) => s.replace(/[^0-9]/g, "").slice(-10);
+  const isAgent = (type: string) => /agent|broker|buyer.?rep|realtor|listing/i.test(type);
+
+  // Dedup against contacts already in the two network pipelines.
+  const existingOpps = await db.crmOpportunity.findMany({
+    where: { pipeline: { in: [DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE] } },
+    select: { contact: { select: { name: true, phone: true, altPhone: true } } },
+  }).catch(() => [] as { contact: { name: string; phone: string; altPhone: string } }[]);
+  const seen = new Set<string>();
+  for (const o of existingOpps) seen.add(`${o.contact.name.toLowerCase().trim()}|${digits(o.contact.phone || o.contact.altPhone)}`);
+
+  let dev = 0, agent = 0, skipped = 0;
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const name = g(row, "name");
+    if (!name) continue;
+    const phone = g(row, "phone");
+    const key = `${name.toLowerCase()}|${digits(phone)}`;
+    if (seen.has(key)) { skipped++; continue; }
+    seen.add(key);
+    const type = g(row, "type");
+    const toAgent = isAgent(type);
+    const pipeline = toAgent ? DISPO_AGENT_PIPELINE : DISPO_DEV_PIPELINE;
+    const market = g(row, "market");
+    const buyBox = g(row, "buyBox");
+    const website = g(row, "website");
+    const links = g(row, "links");
+    const source = g(row, "status") || g(row, "source") || "Unvetted list import";
+    const noteBody = [g(row, "notes"), buyBox && `Known buy box: ${buyBox}`, website && `Web: ${website}`, links && `Links: ${links}`].filter(Boolean).join("\n");
+    try {
+      const contact = await db.crmContact.create({ data: {
+        name, phone, altPhone: g(row, "phone2"), email: g(row, "email"),
+        source, tags: [type, toAgent ? "buyer-agent" : "developer"].filter(Boolean).join(", "),
+        pinnedNote: [market, buyBox].filter(Boolean).join(" · ").slice(0, 300),
+      } });
+      await db.crmOpportunity.create({ data: {
+        contactId: contact.id, title: name, pipeline, stage: "new",
+        formData: { __import: { type, market, buyBox, website, links, source } } as never,
+      } });
+      if (noteBody) await logCrmEvent({ contactId: contact.id, kind: "note", body: noteBody.slice(0, 4000), actor: me!.name });
+      if (toAgent) agent++; else dev++;
+    } catch { /* skip bad row */ }
+  }
+  revalidatePath("/dispo");
+  revalidatePath("/crm");
+  back(`imp=${dev + agent}&dev=${dev}&agent=${agent}${skipped ? `&dup=${skipped}` : ""}`);
+}
