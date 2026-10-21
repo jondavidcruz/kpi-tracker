@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { stripHtml, KIND_EMOJI, titleCase } from "@/lib/crm-shared";
-import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
+import { commsFor, readSignatures, firstOf, defaultSignature, hasSignatureImage } from "@/lib/crm-comms";
 import { readSnippets } from "@/lib/crm-templates";
 import CallButton from "@/components/CallButton";
 import ConvComposerTabs from "@/components/ConvComposerTabs";
@@ -43,6 +43,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const comms = await commsFor(me!);
   const snippets = await readSnippets();
   const mySignature = (await readSignatures())[firstOf(me!.name)] || defaultSignature(me!.name);
+  const mySigImageUrl = (await hasSignatureImage(firstOf(me!.name))) ? `/api/sig/${encodeURIComponent(firstOf(me!.name))}` : "";
   const fromLabel = `${me!.name} <${firstOf(me!.name)}@freedom-offers.com>`;
 
   // 🗂 Department scope (Jon 2026-10-20): dispo conversations (buyers/agents +
@@ -288,7 +289,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                   })}
                   <ScrollAnchor dep={`${cId}:${lastSmsAt}`} />
                 </div>
-                <ConvComposerTabs contactId={contact.id} oppId={opp?.id ?? ""} phone={contact.phone} email={contact.email} leadName={contact.name} rep={me!.name} fromLabel={fromLabel} signature={mySignature} canSms={comms.sms} canEmail={comms.email} snippets={snippets}
+                <ConvComposerTabs contactId={contact.id} oppId={opp?.id ?? ""} phone={contact.phone} email={contact.email} leadName={contact.name} rep={me!.name} fromLabel={fromLabel} signature={mySignature} sigImageUrl={mySigImageUrl} canSms={comms.sms} canEmail={comms.email} snippets={snippets}
                   smsHistory={thread.filter((e) => e.kind === "sms").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString() }; })}
                   emailHistory={thread.filter((e) => e.kind === "email").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }; })} />
               </>

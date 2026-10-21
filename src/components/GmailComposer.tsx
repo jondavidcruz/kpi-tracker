@@ -11,8 +11,8 @@ type Snip = { id: string; name: string; kind: string; subject?: string; body: st
 
 type HistMail = { body: string; inbound: boolean; at: string; actor?: string };
 
-export default function GmailComposer({ oppId, contactId, to, leadName, rep, fromLabel, signature, snippets, history = [] }: {
-  oppId: string; contactId: string; to: string; leadName: string; rep: string; fromLabel: string; signature: string; snippets: Snip[]; history?: HistMail[];
+export default function GmailComposer({ oppId, contactId, to, leadName, rep, fromLabel, signature, sigImageUrl = "", snippets, history = [] }: {
+  oppId: string; contactId: string; to: string; leadName: string; rep: string; fromLabel: string; signature: string; sigImageUrl?: string; snippets: Snip[]; history?: HistMail[];
 }) {
   const allSnips: Snip[] = [
     { id: "__review", name: "⭐ Ask for Google review", kind: "email", subject: "A quick favor, {name}?", body: `Hi {name},\n\nIt was a pleasure working with you! If you have 30 seconds, a quick Google review would mean the world to our small team:\n${GOOGLE_REVIEW_LINK}\n\nThank you!` },
@@ -98,6 +98,8 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
         <div className="border-t border-slate-100 pt-2 text-[12px] leading-snug text-slate-500">
           <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-300">signature — added automatically (edit yours on /account)</div>
           <div className="whitespace-pre-line">{signature}</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {sigImageUrl && <img src={sigImageUrl} alt="signature" className="mt-1.5 max-w-[320px]" />}
         </div>
         <div className="mt-2 flex items-center gap-2">
           {undoLeft > 0 ? (
@@ -148,6 +150,8 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
           <div className="h-[200px] overflow-y-auto px-3 py-2">
             <div className="whitespace-pre-line text-[11px] leading-relaxed text-slate-800">{body || <span className="text-slate-300">start typing to preview…</span>}</div>
             {body && <div className="mt-3 whitespace-pre-line border-t border-slate-100 pt-2 text-[10px] leading-snug text-slate-500">{signature}</div>}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {body && sigImageUrl && <img src={sigImageUrl} alt="signature" className="mt-1.5 max-w-[280px]" />}
           </div>
         </div>
       </div>

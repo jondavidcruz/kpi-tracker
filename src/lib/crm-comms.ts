@@ -57,3 +57,26 @@ export async function writeSignatures(map: SigMap): Promise<void> {
 export function defaultSignature(name: string): string {
   return `${name}\nFreedom Offers\n📞 1-877-652-8991 · freedom-offers.com`;
 }
+
+// 🖼 Per-rep email signature IMAGE (Jon 2026-10-21) — upload your real Gmail
+// signature image and it's embedded at the bottom of every email you send.
+// Stored one Resource row per rep (base64 in description, mime in url) so a big
+// image never bloats the shared signatures row.
+const SIG_IMG_CAT = "__crm_sig_image__";
+export async function readSignatureImage(firstLower: string): Promise<{ data: string; type: string } | null> {
+  const row = await db.resource.findFirst({ where: { category: SIG_IMG_CAT, title: firstLower } }).catch(() => null);
+  if (!row?.description) return null;
+  return { data: row.description, type: row.url || "image/png" };
+}
+export async function writeSignatureImage(firstLower: string, dataB64: string, type: string): Promise<void> {
+  const row = await db.resource.findFirst({ where: { category: SIG_IMG_CAT, title: firstLower } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: dataB64, url: type } });
+  else await db.resource.create({ data: { title: firstLower, category: SIG_IMG_CAT, url: type, description: dataB64 } });
+}
+export async function deleteSignatureImage(firstLower: string): Promise<void> {
+  await db.resource.deleteMany({ where: { category: SIG_IMG_CAT, title: firstLower } }).catch(() => {});
+}
+export async function hasSignatureImage(firstLower: string): Promise<boolean> {
+  const row = await db.resource.findFirst({ where: { category: SIG_IMG_CAT, title: firstLower }, select: { id: true } }).catch(() => null);
+  return !!row;
+}

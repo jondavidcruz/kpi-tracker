@@ -5,20 +5,22 @@ import { db } from "@/lib/db";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
 import VmRecorder from "@/components/VmRecorder";
-import { readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
-import { saveSignatureAction } from "@/app/crm/actions";
+import { readSignatures, firstOf, defaultSignature, hasSignatureImage } from "@/lib/crm-comms";
+import { saveSignatureAction, saveSignatureImageAction } from "@/app/crm/actions";
 
 export const dynamic = "force-dynamic";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const labelCls = "mb-1 block text-xs font-semibold text-slate-500";
 
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ pwok?: string; pwerr?: string; gemini?: string; addr?: string }> }) {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ pwok?: string; pwerr?: string; gemini?: string; addr?: string; sig?: string }> }) {
   const me = await getCurrentUser();
   if (!me) return null;
   const sp = await searchParams;
   const profile = await db.teamProfile.findUnique({ where: { userId: me.id }, select: { address: true, phone: true } });
   const mySig = (await readSignatures())[firstOf(me.name)] || defaultSignature(me.name);
+  const sigImgKey = firstOf(me.name);
+  const hasSigImg = await hasSignatureImage(sigImgKey);
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
@@ -81,6 +83,28 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           <textarea name="signature" rows={4} defaultValue={mySig} className={inputCls} />
           <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save signature</button>
         </form>
+
+        {/* 🖼 Signature image (your Gmail block) */}
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <h4 className="mb-1 text-sm font-bold text-slate-700">🖼 Signature image (like your Gmail)</h4>
+          <p className="mb-3 text-xs text-slate-500">Upload your branded Gmail signature as an image (PNG/JPG, under 800 KB). It&apos;s added under your text signature on every email you send. In Gmail, right-click your signature → <b>Save image as…</b>, then upload it here.</p>
+          {sp.sig === "ok" && <div className="mb-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Signature image saved — it&apos;s now on your emails.</div>}
+          {sp.sig === "bad" && <div className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">Use an image (PNG/JPG) under 800 KB.</div>}
+          {hasSigImg && (
+            <div className="mb-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/sig/${encodeURIComponent(sigImgKey)}?v=${Date.now()}`} alt="Your signature" className="max-w-sm rounded-lg ring-1 ring-slate-200" />
+              <form action={saveSignatureImageAction} className="mt-1.5">
+                <input type="hidden" name="remove" value="1" />
+                <button className="text-xs font-semibold text-rose-600 hover:underline">Remove image</button>
+              </form>
+            </div>
+          )}
+          <form action={saveSignatureImageAction} className="flex flex-wrap items-center gap-2">
+            <input type="file" name="image" accept="image/*" required className="text-xs" />
+            <button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">{hasSigImg ? "Replace image" : "Upload image"}</button>
+          </form>
+        </div>
       </Card>
 
       <Link href="/dashboard" className="inline-block text-sm font-semibold text-brand-navy hover:underline">← Back to dashboard</Link>

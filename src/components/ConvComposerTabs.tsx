@@ -10,9 +10,9 @@ type Snip = { id: string; name: string; kind: string; subject?: string; body: st
 
 type HistMsg = { body: string; inbound: boolean; at: string; actor?: string };
 
-export default function ConvComposerTabs({ contactId, oppId, phone, email, leadName, rep, fromLabel, signature, canSms, canEmail, snippets, smsHistory = [], emailHistory = [] }: {
+export default function ConvComposerTabs({ contactId, oppId, phone, email, leadName, rep, fromLabel, signature, sigImageUrl = "", canSms, canEmail, snippets, smsHistory = [], emailHistory = [] }: {
   contactId: string; oppId: string; phone: string; email: string; leadName: string; rep: string;
-  fromLabel: string; signature: string; canSms: boolean; canEmail: boolean; snippets: Snip[];
+  fromLabel: string; signature: string; sigImageUrl?: string; canSms: boolean; canEmail: boolean; snippets: Snip[];
   smsHistory?: HistMsg[]; emailHistory?: HistMsg[];
 }) {
   const smsOk = canSms && !!phone;
@@ -33,7 +33,7 @@ export default function ConvComposerTabs({ contactId, oppId, phone, email, leadN
         <SmsComposer compact history={smsHistory} oppId={oppId} contactId={contactId} to={phone} leadName={leadName} rep={rep} snippets={snippets.filter((s) => s.kind === "sms")} />
       )}
       {mode === "email" && emailOk && (
-        <GmailComposer history={emailHistory} oppId={oppId} contactId={contactId} to={email} leadName={leadName} rep={rep} fromLabel={fromLabel} signature={signature} snippets={snippets.filter((s) => s.kind === "email")} />
+        <GmailComposer history={emailHistory} oppId={oppId} contactId={contactId} to={email} leadName={leadName} rep={rep} fromLabel={fromLabel} signature={signature} sigImageUrl={sigImageUrl} snippets={snippets.filter((s) => s.kind === "email")} />
       )}
     </div>
   );

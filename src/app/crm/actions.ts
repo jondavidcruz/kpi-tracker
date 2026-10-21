@@ -524,6 +524,31 @@ export async function saveSignatureAction(formData: FormData) {
   revalidatePath("/account");
 }
 
+/** 🖼 Anyone: upload (or remove) their email-signature IMAGE — the branded block
+ *  from their Gmail. Embedded at the bottom of every email they send. */
+export async function saveSignatureImageAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const { firstOf } = await import("@/lib/crm-comms");
+  const key = firstOf(me.name);
+  if (formData.get("remove")) {
+    const { deleteSignatureImage } = await import("@/lib/crm-comms");
+    await deleteSignatureImage(key);
+    revalidatePath("/account");
+    return;
+  }
+  const file = formData.get("image");
+  if (!(file instanceof File) || file.size === 0) return;
+  if (!file.type.startsWith("image/") || file.size > 800 * 1024) { // keep emails light
+    redirect("/account?sig=bad");
+  }
+  const b64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+  const { writeSignatureImage } = await import("@/lib/crm-comms");
+  await writeSignatureImage(key, b64, file.type);
+  revalidatePath("/account");
+  redirect("/account?sig=ok");
+}
+
 /** ✉️ Send a real email to the seller from the card (Resend, reply-to us). */
 export async function sendCrmEmailAction(formData: FormData) {
   const me = await crmUser();
@@ -543,11 +568,15 @@ export async function sendCrmEmailAction(formData: FormData) {
   }
   // GHL-style agent identity: From = the rep (on our domain), reply-to their
   // real inbox, their own signature appended.
-  const { readSignatures, firstOf, defaultSignature } = await import("@/lib/crm-comms");
+  const { readSignatures, firstOf, defaultSignature, hasSignatureImage } = await import("@/lib/crm-comms");
   const sig = (await readSignatures())[firstOf(me.name)] || defaultSignature(me.name);
   const domain = (process.env.ALERT_EMAIL_FROM ?? "info@freedom-offers.com").split("@")[1] ?? "freedom-offers.com";
   const fromAddr = `${me.name} <${firstOf(me.name)}@${domain}>`;
-  const html = `<p>${body.replace(/\n/g, "<br>")}</p><p style="color:#64748b;font-size:13px;white-space:pre-line">${sig.replace(/</g, "&lt;")}</p>`;
+  // 🖼 branded signature image (their Gmail block), referenced by URL so it renders in email clients
+  const sigImg = (await hasSignatureImage(firstOf(me.name)))
+    ? `<div style="margin-top:10px"><img src="https://kpi-tracker-lovat.vercel.app/api/sig/${encodeURIComponent(firstOf(me.name))}" alt="${me.name.replace(/"/g, "")}" style="max-width:380px;height:auto;display:block"></div>`
+    : "";
+  const html = `<p>${body.replace(/\n/g, "<br>")}</p><p style="color:#64748b;font-size:13px;white-space:pre-line">${sig.replace(/</g, "&lt;")}</p>${sigImg}`;
   const { getChannelConfig, sendEmailTo, sendEmailWithAttachment } = await import("@/lib/notify");
   const cfg = { ...(await getChannelConfig()), emailFrom: fromAddr };
   const errOut: { msg?: string } = {};
