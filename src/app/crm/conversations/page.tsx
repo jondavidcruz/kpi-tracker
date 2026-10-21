@@ -30,7 +30,7 @@ function timeAgo(d: Date) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ c?: string; who?: string; q?: string }> }) {
+export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ c?: string; who?: string; q?: string; dept?: string }> }) {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return <Card className="p-10 text-center text-slate-400">Conversations live inside the Seller CRM (acquisitions + managers).</Card>;
@@ -45,6 +45,16 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const mySignature = (await readSignatures())[firstOf(me!.name)] || defaultSignature(me!.name);
   const fromLabel = `${me!.name} <${firstOf(me!.name)}@freedom-offers.com>`;
 
+  // 🗂 Department scope (Jon 2026-10-20): dispo conversations (buyers/agents +
+  // dispo deals) tracked separately from seller conversations so they don't mix.
+  // dept=dispo → only contacts with a dispo-pipeline opp; default → sellers only.
+  const dept = sp.dept === "dispo" ? "dispo" : "seller";
+  const { isDispoPipeline } = await import("@/lib/dispo-buyers");
+  const dispoNames = (await (await import("@/lib/crm")).readPipelines()).filter((p) => isDispoPipeline(p.name)).map((p) => p.name);
+  const dispoRows = dispoNames.length ? await db.crmOpportunity.findMany({ where: { pipeline: { in: dispoNames } }, select: { contactId: true } }).catch(() => []) : [];
+  const dispoIds = new Set(dispoRows.map((r) => r.contactId));
+  const inDept = (id: string) => (dept === "dispo" ? dispoIds.has(id) : !dispoIds.has(id));
+
   // thread list: latest comms event per contact
   const recent = await db.crmEvent.findMany({
     where: { kind: { in: COMMS } },
@@ -53,7 +63,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   });
   const latestByContact = new Map<string, { kind: string; body: string; at: Date }>();
   for (const e of recent) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
-  const contactIds = [...latestByContact.keys()].slice(0, 120);
+  const contactIds = [...latestByContact.keys()].filter(inDept).slice(0, 120);
   const mineOnly = canSeeAll && sp.who === "me";
   // 🔴 Unread chip (queued since 2026-10-08): only threads where the seller wrote last
   const unreadOnly = sp.who === "unread";
@@ -67,8 +77,8 @@ export default async function ConversationsPage({ searchParams }: { searchParams
       ? { AND: [ownerWhere, { OR: [{ name: { contains: q, mode: "insensitive" } }, ...(qDigits.length >= 3 ? [{ phone: { contains: qDigits } }] : [])] }] }
       : { id: { in: contactIds }, ...ownerWhere },
     select: { id: true, name: true, phone: true, assignedTo: true },
-    take: q ? 50 : 120,
-  });
+    take: q ? 80 : 120,
+  }).then((rows) => rows.filter((c) => inDept(c.id)));
   // searched contacts may not be in the recent-600 window → fetch their latest comms
   if (q) {
     const missing = contacts.filter((c) => !latestByContact.has(c.id)).map((c) => c.id);
@@ -123,12 +133,17 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   return (
     <div className="space-y-4">
       <SectionTitle
-        title="💬 Conversations"
-        subtitle="The team inbox — every text, email and call with every seller, in one thread."
+        title={dept === "dispo" ? "💬 Dispo Conversations" : "💬 Seller Conversations"}
+        subtitle={dept === "dispo" ? "Dispositions inbox — texts, emails & calls with your buyers, developers & agents, separate from sellers." : "The seller inbox — every text, email and call with every seller, in one thread."}
         accent="bg-brand-gold"
         right={
           <div className="flex items-center gap-2">
-            <Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Back to pipeline</Link>
+            {/* 🗂 Department toggle (Jon 2026-10-20): dispo conversations kept separate from sellers */}
+            <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
+              <Link prefetch={false} href="/crm/conversations" className={`px-2.5 py-1.5 text-xs font-bold ${dept === "seller" ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>🏠 Sellers</Link>
+              <Link prefetch={false} href="/crm/conversations?dept=dispo" className={`px-2.5 py-1.5 text-xs font-bold ${dept === "dispo" ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>🎯 Dispo</Link>
+            </div>
+            <Link href={dept === "dispo" ? "/dispo" : "/crm"} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Back</Link>
           </div>
         }
       />
