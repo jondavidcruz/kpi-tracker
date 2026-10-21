@@ -53,7 +53,7 @@ export default async function ProcessPage() {
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
           <div className="flex items-center justify-between gap-2">
             <div className="text-sm font-extrabold text-slate-800">📋 SOP <span className="font-semibold text-slate-400">— deep dive</span></div>
-            {showDispoSop && <a href="/sop/dispo" target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">Open Dispo SOP →</a>}
+            {showDispoSop && <a href="/sop/dispo/index.html" target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">Open Dispo SOP →</a>}
           </div>
           <p className="mt-1 text-[12px] text-slate-600">The <b>exact how-to</b> for one lane — step by step with <b>gates</b> that stay HELD until every box is checked (document specs, the utilities call, the 72-hour cascade). The field manual that goes deep where the map goes wide.</p>
         </div>
