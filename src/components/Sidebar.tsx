@@ -13,7 +13,7 @@ import Logo from "./Logo";
 import StatusDot from "./StatusDot";
 import WorldClock from "./WorldClock";
 
-type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
+type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; marketingOrManager?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
 
 // Extra search terms per page so a search matches what people actually call things
 // (e.g. "payroll" finds Schedule & Time, "P&L" finds the Profit & Loss report).
@@ -104,7 +104,7 @@ export default function Sidebar({
       { href: "/reduction", label: "Reduction Play", Icon: TrendingUp },
     ] },
     { label: "Dispositions", items: [
-      { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOnly: true },
+      { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOrManager: true },
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/crm/dealboard", label: "Deal Board", Icon: Presentation },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
@@ -207,7 +207,7 @@ export default function Sidebar({
 
   const hidden = hiddenNav ?? [];
   const visible = (it: Item) =>
-    (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.timecardOnly || timecard) && (!it.csuiteOnly || csuite) && (!it.trainingOnly || training) &&
+    (!it.managerOnly || manager) && (!it.adminOnly || admin) && (!it.marketingOnly || marketing) && (!it.marketingOrManager || marketing || manager) && (!it.timecardOnly || timecard) && (!it.csuiteOnly || csuite) && (!it.trainingOnly || training) &&
     !hidden.some((h) => it.href === h || it.href.startsWith(h + "/")) &&
     (!allowedPaths || allowedPaths.some((p) => it.href === p || it.href.startsWith(p + "/")));
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");

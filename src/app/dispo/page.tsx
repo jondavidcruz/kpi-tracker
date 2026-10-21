@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, canAccessMarketing } from "@/lib/auth";
+import { getCurrentUser, canAccessMarketing, isManager } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { readPipelines } from "@/lib/crm";
 import { formatAddress } from "@/lib/address";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 // to its deal. (Jon 2026-10-20)
 export default async function DispoPage() {
   const me = await getCurrentUser();
-  if (!canAccessMarketing(me)) {
+  if (!canAccessMarketing(me) && !isManager(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
