@@ -13,6 +13,7 @@ import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv } from "@/app/actions";
 import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction } from "@/app/crm/actions";
+import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
+    leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
   }));
   // 🔎 search the deal board (name / address / phone) — parity with the Seller CRM.
   const dealCardsShown = q ? dealCards.filter((c) => `${c.contactName} ${c.address ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(q.toLowerCase())) : dealCards;
@@ -213,6 +215,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
         address: area, phone: o.contact?.phone || undefined, email: o.contact?.email || undefined,
         stage: o.stage || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
         money: "", valueNum: 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
+        leadType: leadTypeBadge(tab === "developers" ? "developer" : "buyer_agent"),
       } as CrmCard;
     }).filter((c) => !needle || `${c.contactName} ${c.address ?? ""} ${c.title ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(needle));
     for (const c of netCards) netCounts[c.stage] = (netCounts[c.stage] ?? 0) + 1;

@@ -30,6 +30,7 @@ export type CrmCard = {
   taskDueToday?: boolean; // ⏰ task due today → green card
   nextTask?: string;      // next upcoming (after today) task due date — green chip
   nextAppt?: string;      // next upcoming (after today) appointment ISO — red chip
+  leadType?: { label: string; cls: string }; // 🏷 seller / land seller / buyer agent / developer — top-right
 };
 // 🎨 GHL-style age coloring (Jon 2026-10-08): customizable ranges + colors,
 // saved per device. Days since last stage activity (updatedAt).
@@ -318,7 +319,10 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       {selecting && <input type="checkbox" readOnly checked={selected.has(c.id)} className="mr-1 mt-0.5 h-4 w-4 shrink-0 accent-indigo-600" />}
                       {/* name → FULL card page; anywhere else on the card → quick view */}
                       <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{titleCase(c.contactName)}</a>
-                      {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
+                      <div className="flex shrink-0 items-center gap-1">
+                        {c.leadType && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.leadType.cls}`}>{c.leadType.label}</span>}
+                        {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
+                      </div>
                     </div>
                     {/* property line — opp title only when it's NOT just the name (Jon
                         2026-10-13: name was showing twice, incl. near-dups like
