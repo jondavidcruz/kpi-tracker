@@ -11,7 +11,7 @@ import {
 } from "@/app/crm/actions";
 import { KIND_EMOJI } from "@/lib/crm-shared";
 import { formatAddress } from "@/lib/address";
-import { CRM_FORMS } from "@/lib/crm-forms";
+import { formsForPipeline } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
 import LienBuilder from "@/components/LienBuilder";
@@ -36,10 +36,11 @@ type Payload = {
   events: Array<{ id?: string; kind: string; body: string; actor: string; at: string }>;
 };
 
-const TABS = [
+// Nav tabs are built per-lead from its pipeline's forms (see tabsFor).
+const tabsFor = (pipeline: string | null | undefined) => [
   { key: "opp", label: "Opportunity details", emoji: "📁" },
   { key: "contact", label: "Contact info", emoji: "👤" },
-  ...CRM_FORMS.map((f) => ({ key: `form:${f.key}`, label: f.name, emoji: f.emoji })),
+  ...formsForPipeline(pipeline).map((f) => ({ key: `form:${f.key}`, label: f.name, emoji: f.emoji })),
   { key: "tasks", label: "Tasks", emoji: "✅" },
   { key: "appts", label: "Appointments", emoji: "📅" },
   { key: "sms", label: "Text message", emoji: "💬" },
@@ -159,7 +160,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                 <button onClick={() => setNavMin((v) => !v)} title={navMin ? "Expand menu" : "Minimize menu"} className="mb-1 block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-bold text-slate-400 hover:bg-slate-100">
                   {navMin ? "»" : "« minimize"}
                 </button>
-                {TABS.map((t) => (
+                {tabsFor(d.pipeline).map((t) => (
                   <button key={t.key} onClick={() => setTab(t.key)} title={t.label}
                     className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold ${navMin ? "text-center" : ""} ${tab === t.key ? "bg-brand-navy text-white" : "text-slate-600 hover:bg-slate-100"}`}>
                     {t.emoji}{navMin ? "" : ` ${t.label}`}
@@ -272,7 +273,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                   </form>
                 )}
 
-                {CRM_FORMS.map((f) => tab === `form:${f.key}` && (
+                {formsForPipeline(d.pipeline).map((f) => tab === `form:${f.key}` && (
                   <form key={f.key} action={submit(saveCrmFormAction, { oppId: d.id, contactId: d.contact.id, formKey: f.key })} className="space-y-3">
                     <div className="text-sm font-extrabold text-slate-800">{f.emoji} {f.name}</div>
                     {f.key === "financial" && <UnderwriteBlock d={d} />}

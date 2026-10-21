@@ -121,3 +121,16 @@ export const DISPO_AGENT_FORM: CrmForm = {
 };
 export const DISPO_DEV_FORMS: CrmForm[] = [DISPO_DEV_FORM];
 export const DISPO_AGENT_FORMS: CrmForm[] = [DISPO_AGENT_FORM];
+
+// 🧩 The ONE rule for which discovery forms a lead shows — driven by its PIPELINE
+// (= lead type), so buyer agents + developers get buyer questions and sellers get
+// seller questions, never seller-default-for-everyone (Jon 2026-10-20). Used by
+// both the full lead page and the quick-view so they always match.
+export function formsForPipeline(pipeline: string | null | undefined): CrmForm[] {
+  const p = (pipeline ?? "").toLowerCase();
+  if (p === "ds: unvetted developers") return DISPO_DEV_FORMS;
+  if (p === "ds: buyer agents") return DISPO_AGENT_FORMS;
+  // Seller / deal pipelines: Land Details only where it's a land pipeline.
+  const isLandPipe = /\bland\b/.test(p);
+  return CRM_FORMS.filter((f) => f.key !== "land" || isLandPipe);
+}

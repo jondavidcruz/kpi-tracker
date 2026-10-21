@@ -21,7 +21,7 @@ const PALETTE = ["bg-sky-100 text-sky-800", "bg-yellow-100 text-yellow-800", "bg
 // already uses on the Seller CRM (Jon 2026-10-20: "make it look like what they
 // recognize"). Developers + Buyer Agents are their own pipelines here (not mixed
 // with sellers); the Deals tab tracks buyer follow-ups per deal.
-export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; imp?: string; dev?: string; agent?: string; dup?: string }> }) {
+export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me) && !isManager(me)) {
     return (
@@ -45,12 +45,30 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const devCount = countOf(DISPO_DEV_PIPELINE);
   const agentCount = countOf(DISPO_AGENT_PIPELINE);
 
-  // ── Deals tab: follow-up Kanban across the dispo DEAL pipelines ──
+  // ── Deals tab: the actual DEAL pipeline (DS: Sell Land Then Sign) board +
+  // the buyer follow-ups attached to those deals (Jon 2026-10-20: "feed the leads
+  // from DS: Sell Land Then Sign"). ──
   const pipelines = await readPipelines();
-  const dealNames = pipelines.map((p) => p.name).filter((n) => isDispoDealPipeline(n));
+  const dealPipes = pipelines.filter((p) => isDispoDealPipeline(p.name));
+  const dealNames = dealPipes.map((p) => p.name);
+  // which deal pipeline to show (default the Sell-Land one Jon named)
+  const dealPl = dealPipes.find((p) => p.name === sp.dealpl)?.name
+    ?? dealPipes.find((p) => /sell land/i.test(p.name))?.name
+    ?? dealNames[0] ?? "";
   const dealOpps = tab === "deals" && dealNames.length
-    ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, select: { id: true, title: true, formData: true, contact: { select: { name: true, address: true } } } })
+    ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, pipeline: true, stage: true, assignedTo: true, tags: true, value: true, askPrice: true, updatedAt: true, createdAt: true, formData: true, contact: { select: { name: true, phone: true, address: true } } } })
     : [];
+  // the deal board (cards for the selected deal pipeline)
+  const dealColumns: CrmColumn[] = (dealPipes.find((p) => p.name === dealPl)?.stages ?? []).map((s) => ({ key: s.key, label: s.label, cls: s.cls }));
+  const dealCards: CrmCard[] = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => ({
+    id: o.id, title: o.title, contactName: o.contact?.name || o.title, address: o.contact?.address ? formatAddress(o.contact.address) : undefined,
+    phone: o.contact?.phone || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
+    money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
+    updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
+  }));
+  const dealCounts: Record<string, number> = {};
+  for (const c of dealCards) dealCounts[c.stage] = (dealCounts[c.stage] ?? 0) + 1;
+  // buyer follow-ups attached across ALL deal pipelines
   const followCards: FollowupCard[] = [];
   for (const o of dealOpps) {
     const dealAddr = formatAddress(o.contact?.address || "") || o.title || o.contact?.name || "deal";
@@ -116,26 +134,40 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
 
       {tab === "deals" && (
         <>
-          <div className="grid grid-cols-3 gap-3">
-            <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-slate-800">{followCards.length}</div><div className="text-[11px] font-semibold text-slate-500">Buyers / agents in play</div></Card>
-            <Card className="p-3 text-center"><div className={`text-2xl font-extrabold tabular-nums ${dueToday ? "text-red-600" : "text-slate-800"}`}>{dueToday}</div><div className="text-[11px] font-semibold text-slate-500">Follow-ups due today</div></Card>
-            <Card className="p-3 text-center"><div className="text-2xl font-extrabold tabular-nums text-emerald-700">{followCards.filter((c) => c.stage === "offer_in").length}</div><div className="text-[11px] font-semibold text-slate-500">💵 Price / offer in</div></Card>
-          </div>
-          {followCards.length === 0 ? (
-            <Card className="p-8 text-center text-slate-500">
-              <div className="mb-2 text-3xl">📇</div>
-              <p className="text-sm font-semibold text-slate-700">No buyers on the board yet.</p>
-              <p className="mx-auto mt-1 max-w-md text-[13px] text-slate-500">Open a deal in <b>DS: Sell Land Then Sign</b>, then on its <b>📇 Buyers &amp; agents</b> panel hit <b>🔗 Attach from buyer network</b> — attached buyers show up here to work.</p>
-              <Link href="/crm?pl=DS%3A%20Sell%20Land%20Then%20Sign" className="mt-4 inline-block rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white">Open the deal pipeline</Link>
-            </Card>
+          {/* deal-pipeline switch (defaults to DS: Sell Land Then Sign) */}
+          {dealPipes.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              {dealPipes.map((p) => (
+                <Link key={p.name} href={`/dispo?tab=deals&dealpl=${encodeURIComponent(p.name)}`} prefetch={false}
+                  className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${p.name === dealPl ? "bg-emerald-600 text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"}`}>{p.name}</Link>
+              ))}
+            </div>
+          )}
+
+          {dealNames.length === 0 ? (
+            <Card className="p-8 text-center text-slate-400">No dispo deal pipeline found. Create <b>DS: Sell Land Then Sign</b> in the CRM first.</Card>
           ) : (
             <Card className="p-3">
-              <DispoFollowupKanban cards={followCards} today={today} />
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">
-                {DISPO_BUYER_STAGES.map((s) => <span key={s.key}><span className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${s.dot}`} />{s.label}</span>)}
-              </div>
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCards.length} deal{dealCards.length === 1 ? "" : "s"}</div>
+              <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
+              <CrmKanban columns={dealColumns} cards={dealCards} counts={dealCounts} currentPipeline={dealPl} pipelineNames={[dealPl]} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
             </Card>
           )}
+
+          {/* the buyer follow-ups attached to these deals */}
+          <details className="rounded-2xl bg-white p-3 ring-1 ring-slate-200" open={followCards.length > 0}>
+            <summary className="cursor-pointer text-[13px] font-bold text-slate-700">📞 Buyer follow-ups on these deals <span className="ml-1 rounded-full bg-slate-100 px-1.5 text-[11px] font-bold text-slate-500">{followCards.length}</span>{dueToday > 0 && <span className="ml-1 rounded-full bg-red-100 px-1.5 text-[11px] font-bold text-red-700">{dueToday} due</span>}</summary>
+            {followCards.length === 0 ? (
+              <p className="mt-2 text-[12px] text-slate-500">None yet. Open a deal above → its <b>📇 Buyers &amp; agents</b> panel → <b>🔗 Attach from buyer network</b>, and the buyers you&apos;re chasing show up here.</p>
+            ) : (
+              <div className="mt-2">
+                <DispoFollowupKanban cards={followCards} today={today} />
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">
+                  {DISPO_BUYER_STAGES.map((s) => <span key={s.key}><span className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${s.dot}`} />{s.label}</span>)}
+                </div>
+              </div>
+            )}
+          </details>
         </>
       )}
 
