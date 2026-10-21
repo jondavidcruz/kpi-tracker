@@ -230,7 +230,14 @@ export default async function DealsPage({
         </div>
       )}
 
-      <DealKanban columns={STATUSES} deals={kanbanDeals} canMove={canClose} />
+      {/* 🏆 P4 (Jon 2026-10-20): the Deals board is now CLOSED/WON only — it's
+          generated when a dispo deal hits DEAL WON. Live deals are worked in the
+          DS pipelines (Dispo CRM), not here. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-[13px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
+        <span>🏆 Closed / won deals only — a deal lands here automatically when it hits <b>DEAL WON</b> in the dispo pipeline.</span>
+        <a href="/dispo" className="ml-auto rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700">→ Work live deals in the Dispo CRM</a>
+      </div>
+      <DealKanban columns={STATUSES.filter((s) => s.key === "closed")} deals={kanbanDeals.filter((d) => d.status === "closed")} canMove={false} />
 
       {/* 📊 Excel-style board + 📞 Follow-ups due REMOVED (Jon 2026-10-20): the
           spreadsheet is retired and the follow-up now lives on each deal's own

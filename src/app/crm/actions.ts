@@ -206,6 +206,20 @@ export async function setOppStageAction(formData: FormData) {
         if (/deal_won/i.test(stage)) {
           postToSpace("contracts", `💰 DEAL WON (escrow closed) — ${contact?.name ?? "deal"}${addr ? ` · ${addr}` : ""}${full.value != null ? ` · $${full.value.toLocaleString()}` : ""}`).catch(() => {});
           postToSpace("team", `💰🎉 WE CLOSED A DEAL! ${addr || contact?.name || ""}${full.value != null ? ` — $${full.value.toLocaleString()}` : ""} — congrats team!`).catch(() => {});
+          // 🏆 P4 (Jon 2026-10-20): the Deals board is now closed-won only, GENERATED
+          // from a dispo deal hitting DEAL WON. Dedup with a formData flag so a bump
+          // in/out of the stage never double-creates (which would double-count revenue).
+          const { isDispoPipeline } = await import("@/lib/dispo-buyers");
+          if (isDispoPipeline(full.pipeline)) {
+            const oppRow = await db.crmOpportunity.findUnique({ where: { id: full.id }, select: { formData: true } });
+            const fd2 = (oppRow?.formData ?? {}) as Record<string, unknown>;
+            if (!fd2.__dealGenerated) {
+              const dealAddr = addr || contact?.name || full.title || "Deal";
+              await db.deal.create({ data: { address: dealAddr, status: "closed", assignedTo: full.assignedTo || me.name, soldPrice: full.value ?? full.askPrice ?? null, assignmentFee: full.value ?? null, soldDate: today, source: "dispo-crm", notes: `Auto-generated from ${full.pipeline} → DEAL WON.` } }).catch(() => {});
+              await db.crmOpportunity.update({ where: { id: full.id }, data: { formData: { ...fd2, __dealGenerated: today } as never } }).catch(() => {});
+              await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: `🏆 DEAL WON — generated a closed deal on the Deals board.`, actor: "dispo-crm" });
+            }
+          }
         }
         if (/offer_call|verbal_offer/i.test(stage)) postToSpace("acquisitions", `💬 Offer in motion — ${(full.assignedTo || me.name).split(" ")[0]} ${stage.includes("verbal") ? "is negotiating a verbal offer" : "is making the offer call"} on ${addr || contact?.name || "a lead"}`).catch(() => {});
       } catch { /* chat bells never block */ }
