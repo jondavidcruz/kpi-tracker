@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { formatAddress } from "@/lib/address";
-import { getCurrentUser, isManager, canManageAllLeads, canAccessMarketing } from "@/lib/auth";
+import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { getBuyerMatchesForLead, getNetworkMatchesForDeal } from "@/lib/buyer-match-lead";
 import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
@@ -57,13 +57,16 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
     return <Card className="p-10 text-center text-slate-400">This lead is in {opp.assignedTo.split(" ")[0]}&apos;s pipeline. <Link href="/crm" className="font-bold text-sky-700 underline">Back to yours</Link></Card>;
   }
   const c = opp.contact;
-  // 🎯 Matching cash buyers for this lead (marketing access only) — who dispo should
-  // send it to, ranked, before it's even signed (Jon 2026-10-20).
-  const mktAccess = canAccessMarketing(me);
+  // 🔒 Who may see our BUYERS (Smart Match + matching cash buyers): dispositions reps
+  // + managers/owner ONLY (Jon 2026-10-21: "protect our buyers" — Nick, Kyle, Michelle
+  // and any acquisitions/new rep must NOT see them). And ONLY on the dispo land-deal
+  // pipelines — never on home/seller leads.
+  const canSeeBuyers = isManager(me) || me?.position === "dispositions";
+  const showMatches = canSeeBuyers && isDispoDealPipeline(opp.pipeline);
   const leadFeatures = (() => { const f = (opp.formData as { land?: { features?: unknown } } | null)?.land?.features; return Array.isArray(f) ? (f as string[]) : []; })();
-  const buyerMatches = mktAccess ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures) : [];
+  const buyerMatches = showMatches ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures) : [];
   // 🎯 Smart Match from the buyer-network CRM (developers + agents), on dispo deals only.
-  const networkMatches = mktAccess && isDispoDealPipeline(opp.pipeline) ? await getNetworkMatchesForDeal(c.address || opp.title) : [];
+  const networkMatches = showMatches ? await getNetworkMatchesForDeal(c.address || opp.title) : [];
   const attachedBuyerIds = new Set(readDispoBuyers(opp.formData).map((b) => b.buyerId).filter(Boolean));
 
   // ⚠️ duplicate-seller guard (nightly ?crmqa=1 found 16 phones split across
@@ -446,7 +449,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           </Card>
 
           {/* 🎯 Matching cash buyers — who to send this land to, ranked (marketing only) */}
-          {mktAccess && buyerMatches.length > 0 && (
+          {showMatches && buyerMatches.length > 0 && (
             <Card className="p-3">
               <div className="mb-1.5 flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Matching cash buyers</span>
@@ -474,7 +477,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
 
           {/* 🎯 Smart Match from the buyer-network CRM — auto-ranked developers +
               agents for THIS deal; one-click attach (Jon 2026-10-20). */}
-          {mktAccess && isDispoDealPipeline(opp.pipeline) && networkMatches.length > 0 && (
+          {showMatches && networkMatches.length > 0 && (
             <Card className="p-3">
               <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Smart Match — your network buys here</div>
               <div className="space-y-1.5">
@@ -508,12 +511,12 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           )}
 
           {/* 📣 Marketing SOP checklist — dispo deals only (Jon 2026-10-20) */}
-          {mktAccess && isDispoDealPipeline(opp.pipeline) && (
+          {showMatches && (
             <DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} />
           )}
 
-          {/* 📇 Per-deal buyer/agent follow-up tracker — dispo pipelines only (Jon 2026-10-20) */}
-          {mktAccess && isDispoDealPipeline(opp.pipeline) && (
+          {/* 📇 Per-deal buyer/agent follow-up tracker — dispo reps only; shows buyer names (Jon 2026-10-21) */}
+          {showMatches && (
             <DispoBuyerTracker oppId={opp.id} buyers={readDispoBuyers(opp.formData)} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} />
           )}
 
