@@ -24,5 +24,5 @@ export async function POST() {
     if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
     else await db.resource.create({ data: { title: "telnyx-tokens", category: "__telnyx_tokens__", url: "", description } });
   } catch { /* non-blocking */ }
-  return NextResponse.json({ token: r.token, callerId: r.callerId, rep: me!.name });
+  return NextResponse.json({ token: r.token, callerId: r.callerId, rep: me!.name, shared: !!r.shared });
 }

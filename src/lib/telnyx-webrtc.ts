@@ -19,7 +19,7 @@ export type TelnyxCfg = { connId?: string; credId?: string; callerId?: string; c
 // agentFirst: each rep gets their OWN telephony credential (own SIP identity),
 // so inbound ring-all can ring every open browser instead of whichever one
 // registered last on the shared credential.
-export async function provisionAndToken(agentFirst?: string): Promise<{ token?: string; callerId?: string; error?: string; steps: string[] }> {
+export async function provisionAndToken(agentFirst?: string): Promise<{ token?: string; callerId?: string; error?: string; shared?: boolean; steps: string[] }> {
   const steps: string[] = [];
   if (!process.env.TELNYX_API_KEY) return { error: "TELNYX_API_KEY missing in Vercel", steps };
   const row = await db.resource.findFirst({ where: { category: CAT } });
@@ -55,35 +55,49 @@ export async function provisionAndToken(agentFirst?: string): Promise<{ token?: 
       cfg.credId = b.data.id;
       steps.push("telephony credential created");
     } else steps.push("telephony credential exists");
-    // per-agent credential (ring-all): create once, remember its SIP username
+    // 📞 Per-agent credential (Jon 2026-10-21): each rep MUST get their OWN SIP
+    // identity so they never register as the same user and kick each other off the
+    // one shared Telnyx account — that was dropping every live call. Robust: create
+    // on demand, and self-heal a stale/deleted credential (the usual culprit).
     let tokenCredId = cfg.credId!;
+    let usedShared = true;
+    const createAgentCred = async (): Promise<string> => {
+      const r = await tx("/telephony_credentials", { method: "POST", body: JSON.stringify({ connection_id: cfg.connId, name: `wr-${agentFirst}-${Math.random().toString(36).slice(2, 6)}` }) });
+      const b = r.body as { data?: { id?: string; sip_username?: string } };
+      if (!r.ok || !b.data?.id) { steps.push(`agent credential refused ${r.status}: ${r.text.slice(0, 120)}`); return ""; }
+      let sipUser = b.data.sip_username ?? "";
+      if (!sipUser) { const g = await tx(`/telephony_credentials/${b.data.id}`); sipUser = (g.body as { data?: { sip_username?: string } }).data?.sip_username ?? ""; }
+      cfg.agents![agentFirst!] = { credId: b.data.id, sipUser };
+      steps.push(`agent credential created (${agentFirst})`);
+      return b.data.id;
+    };
     if (agentFirst) {
       cfg.agents = cfg.agents ?? {};
-      if (!cfg.agents[agentFirst]?.credId) {
-        const r = await tx("/telephony_credentials", { method: "POST", body: JSON.stringify({ connection_id: cfg.connId, name: `wr-${agentFirst}` }) });
-        const b = r.body as { data?: { id?: string; sip_username?: string } };
-        if (r.ok && b.data?.id) {
-          let sipUser = b.data.sip_username ?? "";
-          if (!sipUser) {
-            const g = await tx(`/telephony_credentials/${b.data.id}`);
-            const gb = g.body as { data?: { sip_username?: string } };
-            sipUser = gb.data?.sip_username ?? "";
-          }
-          cfg.agents[agentFirst] = { credId: b.data.id, sipUser };
-          steps.push(`agent credential created (${agentFirst}${sipUser ? "" : " — no sip_username!"})`);
-        } else steps.push(`agent credential refused ${r.status} — falling back to shared`);
-      } else steps.push(`agent credential exists (${agentFirst})`);
-      if (cfg.agents[agentFirst]?.credId) tokenCredId = cfg.agents[agentFirst].credId;
-      // presence stamp: ring-all only dials browsers seen recently (2026-10-09)
-      if (cfg.agents[agentFirst]) cfg.agents[agentFirst].lastSeen = new Date().toISOString();
+      let credId = cfg.agents[agentFirst]?.credId || "";
+      if (!credId) credId = await createAgentCred();
+      else steps.push(`agent credential exists (${agentFirst})`);
+      if (credId) { tokenCredId = credId; usedShared = false; cfg.agents[agentFirst]!.lastSeen = new Date().toISOString(); }
     }
-    const description = JSON.stringify(cfg);
-    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
-    else await db.resource.create({ data: { title: "telnyx-webrtc", category: CAT, url: "", description } });
-    const tok = await tx(`/telephony_credentials/${tokenCredId}/token`, { method: "POST" });
-    const token = typeof tok.body === "string" ? tok.body.trim() : tok.text.trim();
+    const persist = async () => {
+      const description = JSON.stringify(cfg);
+      if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+      else await db.resource.create({ data: { title: "telnyx-webrtc", category: CAT, url: "", description } });
+    };
+    await persist();
+    let tok = await tx(`/telephony_credentials/${tokenCredId}/token`, { method: "POST" });
+    let token = typeof tok.body === "string" ? tok.body.trim() : tok.text.trim();
+    // self-heal: a cached per-agent credential deleted on Telnyx → recreate it fresh
+    if ((!tok.ok || !token) && agentFirst && !usedShared) {
+      steps.push(`token mint failed on cached cred (${tok.status}) — recreating`);
+      delete cfg.agents![agentFirst];
+      const fresh = await createAgentCred();
+      if (fresh) { tokenCredId = fresh; await persist(); }
+      else { tokenCredId = cfg.credId!; usedShared = true; } // last resort: shared
+      tok = await tx(`/telephony_credentials/${tokenCredId}/token`, { method: "POST" });
+      token = typeof tok.body === "string" ? tok.body.trim() : tok.text.trim();
+    }
     if (!tok.ok || !token) return { error: `token mint failed (${tok.status}): ${tok.text.slice(0, 180)}`, steps };
-    steps.push("login token minted");
-    return { token, callerId: cfg.callerId ?? "", steps };
+    steps.push(usedShared ? "⚠️ login token minted (SHARED line — reps will kick each other)" : "login token minted (own line)");
+    return { token, callerId: cfg.callerId ?? "", shared: usedShared, steps };
   } catch (e) { return { error: String(e).slice(0, 200), steps }; }
 }
