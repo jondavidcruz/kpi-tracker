@@ -96,7 +96,7 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
         <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="w-full border-b border-slate-100 py-1.5 text-[13px] font-semibold outline-none placeholder:font-normal placeholder:text-slate-400" />
         <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} placeholder={`Hi ${first},`} className="w-full resize-y py-2 text-[13px] leading-relaxed outline-none placeholder:text-slate-300" />
         <div className="border-t border-slate-100 pt-2 text-[12px] leading-snug text-slate-500">
-          <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-300">signature — added automatically (edit yours on /account)</div>
+          <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-300">signature — added automatically (<a href="/account" className="text-sky-500 underline hover:text-sky-600">edit yours on your Account page</a>)</div>
           <div className="whitespace-pre-line">{signature}</div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {sigImageUrl && <img src={sigImageUrl} alt="signature" className="mt-1.5 max-w-[320px]" />}

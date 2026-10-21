@@ -90,6 +90,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/land-master", label: "Land Master Plan", gate: "csuite" },
   ] },
   { group: "Requests & Support", items: [
+    { href: "/account", label: "My Account & Signature", gate: "all" },
     { href: "/tickets", label: "Requests", gate: "all" },
     { href: "/software", label: "Software & Logins", gate: "all" },
     { href: "/ai-champion", label: "AI Champion", gate: "all" },

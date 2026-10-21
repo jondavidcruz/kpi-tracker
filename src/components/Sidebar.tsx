@@ -168,6 +168,7 @@ export default function Sidebar({
       { href: "/land-master", label: "Land Master Plan", Icon: Map, csuiteOnly: true },
     ] },
     { label: "Requests & Support", items: [
+      { href: "/account", label: "My Account & Signature", Icon: Settings },
       { href: "/tickets", label: "Requests", Icon: Ticket, badge: newTickets },
       { href: "/software", label: "Software & Logins", Icon: KeyRound },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
