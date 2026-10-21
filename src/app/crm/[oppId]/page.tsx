@@ -6,7 +6,9 @@ import { getBuyerMatchesForLead, getNetworkMatchesForDeal } from "@/lib/buyer-ma
 import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
+import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
 import { readDispoBuyers, isDispoDealPipeline } from "@/lib/dispo-buyers";
+import { readMarketingDone } from "@/lib/dispo-marketing";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
 import { stripHtml } from "@/lib/crm-shared";
@@ -501,6 +503,11 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               </div>
               <div className="mt-1.5 text-[10px] text-slate-400">Auto-matched from your developer + agent network by area. Attach to start the follow-up.</div>
             </Card>
+          )}
+
+          {/* 📣 Marketing SOP checklist — dispo deals only (Jon 2026-10-20) */}
+          {mktAccess && isDispoDealPipeline(opp.pipeline) && (
+            <DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} />
           )}
 
           {/* 📇 Per-deal buyer/agent follow-up tracker — dispo pipelines only (Jon 2026-10-20) */}

@@ -1830,3 +1830,19 @@ export async function attachNetworkBuyerToDeal(formData: FormData) {
   }
   revalidatePath(`/crm/${oppId}`);
 }
+
+/** 📣 Toggle a per-deal marketing SOP checklist step (Jon 2026-10-20). */
+export async function toggleDispoMarketingAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const step = String(formData.get("step") ?? "");
+  if (!oppId || !step) return;
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
+  if (!o) return;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  const cur = Array.isArray(fd.__marketing) ? (fd.__marketing as string[]).filter((x) => typeof x === "string") : [];
+  const next = cur.includes(step) ? cur.filter((s) => s !== step) : [...cur, step];
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __marketing: next } as never } });
+  revalidatePath(`/crm/${oppId}`);
+}
