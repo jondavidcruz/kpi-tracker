@@ -14,7 +14,7 @@ import { importDispoNetworkCsv } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
-type Tab = "deals" | "developers" | "agents";
+type Tab = "deals" | "developers" | "agents" | "team";
 const PALETTE = ["bg-sky-100 text-sky-800", "bg-yellow-100 text-yellow-800", "bg-violet-100 text-violet-800", "bg-amber-100 text-amber-800", "bg-emerald-100 text-emerald-800", "bg-rose-100 text-rose-600", "bg-slate-200 text-slate-600"];
 
 // 🎯 Dispositions CRM — dispo's buyer side, built with the SAME Kanban the team
@@ -34,7 +34,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     );
   }
   const sp = await searchParams;
-  const tab: Tab = sp.tab === "developers" || sp.tab === "agents" ? sp.tab : "deals";
+  const tab: Tab = sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" ? sp.tab : "deals";
   const listView = sp.view === "list";
   const q = (sp.q ?? "").trim();
   const settings = await getSettings();
@@ -55,7 +55,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const dealPl = dealPipes.find((p) => p.name === sp.dealpl)?.name
     ?? dealPipes.find((p) => /sell land/i.test(p.name))?.name
     ?? dealNames[0] ?? "";
-  const dealOpps = tab === "deals" && dealNames.length
+  const dealOpps = (tab === "deals" || tab === "team") && dealNames.length
     ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, pipeline: true, stage: true, assignedTo: true, tags: true, value: true, askPrice: true, updatedAt: true, createdAt: true, formData: true, contact: { select: { name: true, phone: true, address: true } } } })
     : [];
   // the deal board (cards for the selected deal pipeline)
@@ -75,6 +75,35 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     for (const b of readDispoBuyers(o.formData)) followCards.push({ oppId: o.id, entryId: b.id, name: b.name, kind: b.kind, phone: b.phone, email: b.email, price: b.price, stage: b.stage, nextFollowUp: b.nextFollowUp, lastContact: b.lastContact, dealAddr });
   }
   const dueToday = followCards.filter((c) => c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in").length;
+
+  // ── Team tab: Sharyn (outreach/phones) vs Marie (data/organization) work lanes,
+  // so they stay on the same page with clear ownership (Jon 2026-10-20). ──
+  type LaneItem = { oppId: string; label: string; detail: string; urgent?: boolean };
+  const sharynQueue: LaneItem[] = [];
+  const marieQueue: LaneItem[] = [];
+  if (tab === "team") {
+    const { MARKETING_STEPS, readMarketingDone } = await import("@/lib/dispo-marketing");
+    // Sharyn — phone/outreach: every overdue/ due follow-up is a call to make
+    for (const c of followCards) {
+      if (c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in") {
+        const over = c.nextFollowUp < today;
+        sharynQueue.push({ oppId: c.oppId, label: `📞 Follow up: ${c.name}`, detail: `${c.dealAddr}${c.phone ? ` · ${c.phone}` : ""} — ${over ? `overdue ${c.nextFollowUp}` : "due today"}`, urgent: over });
+      }
+    }
+    for (const o of dealOpps) {
+      const addr = formatAddress(o.contact?.address || "") || o.title || "deal";
+      const buyers = readDispoBuyers(o.formData);
+      // Sharyn — deals sent out with no attached buyers yet = needs outreach
+      if (buyers.length === 0) sharynQueue.push({ oppId: o.id, label: `📣 Line up buyers: ${addr}`, detail: "No developers/agents attached yet — run Smart Match + call around" });
+      // Marie — data gaps: missing land intake fields
+      const land = ((o.formData ?? {}) as { land?: Record<string, string> }).land ?? {};
+      const missing = ["acreage", "legalAccess"].filter((k) => !land[k]);
+      if (missing.length) marieQueue.push({ oppId: o.id, label: `🗂 Fill intake: ${addr}`, detail: `Missing ${missing.map((m) => (m === "legalAccess" ? "road/legal access" : "acreage")).join(" + ")} — needed to match buyers`, urgent: true });
+      // Marie — marketing checklist incomplete
+      const done = readMarketingDone(o.formData);
+      if (done.length < MARKETING_STEPS.length) marieQueue.push({ oppId: o.id, label: `📣 Market it: ${addr}`, detail: `${done.length}/${MARKETING_STEPS.length} marketing channels done` });
+    }
+  }
 
   // ── Network tab (developers / agents): same cards + Kanban as the Seller CRM ──
   let netColumns: CrmColumn[] = [];
@@ -109,6 +138,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     { key: "deals", label: "📇 Deals & follow-ups", n: followCards.length },
     { key: "developers", label: "🏗 Developers", n: devCount },
     { key: "agents", label: "🧑‍💼 Buyer agents", n: agentCount },
+    { key: "team", label: "👥 Team (Sharyn & Marie)", n: sharynQueue.length + marieQueue.length },
   ];
   const qs = (over: Record<string, string>) => { const p = new URLSearchParams({ tab, ...(q ? { q } : {}), ...(listView ? { view: "list" } : {}), ...over }); for (const [k, v] of [...p.entries()]) if (!v) p.delete(k); return `/dispo?${p.toString()}`; };
 
@@ -216,6 +246,47 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
               <CrmKanban columns={netColumns} cards={netCards} counts={netCounts} currentPipeline={networkPipeline} pipelineNames={[networkPipeline]} pipelineStages={{ [networkPipeline]: netColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/dispo?tab=${tab}&view=list`} who="all" />
             </Card>
           )}
+        </>
+      )}
+
+      {tab === "team" && (
+        <>
+          <Card className="border-l-4 border-emerald-400 p-4">
+            <div className="text-sm font-extrabold text-slate-800">👥 Dispositions — two lanes, one team</div>
+            <p className="mt-0.5 text-[12px] text-slate-500">Clear ownership so Sharyn &amp; Marie are always on the same page — and so dispo keeps running if either is out. Both can see both lanes.</p>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="rounded-lg bg-sky-50 p-2.5 text-[12px] ring-1 ring-sky-100"><b className="text-sky-800">📞 Sharyn — Outreach &amp; systems</b><div className="text-slate-600">Calls, follow-ups, lining up buyers/agents, arming sends.</div></div>
+              <div className="rounded-lg bg-violet-50 p-2.5 text-[12px] ring-1 ring-violet-100"><b className="text-violet-800">🗂 Marie — Data &amp; organization</b><div className="text-slate-600">Intake data complete, every deal marketed, board kept clean.</div></div>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <Card className="p-3">
+              <div className="mb-2 flex items-center gap-2"><span className="text-[11px] font-bold uppercase tracking-wide text-sky-700">📞 Sharyn&apos;s lane — outreach</span><span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">{sharynQueue.length}</span></div>
+              <div className="space-y-1.5">
+                {sharynQueue.length === 0 && <p className="py-2 text-center text-[12px] text-slate-400">✅ All caught up — no calls/outreach due.</p>}
+                {sharynQueue.slice(0, 40).map((it, i) => (
+                  <Link key={`${it.oppId}-${i}`} href={`/crm/${it.oppId}`} className={`block rounded-lg px-2.5 py-1.5 ring-1 ${it.urgent ? "bg-red-50 ring-red-200" : "bg-slate-50 ring-slate-100"} hover:bg-white`}>
+                    <div className="text-[12px] font-bold text-slate-800">{it.label}</div>
+                    <div className="text-[10px] text-slate-500">{it.detail}</div>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+            <Card className="p-3">
+              <div className="mb-2 flex items-center gap-2"><span className="text-[11px] font-bold uppercase tracking-wide text-violet-700">🗂 Marie&apos;s lane — data &amp; marketing</span><span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">{marieQueue.length}</span></div>
+              <div className="space-y-1.5">
+                {marieQueue.length === 0 && <p className="py-2 text-center text-[12px] text-slate-400">✅ All caught up — intake + marketing complete.</p>}
+                {marieQueue.slice(0, 40).map((it, i) => (
+                  <Link key={`${it.oppId}-${i}`} href={`/crm/${it.oppId}`} className={`block rounded-lg px-2.5 py-1.5 ring-1 ${it.urgent ? "bg-amber-50 ring-amber-200" : "bg-slate-50 ring-slate-100"} hover:bg-white`}>
+                    <div className="text-[12px] font-bold text-slate-800">{it.label}</div>
+                    <div className="text-[10px] text-slate-500">{it.detail}</div>
+                  </Link>
+                ))}
+                {devCount > 0 && <Link href="/dispo?tab=developers" className="block rounded-lg bg-slate-50 px-2.5 py-1.5 text-[12px] font-bold text-slate-700 ring-1 ring-slate-100 hover:bg-white">🏗 {devCount} developers in the vetting pool → keep working the board</Link>}
+              </div>
+            </Card>
+          </div>
         </>
       )}
     </div>
