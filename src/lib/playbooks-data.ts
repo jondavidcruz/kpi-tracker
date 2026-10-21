@@ -72,6 +72,51 @@ export const PLAYBOOKS: Playbook[] = [
     ],
   },
   {
+    key: "k_dispo_team_operating", title: "Dispositions — How Sharyn & Marie Run It Together", emoji: "👥", category: "Scripts & Outreach",
+    summary: "The operating system for dispo: one source of truth (the War Room — no more Excel), a clear lane for each person, a daily cadence, and handoffs so dispo keeps running even if one of you is out.",
+    flow: [
+      { emoji: "🗂", label: "One source of truth: the War Room" }, { emoji: "📞", label: "Sharyn: outreach & phones" }, { emoji: "🗃", label: "Marie: data & organization" },
+      { emoji: "🔁", label: "Daily sync" }, { emoji: "🤝", label: "Cover each other" },
+    ],
+    stats: [
+      { value: "1", label: "source of truth (no Excel)" }, { value: "2", label: "lanes, one team" }, { value: "/dispo", label: "where everything lives" }, { value: "0", label: "deals that fall through" },
+    ],
+    sections: [
+      { heading: "🎯 The point of this", body: "Dispo has been our bottleneck because the work lived in people's heads and scattered Excel sheets, and it wasn't clear who owned what. From now on EVERYTHING lives in the War Room Dispo CRM (/dispo) — buyers, agents, deals, follow-ups, notes. No more Excel. If it's not in the War Room, it didn't happen. That one change is what lets us both see the same picture and lets dispo keep running even if one of us is out sick." },
+      { heading: "🗂 One source of truth — the War Room", bullets: [
+        "Developers + buyer agents: the Dispo CRM → Developers / Buyer Agents tabs (not a spreadsheet).",
+        "Deals we're moving: the Deals tab (fed from DS: Sell Land Then Sign).",
+        "Who we've sent a deal to + follow-ups: the deal's 📇 Buyers & agents panel.",
+        "Conversations: Dispo Conversations (separate from the seller inbox).",
+        "If you still have an Excel open — close it. Put the info in the War Room so the other person can see it.",
+      ] },
+      { heading: "📞 Sharyn's lane — Outreach & systems", bullets: [
+        "Make the calls: developer follow-ups, buyer-agent calls in the deal's area.",
+        "Work the follow-up sequence until you get a YES/NO — use 📞 Touch so the next follow-up is auto-set.",
+        "Arm the sends (offer packets, cascade) — you pull the trigger after Marie confirms the info is right.",
+        "Own the systems: keep the process tight, flag anything broken.",
+      ] },
+      { heading: "🗃 Marie's lane — Data & organization", bullets: [
+        "Every deal has complete intake (acreage, access, utilities, features) so Smart Match can find buyers.",
+        "Every deal is marketed — run the 📣 Marketing checklist on each one (active + passive channels).",
+        "Keep the boards clean: vet the developer pool, move cards to the right stage, no duplicates.",
+        "Keep the team in sync — you're the organizer; make sure nothing is sitting unassigned.",
+      ] },
+      { heading: "🔁 Daily cadence (both of you)", bullets: [
+        "START of day: open Dispo CRM → 👥 Team tab. Sharyn works her lane (calls/follow-ups due), Marie works hers (data gaps, marketing). Clear the red (overdue) first.",
+        "MIDDAY: 5-min sync — what's stuck, what needs a handoff, any deal going cold.",
+        "END of day: no follow-up left overdue; every new deal has intake done + buyers lined up; log what happened in the deal's notes (not your memory).",
+      ], tip: "The 👥 Team tab IS your to-do list. If both lanes are empty, dispo is caught up." },
+      { heading: "🤝 Covering each other (so we never go down)", body: "Because everything is in the War Room and both of you can see both lanes, either of you can pick up the other's work on a sick day. If Sharyn is out, Marie works the overdue follow-ups from the Team tab (the next-follow-up dates + notes are all there). If Marie is out, Sharyn keeps intake + marketing moving. Nothing lives only in one person's head or spreadsheet." },
+      { heading: "🚫 What stops today", bullets: [
+        "Separate Excel sheets for buyers / agents / follow-ups — gone. One place.",
+        "\"I'll remember to follow up\" — no. Set the next follow-up in the tracker.",
+        "Guessing who owns a deal — the Team tab shows whose lane each task is in.",
+        "Sending an offer packet with wrong info — Marie confirms the details, Sharyn sends. Developers are our partners; we don't look sloppy.",
+      ] },
+    ],
+  },
+  {
     key: "k_analyze_deal", title: "How To Analyze A Developer Deal (SOP)", emoji: "🏗️", category: "Deal Analysis",
     summary: "The Lux Blueprint step-by-step: how to look at a lot and figure out the most we should offer (the MAO) for a land-for-luxury-builds deal.",
     flow: [
