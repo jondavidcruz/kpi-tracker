@@ -7,7 +7,7 @@ import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
-import { readDispoBuyers, isDispoDealPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, stageMeta } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline, isDispoNetworkPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, stageMeta } from "@/lib/dispo-buyers";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
@@ -327,7 +327,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 target pipeline's stages + an explicit Move button (Nick's ticket). */}
             <div className="mb-2">
               <span className={lbl}>Pipeline</span>
-              <OppPipelineMover id={opp.id} pipeline={opp.pipeline || "War Room"} pipelineNames={pipelines.map((pp) => pp.name)}
+              <OppPipelineMover id={opp.id} pipeline={opp.pipeline || "War Room"} pipelineNames={pipelines.map((pp) => pp.name).filter((n) => isDispoNetworkPipeline(opp.pipeline) || !isDispoNetworkPipeline(n))}
                 pipelineStages={Object.fromEntries(pipelines.map((pp) => [pp.name, pp.stages.map((s) => ({ key: s.key, label: s.label }))]))} selectCls={inputCls} />
             </div>
             <AutoSaveForm action={saveOppMetaAction} className="space-y-2">

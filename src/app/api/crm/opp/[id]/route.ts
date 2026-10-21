@@ -44,7 +44,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const clean = (b: string) => stripHtml(b).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400);
   const smsHistory = [...smsEvents].reverse().map((e) => ({ body: clean(e.body), inbound: stripHtml(e.body).startsWith("⬅"), at: e.at.toISOString() }));
   const emailHistory = [...emailEvents].reverse().map((e) => ({ body: clean(e.body), inbound: stripHtml(e.body).startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }));
-  const pipelineNames = (await (await import("@/lib/crm")).readPipelines()).map((x) => x.name);
+  // Move list: hide the buyer-NETWORK pipelines (DS: Unvetted Developers / Buyer
+  // Agents) from a seller/deal lead — you never move a seller into the buyer network
+  // (Jon 2026-10-21). A network lead itself still sees them (to switch dev↔agent).
+  const { isDispoNetworkPipeline } = await import("@/lib/dispo-buyers");
+  const curIsNetwork = isDispoNetworkPipeline(opp.pipeline);
+  const pipelineNames = (await (await import("@/lib/crm")).readPipelines()).map((x) => x.name)
+    .filter((n) => curIsNetwork || !isDispoNetworkPipeline(n));
   return NextResponse.json({
     me: {
       name: me!.name,
