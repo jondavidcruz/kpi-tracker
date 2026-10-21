@@ -82,8 +82,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
   }));
+  // 🔎 search the deal board (name / address / phone) — parity with the Seller CRM.
+  const dealCardsShown = q ? dealCards.filter((c) => `${c.contactName} ${c.address ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(q.toLowerCase())) : dealCards;
   const dealCounts: Record<string, number> = {};
-  for (const c of dealCards) dealCounts[c.stage] = (dealCounts[c.stage] ?? 0) + 1;
+  for (const c of dealCardsShown) dealCounts[c.stage] = (dealCounts[c.stage] ?? 0) + 1;
   // buyer follow-ups attached across ALL deal pipelines
   const followCards: FollowupCard[] = [];
   for (const o of dealOpps) {
@@ -248,11 +250,23 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
           {dealNames.length === 0 ? (
             <Card className="p-8 text-center text-slate-400">No dispo deal pipeline found. Create <b>DS: Sell Land Then Sign</b> in the CRM first.</Card>
           ) : (
-            <Card className="p-3">
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCards.length} deal{dealCards.length === 1 ? "" : "s"}</div>
-              <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
-              <CrmKanban columns={dealColumns} cards={dealCards} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={[dealPl]} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
-            </Card>
+            <>
+              <Card className="flex flex-wrap items-center gap-2 p-3">
+                <form action="/dispo" method="get" className="flex min-w-[240px] flex-1 items-center gap-2">
+                  <input type="hidden" name="tab" value="deals" />
+                  {dealPl && <input type="hidden" name="dealpl" value={dealPl} />}
+                  <input name="q" defaultValue={q} placeholder="🔎 Search deals — name, address, phone…" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+                  <button className="rounded-lg bg-brand-navy px-3 py-2 text-xs font-bold text-white">Search</button>
+                  {q && <Link href={`/dispo?tab=deals${dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : ""}`} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">clear</Link>}
+                </form>
+                <span className="text-[11px] font-semibold text-slate-400">{dealCardsShown.length} of {dealCards.length}</span>
+              </Card>
+              <Card className="p-3">
+                <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
+                <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
+                <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={[dealPl]} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
+              </Card>
+            </>
           )}
 
           {/* the buyer follow-ups attached to these deals */}
