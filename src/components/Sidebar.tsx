@@ -105,6 +105,7 @@ export default function Sidebar({
     ] },
     { label: "Dispositions", items: [
       { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOrManager: true },
+      { href: "/dispo?tab=nextup", label: "Dispo Next Up", Icon: Zap, marketingOrManager: true },
       { href: "/crm/conversations?dept=dispo", label: "Dispo Conversations", Icon: MessagesSquare, marketingOrManager: true },
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/crm/dealboard", label: "Deal Board", Icon: Presentation },

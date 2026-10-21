@@ -3,6 +3,7 @@ import { getCurrentUser, canAccessMarketing, isManager } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { readPipelines, parseTags } from "@/lib/crm";
+import { commsFor } from "@/lib/crm-comms";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
 import { readDispoBuyers, isDispoDealPipeline, DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
@@ -40,6 +41,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const q = (sp.q ?? "").trim();
   const settings = await getSettings();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
+  const comms = await commsFor(me!); // click-to-call / text / email on the cards, like the Seller CRM
 
   const countRows = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null, pipeline: { in: [DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE] } }, _count: { _all: true } }).catch(() => [] as { pipeline: string; _count: { _all: number } }[]);
   const countOf = (p: string) => countRows.find((c) => c.pipeline === p)?._count._all ?? 0;
@@ -57,15 +59,28 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     ?? dealPipes.find((p) => /sell land/i.test(p.name))?.name
     ?? dealNames[0] ?? "";
   const dealOpps = (tab === "deals" || tab === "team" || tab === "nextup") && dealNames.length
-    ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, pipeline: true, stage: true, assignedTo: true, tags: true, value: true, askPrice: true, updatedAt: true, createdAt: true, formData: true, contact: { select: { name: true, phone: true, address: true } } } })
+    ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, pipeline: true, stage: true, assignedTo: true, tags: true, value: true, askPrice: true, updatedAt: true, createdAt: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true, address: true } } } })
     : [];
+  // 📅 next upcoming task / appointment per deal (today or later) → green/red card chips
+  const dealIds = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => o.id);
+  const [dealTasks, dealAppts] = tab === "deals" && dealIds.length
+    ? await Promise.all([
+        db.crmTask.findMany({ where: { oppId: { in: dealIds }, doneAt: null }, select: { oppId: true, due: true } }),
+        db.crmAppointment.findMany({ where: { oppId: { in: dealIds }, at: { gte: new Date() } }, orderBy: { at: "asc" }, select: { oppId: true, at: true } }),
+      ])
+    : [[], []];
+  const nextTaskByDeal = new Map<string, string>();
+  for (const t of dealTasks) { const d = (t.due || "").slice(0, 10); if (d && d >= today && (!nextTaskByDeal.has(t.oppId) || d < nextTaskByDeal.get(t.oppId)!)) nextTaskByDeal.set(t.oppId, d); }
+  const nextApptByDeal = new Map<string, Date>();
+  for (const a of dealAppts) { if (!nextApptByDeal.has(a.oppId)) nextApptByDeal.set(a.oppId, a.at); }
   // the deal board (cards for the selected deal pipeline)
   const dealColumns: CrmColumn[] = (dealPipes.find((p) => p.name === dealPl)?.stages ?? []).map((s) => ({ key: s.key, label: s.label, cls: s.cls }));
   const dealCards: CrmCard[] = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => ({
-    id: o.id, title: o.title, contactName: o.contact?.name || o.title, address: o.contact?.address ? formatAddress(o.contact.address) : undefined,
-    phone: o.contact?.phone || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
+    id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: o.contact?.address ? formatAddress(o.contact.address) : undefined,
+    phone: o.contact?.phone || undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
     money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
+    nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
   }));
   const dealCounts: Record<string, number> = {};
   for (const c of dealCards) dealCounts[c.stage] = (dealCounts[c.stage] ?? 0) + 1;
@@ -138,7 +153,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     const opps = await db.crmOpportunity.findMany({
       where: { archivedAt: null, pipeline: networkPipeline },
       orderBy: { updatedAt: "desc" },
-      select: { id: true, title: true, stage: true, assignedTo: true, tags: true, updatedAt: true, createdAt: true, formData: true, contact: { select: { name: true, phone: true, email: true, address: true, pinnedNote: true } } },
+      select: { id: true, title: true, stage: true, assignedTo: true, tags: true, updatedAt: true, createdAt: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true, address: true, pinnedNote: true } } },
     });
     const needle = q.toLowerCase();
     netCards = opps.map((o) => {
@@ -146,7 +161,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       const area = imp.market || "";
       const buyBox = imp.buyBox || o.contact?.pinnedNote || "";
       return {
-        id: o.id, title: buyBox, contactName: o.contact?.name || o.title, contactId: undefined,
+        id: o.id, title: buyBox, contactName: o.contact?.name || o.title, contactId: o.contactId,
         address: area, phone: o.contact?.phone || undefined, email: o.contact?.email || undefined,
         stage: o.stage || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
         money: "", valueNum: 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
@@ -236,7 +251,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
             <Card className="p-3">
               <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCards.length} deal{dealCards.length === 1 ? "" : "s"}</div>
               <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
-              <CrmKanban columns={dealColumns} cards={dealCards} counts={dealCounts} currentPipeline={dealPl} pipelineNames={[dealPl]} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
+              <CrmKanban columns={dealColumns} cards={dealCards} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={[dealPl]} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
             </Card>
           )}
 
@@ -299,7 +314,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
           ) : (
             <Card className="p-3">
               <CrmQuickView stages={netColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [networkPipeline]: netColumns.map((s) => ({ key: s.key, label: s.label })) }} />
-              <CrmKanban columns={netColumns} cards={netCards} counts={netCounts} currentPipeline={networkPipeline} pipelineNames={[networkPipeline]} pipelineStages={{ [networkPipeline]: netColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/dispo?tab=${tab}&view=list`} who="all" />
+              <CrmKanban columns={netColumns} cards={netCards} counts={netCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(networkPipeline)}` : ""} currentPipeline={networkPipeline} pipelineNames={[networkPipeline]} pipelineStages={{ [networkPipeline]: netColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/dispo?tab=${tab}&view=list`} who="all" />
             </Card>
           )}
         </>
