@@ -38,6 +38,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [answeredBy, setAnsweredBy] = useState<{ agent: string; caller: string } | null>(null);
   const [micOk, setMicOk] = useState<boolean | null>(null); // null = unknown
   const claimUntilRef = useRef(0); // while fresh, the next native ring auto-answers here
+  const ringStartRef = useRef(0); // when THIS inbound call began ringing — a claim must be newer
   const meFirstRef = useRef("");
   const mePosRef = useRef("");
   const [typeLogged, setTypeLogged] = useState("");
@@ -294,16 +295,20 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
           const inbound = n.call.direction === "inbound";
           if (inbound && cs === "ringing") {
             incomingCallRef.current = n.call as never;
+            ringStartRef.current = Date.now(); // stamp this ring so only a claim filed AFTER it can auto-answer
             // ⚡ cross-profile answer: if I click Answer in ANOTHER browser
             // window (different profile), it files a claim — this ringing
             // client sees it within 2s and picks up here (audio plays via
-            // this computer either way).
+            // this computer either way). The claim must be for THIS ring (newer
+            // than ringStart): a stale claim from a PRIOR call was auto-answering
+            // the next one on the previous answerer's browser, stealing it from
+            // whoever actually clicked (Jon 2026-10-21: Marie clicked, Michelle connected).
             const claimPoll = setInterval(async () => {
               if (!incomingCallRef.current) { clearInterval(claimPoll); return; }
               try {
                 const r = await fetch("/api/crm/callerid?claim=1", { cache: "no-store" });
                 const j = (await r.json()) as { at?: string; agent?: string };
-                if (j.at && j.agent === meFirstRef.current && Date.now() - Date.parse(j.at) < 12_000) {
+                if (j.at && j.agent === meFirstRef.current && Date.now() - Date.parse(j.at) < 12_000 && Date.parse(j.at) >= ringStartRef.current - 1500) {
                   clearInterval(claimPoll);
                   try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { setMicOk(false); return; }
                   try { (incomingCallRef.current as { answer?: () => void } | null)?.answer?.(); setOnCall({ phone: "inbound", dir: "in" }); } catch { /* raced */ }
