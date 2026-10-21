@@ -33,7 +33,7 @@ type Payload = {
   contact: { id: string; name: string; phone: string; altPhone: string; email: string; altEmail: string; address: string; pinnedNote: string; tags: string };
   tasks: Array<{ id: string; title: string; due: string }>;
   appts: Array<{ id: string; title: string; at: string; withWho: string }>;
-  events: Array<{ id?: string; kind: string; body: string; actor: string; at: string }>;
+  events: Array<{ id?: string; kind: string; body: string; actor: string; at: string; link?: string; fileName?: string }>;
 };
 
 // Nav tabs are built per-lead from its pipeline's forms (see tabsFor).
@@ -398,7 +398,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <span className="text-[11px] font-semibold text-red-800">Seller signed but won&apos;t close? Compile everything into a recordable lien.</span>
                       <button type="button" onClick={() => setLienOpen(true)} className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-red-700">🔴 File a Lien</button>
                     </div>
-                    <NoteComposer onSubmit={(html) => { const fd = new FormData(); fd.set("body", html); submit(addCrmNoteAction, { oppId: d.id, contactId: d.contact.id })(fd); }} />
+                    <NoteComposer onSubmit={(html, file) => { const fd = new FormData(); fd.set("body", html); if (file) fd.set("file", file); submit(addCrmNoteAction, { oppId: d.id, contactId: d.contact.id })(fd); }} />
                     <div className="space-y-1.5">
                       {d.events.map((e, i) => {
                         const mine = e.kind === "note" && !!e.id && e.actor === d.me.name;
@@ -421,6 +421,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                             {isNote && isHtmlNote(e.body)
                               ? <div className="mt-1 text-[13px] leading-relaxed [&_a]:text-indigo-600 [&_a]:underline [&_b]:font-bold [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-bold [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(e.body) }} />
                               : <span className={`whitespace-pre-line break-words ${isNote ? "font-medium" : ""}`}>{cleanLinkify(e.body)}</span>}
+                            {e.link && <a href={e.link} target="_blank" rel="noopener noreferrer" onClick={(ev) => ev.stopPropagation()} className="mt-1 inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1 text-[11px] font-semibold text-sky-700 ring-1 ring-slate-200 hover:bg-slate-50">📎 {e.fileName || "Open document"}</a>}
                             <span className="ml-1 text-[9px] text-slate-400">{e.actor} · {new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
                             {mine && <button onClick={() => { setEditNoteId(e.id!); }} title="Edit this note" className="ml-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-indigo-600">✎ edit</button>}
                             {mine && <button onClick={() => { if (confirm("Delete this note?")) { const fd = new FormData(); fd.set("id", e.id!); fd.set("oppId", d.id); submit(deleteCrmNoteAction)(fd); } }} title="Delete this note" className="ml-1 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-red-600">🗑</button>}

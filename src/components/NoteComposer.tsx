@@ -4,17 +4,22 @@
 // HTML to onSubmit; the feed renders it with the same whitelist.
 import { useRef, useState } from "react";
 
-export default function NoteComposer({ onSubmit }: { onSubmit: (html: string) => void }) {
+export default function NoteComposer({ onSubmit }: { onSubmit: (html: string, file?: File | null) => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [empty, setEmpty] = useState(true);
+  const [fileName, setFileName] = useState("");
   const cmd = (c: string) => { document.execCommand(c, false); ref.current?.focus(); syncEmpty(); };
   const syncEmpty = () => setEmpty(!(ref.current?.innerText?.trim()));
   const add = () => {
     const text = ref.current?.innerText?.trim() || "";
     const html = ref.current?.innerHTML?.trim() || "";
-    if (!text) return;
-    onSubmit(html);
+    const file = fileRef.current?.files?.[0] || null;
+    if (!text && !file) return; // need a note or a document
+    onSubmit(html, file);
     if (ref.current) ref.current.innerHTML = "";
+    if (fileRef.current) fileRef.current.value = "";
+    setFileName("");
     setEmpty(true);
   };
   const Btn = ({ onClick, title, children, cls = "" }: { onClick: () => void; title: string; children: React.ReactNode; cls?: string }) => (
@@ -29,6 +34,12 @@ export default function NoteComposer({ onSubmit }: { onSubmit: (html: string) =>
         <span className="mx-1 h-4 w-px bg-slate-200" />
         <Btn onClick={() => cmd("insertUnorderedList")} title="Bullet list">• List</Btn>
         <Btn onClick={() => cmd("insertOrderedList")} title="Numbered list">1. List</Btn>
+        {/* 📎 attach a document — uploads to the lead's Drive folder (shows in
+            Documents) and links from the note (Jon 2026-10-21). */}
+        <span className="mx-1 h-4 w-px bg-slate-200" />
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => fileRef.current?.click()} title="Attach a document (also saved to this lead's Documents · max 15MB)" className="grid h-7 place-items-center rounded-md px-1.5 text-[12px] text-slate-600 hover:bg-slate-100">📎</button>
+        <input ref={fileRef} type="file" className="hidden" onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")} />
+        {fileName && <span className="max-w-[160px] truncate text-[11px] font-semibold text-slate-500" title={fileName}>📎 {fileName}</span>}
         <button type="button" onClick={add} className="ml-auto rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">📝 Add note</button>
       </div>
       <div className="relative">
