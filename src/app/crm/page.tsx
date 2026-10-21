@@ -71,7 +71,11 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const plGroup = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null }, _count: { _all: true } });
   const plCounts: Record<string, number> = {};
   for (const g of plGroup) plCounts[g.pipeline === "" ? "War Room" : g.pipeline] = (plCounts[g.pipeline === "" ? "War Room" : g.pipeline] ?? 0) + g._count._all;
-  const busiest = [...pipelines].sort((a, b) => (plCounts[b.name] ?? 0) - (plCounts[a.name] ?? 0))[0]?.name ?? pipelines[0].name;
+  // 🚫 Never auto-open on a suppression / dead pipeline (DNC, Litigator, Hostile,
+  // No Buyer Interest, etc.) — those are parking lots, not where a rep works (Jon 2026-10-21).
+  const SUPPRESS = /dnc|litigator|tcpa|hostile|no buyer|not interested|\bdead\b|overpriced|nurture/i;
+  const defaultable = pipelines.filter((p) => !SUPPRESS.test(p.name));
+  const busiest = [...(defaultable.length ? defaultable : pipelines)].sort((a, b) => (plCounts[b.name] ?? 0) - (plCounts[a.name] ?? 0))[0]?.name ?? pipelines[0].name;
   // 🏠 Default to the VIEWER'S OWN busiest pipeline, not the global busiest (Jon
   // 2026-10-16: "it keeps opening on Nick's for everyone — show THEIR pipeline").
   // Pick the pipeline holding the most of this person's assigned leads; fall back
@@ -79,7 +83,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const myGroup = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null, assignedTo: { equals: me!.name, mode: "insensitive" } }, _count: { _all: true } });
   const myCounts: Record<string, number> = {};
   for (const g of myGroup) { const n = g.pipeline === "" ? "War Room" : g.pipeline; myCounts[n] = (myCounts[n] ?? 0) + g._count._all; }
-  const myBusiest = [...pipelines].filter((p) => (myCounts[p.name] ?? 0) > 0).sort((a, b) => (myCounts[b.name] ?? 0) - (myCounts[a.name] ?? 0))[0]?.name;
+  const myBusiest = [...defaultable].filter((p) => (myCounts[p.name] ?? 0) > 0).sort((a, b) => (myCounts[b.name] ?? 0) - (myCounts[a.name] ?? 0))[0]?.name;
   const homePipe = myBusiest ?? busiest;
   // Locked reps: restrict the tabs to their allowed pipelines + default to one of them.
   const lockedSet = new Set(lockPipes ?? []);

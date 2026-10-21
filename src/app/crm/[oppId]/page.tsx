@@ -7,7 +7,7 @@ import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
-import { readDispoBuyers, isDispoDealPipeline } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } from "@/lib/dispo-buyers";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
@@ -63,6 +63,12 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   // pipelines — never on home/seller leads.
   const canSeeBuyers = isManager(me) || me?.position === "dispositions";
   const showMatches = canSeeBuyers && isDispoDealPipeline(opp.pipeline);
+  // 🔙 Back goes to where this lead lives — dispo leads return to the Dispo CRM,
+  // not the seller CRM (Jon 2026-10-21: "remember where I'm at").
+  const backHref = opp.pipeline === DISPO_DEV_PIPELINE ? "/dispo?tab=developers"
+    : opp.pipeline === DISPO_AGENT_PIPELINE ? "/dispo?tab=agents"
+    : isDispoDealPipeline(opp.pipeline) ? "/dispo?tab=deals"
+    : "/crm";
   const leadFeatures = (() => { const f = (opp.formData as { land?: { features?: unknown } } | null)?.land?.features; return Array.isArray(f) ? (f as string[]) : []; })();
   const buyerMatches = showMatches ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures) : [];
   // 🎯 Smart Match from the buyer-network CRM (developers + agents), on dispo deals only.
@@ -103,7 +109,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
       {/* ── Header: who, stage, actions ── */}
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Link href="/crm" className="text-sm font-bold text-slate-400 hover:text-slate-600">←</Link>
+          <Link href={backHref} className="text-sm font-bold text-slate-400 hover:text-slate-600">←</Link>
           <div>
             <div className="text-lg font-extrabold tracking-tight text-slate-900">{c.name}</div>
             <div className="text-xs text-slate-500">{formatAddress(opp.title)}</div>

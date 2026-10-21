@@ -9,8 +9,8 @@ export default function DispoMarketingChecklist({ oppId, done }: { oppId: string
   const total = MARKETING_STEPS.length;
   const n = MARKETING_STEPS.filter((s) => doneSet.has(s.key)).length;
   const groups: { group: "active" | "passive"; label: string }[] = [
-    { group: "active", label: "📣 Active — we reach out" },
-    { group: "passive", label: "📰 Passive — list it so buyers find it" },
+    { group: "active", label: "📞 Active outreach — Sharyn (calls / emails / texts)" },
+    { group: "passive", label: "📰 Posting & listing — Marie (the platforms)" },
   ];
   return (
     <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">

@@ -100,8 +100,14 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       const missing = ["acreage", "legalAccess"].filter((k) => !land[k]);
       if (missing.length) marieQueue.push({ oppId: o.id, label: `🗂 Fill intake: ${addr}`, detail: `Missing ${missing.map((m) => (m === "legalAccess" ? "road/legal access" : "acreage")).join(" + ")} — needed to match buyers`, urgent: true });
       // Marie — marketing checklist incomplete
-      const done = readMarketingDone(o.formData);
-      if (done.length < MARKETING_STEPS.length) marieQueue.push({ oppId: o.id, label: `📣 Market it: ${addr}`, detail: `${done.length}/${MARKETING_STEPS.length} marketing channels done` });
+      // Marketing split by owner: Sharyn's outreach steps → her lane, Marie's posting → hers.
+      const done = new Set(readMarketingDone(o.formData));
+      const sharynSteps = MARKETING_STEPS.filter((s) => s.owner === "sharyn");
+      const marieSteps = MARKETING_STEPS.filter((s) => s.owner === "marie");
+      const sharynLeft = sharynSteps.filter((s) => !done.has(s.key)).length;
+      const marieLeft = marieSteps.filter((s) => !done.has(s.key)).length;
+      if (sharynLeft) sharynQueue.push({ oppId: o.id, label: `📣 Outreach: ${addr}`, detail: `${sharynLeft} outreach step${sharynLeft > 1 ? "s" : ""} left (calls/email/text/cascade)` });
+      if (marieLeft) marieQueue.push({ oppId: o.id, label: `📰 Post it: ${addr}`, detail: `${marieLeft} listing${marieLeft > 1 ? "s" : ""} left (FB groups, Lands of America, Marketplace…)` });
     }
   }
 
