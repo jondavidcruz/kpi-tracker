@@ -353,10 +353,13 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
         {/* ── MIDDLE: comms — the main event (SMS / email / notes / timeline) ── */}
         <div className="order-1 min-w-0 space-y-2.5 xl:order-none">
           <Card className="p-3">
-            <form action={addCrmNoteAction} className="flex gap-2">
+            <form action={addCrmNoteAction} className="flex flex-wrap items-center gap-2">
               <input type="hidden" name="oppId" value={opp.id} />
               <input type="hidden" name="contactId" value={c.id} />
-              <input name="body" placeholder="Write a note… what did the seller say?" required className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+              <input name="body" placeholder="Write a note… what did the seller say?" className="min-w-[160px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+              {/* 📎 attach a document — it uploads to this lead's Drive folder (shows in
+                  Documents) and links from the note in the timeline (Jon 2026-10-21). */}
+              <input type="file" name="file" title="Attach a document (also saved to this lead's Documents · max 15MB)" className="max-w-[170px] text-[11px] text-slate-500 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2.5 file:py-1.5 file:text-[11px] file:font-bold file:text-slate-600 hover:file:bg-slate-200" />
               <button className="rounded-xl bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:opacity-90">📝 Note</button>
             </form>
             <form action={logCrmTouchAction} className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
@@ -447,6 +450,11 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                     {m.link && <audio controls preload="none" src={m.link} className="h-9 w-full max-w-sm" />}
                     {m.transcript && <details className="text-[11px]"><summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">📄 Full transcript</summary><div className="mt-1 max-h-60 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 p-2 text-slate-600 ring-1 ring-slate-100">{m.transcript}</div></details>}
                   </div>
+                ); })()}
+                {/* 📎 attached document (on a note or a file upload) → clickable link;
+                    the file also lives in this lead's Documents (Jon 2026-10-21). */}
+                {(() => { const m = e.meta as { link?: string; name?: string } | null; if (!(m && m.link && (e.kind === "note" || e.kind === "file")) || e.body.startsWith("🎙")) return null; return (
+                  <a href={m.link} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 text-[12px] font-semibold text-sky-700 ring-1 ring-slate-200 hover:bg-slate-100">📎 {m.name || "Open document"}</a>
                 ); })()}
                 <div className="mt-0.5 text-[10px] text-slate-400">{fmtAt(e.at)}{e.actor && e.kind !== "note" ? ` · ${e.actor}` : ""}{e.oppId && e.oppId !== opp.id ? " · other opportunity" : ""}</div>
               </div>

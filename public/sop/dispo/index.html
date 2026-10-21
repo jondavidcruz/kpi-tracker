@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>Pre-Contract Dispo SOP</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: single column run-sheet. Six numbered phase blocks, each ending in a
+   gate that stays HELD until its boxes are checked. Cascade phase uses a
+   left-rail time column. Operations-board palette from the packet brand. */
+:root{
+  --ink:#14263a;        /* navy — primary text + rules */
+  --ink-2:#4a5a6d;      /* muted body */
+  --paper:#f6f3ee;      /* cream ground */
+  --panel:#fffdf9;      /* raised card */
+  --gold:#b08d57;       /* accent */
+  --rule:#ddd6ca;
+  --hold:#9a2f2f;       /* gate held */
+  --clear:#2d6a4a;      /* gate clear */
+  --flag:#8a6a1f;       /* caution */
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ink:#eae4d8; --ink-2:#9aa8b8; --paper:#0d1724; --panel:#152433;
+    --gold:#c9a86b; --rule:#2a3b4e; --hold:#e07a7a; --clear:#6cc19a; --flag:#d9b45c;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#eae4d8; --ink-2:#9aa8b8; --paper:#0d1724; --panel:#152433;
+  --gold:#c9a86b; --rule:#2a3b4e; --hold:#e07a7a; --clear:#6cc19a; --flag:#d9b45c;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.55; margin:0;
+}
+.wrap{
+  max-width:960px; margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 64px;
+}
+h1,h2,h3,h4{font-family:"Zilla Slab",Georgia,serif; text-wrap:balance; margin:0}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+/* ---------- masthead ---------- */
+header{padding-block:40px 28px; border-bottom:3px solid var(--ink)}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:600;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--gold);
+}
+h1{font-size:clamp(30px,6vw,46px); font-weight:700; line-height:1.05; margin-top:10px; letter-spacing:-.01em}
+.sub{color:var(--ink-2); font-size:16px; max-width:62ch; margin-top:12px}
+
+/* ---------- the one rule ---------- */
+.prime{
+  margin-top:26px; background:var(--ink); color:var(--paper);
+  border-left:6px solid var(--gold); padding:20px 22px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .prime{background:#1d3448; color:var(--ink)}
+}
+:root[data-theme="dark"] .prime{background:#1d3448; color:var(--ink)}
+.prime .lbl{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--gold); font-weight:600;
+}
+.prime p{margin:.5em 0 0; font-size:17px; line-height:1.5}
+.prime strong{font-weight:700}
+
+/* ---------- board strip ---------- */
+.board{margin-top:34px}
+.board h2{font-size:13px; font-family:"IBM Plex Mono",monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-2); font-weight:600}
+.cols{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+.col{
+  flex:1 1 128px; min-width:0; background:var(--panel); border:1px solid var(--rule);
+  border-top:3px solid var(--gold); padding:10px 11px;
+}
+.col .n{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--gold); font-weight:600}
+.col .t{font-family:"Zilla Slab",serif; font-weight:600; font-size:14px; margin-top:3px; line-height:1.2}
+.col .w{font-size:11.5px; color:var(--ink-2); margin-top:4px; font-family:"IBM Plex Mono",monospace}
+
+/* ---------- phases ---------- */
+.phase{margin-top:46px; scroll-margin-top:20px}
+.phead{display:flex; gap:16px; align-items:baseline; border-bottom:2px solid var(--rule); padding-bottom:10px}
+.pnum{
+  font-family:"IBM Plex Mono",monospace; font-size:34px; font-weight:600;
+  color:var(--gold); line-height:1; flex:0 0 auto;
+}
+.ptitle{min-width:0}
+.ptitle h2{font-size:clamp(21px,3.6vw,27px); font-weight:700; line-height:1.15}
+.pmeta{
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink-2);
+  margin-top:5px; letter-spacing:.03em;
+}
+.pbody{margin-top:18px}
+.pbody > p{max-width:66ch; color:var(--ink-2)}
+.pbody > p strong{color:var(--ink)}
+
+h3.step{
+  font-size:16px; font-weight:600; margin-top:20px;
+  display:flex; gap:9px; align-items:baseline;
+}
+h3.step .dot{color:var(--gold); font-family:"IBM Plex Mono",monospace; font-size:13px}
+.pbody ul{margin:.5em 0 0; padding-left:20px}
+.pbody li{margin:.3em 0; max-width:64ch}
+.pbody li strong{font-weight:600}
+
+/* field grid */
+.fields{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); margin-top:14px}
+.field{background:var(--panel); padding:9px 11px; min-width:0}
+.field .fn{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--gold); font-weight:600}
+.field .fv{font-size:13.5px; margin-top:2px; line-height:1.35}
+
+/* ---------- gates ---------- */
+.gate{margin-top:22px; border:2px solid var(--hold); background:var(--panel)}
+.gate[data-clear="1"]{border-color:var(--clear)}
+.gbar{
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  background:var(--hold); color:#fff; padding:9px 13px;
+}
+.gate[data-clear="1"] .gbar{background:var(--clear)}
+.gbar .gl{font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:600; letter-spacing:.13em; text-transform:uppercase}
+.gbar .gs{margin-left:auto; font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:600}
+.gate ul.checks{list-style:none; margin:0; padding:12px 13px; display:grid; gap:2px}
+.checks li{margin:0; max-width:none}
+.checks label{
+  display:flex; gap:10px; align-items:flex-start; padding:7px 8px;
+  cursor:pointer; border-radius:3px; line-height:1.45;
+}
+.checks label:hover{background:color-mix(in srgb,var(--gold) 11%,transparent)}
+.checks input{
+  appearance:none; flex:0 0 auto; width:17px; height:17px; margin-top:1px;
+  border:2px solid var(--ink-2); border-radius:3px; background:transparent; cursor:pointer;
+}
+.checks input:checked{background:var(--clear); border-color:var(--clear)}
+.checks input:checked::after{content:"✓"; display:block; color:#fff; font-size:12px; line-height:13px; text-align:center; font-weight:700}
+.checks input:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+.checks input:checked + span{color:var(--ink-2); text-decoration:line-through; text-decoration-color:var(--rule)}
+.checks span code{font-family:"IBM Plex Mono",monospace; font-size:.88em; background:color-mix(in srgb,var(--gold) 15%,transparent); padding:1px 4px; border-radius:2px}
+.gfail{padding:0 13px 13px; font-size:13px; color:var(--ink-2); border-top:1px dashed var(--rule); margin-top:4px; padding-top:11px}
+.gfail b{color:var(--hold); font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase}
+
+/* ---------- callouts ---------- */
+.note{background:var(--panel); border-left:4px solid var(--gold); padding:14px 16px; margin-top:18px}
+.note.warn{border-left-color:var(--hold)}
+.note h4{font-size:14.5px; font-weight:700; margin-bottom:5px}
+.note p,.note ul{font-size:14px; color:var(--ink-2); margin:0}
+.note p + p{margin-top:.6em}
+.note ul{padding-left:19px; margin-top:.4em}
+
+/* ---------- three-bucket ---------- */
+.buckets{display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:12px; margin-top:16px}
+.bucket{background:var(--panel); border:1px solid var(--rule); border-top:4px solid var(--gold); padding:14px 15px; min-width:0}
+.bucket .see{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-2); font-weight:600}
+.bucket .say{font-family:"Zilla Slab",serif; font-size:17px; font-weight:700; margin:7px 0 6px; line-height:1.2; color:var(--gold)}
+.bucket p{font-size:13.5px; color:var(--ink-2); margin:0}
+
+/* ---------- cascade ---------- */
+.cascade{margin-top:18px; border-left:2px solid var(--rule); padding-left:0}
+.tier{display:flex; gap:0; align-items:stretch}
+.tier .when{
+  flex:0 0 76px; font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-weight:600;
+  color:var(--gold); padding:14px 12px 14px 14px; position:relative; min-width:0;
+}
+.tier .when::before{
+  content:""; position:absolute; left:-7px; top:19px; width:11px; height:11px;
+  border-radius:50%; background:var(--gold); border:2px solid var(--paper);
+}
+.tier .what{flex:1 1 auto; min-width:0; padding:14px 0 14px 4px; border-bottom:1px solid var(--rule)}
+.tier:last-child .what{border-bottom:0}
+.tier .who{font-family:"Zilla Slab",serif; font-size:17px; font-weight:700; line-height:1.2}
+.tier .how{font-size:13.5px; color:var(--ink-2); margin-top:5px}
+.tier .how b{color:var(--ink); font-weight:600}
+
+/* ---------- tables ---------- */
+.tscroll{overflow-x:auto; margin-top:16px; border:1px solid var(--rule)}
+table{border-collapse:collapse; width:100%; font-size:13.5px; background:var(--panel)}
+th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--rule); vertical-align:top}
+th{
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--gold); font-weight:600; white-space:nowrap;
+}
+tr:last-child td{border-bottom:0}
+td.num{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600}
+
+/* ---------- terms ---------- */
+.terms{background:var(--ink); color:var(--paper); padding:22px 24px; margin-top:22px}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .terms{background:#1d3448; color:var(--ink)}
+  :root:not([data-theme="light"]) .terms h3{color:var(--ink)}
+}
+:root[data-theme="dark"] .terms{background:#1d3448; color:var(--ink)}
+.terms h3{font-size:19px; font-weight:700; color:#fff}
+:root[data-theme="dark"] .terms h3{color:var(--ink)}
+.terms ol{margin:.8em 0 0; padding-left:21px; font-size:14.5px}
+.terms li{margin:.45em 0; max-width:62ch}
+.terms .ph{
+  font-family:"IBM Plex Mono",monospace; font-weight:600; color:var(--gold);
+  font-size:15px; display:inline-block; margin-top:2px;
+}
+
+/* ---------- footer controls ---------- */
+.ctl{margin-top:40px; padding-top:18px; border-top:1px solid var(--rule); display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+button.reset{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; background:transparent; color:var(--ink);
+  border:1.5px solid var(--ink-2); padding:8px 15px; cursor:pointer; border-radius:3px;
+}
+button.reset:hover{border-color:var(--gold); color:var(--gold)}
+button.reset:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+.ctl p{font-size:12.5px; color:var(--ink-2); margin:0; max-width:52ch}
+
+@media (max-width:560px){
+  .pnum{font-size:26px}
+  .phead{gap:11px}
+  .tier .when{flex-basis:62px; padding-left:12px; font-size:11.5px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Freedom Offers LLC · Dispositions</div>
+  <h1>Pre-Contract Dispo SOP</h1>
+  <p class="sub">How Marie and Sharyn take one land lead that is <em>not yet under contract</em> and work it all the way out to every buyer agent and developer — before touching the next one.</p>
+</header>
+
+<div class="prime">
+  <div class="lbl">Standing order</div>
+  <p><strong>One deal at a time.</strong> Phase 6 closes before the next lead opens. A half-worked lead is worth nothing, and five half-worked leads are worth less than one finished.</p>
+</div>
+
+<section class="board">
+  <h2>War Room board — six columns</h2>
+  <div class="cols">
+    <div class="col"><div class="n">01</div><div class="t">Intake</div><div class="w">15 min</div></div>
+    <div class="col"><div class="n">02</div><div class="t">Pull Docs</div><div class="w">30 min</div></div>
+    <div class="col"><div class="n">03</div><div class="t">Utilities Call</div><div class="w">10 min</div></div>
+    <div class="col"><div class="n">04</div><div class="t">Packet Build</div><div class="w">same day</div></div>
+    <div class="col"><div class="n">05</div><div class="t">In Market</div><div class="w">72 hr clock</div></div>
+    <div class="col"><div class="n">06</div><div class="t">Offers In</div><div class="w">until contracted</div></div>
+  </div>
+</section>
+
+<!-- ==================== PHASE 1 ==================== -->
+<section class="phase">
+  <div class="phead">
+    <div class="pnum">01</div>
+    <div class="ptitle">
+      <h2>Claim the lead, open the file</h2>
+      <div class="pmeta">15 minutes · one named owner · before any document is pulled</div>
+    </div>
+  </div>
+  <div class="pbody">
+    <p>Acquisitions drops the lead with status <strong>Verbal — Not Contracted</strong>. Nothing happens until one person's name is in the Owner field. An unowned deal is how leads die.</p>
+
+    <h3 class="step"><span class="dot">▸</span> Claim it</h3>
+    <ul>
+      <li>Put your name in <strong>Owner</strong>. You run this deal end to end.</li>
+      <li>The other manager takes <strong>inbound</strong> on every live deal that week. You do not both work the same buyer list — a buyer called twice by two people reads as a disorganized shop.</li>
+    </ul>
+
+    <h3 class="step"><span class="dot">▸</span> Open the folder</h3>
+    <ul>
+      <li>Name it exactly: <code class="mono">STREET_CITY_ST_ZIP</code> — e.g. <code class="mono">13492_Storm_Lake_St_Port_Charlotte_FL_33981</code></li>
+      <li>Every document for this deal lives here. Nothing on a desktop, nothing in a text thread.</li>
+    </ul>
+
+    <h3 class="step"><span class="dot">▸</span> Collect the intake fields from acquisitions</h3>
+    <div class="fields">
+      <div class="field"><div class="fn">Address</div><div class="fv">Street, city, state, ZIP</div></div>
+      <div class="field"><div class="fn">Parcel / APN</div><div class="fv">The number, not the address</div></div>
+      <div class="field"><div class="fn">County + city limits</div><div class="fv">Inside a city, or county-governed?</div></div>
+      <div class="field"><div class="fn">Acreage</div><div class="fv">Acres and square feet</div></div>
+      <div class="field"><div class="fn">Seller's number</div><div class="fv">What they will actually take</div></div>
+      <div class="field"><div class="fn">Utilities — verbatim</div><div class="fv">The seller's exact words. Do not clean it up.</div></div>
+      <div class="field"><div class="fn">Access</div><div class="fv">Frontage / easement / landlocked / unknown</div></div>
+      <div class="field"><div class="fn">Timeline + motivation</div><div class="fv">Why now, and how fast</div></div>
+    </div>
+
+    <div class="gate" data-gate="g1">
+      <div class="gbar"><span class="gl">Gate 1 — Intake complete</span><span class="gs" data-count>0 / 4</span></div>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span>All eight intake fields are filled. No blanks, no "TBD".</span></label></li>
+        <li><label><input type="checkbox"><span>Parcel / APN number is recorded — not just the street address.</span></label></li>
+        <li><label><input type="checkbox"><span>City-limits question is answered. <strong>"County" and "City of ___" are not the same jurisdiction</strong> and it changes who issues permits.</span></label></li>
+        <li><label><input type="checkbox"><span>My name is in the Owner field.</span></label></li>
+      </ul>
+      <div class="gfail"><b>If held</b> — kick it back to acquisitions with the missing field named. Do not fill gaps with a guess; a guess on the cover page is what gets caught by a developer.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PHASE 2 ==================== -->
+<section class="phase">
+  <div class="phead">
+    <div class="pnum">02</div>
+    <div class="ptitle">
+      <h2>Pull the four documents</h2>
+      <div class="pmeta">30 minutes · four pulls, exact specs · this is where the most time gets lost</div>
+    </div>
+  </div>
+  <div class="pbody">
+    <p>Four documents build the packet. <strong>Nearly every rebuild traces back to a bad pull here</strong> — a stale address left in a search box, a map zoomed too far out, an export that stopped short of the legend. Pull them right once.</p>
+
+    <h3 class="step"><span class="dot">1</span> FEMA FIRMette — <span class="mono" style="font-size:13px">msc.fema.gov</span></h3>
+    <ul>
+      <li><strong>Clear the search box first.</strong> Delete whatever address is sitting in it. The site keeps the last one and will happily hand you a map of someone else's lot.</li>
+      <li>Type the subject address. Nothing else.</li>
+      <li>Export the FIRMette. Check the community name printed at the top before you save.</li>
+    </ul>
+
+    <h3 class="step"><span class="dot">2</span> USFWS Wetlands (NWI) — <span class="mono" style="font-size:13px">fwsprimary.wim.usgs.gov</span></h3>
+    <ul>
+      <li>Zoom in until the scale bar reads between <strong>1:1,500 and 1:3,500</strong>. That is lot scale.</li>
+      <li>A regional sheet at 1:7,000 or wider <strong>cannot clear a single lot</strong> — it is a picture of the neighborhood, and it is worthless to a buyer's engineer.</li>
+      <li>The subject address must print on the sheet.</li>
+    </ul>
+
+    <h3 class="step"><span class="dot">3</span> USDA Web Soil Survey — <span class="mono" style="font-size:13px">websoilsurvey.nrcs.usda.gov</span></h3>
+    <ul>
+      <li>Draw the <strong>AOI box on the parcel itself</strong>, not on the general area.</li>
+      <li>The export must include the <strong>Map Unit Legend</strong>. If the footer says "Page 1 of 3," you need all three pages.</li>
+      <li>Without the legend you have a soil symbol and no soil name — which means the packet cannot state what the dirt is.</li>
+    </ul>
+
+    <h3 class="step"><span class="dot">4</span> Regrid parcel screenshot — <span class="mono" style="font-size:13px">regrid.com</span></h3>
+    <ul>
+      <li>Full browser window, maximum zoom at which the <strong>whole lot still fits</strong>.</li>
+      <li>Red boundary visible. The road visible. The neighboring lots visible — that is how the utilities call gets made in Phase 3.</li>
+      <li>Do not crop to the lot alone. Context is the point.</li>
+    </ul>
+
+    <div class="gate" data-gate="g2">
+      <div class="gbar"><span class="gl">Gate 2 — The four-point check</span><span class="gs" data-count>0 / 5</span></div>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span><strong>FEMA:</strong> the address in the search box is <em>this</em> address, once, with nothing typed over it.</span></label></li>
+        <li><label><input type="checkbox"><span><strong>FEMA:</strong> the community name at the top of the map matches this county or city.</span></label></li>
+        <li><label><input type="checkbox"><span><strong>NWI:</strong> scale is between 1:1,500 and 1:3,500 <em>and</em> the subject address is on the sheet.</span></label></li>
+        <li><label><input type="checkbox"><span><strong>Soil:</strong> page count matches the footer ("Page 1 of 3" means three pages) <em>and</em> the AOI box sits on the parcel.</span></label></li>
+        <li><label><input type="checkbox"><span><strong>Regrid:</strong> image is readable at 100% — boundary, road and neighbors all legible.</span></label></li>
+      </ul>
+      <div class="gfail"><b>If held</b> — re-pull that one document now. It takes four minutes here and costs a full rebuild later.</div>
+    </div>
+
+    <div class="note warn">
+      <h4>What actually went wrong in the last 25 packets</h4>
+      <div class="tscroll">
+        <table>
+          <thead><tr><th>Defect</th><th>Count</th><th>Caught by</th></tr></thead>
+          <tbody>
+            <tr><td>Soil export missing the Map Unit Legend</td><td class="num">6</td><td>Footer page count</td></tr>
+            <tr><td>Utilities line contradicted the aerial</td><td class="num">4</td><td>Phase 3 bucket test</td></tr>
+            <tr><td>Stale or doubled address in the FEMA search box</td><td class="num">3</td><td>Reading the search box</td></tr>
+            <tr><td>Cover jurisdiction wrong (city vs. unincorporated)</td><td class="num">2</td><td>City-limits field</td></tr>
+            <tr><td>Soil report centered ~0.9 mi off the parcel</td><td class="num">1</td><td>Coordinate grid</td></tr>
+            <tr><td>NWI pulled at 1:7,123 — regional, not lot scale</td><td class="num">1</td><td>Scale bar</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:11px">Every one of these is caught by Gate 2. None of them are caught by hurrying.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PHASE 3 ==================== -->
+<section class="phase">
+  <div class="phead">
+    <div class="pnum">03</div>
+    <div class="ptitle">
+      <h2>Make the utilities call</h2>
+      <div class="pmeta">10 minutes · the single most damaging line in any packet</div>
+    </div>
+  </div>
+  <div class="pbody">
+    <p><strong>"No utilities" is not a finding. It is a description of every vacant lot in America.</strong> Nothing is connected to any empty parcel. But a developer reads "no utilities" as <em>no service available in this area</em> — and that either kills the deal outright or kills your credibility the moment he drives past a neighbor's running pool pump.</p>
+
+    <p>Open the Regrid aerial. Look at the block, not the lot. Then pick one of three answers for each of <strong>electric, water, sewer</strong>.</p>
+
+    <div class="buckets">
+      <div class="bucket">
+        <div class="see">If you see</div>
+        <div class="say">Available at Street</div>
+        <p>Occupied homes on the same block — roofs, driveways, pool cages, parked cars. Service is in the street. The buyer pays a <em>connection</em>, not a line extension.</p>
+      </div>
+      <div class="bucket">
+        <div class="see">If you see</div>
+        <div class="say">Verify In Street</div>
+        <p>Platted subdivision, mostly vacant woods, a few scattered homes. Lines are probably in but unconfirmed. Say exactly that, and say it is unconfirmed.</p>
+      </div>
+      <div class="bucket">
+        <div class="see">If you see</div>
+        <div class="say">Service Area Not Reached</div>
+        <p>Raw acreage, no homes in sight, no poles along the road. This is well-and-septic territory. Now "no utilities" is true — and you can defend it.</p>
+      </div>
+    </div>
+
+    <div class="gate" data-gate="g3">
+      <div class="gbar"><span class="gl">Gate 3 — Utilities reconciled</span><span class="gs" data-count>0 / 4</span></div>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span>Electric, water and sewer each have one of the three answers written next to them.</span></label></li>
+        <li><label><input type="checkbox"><span>The answer matches what the aerial shows — not only what the seller said.</span></label></li>
+        <li><label><input type="checkbox"><span>The phrase <strong>"no utilities"</strong> appears nowhere in what goes to a buyer.</span></label></li>
+        <li><label><input type="checkbox"><span>Where the seller's words and the aerial disagree, the packet says which is which.</span></label></li>
+      </ul>
+      <div class="gfail"><b>If held</b> — call the county utility or the power co-op. Ten minutes on the phone beats a developer catching it.</div>
+    </div>
+
+    <div class="note">
+      <h4>Fix this upstream too</h4>
+      <p>The acquisitions intake sheet should force the same three-way choice instead of a free-text utilities box. "Available at street" and "service area not reached" are different facts about a property, and right now both arrive as "no utilities."</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PHASE 4 ==================== -->
+<section class="phase">
+  <div class="phead">
+    <div class="pnum">04</div>
+    <div class="ptitle">
+      <h2>Build and clear the packet</h2>
+      <div class="pmeta">Same day · Template A, pre-contract · nothing ships with an open flag</div>
+    </div>
+  </div>
+  <div class="pbody">
+    <p>Submit the four documents, the reconciled utilities answers and the eight intake fields. The packet comes back as one merged PDF. <strong>Then read the flags.</strong></p>
+
+    <h3 class="step"><span class="dot">▸</span> Resolve every flag</h3>
+    <p>Any row tagged <code class="mono">Verify</code>, <code class="mono">Report Pending</code> or <code class="mono">Read This</code> is an open item. Two choices, no third:</p>
+    <ul>
+      <li><strong>Re-pull and rebuild</strong> — when the document was the problem.</li>
+      <li><strong>Market with the flag disclosed in writing</strong> — when the fact is the problem. An unmapped FEMA panel or a landlocked parcel is still sellable. Hiding it is not.</li>
+    </ul>
+
+    <div class="gate" data-gate="g4">
+      <div class="gbar"><span class="gl">Gate 4 — Release check</span><span class="gs" data-count>0 / 7</span></div>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span><strong>Owner name is blurred</strong> on the parcel map — including neighbor-owner labels.</span></label></li>
+        <li><label><input type="checkbox"><span>Cover jurisdiction is right: <code class="mono">City of ___, ___ County</code> or <code class="mono">___ County, Unincorporated</code>.</span></label></li>
+        <li><label><input type="checkbox"><span><strong>No asking price anywhere in the packet.</strong> Buyers submit what they can pay and how they want to structure it.</span></label></li>
+        <li><label><input type="checkbox"><span>Contact line reads <strong class="mono">1-877-652-8991</strong> — Sharyn and Marie. Not Jon's number.</span></label></li>
+        <li><label><input type="checkbox"><span>This is <strong>Template A</strong> (pre-contract). Template B language implies we control the property. We do not yet.</span></label></li>
+        <li><label><input type="checkbox"><span>Every flag is either resolved or disclosed in the packet text.</span></label></li>
+        <li><label><input type="checkbox"><span><strong>Jon has signed off for release.</strong> The packet goes to him the moment it is built; the cascade does not start until he answers.</span></label></li>
+      </ul>
+      <div class="gfail"><b>If held</b> — it does not go out. A packet with an unblurred owner name or a stray asking price cannot be recalled once it is in fifty inboxes.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PHASE 5 ==================== -->
+<section class="phase">
+  <div class="phead">
+    <div class="pnum">05</div>
+    <div class="ptitle">
+      <h2>Run the cascade</h2>
+      <div class="pmeta">72-hour clock · four tiers · every touch logged</div>
+    </div>
+  </div>
+  <div class="pbody">
+    <p>The cascade exists for two reasons: your best buyers get a real window before the lot is everywhere, and you stop burning the full list on every deal. <strong>Start the clock when the packet clears Gate 4.</strong></p>
+
+    <div class="cascade">
+      <div class="tier">
+        <div class="when">T+0<br>→2 hr</div>
+        <div class="what">
+          <div class="who">Tier 1 — Matched buyers</div>
+          <div class="how">Pull from <b>Vetted Buyers</b>. Filter on county, acreage and intended use. <b>Call first</b>, then text, then email the packet. Every matched name touched inside two hours. These are the people who buy without a price tag because they already trust the pipeline.</div>
+        </div>
+      </div>
+      <div class="tier">
+        <div class="when">T+4 hr</div>
+        <div class="what">
+          <div class="who">Tier 2 — Market list</div>
+          <div class="how">Everyone on the buyer list in that state or metro. One email, packet attached. <b>Send through the CRM or BCC</b> — never a visible to-line with fifty buyers in it.</div>
+        </div>
+      </div>
+      <div class="tier">
+        <div class="when">T+24 hr</div>
+        <div class="what">
+          <div class="who">Tier 3 — Agents &amp; developers</div>
+          <div class="how">Land brokers, builders and developers working that county. Same packet, different ask: <b>"bring me your buyer."</b> An agent with a buyer is worth more than ten cold contacts.</div>
+        </div>
+      </div>
+      <div class="tier">
+        <div class="when">T+48 hr</div>
+        <div class="what">
+          <div class="who">Tier 4 — Open market</div>
+          <div class="how">Facebook land groups, Land.com / Lands of America, LandWatch, Craigslist. Public post, <b>still no price</b>. Packet on request so you capture the contact.</div>
+        </div>
+      </div>
+      <div class="tier">
+        <div class="when">T+72 hr</div>
+        <div class="what">
+          <div class="who">Huddle — do not just repost</div>
+          <div class="how">Zero offers at 72 hours is information. Check three things in order: <b>is the utilities line scaring people off</b>, <b>is an open flag doing it</b>, and <b>is the seller's number even reachable</b> for this county. Reposting a deal that is priced wrong just teaches the list to ignore you.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <h4>Log every touch — this is the part that is unorganized right now</h4>
+      <p>Buyer name · channel · timestamp · response. Four fields. With two managers working live deals, the log is the only thing standing between you and a buyer getting the same lot pitched twice in an afternoon.</p>
+    </div>
+
+    <div class="gate" data-gate="g5">
+      <div class="gbar"><span class="gl">Gate 5 — Cascade complete</span><span class="gs" data-count>0 / 4</span></div>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span>All four tiers fired on schedule, timestamps recorded.</span></label></li>
+        <li><label><input type="checkbox"><span>Every Tier 1 name was <strong>called</strong>, not just emailed.</span></label></li>
+        <li><label><input type="checkbox"><span>Touch log is current — no untracked outreach.</span></label></li>
+        <li><label><input type="checkbox"><span>72-hour huddle held, or offers already in hand.</span></label></li>
+      </ul>
+      <div class="gfail"><b>If held</b> — finish the tier you skipped before adding another channel. Breadth without the calls is just noise.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PHASE 6 ==================== -->
+<section class="phase">
+  <div class="phead">
+    <div class="pnum">06</div>
+    <div class="ptitle">
+      <h2>Work the offers, close the loop</h2>
+      <div class="pmeta">Until contracted · then hand back to acquisitions</div>
+    </div>
+  </div>
+  <div class="pbody">
+    <p>Offers come to <strong>Sharyn and Marie</strong>. Capture the same five things on every one, or you cannot compare them:</p>
+    <div class="fields">
+      <div class="field"><div class="fn">Price</div><div class="fv">The number offered</div></div>
+      <div class="field"><div class="fn">Structure</div><div class="fv">Cash, terms, subject-to</div></div>
+      <div class="field"><div class="fn">Proof of funds</div><div class="fv">Received, or requested</div></div>
+      <div class="field"><div class="fn">Inspection period</div><div class="fv">Days, and what for</div></div>
+      <div class="field"><div class="fn">Close date</div><div class="fv">Target, and how firm</div></div>
+    </div>
+
+    <h3 class="step"><span class="dot">▸</span> Then</h3>
+    <ul>
+      <li>Follow up <strong>daily</strong> with anyone who opened, asked a question or requested the packet. Pre-contract deals go stale fast.</li>
+      <li>Best offer goes back to <strong>acquisitions</strong> to convert the seller's verbal into a signed contract.</li>
+      <li>Once it is under contract: <strong>switch to Template B</strong> and reissue the packet with title information — New Beginnings Title Company, Rachel Frankenberry, 321-972-4800 ext. 2.</li>
+    </ul>
+
+    <div class="terms">
+      <h3>Standing terms — not negotiable at dispo level</h3>
+      <ol>
+        <li><strong>No asking price is published.</strong> Buyers submit what they can pay and how they want to structure it.</li>
+        <li><strong>Freedom Offers controls title and escrow.</strong> The buyer does not select the title company.</li>
+        <li><strong>Buyer pays all closing costs.</strong></li>
+        <li>All offers and deal questions route to Sharyn and Marie:<br><span class="ph">1-877-652-8991</span></li>
+      </ol>
+    </div>
+
+    <div class="gate" data-gate="g6">
+      <div class="gbar"><span class="gl">Gate 6 — File closed, next lead opens</span><span class="gs" data-count>0 / 4</span></div>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span>Every offer logged with all five fields.</span></label></li>
+        <li><label><input type="checkbox"><span>Best offer handed to acquisitions, or the deal is formally dead with a reason recorded.</span></label></li>
+        <li><label><input type="checkbox"><span>If contracted — Template B packet reissued with title information.</span></label></li>
+        <li><label><input type="checkbox"><span>Buyer list updated: who responded, who went quiet, what they said they wanted instead.</span></label></li>
+      </ul>
+      <div class="gfail"><b>If held</b> — the file stays open and the next lead stays closed. That last checkbox is how the Vetted Buyers list gets smarter instead of just longer.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== BACKEND ==================== -->
+<section class="phase">
+  <div class="phead">
+    <div class="pnum">+</div>
+    <div class="ptitle">
+      <h2>What the War Room needs to track</h2>
+      <div class="pmeta">Minimum fields to run this board · for the back end you are building</div>
+    </div>
+  </div>
+  <div class="pbody">
+    <div class="tscroll">
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Why it exists</th></tr></thead>
+        <tbody>
+          <tr><td>Deal ID</td><td>auto</td><td>One per parcel. Two parcels from one seller are two deals.</td></tr>
+          <tr><td>Address + APN</td><td>text</td><td>APN is the real key. Addresses get mistyped.</td></tr>
+          <tr><td>Phase</td><td>one of 6</td><td>Drives the board columns. Only one phase at a time.</td></tr>
+          <tr><td>Owner</td><td>Marie / Sharyn</td><td>No owner, no work. Enforce it.</td></tr>
+          <tr><td>Gates 1–6</td><td>checklist</td><td>A phase cannot advance until its gate is clear.</td></tr>
+          <tr><td>Utilities × 3</td><td>one of 3</td><td>Electric, water, sewer. Dropdown, never free text.</td></tr>
+          <tr><td>Packet link + version</td><td>link</td><td>Template A or B, and which rebuild.</td></tr>
+          <tr><td>Open flags</td><td>list</td><td>Resolved or disclosed. Blocks Gate 4.</td></tr>
+          <tr><td>Tier 1–4 timestamps</td><td>datetime</td><td>Proves the cascade ran, exposes where it stalls.</td></tr>
+          <tr><td>Touch log</td><td>buyer · channel · time · response</td><td>Stops double-calling. Feeds the buyer list.</td></tr>
+          <tr><td>Offers</td><td>5 fields each</td><td>Price, structure, POF, inspection, close date.</td></tr>
+          <tr><td>Days in market</td><td>auto</td><td>The number to manage. Everything else is input.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <h4>Hard stops — these halt the file, no exceptions</h4>
+      <ul>
+        <li>Owner name not blurred on the parcel map.</li>
+        <li>An asking price anywhere in the packet.</li>
+        <li>Template B used on a deal that is not under contract.</li>
+        <li>A buyer told they may choose the title company.</li>
+        <li>Outreach sent with no entry in the touch log.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="ctl">
+  <button class="reset" type="button">Clear all checks</button>
+  <p>Checkboxes are a working run sheet for one deal and stay in this browser only. The War Room is the system of record.</p>
+</div>
+
+</div>
+
+<script>
+(function(){
+  var KEY = "fo-dispo-sop-v1";
+
+  function load(){
+    try { return JSON.parse(localStorage.getItem(KEY) || "{}"); }
+    catch (e) { return {}; }
+  }
+  function save(state){
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  var gates = Array.prototype.slice.call(document.querySelectorAll(".gate"));
+  var state = load();
+
+  function sync(gate){
+    var boxes = Array.prototype.slice.call(gate.querySelectorAll("input[type=checkbox]"));
+    var done = boxes.filter(function(b){ return b.checked; }).length;
+    gate.querySelector("[data-count]").textContent = done + " / " + boxes.length;
+    gate.setAttribute("data-clear", done === boxes.length ? "1" : "0");
+  }
+
+  gates.forEach(function(gate){
+    var id = gate.getAttribute("data-gate");
+    var boxes = Array.prototype.slice.call(gate.querySelectorAll("input[type=checkbox]"));
+    boxes.forEach(function(box, i){
+      box.id = id + "-" + i;
+      if (state[box.id]) box.checked = true;
+      box.addEventListener("change", function(){
+        state[box.id] = box.checked;
+        save(state);
+        sync(gate);
+      });
+    });
+    sync(gate);
+  });
+
+  document.querySelector("button.reset").addEventListener("click", function(){
+    gates.forEach(function(gate){
+      gate.querySelectorAll("input[type=checkbox]").forEach(function(box){
+        box.checked = false;
+        state[box.id] = false;
+      });
+      sync(gate);
+    });
+    save(state);
+  });
+})();
+</script>
+
+</body>
+</html>

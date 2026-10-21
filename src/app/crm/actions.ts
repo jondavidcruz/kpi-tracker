@@ -256,6 +256,23 @@ export async function setOppStageAction(formData: FormData) {
   revalidatePath(`/crm/${id}`);
 }
 
+// 📎 Upload a file into THIS deal's Drive folder (same folder the Documents list +
+// uploadLeadDocAction use), so anything attached to a note also shows in Documents.
+async function uploadToDealDrive(oppId: string, file: File): Promise<{ id: string; link: string } | null> {
+  const { gdriveConfigured, ensureSubfolder, uploadToFolder, listFolder, dealsParent } = await import("@/lib/gdrive");
+  if (!gdriveConfigured()) return null;
+  const DEALS_PARENT = await dealsParent();
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contact: { select: { address: true, name: true } } } });
+  const label = (opp?.contact?.address || opp?.title || opp?.contact?.name || "Unfiled").trim();
+  const streetNo = label.match(/^\d+/)?.[0];
+  let folderId = "";
+  if (streetNo) { const existing = (await listFolder(DEALS_PARENT).catch(() => [])).find((f) => f.name.startsWith(streetNo)); if (existing) folderId = existing.id; }
+  if (!folderId) folderId = await ensureSubfolder(DEALS_PARENT, label.slice(0, 80));
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const up = await uploadToFolder(folderId, file.name.slice(0, 120), bytes, file.type || "application/octet-stream");
+  return { id: up.id, link: up.link };
+}
+
 export async function addCrmNoteAction(formData: FormData) {
   const me = await crmUser();
   if (!me) return;
@@ -265,8 +282,25 @@ export async function addCrmNoteAction(formData: FormData) {
   // bigger body. A plain-text note passes through unchanged (no tags → sanitize noop).
   const { sanitizeNoteHtml } = await import("@/lib/note-html");
   const body = sanitizeNoteHtml(String(formData.get("body") ?? "").trim()).slice(0, 8000);
-  if (!contactId || !body.replace(/<[^>]*>/g, "").trim()) return;
-  await logCrmEvent({ contactId, oppId, kind: "note", body, actor: me.name });
+  const hasText = !!body.replace(/<[^>]*>/g, "").trim();
+  // 📎 optional document on the note (Jon 2026-10-21) — uploads to the deal's Drive
+  // folder (so it ALSO appears in the lead's Documents) and links from the note.
+  const file = formData.get("file");
+  let meta: Record<string, unknown> | undefined;
+  if (file instanceof File && file.size > 0) {
+    if (file.size > 15 * 1024 * 1024) {
+      await logCrmEvent({ contactId, oppId, kind: "system", body: "📎 Attachment skipped — over 15MB; compress it and retry.", actor: me.name });
+    } else {
+      try {
+        const up = await uploadToDealDrive(oppId, file);
+        if (up) meta = { link: up.link, driveId: up.id, name: file.name };
+        else await logCrmEvent({ contactId, oppId, kind: "system", body: "📎 Attachment couldn't save — document storage isn't configured. Tell Jon.", actor: me.name });
+      } catch (e) { await logCrmEvent({ contactId, oppId, kind: "system", body: `📎 Attachment failed: ${String(e).slice(0, 120)}`, actor: me.name }).catch(() => {}); }
+    }
+  }
+  if (!contactId || (!hasText && !meta)) return;
+  const noteBody = hasText ? body : `📎 ${String(meta?.name ?? "document")}`;
+  await logCrmEvent({ contactId, oppId, kind: "note", body: noteBody, meta, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
 }
 

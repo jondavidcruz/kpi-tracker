@@ -13,7 +13,7 @@ import Logo from "./Logo";
 import StatusDot from "./StatusDot";
 import WorldClock from "./WorldClock";
 
-type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; marketingOrManager?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number };
+type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; marketingOrManager?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number; external?: boolean };
 
 // Extra search terms per page so a search matches what people actually call things
 // (e.g. "payroll" finds Schedule & Time, "P&L" finds the Profit & Loss report).
@@ -36,6 +36,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/entry": "enter kpis log numbers bulk lead import",
   "/deals": "pipeline dispositions",
   "/dispo": "dispositions crm kanban follow-ups follow up buyer agents developers board sell land then sign",
+  "/sop/dispo": "dispo sop standard operating procedure pre-contract run sheet gates checklist packet cascade marie sharyn",
   "/reduction": "price reduction seller negotiate script calculator dom offers",
   "/call-scoring": "call recording transcript coaching score",
   "/email-health": "email health bounce rate deliverability opens clicks resend direct rei campaigns domain reputation",
@@ -108,6 +109,7 @@ export default function Sidebar({
       { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOrManager: true },
       { href: "/dispo?tab=nextup", label: "Dispo Next Up", Icon: Zap, marketingOrManager: true },
       { href: "/crm/conversations?dept=dispo", label: "Dispo Conversations", Icon: MessagesSquare, marketingOrManager: true },
+      { href: "/sop/dispo", label: "Dispo SOP", Icon: BookOpen, marketingOrManager: true, external: true },
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/crm/dealboard", label: "Deal Board", Icon: Presentation },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
@@ -321,17 +323,13 @@ export default function Sidebar({
               <div className="space-y-0.5">
                 {items.map((it) => {
                   const active = isActive(it.href);
-                  return (
-                    <Link
-                      key={it.href}
-                      href={it.href}
-                      onClick={() => setOpen(false)}
-                      className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-                        active
-                          ? "bg-brand-navy-700 font-semibold text-white"
-                          : "text-brand-navy-100 hover:bg-white/5 hover:text-white"
-                      }`}
-                    >
+                  const cls = `group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+                    active
+                      ? "bg-brand-navy-700 font-semibold text-white"
+                      : "text-brand-navy-100 hover:bg-white/5 hover:text-white"
+                  }`;
+                  const inner = (
+                    <>
                       <it.Icon size={18} strokeWidth={1.75} className={active ? "text-brand-gold" : "text-brand-navy-300 group-hover:text-white"} />
                       <span className="flex-1">{navOrder?.labels?.[it.href] ?? it.label}</span>
                       {/* One lock only (Jon 2026-10-07): marks what the team can
@@ -342,7 +340,15 @@ export default function Sidebar({
                       {it.badge ? (
                         <span className="rounded-full bg-brand-gold px-1.5 py-0.5 text-[10px] font-bold text-brand-navy">{it.badge}</span>
                       ) : null}
-                    </Link>
+                    </>
+                  );
+                  // Static reference pages (e.g. the Dispo SOP in /public) aren't app
+                  // routes — open them with a plain anchor in a new tab, like the other
+                  // external links in this sidebar, so next/link doesn't try to route them.
+                  return it.external ? (
+                    <a key={it.href} href={it.href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className={cls}>{inner}</a>
+                  ) : (
+                    <Link key={it.href} href={it.href} onClick={() => setOpen(false)} className={cls}>{inner}</Link>
                   );
                 })}
               </div>
