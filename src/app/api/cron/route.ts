@@ -4471,6 +4471,10 @@ export async function GET(request: Request) {
 
   // Close any time card left open past its scheduled shift (forgot to clock out).
   const autoClockedOut = await autoCloseAbandonedSessions();
+  // 🛡️ Comms Guardian — verify calling/texting/email (in + out) and email Jon on any
+  // change (Jon 2026-10-21: "this system can never go down"). Best-effort, non-blocking.
+  let comms: { ok: boolean; down: string[] } | null = null;
+  try { const { checkAndRecordComms } = await import("@/lib/comms-health"); const s = await checkAndRecordComms(true); comms = { ok: s.ok, down: s.lanes.filter((l) => !l.ok).map((l) => l.key) }; } catch { /* non-blocking */ }
   const result = await runScheduledChecks({ date, force, weekly, review });
-  return NextResponse.json({ ok: true, speedTestReminded, autoClockedOut, ...result });
+  return NextResponse.json({ ok: true, speedTestReminded, autoClockedOut, comms, ...result });
 }

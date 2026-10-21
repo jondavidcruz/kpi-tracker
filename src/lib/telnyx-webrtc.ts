@@ -40,14 +40,17 @@ export async function provisionAndToken(agentFirst?: string): Promise<{ token?: 
       const pb = prof.body as { data?: { id?: string } };
       if (pb.data?.id) { await tx(`/credential_connections/${cfg.connId}`, { method: "PATCH", body: JSON.stringify({ outbound: { outbound_voice_profile_id: pb.data.id } }) }); steps.push("outbound voice profile attached"); }
       else steps.push(`voice profile: ${prof.status} ${prof.text.slice(0, 120)}`);
-      let caller = process.env.TELNYX_CALLER_ID ?? "";
-      if (!caller) {
-        const nums = await tx("/phone_numbers?page[size]=1");
-        const nb = nums.body as { data?: Array<{ phone_number?: string }> };
-        caller = nb.data?.[0]?.phone_number ?? "";
-      }
-      cfg.callerId = caller;
+      cfg.callerId = process.env.TELNYX_CALLER_ID ?? "";
     } else steps.push("caller id set");
+    // 📞 caller id MUST be a number that's live on Telnyx right now — never one that's
+    // mid-port (those still ring in GHL and drop outbound). Re-checked every mint so a
+    // ported number starts getting used the moment it goes active (Jon 2026-10-21).
+    try {
+      const { pickWorkingCallerId } = await import("./telnyx-numbers");
+      const picked = await pickWorkingCallerId(cfg.callerId || process.env.TELNYX_CALLER_ID);
+      if (picked.callerId) cfg.callerId = picked.callerId;
+      steps.push(picked.active ? `caller id ${cfg.callerId} (live)` : `⚠️ caller id ${cfg.callerId || "none"} not confirmed live (${picked.live.length} live, ${picked.porting.length} porting)`);
+    } catch { steps.push("caller id live-check skipped"); }
     if (!cfg.credId) {
       const r = await tx("/telephony_credentials", { method: "POST", body: JSON.stringify({ connection_id: cfg.connId, name: "war-room-webrtc" }) });
       const b = r.body as { data?: { id?: string } };

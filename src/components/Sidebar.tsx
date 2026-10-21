@@ -39,6 +39,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/reduction": "price reduction seller negotiate script calculator dom offers",
   "/call-scoring": "call recording transcript coaching score",
   "/email-health": "email health bounce rate deliverability opens clicks resend direct rei campaigns domain reputation",
+  "/comms-health": "comms guardian uptime calling texting email inbound outbound telnyx resend line down monitor always working 24/7 phones sms voice health check",
   "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers list pull skip trace sms sop directrei regrid skipmatrix scrub dnc litigator suppression texting campaign",
   "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
   "/ai-training": "ai training claude chatgpt gemini perplexity prompt prompting models haiku sonnet opus fable effort artificial intelligence learn",
@@ -117,6 +118,7 @@ export default function Sidebar({
       { href: "/lead-sourcing", label: "Lead Sourcing", Icon: TrendingUp, marketingOnly: true },
     ] },
     { label: "Business Heartbeat", items: [
+      { href: "/comms-health", label: "Comms Guardian", Icon: Activity, managerOnly: true },
       { href: "/compliance", label: "Compliance", Icon: ShieldCheck },
       { href: "/phone-health", label: "Phone Health", Icon: Phone },
       { href: "/email-health", label: "Email Health", Icon: Megaphone },

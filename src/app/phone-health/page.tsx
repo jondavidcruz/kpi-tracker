@@ -104,15 +104,11 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   let spend: { shortCalls?: { count: number; pct: number }; balance?: number | null; sms?: { count: number }; voice?: { count: number } } | null = null;
   try { spend = spendRow2?.description ? JSON.parse(spendRow2.description) : null; } catch { spend = null; }
 
-  // Telnyx numbers LIVE from the API (War Room + Direct REI connections)
-  let telnyxNums: Array<{ number: string; connection: string; msgProfile: boolean; status: string }> = [];
-  if (process.env.TELNYX_API_KEY) {
-    try {
-      const res = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=250", { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store" });
-      const body = (await res.json()) as { data?: Array<{ phone_number?: string; connection_name?: string; messaging_profile_id?: string | null; status?: string }> };
-      telnyxNums = (body.data ?? []).map((n) => ({ number: n.phone_number ?? "", connection: n.connection_name ?? "—", msgProfile: Boolean(n.messaging_profile_id), status: n.status ?? "?" })).filter((n) => n.number);
-    } catch { /* board degrades to Twilio only */ }
-  }
+  // Telnyx numbers LIVE from the API, split into usable-now vs mid-port (Jon 2026-10-21).
+  const { partitionNumbers, readPorting } = await import("@/lib/telnyx-numbers");
+  const { live: liveNums, porting: portingNums, unknownToApi } = await partitionNumbers();
+  const portingList = await readPorting();
+  const telnyxNums = liveNums; // the board below shows only numbers you can actually use right now
 
   // 🩺 Telnyx health score (0-100, Twilio-insights style): deducts for the
   // things Telnyx actually bills/flags us on.
@@ -170,6 +166,24 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
 
       {/* Live alarms from Twilio/Telnyx (same feed as Compliance) */}
       <TelcoAlarms />
+
+      {/* ⏳ Porting status — numbers mid-port still ring in GHL and can't call/text
+          from the War Room until the port completes. Held back automatically. */}
+      {(portingNums.length > 0 || unknownToApi.length > 0) && (
+        <Card className="border-l-4 border-amber-400 bg-amber-50/60 p-4">
+          <div className="text-sm font-extrabold text-amber-900">⏳ {portingNums.length + unknownToApi.length} number{portingNums.length + unknownToApi.length === 1 ? "" : "s"} still porting — not live in the War Room yet</div>
+          <p className="mt-0.5 text-[12px] text-amber-800">These are moving from GHL/Twilio to Telnyx. Until each port finishes they still <b>ring in GHL</b>, and the War Room will <b>not</b> call or text from them (that would drop). The dialer only uses the {liveNums.length} live line{liveNums.length === 1 ? "" : "s"} below. The moment a number goes active on Telnyx it starts getting used automatically — no action needed.</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {portingNums.map((n) => (
+              <span key={n.number} className="rounded-full bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-amber-800 ring-1 ring-amber-200" title={`status: ${n.status}`}>{n.number} · ⏳ {n.status}</span>
+            ))}
+            {unknownToApi.map((d) => (
+              <span key={d} className="rounded-full bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-amber-800 ring-1 ring-amber-200" title="not on Telnyx yet">…{d} · ⏳ porting</span>
+            ))}
+          </div>
+          {portingList.some((e) => e.until) && <div className="mt-1.5 text-[11px] text-amber-700">Expected live by {portingList.map((e) => e.until).filter(Boolean).sort().slice(-1)[0]}. {liveNums.length === 0 ? "⚠️ No live Telnyx line right now — buy one fresh Telnyx number to bridge until the port lands." : ""}</div>}
+        </Card>
+      )}
 
       {/* 📬 Deliverability — SMS delivery rate (Telnyx, live) + email bounces
           (Jon 2026-10-08: "what is our bounce rate??") */}
