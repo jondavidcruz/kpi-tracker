@@ -2,8 +2,9 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads, canAccessMarketing } from "@/lib/auth";
-import { getBuyerMatchesForLead } from "@/lib/buyer-match-lead";
+import { getBuyerMatchesForLead, getNetworkMatchesForDeal } from "@/lib/buyer-match-lead";
 import SendToBuyersButton from "@/components/SendToBuyersButton";
+import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import { readDispoBuyers, isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { getActiveReps, getSettings } from "@/lib/data";
@@ -59,6 +60,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   const mktAccess = canAccessMarketing(me);
   const leadFeatures = (() => { const f = (opp.formData as { land?: { features?: unknown } } | null)?.land?.features; return Array.isArray(f) ? (f as string[]) : []; })();
   const buyerMatches = mktAccess ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures) : [];
+  // 🎯 Smart Match from the buyer-network CRM (developers + agents), on dispo deals only.
+  const networkMatches = mktAccess && isDispoDealPipeline(opp.pipeline) ? await getNetworkMatchesForDeal(c.address || opp.title) : [];
+  const attachedBuyerIds = new Set(readDispoBuyers(opp.formData).map((b) => b.buyerId).filter(Boolean));
 
   // ⚠️ duplicate-seller guard (nightly ?crmqa=1 found 16 phones split across
   // reps): any OTHER live contact sharing this phone is flagged on the card so
@@ -461,6 +465,41 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 ))}
               </div>
               <div className="mt-1.5 text-[10px] text-slate-400">Ranked by area + price fit from your vetted buyers. Send top-down.</div>
+            </Card>
+          )}
+
+          {/* 🎯 Smart Match from the buyer-network CRM — auto-ranked developers +
+              agents for THIS deal; one-click attach (Jon 2026-10-20). */}
+          {mktAccess && isDispoDealPipeline(opp.pipeline) && networkMatches.length > 0 && (
+            <Card className="p-3">
+              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Smart Match — your network buys here</div>
+              <div className="space-y-1.5">
+                {networkMatches.map((m, i) => {
+                  const attached = attachedBuyerIds.has(m.oppId);
+                  return (
+                    <div key={m.oppId} className="flex items-start gap-2 rounded-lg bg-emerald-50/50 px-2.5 py-1.5 ring-1 ring-emerald-100">
+                      <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-600 text-[10px] font-extrabold text-white">{i + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="shrink-0 text-[11px]">{m.kind === "buyer_agent" ? "🧑‍💼" : "🏗"}</span>
+                          <a href={`/crm/${m.oppId}`} className="truncate text-[12px] font-bold text-slate-800 hover:text-emerald-700 hover:underline">{m.name}</a>
+                        </div>
+                        {m.reason && <div className="truncate text-[10px] text-emerald-700">{m.reason}</div>}
+                        {m.phone && <div className="truncate text-[10px] font-semibold text-slate-400">{m.phone}</div>}
+                      </div>
+                      {attached
+                        ? <span className="mt-0.5 shrink-0 text-[10px] font-bold text-emerald-600">✓ on deal</span>
+                        : (
+                          <form action={attachNetworkBuyerToDeal} className="mt-0.5 shrink-0">
+                            <input type="hidden" name="oppId" value={opp.id} /><input type="hidden" name="networkOppId" value={m.oppId} />
+                            <button className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700">＋ Attach</button>
+                          </form>
+                        )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-1.5 text-[10px] text-slate-400">Auto-matched from your developer + agent network by area. Attach to start the follow-up.</div>
             </Card>
           )}
 

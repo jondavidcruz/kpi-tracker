@@ -39,3 +39,39 @@ export async function getBuyerMatchesForLead(address: string, price: number | nu
     return [];
   }
 }
+
+export type NetworkMatch = { oppId: string; name: string; phone: string; kind: "developer" | "buyer_agent"; area: string; reason: string; score: number };
+
+// 🎯 Smart Match from the buyer-NETWORK CRM (developers + buyer agents) for a deal
+// (Jon 2026-10-20). Scores each network lead by how much its buy-area overlaps the
+// deal's address/county, so a Sell-Land-Then-Sign deal auto-shows the most likely
+// buyers to attach — no opening the cascade, no copying. Best-effort; never throws.
+export async function getNetworkMatchesForDeal(address: string, limit = 8): Promise<NetworkMatch[]> {
+  if (!address?.trim()) return [];
+  try {
+    const { DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } = await import("@/lib/dispo-buyers");
+    const opps = await db.crmOpportunity.findMany({
+      where: { archivedAt: null, pipeline: { in: [DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE] } },
+      select: { id: true, title: true, pipeline: true, formData: true, contact: { select: { name: true, phone: true } } },
+    });
+    const STOP = new Set(["the", "and", "for", "llc", "inc", "ave", "street", "road", "drive", "lane", "blvd", "court", "circle", "unit", "ste"]);
+    const tokens = [...new Set(address.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4 && !STOP.has(t)))];
+    const scored = opps.map((o) => {
+      const fd = (o.formData ?? {}) as Record<string, Record<string, string> & { market?: string; buyBox?: string }>;
+      const imp = (fd.__import ?? {}) as { market?: string; buyBox?: string };
+      const form = (fd.dev_buybox ?? fd.agent_profile ?? {}) as Record<string, string>;
+      const areaText = `${imp.market ?? ""} ${form.buyCounties ?? ""} ${form.areas ?? ""} ${imp.buyBox ?? ""}`.toLowerCase();
+      const hits = tokens.filter((t) => areaText.includes(t));
+      return {
+        oppId: o.id, name: o.contact?.name || o.title, phone: o.contact?.phone || "",
+        kind: (o.pipeline === DISPO_AGENT_PIPELINE ? "buyer_agent" : "developer") as NetworkMatch["kind"],
+        area: imp.market || form.buyCounties || form.areas || "",
+        reason: hits.length ? `📍 ${hits.slice(0, 3).join(", ")}` : "",
+        score: hits.length,
+      };
+    }).filter((m) => m.score > 0).sort((a, b) => b.score - a.score).slice(0, limit);
+    return scored;
+  } catch {
+    return [];
+  }
+}
