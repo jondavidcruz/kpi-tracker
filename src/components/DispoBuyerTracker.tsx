@@ -81,6 +81,14 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "" 
                   <button className="rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-sky-700" title="Stamp a touch today + bump the next follow-up">📞 Touch</button>
                 </form>
               </div>
+              {/* 📝 per-agent notes — saved on blur, rolled up into the contact's
+                  main note + credited as a buyer conversation (Jon 2026-10-21). */}
+              <form action={updateDispoBuyerAction} className="mt-1">
+                <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="notes" />
+                <textarea name="value" defaultValue={b.notes ?? ""} rows={2} placeholder="📝 Notes on this agent — what they said, what they want, next step…"
+                  onBlur={(e) => { if (e.currentTarget.value !== (b.notes ?? "")) e.currentTarget.form?.requestSubmit(); }}
+                  className="w-full resize-y rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-700 placeholder:text-slate-300" />
+              </form>
               {b.lastContact && <div className="mt-0.5 text-[9px] text-slate-400">last touch {b.lastContact}</div>}
             </div>
           );
