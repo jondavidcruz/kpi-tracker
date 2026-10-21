@@ -16,8 +16,11 @@ export async function GET(req: NextRequest) {
   if (!(await commsFor(me!)).call) return NextResponse.json({ error: "calling not enabled for you" }, { status: 403 });
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
 
-  // Telnyx numbers (10-min cache) — ONLY the ones on OUR connections; the
-  // Direct REI marketing lines never show here (Jon 2026-10-07).
+  // Telnyx numbers (10-min cache) — ONLY the ones on OUR connections AND live right
+  // now: active on Telnyx and NOT mid-port. Porting numbers are assigned to our
+  // connection already but still ring in GHL and drop, so they must never appear in
+  // the "Calling From" picker (Jon 2026-10-21). Direct REI marketing lines also never
+  // show (Jon 2026-10-07).
   let numbers: string[] = numCache && Date.now() - numCache.at < 600_000 ? numCache.numbers : [];
   if (!numbers.length && process.env.TELNYX_API_KEY) {
     try {
@@ -25,9 +28,13 @@ export async function GET(req: NextRequest) {
       let cfg: { connId?: string; ccAppId?: string } = {};
       try { cfg = cfgRow?.description ? JSON.parse(cfgRow.description) : {}; } catch { /* none */ }
       const ours = new Set([cfg.connId, cfg.ccAppId].filter(Boolean));
+      const { portingDigitsNow, digits } = await import("@/lib/telnyx-numbers");
+      const excluded = await portingDigitsNow();
       const res = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=250", { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store" });
-      const body = (await res.json()) as { data?: Array<{ phone_number?: string; connection_id?: string }> };
-      numbers = (body.data ?? []).filter((n) => ours.has(String(n.connection_id ?? ""))).map((n) => n.phone_number ?? "").filter(Boolean);
+      const body = (await res.json()) as { data?: Array<{ phone_number?: string; connection_id?: string; status?: string }> };
+      numbers = (body.data ?? [])
+        .filter((n) => ours.has(String(n.connection_id ?? "")) && n.status === "active" && !excluded.has(digits(n.phone_number ?? "")))
+        .map((n) => n.phone_number ?? "").filter(Boolean);
       numCache = { at: Date.now(), numbers };
     } catch { /* dial still works with the default caller id */ }
   }
@@ -59,7 +66,9 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     numbers,
-    defaultFrom: process.env.TELNYX_CALLER_ID ?? numbers[0] ?? "",
+    // default to the configured caller id ONLY if it's a live line; otherwise the
+    // first live number — never a porting number (Jon 2026-10-21).
+    defaultFrom: (process.env.TELNYX_CALLER_ID && numbers.includes(process.env.TELNYX_CALLER_ID)) ? process.env.TELNYX_CALLER_ID : (numbers[0] ?? ""),
     recents: recentEvents.map((e) => ({ name: cById.get(e.contactId)?.name ?? "—", phone: cById.get(e.contactId)?.phone ?? "", contactId: e.contactId, when: e.at.toISOString(), body: e.body.slice(0, 60) })),
     contacts,
     queue: queue.filter((o) => o.contact.phone).map((o) => ({ oppId: o.id, contactId: o.contact.id, name: o.contact.name, phone: o.contact.phone, title: o.title, due: o.nextFollowUp })),
