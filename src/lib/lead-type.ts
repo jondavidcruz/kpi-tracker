@@ -7,10 +7,10 @@ export type LeadBadge = { label: string; cls: string };
 
 export function leadTypeBadge(kind: LeadKind): LeadBadge {
   switch (kind) {
-    case "buyer_agent": return { label: "🧑‍💼 Buyer Agent", cls: "bg-sky-100 text-sky-700 ring-sky-200" };
+    case "buyer_agent": return { label: "🧑‍💼 Agent", cls: "bg-sky-100 text-sky-700 ring-sky-200" };
     case "developer": return { label: "🏗 Developer", cls: "bg-violet-100 text-violet-700 ring-violet-200" };
-    case "seller_land": return { label: "🌾 Land Seller", cls: "bg-amber-100 text-amber-800 ring-amber-200" };
-    case "seller_property": return { label: "🏠 Property Seller", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" };
+    case "seller_land": return { label: "⛰️ Seller", cls: "bg-amber-100 text-amber-800 ring-amber-200" };
+    case "seller_property": return { label: "🏠 Seller", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" };
     default: return { label: "🧑 Seller", cls: "bg-slate-100 text-slate-600 ring-slate-200" };
   }
 }
