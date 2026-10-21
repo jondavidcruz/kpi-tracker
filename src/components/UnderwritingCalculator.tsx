@@ -1955,7 +1955,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
               <MathReceipt
                 title={nPropType === "land" ? "Land novation (list it)" : "Novation offer"}
                 rows={[
-                  { text: `List it at ${money(nList)} — realistically it sells for ${nRealismPct}% of that`, amount: money(nExpectedSale) },
+                  { text: "Expected sale price", amount: money(nExpectedSale) },
                   { text: `Take away the agent's commission (${nComm}%)`, amount: money(nExpectedSale * (nComm / 100)), minus: true },
                   { text: `Take away seller closing costs (${nSellerClosePct}%)`, amount: money(nSellerClose), minus: true },
                   ...(nRepairCredit + nHoaCost + nExtra + nReserve > 0 ? [{ text: "Take away repair credit + HOA + extras + reserve", amount: money(nRepairCredit + nHoaCost + nExtra + nReserve), minus: true }] : []),
@@ -1965,18 +1965,12 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
                 total={money(novMao)}
                 coach={novMao > 0 ? `The seller can walk away with up to ${money(novMao)}. Open at ${money(novAnchor)} — every dollar below max is extra fee for us.${nPropType === "land" ? ` 🌱 Timeline talk: 3–6 months minimum on market (carry modeled at ${nHoldMonths} mo).` : ""}` : "Enter the list price and fee above to get your number."}
               />
+              {/* Simplified (Jon 2026-10-21): just the MAO, what we make, and the fees
+                  (in the receipt above). Removed the 95%-of-list / best-case / sanity
+                  rows — too many numbers. */}
               {suggestedList > 0 && <Res label="🏷️ Recommended list price" value={money(suggestedList)} tone="good" />}
-              {nList > 0 && <Res label={`Expected sale at ${nRealismPct}% of list`} value={money(nExpectedSale)} tone="muted" />}
-              {nReserve > 0 && <Res label="− Reserve (misc + lender repairs)" value={money(nReserve)} tone="muted" />}
-              {nHoaCost > 0 && <Res label={`− HOA dues (${nHoldMonths} mo)`} value={money(nHoaCost)} tone="muted" />}
-              {extraItems("nExtra", nExtraN).map((x, i) => <Res key={i} label={`− ${x.note || "Additional cost"}`} value={money(x.amt)} tone="muted" />)}
-              <Res label="Net after credit, commission, closing, HOA + extras" value={money(nNet)} tone="muted" />
               <Res label="🎯 Novation MAO (max seller payout)" value={money(novMao)} tone={novMao > 0 ? "navy" : "bad"} big />
-              {nList > 0 && <Res label={`💯 Best case — sells at FULL list (${money(nList)})`} value={`net ${money(nNetFull)} · max seller payout ${money(novMaoFull)}`} tone={novMaoFull > 0 ? "good" : "bad"} />}
-              {novMao > 0 && nList > 0 && <Res label="Sanity check" value={`${Math.round((novMao / nList) * 100)}% of list · ${nSaneWord}`} tone={nSaneTone} />}
-              <Res label="⚓ Anchor payout (open here)" value={money(novAnchor)} tone="good" />
-              <Res label="Our fee at anchor" value={money(feeAtAnchor)} tone="good" />
-              <Res label="Negotiate (seller payout)" value={`${money(novAnchor)} → ${money(novMao)}`} tone="muted" />
+              <Res label="💰 Our fee (what we earn)" value={novMao > 0 && feeAtAnchor > nMinFee ? `${money(nMinFee)} – ${money(feeAtAnchor)}` : money(nMinFee)} tone="good" />
               {novMao > 0 && <OfferLadder rungs={ladder(novAnchor, novMao)} />}
             </>
           )}
