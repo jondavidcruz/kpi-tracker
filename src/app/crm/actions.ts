@@ -1770,21 +1770,17 @@ export async function addPropertyNoteAction(formData: FormData) {
 const PT_TODAY = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 const ymdAdd = (days: number) => new Date(Date.now() + days * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 
-// 🧾 Roll every attached agent/developer's note up into the deal CONTACT's main
-// note (pinnedNote) as a single auto-maintained overview (Jon 2026-10-21). Kept in
-// its own marked block so manual notes above it are never clobbered.
-const BUYER_NOTES_MARK = "— 📇 Buyer/agent notes (auto) —";
-async function rollupDealBuyerNotes(oppId: string): Promise<void> {
-  const { readDispoBuyers } = await import("@/lib/dispo-buyers");
-  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { contactId: true, formData: true, contact: { select: { pinnedNote: true } } } });
+// 🧹 Clean up the old auto "Buyer/agent notes" block out of a lead's pinned note
+// (Jon 2026-10-21: "it looks ugly, remove it"). We no longer roll notes into the
+// pinned note — each agent note goes to the TIMELINE instead — so this just strips
+// any leftover block from this lead when its tracker is next touched.
+async function cleanPinnedAgentBlock(oppId: string): Promise<void> {
+  const { AGENT_NOTES_MARK } = await import("@/lib/crm-shared");
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { contactId: true, contact: { select: { pinnedNote: true } } } });
   if (!o?.contactId) return;
-  const withNotes = readDispoBuyers(o.formData).filter((b) => (b.notes ?? "").trim());
-  const lines = withNotes.map((b) => `• ${b.kind === "buyer_agent" ? "🧑‍💼" : "🏗"} ${b.name}${b.price ? ` (💵 ${b.price})` : ""}: ${String(b.notes).trim()}`);
-  const block = lines.length ? `${BUYER_NOTES_MARK}\n${lines.join("\n")}` : "";
   const cur = o.contact?.pinnedNote ?? "";
-  const base = cur.split(BUYER_NOTES_MARK)[0].trimEnd();
-  const next = [base, block].filter(Boolean).join("\n\n").slice(0, 4000);
-  await db.crmContact.update({ where: { id: o.contactId }, data: { pinnedNote: next } });
+  if (!cur.includes(AGENT_NOTES_MARK)) return;
+  await db.crmContact.update({ where: { id: o.contactId }, data: { pinnedNote: cur.split(AGENT_NOTES_MARK)[0].trimEnd() } });
 }
 
 // 📊 Credit a dispo "Buyer Conversations" KPI when a rep actually works an agent/
@@ -1860,12 +1856,16 @@ export async function updateDispoBuyerAction(formData: FormData) {
   const field = String(formData.get("field") ?? "");
   const value = String(formData.get("value") ?? "").trim();
   if (!oppId || !entryId || !["stage", "price", "nextFollowUp", "notes", "phone", "email"].includes(field)) return;
-  await mutateDispoBuyers(oppId, (list) => list.map((r) => r.id === entryId ? { ...r, [field]: value || undefined } : r));
-  // a saved note = working that agent → roll notes up to the contact's main note +
-  // credit a buyer conversation (Jon 2026-10-21).
+  let entryName = "";
+  const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => { if (r.id === entryId) entryName = String(r.name ?? ""); return r.id === entryId ? { ...r, [field]: value || undefined } : r; }));
+  // a saved note = working that agent → log it to the TIMELINE (a tracked highlight,
+  // not crammed into the pinned note) + credit a buyer conversation (Jon 2026-10-21).
   if (field === "notes") {
-    await rollupDealBuyerNotes(oppId);
-    if (value) await creditBuyerConversation(me.name, oppId, entryId);
+    await cleanPinnedAgentBlock(oppId); // strip any old auto block left in the pinned note
+    if (value) {
+      if (o?.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "note", body: `📝 ${entryName || "Agent"}: ${value.slice(0, 500)}`, actor: me.name });
+      await creditBuyerConversation(me.name, oppId, entryId);
+    }
   }
   revalidatePath(`/crm/${oppId}`);
 }

@@ -11,7 +11,7 @@ import { readDispoBuyers, isDispoDealPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_P
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
-import { stripHtml } from "@/lib/crm-shared";
+import { stripHtml, stripAgentNotesBlock } from "@/lib/crm-shared";
 import { formsForPipeline } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
@@ -161,7 +161,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             );
           })}
         </div>
-        {c.pinnedNote && <div className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {c.pinnedNote}</div>}
+        {stripAgentNotesBlock(c.pinnedNote) && <div className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {stripAgentNotesBlock(c.pinnedNote)}</div>}
         {dupContacts.length > 0 && (
           <div className="mt-2 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 ring-1 ring-rose-200">
             ⚠️ Same phone is also on{" "}

@@ -4,6 +4,15 @@
 
 export type CrmStage = { key: string; label: string; cls: string };
 
+// 🧹 The old auto-rolled "Buyer/agent notes" block that got crammed into a lead's
+// pinned note looked terrible (Jon 2026-10-21). We stopped writing it; this strips
+// any leftover block at display so pinned notes read clean everywhere.
+export const AGENT_NOTES_MARK = "— 📇 Buyer/agent notes (auto) —";
+export function stripAgentNotesBlock(note?: string | null): string {
+  if (!note) return "";
+  return note.split(AGENT_NOTES_MARK)[0].trimEnd();
+}
+
 // Built around Jon's land SOP — including the 24–48h developer-pricing stage.
 export const CRM_STAGES: CrmStage[] = [
   { key: "new", label: "New Lead", cls: "bg-sky-100 text-sky-800" },

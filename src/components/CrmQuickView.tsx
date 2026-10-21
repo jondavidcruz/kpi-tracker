@@ -9,7 +9,7 @@ import {
   addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, saveCrmFormAction,
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
 } from "@/app/crm/actions";
-import { KIND_EMOJI } from "@/lib/crm-shared";
+import { KIND_EMOJI, stripAgentNotesBlock } from "@/lib/crm-shared";
 import { formatAddress } from "@/lib/address";
 import { formsForPipeline } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
@@ -169,7 +169,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
               </nav>
 
               <div className="min-w-0 flex-1 overflow-y-auto p-5">
-                {d.contact.pinnedNote && <div className="mb-3 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {d.contact.pinnedNote}</div>}
+                {stripAgentNotesBlock(d.contact.pinnedNote) && <div className="mb-3 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {stripAgentNotesBlock(d.contact.pinnedNote)}</div>}
 
                 {tab === "opp" && (
                   <form action={submit(saveOppMetaAction, { id: d.id })} className="grid grid-cols-2 gap-3">

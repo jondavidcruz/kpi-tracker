@@ -14,6 +14,7 @@ import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv } from "@/app/actions";
 import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
+import { stripAgentNotesBlock } from "@/lib/crm-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -209,7 +210,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     netCards = opps.map((o) => {
       const imp = ((o.formData ?? {}) as { __import?: { market?: string; buyBox?: string } }).__import ?? {};
       const area = imp.market || "";
-      const buyBox = imp.buyBox || o.contact?.pinnedNote || "";
+      const buyBox = imp.buyBox || stripAgentNotesBlock(o.contact?.pinnedNote) || "";
       return {
         id: o.id, title: buyBox, contactName: o.contact?.name || o.title, contactId: o.contactId,
         address: area, phone: o.contact?.phone || undefined, email: o.contact?.email || undefined,
