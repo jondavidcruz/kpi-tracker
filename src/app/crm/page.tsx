@@ -58,10 +58,14 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // Scale plan (35k+ leads): the board never loads everything — true counts
   // come from an indexed groupBy, each column renders its freshest 60, and
   // the List view paginates. Payload stays ~constant no matter the lead count.
-  // Seller CRM excludes the dispo buyer-NETWORK pipelines (developers / buyer
-  // agents) — those live in their own Dispo CRM (/dispo), not attached to sellers.
-  const { isDispoNetworkPipeline } = await import("@/lib/dispo-buyers");
-  const pipelines = (await readPipelines()).filter((p) => !isDispoNetworkPipeline(p.name));
+  // Seller CRM hides the dispo pipelines (buyer-network developers/agents AND the
+  // DS deal pipelines) from its SELECTOR — they live in the Dispo CRM (/dispo), not
+  // attached to sellers (Jon 2026-10-20). But acquisitions must still be able to MOVE
+  // a lead into dispositions, so `allPipes` (which keeps the DS deal pipelines) is the
+  // move-target list; `pipelines` is the seller browse/selector list.
+  const { isDispoNetworkPipeline, isDispoDealPipeline } = await import("@/lib/dispo-buyers");
+  const allPipes = (await readPipelines()).filter((p) => !isDispoNetworkPipeline(p.name)); // move targets (incl DS deal)
+  const pipelines = allPipes.filter((p) => !isDispoDealPipeline(p.name));                   // seller selector + board
   // Lead counts per pipeline (also powers the tab badges). Default tab =
   // the busiest pipeline, so the board never opens on an empty view.
   const plGroup = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null }, _count: { _all: true } });
@@ -385,7 +389,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       <DueTodayReminder tasks={myDueTasks} appts={myApptsToday} />
       {view === "kanban" ? (
-        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} pipelineStages={Object.fromEntries(pipelines.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={pipelines.map((p) => p.name)} pipelineStages={Object.fromEntries(pipelines.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} currentPipeline={plName} who={whoRaw || "all"} dialerBase={!isLocked && comms.call ? `/crm/dialer?pl=${encodeURIComponent(plName)}` : ""} /></>
+        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} pipelineStages={Object.fromEntries(allPipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={allPipes.map((p) => p.name)} pipelineStages={Object.fromEntries(allPipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} currentPipeline={plName} who={whoRaw || "all"} dialerBase={!isLocked && comms.call ? `/crm/dialer?pl=${encodeURIComponent(plName)}` : ""} /></>
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>
