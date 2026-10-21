@@ -1796,3 +1796,37 @@ export async function removeDispoBuyerAction(formData: FormData) {
   await mutateDispoBuyers(oppId, (list) => list.filter((r) => r.id !== entryId));
   revalidatePath(`/crm/${oppId}`);
 }
+
+/** 🔗 Attach a Buyer-Network lead (developer / buyer agent CrmOpportunity) to a
+ *  DEAL (Jon 2026-10-20) — the integration: the deal's follow-up tracker now
+ *  points at the real network lead (buyerId = its opp id), and the network lead
+ *  gets a timeline note showing which deal it's on. */
+export async function attachNetworkBuyerToDeal(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");          // the deal
+  const networkOppId = String(formData.get("networkOppId") ?? ""); // the buyer/agent lead
+  if (!oppId || !networkOppId) return;
+  const lead = await db.crmOpportunity.findUnique({ where: { id: networkOppId }, select: { pipeline: true, contactId: true, contact: { select: { name: true, phone: true, email: true, pinnedNote: true } } } });
+  if (!lead) return;
+  const { DISPO_AGENT_PIPELINE } = await import("@/lib/dispo-buyers");
+  const kind = lead.pipeline === DISPO_AGENT_PIPELINE ? "buyer_agent" : "developer";
+  const name = lead.contact?.name || "buyer";
+  let added = false;
+  await mutateDispoBuyers(oppId, (list) => {
+    if (list.some((r) => r.buyerId === networkOppId)) return list; // already attached
+    added = true;
+    return [...list, {
+      id: `db_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      name, kind, phone: lead.contact?.phone || undefined, email: lead.contact?.email || undefined,
+      buyerId: networkOppId, stage: "to_contact", addedAt: PT_TODAY(), nextFollowUp: ymdAdd(1),
+    }];
+  });
+  if (added) {
+    const deal = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contactId: true, contact: { select: { address: true, name: true } } } });
+    const dealAddr = deal?.contact?.address || deal?.title || "a deal";
+    if (deal?.contactId) await logCrmEvent({ contactId: deal.contactId, oppId, kind: "system", body: `🔗 Attached ${kind === "buyer_agent" ? "buyer agent" : "developer"} ${name} to this deal.`, actor: me.name });
+    if (lead.contactId) await logCrmEvent({ contactId: lead.contactId, oppId: networkOppId, kind: "system", body: `🔗 Attached to deal: ${dealAddr}. Working the follow-up from the deal's buyer tracker.`, actor: me.name });
+  }
+  revalidatePath(`/crm/${oppId}`);
+}

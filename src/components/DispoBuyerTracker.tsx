@@ -5,10 +5,12 @@
 // next-follow-up + "what they'll pay" one tap each — so the biggest hurdle (the
 // follow-up) is never dropped and every buyer is tied to its deal.
 import { useState } from "react";
+import Link from "next/link";
 import { addDispoBuyerAction, updateDispoBuyerAction, logDispoBuyerTouchAction, removeDispoBuyerAction } from "@/app/crm/actions";
 import { DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, stageMeta, type DispoBuyer } from "@/lib/dispo-buyers";
+import AttachBuyerPanel from "@/components/AttachBuyerPanel";
 
-export default function DispoBuyerTracker({ oppId, buyers, today }: { oppId: string; buyers: DispoBuyer[]; today: string }) {
+export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "" }: { oppId: string; buyers: DispoBuyer[]; today: string; dealArea?: string }) {
   const [adding, setAdding] = useState(false);
   const counts = DISPO_BUYER_STAGES.map((s) => ({ ...s, n: buyers.filter((b) => b.stage === s.key).length }));
   const dueCount = buyers.filter((b) => b.nextFollowUp && b.nextFollowUp <= today && b.stage !== "passed" && b.stage !== "offer_in").length;
@@ -44,7 +46,9 @@ export default function DispoBuyerTracker({ oppId, buyers, today }: { oppId: str
               <div className="flex items-start gap-1.5">
                 <span className="text-[13px] leading-none" title={km?.label}>{km?.emoji}</span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] font-bold text-slate-800">{b.name}</div>
+                  {b.buyerId
+                    ? <Link href={`/crm/${b.buyerId}`} className="block truncate text-[12px] font-bold text-sky-700 hover:underline" title="Open this buyer in the network CRM">{b.name}</Link>
+                    : <div className="truncate text-[12px] font-bold text-slate-800">{b.name}</div>}
                   {(b.phone || b.email) && <div className="truncate text-[10px] font-semibold text-slate-400">{b.phone}{b.phone && b.email ? " · " : ""}{b.email}</div>}
                 </div>
                 <form action={removeDispoBuyerAction}>
@@ -83,7 +87,10 @@ export default function DispoBuyerTracker({ oppId, buyers, today }: { oppId: str
         })}
       </div>
 
-      {/* add */}
+      {/* 🔗 attach from the buyer-network CRM (the integration) */}
+      <AttachBuyerPanel oppId={oppId} defaultQuery={dealArea} attachedIds={buyers.map((b) => b.buyerId).filter((x): x is string => !!x)} />
+
+      {/* add a one-off by hand */}
       {adding ? (
         <form action={addDispoBuyerAction} className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200" onSubmit={() => setAdding(false)}>
           <input type="hidden" name="oppId" value={oppId} />
