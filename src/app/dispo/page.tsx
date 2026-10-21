@@ -5,16 +5,17 @@ import { getSettings } from "@/lib/data";
 import { readPipelines, parseTags } from "@/lib/crm";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
-import { readDispoBuyers, isDispoDealPipeline, DISPO_BUYER_STAGES, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline, DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
 import DispoFollowupKanban, { type FollowupCard } from "@/components/DispoFollowupKanban";
 import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban";
 import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv } from "@/app/actions";
+import { logDispoBuyerTouchAction } from "@/app/crm/actions";
 
 export const dynamic = "force-dynamic";
 
-type Tab = "deals" | "developers" | "agents" | "team";
+type Tab = "deals" | "developers" | "agents" | "team" | "nextup";
 const PALETTE = ["bg-sky-100 text-sky-800", "bg-yellow-100 text-yellow-800", "bg-violet-100 text-violet-800", "bg-amber-100 text-amber-800", "bg-emerald-100 text-emerald-800", "bg-rose-100 text-rose-600", "bg-slate-200 text-slate-600"];
 
 // 🎯 Dispositions CRM — dispo's buyer side, built with the SAME Kanban the team
@@ -34,7 +35,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     );
   }
   const sp = await searchParams;
-  const tab: Tab = sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" ? sp.tab : "deals";
+  const tab: Tab = sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" || sp.tab === "nextup" ? sp.tab : "deals";
   const listView = sp.view === "list";
   const q = (sp.q ?? "").trim();
   const settings = await getSettings();
@@ -55,7 +56,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const dealPl = dealPipes.find((p) => p.name === sp.dealpl)?.name
     ?? dealPipes.find((p) => /sell land/i.test(p.name))?.name
     ?? dealNames[0] ?? "";
-  const dealOpps = (tab === "deals" || tab === "team") && dealNames.length
+  const dealOpps = (tab === "deals" || tab === "team" || tab === "nextup") && dealNames.length
     ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, pipeline: true, stage: true, assignedTo: true, tags: true, value: true, askPrice: true, updatedAt: true, createdAt: true, formData: true, contact: { select: { name: true, phone: true, address: true } } } })
     : [];
   // the deal board (cards for the selected deal pipeline)
@@ -75,6 +76,20 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     for (const b of readDispoBuyers(o.formData)) followCards.push({ oppId: o.id, entryId: b.id, name: b.name, kind: b.kind, phone: b.phone, email: b.email, price: b.price, stage: b.stage, nextFollowUp: b.nextFollowUp, lastContact: b.lastContact, dealAddr });
   }
   const dueToday = followCards.filter((c) => c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in").length;
+
+  // ⏭ Next Up — one prioritized list of who to follow up with next (Jon 2026-10-21,
+  // like acquisitions' Next Up). Overdue first (most overdue on top), then due today,
+  // then upcoming. Follow-ups are outreach → Sharyn's job, but both can work it.
+  const nextUp = tab === "nextup"
+    ? followCards
+        .filter((c) => c.nextFollowUp && c.stage !== "passed" && c.stage !== "offer_in")
+        .map((c) => {
+          const overdueDays = c.nextFollowUp! < today ? Math.round((Date.parse(today) - Date.parse(c.nextFollowUp!)) / 86400000) : 0;
+          return { ...c, overdueDays, dueNow: c.nextFollowUp! <= today };
+        })
+        .sort((a, b) => (Number(b.dueNow) - Number(a.dueNow)) || (b.overdueDays - a.overdueDays) || (a.nextFollowUp! < b.nextFollowUp! ? -1 : 1))
+        .slice(0, 80)
+    : [];
 
   // ── Team tab: Sharyn (outreach/phones) vs Marie (data/organization) work lanes,
   // so they stay on the same page with clear ownership (Jon 2026-10-20). ──
@@ -141,6 +156,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   }
 
   const TABS: { key: Tab; label: string; n: number }[] = [
+    { key: "nextup", label: "⏭ Next Up", n: dueToday },
     { key: "deals", label: "📇 Deals & follow-ups", n: followCards.length },
     { key: "developers", label: "🏗 Developers", n: devCount },
     { key: "agents", label: "🧑‍💼 Buyer agents", n: agentCount },
@@ -167,6 +183,40 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
           </Link>
         ))}
       </div>
+
+      {tab === "nextup" && (
+        <>
+          <Card className="border-l-4 border-emerald-400 p-4">
+            <div className="text-sm font-extrabold text-slate-800">⏭ Next Up — work this top to bottom</div>
+            <p className="mt-0.5 text-[12px] text-slate-500">Every follow-up ranked by urgency (most overdue first). These are outreach calls — Sharyn&apos;s lane — but either of you can clear them. Hit 📞 Touch when you reach out and it auto-sets the next follow-up.</p>
+          </Card>
+          {nextUp.length === 0 ? (
+            <Card className="p-8 text-center text-sm text-slate-400">✅ Nothing due — no follow-ups overdue or coming up. Attach buyers to deals to start new ones.</Card>
+          ) : (
+            <Card className="p-2">
+              <div className="space-y-1.5">
+                {nextUp.map((c, i) => {
+                  const km = DISPO_BUYER_KINDS.find((k) => k.key === c.kind);
+                  return (
+                    <div key={`${c.oppId}-${c.entryId}`} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 ring-1 ${c.overdueDays > 0 ? "bg-red-50 ring-red-200" : c.dueNow ? "bg-amber-50 ring-amber-200" : "bg-slate-50 ring-slate-100"}`}>
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[11px] font-extrabold text-white">{i + 1}</span>
+                      <span className="shrink-0 text-[13px]" title={km?.label}>{km?.emoji}</span>
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/crm/${c.oppId}`} className="block truncate text-[13px] font-bold text-slate-800 hover:underline">{c.name} <span className="font-normal text-slate-400">· 📦 {c.dealAddr}</span></Link>
+                        <div className="truncate text-[11px] text-slate-500">{c.phone ? `${c.phone} · ` : ""}{c.overdueDays > 0 ? `⏰ overdue ${c.overdueDays}d` : c.dueNow ? "due today" : `next ${c.nextFollowUp}`}{c.price ? ` · 💵 ${c.price}` : ""}</div>
+                      </div>
+                      <form action={logDispoBuyerTouchAction} className="shrink-0">
+                        <input type="hidden" name="oppId" value={c.oppId} /><input type="hidden" name="entryId" value={c.entryId} />
+                        <button className="rounded bg-sky-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-sky-700">📞 Touch</button>
+                      </form>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+        </>
+      )}
 
       {tab === "deals" && (
         <>
