@@ -633,6 +633,19 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
       if ((body.data ?? []).some((n) => n.phone_number === reqFrom && ours.has(String(n.connection_id ?? "")))) from = reqFrom;
     } catch { /* fall back to the default line */ }
   }
+  // 📞 never text from a number that isn't live on Telnyx right now — a mid-port
+  // number (still on GHL) rejects/drops the send. Keep the chosen line if it's live
+  // and SMS-capable, else swap to a live texting line (Jon 2026-10-21).
+  if (process.env.TELNYX_API_KEY) {
+    try {
+      const { partitionNumbers, pickWorkingCallerId, digits } = await import("@/lib/telnyx-numbers");
+      const { live } = await partitionNumbers();
+      const smsLive = live.filter((n) => n.msgProfile);
+      const fromD = digits(from ?? "");
+      const isLiveSms = !!fromD && smsLive.some((n) => digits(n.number) === fromD);
+      if (!isLiveSms) { const pick = smsLive[0]?.number || (await pickWorkingCallerId(from)).callerId; if (pick) from = pick; }
+    } catch { /* keep the configured from */ }
+  }
   if (!to || (!text && !hasPhoto)) return; // photo-only MMS is a valid send
   // 🕘 quiet hours apply to TEXTS too (Jon 2026-10-08): 9pm–8am in the lead's
   // own time zone (by area code) = blocked, logged so the rep sees why.
