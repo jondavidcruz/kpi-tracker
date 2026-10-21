@@ -53,6 +53,12 @@ export const CRM_FORMS: CrmForm[] = [
     fields: [
       ...CORE,
       { key: "lot", label: "Lot size", type: "text" },
+      // 🎯 Buy-box matching fields (Jon 2026-10-20) — captured at intake so the deal
+      // auto-marries to developer/agent buy-boxes on the Smart Match.
+      { key: "acreage", label: "Acreage (exact #)", type: "text", hint: "e.g. 2.5 — the single most-asked buy-box number" },
+      { key: "legalAccess", label: "Legal / road access", type: "select", options: ["Paved road frontage", "Dirt / gravel road", "Easement access", "⚠️ Landlocked — NO legal access", "Unknown"] },
+      { key: "easements", label: "Easements?", type: "select", options: ["None known", "Utility easement", "Access easement", "Other — see notes"] },
+      { key: "topography", label: "Topography", type: "select", options: ["Flat / level", "Gentle slope", "Steep / hilly", "Mixed", "Unknown"] },
       { key: "zoning", label: "Zoned for?", type: "text" },
       { key: "hazard", label: "Hazardous zoning? (flood, fire…)", type: "text" },
       { key: "build", label: "Can you build? Min/max size?", type: "text" },
