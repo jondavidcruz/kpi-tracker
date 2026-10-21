@@ -2,12 +2,12 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
-import { getBuyerMatchesForLead, getNetworkMatchesForDeal } from "@/lib/buyer-match-lead";
+import { getBuyerMatchesForLead, getNetworkMatchesForDeal, getDealsForNetworkLead } from "@/lib/buyer-match-lead";
 import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
-import { readDispoBuyers, isDispoDealPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, stageMeta } from "@/lib/dispo-buyers";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
@@ -73,6 +73,10 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   const buyerMatches = showMatches ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures) : [];
   // 🎯 Smart Match from the buyer-network CRM (developers + agents), on dispo deals only.
   const networkMatches = showMatches ? await getNetworkMatchesForDeal(c.address || opp.title) : [];
+  // 🔗 On a buyer-agent / developer lead: every deal they're on (last talk + offer + next follow-up).
+  const isNetworkLead = opp.pipeline === DISPO_DEV_PIPELINE || opp.pipeline === DISPO_AGENT_PIPELINE;
+  const leadDeals = canSeeBuyers && isNetworkLead ? await getDealsForNetworkLead(opp.id) : [];
+  const todayPT = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
   const attachedBuyerIds = new Set(readDispoBuyers(opp.formData).map((b) => b.buyerId).filter(Boolean));
 
   // ⚠️ duplicate-seller guard (nightly ?crmqa=1 found 16 phones split across
@@ -453,6 +457,33 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <span className="text-[11px] text-slate-500">Auto-drafting is <b>off</b> — PandaDoc&apos;s API charges per document. Create the cash/novation contract directly in PandaDoc for this lead.</span>
             )}
           </Card>
+
+          {/* 🔗 Deals this agent/developer is on — last talk + offer + next follow-up,
+              all in one place on their card (Jon 2026-10-21). */}
+          {leadDeals.length > 0 && (
+            <Card className="p-3">
+              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">📦 Deals {c.name.split(" ")[0]} is on ({leadDeals.length})</div>
+              <div className="space-y-1.5">
+                {leadDeals.map((d) => {
+                  const overdue = d.nextFollowUp && d.nextFollowUp <= todayPT && d.stage !== "passed" && d.stage !== "offer_in";
+                  return (
+                    <a key={d.dealOppId} href={`/crm/${d.dealOppId}`} className={`block rounded-lg px-2.5 py-1.5 ring-1 ${overdue ? "bg-red-50 ring-red-200" : "bg-slate-50 ring-slate-100"} hover:bg-white`}>
+                      <div className="flex items-center gap-2">
+                        <span className="flex-1 truncate text-[12px] font-bold text-slate-800">📦 {d.dealAddr}</span>
+                        <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${stageMeta(d.stage).cls}`}>{stageMeta(d.stage).label}</span>
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
+                        {d.price && <span className="font-bold text-emerald-700">💵 offered {d.price}</span>}
+                        {d.lastContact && <span>last talk {d.lastContact}</span>}
+                        {d.nextFollowUp && <span className={overdue ? "font-bold text-red-600" : ""}>{overdue ? `⏰ follow up — was due ${d.nextFollowUp}` : `next ${d.nextFollowUp}`}</span>}
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+              <div className="mt-1.5 text-[10px] text-slate-400">Everything {c.name.split(" ")[0]} is working — update it from each deal&apos;s 📇 Buyers &amp; agents panel.</div>
+            </Card>
+          )}
 
           {/* 🎯 Matching cash buyers — who to send this land to, ranked (marketing only) */}
           {showMatches && buyerMatches.length > 0 && (

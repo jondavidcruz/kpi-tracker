@@ -75,3 +75,38 @@ export async function getNetworkMatchesForDeal(address: string, limit = 8): Prom
     return [];
   }
 }
+
+export type LeadDeal = { dealOppId: string; dealAddr: string; stage: string; price?: string; lastContact?: string; nextFollowUp?: string };
+
+// 🔗 Reverse link (Jon 2026-10-21): every DEAL a buyer agent / developer is attached
+// to, with when we last talked + what they offered + next follow-up — so the agent's
+// OWN card is the one place to see all their deal activity. Best-effort; never throws.
+export async function getDealsForNetworkLead(leadOppId: string): Promise<LeadDeal[]> {
+  if (!leadOppId) return [];
+  try {
+    const { isDispoDealPipeline, readDispoBuyers } = await import("@/lib/dispo-buyers");
+    const { readPipelines } = await import("@/lib/crm");
+    const { formatAddress } = await import("@/lib/address");
+    const dealNames = (await readPipelines()).filter((p) => isDispoDealPipeline(p.name)).map((p) => p.name);
+    if (!dealNames.length) return [];
+    const opps = await db.crmOpportunity.findMany({
+      where: { archivedAt: null, pipeline: { in: dealNames } },
+      select: { id: true, title: true, updatedAt: true, formData: true, contact: { select: { address: true, name: true } } },
+    });
+    const out: LeadDeal[] = [];
+    for (const o of opps) {
+      for (const b of readDispoBuyers(o.formData)) {
+        if (b.buyerId === leadOppId) {
+          out.push({
+            dealOppId: o.id,
+            dealAddr: formatAddress(o.contact?.address || "") || o.title || o.contact?.name || "deal",
+            stage: b.stage, price: b.price, lastContact: b.lastContact, nextFollowUp: b.nextFollowUp,
+          });
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}

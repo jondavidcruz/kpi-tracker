@@ -288,6 +288,15 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
 
       {(tab === "developers" || tab === "agents") && (
         <>
+          {tab === "agents" ? (
+            <Card className="border-l-4 border-sky-400 p-3 text-[12px] text-slate-600">
+              <b className="text-sky-800">🧑‍💼 Buyer agents = daily priority.</b> These get attached to deals and worked actively — open an agent to see every deal they&apos;re on, when you last talked, and what they offered. Attach/track from each deal&apos;s <b>📇 Buyers &amp; agents</b> panel.
+            </Card>
+          ) : (
+            <Card className="border-l-4 border-violet-400 p-3 text-[12px] text-slate-600">
+              <b className="text-violet-800">🏗 Developers = end-of-week vetting (lowest priority).</b> Work deals + buyer-agent follow-ups first; use the back half of the week to vet more developers here and keep building the vetted-developer pipeline.
+            </Card>
+          )}
           <details className="rounded-2xl bg-white p-3 ring-1 ring-slate-200" open={(tab === "developers" ? devCount : agentCount) === 0}>
             <summary className="cursor-pointer text-[13px] font-bold text-slate-700">📥 Import the Excel list <span className="font-normal text-slate-400">— auto-split by Type, duplicates skipped</span></summary>
             <p className="mt-2 mb-3 text-xs text-slate-500">Upload the <b>unvetted-developers-backfill.csv</b>. Each row becomes a CRM lead with its notes; developers + buyer agents split into their tabs. Re-uploading is safe.</p>
