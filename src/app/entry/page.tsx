@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { saveDay, addRepReason, setDayFocus, refreshCrmToday } from "@/app/actions";
+import { saveDay, addRepReason, refreshCrmToday } from "@/app/actions";
 import { toggleCrmTaskAction } from "@/app/crm/actions";
 import { getCurrentUser, isManager, canAccessCSuite, tracksSpeedTest } from "@/lib/auth";
 import { readCommissionPlans, planForUser, pathToGoal } from "@/lib/commissions";
@@ -21,10 +21,11 @@ import { toInputNumber, type Unit } from "@/lib/format";
 import { positionLabel, secondaryPositionOf } from "@/lib/roles";
 import { SPEED_CHECKS_CATEGORY, speedChecksTitle, parseSpeedChecks, fmtCheckTime, hasAfternoonCheck, afternoonCheckRequired } from "@/lib/speed-checks";
 
-// Developer/luxury outreach KPIs (shown only on a developer-focus day).
-const DEV_KEYS = new Set(["dev_instagram", "dev_facebook", "dev_linkedin", "dev_website", "dev_wordofmouth", "dev_conversations"]);
-// Dialer/buyer-calling KPIs — not counted on a developer-focus day.
-const DIALER_KEYS = new Set(["buyers_contacted", "ds_talk_time"]);
+// Developer-outreach channel KPIs that came with the old traditional/developer "focus"
+// toggle (removed Jon 2026-10-21 — never requested). Kept out of the everyday entry so
+// dispo entry is plain. Buyer Conversations (dev_conversations) is intentionally NOT
+// here — it's a normal manual dispo KPI.
+const HIDE_FROM_ENTRY = new Set(["dev_instagram", "dev_facebook", "dev_linkedin", "dev_website", "dev_wordofmouth"]);
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -108,26 +109,15 @@ export default async function EntryPage({
   const pmCheckRequired = afternoonCheckRequired(dateDow);
   const pmCheckDone = hasAfternoonCheck(speedChecks, settings.orgTimezone);
 
-  // Dispositions reps can flip between traditional (dialer) and developer/luxury
-  // outreach for the day. The focus decides which KPIs show + how they're scored.
-  const isDispo = rep?.position === "dispositions";
-  const standup = rep && isDispo ? await db.standup.findUnique({ where: { userId_date: { userId: rep.id, date } } }) : null;
   // commission plan for the selected rep (render-gated to the rep themselves + C-suite)
   const commPlan = rep ? planForUser(await readCommissionPlans(), rep.name) : null;
-  const focus: "traditional" | "developer" = standup?.focus === "developer" ? "developer" : "traditional";
 
-  // Decide which KPIs to show (and which dialer KPIs to grey out on a dev day).
-  let shown = roleKpis.filter((k) => !DEV_KEYS.has(k.key));
-  let mutedKpis: typeof roleKpis = [];
-  if (rep && isDispo && focus === "developer") {
-    shown = roleKpis.filter((k) => !DIALER_KEYS.has(k.key)); // includes dev KPIs
-    mutedKpis = roleKpis.filter((k) => DIALER_KEYS.has(k.key));
-  }
+  // Simple, everyday KPI entry — they just enter the day's numbers (Jon 2026-10-21).
+  let shown = roleKpis.filter((k) => !HIDE_FROM_ENTRY.has(k.key));
 
   // Per-rep channel swap: Marie enters Facebook (not Instagram); Sharyn the reverse.
   if (rep) {
     shown = shown.filter((k) => !isKpiHiddenForRep(rep.name, k.key));
-    mutedKpis = mutedKpis.filter((k) => !isKpiHiddenForRep(rep.name, k.key));
   }
 
   // Goals are per-rep now (e.g. Nick 70 dials vs Michelle 140), so any
@@ -172,7 +162,7 @@ export default async function EntryPage({
   const groups: EntryGroup[] = [];
   if (rep) {
     if (moneyKpis.length > 0) groups.push({ title: "💰 Money — results", hint: "The outcomes that move revenue.", items: moneyKpis.map(toItem) });
-    if (activityKpis.length > 0) groups.push({ title: focus === "developer" ? "📊 Activity — developer outreach" : "📊 Activity", hint: "Your daily effort.", items: activityKpis.map(toItem) });
+    if (activityKpis.length > 0) groups.push({ title: "📊 Activity", hint: "Your daily effort.", items: activityKpis.map(toItem) });
     if (secRole && secRoleKpis.length > 0) {
       const secItems = secRoleKpis.filter((k) => !isKpiHiddenForRep(rep.name, k.key)).map(toItem);
       if (secItems.length > 0) groups.push({
@@ -272,27 +262,6 @@ export default async function EntryPage({
       {(sp.saved || sp.err) && (
         <div className={`rounded-xl px-4 py-2.5 text-sm font-semibold ring-1 ${sp.err ? "bg-red-50 text-red-800 ring-red-200" : "bg-emerald-50 text-emerald-800 ring-emerald-200"}`}>
           {sp.err ? `⚠️ ${sp.err}` : `✓ Recorded ${sp.saved}`}
-        </div>
-      )}
-
-      {rep && isDispo && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-700">Today&apos;s focus</div>
-            <div className="text-xs text-slate-400">Developer/luxury days score outreach, not the dialer.</div>
-          </div>
-          <div className="flex rounded-lg bg-slate-100 p-1">
-            {(["traditional", "developer"] as const).map((f) => (
-              <form key={f} action={setDayFocus}>
-                <input type="hidden" name="userId" value={rep.id} />
-                <input type="hidden" name="date" value={date} />
-                <input type="hidden" name="focus" value={f} />
-                <button className={`rounded-md px-3 py-1.5 text-sm font-semibold ${focus === f ? "bg-brand-navy text-white shadow" : "text-slate-500 hover:text-slate-700"}`}>
-                  {f === "traditional" ? "Traditional" : "Developer / luxury"}
-                </button>
-              </form>
-            ))}
-          </div>
         </div>
       )}
 
@@ -432,17 +401,6 @@ export default async function EntryPage({
             </details>
           )}
         </>
-      )}
-
-      {mutedKpis.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          {mutedKpis.map((k) => (
-            <div key={k.id} className="flex items-center justify-between text-sm text-slate-400">
-              <span>{k.emoji} {k.name}</span>
-              <span className="text-xs">not counted today · developer focus</span>
-            </div>
-          ))}
-        </div>
       )}
 
       {/* End-of-day reminder to upload calls for scoring */}
