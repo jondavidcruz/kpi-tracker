@@ -79,12 +79,26 @@ export async function createCrmLeadAction(formData: FormData) {
   if (!repPipe && michellePipe && owner !== contact.assignedTo) {
     await db.crmContact.update({ where: { id: contact.id }, data: { assignedTo: owner } }).catch(() => {});
   }
-  const opp = await db.crmOpportunity.create({ data: {
+  // 🔁 Don't spawn a duplicate CARD for a contact who already has an OPEN card for
+  // the same property — or when this entry has no real address yet. Repeated "New
+  // lead" submits + the revive-dead "undefined" import were making several cards for
+  // one person (Jon 2026-10-21). A genuinely different address still makes its own card.
+  const placeholderTitle = !title || title === "New opportunity" || /^undefined$/i.test(title);
+  const dupeOpp = existing
+    ? await db.crmOpportunity.findFirst({
+        where: { contactId: contact.id, archivedAt: null, stage: { notIn: ["dead", "signed"] },
+          ...(placeholderTitle ? {} : { title: { equals: title, mode: "insensitive" } }) },
+        orderBy: { updatedAt: "desc" },
+      }).catch(() => null)
+    : null;
+  const opp = dupeOpp ?? await db.crmOpportunity.create({ data: {
     contactId: contact.id, title, stage: landPipe?.stages[0]?.key ?? "new", pipeline: landPipe?.name ?? "",
     assignedTo: owner,
   } });
-  await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: existing
-    ? `Lead created — matched EXISTING contact "${existing.name}" by ${p10.length === 10 && (existing.phone.endsWith(p10) || existing.altPhone.endsWith(p10)) ? "phone" : "email"} (no duplicate card made${name && name.toLowerCase() !== existing.name.toLowerCase() ? `; entered as "${name}"` : ""})`
+  await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: dupeOpp
+    ? `Lead entry matched an existing open card${placeholderTitle ? " (no new address given)" : ` for ${title}`} — no duplicate card made`
+    : existing
+    ? `Lead created — matched EXISTING contact "${existing.name}" by ${p10.length === 10 && (existing.phone.endsWith(p10) || existing.altPhone.endsWith(p10)) ? "phone" : "email"} (no duplicate contact made${name && name.toLowerCase() !== existing.name.toLowerCase() ? `; entered as "${name}"` : ""})`
     : "Lead created", actor: me.name });
   // 📞 speed-to-lead: an immediate call task so a brand-new lead is worked now,
   // then ?newleadnudge keeps nudging every few hours until reached (Jon 2026-10-13)
