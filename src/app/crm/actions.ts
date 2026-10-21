@@ -1797,38 +1797,6 @@ async function cleanPinnedAgentBlock(oppId: string): Promise<void> {
   await db.crmContact.update({ where: { id: o.contactId }, data: { pinnedNote: cur.split(AGENT_NOTES_MARK)[0].trimEnd() } });
 }
 
-// 📊 Credit a dispo "Buyer Conversations" KPI when a rep actually works an agent/
-// developer — a logged touch or a saved note (Jon 2026-10-21: "track how many agents
-// they followed up with"). Deduped per rep per agent per day via a ledger Resource,
-// so touching + noting the same agent counts once. Only credits dispo reps.
-const FOLLOWUP_LEDGER = "__dispo_followups__";
-async function creditBuyerConversation(repName: string, oppId: string, entryId: string): Promise<void> {
-  if (!repName || !entryId) return;
-  const date = PT_TODAY();
-  const row = await db.resource.findFirst({ where: { category: FOLLOWUP_LEDGER } });
-  let list: { date: string; rep: string; oppId: string; entryId: string }[] = [];
-  try { list = row?.description ? JSON.parse(row.description) : []; } catch { list = []; }
-  const k = (x: { date: string; rep: string; entryId: string }) => `${x.date}|${x.rep.toLowerCase()}|${x.entryId}`;
-  const rec = { date, rep: repName, oppId, entryId };
-  if (!list.some((x) => k(x) === k(rec))) list.unshift(rec);
-  list = list.slice(0, 5000);
-  const description = JSON.stringify(list);
-  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
-  else await db.resource.create({ data: { title: "dispo-followups", category: FOLLOWUP_LEDGER, url: "", description } });
-
-  const user = await db.user.findFirst({ where: { name: { equals: repName, mode: "insensitive" } }, select: { id: true, position: true, name: true } });
-  if (!user) return;
-  const { secondaryPositionOf } = await import("@/lib/roles");
-  const isDispo = user.position === "dispositions" || secondaryPositionOf(user) === "dispositions";
-  if (!isDispo) return;
-  const kpi = await db.kpi.findFirst({ where: { key: "dev_conversations" }, select: { id: true } });
-  if (!kpi) return;
-  const value = new Set(list.filter((x) => x.date === date && x.rep.toLowerCase() === repName.toLowerCase()).map((x) => x.entryId)).size;
-  const existing = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: user.id, date } });
-  if (existing) { if (existing.enteredBy === "dispo") await db.entry.update({ where: { id: existing.id }, data: { value } }); }
-  else if (value > 0) await db.entry.create({ data: { kpiId: kpi.id, userId: user.id, date, value, enteredBy: "dispo" } });
-}
-
 async function mutateDispoBuyers(oppId: string, fn: (list: Record<string, unknown>[]) => Record<string, unknown>[]) {
   const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true, contactId: true } });
   if (!o) return null;
@@ -1872,14 +1840,12 @@ export async function updateDispoBuyerAction(formData: FormData) {
   if (!oppId || !entryId || !["stage", "price", "nextFollowUp", "notes", "phone", "email"].includes(field)) return;
   let entryName = "";
   const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => { if (r.id === entryId) entryName = String(r.name ?? ""); return r.id === entryId ? { ...r, [field]: value || undefined } : r; }));
-  // a saved note = working that agent → log it to the TIMELINE (a tracked highlight,
-  // not crammed into the pinned note) + credit a buyer conversation (Jon 2026-10-21).
+  // a saved note = working that agent → log it to the TIMELINE as a tracked highlight
+  // (not crammed into the pinned note). Buyer Conversations stays a MANUAL KPI (Jon
+  // 2026-10-21: auto-counting notes inflated it — 53 vs the real 7).
   if (field === "notes") {
     await cleanPinnedAgentBlock(oppId); // strip any old auto block left in the pinned note
-    if (value) {
-      if (o?.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "note", body: `📝 ${entryName || "Agent"}: ${value.slice(0, 500)}`, actor: me.name });
-      await creditBuyerConversation(me.name, oppId, entryId);
-    }
+    if (value && o?.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "note", body: `📝 ${entryName || "Agent"}: ${value.slice(0, 500)}`, actor: me.name });
   }
   revalidatePath(`/crm/${oppId}`);
 }
@@ -1899,8 +1865,6 @@ export async function logDispoBuyerTouchAction(formData: FormData) {
     return { ...r, lastContact: PT_TODAY(), nextFollowUp: ymdAdd(3), stage };
   }));
   if (o?.contactId && touchedName) await logCrmEvent({ contactId: o.contactId, oppId, kind: "call", body: `📞 Followed up with ${touchedName} (deal buyer tracker) — next touch ${ymdAdd(3)}`, actor: me.name });
-  // following up with an agent = a buyer conversation on the dispo scorecard.
-  await creditBuyerConversation(me.name, oppId, entryId);
   revalidatePath(`/crm/${oppId}`);
 }
 
