@@ -1860,6 +1860,40 @@ export async function attachNetworkBuyerToDeal(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+/** 🗺 Bulk-attach ONE network buyer/agent to EVERY deal in an area (Jon 2026-10-21):
+ *  an agent buying across many parcels + sellers in the same market gets attached to
+ *  all of them in one click, instead of opening each deal. Reuses the single-attach
+ *  rules (dedupe by buyerId, timeline note on both sides). */
+export async function bulkAttachNetworkBuyerToDealsAction(formData: FormData) {
+  const me = await crmUser();
+  const back = String(formData.get("back") ?? "/dispo?tab=deals&view=areas");
+  if (!me) redirect(back);
+  const networkOppId = String(formData.get("networkOppId") ?? "");
+  const oppIds = String(formData.get("oppIds") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!networkOppId || oppIds.length === 0) redirect(back);
+  const lead = await db.crmOpportunity.findUnique({ where: { id: networkOppId }, select: { pipeline: true, contactId: true, contact: { select: { name: true, phone: true, email: true } } } });
+  if (!lead) redirect(back);
+  const { DISPO_AGENT_PIPELINE } = await import("@/lib/dispo-buyers");
+  const kind = lead!.pipeline === DISPO_AGENT_PIPELINE ? "buyer_agent" : "developer";
+  const name = lead!.contact?.name || "buyer";
+  let attached = 0;
+  for (const oppId of oppIds) {
+    let added = false;
+    const o = await mutateDispoBuyers(oppId, (list) => {
+      if (list.some((r) => r.buyerId === networkOppId)) return list; // already on this deal
+      added = true;
+      return [...list, { id: `db_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name, kind, phone: lead!.contact?.phone || undefined, email: lead!.contact?.email || undefined, buyerId: networkOppId, stage: "to_contact", addedAt: PT_TODAY(), nextFollowUp: ymdAdd(1) }];
+    });
+    if (added) {
+      attached++;
+      if (o?.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "system", body: `🔗 Attached ${kind === "buyer_agent" ? "buyer agent" : "developer"} ${name} to this deal (area bulk-attach).`, actor: me.name });
+    }
+  }
+  if (attached && lead!.contactId) await logCrmEvent({ contactId: lead!.contactId, oppId: networkOppId, kind: "system", body: `🔗 Bulk-attached to ${attached} deal${attached === 1 ? "" : "s"} in one area.`, actor: me.name });
+  revalidatePath("/dispo");
+  redirect(`${back}${back.includes("?") ? "&" : "?"}bulk=${attached}`);
+}
+
 /** 📣 Toggle a per-deal marketing SOP checklist step (Jon 2026-10-20). */
 export async function toggleDispoMarketingAction(formData: FormData) {
   const me = await crmUser();

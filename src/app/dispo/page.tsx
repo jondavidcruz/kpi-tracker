@@ -12,18 +12,32 @@ import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban"
 import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv } from "@/app/actions";
-import { logDispoBuyerTouchAction } from "@/app/crm/actions";
+import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction } from "@/app/crm/actions";
 
 export const dynamic = "force-dynamic";
 
 type Tab = "deals" | "developers" | "agents" | "team" | "nextup";
 const PALETTE = ["bg-sky-100 text-sky-800", "bg-yellow-100 text-yellow-800", "bg-violet-100 text-violet-800", "bg-amber-100 text-amber-800", "bg-emerald-100 text-emerald-800", "bg-rose-100 text-rose-600", "bg-slate-200 text-slate-600"];
 
+// 🗺 Pull "City, ST" out of a canonical "Street, City, ST ZIP" address so we can
+// group deals by market. Street is parts[0], the state/zip tail is last; the city
+// is the first part after the street. Guards against street-only / junk rows.
+function cityState(addr?: string): { city: string; st: string } {
+  if (!addr) return { city: "", st: "" };
+  const parts = addr.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) return { city: "", st: "" };
+  const tail = parts[parts.length - 1];
+  const st = (tail.match(/\b([A-Z]{2})\b/) || [])[1] || "";
+  const c = parts[1];
+  const city = c && !/^\d/.test(c) && !/^[A-Z]{2}\b/.test(c) ? c : "";
+  return { city, st };
+}
+
 // 🎯 Dispositions CRM — dispo's buyer side, built with the SAME Kanban the team
 // already uses on the Seller CRM (Jon 2026-10-20: "make it look like what they
 // recognize"). Developers + Buyer Agents are their own pipelines here (not mixed
 // with sellers); the Deals tab tracks buyer follow-ups per deal.
-export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string }> }) {
+export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me) && !isManager(me)) {
     return (
@@ -38,6 +52,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const tab: Tab = sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" || sp.tab === "nextup" ? sp.tab : "deals";
   const listView = sp.view === "list";
+  const areasView = sp.view === "areas";
   const q = (sp.q ?? "").trim();
   const settings = await getSettings();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
@@ -93,6 +108,37 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     for (const b of readDispoBuyers(o.formData)) followCards.push({ oppId: o.id, entryId: b.id, name: b.name, kind: b.kind, phone: b.phone, email: b.email, price: b.price, stage: b.stage, nextFollowUp: b.nextFollowUp, lastContact: b.lastContact, dealAddr });
   }
   const dueToday = followCards.filter((c) => c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in").length;
+
+  // 🗺 Areas view — group THIS pipeline's deals by city so an agent/developer buying
+  // across many parcels + sellers in one market is visible together and attachable in
+  // one move (Jon 2026-10-21). Read-only grouping; no schema change.
+  type AreaGroup = { key: string; label: string; cards: CrmCard[]; dealIds: string[]; attached: { name: string; kind: string; count: number }[] };
+  let areaGroups: AreaGroup[] = [];
+  let buyerOptions: { id: string; label: string; group: string }[] = [];
+  if (tab === "deals" && areasView) {
+    const map = new Map<string, CrmCard[]>();
+    for (const c of dealCardsShown) {
+      const { city, st } = cityState(c.address);
+      const key = city ? `${city}|${st}` : "__none";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    const dealIdSet = new Set(dealCardsShown.map((c) => c.id));
+    const byDeal = new Map<string, FollowupCard[]>();
+    for (const f of followCards) { if (!dealIdSet.has(f.oppId)) continue; if (!byDeal.has(f.oppId)) byDeal.set(f.oppId, []); byDeal.get(f.oppId)!.push(f); }
+    areaGroups = [...map.entries()].map(([key, cards]) => {
+      const dealIds = cards.map((c) => c.id);
+      const counts = new Map<string, { name: string; kind: string; count: number }>();
+      for (const id of dealIds) for (const f of byDeal.get(id) ?? []) {
+        const k = `${f.name.toLowerCase()}|${f.kind}`;
+        const e = counts.get(k) ?? { name: f.name, kind: f.kind, count: 0 };
+        e.count++; counts.set(k, e);
+      }
+      return { key, label: key === "__none" ? "📍 No city on file" : key.replace("|", ", "), cards, dealIds, attached: [...counts.values()].sort((a, b) => b.count - a.count) };
+    }).sort((a, b) => (a.key === "__none" ? 1 : 0) - (b.key === "__none" ? 1 : 0) || b.cards.length - a.cards.length);
+    const opts = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: [DISPO_AGENT_PIPELINE, DISPO_DEV_PIPELINE] } }, select: { id: true, pipeline: true, contact: { select: { name: true } } }, orderBy: { updatedAt: "desc" } });
+    buyerOptions = opts.map((o) => ({ id: o.id, label: o.contact?.name || "(unnamed)", group: o.pipeline === DISPO_AGENT_PIPELINE ? "🧑‍💼 Buyer agents" : "🏗 Developers" }));
+  }
 
   // ⏭ Next Up — one prioritized list of who to follow up with next (Jon 2026-10-21,
   // like acquisitions' Next Up). Overdue first (most overdue on top), then due today,
@@ -251,21 +297,83 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
             <Card className="p-8 text-center text-slate-400">No dispo deal pipeline found. Create <b>DS: Sell Land Then Sign</b> in the CRM first.</Card>
           ) : (
             <>
+              {sp.bulk && /^\d+$/.test(sp.bulk) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">🔗 Attached to {sp.bulk} deal{sp.bulk === "1" ? "" : "s"} in this area. They now show in each deal&apos;s buyer tracker + 📞 Next Up.</div>}
               <Card className="flex flex-wrap items-center gap-2 p-3">
                 <form action="/dispo" method="get" className="flex min-w-[240px] flex-1 items-center gap-2">
                   <input type="hidden" name="tab" value="deals" />
                   {dealPl && <input type="hidden" name="dealpl" value={dealPl} />}
+                  {areasView && <input type="hidden" name="view" value="areas" />}
                   <input name="q" defaultValue={q} placeholder="🔎 Search deals — name, address, phone…" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
                   <button className="rounded-lg bg-brand-navy px-3 py-2 text-xs font-bold text-white">Search</button>
-                  {q && <Link href={`/dispo?tab=deals${dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : ""}`} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">clear</Link>}
+                  {q && <Link href={`/dispo?tab=deals${areasView ? "&view=areas" : ""}${dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : ""}`} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">clear</Link>}
                 </form>
+                <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
+                  <Link href={`/dispo?tab=deals${dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`px-3 py-1.5 text-xs font-bold ${!areasView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📊 Board</Link>
+                  <Link href={`/dispo?tab=deals&view=areas${dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`px-3 py-1.5 text-xs font-bold ${areasView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>🗺 Areas</Link>
+                </div>
                 <span className="text-[11px] font-semibold text-slate-400">{dealCardsShown.length} of {dealCards.length}</span>
               </Card>
-              <Card className="p-3">
-                <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
-                <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
-                <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={[dealPl]} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
-              </Card>
+              {!areasView ? (
+                <Card className="p-3">
+                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
+                  <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
+                  <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={[dealPl]} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
+                </Card>
+              ) : (
+                <>
+                  <Card className="border-l-4 border-emerald-400 p-4">
+                    <div className="text-sm font-extrabold text-slate-800">🗺 Deals by area — one market at a time</div>
+                    <p className="mt-0.5 text-[12px] text-slate-500">Every deal in <b>{dealPl}</b> grouped by city. When the same agent or developer is buying across a market (e.g. 22 parcels across 11 sellers in Cape Coral), attach them to <b>every</b> deal here in one click instead of opening each lead. The chips show who&apos;s already working the area and on how many deals.</p>
+                  </Card>
+                  {areaGroups.length === 0 ? (
+                    <Card className="p-8 text-center text-sm text-slate-400">No deals to group {q ? "for that search" : "yet"}.</Card>
+                  ) : areaGroups.map((g) => (
+                    <Card key={g.key} className="p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-extrabold text-slate-800">📍 {g.label} <span className="font-semibold text-slate-400">· {g.cards.length} deal{g.cards.length === 1 ? "" : "s"}</span></div>
+                        {g.attached.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {g.attached.map((a, i) => (
+                              <span key={i} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">{a.kind === "buyer_agent" ? "🧑‍💼" : "🏗"} {a.name} · {a.count}/{g.cards.length}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {/* 🔗 one move: attach a buyer/agent to EVERY deal in this market */}
+                      {buyerOptions.length > 0 && (
+                        <form action={bulkAttachNetworkBuyerToDealsAction} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-100">
+                          <input type="hidden" name="oppIds" value={g.dealIds.join(",")} />
+                          <input type="hidden" name="back" value={`/dispo?tab=deals&view=areas${dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : ""}`} />
+                          <span className="text-[11px] font-bold text-slate-500">🔗 Attach to all {g.cards.length} deal{g.cards.length === 1 ? "" : "s"}:</span>
+                          <select name="networkOppId" required defaultValue="" className="min-w-[200px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-semibold text-slate-700">
+                            <option value="" disabled>Pick a buyer / agent…</option>
+                            {["🧑‍💼 Buyer agents", "🏗 Developers"].map((gr) => {
+                              const items = buyerOptions.filter((b) => b.group === gr);
+                              return items.length ? <optgroup key={gr} label={gr}>{items.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</optgroup> : null;
+                            })}
+                          </select>
+                          <button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-emerald-700">Attach to area →</button>
+                        </form>
+                      )}
+                      <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+                        {g.cards.map((c) => (
+                          <Link key={c.id} href={`/crm/${c.id}`} className="block rounded-lg bg-white px-2.5 py-2 ring-1 ring-slate-200 hover:bg-slate-50">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-[13px] font-bold text-slate-800">{c.contactName}</span>
+                              <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{dealColumns.find((s) => s.key === c.stage)?.label ?? c.stage}</span>
+                            </div>
+                            {c.address && <div className="mt-0.5 truncate text-[11px] text-slate-500">📍 {c.address}</div>}
+                            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-400">
+                              {c.money && <span className="font-bold text-emerald-600">{c.money}</span>}
+                              {c.phone && <span>{c.phone}</span>}
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    </Card>
+                  ))}
+                </>
+              )}
             </>
           )}
 
