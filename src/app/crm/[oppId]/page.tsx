@@ -5,11 +5,11 @@ import { getCurrentUser, isManager, canManageAllLeads, canAccessMarketing } from
 import { getBuyerMatchesForLead } from "@/lib/buyer-match-lead";
 import SendToBuyersButton from "@/components/SendToBuyersButton";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
-import { readDispoBuyers, isDispoDealPipeline } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } from "@/lib/dispo-buyers";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
 import { stripHtml } from "@/lib/crm-shared";
-import { CRM_FORMS } from "@/lib/crm-forms";
+import { CRM_FORMS, DISPO_DEV_FORMS, DISPO_AGENT_FORMS } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import DraftOfferButton from "@/components/DraftOfferButton";
@@ -543,7 +543,12 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               // 🏞 Land Details form shows only on the land-selling pipeline (Jon
               // 2026-10-20: "remove land details from all other pipelines").
               const isLandOpp = /\bland\b/i.test(opp.pipeline || "");
-              return CRM_FORMS.filter((form) => form.key !== "land" || isLandOpp).map((form) => {
+              // 🏗/🧑‍💼 Buyer-network leads (developers / buyer agents) are NOT sellers —
+              // show their buy-box / agent form instead of the seller discovery (Jon 2026-10-20).
+              const formsForOpp = opp.pipeline === DISPO_DEV_PIPELINE ? DISPO_DEV_FORMS
+                : opp.pipeline === DISPO_AGENT_PIPELINE ? DISPO_AGENT_FORMS
+                : CRM_FORMS.filter((form) => form.key !== "land" || isLandOpp);
+              return formsForOpp.map((form) => {
                 const answers = fd[form.key] ?? {};
                 const count = Object.keys(answers).length;
                 return (

@@ -86,3 +86,38 @@ export const CRM_FORMS: CrmForm[] = [
     ],
   },
 ];
+
+// 🏗/🧑‍💼 Dispo buyer-NETWORK forms (Jon 2026-10-20). Developers + buyer agents are
+// NOT sellers — their lead cards ask buy-box / relationship questions, never the
+// seller discovery above. Answers save to the opp's formData like any CRM form.
+export const DISPO_DEV_FORM: CrmForm = {
+  key: "dev_buybox", name: "Developer Buy-Box", emoji: "🏗",
+  fields: [
+    { key: "relationship", label: "Relationship status", type: "select", options: ["New — not contacted", "Researching them", "Reached out", "Following up", "Vetted — good buyer", "Not a fit"] },
+    { key: "buyCounties", label: "Counties / areas they buy", type: "textarea", hint: "The goldmine — where do they actually buy? One per line." },
+    { key: "landTypes", label: "What land do they buy?", type: "checks", options: ["Infill lots", "Acreage / rural", "Subdividable", "Entitled / paper lots", "Teardown", "Waterfront", "Agricultural", "Recreational"] },
+    { key: "lotSize", label: "Lot size range (acres)", type: "text", hint: "e.g. 0.25–5 ac" },
+    { key: "priceRange", label: "Price range per deal $", type: "text", hint: "e.g. $50k–$500k" },
+    { key: "closeSpeed", label: "How fast can they close?", type: "select", options: ["Cash — under 14 days", "15–30 days", "30–60 days", "Needs financing / longer"] },
+    { key: "volume", label: "Deals / lots per year", type: "text" },
+    { key: "requirements", label: "Utilities / zoning requirements", type: "text" },
+    { key: "dealBreakers", label: "Deal breakers", type: "textarea", hint: "wetlands, no access, power lines…" },
+    { key: "decisionMaker", label: "Who's the decision maker?", type: "text" },
+    { key: "proofOfFunds", label: "Proof of funds?", type: "select", options: ["Yes — verified", "Claimed, not verified", "No / unknown"] },
+  ],
+};
+export const DISPO_AGENT_FORM: CrmForm = {
+  key: "agent_profile", name: "Buyer-Agent Profile", emoji: "🧑‍💼",
+  fields: [
+    { key: "relationship", label: "Relationship status", type: "select", options: ["New — not contacted", "Reached out", "Following up", "Active partner", "Not a fit"] },
+    { key: "brokerage", label: "Brokerage / company", type: "text" },
+    { key: "areas", label: "Areas they cover", type: "textarea", hint: "Counties / cities they list + sell in" },
+    { key: "buyerTypes", label: "Buyers they represent", type: "text", hint: "builders, developers, investors, funds…" },
+    { key: "priceRange", label: "Price range their buyers want $", type: "text" },
+    { key: "bestContact", label: "Best way to reach them", type: "select", options: ["Call", "Text", "Email"] },
+    { key: "sendsDeals", label: "Will they bring buyers to our deals?", type: "select", options: ["Yes — actively", "Maybe", "Not yet"] },
+    { key: "notes", label: "Notes", type: "textarea" },
+  ],
+};
+export const DISPO_DEV_FORMS: CrmForm[] = [DISPO_DEV_FORM];
+export const DISPO_AGENT_FORMS: CrmForm[] = [DISPO_AGENT_FORM];

@@ -5,8 +5,9 @@ import { getSettings } from "@/lib/data";
 import { readPipelines } from "@/lib/crm";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
-import { readDispoBuyers, isDispoDealPipeline, DISPO_BUYER_STAGES, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline, DISPO_BUYER_STAGES, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
 import DispoFollowupKanban, { type FollowupCard } from "@/components/DispoFollowupKanban";
+import BuyerNetworkBoard, { type NetworkLead } from "@/components/BuyerNetworkBoard";
 import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv } from "@/app/actions";
 
@@ -60,25 +61,33 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     { key: "agents", label: "🧑‍💼 Buyer agents", n: agentCount },
   ];
 
+  // Network leads for the active list tab (developers / agents) — the real CRM.
+  let networkLeads: NetworkLead[] = [];
+  let networkStages: { key: string; label: string }[] = [];
+  if (tab === "developers" || tab === "agents") {
+    const pipeline = tab === "developers" ? DISPO_DEV_PIPELINE : DISPO_AGENT_PIPELINE;
+    networkStages = DISPO_NETWORK_PIPELINES.find((p) => p.name === pipeline)?.stages ?? [];
+    const leadOpps = await db.crmOpportunity.findMany({
+      where: { archivedAt: null, pipeline },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, title: true, stage: true, updatedAt: true, formData: true, contact: { select: { name: true, phone: true, email: true, pinnedNote: true } } },
+    });
+    networkLeads = leadOpps.map((o) => {
+      const imp = ((o.formData ?? {}) as { __import?: { market?: string; buyBox?: string; type?: string } }).__import ?? {};
+      return { id: o.id, name: o.contact?.name || o.title, phone: o.contact?.phone || undefined, email: o.contact?.email || undefined, area: imp.market || undefined, buyBox: imp.buyBox || o.contact?.pinnedNote || undefined, priceBand: undefined, stage: o.stage || "new", updatedAt: o.updatedAt.toISOString() };
+    });
+  }
   const importHref = (t: Tab) => `/dispo?tab=${t}`;
   const networkTab = (kind: "developers" | "agents") => {
-    const pipeline = kind === "developers" ? DISPO_DEV_PIPELINE : DISPO_AGENT_PIPELINE;
     const n = kind === "developers" ? devCount : agentCount;
-    const boardHref = `/crm?pl=${encodeURIComponent(pipeline)}`;
     return (
       <>
-        <Card className="flex flex-wrap items-center gap-3 p-4">
-          <div>
-            <div className="text-sm font-extrabold text-slate-800">{kind === "developers" ? "🏗 Unvetted Developers" : "🧑‍💼 Buyer Agents"} — {n} lead{n === 1 ? "" : "s"}</div>
-            <div className="text-[12px] text-slate-500">Each is a full CRM lead — a card with notes you can drag between stages, same as the Acquisitions CRM.</div>
-          </div>
-          <Link href={boardHref} className="ml-auto rounded-lg bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:bg-brand-navy-700">Open the board →</Link>
-        </Card>
-        <details className="rounded-2xl bg-white p-4 ring-1 ring-slate-200" open={n === 0}>
-          <summary className="cursor-pointer text-sm font-bold text-slate-700">📥 Import the Excel list <span className="font-normal text-slate-400">— developers + buyer agents, auto-split by Type, duplicates skipped</span></summary>
-          <p className="mt-2 mb-3 text-xs text-slate-500">Upload the <b>unvetted-developers-backfill.csv</b> I sent you. Each row becomes a CRM lead card (with its notes) in the right pipeline — developers here, buyer agents in the Buyer Agents tab. Re-uploading is safe.</p>
+        <details className="rounded-2xl bg-white p-3 ring-1 ring-slate-200" open={n === 0}>
+          <summary className="cursor-pointer text-[13px] font-bold text-slate-700">📥 Import the Excel list <span className="font-normal text-slate-400">— auto-split by Type, duplicates skipped</span></summary>
+          <p className="mt-2 mb-3 text-xs text-slate-500">Upload the <b>unvetted-developers-backfill.csv</b>. Each row becomes a CRM lead with its notes; developers + buyer agents split into their tabs. Re-uploading is safe.</p>
           <CsvMapImport action={importDispoNetworkCsv} returnTo={importHref(kind)} />
         </details>
+        <BuyerNetworkBoard leads={networkLeads} stages={networkStages} kindLabel={kind === "developers" ? "developers" : "buyer agents"} />
       </>
     );
   };

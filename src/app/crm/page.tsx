@@ -58,7 +58,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // Scale plan (35k+ leads): the board never loads everything — true counts
   // come from an indexed groupBy, each column renders its freshest 60, and
   // the List view paginates. Payload stays ~constant no matter the lead count.
-  const pipelines = await readPipelines();
+  // Seller CRM excludes the dispo buyer-NETWORK pipelines (developers / buyer
+  // agents) — those live in their own Dispo CRM (/dispo), not attached to sellers.
+  const { isDispoNetworkPipeline } = await import("@/lib/dispo-buyers");
+  const pipelines = (await readPipelines()).filter((p) => !isDispoNetworkPipeline(p.name));
   // Lead counts per pipeline (also powers the tab badges). Default tab =
   // the busiest pipeline, so the board never opens on an empty view.
   const plGroup = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null }, _count: { _all: true } });

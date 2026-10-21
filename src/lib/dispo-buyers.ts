@@ -85,6 +85,13 @@ export function isDispoDealPipeline(name: string | null | undefined): boolean {
 // the Acquisitions CRM (Jon 2026-10-20).
 export const DISPO_DEV_PIPELINE = "DS: Unvetted Developers";
 export const DISPO_AGENT_PIPELINE = "DS: Buyer Agents";
+
+/** The buyer-NETWORK pipelines (developers / agents) — these live in the Dispo CRM,
+ *  NOT in the seller CRM selector (Jon 2026-10-20: keep them off the sellers). */
+export function isDispoNetworkPipeline(name: string | null | undefined): boolean {
+  const n = (name ?? "").toLowerCase();
+  return n === DISPO_DEV_PIPELINE.toLowerCase() || n === DISPO_AGENT_PIPELINE.toLowerCase();
+}
 export const DISPO_NETWORK_PIPELINES: { name: string; stages: { key: string; label: string }[] }[] = [
   { name: DISPO_DEV_PIPELINE, stages: [
     { key: "new", label: "🆕 New / to research" },
