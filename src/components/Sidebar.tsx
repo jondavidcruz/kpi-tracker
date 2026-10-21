@@ -35,6 +35,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/report": "kpi history reports past dates calendar",
   "/entry": "enter kpis log numbers bulk lead import",
   "/deals": "pipeline dispositions",
+  "/dispo": "dispositions crm kanban follow-ups follow up buyer agents developers board sell land then sign",
   "/reduction": "price reduction seller negotiate script calculator dom offers",
   "/call-scoring": "call recording transcript coaching score",
   "/email-health": "email health bounce rate deliverability opens clicks resend direct rei campaigns domain reputation",
@@ -103,6 +104,7 @@ export default function Sidebar({
       { href: "/reduction", label: "Reduction Play", Icon: TrendingUp },
     ] },
     { label: "Dispositions", items: [
+      { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOnly: true },
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/crm/dealboard", label: "Deal Board", Icon: Presentation },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
