@@ -1983,6 +1983,36 @@ export async function bulkAttachNetworkBuyerToDealsAction(formData: FormData) {
   redirect(`${back}${back.includes("?") ? "&" : "?"}bulk=${attached}`);
 }
 
+/** 📦 Save the structured parcel list on a land deal (Jon 2026-10-21): one deal,
+ *  many parcels — captured cleanly instead of cramming the address field. The first
+ *  parcel becomes the headline address/APN so cards stay tidy. No schema migration. */
+export async function saveLandParcelsAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  if (!oppId) return;
+  let parcels: { address?: string; apn?: string }[] = [];
+  try { const j = JSON.parse(String(formData.get("parcels") ?? "[]")); if (Array.isArray(j)) parcels = j; } catch { parcels = []; }
+  const { normalizeAddress } = await import("@/lib/address");
+  const cleaned = parcels
+    .map((p) => ({ address: normalizeAddress(String(p.address ?? "").trim()) || String(p.address ?? "").trim(), apn: String(p.apn ?? "").trim() || undefined }))
+    .filter((p) => p.address || p.apn)
+    .slice(0, 50);
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { contactId: true, formData: true } });
+  if (!o) return;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  const land = (fd.land ?? {}) as Record<string, unknown>;
+  const property = (fd.property ?? {}) as Record<string, unknown>;
+  const first = cleaned[0];
+  await db.crmOpportunity.update({ where: { id: oppId }, data: {
+    formData: { ...fd, land: { ...land, parcels: cleaned }, property: { ...property, apn: first?.apn ?? (property.apn ?? "") } } as never,
+    ...(first?.address ? { title: first.address } : {}),
+  } });
+  if (first?.address && o.contactId) await db.crmContact.update({ where: { id: o.contactId }, data: { address: first.address } }).catch(() => {});
+  if (o.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "system", body: `📦 Parcels updated — ${cleaned.length} parcel${cleaned.length === 1 ? "" : "s"} on this deal`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
 /** 📣 Toggle a per-deal marketing SOP checklist step (Jon 2026-10-20). */
 export async function toggleDispoMarketingAction(formData: FormData) {
   const me = await crmUser();

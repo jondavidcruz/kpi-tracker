@@ -11,7 +11,8 @@ import { readDispoBuyers, isDispoDealPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_P
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
-import { stripHtml, stripAgentNotesBlock } from "@/lib/crm-shared";
+import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels } from "@/lib/crm-shared";
+import ParcelsPanel from "@/components/ParcelsPanel";
 import { formsForPipeline } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
@@ -215,6 +216,15 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 <div className="flex flex-wrap gap-1 pt-1">{parseTags(c.tags).map((t) => <span key={t} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-600">#{t}</span>)}</div>
               )}
             </div>
+            {/* 📦 Parcels on THIS deal (one card, many parcels) — shows for land deals
+                with an APN or more than one address (Jon 2026-10-21). */}
+            {(() => {
+              const parcels = readParcels(opp.formData);
+              const crammedApn = ((opp.formData as { property?: { apn?: string } } | null)?.property?.apn) ?? "";
+              const show = parcels.length > 0 || splitCrammedParcels(c.address, crammedApn).length > 0;
+              return show ? <div className="mt-3"><ParcelsPanel oppId={opp.id} parcels={parcels} crammedAddress={c.address} crammedApn={crammedApn} /></div> : null;
+            })()}
+
             {/* multi-opportunity */}
             <div className="mt-3 border-t border-slate-100 pt-2">
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🔗 All opportunities for {c.name.split(" ")[0]} ({siblingOpps.length}) — each is its own card with its own notes</div>

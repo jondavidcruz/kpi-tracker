@@ -13,6 +13,34 @@ export function stripAgentNotesBlock(note?: string | null): string {
   return note.split(AGENT_NOTES_MARK)[0].trimEnd();
 }
 
+// 📦 Multi-parcel land deals (Jon 2026-10-21): one seller / one deal can own several
+// parcels. Capture them as a structured list on the opp (formData.land.parcels) —
+// NOT crammed into the address field, and NOT split into separate cards.
+export type Parcel = { address: string; apn?: string };
+export function readParcels(formData: unknown): Parcel[] {
+  const raw = (formData as { land?: { parcels?: unknown } } | null)?.land?.parcels;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((p): p is Parcel => !!p && typeof p === "object" && typeof (p as Parcel).address === "string")
+    .map((p) => ({ address: String(p.address).trim(), apn: p.apn ? String(p.apn).trim() : undefined }))
+    .filter((p) => p.address || p.apn);
+}
+/** Split the legacy crammed fields ("addr | addr | addr" + "apn & apn") into parcels. */
+export function splitCrammedParcels(address?: string | null, apn?: string | null): Parcel[] {
+  const addrs = (address || "").split(/\s*\|\s*/).map((s) => s.trim()).filter(Boolean);
+  const apns = (apn || "").split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean);
+  const n = Math.max(addrs.length, apns.length);
+  if (n <= 1) return [];
+  const out: Parcel[] = [];
+  for (let i = 0; i < n; i++) out.push({ address: addrs[i] || "", apn: apns[i] || undefined });
+  return out.filter((p) => p.address || p.apn);
+}
+/** How many parcels this deal has (structured list, else detected from crammed fields). */
+export function parcelCount(formData: unknown, address?: string | null, apn?: string | null): number {
+  const p = readParcels(formData);
+  return p.length || splitCrammedParcels(address, apn).length;
+}
+
 // Built around Jon's land SOP — including the 24–48h developer-pricing stage.
 export const CRM_STAGES: CrmStage[] = [
   { key: "new", label: "New Lead", cls: "bg-sky-100 text-sky-800" },

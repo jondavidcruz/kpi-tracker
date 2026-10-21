@@ -14,7 +14,7 @@ import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv } from "@/app/actions";
 import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
-import { stripAgentNotesBlock } from "@/lib/crm-shared";
+import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +99,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
+    parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
   }));
   // 🔎 search the deal board (name / address / phone) — parity with the Seller CRM.
   const dealCardsShown = q ? dealCards.filter((c) => `${c.contactName} ${c.address ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(q.toLowerCase())) : dealCards;
