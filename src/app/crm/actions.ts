@@ -2145,6 +2145,29 @@ export async function removeDispoOfferAction(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+/** 🤝 Hand the best buyer offer back to the seller side: record the suggested
+ *  seller offer (best buyer offer − our spread), and create a task for the lead's
+ *  owner to present it — so dispo's offers turn into a seller counter, fast
+ *  (Jon 2026-10-24). */
+export async function handBestOfferToSellerAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const n = (k: string) => { const s = String(formData.get(k) ?? "").replace(/[$,\s]/g, ""); return s ? Number(s) || 0 : 0; };
+  const best = n("best"), sellerOffer = n("sellerOffer"), spread = best - sellerOffer;
+  const buyer = String(formData.get("buyer") ?? "").trim();
+  if (!oppId || !best || !sellerOffer) return;
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { contactId: true, assignedTo: true, contact: { select: { name: true, address: true } } } });
+  if (!opp) return;
+  const addr = opp.contact?.address || opp.contact?.name || "the deal";
+  const roi = sellerOffer > 0 ? Math.round((spread / sellerOffer) * 100) : 0;
+  const money = (x: number) => `$${Math.round(x).toLocaleString()}`;
+  const body = `🤝 Best offer handed to seller side: buyer${buyer ? ` ${buyer}` : ""} at ${money(best)} → present ${money(sellerOffer)} to the seller (our spread ${money(spread)}, ${roi}% ROI).`;
+  if (opp.contactId) await logCrmEvent({ contactId: opp.contactId, oppId, kind: "system", body, actor: me.name });
+  await db.crmTask.create({ data: { oppId, contactId: opp.contactId, title: `🤝 Present ${money(sellerOffer)} to the seller on ${addr} — best buyer offer ${money(best)} (spread ${money(spread)})`, due: PT_TODAY(), assignedTo: opp.assignedTo || me.name, createdBy: "best-offer" } }).catch(() => {});
+  revalidatePath(`/crm/${oppId}`);
+}
+
 /** 🔗 Attach a Buyer-Network lead (developer / buyer agent CrmOpportunity) to a
  *  DEAL (Jon 2026-10-20) — the integration: the deal's follow-up tracker now
  *  points at the real network lead (buyerId = its opp id), and the network lead

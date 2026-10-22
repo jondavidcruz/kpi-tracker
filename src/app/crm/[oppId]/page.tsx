@@ -605,7 +605,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             const si = stages.findIndex((s) => s.key === opp.stage);
             const mi = stages.findIndex((s) => /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.label) || /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.key));
             const pastCascade = si >= 0 && mi >= 0 && si >= mi;
-            return <DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} />;
+            return <DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} askPrice={opp.askPrice ?? null} />;
           })()}
 
           {comms.email && c.email && (

@@ -6,13 +6,24 @@
 // deal with <3 offers shows a red "keep working" flag.
 import { useState } from "react";
 import Link from "next/link";
-import { addDispoOfferAction, updateDispoOfferAction, removeDispoOfferAction } from "@/app/crm/actions";
+import { addDispoOfferAction, updateDispoOfferAction, removeDispoOfferAction, handBestOfferToSellerAction } from "@/app/crm/actions";
 import { OFFER_GOAL, OFFER_STATUSES, offerStatusMeta, offerStats, parseMoney, fmtMoney, type DispoOffer } from "@/lib/dispo-offers";
 
-export default function DispoOffersPanel({ oppId, offers, buyerNames = [], pastCascade = false }: { oppId: string; offers: DispoOffer[]; buyerNames?: string[]; pastCascade?: boolean }) {
+export default function DispoOffersPanel({ oppId, offers, buyerNames = [], pastCascade = false, askPrice = null }: { oppId: string; offers: DispoOffer[]; buyerNames?: string[]; pastCascade?: boolean; askPrice?: number | null }) {
   const [adding, setAdding] = useState(false);
   const st = offerStats(offers);
   const behind = pastCascade && !st.met;
+  // 🤝 Best-offer → seller handoff (Jon 2026-10-24): offer the seller BELOW the best
+  // buyer offer so we keep a spread. Default target spread ~20% of the best offer;
+  // if we know the seller's asking, cap the offer at it (never offer MORE than asked).
+  const best = st.best ?? 0;
+  const defaultSpread = best > 0 ? Math.max(5000, Math.round((best * 0.2) / 500) * 500) : 0;
+  const [spreadStr, setSpreadStr] = useState("");
+  const spread = spreadStr.trim() ? Math.max(0, parseMoney(spreadStr) ?? 0) : defaultSpread;
+  const uncapped = Math.max(0, best - spread);
+  const sellerOffer = askPrice != null && askPrice > 0 ? Math.min(askPrice, uncapped) : uncapped;
+  const realSpread = best - sellerOffer;
+  const roi = sellerOffer > 0 ? Math.round((realSpread / sellerOffer) * 100) : 0;
 
   return (
     <div className={`rounded-xl bg-white p-3 ring-1 ${behind ? "ring-red-200" : "ring-slate-200"}`}>
@@ -31,6 +42,32 @@ export default function DispoOffersPanel({ oppId, offers, buyerNames = [], pastC
       {behind && (
         <div className="mb-2 rounded-lg bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-200">
           🚩 This deal is out but has {st.live === 0 ? "no offers" : `only ${st.live} offer${st.live === 1 ? "" : "s"}`} — goal is {OFFER_GOAL}. Keep chasing buyers until we hit 3.
+        </div>
+      )}
+
+      {/* 🤝 Best offer → seller: what to offer the seller to keep a spread */}
+      {best > 0 && (
+        <div className="mb-2 rounded-lg bg-indigo-50 p-2 ring-1 ring-indigo-200">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+            <span className="font-extrabold text-indigo-900">🤝 Hand best offer to the seller</span>
+            <span className="text-slate-500">best buyer offer <b className="text-emerald-700">{fmtMoney(best)}</b>{st.bestBuyer ? ` (${st.bestBuyer})` : ""}</span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="text-slate-500">Target spread</span>
+            <input value={spreadStr} onChange={(e) => setSpreadStr(e.target.value)} placeholder={fmtMoney(defaultSpread)} className="w-20 rounded border border-indigo-200 px-1 py-0.5 text-[11px] font-bold" />
+            <span className="text-slate-400">→ offer the seller</span>
+            <span className="rounded-md bg-white px-1.5 py-0.5 text-[12px] font-extrabold text-indigo-800 ring-1 ring-indigo-200">{fmtMoney(sellerOffer)}</span>
+            <span className="font-bold text-emerald-700">= {fmtMoney(realSpread)} spread ({roi}% ROI)</span>
+          </div>
+          <div className="mt-0.5 text-[10px] text-slate-400">
+            {askPrice != null && askPrice > 0
+              ? <>Seller asked {fmtMoney(askPrice)} — offer is capped at their ask so you never overpay.</>
+              : <>No seller asking price on file — this is best offer − spread. Confirm it&apos;s a number they&apos;d take.</>}
+          </div>
+          <form action={handBestOfferToSellerAction} className="mt-1.5">
+            <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="best" value={best} /><input type="hidden" name="sellerOffer" value={sellerOffer} /><input type="hidden" name="buyer" value={st.bestBuyer} />
+            <button className="rounded-lg bg-indigo-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-indigo-700" title="Log the suggested seller offer + create a task to present it">🤝 Hand to seller side ({fmtMoney(sellerOffer)})</button>
+          </form>
         </div>
       )}
 
