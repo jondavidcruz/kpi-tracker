@@ -32,6 +32,7 @@ export type CrmCard = {
   nextAppt?: string;      // next upcoming (after today) appointment ISO — red chip
   leadType?: { label: string; cls: string }; // 🏷 seller / land seller / buyer agent / developer — top-right
   parcels?: number; // 📦 how many parcels on this deal (>1 shows a badge)
+  gate?: { cleared: boolean; label: string }; // 🚦 Option B — this stage's SOP gate status
 };
 // 🎨 GHL-style age coloring (Jon 2026-10-08): customizable ranges + colors,
 // saved per device. Days since last stage activity (updatedAt).
@@ -321,6 +322,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       {/* name → FULL card page; anywhere else on the card → quick view */}
                       <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{titleCase(c.contactName)}</a>
                       <div className="flex shrink-0 items-center gap-1">
+                        {c.gate && <span title={`SOP gate — ${c.gate.label}: ${c.gate.cleared ? "cleared, clear to advance" : "held, advance locked"}`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.gate.cleared ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-red-100 text-red-700 ring-red-200"}`}>{c.gate.cleared ? "✓ gate" : "🔒 gate"}</span>}
                         {!!c.parcels && c.parcels > 1 && <span title={`${c.parcels} parcels on this deal`} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 ring-1 ring-amber-200">📦 {c.parcels}</span>}
                         {c.leadType && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.leadType.cls}`}>{c.leadType.label}</span>}
                         {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}

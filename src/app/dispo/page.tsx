@@ -15,6 +15,7 @@ import { importDispoNetworkCsv } from "@/app/actions";
 import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
+import { gateForCurrentStage, gateCleared, readDealType, readGateChecks, defaultDealType } from "@/lib/dispo-gates";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
+    gate: (() => {
+      const gt = gateForCurrentStage(readDealType(o.formData) || defaultDealType(o.pipeline, o.tags), dealColumns.map((s) => ({ key: s.key, label: s.label })), o.stage);
+      return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData)), label: gt.label } : undefined;
+    })(),
   }));
   // 🔎 search the deal board (name / address / phone) — parity with the Seller CRM.
   const dealCardsShown = q ? dealCards.filter((c) => `${c.contactName} ${c.address ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(q.toLowerCase())) : dealCards;

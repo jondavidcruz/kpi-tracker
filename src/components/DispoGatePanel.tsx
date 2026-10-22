@@ -7,8 +7,8 @@ import { useState, useTransition } from "react";
 import { DEAL_TYPES, GATE_PATHS, forwardStages, gateCleared, type DealType, type Stage } from "@/lib/dispo-gates";
 import { setDispoDealTypeAction, toggleDispoGateAction, setOppStageAction } from "@/app/crm/actions";
 
-export default function DispoGatePanel({ oppId, currentStage, stages, dealType, checks }: {
-  oppId: string; currentStage: string; stages: Stage[]; dealType: DealType; checks: Record<string, boolean[]>;
+export default function DispoGatePanel({ oppId, currentStage, stages, dealType, checks, onChanged }: {
+  oppId: string; currentStage: string; stages: Stage[]; dealType: DealType; checks: Record<string, boolean[]>; onChanged?: () => void;
 }) {
   const [, start] = useTransition();
   const [type, setType] = useState<DealType>(dealType);
@@ -24,7 +24,7 @@ export default function DispoGatePanel({ oppId, currentStage, stages, dealType, 
   const pickType = (t: DealType) => {
     setType(t);
     const fd = new FormData(); fd.set("oppId", oppId); fd.set("type", t);
-    start(() => { setDispoDealTypeAction(fd); });
+    start(async () => { await setDispoDealTypeAction(fd); onChanged?.(); });
   };
   const toggle = (gk: string, i: number, val: boolean) => {
     setLocal((prev) => { const arr = [...(prev[gk] ?? [])]; while (arr.length <= i) arr.push(false); arr[i] = val; return { ...prev, [gk]: arr }; });
@@ -34,7 +34,7 @@ export default function DispoGatePanel({ oppId, currentStage, stages, dealType, 
   const advance = () => {
     if (!nextStage || !cleared) return;
     const fd = new FormData(); fd.set("id", oppId); fd.set("stage", nextStage.key);
-    start(() => { setOppStageAction(fd); });
+    start(async () => { await setOppStageAction(fd); onChanged?.(); });
   };
 
   return (

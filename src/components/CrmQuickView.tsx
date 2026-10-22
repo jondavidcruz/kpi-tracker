@@ -10,6 +10,9 @@ import {
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
 } from "@/app/crm/actions";
 import { KIND_EMOJI, stripAgentNotesBlock } from "@/lib/crm-shared";
+import DispoGatePanel from "@/components/DispoGatePanel";
+import { isDispoDealPipeline } from "@/lib/dispo-buyers";
+import { readDealType, defaultDealType, readGateChecks } from "@/lib/dispo-gates";
 import { formatAddress } from "@/lib/address";
 import { formsForPipeline } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
@@ -152,6 +155,13 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                 );
               })}
             </div>
+
+            {/* 🚦 Option B — SOP gate for dispo deals; advance is locked until it clears (Jon 2026-10-21) */}
+            {isDispoDealPipeline(d.pipeline) && pipelineStages?.[d.pipeline] && (
+              <div className="border-b border-slate-100 px-5 py-3">
+                <DispoGatePanel oppId={d.id} currentStage={d.stage} stages={pipelineStages[d.pipeline]} dealType={readDealType(d.formData) || defaultDealType(d.pipeline, d.tags)} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} />
+              </div>
+            )}
 
             <div className="flex min-h-0 flex-1">
               {/* left section nav, GHL-style — collapsible to an icon rail (Jon
