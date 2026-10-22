@@ -119,11 +119,20 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   }
   const dueToday = followCards.filter((c) => c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in").length;
 
-  // 🚨 "Not out yet" — active deals with ZERO buyers attached = not going to any
-  // agent/developer. The biggest leak (Jon 2026-10-21). One click arms the cascade.
+  // 🚨 "Not out yet" — deals that haven't reached the marketing stage AND have no
+  // buyers attached = genuinely not pushed to anyone (Jon 2026-10-21). A deal already
+  // at "Sent to Agents/On Market" HAS been sent (the stage says so) — don't flag it
+  // just because its buyers aren't tracked in our new tracker yet.
   const dealsWithBuyers = new Set(followCards.map((f) => f.oppId));
+  const marketIdx = dealColumns.findIndex((s) => /sent to agent|on market|marketing|\bjvp\b/i.test(s.label) || /sent to agent|on market|marketing|\bjvp\b/i.test(s.key));
   const notOutDeals = tab === "deals"
-    ? dealCardsShown.filter((c) => !dealsWithBuyers.has(c.id) && !/nurtur|no buyer interest|\bdead\b|overpric|died/i.test(dealColumns.find((s) => s.key === c.stage)?.label || ""))
+    ? dealCardsShown.filter((c) => {
+        if (dealsWithBuyers.has(c.id)) return false;
+        const si = dealColumns.findIndex((s) => s.key === c.stage);
+        if (si < 0) return false;
+        if (/nurtur|no buyer interest|\bdead\b|overpric|died/i.test(dealColumns[si].label)) return false;
+        return marketIdx < 0 ? true : si < marketIdx; // only PRE-marketing stages
+      })
     : [];
 
   // 📊 Accountability scoreboard (Jon 2026-10-21) — today's outreach on dispo deals,
@@ -388,33 +397,35 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                 <span className="text-[11px] font-semibold text-slate-400">{dealCardsShown.length} of {dealCards.length}</span>
               </Card>
 
-              {/* 🚨 Not out yet — deals with no buyers attached; one click arms the cascade */}
-              {!areasView && notOutDeals.length > 0 && (
-                <Card className="border-l-4 border-red-400 p-3">
-                  <div className="mb-1.5 text-sm font-extrabold text-red-800">🚨 {notOutDeals.length} deal{notOutDeals.length === 1 ? "" : "s"} not out yet — no buyers attached</div>
-                  <p className="mb-2 text-[11px] text-slate-500">These aren&apos;t going to any agent or developer. Hit <b>⚡ Run cascade</b> to attach the top matched buyers, then work the follow-ups.</p>
-                  <div className="space-y-1">
-                    {notOutDeals.slice(0, 12).map((c) => (
-                      <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-red-50/60 px-2.5 py-1.5 ring-1 ring-red-100">
-                        <Link href={`/crm/${c.id}`} className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-800 hover:underline">{c.contactName}{c.address ? <span className="font-normal text-slate-400"> · {c.address}</span> : null}</Link>
-                        <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">{dealColumns.find((s) => s.key === c.stage)?.label ?? c.stage}</span>
-                        <form action={runDispoCascadeAction} className="shrink-0">
-                          <input type="hidden" name="oppId" value={c.id} />
-                          <button className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700">⚡ Run cascade</button>
-                        </form>
-                      </div>
-                    ))}
-                  </div>
-                  {notOutDeals.length > 12 && <div className="mt-1.5 text-[11px] text-slate-400">+ {notOutDeals.length - 12} more — work them top to bottom.</div>}
-                </Card>
-              )}
-
               {!areasView ? (
+                <>
                 <Card className="p-3">
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
                   <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
                   <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={[dealPl]} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
                 </Card>
+
+                {/* 🚨 Not out yet — pre-marketing deals with no buyers; one click arms the cascade. Below the board (Jon 2026-10-21: pipeline first) */}
+                {notOutDeals.length > 0 && (
+                  <Card className="border-l-4 border-red-400 p-3">
+                    <div className="mb-1.5 text-sm font-extrabold text-red-800">🚨 {notOutDeals.length} deal{notOutDeals.length === 1 ? "" : "s"} not out yet — before marketing, no buyers attached</div>
+                    <p className="mb-2 text-[11px] text-slate-500">These haven&apos;t reached the agents/buyers stage and have no buyers attached. Hit <b>⚡ Run cascade</b> to attach the top matched buyers, then work the follow-ups.</p>
+                    <div className="space-y-1">
+                      {notOutDeals.slice(0, 12).map((c) => (
+                        <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-red-50/60 px-2.5 py-1.5 ring-1 ring-red-100">
+                          <Link href={`/crm/${c.id}`} className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-800 hover:underline">{c.contactName}{c.address ? <span className="font-normal text-slate-400"> · {c.address}</span> : null}</Link>
+                          <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">{dealColumns.find((s) => s.key === c.stage)?.label ?? c.stage}</span>
+                          <form action={runDispoCascadeAction} className="shrink-0">
+                            <input type="hidden" name="oppId" value={c.id} />
+                            <button className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700">⚡ Run cascade</button>
+                          </form>
+                        </div>
+                      ))}
+                    </div>
+                    {notOutDeals.length > 12 && <div className="mt-1.5 text-[11px] text-slate-400">+ {notOutDeals.length - 12} more — work them top to bottom.</div>}
+                  </Card>
+                )}
+                </>
               ) : (
                 <>
                   <Card className="border-l-4 border-emerald-400 p-4">
