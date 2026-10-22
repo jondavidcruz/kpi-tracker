@@ -57,7 +57,7 @@ export const GATE_PATHS: Record<GatePath, DispoGate[]> = {
       "Owner name blurred, no asking price in the packet",
       "Jon signed off for release",
     ] },
-    { key: "land_cascade", label: "Cascade fired", match: /sent to agent|\bjvp\b/i, checks: [
+    { key: "land_cascade", label: "Cascade fired", match: /sent to (buyer|agent)|cascade|\bjvp\b/i, checks: [
       "Tier 1 vetted developers called + texted + emailed",
       "Tier 2 cash buyers in the market area",
       "Tier 3 buyer agents, then Tier 4 passive channels",

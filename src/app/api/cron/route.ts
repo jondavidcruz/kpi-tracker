@@ -927,7 +927,9 @@ export async function GET(request: Request) {
   if (url.searchParams.get("assignbypipeline") === "1") {
     const commit = url.searchParams.get("commit") === "1";
     const OWN: Record<string, string> = { "🔥 AQM: Michelle Lagudas": "Michelle Lagudas", "🎓 JrAQ: Nick Fair": "Nicholas Fair" };
-    const DISPO = ["🏆 DS: Signed Go Close", "🎯 DS: Sell Land Then Sign"];
+    // Dispo deal pipelines matched by pattern (emoji-tolerant) instead of stale
+    // hardcoded names, so blank owners on the CURRENT dispo pipelines get Sharyn.
+    const { isDispoDealPipeline } = await import("@/lib/dispo-buyers");
     const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { id: true, pipeline: true, assignedTo: true } });
     const changes: Array<{ id: string; from: string; pipeline: string; to: string; movedPipe?: string }> = [];
     for (const o of opps) {
@@ -938,7 +940,7 @@ export async function GET(request: Request) {
       }
       const forced = OWN[o.pipeline];
       if (forced && o.assignedTo !== forced) { changes.push({ id: o.id, from: o.assignedTo, pipeline: o.pipeline, to: forced }); continue; }
-      if (DISPO.includes(o.pipeline) && !o.assignedTo.trim()) changes.push({ id: o.id, from: "(blank)", pipeline: o.pipeline, to: "Sharyn Kayle" });
+      if (isDispoDealPipeline(o.pipeline) && !o.assignedTo.trim()) changes.push({ id: o.id, from: "(blank)", pipeline: o.pipeline, to: "Sharyn Kayle" });
     }
     if (commit) {
       for (const c of changes) await db.crmOpportunity.update({ where: { id: c.id }, data: { assignedTo: c.to, ...(c.movedPipe ? { pipeline: c.movedPipe } : {}) } }).catch(() => {});

@@ -125,7 +125,9 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // A closed/won stage — detected by the stage KEY or LABEL so it works even for
   // deals orphaned by a rename (their old key still says won/closed). Excludes
   // "closing scheduled" (still open) and died/dead (lost).
-  const isClosedStage = (s: string) => /\bwon\b|deal.?won|\bclosed\b|\bsold\b/i.test(s || "") && !/died|\bdead\b/i.test(s || "");
+  // Match the stage KEY (a slug like "closed_won") — no \b, since "_" is a word char
+  // so \bwon\b/\bclosed\b fail on compound keys. Mirrors isWonStage in setOppStageAction.
+  const isClosedStage = (s: string) => /won|closed|sold/i.test(s || "") && !/died|dead|nurtur/i.test(s || "");
   // the deal board (cards for the selected deal pipeline)
   const dealColumns: CrmColumn[] = (dealPipes.find((p) => p.name === dealPl)?.stages ?? []).map((s) => ({ key: s.key, label: s.label, cls: s.cls }));
   const dealStageKeys = new Set(dealColumns.map((s) => s.key));

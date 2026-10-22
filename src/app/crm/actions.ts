@@ -1311,8 +1311,11 @@ export async function saveCrmFormAction(formData: FormData) {
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
   const formKey = String(formData.get("formKey") ?? "");
-  const { CRM_FORMS } = await import("@/lib/crm-forms");
-  const form = CRM_FORMS.find((f) => f.key === formKey);
+  // Look up the form across ALL form sets — the Developer Buy-Box (dev_buybox) and
+  // Buyer-Agent Profile (agent_profile) live in separate exports, not CRM_FORMS, so
+  // the old CRM_FORMS-only lookup silently dropped every buy-box save (Jon 2026-10-24).
+  const { CRM_FORMS, DISPO_DEV_FORMS, DISPO_AGENT_FORMS } = await import("@/lib/crm-forms");
+  const form = [...CRM_FORMS, ...DISPO_DEV_FORMS, ...DISPO_AGENT_FORMS].find((f) => f.key === formKey);
   if (!oppId || !form) return;
   const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
   if (!opp) return;
