@@ -77,7 +77,8 @@ export function isDispoPipeline(name: string | null | undefined): boolean {
  *  pipelines (developers / agents), which are contacts, not deals. */
 export function isDispoDealPipeline(name: string | null | undefined): boolean {
   const n = (name ?? "").toLowerCase();
-  return n.includes("sell land") || n.includes("go close");
+  // land pre-marketing, signed-go-close (novation), signed-off-market (cash)
+  return n.includes("sell land") || n.includes("go close") || n.includes("off market") || n.includes("signed");
 }
 
 // 🏗 / 🧑‍💼 The two dispo buyer-NETWORK pipelines (developers + buyer agents) —
