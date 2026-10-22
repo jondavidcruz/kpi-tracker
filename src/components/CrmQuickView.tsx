@@ -156,10 +156,12 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
               })}
             </div>
 
-            {/* 🚦 Option B — SOP gate for dispo deals; advance is locked until it clears (Jon 2026-10-21) */}
-            {isDispoDealPipeline(d.pipeline) && pipelineStages?.[d.pipeline] && (
+            {/* 🚦 Option B — SOP gate for dispo deals; advance is locked until it clears
+                (Jon 2026-10-21). Uses the board's own `stages` (the open deal's pipeline)
+                rather than a name-keyed lookup, which broke on aliased pipeline names. */}
+            {isDispoDealPipeline(d.pipeline) && (pipelineStages?.[d.pipeline] ?? stages).length > 0 && (
               <div className="border-b border-slate-100 px-5 py-3">
-                <DispoGatePanel oppId={d.id} currentStage={d.stage} stages={pipelineStages[d.pipeline]} dealType={readDealType(d.formData) || defaultDealType(d.pipeline, d.tags)} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} />
+                <DispoGatePanel oppId={d.id} currentStage={d.stage} stages={pipelineStages?.[d.pipeline] ?? stages} dealType={readDealType(d.formData) || defaultDealType(d.pipeline, d.tags)} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} />
               </div>
             )}
 
