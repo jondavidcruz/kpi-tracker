@@ -12,7 +12,7 @@ import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban"
 import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv } from "@/app/actions";
-import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction } from "@/app/crm/actions";
+import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispoCascadeAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
@@ -118,6 +118,13 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     for (const b of readDispoBuyers(o.formData)) followCards.push({ oppId: o.id, entryId: b.id, name: b.name, kind: b.kind, phone: b.phone, email: b.email, price: b.price, stage: b.stage, nextFollowUp: b.nextFollowUp, lastContact: b.lastContact, dealAddr });
   }
   const dueToday = followCards.filter((c) => c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in").length;
+
+  // 🚨 "Not out yet" — active deals with ZERO buyers attached = not going to any
+  // agent/developer. The biggest leak (Jon 2026-10-21). One click arms the cascade.
+  const dealsWithBuyers = new Set(followCards.map((f) => f.oppId));
+  const notOutDeals = tab === "deals"
+    ? dealCardsShown.filter((c) => !dealsWithBuyers.has(c.id) && !/nurtur|no buyer interest|\bdead\b|overpric|died/i.test(dealColumns.find((s) => s.key === c.stage)?.label || ""))
+    : [];
 
   // 📊 Accountability scoreboard (Jon 2026-10-21) — today's outreach on dispo deals,
   // per rep + team throughput. Honest, from the activity log — no self-reporting.
@@ -379,6 +386,28 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                 </div>
                 <span className="text-[11px] font-semibold text-slate-400">{dealCardsShown.length} of {dealCards.length}</span>
               </Card>
+
+              {/* 🚨 Not out yet — deals with no buyers attached; one click arms the cascade */}
+              {!areasView && notOutDeals.length > 0 && (
+                <Card className="border-l-4 border-red-400 p-3">
+                  <div className="mb-1.5 text-sm font-extrabold text-red-800">🚨 {notOutDeals.length} deal{notOutDeals.length === 1 ? "" : "s"} not out yet — no buyers attached</div>
+                  <p className="mb-2 text-[11px] text-slate-500">These aren&apos;t going to any agent or developer. Hit <b>⚡ Run cascade</b> to attach the top matched buyers, then work the follow-ups.</p>
+                  <div className="space-y-1">
+                    {notOutDeals.slice(0, 12).map((c) => (
+                      <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-red-50/60 px-2.5 py-1.5 ring-1 ring-red-100">
+                        <Link href={`/crm/${c.id}`} className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-800 hover:underline">{c.contactName}{c.address ? <span className="font-normal text-slate-400"> · {c.address}</span> : null}</Link>
+                        <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">{dealColumns.find((s) => s.key === c.stage)?.label ?? c.stage}</span>
+                        <form action={runDispoCascadeAction} className="shrink-0">
+                          <input type="hidden" name="oppId" value={c.id} />
+                          <button className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700">⚡ Run cascade</button>
+                        </form>
+                      </div>
+                    ))}
+                  </div>
+                  {notOutDeals.length > 12 && <div className="mt-1.5 text-[11px] text-slate-400">+ {notOutDeals.length - 12} more — work them top to bottom.</div>}
+                </Card>
+              )}
+
               {!areasView ? (
                 <Card className="p-3">
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
