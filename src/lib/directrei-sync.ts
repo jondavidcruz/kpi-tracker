@@ -171,7 +171,12 @@ export async function refreshDreiFeed(todayYmd: string): Promise<DreiFeed | null
     const michelleUser = await db.user.findFirst({ where: { active: true, name: { contains: "Michelle", mode: "insensitive" } }, select: { name: true } });
     const reps = await db.user.findMany({ where: { active: true, position: { in: ["acquisitions", "cc_lm"] } }, select: { name: true } });
     const replied = (feed.recentReplies ?? []).filter((r) => r.side === "seller" && (r.at ?? "").slice(0, 10) === todayYmd);
-    if ((michelleUser || reps.length) && replied.length) {
+    // 🛑 Kill switch (Jon 2026-10-24): Jon disabled Direct REI, but this daily sync
+    // kept CREATING leads (in the War Room pipeline) from replied sellers. Lead
+    // creation is OFF unless DIRECTREI_LEADS="on" is set — the KPI feed above still
+    // runs, but no auto-leads. Set the env var to turn it back on.
+    const leadsOn = process.env.DIRECTREI_LEADS === "on";
+    if (leadsOn && (michelleUser || reps.length) && replied.length) {
       const rep = michelleUser?.name ?? reps[0]?.name ?? "";
       const pipeName = michellePipe?.name ?? "";
       const stageKey = michellePipe?.stages[0]?.key ?? "new";

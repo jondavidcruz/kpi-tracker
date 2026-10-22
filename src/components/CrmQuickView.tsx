@@ -188,8 +188,8 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                 {tab === "opp" && (
                   <form action={submit(saveOppMetaAction, { id: d.id })} className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
-                      <label className={labelCls}>Opportunity name</label>
-                      <input name="title" defaultValue={formatAddress(d.title)} className={inputCls} />
+                      <label className={labelCls}>🏠 Property address <span className="font-normal normal-case text-slate-400">— the deal / property (this lead is named after the seller: {d.contact.name})</span></label>
+                      <input name="title" defaultValue={formatAddress(d.title)} placeholder="123 Main St, City, ST ZIP" className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Pipeline (pick the destination stage)</label>

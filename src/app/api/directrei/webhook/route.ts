@@ -65,6 +65,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (ev !== "contact.qualified") return NextResponse.json({ ok: true, ignored: ev }); // 2xx so deliveries never "fail"
+  // 🛑 Direct REI lead creation is OFF unless DIRECTREI_LEADS="on" (Jon 2026-10-24
+  // disabled Direct REI; this webhook was still creating leads in the War Room).
+  if (process.env.DIRECTREI_LEADS !== "on") return NextResponse.json({ ok: true, handled: "directrei-disabled" });
 
   const addr = normalizeAddress([d.mailing_street, d.mailing_city, `${d.mailing_state ?? ""} ${d.mailing_zip ?? ""}`.trim()].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(", "));
   const title = addr || `${d.name ?? "Direct REI seller"}${d.market ? ` — ${d.market}` : ""}`;

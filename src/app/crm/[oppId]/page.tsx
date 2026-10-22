@@ -350,7 +350,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             </div>
             <AutoSaveForm action={saveOppMetaAction} className="space-y-2">
               <input type="hidden" name="id" value={opp.id} />
-              <label><span className={lbl}>Title / property</span><input name="title" defaultValue={formatAddress(opp.title)} className={inputCls} /></label>
+              <label><span className={lbl}>🏠 Property address <span className="font-normal normal-case text-slate-400">— the deal (lead is named after the seller)</span></span><input name="title" defaultValue={formatAddress(opp.title)} placeholder="123 Main St, City, ST ZIP" className={inputCls} /></label>
               <div className="grid grid-cols-2 gap-2">
                 <label><span className={lbl}>Seller wants $</span><input name="askPrice" defaultValue={opp.askPrice ?? ""} className={inputCls} /></label>
                 <label><span className={lbl}>Est. value / fee $</span><input name="value" defaultValue={opp.value ?? ""} className={inputCls} /></label>
