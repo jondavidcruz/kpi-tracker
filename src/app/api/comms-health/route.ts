@@ -63,7 +63,15 @@ async function routingDiag() {
     const list = (row?.description ? JSON.parse(row.description) : []) as Array<Record<string, unknown>>;
     events = list.slice(0, 20).map((e) => ({ at: e.at, ev: e.ev, to: maskTo(e.to as string), answered: e.answered, status: e.status, result: e.result, cc: e.cc, dir: e.direction, cause: e.cause, agent: e.agent }));
   } catch { /* ignore */ }
-  return { sharedSip: maskSip(sharedSip), distinctSipPerRep: !dupSip, agentCount: roster.length, roster, recentEvents: events };
+  // raw tail (phone numbers masked) so we can see the exact rec.outcome result
+  let rawEvents: unknown[] = [];
+  try {
+    const row = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
+    const list = (row?.description ? JSON.parse(row.description) : []) as Array<Record<string, unknown>>;
+    const mnum = (v: unknown) => (typeof v === "string" ? v.replace(/(\d{6})\d+/, "$1…") : v);
+    rawEvents = list.slice(0, 10).map((e) => ({ ...e, from: mnum(e.from), to: mnum(e.to) }));
+  } catch { /* ignore */ }
+  return { sharedSip: maskSip(sharedSip), distinctSipPerRep: !dupSip, agentCount: roster.length, roster, recentEvents: events, rawEvents };
 }
 
 export async function GET(req: Request) {
