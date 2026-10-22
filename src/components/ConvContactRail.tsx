@@ -136,7 +136,6 @@ export default function ConvContactRail({ contact, opps, owners, canEdit, notes 
               {owners.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </label>
-          <label className="block"><span className={lbl}>📌 Pinned note</span><input name="pinnedNote" defaultValue={contact.pinnedNote} placeholder="Always-visible summary" className={inp} /></label>
           <div className="flex gap-2 pt-1">
             <button className="flex-1 rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">Save contact</button>
             <button type="button" onClick={() => setEditing(false)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Cancel</button>

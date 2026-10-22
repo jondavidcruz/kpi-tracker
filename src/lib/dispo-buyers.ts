@@ -76,11 +76,12 @@ export function isDispoPipeline(name: string | null | undefined): boolean {
 
 /** A dispo DEAL pipeline (a property deal) — where the per-deal buyer/agent tracker
  *  + matching-buyers + DEAL WON → Deal generation belong. NOT the buyer-network
- *  pipelines (developers / agents), which are contacts, not deals. */
+ *  pipelines (developers / agents), which are contacts, not deals. Defined as ANY
+ *  dispo ("DS: …") pipeline that isn't the buyer network — so every dispo deal
+ *  pipeline Jon creates/renames (emoji-prefixed too) lets reps attach buyers
+ *  consistently (Jon 2026-10-24). */
 export function isDispoDealPipeline(name: string | null | undefined): boolean {
-  const n = (name ?? "").toLowerCase();
-  // land pre-marketing, signed-go-close (novation), signed-off-market (cash)
-  return n.includes("sell land") || n.includes("go close") || n.includes("off market") || n.includes("signed");
+  return isDispoPipeline(name) && !isDevNetworkName(name) && !isAgentNetworkName(name);
 }
 
 // 🏗 / 🧑‍💼 The two dispo buyer-NETWORK pipelines (developers + buyer agents) —

@@ -4,6 +4,8 @@
 // (address, APN, motivation, price, timeline…), then branch — Land digs into
 // zoning/utilities, Home digs into the majors (HVAC, water heater, roof…).
 // Answers live in CrmOpportunity.formData {formKey: {field: value}}.
+import { isDevNetworkName, isAgentNetworkName } from "./dispo-buyers";
+
 export type FormField =
   | { key: string; label: string; type: "text" | "textarea"; hint?: string }
   | { key: string; label: string; type: "select"; options: string[] }
@@ -135,10 +137,12 @@ export const DISPO_AGENT_FORMS: CrmForm[] = [DISPO_AGENT_FORM];
 // seller questions, never seller-default-for-everyone (Jon 2026-10-20). Used by
 // both the full lead page and the quick-view so they always match.
 export function formsForPipeline(pipeline: string | null | undefined): CrmForm[] {
-  const p = (pipeline ?? "").toLowerCase();
-  if (p === "ds: unvetted developers") return DISPO_DEV_FORMS;
-  if (p === "ds: buyer agents") return DISPO_AGENT_FORMS;
-  // Seller / deal pipelines: Land Details only where it's a land pipeline.
-  const isLandPipe = /\bland\b/.test(p);
-  return CRM_FORMS.filter((f) => f.key !== "land" || isLandPipe);
+  // Buyer-network leads (developers / agents) use their own forms — matched by
+  // pattern so a rename/emoji can't misfire (Jon 2026-10-24).
+  if (isDevNetworkName(pipeline)) return DISPO_DEV_FORMS;
+  if (isAgentNetworkName(pipeline)) return DISPO_AGENT_FORMS;
+  // Every other (seller / deal) lead ALWAYS shows both Home AND Land Details —
+  // never hide one (Jon 2026-10-24: "leave it there all the time so the land
+  // details don't disappear when a lead moves to dispo").
+  return CRM_FORMS;
 }

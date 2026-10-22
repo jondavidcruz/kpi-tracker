@@ -404,6 +404,8 @@ export async function saveCrmContactAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const oppId = String(formData.get("oppId") ?? "");
   if (!id) return;
+  // pinnedNote + tags are only written when their field is PRESENT, so removing
+  // those inputs from the contact form never wipes existing data (Jon 2026-10-24).
   await db.crmContact.update({ where: { id }, data: {
     name: String(formData.get("name") ?? "").trim() || undefined,
     phone: String(formData.get("phone") ?? "").trim(),
@@ -411,8 +413,8 @@ export async function saveCrmContactAction(formData: FormData) {
     email: String(formData.get("email") ?? "").trim(),
     altEmail: String(formData.get("altEmail") ?? "").trim(),
     address: String(formData.get("address") ?? "").trim(),
-    tags: String(formData.get("ctags") ?? "").trim().slice(0, 300),
-    pinnedNote: String(formData.get("pinnedNote") ?? "").trim().slice(0, 300),
+    ...(formData.get("ctags") != null ? { tags: String(formData.get("ctags")).trim().slice(0, 300) } : {}),
+    ...(formData.get("pinnedNote") != null ? { pinnedNote: String(formData.get("pinnedNote")).trim().slice(0, 300) } : {}),
   } });
   // 🧭 APN/parcel lives on the opportunity (no contact column) — Jon 2026-10-13
   const apn = formData.get("apn");

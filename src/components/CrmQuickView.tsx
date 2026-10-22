@@ -272,17 +272,10 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <input name="altEmail" defaultValue={d.contact.altEmail} className={inputCls} />
                     </div>
                     <div className="col-span-2">
-                      <label className={labelCls}>Property address</label>
-                      <input name="address" defaultValue={d.contact.address} className={inputCls} />
+                      <label className={labelCls}>📬 Mailing address <span className="font-normal normal-case text-slate-400">— where this person lives (not the property)</span></label>
+                      <input name="address" defaultValue={d.contact.address} placeholder="Seller's home / mailing address" className={inputCls} />
                     </div>
-                    <div className="col-span-2">
-                      <label className={labelCls}>🧭 APN / Parcel # (land leads)</label>
-                      <input name="apn" defaultValue={(d.formData as { property?: { apn?: string } } | undefined)?.property?.apn ?? ""} placeholder="123-456-789" className={inputCls} />
-                    </div>
-                    <div className="col-span-2">
-                      <label className={labelCls}>📌 Pinned note (always on top)</label>
-                      <input name="pinnedNote" defaultValue={d.contact.pinnedNote} className={inputCls} />
-                    </div>
+                    <div className="col-span-2 text-[10px] text-slate-400">The property address + APN live on <b>Opportunity details</b> and <b>Home / Land Details</b> — this is just the person.</div>
                     <div className="col-span-2"><button className="rounded-xl bg-brand-navy px-4 py-2 text-xs font-bold text-white">Update</button></div>
                   </form>
                 )}

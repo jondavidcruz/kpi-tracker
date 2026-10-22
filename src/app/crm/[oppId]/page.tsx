@@ -217,20 +217,18 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                   <label><span className={lbl}>Email</span><input name="email" defaultValue={c.email} className={inputCls} /></label>
                   <label><span className={lbl}>Email 2</span><input name="altEmail" defaultValue={c.altEmail} className={inputCls} /></label>
                 </div>
-                <label><span className={lbl}>Address</span><input name="address" defaultValue={c.address} className={inputCls} /></label>
-                {/* 🧭 APN / parcel # — land leads are a parcel, not a street
-                    address (Jon 2026-10-13). Saved on this opportunity. */}
-                <label><span className={lbl}>🧭 APN / Parcel #</span><input name="apn" defaultValue={((opp.formData as { property?: { apn?: string } } | null)?.property?.apn) ?? ""} placeholder="123-456-789" className={inputCls} /></label>
+                {/* 📬 Contact = the PERSON, not the property. Mailing address only;
+                    the property address + APN live on the Opportunity + Home/Land
+                    Details (Jon 2026-10-24). */}
+                <label><span className={lbl}>📬 Mailing address — where they live (not the property)</span><input name="address" defaultValue={c.address} placeholder="Seller's home / mailing address" className={inputCls} /></label>
                 <label><span className={lbl}>Contact tags</span><input name="ctags" defaultValue={c.tags} placeholder="motivated, probate…" className={inputCls} /></label>
-                <label><span className={lbl}>📌 Pinned note (always visible)</span><input name="pinnedNote" defaultValue={c.pinnedNote} className={inputCls} /></label>
                 <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">Save contact</button>
               </AutoSaveForm>
             </details>
             <div className="mt-2 space-y-1 text-[13px] text-slate-700">
               {c.phone && <div>📱 {c.phone}{c.altPhone ? ` · ${c.altPhone}` : ""}</div>}
               {c.email && <div>✉️ {c.email}{c.altEmail ? ` · ${c.altEmail}` : ""}</div>}
-              {((opp.formData as { property?: { apn?: string } } | null)?.property?.apn) && <div>🧭 APN {(opp.formData as { property?: { apn?: string } } | null)?.property?.apn}</div>}
-              {c.address && <div>🏠 {c.address}</div>}
+              {c.address && <div>📬 {c.address} <span className="text-[11px] text-slate-400">(mailing)</span></div>}
               <div className="text-xs text-slate-400">Source: {c.source || "—"} · added {c.createdAt.toLocaleDateString()}</div>
               {parseTags(c.tags).length > 0 && (
                 <div className="flex flex-wrap gap-1 pt-1">{parseTags(c.tags).map((t) => <span key={t} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-600">#{t}</span>)}</div>
