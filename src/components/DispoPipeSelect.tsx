@@ -22,7 +22,6 @@ export default function DispoPipeSelect({ pipes, current, q }: { pipes: Pipe[]; 
   return (
     <div ref={ref} className="relative inline-block">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-3.5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700">
-        <span>{cur.emoji}</span>
         <span>{cur.name}</span>
         <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-bold">{cur.count}</span>
         <span className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`}>▼</span>
@@ -31,7 +30,6 @@ export default function DispoPipeSelect({ pipes, current, q }: { pipes: Pipe[]; 
         <div className="absolute left-0 z-30 mt-1 w-72 overflow-hidden rounded-xl bg-white py-1 shadow-xl ring-1 ring-slate-200">
           {pipes.map((p) => (
             <button key={p.name} type="button" onClick={() => go(p.name)} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 ${p.name === cur.name ? "bg-emerald-50 font-bold text-emerald-800" : "text-slate-700"}`}>
-              <span>{p.emoji}</span>
               <span className="min-w-0 flex-1 truncate">{p.name}</span>
               <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{p.count}</span>
             </button>

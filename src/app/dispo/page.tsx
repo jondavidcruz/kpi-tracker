@@ -567,7 +567,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                           {closedDeals.map((d, i) => (
                             <tr key={d.id} className={i % 2 ? "bg-white" : "bg-slate-50/40"}>
                               <td className="px-3 py-2"><div className="font-bold text-slate-800">{d.address}</div>{d.contactName && <div className="text-[10px] text-slate-400">{d.contactName}</div>}</td>
-                              <td className="px-2 py-2 text-slate-600">{d.typeEmoji} {d.pipeline.replace(/^DS:\s*/, "")}</td>
+                              <td className="px-2 py-2 text-slate-600">{d.pipeline.replace(/^[^A-Za-z]*DS:\s*/, "")}</td>
                               <td className="px-2 py-2 font-semibold text-lime-700">{d.acres != null ? fmtAcres(d.acres) : <span className="font-normal text-slate-300">—</span>}</td>
                               <td className="px-2 py-2 font-semibold text-slate-700">{d.money || <span className="font-normal text-slate-300">—</span>}</td>
                               <td className="px-2 py-2"><span className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{d.stage}</span></td>
