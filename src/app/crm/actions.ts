@@ -2154,8 +2154,8 @@ export async function attachNetworkBuyerToDeal(formData: FormData) {
   if (!oppId || !networkOppId) return;
   const lead = await db.crmOpportunity.findUnique({ where: { id: networkOppId }, select: { pipeline: true, contactId: true, contact: { select: { name: true, phone: true, email: true, pinnedNote: true } } } });
   if (!lead) return;
-  const { DISPO_AGENT_PIPELINE } = await import("@/lib/dispo-buyers");
-  const kind = lead.pipeline === DISPO_AGENT_PIPELINE ? "buyer_agent" : "developer";
+  const { isAgentNetworkName } = await import("@/lib/dispo-buyers");
+  const kind = isAgentNetworkName(lead!.pipeline) ? "buyer_agent" : "developer";
   const name = lead.contact?.name || "buyer";
   let added = false;
   await mutateDispoBuyers(oppId, (list) => {
@@ -2189,8 +2189,8 @@ export async function bulkAttachNetworkBuyerToDealsAction(formData: FormData) {
   if (!networkOppId || oppIds.length === 0) redirect(back);
   const lead = await db.crmOpportunity.findUnique({ where: { id: networkOppId }, select: { pipeline: true, contactId: true, contact: { select: { name: true, phone: true, email: true } } } });
   if (!lead) redirect(back);
-  const { DISPO_AGENT_PIPELINE } = await import("@/lib/dispo-buyers");
-  const kind = lead!.pipeline === DISPO_AGENT_PIPELINE ? "buyer_agent" : "developer";
+  const { isAgentNetworkName } = await import("@/lib/dispo-buyers");
+  const kind = isAgentNetworkName(lead!.pipeline) ? "buyer_agent" : "developer";
   const name = lead!.contact?.name || "buyer";
   let attached = 0;
   for (const oppId of oppIds) {
