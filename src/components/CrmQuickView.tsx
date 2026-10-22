@@ -11,6 +11,7 @@ import {
   runDispoCascadeAction,
 } from "@/app/crm/actions";
 import { KIND_EMOJI, stripAgentNotesBlock } from "@/lib/crm-shared";
+import AutoSaveForm from "@/components/AutoSaveForm";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { readGateChecks } from "@/lib/dispo-gates";
@@ -186,7 +187,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                 {stripAgentNotesBlock(d.contact.pinnedNote) && <div className="mb-3 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {stripAgentNotesBlock(d.contact.pinnedNote)}</div>}
 
                 {tab === "opp" && (
-                  <form action={submit(saveOppMetaAction, { id: d.id })} className="grid grid-cols-2 gap-3">
+                  <AutoSaveForm action={submit(saveOppMetaAction, { id: d.id })} className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className={labelCls}>🏠 Property address <span className="font-normal normal-case text-slate-400">— the deal / property (this lead is named after the seller: {d.contact.name})</span></label>
                       <input name="title" defaultValue={formatAddress(d.title)} placeholder="123 Main St, City, ST ZIP" className={inputCls} />
@@ -234,10 +235,6 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <input name="value" defaultValue={d.value ?? ""} className={inputCls} />
                     </div>
                     <div>
-                      <label className={labelCls}>Seller asking $</label>
-                      <input name="askPrice" defaultValue={d.askPrice ?? ""} className={inputCls} />
-                    </div>
-                    <div>
                       <label className={labelCls}>Next follow-up</label>
                       <input name="nextFollowUp" type="date" defaultValue={d.nextFollowUp} className={inputCls} />
                     </div>
@@ -245,12 +242,11 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <label className={labelCls}>Tags (comma-separated)</label>
                       <input name="tags" defaultValue={d.tags} className={inputCls} />
                     </div>
-                    <div className="col-span-2"><button className="rounded-xl bg-brand-navy px-4 py-2 text-xs font-bold text-white">Update</button></div>
-                  </form>
+                  </AutoSaveForm>
                 )}
 
                 {tab === "contact" && (
-                  <form action={submit(saveCrmContactAction, { id: d.contact.id, oppId: d.id, ctags: d.contact.tags })} className="grid grid-cols-2 gap-3">
+                  <AutoSaveForm action={submit(saveCrmContactAction, { id: d.contact.id, oppId: d.id, ctags: d.contact.tags })} className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className={labelCls}>Name</label>
                       <input name="name" defaultValue={d.contact.name} className={inputCls} />
@@ -276,12 +272,11 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <input name="address" defaultValue={d.contact.address} placeholder="Seller's home / mailing address" className={inputCls} />
                     </div>
                     <div className="col-span-2 text-[10px] text-slate-400">The property address + APN live on <b>Opportunity details</b> and <b>Home / Land Details</b> — this is just the person.</div>
-                    <div className="col-span-2"><button className="rounded-xl bg-brand-navy px-4 py-2 text-xs font-bold text-white">Update</button></div>
-                  </form>
+                  </AutoSaveForm>
                 )}
 
                 {formsForPipeline(d.pipeline).map((f) => tab === `form:${f.key}` && (
-                  <form key={f.key} action={submit(saveCrmFormAction, { oppId: d.id, contactId: d.contact.id, formKey: f.key })} className="space-y-3">
+                  <AutoSaveForm key={f.key} action={submit(saveCrmFormAction, { oppId: d.id, contactId: d.contact.id, formKey: f.key })} className="space-y-3">
                     <div className="text-sm font-extrabold text-slate-800">{f.emoji} {f.name}</div>
                     {f.key === "financial" && <UnderwriteBlock d={d} />}
                     {f.fields.map((fld) => {
@@ -321,8 +316,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                         </div>
                       );
                     })}
-                    <button className="rounded-xl bg-brand-navy px-4 py-2 text-xs font-bold text-white">Save {f.name}</button>
-                  </form>
+                  </AutoSaveForm>
                 ))}
 
                 {tab === "tasks" && (

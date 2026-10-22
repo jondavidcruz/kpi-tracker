@@ -385,14 +385,18 @@ export async function saveOppMetaAction(formData: FormData) {
   const num = (k: string) => { const s = String(formData.get(k) ?? "").replace(/[$,\s]/g, ""); return s === "" ? null : Number(s) || null; };
   const plRaw = formData.get("pipeline");
   const { formatAddress } = await import("@/lib/address");
+  // Only write fields that are actually PRESENT in the form, so autosave (which may
+  // submit a partial form) + a form that omits the owner field never wipe data
+  // (Jon 2026-10-24). Owner is saved separately via setOppOwnerAction.
+  const has = (k: string) => formData.get(k) != null;
   await db.crmOpportunity.update({ where: { id }, data: {
     ...(plRaw != null ? { pipeline: String(plRaw) === "War Room" ? "" : String(plRaw) } : {}),
-    // the Opportunity-name box is scrubbed on every save: "Street, City, ST ZIP" once
-    title: formatAddress(String(formData.get("title") ?? "")) || undefined,
-    assignedTo: String(formData.get("assignedTo") ?? "").trim(),
-    tags: String(formData.get("tags") ?? "").trim().slice(0, 300),
-    nextFollowUp: String(formData.get("nextFollowUp") ?? "").trim(),
-    value: num("value"), askPrice: num("askPrice"),
+    ...(has("title") ? { title: formatAddress(String(formData.get("title") ?? "")) || undefined } : {}),
+    ...(has("assignedTo") ? { assignedTo: String(formData.get("assignedTo")).trim() } : {}),
+    ...(has("tags") ? { tags: String(formData.get("tags")).trim().slice(0, 300) } : {}),
+    ...(has("nextFollowUp") ? { nextFollowUp: String(formData.get("nextFollowUp")).trim() } : {}),
+    ...(has("value") ? { value: num("value") } : {}),
+    ...(has("askPrice") ? { askPrice: num("askPrice") } : {}),
   } });
   revalidatePath(`/crm/${id}`);
   revalidatePath("/crm");

@@ -156,7 +156,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   })).sort((a, b) => b.at.getTime() - a.at.getTime());
   const closedTotal = closedDeals.reduce((a, d) => a + d.valueNum, 0);
   const dealCards: CrmCard[] = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => ({
-    id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: o.contact?.address ? formatAddress(o.contact.address) : undefined,
+    id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: formatAddress(o.title || "") || (o.contact?.address ? formatAddress(o.contact.address) : undefined),
     phone: o.contact?.phone ? o.contact.phone.replace(/\.\d+$/, "") : undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
     money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
