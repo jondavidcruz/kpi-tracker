@@ -4,7 +4,7 @@ import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { getBuyerMatchesForLead, getNetworkMatchesForDeal, getDealsForNetworkLead } from "@/lib/buyer-match-lead";
 import SendToBuyersButton from "@/components/SendToBuyersButton";
-import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
+import { attachNetworkBuyerToDeal, runDispoCascadeAction } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
 import DispoGatePanel from "@/components/DispoGatePanel";
@@ -575,6 +575,15 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           {/* 📣 Marketing SOP checklist — dispo deals only (Jon 2026-10-20) */}
           {showMatches && (
             <DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} />
+          )}
+
+          {/* ⚡ One-click cascade — attach the top matched developers + agents so the
+              deal goes out to more buyers fast (Jon 2026-10-21) */}
+          {showMatches && (
+            <form action={runDispoCascadeAction}>
+              <input type="hidden" name="oppId" value={opp.id} />
+              <button className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-emerald-700" title="Attach the top matched vetted developers + buyer agents to this deal's tracker, ready to work">⚡ Run the cascade — attach top matched buyers</button>
+            </form>
           )}
 
           {/* 📇 Per-deal buyer/agent follow-up tracker — dispo reps only; shows buyer names (Jon 2026-10-21) */}

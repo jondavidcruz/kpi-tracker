@@ -2028,6 +2028,33 @@ export async function saveLandParcelsAction(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+/** ⚡ Run the cascade in one click (Jon 2026-10-21): auto-attach the top matched
+ *  vetted developers + buyer agents to this deal's follow-up tracker, so the rep works
+ *  a ready list instead of building one — the fastest path to getting a deal out to
+ *  more buyers. Dedupes; never double-attaches. */
+export async function runDispoCascadeAction(formData: FormData) {
+  const me = await crmUser();
+  const oppId = String(formData.get("oppId") ?? "");
+  if (!me || !oppId) return;
+  const deal = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { contactId: true, title: true, contact: { select: { address: true } } } });
+  if (!deal) return;
+  const addr = deal.contact?.address || deal.title || "";
+  const { getNetworkMatchesForDeal } = await import("@/lib/buyer-match-lead");
+  const matches = await getNetworkMatchesForDeal(addr, 8);
+  let attached = 0;
+  for (const m of matches) {
+    let added = false;
+    await mutateDispoBuyers(oppId, (list) => {
+      if (list.some((r) => r.buyerId === m.oppId)) return list;
+      added = true;
+      return [...list, { id: `db_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: m.name, kind: m.kind, phone: m.phone || undefined, buyerId: m.oppId, stage: "to_contact", addedAt: PT_TODAY(), nextFollowUp: ymdAdd(1) }];
+    });
+    if (added) attached++;
+  }
+  if (deal.contactId) await logCrmEvent({ contactId: deal.contactId, oppId, kind: "system", body: attached ? `📣 Cascade armed — attached ${attached} matched buyer${attached === 1 ? "" : "s"} (developers + agents) to the tracker. Call, text, and email them now.` : `📣 Cascade run — no new matched buyers in this market yet (all already attached, or none vetted for the area).`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
 /** 🚦 Set a dispo deal's TYPE (cash / novation / land) — picks which gate path applies. */
 export async function setDispoDealTypeAction(formData: FormData) {
   const me = await crmUser();
