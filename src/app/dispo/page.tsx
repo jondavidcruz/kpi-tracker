@@ -227,6 +227,24 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       })
     : [];
 
+  // 🥶 Going cold: deals that ARE out (at/past the Sent-to-Buyers stage) but have
+  // fewer than 3 live offers AND nothing's moved on them in 2+ days — the goal is
+  // 3 offers, and a stalled deal with too few is dispo not pushing hard enough
+  // (Jon 2026-10-24). Excludes closed/won + dead/nurture side stages.
+  const COLD_DAYS = 2;
+  const coldDeals = tab === "deals" && marketIdx >= 0
+    ? dealCardsShown.filter((c) => {
+        const si = dealColumns.findIndex((s) => s.key === c.stage);
+        if (si < marketIdx) return false; // not out yet
+        const lbl = `${dealColumns[si]?.key ?? ""} ${dealColumns[si]?.label ?? ""}`;
+        if (/won|closed|sold|nurtur|\bdead\b|died|lost/i.test(lbl)) return false; // closed or parked
+        if ((c.offers?.live ?? 0) >= OFFER_GOAL) return false; // hit the goal
+        const ageDays = c.updatedAt ? (Date.now() - new Date(c.updatedAt).getTime()) / 86400000 : 0;
+        return ageDays >= COLD_DAYS;
+      }).map((c) => ({ ...c, ageDays: c.updatedAt ? Math.floor((Date.now() - new Date(c.updatedAt).getTime()) / 86400000) : 0 }))
+      .sort((a, b) => (a.offers?.live ?? 0) - (b.offers?.live ?? 0) || b.ageDays - a.ageDays)
+    : [];
+
   // 📊 Accountability scoreboard (Jon 2026-10-21) — today's outreach on dispo deals,
   // per rep + team throughput. Honest, from the activity log — no self-reporting.
   let scoreReps: RepRow[] = [];
@@ -661,6 +679,25 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                   <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
                   <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={movePipes.map((p) => p.name)} pipelineGroups={Object.fromEntries(movePipes.map((p) => [p.name, crmGroupOf(p.name, crmMap)]))} pipelineStages={moveStages} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
                 </Card>
+
+                {/* 🥶 Going cold — out to buyers but under 3 offers and stalled 2+ days */}
+                {coldDeals.length > 0 && (
+                  <Card className="border-l-4 border-amber-400 p-3">
+                    <div className="mb-1.5 text-sm font-extrabold text-amber-800">🥶 {coldDeals.length} deal{coldDeals.length === 1 ? "" : "s"} going cold — out to buyers, under {OFFER_GOAL} offers, no movement in {COLD_DAYS}+ days</div>
+                    <p className="mb-2 text-[11px] text-slate-500">These are out but stalling below the {OFFER_GOAL}-offer goal. Chase the attached buyers for a price, run the cascade to more buyers, or log the offers you already have.</p>
+                    <div className="space-y-1">
+                      {coldDeals.slice(0, 12).map((c) => (
+                        <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50/60 px-2.5 py-1.5 ring-1 ring-amber-100">
+                          <Link href={`/crm/${c.id}`} className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-800 hover:underline">{c.contactName}{c.address ? <span className="font-normal text-slate-400"> · {c.address}</span> : null}</Link>
+                          <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">💰 {c.offers?.live ?? 0}/{OFFER_GOAL}</span>
+                          <span className="shrink-0 text-[10px] font-semibold text-slate-400">cold {c.ageDays}d</span>
+                          <form action={runDispoCascadeAction} className="shrink-0"><input type="hidden" name="oppId" value={c.id} /><button className="rounded bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700" title="Attach more matched buyers">⚡ More buyers</button></form>
+                        </div>
+                      ))}
+                      {coldDeals.length > 12 && <div className="mt-1.5 text-[11px] text-slate-400">+ {coldDeals.length - 12} more going cold.</div>}
+                    </div>
+                  </Card>
+                )}
 
                 {/* 🚨 Not out yet — pre-marketing deals with no buyers; one click arms the cascade. Below the board (Jon 2026-10-21: pipeline first) */}
                 {notOutDeals.length > 0 && (

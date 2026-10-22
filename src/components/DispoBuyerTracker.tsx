@@ -6,12 +6,13 @@
 // follow-up) is never dropped and every buyer is tied to its deal.
 import { useState } from "react";
 import Link from "next/link";
-import { addDispoBuyerAction, updateDispoBuyerAction, logDispoBuyerTouchAction, removeDispoBuyerAction } from "@/app/crm/actions";
+import { addDispoBuyerAction, updateDispoBuyerAction, logDispoBuyerTouchAction, removeDispoBuyerAction, addDispoOfferAction } from "@/app/crm/actions";
 import { DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, stageMeta, type DispoBuyer } from "@/lib/dispo-buyers";
 import AttachBuyerPanel from "@/components/AttachBuyerPanel";
 
 export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "", canCall = false, canSms = false }: { oppId: string; buyers: DispoBuyer[]; today: string; dealArea?: string; canCall?: boolean; canSms?: boolean }) {
   const [adding, setAdding] = useState(false);
+  const [offerFor, setOfferFor] = useState<string | null>(null); // entryId whose quick-offer form is open
   const counts = DISPO_BUYER_STAGES.map((s) => ({ ...s, n: buyers.filter((b) => b.stage === s.key).length }));
   const dueCount = buyers.filter((b) => b.nextFollowUp && b.nextFollowUp <= today && b.stage !== "passed" && b.stage !== "offer_in").length;
 
@@ -95,7 +96,20 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "",
                   <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} />
                   <button className="rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-sky-700" title="Stamp a touch today + bump the next follow-up">📞 Touch</button>
                 </form>
+                {/* 💰 log an OFFER from this buyer — tied to THIS deal + this buyer */}
+                <button type="button" onClick={() => setOfferFor(offerFor === b.id ? null : b.id)} className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700" title="Log an offer this buyer made on THIS deal">💰 +offer</button>
               </div>
+              {offerFor === b.id && (
+                <form action={addDispoOfferAction} onSubmit={() => setOfferFor(null)} className="mt-1 flex flex-wrap items-center gap-1 rounded-lg bg-emerald-50 p-1.5 ring-1 ring-emerald-200">
+                  <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="buyer" value={b.name} />{b.buyerId && <input type="hidden" name="buyerId" value={b.buyerId} />}
+                  <span className="text-[10px] font-bold text-emerald-800">💰 {b.name.split(" ")[0]}&apos;s offer on this deal:</span>
+                  <input name="price" placeholder="$ price" required className="w-20 rounded border border-emerald-200 px-1 py-0.5 text-[10px] font-bold" />
+                  <input name="terms" placeholder="terms" className="w-20 rounded border border-emerald-200 px-1 py-0.5 text-[10px]" />
+                  <input name="daysToClose" placeholder="days" inputMode="numeric" className="w-12 rounded border border-emerald-200 px-1 py-0.5 text-[10px]" />
+                  <button className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700">Log</button>
+                  <button type="button" onClick={() => setOfferFor(null)} className="text-[10px] font-semibold text-slate-400">cancel</button>
+                </form>
+              )}
               {/* 📝 per-agent notes — saved on blur, rolled up into the contact's
                   main note + credited as a buyer conversation (Jon 2026-10-21). */}
               <form action={updateDispoBuyerAction} className="mt-1">
