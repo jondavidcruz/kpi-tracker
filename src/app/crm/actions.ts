@@ -1779,6 +1779,40 @@ export async function resortOrphanStagesAction(formData: FormData) {
   redirect(`${back}${back.includes("?") ? "&" : "?"}resorted=${moved}`);
 }
 
+// 💾 Save ALL pipelines in one shot (Jon 2026-10-24: "one save button, not one per
+// pipeline"). Takes the whole editor state as JSON [{original,name,stages:[{key,label}]}],
+// preserves stage KEYS (so renames don't orphan deals), applies pipeline renames to
+// their opps, and keeps War Room fixed + never drops a pipeline that still has leads.
+export async function saveAllPipelinesAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const { readGhlPipelinesRaw, writeGhlPipelines, stageSlug } = await import("@/lib/crm");
+  let payload: Array<{ original?: string; name?: string; stages?: Array<{ key?: string; label?: string }> }> = [];
+  try { const j = JSON.parse(String(formData.get("payload") ?? "[]")); if (Array.isArray(j)) payload = j; } catch { payload = []; }
+  const cur = await readGhlPipelinesRaw();
+  const war = cur.filter((p) => p.name === "War Room"); // fixed — powers the land SOP
+  // apply renames to opps first
+  for (const p of payload) {
+    const name = String(p.name ?? "").trim();
+    if (p.original && name && p.original !== name) await db.crmOpportunity.updateMany({ where: { pipeline: p.original }, data: { pipeline: name } });
+  }
+  const built = payload
+    .map((p) => ({ name: String(p.name ?? "").trim().slice(0, 60), stages: (Array.isArray(p.stages) ? p.stages : []).map((s) => ({ label: String(s?.label ?? "").trim(), key: String(s?.key ?? "").trim() })).filter((s) => s.label).map((s) => ({ key: s.key || stageSlug(s.label), label: s.label })).slice(0, 25) }))
+    .filter((p) => p.name && p.stages.length && p.name !== "War Room");
+  // never silently drop a pipeline that still has live leads but wasn't in the editor
+  const keepNames = new Set([...built.map((b) => b.name), ...payload.map((p) => String(p.original ?? "")).filter(Boolean)]);
+  const rescued: typeof built = [];
+  for (const c of cur) {
+    if (c.name === "War Room" || keepNames.has(c.name)) continue;
+    const count = await db.crmOpportunity.count({ where: { pipeline: c.name, archivedAt: null } }).catch(() => 1);
+    if (count > 0) rescued.push(c);
+  }
+  await writeGhlPipelines([...war, ...built, ...rescued]);
+  revalidatePath("/crm");
+  revalidatePath("/crm/pipelines");
+  redirect("/crm/pipelines?saved=all");
+}
+
 export async function reorderPipelineAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
