@@ -648,7 +648,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                 <Card className="p-3">
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
                   <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
-                  <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={movePipes.map((p) => p.name)} pipelineStages={moveStages} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
+                  <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={movePipes.map((p) => p.name)} pipelineGroups={Object.fromEntries(movePipes.map((p) => [p.name, crmGroupOf(p.name, crmMap)]))} pipelineStages={moveStages} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
                 </Card>
 
                 {/* 🚨 Not out yet — pre-marketing deals with no buyers; one click arms the cascade. Below the board (Jon 2026-10-21: pipeline first) */}

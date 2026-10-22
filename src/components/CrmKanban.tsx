@@ -57,7 +57,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [], pipelineStages = {}, currentPipeline = "", who = "all", dialerBase = "" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[]; pipelineStages?: Record<string, { key: string; label: string }[]>; currentPipeline?: string; who?: string; dialerBase?: string }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [], pipelineGroups = {}, pipelineStages = {}, currentPipeline = "", who = "all", dialerBase = "" }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[]; pipelineGroups?: Record<string, "acquisitions" | "dispositions">; pipelineStages?: Record<string, { key: string; label: string }[]>; currentPipeline?: string; who?: string; dialerBase?: string }) {
   const [cards, setCards] = useState(initial);
   // THE 27-vs-112 bug (Jon 2026-10-08): this component stays mounted when you
   // switch pipeline tabs, so the drag-and-drop card state kept showing the
@@ -486,7 +486,14 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
               {bulk.op === "pipeline" && (<>
                 <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value, val2: "" })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
                   <option value="">pick a pipeline…</option>
-                  {pipelineNames.map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+                  {Object.keys(pipelineGroups).length ? (<>
+                    <optgroup label="📞 Acquisitions">
+                      {pipelineNames.filter((pn) => pipelineGroups[pn] !== "dispositions").map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+                    </optgroup>
+                    <optgroup label="🎯 Dispositions">
+                      {pipelineNames.filter((pn) => pipelineGroups[pn] === "dispositions").map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+                    </optgroup>
+                  </>) : pipelineNames.map((pn) => <option key={pn} value={pn}>{pn}</option>)}
                 </select>
                 {/* and WHICH stage in that pipeline (Jon 2026-10-13); blank = first stage */}
                 {bulk.val && (pipelineStages[bulk.val]?.length ?? 0) > 0 && (
