@@ -66,18 +66,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // land (unsigned, find a buyer first) · novation (signed, list via agent) · cash
   // (signed, find a cash buyer off-market). Auto-create the cash pipeline once,
   // cloning the signed board's stages. Idempotent; managers only.
-  if (isManager(me)) {
-    try {
-      const { readGhlPipelinesRaw, writeGhlPipelines, stageSlug } = await import("@/lib/crm");
-      const raw = await readGhlPipelinesRaw();
-      const CASH_PIPE = "DS: Signed Off Market";
-      if (!raw.some((p) => p.name === CASH_PIPE)) {
-        const signed = raw.find((p) => /go close/i.test(p.name));
-        const stages = signed?.stages ?? ["📸 NEW / PHOTOS (Day 1-4)", "🛑 DELAYED/LIEN", "📣 ON MARKET", "🟡 ESCROW OPENED (70%)", "🚦 CLOSING SCHEDULED (90%)", "💰 DEAL WON (100%)", "🪦 DEAL DIED"].map((label) => ({ key: stageSlug(label), label }));
-        await writeGhlPipelines([...raw, { name: CASH_PIPE, stages }]);
-      }
-    } catch { /* non-blocking — board still works */ }
-  }
+  if (isManager(me)) { const { ensureCashPipeline } = await import("@/lib/dispo-pipelines"); await ensureCashPipeline(); }
 
   const countRows = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null, pipeline: { in: [DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE] } }, _count: { _all: true } }).catch(() => [] as { pipeline: string; _count: { _all: number } }[]);
   const countOf = (p: string) => countRows.find((c) => c.pipeline === p)?._count._all ?? 0;

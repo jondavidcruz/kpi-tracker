@@ -37,7 +37,7 @@ type Payload = {
   contact: { id: string; name: string; phone: string; altPhone: string; email: string; altEmail: string; address: string; pinnedNote: string; tags: string };
   tasks: Array<{ id: string; title: string; due: string }>;
   appts: Array<{ id: string; title: string; at: string; withWho: string }>;
-  events: Array<{ id?: string; kind: string; body: string; actor: string; at: string; link?: string; fileName?: string }>;
+  events: Array<{ id?: string; kind: string; body: string; actor: string; at: string; link?: string; fileName?: string; recLink?: string; transcript?: string }>;
 };
 
 // Nav tabs are built per-lead from its pipeline's forms (see tabsFor).
@@ -436,6 +436,14 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                               ? <div className="mt-1 text-[13px] leading-relaxed [&_a]:text-indigo-600 [&_a]:underline [&_b]:font-bold [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-bold [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(e.body) }} />
                               : <span className={`whitespace-pre-line break-words ${isNote ? "font-medium" : ""}`}>{cleanLinkify(e.body)}</span>}
                             {e.link && <a href={e.link} target="_blank" rel="noopener noreferrer" onClick={(ev) => ev.stopPropagation()} className="mt-1 inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1 text-[11px] font-semibold text-sky-700 ring-1 ring-slate-200 hover:bg-slate-50">📎 {e.fileName || "Open document"}</a>}
+                            {/* 🎙 call recording — play it + read the transcript right here (Jon 2026-10-22) */}
+                            {e.recLink && (
+                              <div className="mt-1.5 space-y-1" onClick={(ev) => ev.stopPropagation()}>
+                                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                                <audio controls preload="none" src={e.recLink} className="h-8 w-full max-w-xs" />
+                                {e.transcript && <details className="text-[11px]"><summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">📄 Transcript</summary><div className="mt-1 max-h-48 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 p-2 text-slate-600 ring-1 ring-slate-100">{e.transcript}</div></details>}
+                              </div>
+                            )}
                             <span className="ml-1 text-[9px] text-slate-400">{e.actor} · {new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
                             {mine && <button onClick={() => { setEditNoteId(e.id!); }} title="Edit this note" className="ml-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-indigo-600">✎ edit</button>}
                             {mine && <button onClick={() => { if (confirm("Delete this note?")) { const fd = new FormData(); fd.set("id", e.id!); fd.set("oppId", d.id); submit(deleteCrmNoteAction)(fd); } }} title="Delete this note" className="ml-1 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-red-600">🗑</button>}

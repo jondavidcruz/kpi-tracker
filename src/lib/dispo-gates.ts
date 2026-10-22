@@ -62,45 +62,52 @@ export const GATE_PATHS: Record<GatePath, DispoGate[]> = {
       "Best offer handed back to acquisitions / the seller",
     ] },
   ],
+  // 💵 CASH = WHOLESALE (Jon 2026-10-22): signed, but we find OFF-MARKET buyers — the
+  // same find-a-buyer play as land, just already under contract. NOT a listing.
   cash: [
-    { key: "cash_ready", label: "Deal ready to market", match: /new|photo|day 1|intake/i, checks: [
-      "Address / APN + acreage / specs complete",
-      "Photos + packet ready to send",
-      "Vetted cash-buyer list pulled for this market",
+    { key: "cash_ready", label: "Ready to market", match: /new|signed|packet|photo/i, checks: [
+      "Specs / APN + photos + packet ready to send",
+      "Vetted cash-buyer + agent list pulled for this market",
+      "Deal armed to go out",
     ] },
-    { key: "cash_worked", label: "Buyers worked", match: /on market|marketing/i, checks: [
-      "Matched cash buyers called + texted + emailed",
+    { key: "cash_cascade", label: "Cascade fired — out to buyers", match: /sent to (buyer|agent)|cascade/i, checks: [
+      "Matched cash buyers + agents called + texted + emailed",
       "Every buyer logged in the tracker — nothing untracked",
       "Top-tier buyers chased for a price",
     ] },
-    { key: "cash_assigned", label: "Under assignment", match: /escrow/i, checks: [
+    { key: "cash_offers", label: "Offers worked (goal: 3)", match: /offers? in|received.*offer|3 offers/i, checks: [
+      "At least 3 offers logged (the minimum goal)",
+      "Best offer selected",
+    ] },
+    { key: "cash_assigned", label: "Under assignment", match: /assign|under contract/i, checks: [
       "Cash buyer committed + assignment signed",
       "EMD received",
-      "Title / escrow opened",
     ] },
-    { key: "cash_closing", label: "Clear to close", match: /closing/i, checks: [
-      "Closing date set",
+    { key: "cash_escrow", label: "In escrow → close", match: /escrow/i, checks: [
+      "Title / escrow opened",
       "All closing docs in",
     ] },
   ],
+  // 🤝 NOVATION = listing: get a listing agent to walk + photo + list on MLS, take
+  // offers, accept one, open escrow, close (Jon 2026-10-22).
   novation: [
-    { key: "nov_setup", label: "Novation set up + listing ready", match: /new|photo|day 1|intake/i, checks: [
-      "Novation agreement in place with the seller",
-      "Agent / broker lined up (or MLS plan set)",
+    { key: "nov_setup", label: "Agent + photos ready", match: /new|photo|day 1|intake/i, checks: [
+      "Listing agent engaged — walk scheduled",
+      "Property walked + photos taken",
       "Listing price + terms set",
     ] },
-    { key: "nov_listed", label: "Listed + agents engaged", match: /on market|marketing/i, checks: [
-      "Listed on the MLS / pitched to agents",
-      "Showings / offers being tracked",
+    { key: "nov_market", label: "On market", match: /on market|marketing/i, checks: [
+      "Listed on the MLS / live",
+      "Showings + offers being tracked",
       "A buyer agent is actively working it",
     ] },
-    { key: "nov_buyer", label: "Buyer locked", match: /escrow/i, checks: [
-      "Buyer offer accepted",
+    { key: "nov_escrow", label: "Offer accepted → escrow", match: /escrow/i, checks: [
+      "An offer is accepted + the buyer is qualified",
       "Novation contract executed",
       "Escrow opened",
     ] },
     { key: "nov_closing", label: "Clear to close", match: /closing/i, checks: [
-      "Closing date set",
+      "Closing scheduled",
       "All closing docs in",
     ] },
   ],

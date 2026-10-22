@@ -68,17 +68,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // a lead into dispositions, so `allPipes` (which keeps the DS deal pipelines) is the
   // move-target list; `pipelines` is the seller browse/selector list.
   const { isDispoNetworkPipeline, isDispoDealPipeline } = await import("@/lib/dispo-buyers");
-  // Ensure the cash dispo pipeline exists so acquisitions can hand off a signed CASH
-  // deal to it even before a manager opens /dispo (Jon 2026-10-22). Idempotent.
-  try {
-    const { readGhlPipelinesRaw, writeGhlPipelines, stageSlug } = await import("@/lib/crm");
-    const rawP = await readGhlPipelinesRaw();
-    if (!rawP.some((p) => p.name === "DS: Signed Off Market")) {
-      const signed = rawP.find((p) => /go close/i.test(p.name));
-      const stages = signed?.stages ?? ["📸 NEW / PHOTOS (Day 1-4)", "🛑 DELAYED/LIEN", "📣 ON MARKET", "🟡 ESCROW OPENED (70%)", "🚦 CLOSING SCHEDULED (90%)", "💰 DEAL WON (100%)", "🪦 DEAL DIED"].map((label) => ({ key: stageSlug(label), label }));
-      await writeGhlPipelines([...rawP, { name: "DS: Signed Off Market", stages }]);
-    }
-  } catch { /* non-blocking */ }
+  // Ensure the cash (wholesale) dispo pipeline exists so acquisitions can hand off a
+  // signed cash deal to it even before a manager opens /dispo (Jon 2026-10-22).
+  { const { ensureCashPipeline } = await import("@/lib/dispo-pipelines"); await ensureCashPipeline(); }
   const allPipes = (await readPipelines()).filter((p) => !isDispoNetworkPipeline(p.name)); // move targets (incl DS deal)
   const pipelines = allPipes.filter((p) => !isDispoDealPipeline(p.name));                   // seller selector + board
   // Lead counts per pipeline (also powers the tab badges). Default tab =

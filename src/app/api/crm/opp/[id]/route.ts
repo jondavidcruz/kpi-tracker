@@ -73,6 +73,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
     tasks: tasks.map((t) => ({ id: t.id, title: t.title, due: t.due })),
     appts: appts.map((a) => ({ id: a.id, title: a.title, at: a.at.toISOString(), withWho: a.withWho })),
-    events: events.map((e) => { const m = e.meta as { link?: string; name?: string } | null; return { id: e.id, kind: e.kind, body: stripHtml(e.body).slice(0, 600), actor: e.actor, at: e.at.toISOString(), ...(m?.link && !e.body.startsWith("🎙") ? { link: m.link, fileName: m.name } : {}) }; }),
+    events: events.map((e) => {
+      const m = e.meta as { link?: string; name?: string; transcript?: string } | null;
+      const isRec = e.body.startsWith("🎙") && !!m?.link;
+      return {
+        id: e.id, kind: e.kind, body: stripHtml(e.body).slice(0, 600), actor: e.actor, at: e.at.toISOString(),
+        ...(m?.link && !e.body.startsWith("🎙") ? { link: m.link, fileName: m.name } : {}),
+        ...(isRec ? { recLink: m!.link, transcript: (m!.transcript || "").slice(0, 6000) } : {}),
+      };
+    }),
   });
 }
