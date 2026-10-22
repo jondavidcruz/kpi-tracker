@@ -16,7 +16,7 @@ import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispo
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
-import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline } from "@/lib/dispo-gates";
+import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline, PATH_META } from "@/lib/dispo-gates";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +61,23 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const settings = await getSettings();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
   const comms = await commsFor(me!); // click-to-call / text / email on the cards, like the Seller CRM
+
+  // 🧩 Segment the three dispo processes into their own pipelines (Jon 2026-10-22):
+  // land (unsigned, find a buyer first) · novation (signed, list via agent) · cash
+  // (signed, find a cash buyer off-market). Auto-create the cash pipeline once,
+  // cloning the signed board's stages. Idempotent; managers only.
+  if (isManager(me)) {
+    try {
+      const { readGhlPipelinesRaw, writeGhlPipelines, stageSlug } = await import("@/lib/crm");
+      const raw = await readGhlPipelinesRaw();
+      const CASH_PIPE = "DS: Signed Off Market";
+      if (!raw.some((p) => p.name === CASH_PIPE)) {
+        const signed = raw.find((p) => /go close/i.test(p.name));
+        const stages = signed?.stages ?? ["📸 NEW / PHOTOS (Day 1-4)", "🛑 DELAYED/LIEN", "📣 ON MARKET", "🟡 ESCROW OPENED (70%)", "🚦 CLOSING SCHEDULED (90%)", "💰 DEAL WON (100%)", "🪦 DEAL DIED"].map((label) => ({ key: stageSlug(label), label }));
+        await writeGhlPipelines([...raw, { name: CASH_PIPE, stages }]);
+      }
+    } catch { /* non-blocking — board still works */ }
+  }
 
   const countRows = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null, pipeline: { in: [DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE] } }, _count: { _all: true } }).catch(() => [] as { pipeline: string; _count: { _all: number } }[]);
   const countOf = (p: string) => countRows.find((c) => c.pipeline === p)?._count._all ?? 0;
@@ -369,10 +386,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
           {/* deal-pipeline switch (defaults to DS: Sell Land Then Sign) */}
           {dealPipes.length > 1 && (
             <div className="flex flex-wrap gap-1.5">
-              {dealPipes.map((p) => (
+              {dealPipes.map((p) => { const pm = PATH_META[pathForPipeline(p.name)]; return (
                 <Link key={p.name} href={`/dispo?tab=deals&dealpl=${encodeURIComponent(p.name)}`} prefetch={false}
-                  className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${p.name === dealPl ? "bg-emerald-600 text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"}`}>{p.name}</Link>
-              ))}
+                  className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${p.name === dealPl ? "bg-emerald-600 text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"}`} title={pm.label}>{p.name} <span className="font-normal opacity-70">· {pm.emoji}</span></Link>
+              ); })}
             </div>
           )}
 
