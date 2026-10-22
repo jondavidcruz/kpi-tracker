@@ -6,8 +6,9 @@ import { readPipelines, parseTags } from "@/lib/crm";
 import { commsFor } from "@/lib/crm-comms";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
-import { readDispoBuyers, isDispoDealPipeline, isDevNetworkName, isAgentNetworkName, DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDevNetworkName, isAgentNetworkName, DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
 import { resolveNetworkPipelines } from "@/lib/dispo-network";
+import DispoPipeSelect from "@/components/DispoPipeSelect";
 import DispoFollowupKanban, { type FollowupCard } from "@/components/DispoFollowupKanban";
 import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban";
 import CrmQuickView from "@/components/CrmQuickView";
@@ -93,7 +94,13 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // the buyer follow-ups attached to those deals (Jon 2026-10-20: "feed the leads
   // from DS: Sell Land Then Sign"). ──
   const pipelines = await readPipelines();
-  const dealPipes = pipelines.filter((p) => isDispoDealPipeline(p.name));
+  // Deal pipelines = everything assigned to the Dispositions CRM that ISN'T the
+  // developer/buyer-agent network (those have their own tabs). Uses the explicit CRM
+  // assignment so pipelines Jon creates + marks "Dispositions" show up here even if
+  // their name doesn't match an old keyword pattern (Jon 2026-10-24).
+  const { readPipelineCrm, crmGroupOf } = await import("@/lib/pipeline-crm");
+  const crmMap = await readPipelineCrm();
+  const dealPipes = pipelines.filter((p) => p.name !== "War Room" && crmGroupOf(p.name, crmMap) === "dispositions" && !isDevNetworkName(p.name) && !isAgentNetworkName(p.name));
   const dealNames = dealPipes.map((p) => p.name);
   // which deal pipeline to show (default the Sell-Land one Jon named)
   const dealPl = dealPipes.find((p) => p.name === sp.dealpl)?.name
@@ -462,14 +469,12 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
 
       {tab === "deals" && (
         <>
-          {/* deal-pipeline switch (defaults to DS: Sell Land Then Sign) */}
-          {dealPipes.length > 1 && (
-            <div className="flex flex-wrap gap-1.5">
-              {dealPipes.map((p) => { const pm = PATH_META[pathForPipeline(p.name)]; return (
-                <Link key={p.name} href={`/dispo?tab=deals&dealpl=${encodeURIComponent(p.name)}`} prefetch={false}
-                  className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${p.name === dealPl ? "bg-emerald-600 text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"}`} title={pm.label}>{p.name} <span className="font-normal opacity-70">· {pm.emoji}</span></Link>
-              ); })}
-            </div>
+          {/* deal-pipeline switch — a click-to-open dropdown like the Seller CRM */}
+          {dealPipes.length >= 1 && (
+            <DispoPipeSelect
+              pipes={dealPipes.map((p) => ({ name: p.name, emoji: PATH_META[pathForPipeline(p.name)].emoji, label: PATH_META[pathForPipeline(p.name)].label, count: dealOpps.filter((o) => o.pipeline === p.name).length }))}
+              current={dealPl} q={qRaw}
+            />
           )}
 
           {dealNames.length === 0 ? (
