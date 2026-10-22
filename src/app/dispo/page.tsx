@@ -210,6 +210,11 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     for (const b of readDispoBuyers(o.formData)) followCards.push({ oppId: o.id, entryId: b.id, name: b.name, kind: b.kind, phone: b.phone, email: b.email, price: b.price, stage: b.stage, nextFollowUp: b.nextFollowUp, lastContact: b.lastContact, dealAddr });
   }
   const dueToday = followCards.filter((c) => c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in").length;
+  // ⏰ Overdue buyer follow-ups (due BEFORE today) — surfaced on the board so Sharyn
+  // & Marie can't miss a buyer they promised to chase (Jon 2026-10-24).
+  const overdueFollowups = followCards
+    .filter((c) => c.nextFollowUp && c.nextFollowUp < today && c.stage !== "passed" && c.stage !== "offer_in")
+    .sort((a, b) => (a.nextFollowUp ?? "").localeCompare(b.nextFollowUp ?? ""));
 
   // 🚨 "Not out yet" — deals that haven't reached the marketing stage AND have no
   // buyers attached = genuinely not pushed to anyone (Jon 2026-10-21). A deal already
@@ -679,6 +684,23 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                   <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
                   <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={movePipes.map((p) => p.name)} pipelineGroups={Object.fromEntries(movePipes.map((p) => [p.name, crmGroupOf(p.name, crmMap)]))} pipelineStages={moveStages} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
                 </Card>
+
+                {/* ⏰ Overdue buyer follow-ups — promised chases that slipped */}
+                {overdueFollowups.length > 0 && (
+                  <Card className="border-l-4 border-rose-400 p-3">
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2 text-sm font-extrabold text-rose-800">⏰ {overdueFollowups.length} buyer follow-up{overdueFollowups.length === 1 ? "" : "s"} overdue <Link href="/dispo?tab=nextup" className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700 hover:bg-rose-200">open Next Up →</Link></div>
+                    <div className="space-y-1">
+                      {overdueFollowups.slice(0, 10).map((c) => (
+                        <div key={`${c.oppId}-${c.entryId}`} className="flex flex-wrap items-center gap-2 rounded-lg bg-rose-50/60 px-2.5 py-1.5 ring-1 ring-rose-100">
+                          <Link href={`/crm/${c.oppId}`} className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-800 hover:underline">{c.name} <span className="font-normal text-slate-400">· 📦 {c.dealAddr}</span></Link>
+                          <span className="shrink-0 text-[10px] font-semibold text-rose-600">due {c.nextFollowUp}</span>
+                          <form action={logDispoBuyerTouchAction} className="shrink-0"><input type="hidden" name="oppId" value={c.oppId} /><input type="hidden" name="entryId" value={c.entryId} /><button className="rounded bg-sky-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-sky-700">📞 Touch</button></form>
+                        </div>
+                      ))}
+                      {overdueFollowups.length > 10 && <div className="mt-1.5 text-[11px] text-slate-400">+ {overdueFollowups.length - 10} more overdue — see Next Up.</div>}
+                    </div>
+                  </Card>
+                )}
 
                 {/* 🥶 Going cold — out to buyers but under 3 offers and stalled 2+ days */}
                 {coldDeals.length > 0 && (
