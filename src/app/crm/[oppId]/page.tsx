@@ -82,12 +82,13 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   // pipelines — never on home/seller leads.
   const canSeeBuyers = isManager(me) || me?.position === "dispositions";
   const showMatches = canSeeBuyers && isDispoDealPipeline(opp.pipeline);
-  // 🔙 Back goes to where this lead lives — dispo leads return to the Dispo CRM,
-  // not the seller CRM (Jon 2026-10-21: "remember where I'm at").
+  // 🔙 Back goes to where this lead lives — AND to the SAME pipeline it's in, so
+  // editing a lead never bounces you to a different board (Jon 2026-10-24: "stop
+  // the resets, keep me on what I was working on").
   const backHref = isDevNetworkName(opp.pipeline) ? "/dispo?tab=developers"
     : isAgentNetworkName(opp.pipeline) ? "/dispo?tab=agents"
-    : isDispoDealPipeline(opp.pipeline) ? "/dispo?tab=deals"
-    : "/crm";
+    : isDispoDealPipeline(opp.pipeline) ? `/dispo?tab=deals&dealpl=${encodeURIComponent(opp.pipeline)}`
+    : `/crm?pl=${encodeURIComponent(opp.pipeline || "War Room")}`;
   const leadFeatures = (() => { const f = (opp.formData as { land?: { features?: unknown } } | null)?.land?.features; return Array.isArray(f) ? (f as string[]) : []; })();
   const buyerMatches = showMatches ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures) : [];
   // 🎯 Smart Match from the buyer-network CRM (developers + agents), on dispo deals only.

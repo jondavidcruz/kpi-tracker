@@ -44,7 +44,7 @@ function cityState(addr?: string): { city: string; st: string } {
 // already uses on the Seller CRM (Jon 2026-10-20: "make it look like what they
 // recognize"). Developers + Buyer Agents are their own pipelines here (not mixed
 // with sellers); the Deals tab tracks buyer follow-ups per deal.
-export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string; resorted?: string }> }) {
+export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string; resorted?: string; pipedx?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me) && !isManager(me)) {
     return (
@@ -80,6 +80,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // (Removed the auto-create of a "DS: Signed Off Market" pipeline — Jon manages the
   // dispo pipelines himself now and it kept respawning one he'd deleted. 2026-10-24)
   const net = await resolveNetworkPipelines();
+  // 🔎 manager diagnostic data (only when ?pipedx=1) — where do all opps actually live?
+  const pipeDx = sp.pipedx && isManager(me)
+    ? { dev: net.dev, agent: net.agent, rows: (await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null }, _count: { _all: true } }).catch(() => [] as { pipeline: string; _count: { _all: number } }[])).map((r) => ({ pipeline: r.pipeline, count: r._count._all })).sort((a, b) => b.count - a.count) }
+    : null;
   const countRows = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null, pipeline: { in: net.all } }, _count: { _all: true } }).catch(() => [] as { pipeline: string; _count: { _all: number } }[]);
   const sumCount = (names: string[]) => countRows.filter((c) => names.includes(c.pipeline)).reduce((a, c) => a + c._count._all, 0);
   const devCount = sumCount(net.dev);
@@ -394,6 +398,19 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       />
 
       {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} lead{sp.imp === "1" ? "" : "s"}{sp.dev && sp.agent ? ` (${sp.dev} developers, ${sp.agent} buyer agents)` : ""}.{sp.dup && /^\d+$/.test(sp.dup) ? ` Skipped ${sp.dup} already here.` : ""}</div>}
+
+      {/* 🔎 manager-only pipeline diagnostic (?pipedx=1): every pipeline → live opp count,
+          so we can see exactly where the developers / buyer agents actually live. */}
+      {pipeDx && (
+        <Card className="p-3">
+          <div className="mb-1 text-[12px] font-extrabold text-slate-800">🔎 Pipeline distribution (live opps) — resolved network dev={JSON.stringify(pipeDx.dev)} · agent={JSON.stringify(pipeDx.agent)}</div>
+          <div className="overflow-x-auto"><table className="text-[11px]"><tbody>
+            {pipeDx.rows.map((r) => (
+              <tr key={r.pipeline}><td className="pr-4 font-mono">{JSON.stringify(r.pipeline)}</td><td className="font-bold">{r.count}</td></tr>
+            ))}
+          </tbody></table></div>
+        </Card>
+      )}
 
       <div className="flex flex-wrap gap-1.5">
         {TABS.map((t) => (
