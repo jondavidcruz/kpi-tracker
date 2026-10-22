@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 // 📅 Calendar — the GHL appointment list: every booked appointment across the
 // team, upcoming first (book them from any lead card or the quick-view panel).
-export default async function CrmCalendarPage({ searchParams }: { searchParams: Promise<{ v?: string; who?: string }> }) {
+export default async function CrmCalendarPage({ searchParams }: { searchParams: Promise<{ v?: string; who?: string; dept?: string }> }) {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return <Card className="p-10 text-center text-slate-400">The calendar lives inside the Seller CRM (acquisitions + managers).</Card>;
@@ -19,10 +19,23 @@ export default async function CrmCalendarPage({ searchParams }: { searchParams: 
   const who = manager ? (sp.who ?? "") : me!.name;
   const now = new Date();
 
+  // 🗂 Department scope (Jon 2026-10-24): dept=dispo → appointments on dispo-pipeline
+  // deals only; dept=acq → appointments NOT on dispo deals.
+  const dept = sp.dept === "dispo" ? "dispo" : sp.dept === "acq" ? "acq" : "";
+  let dispoOppIds: string[] = [];
+  if (dept) {
+    const { isDispoPipeline } = await import("@/lib/dispo-buyers");
+    const { readPipelines } = await import("@/lib/crm");
+    const dispoNames = (await readPipelines()).filter((p) => isDispoPipeline(p.name)).map((p) => p.name);
+    dispoOppIds = dispoNames.length ? (await db.crmOpportunity.findMany({ where: { pipeline: { in: dispoNames } }, select: { id: true } })).map((o) => o.id) : [];
+  }
+
   const appts = await db.crmAppointment.findMany({
     where: {
       ...(v === "past" ? { at: { lt: now } } : { at: { gte: new Date(now.getTime() - 3600_000) } }),
       ...(who ? { withWho: { contains: who.split(" ")[0], mode: "insensitive" as const } } : {}),
+      ...(dept === "dispo" ? { oppId: { in: dispoOppIds } } : {}),
+      ...(dept === "acq" ? { oppId: { notIn: dispoOppIds } } : {}),
     },
     orderBy: { at: v === "past" ? "desc" : "asc" }, take: 100,
   });
@@ -41,7 +54,7 @@ export default async function CrmCalendarPage({ searchParams }: { searchParams: 
 
   return (
     <div className="space-y-4">
-      <SectionTitle title="📅 Calendar" subtitle="Every seller appointment, team-wide — book them from any lead card." accent="bg-brand-gold"
+      <SectionTitle title={dept === "dispo" ? "🎯 Dispositions Calendar" : dept === "acq" ? "📞 Acquisitions Calendar" : "📅 Calendar"} subtitle={`${dept === "dispo" ? "Dispo appointments" : dept === "acq" ? "Acquisitions appointments" : "Every appointment, team-wide"} — book them from any lead card.`} accent="bg-brand-gold"
         right={<Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link>} />
 
       <div className="flex flex-wrap items-center gap-2">

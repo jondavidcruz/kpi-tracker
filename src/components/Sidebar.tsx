@@ -83,6 +83,18 @@ export default function Sidebar({
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => { try { if (localStorage.getItem("fo_sidebar_collapsed") === "1") setCollapsed(true); } catch { /* ok */ } }, []);
   const toggleCollapsed = () => setCollapsed((v) => { const n = !v; try { localStorage.setItem("fo_sidebar_collapsed", n ? "1" : "0"); } catch { /* ok */ } return n; });
+  // 📂 Per-department collapse (Jon 2026-10-24: "give the option to minimize the
+  // departments"). Persist which group labels are collapsed, per viewer.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  useEffect(() => { try { const r = localStorage.getItem("fo_nav_collapsed_groups"); if (r) setCollapsedGroups(new Set(JSON.parse(r))); } catch { /* ok */ } }, []);
+  const toggleGroup = (label: string) => setCollapsedGroups((s) => { const n = new Set(s); if (n.has(label)) n.delete(label); else n.add(label); try { localStorage.setItem("fo_nav_collapsed_groups", JSON.stringify([...n])); } catch { /* ok */ } return n; });
+  // 🎨 Department color accent — Acquisitions = red, Dispositions = green, so the
+  // team can tell which section is which at a glance (Jon 2026-10-24).
+  const groupAccent = (label: string): { text: string; ring: string; bg: string } | null => {
+    if (/acquisition/i.test(label)) return { text: "text-rose-300", ring: "ring-rose-400/30", bg: "bg-rose-500/[0.04]" };
+    if (/disposition/i.test(label)) return { text: "text-emerald-300", ring: "ring-emerald-400/30", bg: "bg-emerald-500/[0.04]" };
+    return null;
+  };
 
   const groups: { label: string; items: Item[] }[] = [
     // Department columns (Jon 2026-10-06) — defaults only; every tab drags
@@ -100,9 +112,9 @@ export default function Sidebar({
       { href: "/crm", label: "Seller CRM", Icon: Phone },
       { href: "/crm/next", label: "Next Up", Icon: Zap },
       { href: "/crm/conversations", label: "Conversations", Icon: MessagesSquare },
-      { href: "/crm/tasks", label: "Tasks", Icon: ListChecks, badge: dueTasks },
-      { href: "/crm/contacts", label: "Contacts", Icon: Contact },
-      { href: "/crm/calendar", label: "Calendar", Icon: CalendarDays },
+      { href: "/crm/tasks?dept=acquisitions", label: "Tasks", Icon: ListChecks, badge: dueTasks },
+      { href: "/crm/contacts?dept=acq", label: "Contacts", Icon: Contact },
+      { href: "/crm/calendar?dept=acq", label: "Calendar", Icon: CalendarDays },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/reduction", label: "Reduction Play", Icon: TrendingUp },
       { href: "/sop/acquisitions", label: "Acquisitions SOP", Icon: BookOpen, external: true },
@@ -111,6 +123,9 @@ export default function Sidebar({
       { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOrManager: true },
       { href: "/dispo?tab=nextup", label: "Dispo Next Up", Icon: Zap, marketingOrManager: true },
       { href: "/crm/conversations?dept=dispo", label: "Dispo Conversations", Icon: MessagesSquare, marketingOrManager: true },
+      { href: "/crm/tasks?dept=dispositions", label: "Dispo Tasks", Icon: ListChecks, marketingOrManager: true },
+      { href: "/crm/contacts?dept=dispo", label: "Dispo Contacts", Icon: Contact, marketingOrManager: true },
+      { href: "/crm/calendar?dept=dispo", label: "Dispo Calendar", Icon: CalendarDays, marketingOrManager: true },
       { href: "/sop/dispo", label: "Dispo SOP", Icon: BookOpen, marketingOrManager: true, external: true },
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/crm/dealboard", label: "Deal Board", Icon: Presentation },
@@ -319,9 +334,18 @@ export default function Sidebar({
         {orderedGroups.map((g) => {
           const items = g.items.filter(visible);
           if (items.length === 0) return null;
+          const accent = groupAccent(g.label);
+          const isCollapsed = collapsedGroups.has(g.label);
+          const label = navOrder?.groupLabels?.[g.label] ?? g.label;
           return (
-            <div key={g.label}>
-              <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-navy-300">{navOrder?.groupLabels?.[g.label] ?? g.label}</div>
+            <div key={g.label} className={accent ? `rounded-xl p-1 ring-1 ${accent.ring} ${accent.bg}` : ""}>
+              <button type="button" onClick={() => toggleGroup(g.label)} title={isCollapsed ? "Expand" : "Minimize this department"}
+                className={`flex w-full items-center gap-1.5 px-3 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-[0.08em] ${accent ? accent.text : "text-brand-navy-300"} hover:opacity-80`}>
+                <span className={`transition-transform ${isCollapsed ? "-rotate-90" : ""}`}>▾</span>
+                <span className="flex-1 text-left">{label}</span>
+                {isCollapsed && <span className="rounded-full bg-white/10 px-1.5 text-[9px] font-bold">{items.length}</span>}
+              </button>
+              {!isCollapsed && (
               <div className="space-y-0.5">
                 {items.map((it) => {
                   const active = isActive(it.href);
@@ -354,6 +378,7 @@ export default function Sidebar({
                   );
                 })}
               </div>
+              )}
             </div>
           );
         })}

@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 // paginated table (name / phone / email / owner / tags / last activity).
 const PAGE = 50;
 
-export default async function CrmContactsPage({ searchParams }: { searchParams: Promise<{ q?: string; p?: string; who?: string; dupes?: string }> }) {
+export default async function CrmContactsPage({ searchParams }: { searchParams: Promise<{ q?: string; p?: string; who?: string; dupes?: string; dept?: string }> }) {
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   if (!allowed) return <Card className="p-10 text-center text-slate-400">Contacts live inside the Seller CRM (acquisitions + managers).</Card>;
@@ -78,6 +78,16 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   // tied to their own pipeline(s), so Contacts is safe to show them.
   const lockPipes = await pipelineLockFor(me!);
   const pipeIn = lockPipes?.length ? (lockPipes.includes("War Room") ? [...lockPipes, ""] : lockPipes) : null;
+  // 🗂 Department scope (Jon 2026-10-24): dept=dispo → contacts with a dispo-pipeline
+  // opp; dept=acq → contacts with an acquisitions (non-dispo) opp. So Dispositions
+  // and Acquisitions each see only their own people.
+  const dept = sp.dept === "dispo" ? "dispo" : sp.dept === "acq" ? "acq" : "";
+  const { isDispoPipeline } = await import("@/lib/dispo-buyers");
+  const dispoNames = dept ? (await readPipelines()).filter((p) => isDispoPipeline(p.name)).map((p) => p.name) : [];
+  const oppAnd: Record<string, unknown>[] = [];
+  if (pipeIn) oppAnd.push({ pipeline: { in: pipeIn } });
+  if (dept === "dispo" && dispoNames.length) oppAnd.push({ pipeline: { in: dispoNames } });
+  if (dept === "acq" && dispoNames.length) oppAnd.push({ pipeline: { notIn: dispoNames } });
   // 🔎 Deep search (Jon 2026-10-20): also match contacts by their leads' NOTES and
   // land/discovery answers (e.g. "waterfront"), like the board search.
   let deepContactIds: string[] = [];
@@ -96,7 +106,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   const where = {
     archivedAt: null,
     ...(who ? { assignedTo: { equals: who, mode: "insensitive" as const } } : {}),
-    ...(pipeIn ? { opportunities: { some: { pipeline: { in: pipeIn } } } } : {}),
+    ...(oppAnd.length ? { opportunities: { some: { AND: oppAnd } } } : {}),
     ...(q ? { OR: [
       { name: { contains: q, mode: "insensitive" as const } },
       { phone: { contains: q.replace(/\D/g, "") || q } },
@@ -121,7 +131,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
 
   return (
     <div className="space-y-4">
-      <SectionTitle title="👤 Contacts" subtitle={`${total.toLocaleString()} sellers — search by name, phone, email, property or tag.`} accent="bg-brand-gold"
+      <SectionTitle title={dept === "dispo" ? "🎯 Dispositions Contacts" : dept === "acq" ? "📞 Acquisitions Contacts" : "👤 Contacts"} subtitle={`${total.toLocaleString()} ${dept === "dispo" ? "dispo buyers, agents & deal contacts" : "contacts"} — search by name, phone, email, property or tag.`} accent="bg-brand-gold"
         right={<span className="flex items-center gap-2"><Link prefetch={false} href="/crm/contacts?dupes=1" title="Sellers who appear more than once (same phone)" className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">🔁 Duplicates</Link><Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link></span>} />
 
       <Card className="space-y-2 p-3">
