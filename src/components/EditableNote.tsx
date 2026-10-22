@@ -3,10 +3,19 @@
 // timeline. Only the author (or a manager) gets the pencil; others see plain text.
 import { useState } from "react";
 import { editCrmNoteAction, deleteCrmNoteAction } from "@/app/crm/actions";
+import { sanitizeNoteHtml, isHtmlNote } from "@/lib/note-html";
+
+// turn a rich-HTML note into editable plain text (so editing doesn't show raw tags)
+const htmlToText = (h: string) => h
+  .replace(/<\s*(br|\/p|\/div|\/li|\/tr|\/h[1-6])\s*\/?>/gi, "\n")
+  .replace(/<li[^>]*>/gi, "• ").replace(/<[^>]+>/g, "")
+  .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+  .replace(/\n{3,}/g, "\n\n").trim();
 
 export default function EditableNote({ id, oppId, actor, body, canEdit }: { id: string; oppId: string; actor: string; body: string; canEdit: boolean }) {
+  const rich = isHtmlNote(body);
   const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(body);
+  const [val, setVal] = useState(rich ? htmlToText(body) : body);
 
   if (editing) {
     return (
@@ -16,14 +25,16 @@ export default function EditableNote({ id, oppId, actor, body, canEdit }: { id: 
         <textarea name="body" value={val} onChange={(e) => setVal(e.target.value)} rows={3} className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" autoFocus />
         <div className="flex gap-1.5">
           <button className="rounded-lg bg-brand-navy px-3 py-1 text-[11px] font-bold text-white hover:opacity-90">Save</button>
-          <button type="button" onClick={() => { setVal(body); setEditing(false); }} className="rounded-lg bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">Cancel</button>
+          <button type="button" onClick={() => { setVal(rich ? htmlToText(body) : body); setEditing(false); }} className="rounded-lg bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">Cancel</button>
         </div>
       </form>
     );
   }
   return (
     <div className="group/note">
-      <span className="whitespace-pre-line text-[13px] text-slate-800"><b>{actor}:</b> {body}</span>
+      {rich
+        ? <span className="text-[13px] text-slate-800 [&_a]:text-indigo-600 [&_a]:underline [&_b]:font-bold [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-bold [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5"><b>{actor}:</b> <span dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(body) }} /></span>
+        : <span className="whitespace-pre-line text-[13px] text-slate-800"><b>{actor}:</b> {body}</span>}
       {canEdit && (
         <button onClick={() => setEditing(true)} title="Edit this note" className="ml-1.5 align-middle text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/note:opacity-100 hover:text-indigo-600">✎ edit</button>
       )}

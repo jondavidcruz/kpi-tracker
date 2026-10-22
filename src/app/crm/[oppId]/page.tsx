@@ -23,9 +23,10 @@ import CallButton from "@/components/CallButton";
 import DraftOfferButton from "@/components/DraftOfferButton";
 import { PANDADOC_DRAFTING_ENABLED } from "@/lib/pandadoc";
 import EditableNote from "@/components/EditableNote";
+import LeadNoteComposer from "@/components/LeadNoteComposer";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import OppPipelineMover from "@/components/OppPipelineMover";
-import { setOppStageAction, addCrmNoteAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, toggleDndAction, uploadLeadDocAction } from "../actions";
+import { setOppStageAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, toggleDndAction, uploadLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
@@ -372,23 +373,17 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
         {/* ── MIDDLE: comms — the main event (SMS / email / notes / timeline) ── */}
         <div className="order-1 min-w-0 space-y-2.5 xl:order-none">
           <Card className="p-3">
-            <form action={addCrmNoteAction} className="flex flex-wrap items-center gap-2">
-              <input type="hidden" name="oppId" value={opp.id} />
-              <input type="hidden" name="contactId" value={c.id} />
-              <input name="body" placeholder="Write a note… what did the seller say?" className="min-w-[160px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
-              {/* 📎 attach a document — it uploads to this lead's Drive folder (shows in
-                  Documents) and links from the note in the timeline (Jon 2026-10-21). */}
-              <input type="file" name="file" title="Attach a document (also saved to this lead's Documents · max 15MB)" className="max-w-[170px] text-[11px] text-slate-500 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2.5 file:py-1.5 file:text-[11px] file:font-bold file:text-slate-600 hover:file:bg-slate-200" />
-              <button className="rounded-xl bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:opacity-90">📝 Note</button>
-            </form>
+            {/* 📝 the SAME smart note editor as the quickview — bold, underline,
+                bullets, attach (Jon 2026-10-24: "make notes smart like quick notes") */}
+            <LeadNoteComposer oppId={opp.id} contactId={c.id} />
             <form action={logCrmTouchAction} className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
               <input type="hidden" name="oppId" value={opp.id} />
               <input type="hidden" name="contactId" value={c.id} />
-              <span className="font-bold text-slate-400">Quick log:</span>
+              <span className="font-bold text-slate-400">Or just log a touch:</span>
               <button name="kind" value="call" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">📞 called</button>
               <button name="kind" value="sms" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">💬 texted</button>
               <button name="kind" value="email" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">✉️ emailed</button>
-              <input name="body" placeholder="optional note" className="min-w-[120px] flex-1 rounded-lg border border-slate-200 px-2 py-1" />
+              <input name="body" placeholder="what was said (optional)" className="min-w-[120px] flex-1 rounded-lg border border-slate-200 px-2 py-1" />
             </form>
           </Card>
 
@@ -459,7 +454,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
               <div className="min-w-0 flex-1">
                 {e.kind === "note"
-                  ? <EditableNote id={e.id} oppId={opp.id} actor={e.actor} body={stripHtml(e.body)} canEdit={e.actor === me!.name || manager} />
+                  ? <EditableNote id={e.id} oppId={opp.id} actor={e.actor} body={e.body} canEdit={e.actor === me!.name || manager} />
                   : <div className="whitespace-pre-line text-[13px] text-slate-800"><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</div>}
                 {/* 🎙 recording → play it right here + collapsed full transcript
                     (the AI summary is its own 📝 note; Jon 2026-10-12/13) */}
