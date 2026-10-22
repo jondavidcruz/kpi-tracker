@@ -6,6 +6,8 @@ import { getBuyerMatchesForLead, getNetworkMatchesForDeal, getDealsForNetworkLea
 import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { attachNetworkBuyerToDeal, runDispoCascadeAction } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
+import DispoOffersPanel from "@/components/DispoOffersPanel";
+import { readDispoOffers } from "@/lib/dispo-offers";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { readGateChecks } from "@/lib/dispo-gates";
@@ -590,6 +592,14 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
           {showMatches && (
             <DispoBuyerTracker oppId={opp.id} buyers={readDispoBuyers(opp.formData)} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} />
           )}
+
+          {/* 💰 Offers received — the 3-offer accountability tracker (Jon 2026-10-22) */}
+          {showMatches && (() => {
+            const si = stages.findIndex((s) => s.key === opp.stage);
+            const mi = stages.findIndex((s) => /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.label) || /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.key));
+            const pastCascade = si >= 0 && mi >= 0 && si >= mi;
+            return <DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} />;
+          })()}
 
           {comms.email && c.email && (
             <Card className="p-0">

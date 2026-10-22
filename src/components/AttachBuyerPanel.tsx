@@ -2,25 +2,35 @@
 // 🔗 Attach a Buyer-Network lead (developer / buyer agent) to THIS deal (Jon
 // 2026-10-20). Searches the Dispo CRM network and attaches the pick to the deal's
 // follow-up tracker — the integration that ties the two together.
+// Fix (Jon 2026-10-22): no longer force-seeds the search with the deal's area (that
+// made buyer agents show "No matches" whenever their area text didn't match the
+// exact city). Opens showing a BALANCED recent list of agents + developers; the deal
+// area is a one-tap chip, and kind chips let you jump straight to agents.
 import { useState, useEffect, useRef } from "react";
 import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 
 type Hit = { id: string; name: string; phone: string; area: string; buyBox: string; kind: string };
+type Kind = "" | "agent" | "developer";
 
 export default function AttachBuyerPanel({ oppId, defaultQuery = "", attachedIds = [] }: { oppId: string; defaultQuery?: string; attachedIds?: string[] }) {
   const [open, setOpen] = useState(false);
-  const [q, setQ] = useState(defaultQuery);
+  const [q, setQ] = useState("");
+  const [kind, setKind] = useState<Kind>("");
   const [hits, setHits] = useState<Hit[]>([]);
+  const [counts, setCounts] = useState<{ agents: number; developers: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState<Set<string>>(new Set(attachedIds));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const search = async (query: string) => {
+  const search = async (query: string, k: Kind) => {
     setLoading(true);
-    try { const r = await fetch(`/api/dispo/network?q=${encodeURIComponent(query)}`); if (r.ok) setHits((await r.json()).results ?? []); } catch { /* ignore */ }
+    try {
+      const r = await fetch(`/api/dispo/network?q=${encodeURIComponent(query)}${k ? `&kind=${k}` : ""}`);
+      if (r.ok) { const j = await r.json(); setHits(j.results ?? []); setCounts(j.counts ?? null); }
+    } catch { /* ignore */ }
     setLoading(false);
   };
-  useEffect(() => { if (!open) return; if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => search(q), 300); return () => { if (timer.current) clearTimeout(timer.current); }; }, [q, open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!open) return; if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => search(q, kind), 250); return () => { if (timer.current) clearTimeout(timer.current); }; }, [q, kind, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const attach = async (id: string) => {
     setDone((s) => new Set(s).add(id));
@@ -31,15 +41,24 @@ export default function AttachBuyerPanel({ oppId, defaultQuery = "", attachedIds
   if (!open) {
     return <button onClick={() => setOpen(true)} className="mt-1.5 w-full rounded-lg bg-brand-navy px-2 py-1.5 text-[11px] font-bold text-white hover:bg-brand-navy-700">🔗 Attach from buyer network</button>;
   }
+  const chip = (k: Kind, label: string) => (
+    <button onClick={() => setKind(k)} className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${kind === k ? "bg-brand-navy text-white" : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50"}`}>{label}{k === "agent" && counts ? ` ${counts.agents}` : k === "developer" && counts ? ` ${counts.developers}` : ""}</button>
+  );
   return (
     <div className="mt-1.5 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
       <div className="mb-1 flex items-center gap-1">
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 search developers + agents by area, name…" className="min-w-0 flex-1 rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 search by name or area…" className="min-w-0 flex-1 rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
         <button onClick={() => setOpen(false)} className="rounded bg-slate-200 px-1.5 py-1 text-[11px] font-bold text-slate-600">Done</button>
+      </div>
+      <div className="mb-1 flex flex-wrap items-center gap-1">
+        {chip("", "All")}
+        {chip("agent", "🧑‍💼 Agents")}
+        {chip("developer", "🏗 Developers")}
+        {defaultQuery && <button onClick={() => setQ(defaultQuery)} className="rounded-full bg-lime-50 px-2 py-0.5 text-[10px] font-bold text-lime-700 ring-1 ring-lime-200" title={`Filter to this deal's area`}>📍 {defaultQuery}</button>}
       </div>
       <div className="max-h-56 space-y-1 overflow-y-auto">
         {loading && <div className="py-2 text-center text-[11px] text-slate-400">searching…</div>}
-        {!loading && hits.length === 0 && <div className="py-2 text-center text-[11px] text-slate-400">No matches. Type an area or name.</div>}
+        {!loading && hits.length === 0 && <div className="py-2 text-center text-[11px] text-slate-400">No matches{q ? ` for “${q}”` : ""}. {q ? "Clear the search to see everyone." : "Import your developers + agents on the /dispo tabs."}</div>}
         {hits.map((h) => (
           <div key={h.id} className="flex items-center gap-2 rounded bg-white px-2 py-1 ring-1 ring-slate-100">
             <span className="text-[11px]" title={h.kind === "buyer_agent" ? "Buyer agent" : "Developer"}>{h.kind === "buyer_agent" ? "🧑‍💼" : "🏗"}</span>

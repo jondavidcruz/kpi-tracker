@@ -1930,6 +1930,65 @@ export async function removeDispoBuyerAction(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+// ── 💰 Offers-received tracker (Jon 2026-10-22) ──────────────────────────────
+// Stored on CrmOpportunity.formData.__dispoOffers (no migration). Records the
+// offers that come BACK on a deal — price, terms, days to close — so we can hold
+// the "minimum 3 offers" goal accountable and pick the best one.
+async function mutateDispoOffers(oppId: string, fn: (list: Record<string, unknown>[]) => Record<string, unknown>[]) {
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true, contactId: true } });
+  if (!o) return null;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  const cur = Array.isArray(fd.__dispoOffers) ? (fd.__dispoOffers as Record<string, unknown>[]) : [];
+  const next = fn([...cur]);
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __dispoOffers: next } as never } });
+  return o;
+}
+
+/** Log an offer we received on this deal. */
+export async function addDispoOfferAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const buyer = String(formData.get("buyer") ?? "").trim();
+  const price = String(formData.get("price") ?? "").trim();
+  if (!oppId || !buyer) return;
+  const entry: Record<string, unknown> = {
+    id: `of_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    buyer, price,
+    buyerId: String(formData.get("buyerId") ?? "").trim() || undefined,
+    terms: String(formData.get("terms") ?? "").trim() || undefined,
+    daysToClose: String(formData.get("daysToClose") ?? "").trim() || undefined,
+    status: "received", at: PT_TODAY(), by: me.name,
+  };
+  const o = await mutateDispoOffers(oppId, (list) => [...list, entry]);
+  if (o?.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "system", body: `💰 Offer logged — ${buyer}${price ? ` @ ${price}` : ""}${entry.terms ? ` (${entry.terms})` : ""}${entry.daysToClose ? `, ${entry.daysToClose}d to close` : ""}`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** Update one field on a logged offer (price / terms / daysToClose / status / notes / buyer). */
+export async function updateDispoOfferAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const entryId = String(formData.get("entryId") ?? "");
+  const field = String(formData.get("field") ?? "");
+  const value = String(formData.get("value") ?? "").trim();
+  if (!oppId || !entryId || !["price", "terms", "daysToClose", "status", "notes", "buyer"].includes(field)) return;
+  await mutateDispoOffers(oppId, (list) => list.map((r) => (r.id === entryId ? { ...r, [field]: value || undefined } : r)));
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** Remove a logged offer from this deal. */
+export async function removeDispoOfferAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const entryId = String(formData.get("entryId") ?? "");
+  if (!oppId || !entryId) return;
+  await mutateDispoOffers(oppId, (list) => list.filter((r) => r.id !== entryId));
+  revalidatePath(`/crm/${oppId}`);
+}
+
 /** 🔗 Attach a Buyer-Network lead (developer / buyer agent CrmOpportunity) to a
  *  DEAL (Jon 2026-10-20) — the integration: the deal's follow-up tracker now
  *  points at the real network lead (buyerId = its opp id), and the network lead

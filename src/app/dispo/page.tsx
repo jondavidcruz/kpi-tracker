@@ -18,6 +18,7 @@ import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline, PATH_META } from "@/lib/dispo-gates";
 import { parseAcres, fmtAcres, parseAcreQuery, acreInRange } from "@/lib/acreage";
+import { readDispoOffers, offerStats, OFFER_GOAL } from "@/lib/dispo-offers";
 
 export const dynamic = "force-dynamic";
 
@@ -121,6 +122,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
     acres: parseAcres(o.formData) ?? undefined,
+    offers: (() => { const s = offerStats(readDispoOffers(o.formData)); return { live: s.live, goal: OFFER_GOAL }; })(),
     gate: (() => {
       const gt = gateForCurrentStage(pathForPipeline(o.pipeline), dealColumns.map((s) => ({ key: s.key, label: s.label })), o.stage);
       return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData)), label: gt.label } : undefined;
@@ -134,6 +136,26 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     if (acreFilterOn && !acreInRange(c.acres ?? null, acMin, acMax)) return false;
     return true;
   });
+  // 🗂 Land diligence per deal (for the Inventory spreadsheet view): zoning,
+  // access, flood, wetlands, utilities, features, notes — pulled from the land
+  // intake (formData.land.*) so the inventory reads like a for-sale sheet.
+  const landByOpp = new Map<string, { zoning: string; access: string; topo: string; flood: string; wetlands: string; utilities: string[]; features: string[]; notes: string }>();
+  if (tab === "deals") {
+    const asArr = (v: unknown) => (Array.isArray(v) ? v.map((x) => String(x)) : []);
+    for (const o of dealOpps.filter((x) => x.pipeline === dealPl)) {
+      const land = ((o.formData ?? {}) as { land?: Record<string, unknown> }).land ?? {};
+      landByOpp.set(o.id, {
+        zoning: String(land.zoning ?? ""),
+        access: String(land.legalAccess ?? ""),
+        topo: String(land.topography ?? ""),
+        flood: String(land.floodZone ?? land.hazard ?? ""),
+        wetlands: String(land.wetlands ?? ""),
+        utilities: asArr(land.utilities),
+        features: asArr(land.features),
+        notes: String(land.special ?? ""),
+      });
+    }
+  }
   const dealCounts: Record<string, number> = {};
   for (const c of dealCardsShown) dealCounts[c.stage] = (dealCounts[c.stage] ?? 0) + 1;
   // buyer follow-ups attached across ALL deal pipelines
@@ -455,31 +477,49 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                     <div className="p-8 text-center text-sm text-slate-400">No parcels match{acreFilterOn ? " that acre range" : ""}{q ? " / that search" : ""}.</div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left text-[12px]">
-                        <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-400">
+                      <table className="w-full min-w-[1100px] text-left text-[12px]">
+                        <thead className="bg-slate-50 text-[9.5px] uppercase tracking-wide text-slate-400">
                           <tr>
                             <th className="px-3 py-2 font-bold">Parcel / address</th>
                             <th className="px-2 py-2 font-bold">⛰️ Acres</th>
-                            <th className="px-2 py-2 font-bold">Ask / value</th>
+                            <th className="px-2 py-2 font-bold">Zoning</th>
+                            <th className="px-2 py-2 font-bold">Access</th>
+                            <th className="px-2 py-2 font-bold">Flood</th>
+                            <th className="px-2 py-2 font-bold">Wetlands</th>
+                            <th className="px-2 py-2 font-bold">Utilities</th>
+                            <th className="px-2 py-2 font-bold">Features</th>
+                            <th className="px-2 py-2 font-bold">Ask</th>
+                            <th className="px-2 py-2 font-bold">💰</th>
                             <th className="px-2 py-2 font-bold">Stage</th>
-                            <th className="px-2 py-2 font-bold">Owner</th>
+                            <th className="px-2 py-2 font-bold">Notes</th>
                             <th className="px-2 py-2 font-bold"></th>
                           </tr>
                         </thead>
                         <tbody>
-                          {[...dealCardsShown].sort((a, b) => (a.acres ?? Infinity) - (b.acres ?? Infinity)).map((c, i) => (
-                            <tr key={c.id} className={i % 2 ? "bg-white" : "bg-slate-50/40"}>
+                          {[...dealCardsShown].sort((a, b) => (a.acres ?? Infinity) - (b.acres ?? Infinity)).map((c, i) => {
+                            const ld = landByOpp.get(c.id);
+                            const utils = ld?.utilities.filter((u) => !/^no /i.test(u)) ?? [];
+                            const dash = <span className="text-slate-300">—</span>;
+                            return (
+                            <tr key={c.id} className={`align-top ${i % 2 ? "bg-white" : "bg-slate-50/40"}`}>
                               <td className="px-3 py-2">
                                 <div className="font-bold text-slate-800">{c.address || c.title || c.contactName}</div>
-                                <div className="text-[11px] text-slate-400">{c.contactName}{c.parcels && c.parcels > 1 ? ` · 📦 ${c.parcels} parcels` : ""}{c.leadType ? ` · ${c.leadType.label}` : ""}</div>
+                                <div className="text-[10px] text-slate-400">{c.contactName}{c.parcels && c.parcels > 1 ? ` · 📦 ${c.parcels}` : ""}</div>
                               </td>
-                              <td className="px-2 py-2 font-extrabold text-lime-700">{c.acres != null ? fmtAcres(c.acres) : <span className="font-normal text-slate-300">—</span>}</td>
-                              <td className="px-2 py-2 font-semibold text-slate-700">{c.money || <span className="font-normal text-slate-300">—</span>}</td>
-                              <td className="px-2 py-2"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{dealColumns.find((s) => s.key === c.stage)?.label ?? c.stage}</span></td>
-                              <td className="px-2 py-2 text-slate-500">{c.assignedTo || "—"}</td>
+                              <td className="px-2 py-2 font-extrabold text-lime-700">{c.acres != null ? fmtAcres(c.acres) : dash}</td>
+                              <td className="px-2 py-2 text-slate-600">{ld?.zoning || dash}</td>
+                              <td className="px-2 py-2 text-slate-600">{ld?.access ? ld.access.replace(/^⚠️ /, "⚠️") : dash}</td>
+                              <td className="px-2 py-2">{ld?.flood ? <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${/^(no|zone x|none)/i.test(ld.flood) ? "bg-emerald-50 text-emerald-700" : /unknown/i.test(ld.flood) ? "bg-slate-100 text-slate-500" : "bg-amber-50 text-amber-700"}`}>{ld.flood}</span> : dash}</td>
+                              <td className="px-2 py-2">{ld?.wetlands ? <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${/^none/i.test(ld.wetlands) ? "bg-emerald-50 text-emerald-700" : /unknown/i.test(ld.wetlands) ? "bg-slate-100 text-slate-500" : "bg-amber-50 text-amber-700"}`}>{ld.wetlands}</span> : dash}</td>
+                              <td className="px-2 py-2 text-[10px] text-slate-500">{utils.length ? utils.slice(0, 3).join(", ") + (utils.length > 3 ? ` +${utils.length - 3}` : "") : dash}</td>
+                              <td className="px-2 py-2 text-[10px] text-slate-500">{ld?.features.length ? ld.features.slice(0, 3).join(", ") + (ld.features.length > 3 ? ` +${ld.features.length - 3}` : "") : dash}</td>
+                              <td className="px-2 py-2 font-semibold text-slate-700">{c.money || dash}</td>
+                              <td className="px-2 py-2">{c.offers && c.offers.live > 0 ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${c.offers.live >= c.offers.goal ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{c.offers.live}/{c.offers.goal}</span> : dash}</td>
+                              <td className="px-2 py-2"><span className="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{dealColumns.find((s) => s.key === c.stage)?.label ?? c.stage}</span></td>
+                              <td className="px-2 py-2 max-w-[180px] text-[10px] text-slate-500"><span className="line-clamp-2">{ld?.notes || dash}</span></td>
                               <td className="px-2 py-2 text-right"><Link href={`/crm/${c.id}`} className="font-bold text-sky-600 hover:underline">Open →</Link></td>
                             </tr>
-                          ))}
+                          ); })}
                         </tbody>
                       </table>
                     </div>
