@@ -159,10 +159,10 @@ export async function setOppStageAction(formData: FormData) {
   {
     const { isDispoDealPipeline } = await import("@/lib/dispo-buyers");
     if (isDispoDealPipeline(opp.pipeline)) {
-      const { readDealType, defaultDealType, readGateChecks, stageMoveBlocked } = await import("@/lib/dispo-gates");
-      const type = readDealType(opp.formData) || defaultDealType(opp.pipeline, (await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } }))?.tags ?? "");
+      const { pathForPipeline, readGateChecks, stageMoveBlocked } = await import("@/lib/dispo-gates");
+      const path = pathForPipeline(opp.pipeline);
       const stages = pipes.find((p) => p.name === opp.pipeline)?.stages.map((s) => ({ key: s.key, label: s.label })) ?? [];
-      const block = stageMoveBlocked(type, stages, opp.stage, stage, readGateChecks(opp.formData));
+      const block = stageMoveBlocked(path, stages, opp.stage, stage, readGateChecks(opp.formData));
       if (block.blocked && block.gate) {
         await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: `🔒 Stage held — clear the gate “${block.gate.label}” before advancing. (Option B: the SOP gate for this stage isn't complete.)`, actor: me.name });
         revalidatePath(`/crm/${id}`); revalidatePath("/crm"); revalidatePath("/dispo"); // snap the board card back

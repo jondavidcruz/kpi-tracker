@@ -15,7 +15,7 @@ import DueTodayReminder from "@/components/DueTodayReminder";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { DISPO_AGENT_PIPELINE, DISPO_DEV_PIPELINE, isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { parcelCount } from "@/lib/crm-shared";
-import { gateForCurrentStage, gateCleared, readDealType, readGateChecks, defaultDealType } from "@/lib/dispo-gates";
+import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline } from "@/lib/dispo-gates";
 import { commsFor } from "@/lib/crm-comms";
 import { createCrmLeadAction, bulkOppAction } from "./actions";
 import CrmOwnerSelect from "@/components/CrmOwnerSelect";
@@ -269,7 +269,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       leadType: o.pipeline === DISPO_AGENT_PIPELINE ? leadTypeBadge("buyer_agent") : o.pipeline === DISPO_DEV_PIPELINE ? leadTypeBadge("developer") : leadTypeBadge(sellerKind(o.formData, o.pipeline)),
       parcels: parcelCount(o.formData, o.contact.address, fd.property?.apn),
       gate: isDispoDealPipeline(o.pipeline) ? (() => {
-        const gt = gateForCurrentStage(readDealType(o.formData) || defaultDealType(o.pipeline, o.tags), stages.map((s) => ({ key: s.key, label: s.label })), o.stage);
+        const gt = gateForCurrentStage(pathForPipeline(o.pipeline), stages.map((s) => ({ key: s.key, label: s.label })), o.stage);
         return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData)), label: gt.label } : undefined;
       })() : undefined,
     };

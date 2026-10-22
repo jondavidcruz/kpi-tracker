@@ -15,7 +15,7 @@ import { importDispoNetworkCsv } from "@/app/actions";
 import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
-import { gateForCurrentStage, gateCleared, readDealType, readGateChecks, defaultDealType } from "@/lib/dispo-gates";
+import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline } from "@/lib/dispo-gates";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +102,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
     gate: (() => {
-      const gt = gateForCurrentStage(readDealType(o.formData) || defaultDealType(o.pipeline, o.tags), dealColumns.map((s) => ({ key: s.key, label: s.label })), o.stage);
+      const gt = gateForCurrentStage(pathForPipeline(o.pipeline), dealColumns.map((s) => ({ key: s.key, label: s.label })), o.stage);
       return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData)), label: gt.label } : undefined;
     })(),
   }));

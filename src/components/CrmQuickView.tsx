@@ -12,7 +12,7 @@ import {
 import { KIND_EMOJI, stripAgentNotesBlock } from "@/lib/crm-shared";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { isDispoDealPipeline } from "@/lib/dispo-buyers";
-import { readDealType, defaultDealType, readGateChecks } from "@/lib/dispo-gates";
+import { readGateChecks } from "@/lib/dispo-gates";
 import { formatAddress } from "@/lib/address";
 import { formsForPipeline } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
@@ -161,7 +161,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                 rather than a name-keyed lookup, which broke on aliased pipeline names. */}
             {isDispoDealPipeline(d.pipeline) && (pipelineStages?.[d.pipeline] ?? stages).length > 0 && (
               <div className="border-b border-slate-100 px-5 py-3">
-                <DispoGatePanel oppId={d.id} currentStage={d.stage} stages={pipelineStages?.[d.pipeline] ?? stages} dealType={readDealType(d.formData) || defaultDealType(d.pipeline, d.tags)} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} />
+                <DispoGatePanel oppId={d.id} pipeline={d.pipeline} currentStage={d.stage} stages={pipelineStages?.[d.pipeline] ?? stages} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} />
               </div>
             )}
 
