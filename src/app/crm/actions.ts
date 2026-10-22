@@ -1787,7 +1787,7 @@ export async function saveAllPipelinesAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
   const { readGhlPipelinesRaw, writeGhlPipelines, stageSlug } = await import("@/lib/crm");
-  let payload: Array<{ original?: string; name?: string; stages?: Array<{ key?: string; label?: string }> }> = [];
+  let payload: Array<{ original?: string; name?: string; group?: string; stages?: Array<{ key?: string; label?: string }> }> = [];
   try { const j = JSON.parse(String(formData.get("payload") ?? "[]")); if (Array.isArray(j)) payload = j; } catch { payload = []; }
   const cur = await readGhlPipelinesRaw();
   const war = cur.filter((p) => p.name === "War Room"); // fixed — powers the land SOP
@@ -1808,6 +1808,14 @@ export async function saveAllPipelinesAction(formData: FormData) {
     if (count > 0) rescued.push(c);
   }
   await writeGhlPipelines([...war, ...built, ...rescued]);
+  // 🗂 Persist each pipeline's CRM (Acquisitions / Dispositions) so routing uses the
+  // explicit choice, not name-pattern guessing (Jon 2026-10-24).
+  try {
+    const { writePipelineCrm } = await import("@/lib/pipeline-crm");
+    const crm: Record<string, "acquisitions" | "dispositions"> = {};
+    for (const p of payload) { const name = String(p.name ?? "").trim(); if (name && (p.group === "acquisitions" || p.group === "dispositions")) crm[name] = p.group; }
+    await writePipelineCrm(crm);
+  } catch { /* non-blocking */ }
   revalidatePath("/crm");
   revalidatePath("/crm/pipelines");
   redirect("/crm/pipelines?saved=all");

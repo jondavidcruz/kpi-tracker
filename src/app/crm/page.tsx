@@ -68,11 +68,15 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // attached to sellers (Jon 2026-10-20). But acquisitions must still be able to MOVE
   // a lead into dispositions, so `allPipes` (which keeps the DS deal pipelines) is the
   // move-target list; `pipelines` is the seller browse/selector list.
-  const { isDispoNetworkPipeline, isDispoDealPipeline } = await import("@/lib/dispo-buyers");
+  const { isDispoNetworkPipeline } = await import("@/lib/dispo-buyers");
+  const { readPipelineCrm, crmGroupOf } = await import("@/lib/pipeline-crm");
+  const crmMap = await readPipelineCrm();
   // (Removed the auto-create of a "DS: Signed Off Market" pipeline — Jon manages the
   // dispo pipelines himself now and it kept respawning a pipeline he'd deleted. 2026-10-24)
   const allPipes = (await readPipelines()).filter((p) => !isDispoNetworkPipeline(p.name)); // move targets (incl DS deal)
-  const pipelines = allPipes.filter((p) => !isDispoDealPipeline(p.name));                   // seller selector + board
+  // Seller selector/board shows ONLY pipelines assigned to the Acquisitions CRM
+  // (explicit assignment in /crm/pipelines, else name pattern) — Jon 2026-10-24.
+  const pipelines = allPipes.filter((p) => crmGroupOf(p.name, crmMap) === "acquisitions");
   // Lead counts per pipeline (also powers the tab badges). Default tab =
   // the busiest pipeline, so the board never opens on an empty view.
   const plGroup = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null }, _count: { _all: true } });
