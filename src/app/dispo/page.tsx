@@ -17,6 +17,7 @@ import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline, PATH_META } from "@/lib/dispo-gates";
+import { parseAcres, fmtAcres, parseAcreQuery, acreInRange } from "@/lib/acreage";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ function cityState(addr?: string): { city: string; st: string } {
 // already uses on the Seller CRM (Jon 2026-10-20: "make it look like what they
 // recognize"). Developers + Buyer Agents are their own pipelines here (not mixed
 // with sellers); the Deals tab tracks buyer follow-ups per deal.
-export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string }> }) {
+export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me) && !isManager(me)) {
     return (
@@ -57,7 +58,18 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const tab: Tab = sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" || sp.tab === "nextup" ? sp.tab : "deals";
   const listView = sp.view === "list";
   const areasView = sp.view === "areas";
-  const q = (sp.q ?? "").trim();
+  const inventoryView = sp.view === "inventory";
+  const qRaw = (sp.q ?? "").trim();
+  // ⛰️ Pull an acre filter OUT of the search box ("5-10 acres", ">10 ac") so the
+  // text search below only matches on what's left (name/address). Explicit acre
+  // min/max inputs override/augment the query-parsed range (Jon 2026-10-22).
+  const aq = parseAcreQuery(qRaw);
+  const q = aq.matched ? aq.rest : qRaw;
+  const acMinIn = sp.acmin && /^\d+(\.\d+)?$/.test(sp.acmin) ? Number(sp.acmin) : undefined;
+  const acMaxIn = sp.acmax && /^\d+(\.\d+)?$/.test(sp.acmax) ? Number(sp.acmax) : undefined;
+  const acMin = acMinIn ?? aq.min;
+  const acMax = acMaxIn ?? aq.max;
+  const acreFilterOn = acMin != null || acMax != null;
   const settings = await getSettings();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
   const comms = await commsFor(me!); // click-to-call / text / email on the cards, like the Seller CRM
@@ -108,13 +120,20 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
+    acres: parseAcres(o.formData) ?? undefined,
     gate: (() => {
       const gt = gateForCurrentStage(pathForPipeline(o.pipeline), dealColumns.map((s) => ({ key: s.key, label: s.label })), o.stage);
       return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData)), label: gt.label } : undefined;
     })(),
   }));
-  // 🔎 search the deal board (name / address / phone) — parity with the Seller CRM.
-  const dealCardsShown = q ? dealCards.filter((c) => `${c.contactName} ${c.address ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(q.toLowerCase())) : dealCards;
+  // 🔎 search the deal board (name / address / phone) — parity with the Seller CRM —
+  // plus an ⛰️ acre-size filter so dispo can answer "do we have 5–10 acre parcels?"
+  // instantly (Jon 2026-10-22). Acre tokens are stripped from the text query above.
+  const dealCardsShown = dealCards.filter((c) => {
+    if (q && !`${c.contactName} ${c.address ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(q.toLowerCase())) return false;
+    if (acreFilterOn && !acreInRange(c.acres ?? null, acMin, acMax)) return false;
+    return true;
+  });
   const dealCounts: Record<string, number> = {};
   for (const c of dealCardsShown) dealCounts[c.stage] = (dealCounts[c.stage] ?? 0) + 1;
   // buyer follow-ups attached across ALL deal pipelines
@@ -387,23 +406,86 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
           ) : (
             <>
               {sp.bulk && /^\d+$/.test(sp.bulk) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">🔗 Attached to {sp.bulk} deal{sp.bulk === "1" ? "" : "s"} in this area. They now show in each deal&apos;s buyer tracker + 📞 Next Up.</div>}
+              {(() => {
+                // keep the current view + acre filter on the text-search submit, and
+                // the current search + acre filter on the view toggles (Jon 2026-10-22)
+                const viewSuffix = areasView ? "&view=areas" : inventoryView ? "&view=inventory" : "";
+                const plSuffix = dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : "";
+                const acSuffix = `${acMinIn != null ? `&acmin=${acMinIn}` : ""}${acMaxIn != null ? `&acmax=${acMaxIn}` : ""}`;
+                const qSuffix = qRaw ? `&q=${encodeURIComponent(qRaw)}` : "";
+                return (
               <Card className="flex flex-wrap items-center gap-2 p-3">
-                <form action="/dispo" method="get" className="flex min-w-[240px] flex-1 items-center gap-2">
+                <form action="/dispo" method="get" className="flex min-w-[240px] flex-1 flex-wrap items-center gap-2">
                   <input type="hidden" name="tab" value="deals" />
                   {dealPl && <input type="hidden" name="dealpl" value={dealPl} />}
                   {areasView && <input type="hidden" name="view" value="areas" />}
-                  <input name="q" defaultValue={q} placeholder="🔎 Search deals — name, address, phone…" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+                  {inventoryView && <input type="hidden" name="view" value="inventory" />}
+                  <input name="q" defaultValue={qRaw} placeholder="🔎 Search deals — name, address, or “5-10 acres”…" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+                  <span className="flex items-center gap-1 rounded-xl bg-lime-50 px-2 py-1 ring-1 ring-lime-200" title="Filter by parcel size (acres)">
+                    <span className="text-[11px] font-bold text-lime-700">⛰️</span>
+                    <input name="acmin" defaultValue={acMinIn ?? ""} inputMode="decimal" placeholder="min" className="w-12 rounded-md border border-lime-200 bg-white px-1.5 py-1 text-xs" />
+                    <span className="text-[11px] text-lime-700">–</span>
+                    <input name="acmax" defaultValue={acMaxIn ?? ""} inputMode="decimal" placeholder="max" className="w-12 rounded-md border border-lime-200 bg-white px-1.5 py-1 text-xs" />
+                    <span className="text-[10px] font-semibold text-lime-700">ac</span>
+                  </span>
                   <button className="rounded-lg bg-brand-navy px-3 py-2 text-xs font-bold text-white">Search</button>
-                  {q && <Link href={`/dispo?tab=deals${areasView ? "&view=areas" : ""}${dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : ""}`} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">clear</Link>}
+                  {(qRaw || acreFilterOn) && <Link href={`/dispo?tab=deals${viewSuffix}${plSuffix}`} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">clear</Link>}
                 </form>
                 <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
-                  <Link href={`/dispo?tab=deals${dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`px-3 py-1.5 text-xs font-bold ${!areasView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📊 Board</Link>
-                  <Link href={`/dispo?tab=deals&view=areas${dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`px-3 py-1.5 text-xs font-bold ${areasView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>🗺 Areas</Link>
+                  <Link href={`/dispo?tab=deals${plSuffix}${qSuffix}${acSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${!areasView && !inventoryView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📊 Board</Link>
+                  <Link href={`/dispo?tab=deals&view=inventory${plSuffix}${qSuffix}${acSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${inventoryView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📋 Inventory</Link>
+                  <Link href={`/dispo?tab=deals&view=areas${plSuffix}${qSuffix}${acSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${areasView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>🗺 Areas</Link>
                 </div>
-                <span className="text-[11px] font-semibold text-slate-400">{dealCardsShown.length} of {dealCards.length}</span>
+                <span className="text-[11px] font-semibold text-slate-400">{dealCardsShown.length} of {dealCards.length}{acreFilterOn ? ` · ${acMin ?? "0"}–${acMax ?? "∞"} ac` : ""}</span>
               </Card>
+                );
+              })()}
 
-              {!areasView ? (
+              {inventoryView ? (
+                /* 📋 Inventory — treat the board like a searchable stock list: every
+                   parcel in this pipeline, sorted by acreage, so when an agent says
+                   "my buyer wants 5–10 acre lots" dispo filters ⛰️ and sees exactly
+                   what's available to sell (Jon 2026-10-22). */
+                <Card className="p-0 overflow-hidden">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-lime-50/60 px-3 py-2">
+                    <div className="text-[13px] font-extrabold text-slate-800">📋 {dealPl} inventory <span className="font-semibold text-slate-400">— {dealCardsShown.length} parcel{dealCardsShown.length === 1 ? "" : "s"}{acreFilterOn ? `, ${acMin ?? "0"}–${acMax ?? "∞"} ac` : ""}</span></div>
+                    <div className="text-[11px] text-slate-500">Sorted by size · sum {dealCardsShown.reduce((a, c) => a + (c.acres ?? 0), 0).toFixed(1)} ac</div>
+                  </div>
+                  {dealCardsShown.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-slate-400">No parcels match{acreFilterOn ? " that acre range" : ""}{q ? " / that search" : ""}.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-[12px]">
+                        <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-400">
+                          <tr>
+                            <th className="px-3 py-2 font-bold">Parcel / address</th>
+                            <th className="px-2 py-2 font-bold">⛰️ Acres</th>
+                            <th className="px-2 py-2 font-bold">Ask / value</th>
+                            <th className="px-2 py-2 font-bold">Stage</th>
+                            <th className="px-2 py-2 font-bold">Owner</th>
+                            <th className="px-2 py-2 font-bold"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...dealCardsShown].sort((a, b) => (a.acres ?? Infinity) - (b.acres ?? Infinity)).map((c, i) => (
+                            <tr key={c.id} className={i % 2 ? "bg-white" : "bg-slate-50/40"}>
+                              <td className="px-3 py-2">
+                                <div className="font-bold text-slate-800">{c.address || c.title || c.contactName}</div>
+                                <div className="text-[11px] text-slate-400">{c.contactName}{c.parcels && c.parcels > 1 ? ` · 📦 ${c.parcels} parcels` : ""}{c.leadType ? ` · ${c.leadType.label}` : ""}</div>
+                              </td>
+                              <td className="px-2 py-2 font-extrabold text-lime-700">{c.acres != null ? fmtAcres(c.acres) : <span className="font-normal text-slate-300">—</span>}</td>
+                              <td className="px-2 py-2 font-semibold text-slate-700">{c.money || <span className="font-normal text-slate-300">—</span>}</td>
+                              <td className="px-2 py-2"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{dealColumns.find((s) => s.key === c.stage)?.label ?? c.stage}</span></td>
+                              <td className="px-2 py-2 text-slate-500">{c.assignedTo || "—"}</td>
+                              <td className="px-2 py-2 text-right"><Link href={`/crm/${c.id}`} className="font-bold text-sky-600 hover:underline">Open →</Link></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              ) : !areasView ? (
                 <>
                 <Card className="p-3">
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
