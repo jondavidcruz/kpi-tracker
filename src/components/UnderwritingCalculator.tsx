@@ -417,6 +417,13 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   // ---- Assignment ----
   const marketPct = v("marketPct") || "75"; // default to SD/OC (75%), our home market — not the more conservative 70%
   const arv = n("arv");
+  // 🏡 ADU potential (Jon 2026-10-24): if the lot can add an ADU, it raises the ARV
+  // by the ADU's added value and adds its build cost — so we can offer more. Net gain
+  // to the max offer = added value × market% − build cost.
+  const aduOn = v("aduOn") === "1";
+  const aduAdd = aduOn ? n("aduAdd") : 0;    // value an ADU adds to the ARV
+  const aduBuild = aduOn ? n("aduCost") : 0; // cost to build the ADU
+  const arvEff = arv + aduAdd;               // ARV used for the house offer, ADU included
   const suggestedFee = feeForArv(arv); // tiered minimum we plan for, by ARV
   const aFee = f.aFee != null && f.aFee !== "" ? n("aFee") : suggestedFee;
   const sqft = n("sqft"), rehabSf = num(v("rehabSf"));
@@ -430,8 +437,9 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   // (cash-for-keys, eviction, liens). Detailed money-cost math lives on the Flip tab.
   const aHoa = n("aHoa");
   const aExtra = extraSum("aExtra", aExtraN);
-  const flipperTarget = arv * (num(marketPct) / 100);
-  const cashMao = flipperTarget - repairs - aHoa - aExtra - aFee;
+  const flipperTarget = arvEff * (num(marketPct) / 100);
+  const aduUplift = aduOn ? Math.round(aduAdd * (num(marketPct) / 100) - aduBuild) : 0; // net lift to the max offer
+  const cashMao = flipperTarget - repairs - aHoa - aExtra - aFee - aduBuild;
   const aAnchorPct = "10"; // standard anchor — fixed, no input (Jon 2026-09-25)
   const aAnchor = cashMao * (1 - num(aAnchorPct) / 100);
 
@@ -767,7 +775,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
   const asking = n("askPrice");
   const accepted = n("acceptedPrice");
   let dealMax = 0, profitAtAccepted = 0, marginLabel = "Your profit", showAsking = true;
-  if (tab === "assignment") { dealMax = cashMao; profitAtAccepted = (flipperTarget - repairs - aHoa - aExtra) - accepted; marginLabel = "Your assignment fee"; }
+  if (tab === "assignment") { dealMax = cashMao; profitAtAccepted = (flipperTarget - repairs - aHoa - aExtra - aduBuild) - accepted; marginLabel = "Your assignment fee"; }
   else if (tab === "cash_land") { dealMax = clMao; profitAtAccepted = clValueBase - accepted; marginLabel = "Your spread vs land value"; showAsking = true; }
   else if (tab === "note_land") { dealMax = 0; profitAtAccepted = 0; marginLabel = "—"; showAsking = false; }
   else if (tab === "developer") { dealMax = devMao; profitAtAccepted = devDispo - accepted; marginLabel = "Your assignment fee"; showAsking = true; }
@@ -866,7 +874,7 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
       const comps = [1, 2, 3].map((i) => { const a = v(`comp${i}`); const p = v(`comp${i}p`); const d = v(`comp${i}d`); return a ? `${esc(a)}${p ? ` — $${esc(p)}` : ""}${d ? `, ${esc(d)} DOM` : ""}` : ""; }).filter(Boolean).join("<br>");
       return {
         title: "Assignment (Cash) Analysis", comps: `<strong>Subject:</strong> ${esc(addr)}${comps ? `<br><strong>ARV comps (price · days on market):</strong><br>${comps}` : ""}`,
-        rows: [["ARV", money(arv)], [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...extraItems("aExtra", aExtraN).map((x) => [x.note || "Additional cost", money(x.amt)] as [string, string]), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`], ...(aDblOn ? ([["🔁 Double-close closing cost (seller side ×2)", money(aDblCost)], ["🎯 Double-close MAO (offer this instead)", money(aDblMao)]] as [string, string][]) : [])],
+        rows: [["ARV", money(arv)], ...(aduOn ? ([["🏡 ADU adds to ARV", money(aduAdd)], [`ADU-adjusted ARV`, money(arvEff)]] as [string, string][]) : []), [`Market tier (${marketPct}% of ARV)`, money(flipperTarget)], ["Repairs", money(repairs)], ...(aduOn ? ([["🏡 ADU build cost", money(aduBuild)]] as [string, string][]) : []), ...(aHoa > 0 ? ([["HOA / special dues", money(aHoa)]] as [string, string][]) : []), ...extraItems("aExtra", aExtraN).map((x) => [x.note || "Additional cost", money(x.amt)] as [string, string]), ["Assignment fee", money(aFee)], ["🎯 Cash MAO (max offer to seller)", money(cashMao)], [`Anchor / opening offer (${aAnchorPct}% below MAO)`, money(aAnchor)], ["Negotiation range", `${money(aAnchor)} → ${money(cashMao)}`], ...(aDblOn ? ([["🔁 Double-close closing cost (seller side ×2)", money(aDblCost)], ["🎯 Double-close MAO (offer this instead)", money(aDblMao)]] as [string, string][]) : [])],
         note: aDblOn
           ? "DOUBLE CLOSE — the seller won't let us assign, so we do two separate simultaneous closings (A→B buy, B→C sell). Closing costs are paid on BOTH escrows (escrow usually gives a small simultaneous-close discount). That extra cost is ours, so offer the seller the Double-close MAO to keep the same fee — or hold the MAO and the fee shrinks by that amount."
           : "Open at the anchor, negotiate up to the cash MAO. Holding accounts for the flipper's carry. On assignment the end buyer covers BOTH the seller's and the buyer's closing costs, so no closing is deducted here. If the seller won't meet MAO, pivot to Novation.",
@@ -1340,6 +1348,22 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
                   {rcMsg && <p className="mt-1 text-[11px] text-slate-500">{rcMsg}</p>}
                 </div>
               )}
+              {/* 🏡 ADU potential — adding an ADU raises the ARV, so we can offer more */}
+              <div className="sm:col-span-2 rounded-lg bg-amber-50 p-2.5 ring-1 ring-amber-200">
+                <label className="flex cursor-pointer items-center gap-2 text-[12px] font-bold text-amber-800">
+                  <input type="checkbox" checked={aduOn} onChange={(e) => setV("aduOn", e.target.checked ? "1" : "")} className="h-4 w-4 accent-amber-600" />
+                  🏡 This lot can add an ADU (raises the value → we can offer more)
+                </label>
+                {aduOn && (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Field k="aduAdd" label="ADU adds to ARV" prefix="$" placeholder="150,000" />
+                    <Field k="aduCost" label="ADU build cost" prefix="$" placeholder="120,000" />
+                    <div className="col-span-2 rounded-md bg-white px-2.5 py-1.5 text-[11px] leading-snug text-slate-600 ring-1 ring-amber-200">
+                      ADU lifts the ARV to <b className="text-slate-800">{money(arvEff)}</b> and changes your max offer by <b className={aduUplift >= 0 ? "text-emerald-700" : "text-red-600"}>{aduUplift >= 0 ? "+" : ""}{money(aduUplift)}</b> <span className="text-slate-400">(added value × {marketPct}% − build cost). Only use if the buyer would actually build it.</span>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="flex items-end gap-2">
                 <div className="flex-1"><Field k="aFee" label="Assignment fee" prefix="$" placeholder={suggestedFee ? suggestedFee.toLocaleString() : "15,000"} req="need" /></div>
                 {suggestedFee > 0 && <button type="button" onClick={() => setV("aFee", String(suggestedFee))} className="mb-0.5 shrink-0 rounded-lg bg-emerald-100 px-2.5 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200" title={`Tiered minimum for ${tierLabel(arv)} ARV`}>Use {money(suggestedFee)}</button>}
