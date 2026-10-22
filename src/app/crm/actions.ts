@@ -1251,9 +1251,22 @@ export async function savePipelineAction(formData: FormData) {
     done("deleted");
   }
   const name = String(formData.get("name") ?? "").trim().slice(0, 60);
-  const stageLines = String(formData.get("stages") ?? "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 25);
-  if (!name || !stageLines.length) done("empty");
-  const stages = stageLines.map((label) => ({ key: stageSlug(label), label }));
+  // Prefer stagesJson (each row carries its original KEY so a rename keeps the deals
+  // in place — no more orphaning into column 1). Fall back to the plain lines.
+  let stages: Array<{ key: string; label: string }> = [];
+  try {
+    const parsed = JSON.parse(String(formData.get("stagesJson") ?? "[]"));
+    if (Array.isArray(parsed)) stages = parsed
+      .map((r: { key?: string; label?: string }) => ({ label: String(r?.label ?? "").trim(), key: String(r?.key ?? "").trim() }))
+      .filter((r) => r.label)
+      .map((r) => ({ key: r.key || stageSlug(r.label), label: r.label }))
+      .slice(0, 25);
+  } catch { stages = []; }
+  if (!stages.length) {
+    const stageLines = String(formData.get("stages") ?? "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 25);
+    stages = stageLines.map((label) => ({ key: stageSlug(label), label }));
+  }
+  if (!name || !stages.length) done("empty");
   const entry = { name, stages };
   if (i >= 0) {
     list[i] = entry;
@@ -1730,6 +1743,42 @@ export async function setOppPipelineAction(formData: FormData) {
 /** 🔀 Reorder the pipeline tabs (Jon 2026-10-13: drag/move pipelines, not just
  *  rename). dir "up"/"down" swaps a pipeline with its neighbor in the stored
  *  order (the War Room + DNC built-ins aren't in the stored list). */
+// 🔧 Re-sort deals whose stored stage no longer matches any stage in their pipeline
+// (Jon 2026-10-24). Renaming a pipeline's stages changes the stage KEYS, so every
+// deal's old key becomes orphaned → the board dumps them all into the first column
+// and "select whole stage" counts 0. This remaps each orphan to the best-matching
+// CURRENT stage by comparing the old key's words to each stage's key+label (so a
+// deal whose old stage was "deal_won" lands in "Closed / Won", "escrow_opened" →
+// "Escrow Opened", etc.); anything with no word overlap stays in the first stage.
+const stageTokens = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 2 && !["the", "and", "new"].includes(t)));
+export async function resortOrphanStagesAction(formData: FormData) {
+  const me = await getCurrentUser();
+  const { canManageAllLeads } = await import("@/lib/auth");
+  if (!canManageAllLeads(me)) return;
+  const pipeline = String(formData.get("pipeline") ?? "");
+  const back = String(formData.get("back") ?? "/dispo?tab=deals");
+  if (!pipeline) redirect(back);
+  const pls = await readPipelines();
+  const pl = pls.find((p) => p.name === pipeline);
+  if (!pl || !pl.stages.length) redirect(back);
+  const keys = new Set(pl!.stages.map((s) => s.key));
+  const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline, stage: { notIn: [...keys] } }, select: { id: true, stage: true }, take: 3000 });
+  let moved = 0;
+  for (const o of opps) {
+    const ot = stageTokens(o.stage || "");
+    let best = pl!.stages[0], bestScore = 0;
+    for (const s of pl!.stages) {
+      const st = stageTokens(`${s.key} ${s.label}`);
+      let score = 0; for (const t of ot) if (st.has(t)) score++;
+      if (score > bestScore) { bestScore = score; best = s; }
+    }
+    await db.crmOpportunity.update({ where: { id: o.id }, data: { stage: best.key } });
+    moved++;
+  }
+  revalidatePath("/dispo");
+  redirect(`${back}${back.includes("?") ? "&" : "?"}resorted=${moved}`);
+}
+
 export async function reorderPipelineAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;

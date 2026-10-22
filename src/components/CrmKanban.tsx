@@ -34,6 +34,7 @@ export type CrmCard = {
   parcels?: number; // 📦 how many parcels on this deal (>1 shows a badge)
   acres?: number;   // ⛰️ parcel size — shown as a chip + searchable by acre range
   offers?: { live: number; goal: number }; // 💰 offers received vs the 3-offer goal
+  staleStage?: string;  // ⚠️ stored stage no longer in this pipeline (rename orphan) — real stage to show
   gate?: { cleared: boolean; label: string }; // 🚦 Option B — this stage's SOP gate status
 };
 // 🎨 GHL-style age coloring (Jon 2026-10-08): customizable ranges + colors,
@@ -328,6 +329,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         {!!c.parcels && c.parcels > 1 && <span title={`${c.parcels} parcels on this deal`} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 ring-1 ring-amber-200">📦 {c.parcels}</span>}
                         {c.acres != null && <span title={`${c.acres} acres`} className="rounded-full bg-lime-100 px-1.5 py-0.5 text-[9px] font-bold text-lime-800 ring-1 ring-lime-200">⛰️ {c.acres % 1 === 0 ? c.acres : c.acres.toFixed(2)} ac</span>}
                         {c.offers && c.offers.live > 0 && <span title={`${c.offers.live} of ${c.offers.goal} offers received`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.offers.live >= c.offers.goal ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>💰 {c.offers.live}/{c.offers.goal}</span>}
+                        {c.staleStage && <span title={`This deal's saved stage ("${c.staleStage}") no longer exists in this pipeline after a rename — use "Re-sort deals" to file it correctly.`} className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700 ring-1 ring-orange-200">⚠️ was: {c.staleStage}</span>}
                         {c.leadType && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.leadType.cls}`}>{c.leadType.label}</span>}
                         {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
                       </div>

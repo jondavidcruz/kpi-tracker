@@ -13,7 +13,7 @@ import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban"
 import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv } from "@/app/actions";
-import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispoCascadeAction } from "@/app/crm/actions";
+import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispoCascadeAction, resortOrphanStagesAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
@@ -44,7 +44,7 @@ function cityState(addr?: string): { city: string; st: string } {
 // already uses on the Seller CRM (Jon 2026-10-20: "make it look like what they
 // recognize"). Developers + Buyer Agents are their own pipelines here (not mixed
 // with sellers); the Deals tab tracks buyer follow-ups per deal.
-export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string }> }) {
+export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string; resorted?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me) && !isManager(me)) {
     return (
@@ -61,6 +61,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const listView = sp.view === "list";
   const areasView = sp.view === "areas";
   const inventoryView = sp.view === "inventory";
+  const closedView = sp.view === "closed";
   const qRaw = (sp.q ?? "").trim();
   // ⛰️ Pull an acre filter OUT of the search box ("5-10 acres", ">10 ac") so the
   // text search below only matches on what's left (name/address). Explicit acre
@@ -109,8 +110,34 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   for (const t of dealTasks) { const d = (t.due || "").slice(0, 10); if (d && d >= today && (!nextTaskByDeal.has(t.oppId) || d < nextTaskByDeal.get(t.oppId)!)) nextTaskByDeal.set(t.oppId, d); }
   const nextApptByDeal = new Map<string, Date>();
   for (const a of dealAppts) { if (!nextApptByDeal.has(a.oppId)) nextApptByDeal.set(a.oppId, a.at); }
+  // A closed/won stage — detected by the stage KEY or LABEL so it works even for
+  // deals orphaned by a rename (their old key still says won/closed). Excludes
+  // "closing scheduled" (still open) and died/dead (lost).
+  const isClosedStage = (s: string) => /\bwon\b|deal.?won|\bclosed\b|\bsold\b/i.test(s || "") && !/died|\bdead\b/i.test(s || "");
   // the deal board (cards for the selected deal pipeline)
   const dealColumns: CrmColumn[] = (dealPipes.find((p) => p.name === dealPl)?.stages ?? []).map((s) => ({ key: s.key, label: s.label, cls: s.cls }));
+  const dealStageKeys = new Set(dealColumns.map((s) => s.key));
+  // 🚑 Orphaned deals: stored stage no longer exists in this pipeline (a stage rename
+  // re-keyed them) → they pile into the first column & "select whole stage" counts 0.
+  const prettyStage = (k: string) => k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const orphanOpps = dealOpps.filter((o) => o.pipeline === dealPl && o.stage && !dealStageKeys.has(o.stage));
+  const orphanCount = orphanOpps.length;
+  // ✅ Closed board — every CLOSED/WON deal across ALL three dispo pipelines, tagged
+  // by its type (Jon 2026-10-24: "the final board that shows all deal types we closed").
+  const closedDeals = (tab === "deals" ? dealOpps.filter((o) => isClosedStage(o.stage)) : []).map((o) => ({
+    id: o.id,
+    address: o.contact?.address ? formatAddress(o.contact.address) : (o.title || o.contact?.name || "deal"),
+    contactName: o.contact?.name || "",
+    pipeline: o.pipeline,
+    typeEmoji: PATH_META[pathForPipeline(o.pipeline)].emoji,
+    acres: parseAcres(o.formData),
+    money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "",
+    valueNum: o.value ?? o.askPrice ?? 0,
+    stage: prettyStage(o.stage || ""),
+    owner: o.assignedTo || "",
+    at: o.updatedAt,
+  })).sort((a, b) => b.at.getTime() - a.at.getTime());
+  const closedTotal = closedDeals.reduce((a, d) => a + d.valueNum, 0);
   const dealCards: CrmCard[] = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => ({
     id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: o.contact?.address ? formatAddress(o.contact.address) : undefined,
     phone: o.contact?.phone || undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
@@ -121,6 +148,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
     acres: parseAcres(o.formData) ?? undefined,
     offers: (() => { const s = offerStats(readDispoOffers(o.formData)); return { live: s.live, goal: OFFER_GOAL }; })(),
+    staleStage: o.stage && !dealStageKeys.has(o.stage) ? prettyStage(o.stage) : undefined,
     gate: (() => {
       const gt = gateForCurrentStage(pathForPipeline(o.pipeline), dealColumns.map((s) => ({ key: s.key, label: s.label })), o.stage);
       return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData)), label: gt.label } : undefined;
@@ -430,7 +458,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
               {(() => {
                 // keep the current view + acre filter on the text-search submit, and
                 // the current search + acre filter on the view toggles (Jon 2026-10-22)
-                const viewSuffix = areasView ? "&view=areas" : inventoryView ? "&view=inventory" : "";
+                const viewSuffix = areasView ? "&view=areas" : inventoryView ? "&view=inventory" : closedView ? "&view=closed" : "";
                 const plSuffix = dealPl ? `&dealpl=${encodeURIComponent(dealPl)}` : "";
                 const acSuffix = `${acMinIn != null ? `&acmin=${acMinIn}` : ""}${acMaxIn != null ? `&acmax=${acMaxIn}` : ""}`;
                 const qSuffix = qRaw ? `&q=${encodeURIComponent(qRaw)}` : "";
@@ -441,6 +469,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                   {dealPl && <input type="hidden" name="dealpl" value={dealPl} />}
                   {areasView && <input type="hidden" name="view" value="areas" />}
                   {inventoryView && <input type="hidden" name="view" value="inventory" />}
+                  {closedView && <input type="hidden" name="view" value="closed" />}
                   <input name="q" defaultValue={qRaw} placeholder="🔎 Search deals — name, address, or “5-10 acres”…" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
                   <span className="flex items-center gap-1 rounded-xl bg-lime-50 px-2 py-1 ring-1 ring-lime-200" title="Filter by parcel size (acres)">
                     <span className="text-[11px] font-bold text-lime-700">⛰️</span>
@@ -453,16 +482,79 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                   {(qRaw || acreFilterOn) && <Link href={`/dispo?tab=deals${viewSuffix}${plSuffix}`} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">clear</Link>}
                 </form>
                 <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
-                  <Link href={`/dispo?tab=deals${plSuffix}${qSuffix}${acSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${!areasView && !inventoryView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📊 Board</Link>
+                  <Link href={`/dispo?tab=deals${plSuffix}${qSuffix}${acSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${!areasView && !inventoryView && !closedView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📊 Board</Link>
                   <Link href={`/dispo?tab=deals&view=inventory${plSuffix}${qSuffix}${acSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${inventoryView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📋 Inventory</Link>
                   <Link href={`/dispo?tab=deals&view=areas${plSuffix}${qSuffix}${acSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${areasView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>🗺 Areas</Link>
+                  <Link href={`/dispo?tab=deals&view=closed${qSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${closedView ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>✅ Closed</Link>
                 </div>
                 <span className="text-[11px] font-semibold text-slate-400">{dealCardsShown.length} of {dealCards.length}{acreFilterOn ? ` · ${acMin ?? "0"}–${acMax ?? "∞"} ac` : ""}</span>
               </Card>
                 );
               })()}
 
-              {inventoryView ? (
+              {/* 🔔 flash after a re-sort */}
+              {sp.resorted && /^\d+$/.test(sp.resorted) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✅ Re-sorted {sp.resorted} deal{sp.resorted === "1" ? "" : "s"} back to their matching stages.</div>}
+
+              {/* 🚑 Orphaned-deals banner: a stage rename re-keyed deals so they piled
+                  into the first column & bulk-select counts 0. One click re-files them. */}
+              {orphanCount > 0 && !closedView && (
+                <Card className="flex flex-wrap items-center gap-3 border-l-4 border-orange-400 p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-extrabold text-orange-800">⚠️ {orphanCount} deal{orphanCount === 1 ? "" : "s"} in <b>{dealPl}</b> have an old stage from a rename</div>
+                    <p className="mt-0.5 text-[12px] text-slate-500">Renaming this pipeline&apos;s stages changed their internal keys, so these deals (including ones that were <b>Won/Closed</b>) fell into the first column and can&apos;t be bulk-selected. Re-sort files each one back to its matching stage (a deal that was &ldquo;Closed/Won&rdquo; goes to your Closed/Won stage, etc.).</p>
+                  </div>
+                  <form action={resortOrphanStagesAction}>
+                    <input type="hidden" name="pipeline" value={dealPl} />
+                    <input type="hidden" name="back" value={`/dispo?tab=deals&dealpl=${encodeURIComponent(dealPl)}`} />
+                    <button className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white hover:bg-orange-700">🔧 Re-sort {orphanCount} deal{orphanCount === 1 ? "" : "s"}</button>
+                  </form>
+                </Card>
+              )}
+
+              {closedView ? (
+                /* ✅ Closed board — every CLOSED/WON deal across all three dispo
+                   pipelines, tagged by type (Jon 2026-10-24). The "final board". */
+                <Card className="p-0 overflow-hidden">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-emerald-50/60 px-3 py-2">
+                    <div className="text-[13px] font-extrabold text-slate-800">✅ Closed / Won — all dispo types <span className="font-semibold text-slate-400">— {closedDeals.length} deal{closedDeals.length === 1 ? "" : "s"}</span></div>
+                    <div className="text-[11px] font-bold text-emerald-700">{closedTotal > 0 ? `$${closedTotal.toLocaleString()} total value` : ""}</div>
+                  </div>
+                  {closedDeals.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-slate-400">No closed/won deals yet. When a deal reaches a Closed/Won stage in any dispo pipeline, it shows here.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[760px] text-left text-[12px]">
+                        <thead className="bg-slate-50 text-[9.5px] uppercase tracking-wide text-slate-400">
+                          <tr>
+                            <th className="px-3 py-2 font-bold">Deal</th>
+                            <th className="px-2 py-2 font-bold">Type</th>
+                            <th className="px-2 py-2 font-bold">⛰️ Acres</th>
+                            <th className="px-2 py-2 font-bold">Value</th>
+                            <th className="px-2 py-2 font-bold">Closed stage</th>
+                            <th className="px-2 py-2 font-bold">Owner</th>
+                            <th className="px-2 py-2 font-bold">Date</th>
+                            <th className="px-2 py-2 font-bold"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {closedDeals.map((d, i) => (
+                            <tr key={d.id} className={i % 2 ? "bg-white" : "bg-slate-50/40"}>
+                              <td className="px-3 py-2"><div className="font-bold text-slate-800">{d.address}</div>{d.contactName && <div className="text-[10px] text-slate-400">{d.contactName}</div>}</td>
+                              <td className="px-2 py-2 text-slate-600">{d.typeEmoji} {d.pipeline.replace(/^DS:\s*/, "")}</td>
+                              <td className="px-2 py-2 font-semibold text-lime-700">{d.acres != null ? fmtAcres(d.acres) : <span className="font-normal text-slate-300">—</span>}</td>
+                              <td className="px-2 py-2 font-semibold text-slate-700">{d.money || <span className="font-normal text-slate-300">—</span>}</td>
+                              <td className="px-2 py-2"><span className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{d.stage}</span></td>
+                              <td className="px-2 py-2 text-slate-500">{d.owner || "—"}</td>
+                              <td className="px-2 py-2 text-slate-400">{d.at.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
+                              <td className="px-2 py-2 text-right"><Link href={`/crm/${d.id}`} className="font-bold text-sky-600 hover:underline">Open →</Link></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              ) : inventoryView ? (
                 /* 📋 Inventory — treat the board like a searchable stock list: every
                    parcel in this pipeline, sorted by acreage, so when an agent says
                    "my buyer wants 5–10 acre lots" dispo filters ⛰️ and sees exactly
