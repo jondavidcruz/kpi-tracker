@@ -1890,15 +1890,26 @@ export async function updateDispoBuyerAction(formData: FormData) {
   const value = String(formData.get("value") ?? "").trim();
   if (!oppId || !entryId || !["stage", "price", "nextFollowUp", "notes", "phone", "email"].includes(field)) return;
   let entryName = "";
-  const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => { if (r.id === entryId) entryName = String(r.name ?? ""); return r.id === entryId ? { ...r, [field]: value || undefined } : r; }));
+  let entryBuyerId = "";
+  const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => { if (r.id === entryId) { entryName = String(r.name ?? ""); entryBuyerId = String(r.buyerId ?? ""); } return r.id === entryId ? { ...r, [field]: value || undefined } : r; }));
   // a saved note = working that agent → log it to the TIMELINE as a tracked highlight
   // (not crammed into the pinned note). Buyer Conversations stays a MANUAL KPI (Jon
   // 2026-10-21: auto-counting notes inflated it — 53 vs the real 7).
   if (field === "notes") {
     await cleanPinnedAgentBlock(oppId); // strip any old auto block left in the pinned note
     if (value && o?.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "note", body: `📝 ${entryName || "Agent"}: ${value.slice(0, 500)}`, actor: me.name });
+    // 🔁 Mirror the note onto the AGENT'S OWN contact card (Jon 2026-10-24): a note
+    // about what this agent wants (e.g. "just send the address, not the whole file")
+    // belongs on THEIR lead, not only on the deal. Tagged with the deal it came from.
+    if (value && entryBuyerId) {
+      const lead = await db.crmOpportunity.findUnique({ where: { id: entryBuyerId }, select: { contactId: true } }).catch(() => null);
+      const dealLabel = (await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contact: { select: { address: true } } } }).catch(() => null));
+      const dealAddr = dealLabel?.contact?.address || dealLabel?.title || "a deal";
+      if (lead?.contactId) await logCrmEvent({ contactId: lead.contactId, oppId: entryBuyerId, kind: "note", body: `📝 From deal “${dealAddr}”: ${value.slice(0, 500)}`, actor: me.name });
+    }
   }
   revalidatePath(`/crm/${oppId}`);
+  if (field === "notes" && entryBuyerId) revalidatePath(`/crm/${entryBuyerId}`);
 }
 
 /** Log a touch: stamp last contact today, advance to "contacted", bump next follow-up. */

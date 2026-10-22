@@ -34,6 +34,20 @@ import { enrollSequenceAction, unenrollSequenceAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
+// 🔗 Merge each tracked buyer's LIVE contact id + phone + email off its network
+// lead opp, so the tracker rows can call/text/email and the note-sync knows the
+// agent's contact. Stored entries only keep buyerId + a snapshot; this refreshes.
+async function enrichDispoBuyers(buyers: Awaited<ReturnType<typeof readDispoBuyers>>) {
+  const ids = buyers.map((b) => b.buyerId).filter((x): x is string => !!x);
+  if (!ids.length) return buyers;
+  const leads = await db.crmOpportunity.findMany({ where: { id: { in: ids } }, select: { id: true, contactId: true, contact: { select: { phone: true, email: true } } } }).catch(() => []);
+  const byId = new Map(leads.map((l) => [l.id, l]));
+  return buyers.map((b) => {
+    const l = b.buyerId ? byId.get(b.buyerId) : undefined;
+    return l ? { ...b, contactId: l.contactId ?? b.contactId, phone: b.phone || l.contact?.phone || undefined, email: b.email || l.contact?.email || undefined } : b;
+  });
+}
+
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lbl = "block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5";
 
@@ -590,7 +604,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
 
           {/* 📇 Per-deal buyer/agent follow-up tracker — dispo reps only; shows buyer names (Jon 2026-10-21) */}
           {showMatches && (
-            <DispoBuyerTracker oppId={opp.id} buyers={readDispoBuyers(opp.formData)} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} />
+            <DispoBuyerTracker oppId={opp.id} buyers={await enrichDispoBuyers(readDispoBuyers(opp.formData))} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={comms.call} canSms={comms.sms} />
           )}
 
           {/* 💰 Offers received — the 3-offer accountability tracker (Jon 2026-10-22) */}

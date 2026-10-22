@@ -19,14 +19,17 @@ export function tzForPhone(phone: string): string | null {
   return NPA[npa] ?? null;
 }
 
-/** Returns a human warning when it's quiet hours (9pm–8am) where the lead lives, else null. */
-export function quietHoursWarning(phone: string, fallbackTz?: string): string | null {
+/** Returns a human warning when it's quiet hours (9pm–8am) where the lead lives, else
+ *  null. `nowMs` lets the caller pass a CLOCK-SKEW-CORRECTED time (server-trusted) so a
+ *  wrong device clock can't falsely block a call (Jon 2026-10-24). */
+export function quietHoursWarning(phone: string, fallbackTz?: string, nowMs?: number): string | null {
   const tz = tzForPhone(phone) ?? fallbackTz ?? null;
   if (!tz) return null;
   try {
-    const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: tz }).format(new Date()));
+    const d = new Date(nowMs ?? Date.now());
+    const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: tz }).format(d));
     if (hour >= 21 || hour < 8) {
-      const local = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).format(new Date());
+      const local = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).format(d);
       return `It's ${local} where this lead lives (${tz.split("/")[1]?.replace("_", " ")}) — quiet hours are 9pm–8am. Call blocked to keep us compliant.`;
     }
     return null;

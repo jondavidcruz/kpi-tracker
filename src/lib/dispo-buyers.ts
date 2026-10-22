@@ -20,7 +20,8 @@ export type DispoBuyer = {
   nextFollowUp?: string;    // YYYY-MM-DD — drives the "due" highlight
   price?: string;           // what they said they'd pay
   notes?: string;
-  buyerId?: string;         // link back to a MarketContact (vetted developer), if any
+  buyerId?: string;         // link back to the network lead opp (developer/agent), if any
+  contactId?: string;       // the network lead's CONTACT id — merged at render for call/text/email + note-sync
   addedAt?: string;         // YYYY-MM-DD
 };
 
@@ -61,6 +62,7 @@ export function readDispoBuyers(formData: unknown): DispoBuyer[] {
       price: r.price ? String(r.price) : undefined,
       notes: r.notes ? String(r.notes) : undefined,
       buyerId: r.buyerId ? String(r.buyerId) : undefined,
+      contactId: r.contactId ? String(r.contactId) : undefined,
       addedAt: r.addedAt ? String(r.addedAt) : undefined,
     }))
     .filter((r) => r.id && r.name);

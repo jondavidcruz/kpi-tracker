@@ -10,7 +10,7 @@ import { addDispoBuyerAction, updateDispoBuyerAction, logDispoBuyerTouchAction, 
 import { DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, stageMeta, type DispoBuyer } from "@/lib/dispo-buyers";
 import AttachBuyerPanel from "@/components/AttachBuyerPanel";
 
-export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "" }: { oppId: string; buyers: DispoBuyer[]; today: string; dealArea?: string }) {
+export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "", canCall = false, canSms = false }: { oppId: string; buyers: DispoBuyer[]; today: string; dealArea?: string; canCall?: boolean; canSms?: boolean }) {
   const [adding, setAdding] = useState(false);
   const counts = DISPO_BUYER_STAGES.map((s) => ({ ...s, n: buyers.filter((b) => b.stage === s.key).length }));
   const dueCount = buyers.filter((b) => b.nextFollowUp && b.nextFollowUp <= today && b.stage !== "passed" && b.stage !== "offer_in").length;
@@ -51,10 +51,25 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "" 
                     : <div className="truncate text-[12px] font-bold text-slate-800">{b.name}</div>}
                   {(b.phone || b.email) && <div className="truncate text-[10px] font-semibold text-slate-400">{b.phone}{b.phone && b.email ? " · " : ""}{b.email}</div>}
                 </div>
-                <form action={removeDispoBuyerAction}>
-                  <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} />
-                  <button className="rounded px-1 text-[11px] text-slate-300 hover:bg-rose-50 hover:text-rose-600" title="Remove from this deal">✕</button>
-                </form>
+                {/* 📞💬✉️ mini-card actions — call/text/email this buyer right here (Jon 2026-10-24) */}
+                <div className="flex shrink-0 items-center gap-0.5">
+                  {canCall && b.phone && (
+                    <button type="button" title={`Call ${b.name} in-app (Telnyx)`}
+                      onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: b.phone, name: b.name, oppId: b.buyerId, contactId: b.contactId } }))}
+                      className="grid h-6 w-6 place-items-center rounded-md bg-emerald-50 text-[11px] ring-1 ring-emerald-200 hover:bg-emerald-100">📞</button>
+                  )}
+                  {b.phone && (canSms && b.buyerId
+                    ? <Link href={`/crm/${b.buyerId}#sms`} title={`Text ${b.name}`} className="grid h-6 w-6 place-items-center rounded-md bg-sky-50 text-[11px] ring-1 ring-sky-200 hover:bg-sky-100">💬</Link>
+                    : <a href={`sms:${b.phone}`} title={`Text ${b.name}`} className="grid h-6 w-6 place-items-center rounded-md bg-sky-50 text-[11px] ring-1 ring-sky-200 hover:bg-sky-100">💬</a>)}
+                  {b.email && (b.buyerId
+                    ? <Link href={`/crm/${b.buyerId}#email`} title={`Email ${b.name}`} className="grid h-6 w-6 place-items-center rounded-md bg-amber-50 text-[11px] ring-1 ring-amber-200 hover:bg-amber-100">✉️</Link>
+                    : <a href={`mailto:${b.email}`} title={`Email ${b.name}`} className="grid h-6 w-6 place-items-center rounded-md bg-amber-50 text-[11px] ring-1 ring-amber-200 hover:bg-amber-100">✉️</a>)}
+                  {b.buyerId && <Link href={`/crm/${b.buyerId}`} title="Open this buyer's full lead card" className="grid h-6 w-6 place-items-center rounded-md bg-slate-50 text-[11px] ring-1 ring-slate-200 hover:bg-slate-100">↗</Link>}
+                  <form action={removeDispoBuyerAction}>
+                    <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} />
+                    <button className="grid h-6 w-6 place-items-center rounded px-1 text-[11px] text-slate-300 hover:bg-rose-50 hover:text-rose-600" title="Remove from this deal">✕</button>
+                  </form>
+                </div>
               </div>
 
               <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -85,7 +100,7 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "" 
                   main note + credited as a buyer conversation (Jon 2026-10-21). */}
               <form action={updateDispoBuyerAction} className="mt-1">
                 <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="notes" />
-                <textarea name="value" defaultValue={b.notes ?? ""} rows={2} placeholder="📝 Notes on this agent — what they said, what they want, next step…"
+                <textarea name="value" defaultValue={b.notes ?? ""} rows={2} placeholder={b.buyerId ? "📝 Notes on this agent (also saved to their lead card) — what they want, next step…" : "📝 Notes on this agent — what they said, what they want, next step…"}
                   onBlur={(e) => { if (e.currentTarget.value !== (b.notes ?? "")) e.currentTarget.form?.requestSubmit(); }}
                   className="w-full resize-y rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-700 placeholder:text-slate-300" />
               </form>

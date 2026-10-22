@@ -71,6 +71,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [dtmfTrail, setDtmfTrail] = useState("");
   const dialStartRef = useRef(0); // when the attempt began (ring OR answer)
   const [endConfirm, setEndConfirm] = useState(false);
+  // 🕐 Device-clock skew vs the server (Jon 2026-10-24): a wrong computer clock
+  // made Michelle's calls get falsely blocked by the quiet-hours guard. We measure
+  // the offset once and (a) correct the guard with it, (b) warn her to fix the clock.
+  const [clockSkew, setClockSkew] = useState(0); // serverNow - clientNow, ms
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef(0);
   const recStartedRef = useRef(false); // 🎙 did we already start recording this outbound call?
@@ -180,6 +184,23 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     } catch { /* panel still dials */ }
   };
   useEffect(() => { if (open && !data) load(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 🕐 measure the clock skew once on mount (round-trip compensated)
+  useEffect(() => {
+    (async () => {
+      try {
+        const t0 = Date.now();
+        const r = await fetch("/api/now", { cache: "no-store" });
+        if (!r.ok) return;
+        const { now } = await r.json();
+        const t1 = Date.now();
+        const skew = now - (t0 + (t1 - t0) / 2); // server - client midpoint
+        if (Number.isFinite(skew)) setClockSkew(skew);
+      } catch { /* offline — leave skew 0 */ }
+    })();
+  }, []);
+  const clockOff = Math.abs(clockSkew) > 5 * 60_000; // >5 min = materially wrong
+  const clockOffLabel = () => { const m = Math.round(Math.abs(clockSkew) / 60000); const h = Math.floor(m / 60); const mm = m % 60; return `${h ? `${h}h ` : ""}${mm}m ${clockSkew > 0 ? "behind" : "ahead"}`; };
 
   // opportunity-card 📞 buttons land here
   useEffect(() => {
@@ -483,9 +504,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const call = async (ctx: Ctx) => {
     const to = ctx.phone.replace(/[^+\d]/g, "");
     if (to.replace(/\D/g, "").length < 10) { setMsg("enter a full number"); return; }
-    // 🕘 quiet-hours guard: 9pm–8am in the LEAD'S time zone (by area code) = blocked
-    const quiet = quietHoursWarning(to);
-    if (quiet) { setState("error"); setMsg(quiet); setTimeout(() => { setState("idle"); setMsg(""); }, 6000); return; }
+    // 🕘 quiet-hours guard: 9pm–8am in the LEAD'S time zone (by area code) = blocked.
+    // Use the server-corrected time so a wrong device clock can't block a valid call.
+    const quiet = quietHoursWarning(to, undefined, Date.now() + clockSkew);
+    if (quiet) { setState("error"); setMsg(clockOff ? `${quiet}  (Note: your computer clock is ${clockOffLabel()} — this uses the corrected time.)` : quiet); setTimeout(() => { setState("idle"); setMsg(""); }, 7000); return; }
     setOnCall({ ...ctx, dir: "out" }); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     dialStartRef.current = Date.now(); setEndConfirm(false);
     try {
@@ -560,6 +582,12 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             </span>
             <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-slate-500">✕</button>
           </span>
+
+          {clockOff && (
+            <span className="block border-b border-amber-200 bg-amber-50 px-3.5 py-2 text-[11px] font-semibold text-amber-800">
+              ⚠️ Your computer&apos;s clock is <b>{clockOffLabel()}</b> the real time. Calls use the corrected time so they won&apos;t be wrongly blocked — but please fix it: open your computer&apos;s Date &amp; Time settings and turn on <b>“Set time automatically.”</b>
+            </span>
+          )}
 
           {incoming && (
             <span className="flex items-center gap-2 bg-emerald-600 px-3.5 py-2.5">
