@@ -61,7 +61,7 @@ async function routingDiag() {
   try {
     const row = await db.resource.findFirst({ where: { category: "__telnyx_events__" } });
     const list = (row?.description ? JSON.parse(row.description) : []) as Array<Record<string, unknown>>;
-    events = list.slice(0, 16).map((e) => ({ at: e.at, ev: e.ev, to: maskTo(e.to as string), answered: e.answered }));
+    events = list.slice(0, 20).map((e) => ({ at: e.at, ev: e.ev, to: maskTo(e.to as string), answered: e.answered, status: e.status, result: e.result, cc: e.cc, dir: e.direction, cause: e.cause, agent: e.agent }));
   } catch { /* ignore */ }
   return { sharedSip: maskSip(sharedSip), distinctSipPerRep: !dupSip, agentCount: roster.length, roster, recentEvents: events };
 }
