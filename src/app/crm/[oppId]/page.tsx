@@ -7,6 +7,8 @@ import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
+import DispoGatePanel from "@/components/DispoGatePanel";
+import { readDealType, defaultDealType, readGateChecks } from "@/lib/dispo-gates";
 import { readDispoBuyers, isDispoDealPipeline, isDispoNetworkPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, stageMeta } from "@/lib/dispo-buyers";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { getActiveReps, getSettings } from "@/lib/data";
@@ -564,6 +566,12 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <div className="mt-1.5 text-[10px] text-slate-400">Auto-matched from your developer + agent network by area. Attach to start the follow-up.</div>
             </Card>
           )}
+
+          {/* 🚦 Option B — SOP gate wired into the pipeline; advance is blocked until it clears (Jon 2026-10-21) */}
+          {showMatches && (() => {
+            const type = readDealType(opp.formData) || defaultDealType(opp.pipeline, opp.tags);
+            return <DispoGatePanel oppId={opp.id} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} dealType={type} checks={readGateChecks(opp.formData)} />;
+          })()}
 
           {/* 📣 Marketing SOP checklist — dispo deals only (Jon 2026-10-20) */}
           {showMatches && (

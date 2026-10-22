@@ -149,10 +149,27 @@ export async function setOppStageAction(formData: FormData) {
   if (!me) return;
   const id = String(formData.get("id") ?? "");
   const stage = String(formData.get("stage") ?? "");
-  const valid = (await readPipelines()).some((p) => p.stages.some((st) => st.key === stage));
+  const pipes = await readPipelines();
+  const valid = pipes.some((p) => p.stages.some((st) => st.key === stage));
   if (!id || !valid) return;
-  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, stage: true } });
+  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, stage: true, pipeline: true, formData: true } });
   if (!opp || opp.stage === stage) return;
+  // 🚦 Option B gate enforcement (Jon 2026-10-21): on a dispo deal, don't let it move
+  // FORWARD to a later stage until the gate guarding its current stage is cleared.
+  {
+    const { isDispoDealPipeline } = await import("@/lib/dispo-buyers");
+    if (isDispoDealPipeline(opp.pipeline)) {
+      const { readDealType, defaultDealType, readGateChecks, stageMoveBlocked } = await import("@/lib/dispo-gates");
+      const type = readDealType(opp.formData) || defaultDealType(opp.pipeline, (await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } }))?.tags ?? "");
+      const stages = pipes.find((p) => p.name === opp.pipeline)?.stages.map((s) => ({ key: s.key, label: s.label })) ?? [];
+      const block = stageMoveBlocked(type, stages, opp.stage, stage, readGateChecks(opp.formData));
+      if (block.blocked && block.gate) {
+        await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: `🔒 Stage held — clear the gate “${block.gate.label}” before advancing. (Option B: the SOP gate for this stage isn't complete.)`, actor: me.name });
+        revalidatePath(`/crm/${id}`); revalidatePath("/crm"); revalidatePath("/dispo"); // snap the board card back
+        return; // refuse the forward move
+      }
+    }
+  }
   await db.crmOpportunity.update({ where: { id }, data: {
     stage,
     ...(stage === "at_developers" ? { devPricingSentAt: new Date() } : {}),
@@ -2008,6 +2025,41 @@ export async function saveLandParcelsAction(formData: FormData) {
   } });
   if (first?.address && o.contactId) await db.crmContact.update({ where: { id: o.contactId }, data: { address: first.address } }).catch(() => {});
   if (o.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "system", body: `📦 Parcels updated — ${cleaned.length} parcel${cleaned.length === 1 ? "" : "s"} on this deal`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** 🚦 Set a dispo deal's TYPE (cash / novation / land) — picks which gate path applies. */
+export async function setDispoDealTypeAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const type = String(formData.get("type") ?? "");
+  if (!oppId || !["cash", "novation", "land"].includes(type)) return;
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true, contactId: true } });
+  if (!o) return;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __dealType: type } as never } });
+  if (o.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "system", body: `🚦 Deal type set: ${type === "cash" ? "💵 All cash" : type === "novation" ? "🤝 Novation" : "⛰️ Sell land, then sign"} — gate path applied.`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** 🚦 Toggle one gate checkbox on a dispo deal (stored in formData.__gates). */
+export async function toggleDispoGateAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const gateKey = String(formData.get("gateKey") ?? "");
+  const idx = parseInt(String(formData.get("idx") ?? ""), 10);
+  const checked = String(formData.get("checked") ?? "") === "1";
+  if (!oppId || !gateKey || !Number.isInteger(idx) || idx < 0 || idx > 20) return;
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
+  if (!o) return;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  const gates = (fd.__gates && typeof fd.__gates === "object" && !Array.isArray(fd.__gates) ? fd.__gates : {}) as Record<string, boolean[]>;
+  const arr = Array.isArray(gates[gateKey]) ? [...gates[gateKey]] : [];
+  while (arr.length <= idx) arr.push(false);
+  arr[idx] = checked;
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __gates: { ...gates, [gateKey]: arr } } as never } });
   revalidatePath(`/crm/${oppId}`);
 }
 
