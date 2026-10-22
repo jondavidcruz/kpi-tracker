@@ -123,6 +123,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // per rep + team throughput. Honest, from the activity log — no self-reporting.
   let scoreReps: RepRow[] = [];
   let scoreTeam: TeamStats = { dealsPushed: 0, totalActive: 0, agentsReached: 0, thisHour: 0 };
+  let scoreAlert: string | null = null;
   if (tab === "deals" || tab === "team" || tab === "nextup") {
     const tz = settings.orgTimezone;
     const p = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date());
@@ -155,6 +156,17 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     scoreReps = dispoUsers.map((u) => { const r = byRep.get(u.name); return { name: u.name, dealsWorked: r ? r.deals.size : 0, outreach: r ? r.outreach : 0, agentsWorked: r ? r.agents : 0, lastAgoMin: r && r.last ? Math.round((Date.now() - r.last) / 60000) : null }; })
       .sort((a, b) => b.outreach - a.outreach);
     scoreTeam = { dealsPushed: new Set(evs.map((e) => e.oppId)).size, totalActive: dealOpps.length, agentsReached: agentNames.size, thisHour: thisHourCount };
+    // ⏰ Shift-hours stall nudge — dispo should push a deal out every hour (Jon 2026-10-21).
+    const ptHour = gv("hour");
+    const dow = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(new Date());
+    const shiftActive = ptHour >= 8 && ptHour < 18 && dow !== "Sun";
+    const lasts = scoreReps.map((r) => r.lastAgoMin).filter((x): x is number => x != null);
+    const teamLast = lasts.length ? Math.min(...lasts) : null;
+    if (shiftActive) {
+      if (teamLast == null) scoreAlert = "🚨 Dispo is cold — nothing has gone out today. Open a deal, run the cascade, and start calling buyers.";
+      else if (teamLast > 45) scoreAlert = `💤 No dispo outreach in ${teamLast} min. Get the next deal out — pick one from Next Up and work the buyers.`;
+      else if (scoreTeam.thisHour === 0) scoreAlert = "⏰ No deals out this hour yet. The goal is more buyers reached every hour — run a cascade now.";
+    }
   }
 
   // 🗺 Areas view — group THIS pipeline's deals by city so an agent/developer buying
@@ -296,6 +308,9 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
         ))}
       </div>
 
+      {scoreAlert && (
+        <Link href="/dispo?tab=nextup" className="block rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-800 ring-1 ring-red-200 transition hover:bg-red-100">{scoreAlert}</Link>
+      )}
       {(tab === "deals" || tab === "team" || tab === "nextup") && <DispoScoreboard reps={scoreReps} team={scoreTeam} />}
 
       {tab === "nextup" && (
