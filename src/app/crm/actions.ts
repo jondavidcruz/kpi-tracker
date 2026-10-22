@@ -234,14 +234,21 @@ export async function setOppStageAction(formData: FormData) {
             })().catch(() => {});
           }
         }
-        if (/deal_won/i.test(stage)) {
+        // 🏆 Won/closed stage — match the KEY or the LABEL (Jon renamed the stage to
+        // "Closed / Won" → key "closed_won", which the old /deal_won/ test missed, so
+        // closed deals stopped reaching the Deals board — Jon 2026-10-24).
+        const wonLabel = pipes.find((p) => p.name === full.pipeline)?.stages.find((s) => s.key === stage)?.label ?? "";
+        const isWonStage = (/won/i.test(stage) || /won/i.test(wonLabel)) && !/dead|died|lost|nurtur/i.test(stage) && !/dead|died|lost|nurtur/i.test(wonLabel);
+        if (isWonStage) {
           postToSpace("contracts", `💰 DEAL WON (escrow closed) — ${contact?.name ?? "deal"}${addr ? ` · ${addr}` : ""}${full.value != null ? ` · $${full.value.toLocaleString()}` : ""}`).catch(() => {});
           postToSpace("team", `💰🎉 WE CLOSED A DEAL! ${addr || contact?.name || ""}${full.value != null ? ` — $${full.value.toLocaleString()}` : ""} — congrats team!`).catch(() => {});
           // 🏆 P4 (Jon 2026-10-20): the Deals board is now closed-won only, GENERATED
           // from a dispo deal hitting DEAL WON. Dedup with a formData flag so a bump
           // in/out of the stage never double-creates (which would double-count revenue).
-          const { isDispoPipeline } = await import("@/lib/dispo-buyers");
-          if (isDispoPipeline(full.pipeline)) {
+          // Uses isDispoDealPipeline (works with emoji-prefixed names, unlike the old
+          // isDispoPipeline ^ds anchor).
+          const { isDispoDealPipeline } = await import("@/lib/dispo-buyers");
+          if (isDispoDealPipeline(full.pipeline)) {
             const oppRow = await db.crmOpportunity.findUnique({ where: { id: full.id }, select: { formData: true } });
             const fd2 = (oppRow?.formData ?? {}) as Record<string, unknown>;
             if (!fd2.__dealGenerated) {

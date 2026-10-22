@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LiveRefresh from "@/components/LiveRefresh";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
@@ -292,6 +293,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
   return (
     <div className="space-y-5">
+      <LiveRefresh seconds={20} />
       <SectionTitle
         title="🧲 Seller CRM — Acquisitions"
         subtitle="Every seller lead, GHL-style: pipeline, notes, tasks, appointments — calls & texts log themselves."

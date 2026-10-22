@@ -9,6 +9,7 @@ import { Card, SectionTitle } from "@/components/ui";
 import { readDispoBuyers, isDevNetworkName, isAgentNetworkName, DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
 import { resolveNetworkPipelines } from "@/lib/dispo-network";
 import DispoPipeSelect from "@/components/DispoPipeSelect";
+import LiveRefresh from "@/components/LiveRefresh";
 import DispoFollowupKanban, { type FollowupCard } from "@/components/DispoFollowupKanban";
 import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban";
 import CrmQuickView from "@/components/CrmQuickView";
@@ -397,6 +398,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-5">
+      <LiveRefresh seconds={20} />
       <SectionTitle
         title="🎯 Dispositions CRM"
         subtitle="Dispo's buyer side — same board the team uses on the Seller CRM. Developers + buyer agents are their own pipelines (not mixed with sellers); the Deals tab tracks buyer follow-ups per deal."

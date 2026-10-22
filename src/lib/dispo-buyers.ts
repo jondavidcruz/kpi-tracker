@@ -70,8 +70,8 @@ export function readDispoBuyers(formData: unknown): DispoBuyer[] {
 
 /** Is this a dispositions pipeline (DS: … / dispo)? */
 export function isDispoPipeline(name: string | null | undefined): boolean {
-  const n = (name ?? "").toLowerCase();
-  return /^ds[:\s]/.test(n) || n.includes("sell land") || n.includes("go close") || n.includes("dispo");
+  const n = normPipe(name); // strips a leading emoji so "🏆 DS: …" still matches
+  return /^ds\b/.test(n) || n.includes("sell land") || n.includes("go close") || n.includes("dispo");
 }
 
 /** A dispo DEAL pipeline (a property deal) — where the per-deal buyer/agent tracker
