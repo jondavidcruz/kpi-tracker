@@ -117,6 +117,11 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // the deal board (cards for the selected deal pipeline)
   const dealColumns: CrmColumn[] = (dealPipes.find((p) => p.name === dealPl)?.stages ?? []).map((s) => ({ key: s.key, label: s.label, cls: s.cls }));
   const dealStageKeys = new Set(dealColumns.map((s) => s.key));
+  // Valid bulk MOVE targets from a dispo deal board = every non-network pipeline
+  // (so Acquisitions ← Dispositions moves work; Jon 2026-10-24 couldn't move leads
+  // back to acquisitions because only the current pipeline was offered).
+  const movePipes = pipelines.filter((p) => !isDevNetworkName(p.name) && !isAgentNetworkName(p.name));
+  const moveStages = Object.fromEntries(movePipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]));
   // 🚑 Orphaned deals: stored stage no longer exists in this pipeline (a stage rename
   // re-keyed them) → they pile into the first column & "select whole stage" counts 0.
   const prettyStage = (k: string) => k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -140,7 +145,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const closedTotal = closedDeals.reduce((a, d) => a + d.valueNum, 0);
   const dealCards: CrmCard[] = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => ({
     id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: o.contact?.address ? formatAddress(o.contact.address) : undefined,
-    phone: o.contact?.phone || undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
+    phone: o.contact?.phone ? o.contact.phone.replace(/\.\d+$/, "") : undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
     money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
@@ -621,7 +626,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                 <Card className="p-3">
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
                   <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
-                  <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={[dealPl]} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
+                  <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={movePipes.map((p) => p.name)} pipelineStages={moveStages} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
                 </Card>
 
                 {/* 🚨 Not out yet — pre-marketing deals with no buyers; one click arms the cascade. Below the board (Jon 2026-10-21: pipeline first) */}

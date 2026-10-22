@@ -75,6 +75,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // made Michelle's calls get falsely blocked by the quiet-hours guard. We measure
   // the offset once and (a) correct the guard with it, (b) warn her to fix the clock.
   const [clockSkew, setClockSkew] = useState(0); // serverNow - clientNow, ms
+  const clockSkewRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef(0);
   const recStartedRef = useRef(false); // 🎙 did we already start recording this outbound call?
@@ -186,20 +187,27 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   };
   useEffect(() => { if (open && !data) load(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 🕐 measure the clock skew once on mount (round-trip compensated)
+  // 🕐 measure the clock skew (round-trip compensated). RE-measures every 60s and
+  // returns the fresh value, so when a rep FIXES their clock the warning clears on
+  // its own and a call always uses the current offset — not a stale one from page
+  // load (Jon 2026-10-24: Michelle fixed her clock but the tab still said 3h off).
+  const measureSkew = async (): Promise<number> => {
+    try {
+      const t0 = Date.now();
+      const r = await fetch("/api/now", { cache: "no-store" });
+      if (!r.ok) return clockSkewRef.current;
+      const { now } = await r.json();
+      const t1 = Date.now();
+      const skew = now - (t0 + (t1 - t0) / 2); // server - client midpoint
+      if (Number.isFinite(skew)) { clockSkewRef.current = skew; setClockSkew(skew); return skew; }
+    } catch { /* offline — keep last known */ }
+    return clockSkewRef.current;
+  };
   useEffect(() => {
-    (async () => {
-      try {
-        const t0 = Date.now();
-        const r = await fetch("/api/now", { cache: "no-store" });
-        if (!r.ok) return;
-        const { now } = await r.json();
-        const t1 = Date.now();
-        const skew = now - (t0 + (t1 - t0) / 2); // server - client midpoint
-        if (Number.isFinite(skew)) setClockSkew(skew);
-      } catch { /* offline — leave skew 0 */ }
-    })();
-  }, []);
+    measureSkew();
+    const id = setInterval(measureSkew, 60_000);
+    return () => clearInterval(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const clockOff = Math.abs(clockSkew) > 5 * 60_000; // >5 min = materially wrong
   const clockOffLabel = () => { const m = Math.round(Math.abs(clockSkew) / 60000); const h = Math.floor(m / 60); const mm = m % 60; return `${h ? `${h}h ` : ""}${mm}m ${clockSkew > 0 ? "behind" : "ahead"}`; };
 
@@ -207,6 +215,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   useEffect(() => {
     const h = (e: Event) => {
       const d = (e as CustomEvent).detail as Ctx;
+      d.phone = String(d.phone || "").replace(/\.\d+$/, ""); // drop ".0" import artifact
       setOpen(true);
       setTab("keypad");
       setNum(d.phone);
@@ -511,12 +520,16 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const remoteDecline = () => { try { bcRef.current?.postMessage({ t: "decline" }); } catch { /* no channel */ } setRemoteIncoming(null); };
 
   const call = async (ctx: Ctx) => {
-    const to = ctx.phone.replace(/[^+\d]/g, "");
+    // strip a trailing ".0" (spreadsheet-import artifact — e.g. "8184424145.0")
+    // BEFORE cleaning, or the "0" after the dot sticks to the number (Jon 2026-10-24)
+    const to = ctx.phone.replace(/\.\d+$/, "").replace(/[^+\d]/g, "");
     if (to.replace(/\D/g, "").length < 10) { setMsg("enter a full number"); return; }
     // 🕘 quiet-hours guard: 9pm–8am in the LEAD'S time zone (by area code) = blocked.
-    // Use the server-corrected time so a wrong device clock can't block a valid call.
-    const quiet = quietHoursWarning(to, undefined, Date.now() + clockSkew);
-    if (quiet) { setState("error"); setMsg(clockOff ? `${quiet}  (Note: your computer clock is ${clockOffLabel()} — this uses the corrected time.)` : quiet); setTimeout(() => { setState("idle"); setMsg(""); }, 7000); return; }
+    // Re-measure the clock skew RIGHT NOW so a just-fixed (or just-broken) device clock
+    // is reflected immediately, and use the server-corrected time for the decision.
+    const skew = await measureSkew();
+    const quiet = quietHoursWarning(to, undefined, Date.now() + skew);
+    if (quiet) { setState("error"); setMsg(Math.abs(skew) > 5 * 60_000 ? `${quiet}  (Your computer clock is off by ${Math.round(Math.abs(skew) / 60000)}m — this used the corrected time.)` : quiet); setTimeout(() => { setState("idle"); setMsg(""); }, 7000); return; }
     setOnCall({ ...ctx, dir: "out" }); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     dialStartRef.current = Date.now(); setEndConfirm(false);
     try {

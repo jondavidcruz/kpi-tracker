@@ -260,7 +260,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     // APN/parcel for land with no street address (shows on the card in place of address)
     const fd = (o.formData ?? {}) as { property?: { apn?: string } };
     return {
-      id: o.id, title: o.title, contactName: o.contact.name, contactId: o.contactId, phone: o.contact.phone, address: o.contact.address, stage: o.stage,
+      id: o.id, title: o.title, contactName: o.contact.name, contactId: o.contactId, phone: o.contact.phone ? o.contact.phone.replace(/\.\d+$/, "") : o.contact.phone, address: o.contact.address, stage: o.stage,
       assignedTo: o.assignedTo, tags: parseTags(o.tags), badges,
       money: money(o.value) || (o.askPrice != null ? `ask ${money(o.askPrice)}` : ""),
       email: o.contact.email, smsUnread: smsUnread.get(o.contactId) ?? 0,
