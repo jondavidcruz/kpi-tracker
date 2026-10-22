@@ -160,7 +160,8 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       if (m) agentNames.add(m[1].trim().toLowerCase());
       if (e.at.getTime() >= hourStart.getTime()) thisHourCount++;
     }
-    scoreReps = dispoUsers.map((u) => { const r = byRep.get(u.name); return { name: u.name, dealsWorked: r ? r.deals.size : 0, outreach: r ? r.outreach : 0, agentsWorked: r ? r.agents : 0, lastAgoMin: r && r.last ? Math.round((Date.now() - r.last) / 60000) : null }; })
+    const elapsedH = Math.max(0.5, (gv("hour") - 8) + gv("minute") / 60); // hours into an 8am shift
+    scoreReps = dispoUsers.map((u) => { const r = byRep.get(u.name); const out = r ? r.outreach : 0; return { name: u.name, dealsWorked: r ? r.deals.size : 0, outreach: out, agentsWorked: r ? r.agents : 0, lastAgoMin: r && r.last ? Math.round((Date.now() - r.last) / 60000) : null, perHour: Math.round((out / elapsedH) * 10) / 10 }; })
       .sort((a, b) => b.outreach - a.outreach);
     scoreTeam = { dealsPushed: new Set(evs.map((e) => e.oppId)).size, totalActive: dealOpps.length, agentsReached: agentNames.size, thisHour: thisHourCount };
     // ⏰ Shift-hours stall nudge — dispo should push a deal out every hour (Jon 2026-10-21).

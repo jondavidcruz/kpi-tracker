@@ -4,7 +4,7 @@ import { Card } from "@/components/ui";
 // accountable… get the deal out to more agents & developers every hour"). Live,
 // honest numbers for TODAY — who's pushing deals out, who's idle, and how many
 // unique agents/developers have been reached. No self-reporting; all from the log.
-export type RepRow = { name: string; dealsWorked: number; outreach: number; agentsWorked: number; lastAgoMin: number | null };
+export type RepRow = { name: string; dealsWorked: number; outreach: number; agentsWorked: number; lastAgoMin: number | null; perHour: number };
 export type TeamStats = { dealsPushed: number; totalActive: number; agentsReached: number; thisHour: number };
 
 export default function DispoScoreboard({ reps, team }: { reps: RepRow[]; team: TeamStats }) {
@@ -36,6 +36,7 @@ export default function DispoScoreboard({ reps, team }: { reps: RepRow[]; team: 
               <span className="text-slate-600"><b className="text-slate-900">{r.dealsWorked}</b> deals</span>
               <span className="text-slate-600"><b className="text-slate-900">{r.agentsWorked}</b> agents/devs</span>
               <span className="text-slate-600"><b className="text-slate-900">{r.outreach}</b> touches</span>
+              <span className="text-slate-500" title="outreach per hour of shift so far">{r.perHour}/hr</span>
               <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${cold ? "bg-red-100 text-red-700" : idle ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>
                 {cold ? "⚠️ nothing logged today" : idle ? `💤 idle ${r.lastAgoMin}m` : `🟢 active ${r.lastAgoMin}m ago`}
               </span>
