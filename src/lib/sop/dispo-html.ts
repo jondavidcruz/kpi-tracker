@@ -1,4 +1,6 @@
-<!doctype html>
+// Auto-embedded from the Dispo SOP HTML so it can be served through an access-gated
+// route (Jon 2026-10-22: acquisitions reps must not see dispo). Do not hand-edit.
+const HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -684,3 +686,5 @@ button.reset:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
 
 </body>
 </html>
+`;
+export default HTML;

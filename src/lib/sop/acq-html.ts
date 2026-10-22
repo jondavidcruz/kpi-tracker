@@ -1,4 +1,5 @@
-<!doctype html>
+// Auto-embedded from the Acquisitions SOP HTML, served through a login-gated route.
+const HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -131,7 +132,7 @@ h3.step .dot{color:var(--gold); font-family:"IBM Plex Mono",monospace; font-size
   border:2px solid var(--ink-2); border-radius:3px; background:transparent; cursor:pointer;
 }
 .checks input:checked{background:var(--clear); border-color:var(--clear)}
-.checks input:checked::after{content:"\2713"; display:block; color:#fff; font-size:12px; line-height:13px; text-align:center; font-weight:700}
+.checks input:checked::after{content:"✓"; display:block; color:#fff; font-size:12px; line-height:13px; text-align:center; font-weight:700}
 .checks input:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
 .checks input:checked + span{color:var(--ink-2); text-decoration:line-through; text-decoration-color:var(--rule)}
 .gfail{padding:0 13px 13px; font-size:13px; color:var(--ink-2); border-top:1px dashed var(--rule); margin-top:4px; padding-top:11px}
@@ -625,3 +626,5 @@ button.reset:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
 
 </body>
 </html>
+`;
+export default HTML;
