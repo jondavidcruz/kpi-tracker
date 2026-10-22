@@ -6,7 +6,8 @@ import { readPipelines, parseTags } from "@/lib/crm";
 import { commsFor } from "@/lib/crm-comms";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
-import { readDispoBuyers, isDispoDealPipeline, DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline, isDevNetworkName, isAgentNetworkName, DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
+import { resolveNetworkPipelines } from "@/lib/dispo-network";
 import DispoFollowupKanban, { type FollowupCard } from "@/components/DispoFollowupKanban";
 import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban";
 import CrmQuickView from "@/components/CrmQuickView";
@@ -75,16 +76,13 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.orgTimezone }).format(new Date());
   const comms = await commsFor(me!); // click-to-call / text / email on the cards, like the Seller CRM
 
-  // 🧩 Segment the three dispo processes into their own pipelines (Jon 2026-10-22):
-  // land (unsigned, find a buyer first) · novation (signed, list via agent) · cash
-  // (signed, find a cash buyer off-market). Auto-create the cash pipeline once,
-  // cloning the signed board's stages. Idempotent; managers only.
-  if (isManager(me)) { const { ensureCashPipeline } = await import("@/lib/dispo-pipelines"); await ensureCashPipeline(); }
-
-  const countRows = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null, pipeline: { in: [DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE] } }, _count: { _all: true } }).catch(() => [] as { pipeline: string; _count: { _all: number } }[]);
-  const countOf = (p: string) => countRows.find((c) => c.pipeline === p)?._count._all ?? 0;
-  const devCount = countOf(DISPO_DEV_PIPELINE);
-  const agentCount = countOf(DISPO_AGENT_PIPELINE);
+  // (Removed the auto-create of a "DS: Signed Off Market" pipeline — Jon manages the
+  // dispo pipelines himself now and it kept respawning one he'd deleted. 2026-10-24)
+  const net = await resolveNetworkPipelines();
+  const countRows = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null, pipeline: { in: net.all } }, _count: { _all: true } }).catch(() => [] as { pipeline: string; _count: { _all: number } }[]);
+  const sumCount = (names: string[]) => countRows.filter((c) => names.includes(c.pipeline)).reduce((a, c) => a + c._count._all, 0);
+  const devCount = sumCount(net.dev);
+  const agentCount = sumCount(net.agent);
 
   // ── Deals tab: the actual DEAL pipeline (DS: Sell Land Then Sign) board +
   // the buyer follow-ups attached to those deals (Jon 2026-10-20: "feed the leads
@@ -260,8 +258,8 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       }
       return { key, label: key === "__none" ? "📍 No city on file" : key.replace("|", ", "), cards, dealIds, attached: [...counts.values()].sort((a, b) => b.count - a.count) };
     }).sort((a, b) => (a.key === "__none" ? 1 : 0) - (b.key === "__none" ? 1 : 0) || b.cards.length - a.cards.length);
-    const opts = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: [DISPO_AGENT_PIPELINE, DISPO_DEV_PIPELINE] } }, select: { id: true, pipeline: true, contact: { select: { name: true } } }, orderBy: { updatedAt: "desc" } });
-    buyerOptions = opts.map((o) => ({ id: o.id, label: o.contact?.name || "(unnamed)", group: o.pipeline === DISPO_AGENT_PIPELINE ? "🧑‍💼 Buyer agents" : "🏗 Developers" }));
+    const opts = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.all } }, select: { id: true, pipeline: true, contact: { select: { name: true } } }, orderBy: { updatedAt: "desc" } });
+    buyerOptions = opts.map((o) => ({ id: o.id, label: o.contact?.name || "(unnamed)", group: isAgentNetworkName(o.pipeline) ? "🧑‍💼 Buyer agents" : "🏗 Developers" }));
   }
 
   // ⏭ Next Up — one prioritized list of who to follow up with next (Jon 2026-10-21,
@@ -319,11 +317,12 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   let netCounts: Record<string, number> = {};
   let networkPipeline = "";
   if (tab === "developers" || tab === "agents") {
-    networkPipeline = tab === "developers" ? DISPO_DEV_PIPELINE : DISPO_AGENT_PIPELINE;
-    const stages = DISPO_NETWORK_PIPELINES.find((p) => p.name === networkPipeline)?.stages ?? [];
+    const tabNames = tab === "developers" ? net.dev : net.agent;         // real stored name(s)
+    networkPipeline = tabNames[0] ?? (tab === "developers" ? DISPO_DEV_PIPELINE : DISPO_AGENT_PIPELINE);
+    const stages = (DISPO_NETWORK_PIPELINES.find((p) => tab === "developers" ? isDevNetworkName(p.name) : isAgentNetworkName(p.name))?.stages) ?? [];
     netColumns = stages.map((s, i) => ({ key: s.key, label: s.label, cls: PALETTE[i % PALETTE.length] }));
     const opps = await db.crmOpportunity.findMany({
-      where: { archivedAt: null, pipeline: networkPipeline },
+      where: { archivedAt: null, pipeline: { in: tabNames } },
       orderBy: { updatedAt: "desc" },
       select: { id: true, title: true, stage: true, assignedTo: true, tags: true, updatedAt: true, createdAt: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true, address: true, pinnedNote: true } } },
     });

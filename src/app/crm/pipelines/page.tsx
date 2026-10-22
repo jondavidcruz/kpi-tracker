@@ -9,9 +9,17 @@ import StageListEditor from "@/components/StageListEditor";
 export const dynamic = "force-dynamic";
 
 // 🔀 Pipelines — rename anything, add stages & whole pipelines, in its own room.
-export default async function CrmPipelinesPage() {
+export default async function CrmPipelinesPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const me = await getCurrentUser();
   if (!me || !canAccessCSuite(me)) return <Card className="p-10 text-center text-slate-400">🔒 System Settings — C-suite only.</Card>;
+  const saved = (await searchParams).saved ?? "";
+  const flash: { ok: boolean; msg: string } | null =
+    saved === "saved" ? { ok: true, msg: "✓ Pipeline saved." }
+    : saved === "created" ? { ok: true, msg: "✓ Pipeline created." }
+    : saved === "deleted" ? { ok: true, msg: "✓ Pipeline deleted." }
+    : saved === "empty" ? { ok: false, msg: "⚠️ Nothing saved — a pipeline needs a name and at least one stage." }
+    : saved.startsWith("hasleads:") ? { ok: false, msg: `⚠️ Can't delete “${decodeURIComponent(saved.slice(9))}” — it still has live leads. Move or archive them first, then delete.` }
+    : null;
   const pipelines = await readPipelines();
   const counts = await db.crmOpportunity.groupBy({ by: ["pipeline"], where: { archivedAt: null }, _count: { _all: true } });
   const plCounts: Record<string, number> = {};
@@ -21,6 +29,8 @@ export default async function CrmPipelinesPage() {
     <div className="space-y-4">
       <SectionTitle title="🔀 Pipelines" subtitle="Rename anything, re-order stages (one per line, top to bottom), create your own pipelines." accent="bg-brand-gold"
         right={<Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link>} />
+
+      {flash && <div className={`rounded-xl px-4 py-2.5 text-sm font-semibold ring-1 ${flash.ok ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"}`}>{flash.msg}</div>}
 
       <Card className="p-4">
         <p className="text-xs text-slate-500">Renaming a stage moves its column; leads in a removed stage show in the first column until you drag them. The &ldquo;War Room&rdquo; pipeline&apos;s stages are fixed (they power the land SOP automations).</p>

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, canAccessMarketing, isManager } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } from "@/lib/dispo-buyers";
+import { isAgentNetworkName } from "@/lib/dispo-buyers";
+import { resolveNetworkPipelines } from "@/lib/dispo-network";
 
 // 🔎 Search the Buyer-Network CRM (developers + buyer agents) to ATTACH to a deal
 // (Jon 2026-10-20). Returns the top matches for a typed query / the deal's area.
@@ -15,7 +16,7 @@ function shape(o: Row) {
   const imp = ((o.formData ?? {}) as { __import?: { market?: string; buyBox?: string } }).__import ?? {};
   const area = imp.market || "";
   const buyBox = imp.buyBox || o.contact?.pinnedNote || "";
-  return { id: o.id, name: o.contact?.name || o.title, phone: o.contact?.phone || "", email: o.contact?.email || "", area, buyBox, kind: o.pipeline === DISPO_AGENT_PIPELINE ? "buyer_agent" : "developer" };
+  return { id: o.id, name: o.contact?.name || o.title, phone: o.contact?.phone || "", email: o.contact?.email || "", area, buyBox, kind: isAgentNetworkName(o.pipeline) ? "buyer_agent" : "developer" };
 }
 
 export async function GET(req: NextRequest) {
@@ -26,16 +27,17 @@ export async function GET(req: NextRequest) {
   const wantAgents = kind !== "developer";
   const wantDevs = kind !== "agent";
 
-  const pull = async (pipeline: string) => (await db.crmOpportunity.findMany({
-    where: { archivedAt: null, pipeline },
+  const pull = async (pipelines: string[]) => pipelines.length ? (await db.crmOpportunity.findMany({
+    where: { archivedAt: null, pipeline: { in: pipelines } },
     orderBy: { updatedAt: "desc" },
     take: 400,
     select: { id: true, title: true, pipeline: true, formData: true, contact: { select: { name: true, phone: true, email: true, pinnedNote: true } } },
-  }).catch(() => [])) as Row[];
+  }).catch(() => [])) as Row[] : [];
 
+  const net = await resolveNetworkPipelines();
   const [agentRows, devRows] = await Promise.all([
-    wantAgents ? pull(DISPO_AGENT_PIPELINE) : Promise.resolve([] as Row[]),
-    wantDevs ? pull(DISPO_DEV_PIPELINE) : Promise.resolve([] as Row[]),
+    wantAgents ? pull(net.agent) : Promise.resolve([] as Row[]),
+    wantDevs ? pull(net.dev) : Promise.resolve([] as Row[]),
   ]);
 
   const match = (r: ReturnType<typeof shape>) => !q || `${r.name} ${r.area} ${r.buyBox} ${r.phone}`.toLowerCase().includes(q);

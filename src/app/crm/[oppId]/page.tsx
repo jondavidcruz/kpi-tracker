@@ -11,7 +11,7 @@ import { readDispoOffers } from "@/lib/dispo-offers";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { readGateChecks } from "@/lib/dispo-gates";
-import { readDispoBuyers, isDispoDealPipeline, isDispoNetworkPipeline, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, stageMeta } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDispoDealPipeline, isDispoNetworkPipeline, isDevNetworkName, isAgentNetworkName, stageMeta } from "@/lib/dispo-buyers";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
@@ -84,8 +84,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   const showMatches = canSeeBuyers && isDispoDealPipeline(opp.pipeline);
   // 🔙 Back goes to where this lead lives — dispo leads return to the Dispo CRM,
   // not the seller CRM (Jon 2026-10-21: "remember where I'm at").
-  const backHref = opp.pipeline === DISPO_DEV_PIPELINE ? "/dispo?tab=developers"
-    : opp.pipeline === DISPO_AGENT_PIPELINE ? "/dispo?tab=agents"
+  const backHref = isDevNetworkName(opp.pipeline) ? "/dispo?tab=developers"
+    : isAgentNetworkName(opp.pipeline) ? "/dispo?tab=agents"
     : isDispoDealPipeline(opp.pipeline) ? "/dispo?tab=deals"
     : "/crm";
   const leadFeatures = (() => { const f = (opp.formData as { land?: { features?: unknown } } | null)?.land?.features; return Array.isArray(f) ? (f as string[]) : []; })();
@@ -93,7 +93,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   // 🎯 Smart Match from the buyer-network CRM (developers + agents), on dispo deals only.
   const networkMatches = showMatches ? await getNetworkMatchesForDeal(c.address || opp.title) : [];
   // 🔗 On a buyer-agent / developer lead: every deal they're on (last talk + offer + next follow-up).
-  const isNetworkLead = opp.pipeline === DISPO_DEV_PIPELINE || opp.pipeline === DISPO_AGENT_PIPELINE;
+  const isNetworkLead = isDevNetworkName(opp.pipeline) || isAgentNetworkName(opp.pipeline);
   const leadDeals = canSeeBuyers && isNetworkLead ? await getDealsForNetworkLead(opp.id) : [];
   const todayPT = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
   const attachedBuyerIds = new Set(readDispoBuyers(opp.formData).map((b) => b.buyerId).filter(Boolean));

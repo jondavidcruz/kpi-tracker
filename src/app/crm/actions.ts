@@ -1237,19 +1237,22 @@ export async function savePipelineAction(formData: FormData) {
   const original = String(formData.get("original") ?? ""); // "" = create new
   const del = formData.get("del") === "1";
   const i = list.findIndex((p) => p.name === original);
+  // revalidate BOTH the board and THIS editor page (the bug: only /crm was
+  // revalidated, so the pipelines editor Jon was looking at never refreshed and
+  // every save looked like it did nothing — Jon 2026-10-24). Flash a result too.
+  const done = (flash: string) => { revalidatePath("/crm"); revalidatePath("/crm/pipelines"); redirect(`/crm/pipelines?saved=${flash}`); };
   if (del) {
     if (i >= 0) {
       const count = await db.crmOpportunity.count({ where: { pipeline: original, archivedAt: null } });
-      if (count > 0) return; // never orphan live leads
+      if (count > 0) done(`hasleads:${encodeURIComponent(original)}`); // never orphan live leads — tell them why
       list.splice(i, 1);
       await writeGhlPipelines(list);
     }
-    revalidatePath("/crm");
-    return;
+    done("deleted");
   }
   const name = String(formData.get("name") ?? "").trim().slice(0, 60);
   const stageLines = String(formData.get("stages") ?? "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 25);
-  if (!name || !stageLines.length) return;
+  if (!name || !stageLines.length) done("empty");
   const stages = stageLines.map((label) => ({ key: stageSlug(label), label }));
   const entry = { name, stages };
   if (i >= 0) {
@@ -1257,7 +1260,7 @@ export async function savePipelineAction(formData: FormData) {
     if (original !== name) await db.crmOpportunity.updateMany({ where: { pipeline: original }, data: { pipeline: name } });
   } else list.push(entry);
   await writeGhlPipelines(list);
-  revalidatePath("/crm");
+  done(i >= 0 ? "saved" : "created");
 }
 
 /** Owner/managers: drag-ordered KPIs → sortOrder (10,20,30…). */
@@ -1741,6 +1744,7 @@ export async function reorderPipelineAction(formData: FormData) {
   [list[i], list[j]] = [list[j], list[i]];
   await writeGhlPipelines(list);
   revalidatePath("/crm");
+  revalidatePath("/crm/pipelines");
 }
 
 // ── Conversations rail: edit contact + manage multiple properties/parcels ──

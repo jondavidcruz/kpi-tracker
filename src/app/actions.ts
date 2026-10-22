@@ -4607,7 +4607,7 @@ export async function importDispoNetworkCsv(formData: FormData) {
   const me = await getCurrentUser();
   const { canAccessMarketing, isManager } = await import("@/lib/auth");
   if (!canAccessMarketing(me) && !isManager(me)) return;
-  const { DISPO_NETWORK_PIPELINES, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } = await import("@/lib/dispo-buyers");
+  const { DISPO_NETWORK_PIPELINES, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, isDevNetworkName, isAgentNetworkName } = await import("@/lib/dispo-buyers");
   const { logCrmEvent } = await import("@/lib/crm");
 
   const text = String(formData.get("csv") ?? "");
@@ -4625,9 +4625,15 @@ export async function importDispoNetworkCsv(formData: FormData) {
   const pRow = await db.resource.findFirst({ where: { category: PIPES_CAT } }).catch(() => null);
   let ghl: Array<{ name: string; stages: Array<{ key: string; label: string }> }> = [];
   try { ghl = pRow?.description ? JSON.parse(pRow.description) : []; } catch { ghl = []; }
+  // Use the EXISTING network pipeline names if they're already there under any naming
+  // variant (Jon renamed them to "DS: Developers"/"DS: Buyer Agents") — only create a
+  // canonical one when none exists, so we never spawn a duplicate (Jon 2026-10-24).
+  const devName = ghl.find((p) => isDevNetworkName(p.name))?.name ?? DISPO_DEV_PIPELINE;
+  const agentName = ghl.find((p) => isAgentNetworkName(p.name))?.name ?? DISPO_AGENT_PIPELINE;
   let changed = false;
   for (const np of DISPO_NETWORK_PIPELINES) {
-    if (!ghl.some((p) => p.name === np.name)) { ghl.push({ name: np.name, stages: np.stages }); changed = true; }
+    const exists = isDevNetworkName(np.name) ? ghl.some((p) => isDevNetworkName(p.name)) : ghl.some((p) => isAgentNetworkName(p.name));
+    if (!exists) { ghl.push({ name: np.name, stages: np.stages }); changed = true; }
   }
   if (changed) {
     if (pRow) await db.resource.update({ where: { id: pRow.id }, data: { description: JSON.stringify(ghl) } });
@@ -4640,7 +4646,7 @@ export async function importDispoNetworkCsv(formData: FormData) {
 
   // Dedup against contacts already in the two network pipelines.
   const existingOpps = await db.crmOpportunity.findMany({
-    where: { pipeline: { in: [DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE] } },
+    where: { pipeline: { in: [devName, agentName] } },
     select: { contact: { select: { name: true, phone: true, altPhone: true } } },
   }).catch(() => [] as { contact: { name: string; phone: string; altPhone: string } }[]);
   const seen = new Set<string>();
@@ -4657,7 +4663,7 @@ export async function importDispoNetworkCsv(formData: FormData) {
     seen.add(key);
     const type = g(row, "type");
     const toAgent = isAgent(type);
-    const pipeline = toAgent ? DISPO_AGENT_PIPELINE : DISPO_DEV_PIPELINE;
+    const pipeline = toAgent ? agentName : devName;
     const market = g(row, "market");
     const buyBox = g(row, "buyBox");
     const website = g(row, "website");

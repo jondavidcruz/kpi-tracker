@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { matchBuyersForDeal, type BuyerMatch, type MatchBuyer } from "@/lib/buyer-match";
+import { isAgentNetworkName } from "@/lib/dispo-buyers";
 
 // 🎯 Matching cash buyers for a LEAD (Jon 2026-10-20) — the same ranking the Deals
 // board uses (matchBuyersForDeal: geography + price + terms), but runnable on a land
@@ -49,9 +50,10 @@ export type NetworkMatch = { oppId: string; name: string; phone: string; kind: "
 export async function getNetworkMatchesForDeal(address: string, limit = 8): Promise<NetworkMatch[]> {
   if (!address?.trim()) return [];
   try {
-    const { DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE } = await import("@/lib/dispo-buyers");
+    const { resolveNetworkPipelines } = await import("@/lib/dispo-network");
+    const net = await resolveNetworkPipelines();
     const opps = await db.crmOpportunity.findMany({
-      where: { archivedAt: null, pipeline: { in: [DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE] } },
+      where: { archivedAt: null, pipeline: { in: net.all } },
       select: { id: true, title: true, pipeline: true, formData: true, contact: { select: { name: true, phone: true } } },
     });
     const STOP = new Set(["the", "and", "for", "llc", "inc", "ave", "street", "road", "drive", "lane", "blvd", "court", "circle", "unit", "ste"]);
@@ -64,7 +66,7 @@ export async function getNetworkMatchesForDeal(address: string, limit = 8): Prom
       const hits = tokens.filter((t) => areaText.includes(t));
       return {
         oppId: o.id, name: o.contact?.name || o.title, phone: o.contact?.phone || "",
-        kind: (o.pipeline === DISPO_AGENT_PIPELINE ? "buyer_agent" : "developer") as NetworkMatch["kind"],
+        kind: (isAgentNetworkName(o.pipeline) ? "buyer_agent" : "developer") as NetworkMatch["kind"],
         area: imp.market || form.buyCounties || form.areas || "",
         reason: hits.length ? `📍 ${hits.slice(0, 3).join(", ")}` : "",
         score: hits.length,

@@ -69,9 +69,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // a lead into dispositions, so `allPipes` (which keeps the DS deal pipelines) is the
   // move-target list; `pipelines` is the seller browse/selector list.
   const { isDispoNetworkPipeline, isDispoDealPipeline } = await import("@/lib/dispo-buyers");
-  // Ensure the cash (wholesale) dispo pipeline exists so acquisitions can hand off a
-  // signed cash deal to it even before a manager opens /dispo (Jon 2026-10-22).
-  { const { ensureCashPipeline } = await import("@/lib/dispo-pipelines"); await ensureCashPipeline(); }
+  // (Removed the auto-create of a "DS: Signed Off Market" pipeline — Jon manages the
+  // dispo pipelines himself now and it kept respawning a pipeline he'd deleted. 2026-10-24)
   const allPipes = (await readPipelines()).filter((p) => !isDispoNetworkPipeline(p.name)); // move targets (incl DS deal)
   const pipelines = allPipes.filter((p) => !isDispoDealPipeline(p.name));                   // seller selector + board
   // Lead counts per pipeline (also powers the tab badges). Default tab =

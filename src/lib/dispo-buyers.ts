@@ -85,15 +85,31 @@ export function isDispoDealPipeline(name: string | null | undefined): boolean {
 
 // 🏗 / 🧑‍💼 The two dispo buyer-NETWORK pipelines (developers + buyer agents) —
 // real CrmOpportunity pipelines so each lead is a card with notes + stages, like
-// the Acquisitions CRM (Jon 2026-10-20).
-export const DISPO_DEV_PIPELINE = "DS: Unvetted Developers";
+// the Acquisitions CRM (Jon 2026-10-20). NOTE: these were renamed in the live CRM
+// to "DS: Developers" / "DS: Buyer Agents" (Jon's screenshot 2026-10-24). The
+// matchers below are tolerant of naming/whitespace variants so classification +
+// the seller-CRM exclusion never silently break when a pipeline is renamed.
+export const DISPO_DEV_PIPELINE = "DS: Developers";
 export const DISPO_AGENT_PIPELINE = "DS: Buyer Agents";
+
+const normPipe = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/** A buyer-NETWORK developer pipeline — tolerant of "DS: Developers",
+ *  "DS: Unvetted Developers", trailing spaces, etc. */
+export function isDevNetworkName(name: string | null | undefined): boolean {
+  const n = normPipe(name);
+  return /^ds[:\s]/.test(n) && (/\bdevelopers?\b/.test(n) || n.includes("unvetted"));
+}
+/** A buyer-NETWORK buyer-agent pipeline — tolerant of "DS: Buyer Agents" variants. */
+export function isAgentNetworkName(name: string | null | undefined): boolean {
+  const n = normPipe(name);
+  return /^ds[:\s]/.test(n) && /\bagents?\b/.test(n);
+}
 
 /** The buyer-NETWORK pipelines (developers / agents) — these live in the Dispo CRM,
  *  NOT in the seller CRM selector (Jon 2026-10-20: keep them off the sellers). */
 export function isDispoNetworkPipeline(name: string | null | undefined): boolean {
-  const n = (name ?? "").toLowerCase();
-  return n === DISPO_DEV_PIPELINE.toLowerCase() || n === DISPO_AGENT_PIPELINE.toLowerCase();
+  return isDevNetworkName(name) || isAgentNetworkName(name);
 }
 export const DISPO_NETWORK_PIPELINES: { name: string; stages: { key: string; label: string }[] }[] = [
   { name: DISPO_DEV_PIPELINE, stages: [

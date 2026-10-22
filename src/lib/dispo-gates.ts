@@ -10,18 +10,24 @@
 export type GatePath = "cash" | "novation" | "land";
 export type Stage = { key: string; label: string };
 
+// Emojis per process (Jon 2026-10-24): Novation = 🪧 (listed/on-market sign),
+// Off-market assignment = 🤝, Find-buyer = 🤝. Novation is the one that's NOT a
+// handshake so the three read distinctly on the switcher.
 export const PATH_META: Record<GatePath, { label: string; emoji: string }> = {
-  cash: { label: "All-cash — find a cash buyer", emoji: "💵" },
-  novation: { label: "Novation — list through an agent", emoji: "🤝" },
-  land: { label: "Sell land, then sign — run the cascade", emoji: "⛰️" },
+  cash: { label: "Off market — assignment to a cash buyer", emoji: "🤝" },
+  novation: { label: "On market — list through a listing agent", emoji: "🪧" },
+  land: { label: "Find a buyer (unsigned)", emoji: "🤝" },
 };
 
-/** The pipeline decides the gate path. */
+/** The pipeline decides the gate path. Tolerant of Jon's live names:
+ *  "DS: Signed - Novation", "DS: Unsigned - Find Buyer", "DS: Signed - Wholesale",
+ *  "DS: Signed Off Market", plus the legacy "Sell Land Then Sign"/"Signed Go Close". */
 export function pathForPipeline(pipeline?: string | null): GatePath {
   const n = (pipeline ?? "").toLowerCase();
-  if (/sell land/.test(n)) return "land";
-  if (/off.?market/.test(n)) return "cash";       // DS: Signed Off Market
-  if (/go close|signed/.test(n)) return "novation"; // DS: Signed Go Close
+  if (/novation|on.?market/.test(n)) return "novation";
+  if (/wholesale|off.?market|assign/.test(n)) return "cash";
+  if (/find buyer|unsigned|sell land/.test(n)) return "land";
+  if (/go close|signed/.test(n)) return "novation"; // legacy "DS: Signed Go Close"
   return "land";
 }
 
