@@ -15,7 +15,7 @@ import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban"
 import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv } from "@/app/actions";
-import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispoCascadeAction, resortOrphanStagesAction } from "@/app/crm/actions";
+import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispoCascadeAction, resortOrphanStagesAction, syncClosedDealsAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
@@ -46,7 +46,7 @@ function cityState(addr?: string): { city: string; st: string } {
 // already uses on the Seller CRM (Jon 2026-10-20: "make it look like what they
 // recognize"). Developers + Buyer Agents are their own pipelines here (not mixed
 // with sellers); the Deals tab tracks buyer follow-ups per deal.
-export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string; resorted?: string; pipedx?: string }> }) {
+export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string; resorted?: string; pipedx?: string; synced?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me) && !isManager(me)) {
     return (
@@ -546,8 +546,15 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                 <Card className="p-0 overflow-hidden">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-emerald-50/60 px-3 py-2">
                     <div className="text-[13px] font-extrabold text-slate-800">✅ Closed / Won — all dispo types <span className="font-semibold text-slate-400">— {closedDeals.length} deal{closedDeals.length === 1 ? "" : "s"}</span></div>
-                    <div className="text-[11px] font-bold text-emerald-700">{closedTotal > 0 ? `$${closedTotal.toLocaleString()} total value` : ""}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-[11px] font-bold text-emerald-700">{closedTotal > 0 ? `$${closedTotal.toLocaleString()} total value` : ""}</div>
+                      <form action={syncClosedDealsAction}>
+                        <input type="hidden" name="back" value="/dispo?tab=deals&view=closed" />
+                        <button className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700" title="Make sure every Closed/Won lead here also shows as a closed deal on the Deals board">🔗 Sync to Deals board</button>
+                      </form>
+                    </div>
                   </div>
+                  {sp.synced && /^\d+$/.test(sp.synced) && <div className="border-b border-emerald-100 bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-800">✅ Synced {sp.synced} closed deal{sp.synced === "1" ? "" : "s"} to the Deals board.{sp.synced === "0" ? " (All were already on the board.)" : ""}</div>}
                   {closedDeals.length === 0 ? (
                     <div className="p-8 text-center text-sm text-slate-400">No closed/won deals yet. When a deal reaches a Closed/Won stage in any dispo pipeline, it shows here.</div>
                   ) : (

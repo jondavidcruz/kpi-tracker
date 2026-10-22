@@ -1828,6 +1828,40 @@ export async function saveAllPipelinesAction(formData: FormData) {
   redirect("/crm/pipelines?saved=all");
 }
 
+// 🔗 Backfill: make sure every lead currently in a Closed/Won stage of a dispo deal
+// pipeline has a closed Deal on the Deals board (Jon 2026-10-24: the rename broke the
+// auto-generation, so some Closed/Won leads never reached the board). Idempotent via
+// the __dealGenerated flag, so it never double-counts revenue.
+export async function syncClosedDealsAction(formData: FormData) {
+  const me = await crmUser();
+  const { canManageAllLeads } = await import("@/lib/auth");
+  if (!me || !canManageAllLeads(me)) return;
+  const back = String(formData.get("back") ?? "/dispo?tab=deals&view=closed");
+  const { isDispoDealPipeline } = await import("@/lib/dispo-buyers");
+  const pls = (await readPipelines()).filter((p) => isDispoDealPipeline(p.name));
+  const wonKeys = new Set<string>();
+  for (const p of pls) for (const s of p.stages) {
+    const t = `${s.key} ${s.label}`;
+    if (/won/i.test(t) && !/dead|died|lost|nurtur/i.test(t)) wonKeys.add(s.key);
+  }
+  const today = PT_TODAY();
+  let made = 0;
+  if (wonKeys.size) {
+    const opps = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: pls.map((p) => p.name) }, stage: { in: [...wonKeys] } }, select: { id: true, title: true, pipeline: true, assignedTo: true, value: true, askPrice: true, contactId: true, formData: true, contact: { select: { name: true, address: true } } } });
+    for (const o of opps) {
+      const fd = (o.formData ?? {}) as Record<string, unknown>;
+      if (fd.__dealGenerated) continue;
+      const addr = o.contact?.address || o.title || o.contact?.name || "Deal";
+      await db.deal.create({ data: { address: addr, status: "closed", assignedTo: o.assignedTo || me.name, soldPrice: o.value ?? o.askPrice ?? null, assignmentFee: o.value ?? null, soldDate: today, source: "dispo-crm", notes: `Backfilled from ${o.pipeline} → Closed/Won.` } }).catch(() => {});
+      await db.crmOpportunity.update({ where: { id: o.id }, data: { formData: { ...fd, __dealGenerated: today } as never } }).catch(() => {});
+      made++;
+    }
+  }
+  revalidatePath("/deals");
+  revalidatePath("/dispo");
+  redirect(`${back}${back.includes("?") ? "&" : "?"}synced=${made}`);
+}
+
 export async function reorderPipelineAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
