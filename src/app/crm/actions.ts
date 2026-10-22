@@ -2168,6 +2168,38 @@ export async function handBestOfferToSellerAction(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+/** 📄 Generate / save the assignment contract draft on a deal (Jon 2026-10-22).
+ *  Builds the Assignment of Purchase & Sale Agreement from the deal's own numbers
+ *  (seller-contract price + our assignment fee) and stores it on the opp so it
+ *  persists. The contract text is rebuilt server-side from the submitted fields so
+ *  the client can't inject arbitrary body text. */
+export async function saveAssignmentDraftAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  if (!oppId) return;
+  const { buildAssignmentContract, money } = await import("@/lib/assignment-contract");
+  const s = (k: string) => String(formData.get(k) ?? "").trim();
+  const num = (k: string) => { const v = Number(s(k).replace(/[$,\s]/g, "")); return Number.isFinite(v) ? v : 0; };
+  const inp = {
+    assignorEntity: s("assignorEntity") || "Freedom Offers LLC",
+    assignorSigner: s("assignorSigner"),
+    assigneeName: s("assigneeName"), assigneeEntity: s("assigneeEntity"), assigneeEmail: s("assigneeEmail"),
+    propertyAddress: s("propertyAddress"), apn: s("apn"), county: s("county"), state: s("state"), acres: s("acres"),
+    purchasePrice: num("purchasePrice"), assignmentFee: num("assignmentFee"), emd: num("emd"),
+    closingDays: num("closingDays") || 30, titleCompany: s("titleCompany"),
+    effectiveDate: s("effectiveDate") || PT_TODAY(),
+  };
+  const text = buildAssignmentContract(inp);
+  const draft = { ...inp, generatedAt: new Date().toISOString(), generatedBy: me.name, text };
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true, contactId: true } });
+  if (!o) return;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __assignmentDraft: draft } as never } });
+  if (o.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "system", body: `📄 Assignment contract drafted — assignee ${inp.assigneeName || inp.assigneeEntity || "TBD"}, purchase ${money(inp.purchasePrice)} + fee ${money(inp.assignmentFee)}.`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
 /** 🔗 Attach a Buyer-Network lead (developer / buyer agent CrmOpportunity) to a
  *  DEAL (Jon 2026-10-20) — the integration: the deal's follow-up tracker now
  *  points at the real network lead (buyerId = its opp id), and the network lead

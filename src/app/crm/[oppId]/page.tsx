@@ -7,7 +7,9 @@ import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { attachNetworkBuyerToDeal, runDispoCascadeAction } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoOffersPanel from "@/components/DispoOffersPanel";
-import { readDispoOffers } from "@/lib/dispo-offers";
+import { readDispoOffers, offerStats, parseMoney } from "@/lib/dispo-offers";
+import AssignmentContractPanel from "@/components/AssignmentContractPanel";
+import { readAssignmentDraft } from "@/lib/assignment-contract";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { readGateChecks } from "@/lib/dispo-gates";
@@ -606,6 +608,38 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             const mi = stages.findIndex((s) => /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.label) || /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.key));
             const pastCascade = si >= 0 && mi >= 0 && si >= mi;
             return <DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} askPrice={opp.askPrice ?? null} />;
+          })()}
+
+          {/* 📄 Assignment contract auto-draft — build it from the deal's own numbers (Jon 2026-10-22) */}
+          {showMatches && (() => {
+            const offers = readDispoOffers(opp.formData);
+            const st = offerStats(offers);
+            const fd = (opp.formData ?? {}) as Record<string, unknown>;
+            const ff = (k: string): string => {
+              for (const sec of Object.values(fd)) {
+                if (sec && typeof sec === "object" && !Array.isArray(sec) && k in (sec as Record<string, unknown>)) {
+                  const v = (sec as Record<string, unknown>)[k];
+                  if (v) return String(Array.isArray(v) ? v.join(", ") : v);
+                }
+              }
+              return "";
+            };
+            const best = st.best ?? 0;
+            const sellerPrice = parseMoney(ff("sellerNumber")) ?? parseMoney(ff("ourOffer")) ?? opp.askPrice ?? (best ? Math.round((best * 0.8) / 500) * 500 : 0);
+            const fee = best > 0 && sellerPrice > 0 ? Math.max(0, best - sellerPrice) : 0;
+            const accepted = offers.find((o) => o.status === "accepted");
+            const propAddr = opp.title && !/^\s*$/.test(opp.title) ? opp.title : (ff("address") || c.address || "");
+            const stMatch = /,\s*([A-Z]{2})\s*\d{0,5}\s*$/.exec(propAddr);
+            const defaults = {
+              assignorEntity: "Freedom Offers LLC", assignorSigner: me?.name || "",
+              assigneeName: accepted?.buyer || st.bestBuyer || "", assigneeEntity: "", assigneeEmail: "",
+              propertyAddress: propAddr, apn: ff("apn") || ((opp.formData as { property?: { apn?: string } } | null)?.property?.apn ?? ""),
+              county: "", state: stMatch ? stMatch[1] : "", acres: ff("acreage"),
+              purchasePrice: sellerPrice || 0, assignmentFee: fee, emd: 0,
+              closingDays: 30, titleCompany: "",
+              effectiveDate: new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }),
+            };
+            return <AssignmentContractPanel oppId={opp.id} defaults={defaults} draft={readAssignmentDraft(opp.formData)} />;
           })()}
 
           {comms.email && c.email && (
