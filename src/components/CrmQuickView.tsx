@@ -8,6 +8,7 @@ import {
   setOppStageAction, setOppPipelineAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
   addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, saveCrmFormAction,
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
+  runDispoCascadeAction,
 } from "@/app/crm/actions";
 import { KIND_EMOJI, stripAgentNotesBlock } from "@/lib/crm-shared";
 import DispoGatePanel from "@/components/DispoGatePanel";
@@ -162,6 +163,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
             {isDispoDealPipeline(d.pipeline) && (pipelineStages?.[d.pipeline] ?? stages).length > 0 && (
               <div className="border-b border-slate-100 px-5 py-3">
                 <DispoGatePanel oppId={d.id} pipeline={d.pipeline} currentStage={d.stage} stages={pipelineStages?.[d.pipeline] ?? stages} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} />
+                <button type="button" onClick={() => { const fd = new FormData(); fd.set("oppId", d.id); submit(runDispoCascadeAction)(fd); }} disabled={pending} className="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50" title="Attach the top matched vetted developers + buyer agents, ready to work">⚡ Run the cascade — attach top matched buyers</button>
               </div>
             )}
 
