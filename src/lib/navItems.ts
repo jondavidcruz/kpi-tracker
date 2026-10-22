@@ -25,6 +25,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/crm/calendar", label: "Calendar", gate: "all" },
     { href: "/underwriting", label: "Underwriting", gate: "all" },
     { href: "/reduction", label: "Reduction Play", gate: "all" },
+    { href: "/sop/acquisitions/index.html", label: "Acquisitions SOP", gate: "all" },
   ] },
   { group: "Dispositions", items: [
     { href: "/dispo", label: "Dispo CRM", gate: "marketing" },

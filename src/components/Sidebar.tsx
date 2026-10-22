@@ -37,6 +37,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/deals": "pipeline dispositions",
   "/dispo": "dispositions crm kanban follow-ups follow up buyer agents developers board sell land then sign",
   "/sop/dispo/index.html": "dispo sop standard operating procedure pre-contract run sheet gates checklist packet cascade marie sharyn",
+  "/sop/acquisitions/index.html": "acquisitions sop acq sales rep sop standard operating procedure process call script underwriting mao cash novation offer contract 5 minute speed to lead",
   "/reduction": "price reduction seller negotiate script calculator dom offers",
   "/call-scoring": "call recording transcript coaching score",
   "/email-health": "email health bounce rate deliverability opens clicks resend direct rei campaigns domain reputation",
@@ -104,6 +105,7 @@ export default function Sidebar({
       { href: "/crm/calendar", label: "Calendar", Icon: CalendarDays },
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/reduction", label: "Reduction Play", Icon: TrendingUp },
+      { href: "/sop/acquisitions/index.html", label: "Acquisitions SOP", Icon: BookOpen, external: true },
     ] },
     { label: "Dispositions", items: [
       { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOrManager: true },
