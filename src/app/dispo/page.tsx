@@ -15,6 +15,7 @@ import { importDispoNetworkCsv } from "@/app/actions";
 import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
+import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline } from "@/lib/dispo-gates";
 
 export const dynamic = "force-dynamic";
@@ -117,6 +118,44 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     for (const b of readDispoBuyers(o.formData)) followCards.push({ oppId: o.id, entryId: b.id, name: b.name, kind: b.kind, phone: b.phone, email: b.email, price: b.price, stage: b.stage, nextFollowUp: b.nextFollowUp, lastContact: b.lastContact, dealAddr });
   }
   const dueToday = followCards.filter((c) => c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in").length;
+
+  // 📊 Accountability scoreboard (Jon 2026-10-21) — today's outreach on dispo deals,
+  // per rep + team throughput. Honest, from the activity log — no self-reporting.
+  let scoreReps: RepRow[] = [];
+  let scoreTeam: TeamStats = { dealsPushed: 0, totalActive: 0, agentsReached: 0, thisHour: 0 };
+  if (tab === "deals" || tab === "team" || tab === "nextup") {
+    const tz = settings.orgTimezone;
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date());
+    const gv = (t: string) => Number(p.find((x) => x.type === t)?.value ?? 0);
+    const todayStart = new Date(Date.now() - ((gv("hour") % 24) * 3600 + gv("minute") * 60 + gv("second")) * 1000);
+    const hourStart = new Date(Date.now() - (gv("minute") * 60 + gv("second")) * 1000);
+    const allDealIds = dealOpps.map((o) => o.id);
+    const evs = allDealIds.length
+      ? await db.crmEvent.findMany({ where: { oppId: { in: allDealIds }, at: { gte: todayStart }, kind: { in: ["call", "sms", "email"] } }, select: { actor: true, oppId: true, at: true, body: true } })
+      : [];
+    const { secondaryPositionOf } = await import("@/lib/roles");
+    const users = await db.user.findMany({ where: { active: true }, select: { name: true, position: true } }).catch(() => [] as { name: string; position: string | null }[]);
+    const dispoUsers = users.filter((u) => u.position === "dispositions" || secondaryPositionOf({ name: u.name, position: u.position ?? undefined }) === "dispositions");
+    const byRep = new Map<string, { deals: Set<string>; outreach: number; agents: number; last: number | null }>();
+    const agentNames = new Set<string>();
+    let thisHourCount = 0;
+    for (const e of evs) {
+      const a = e.actor || "";
+      if (a && a !== "auto") {
+        const r = byRep.get(a) ?? { deals: new Set<string>(), outreach: 0, agents: 0, last: null };
+        r.deals.add(e.oppId); r.outreach++;
+        if (/deal buyer tracker|🔗 attached/i.test(e.body)) r.agents++;
+        const t = e.at.getTime(); if (r.last == null || t > r.last) r.last = t;
+        byRep.set(a, r);
+      }
+      const m = /followed up with ([^(]+)\(deal buyer tracker\)/i.exec(e.body);
+      if (m) agentNames.add(m[1].trim().toLowerCase());
+      if (e.at.getTime() >= hourStart.getTime()) thisHourCount++;
+    }
+    scoreReps = dispoUsers.map((u) => { const r = byRep.get(u.name); return { name: u.name, dealsWorked: r ? r.deals.size : 0, outreach: r ? r.outreach : 0, agentsWorked: r ? r.agents : 0, lastAgoMin: r && r.last ? Math.round((Date.now() - r.last) / 60000) : null }; })
+      .sort((a, b) => b.outreach - a.outreach);
+    scoreTeam = { dealsPushed: new Set(evs.map((e) => e.oppId)).size, totalActive: dealOpps.length, agentsReached: agentNames.size, thisHour: thisHourCount };
+  }
 
   // 🗺 Areas view — group THIS pipeline's deals by city so an agent/developer buying
   // across many parcels + sellers in one market is visible together and attachable in
@@ -256,6 +295,8 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
           </Link>
         ))}
       </div>
+
+      {(tab === "deals" || tab === "team" || tab === "nextup") && <DispoScoreboard reps={scoreReps} team={scoreTeam} />}
 
       {tab === "nextup" && (
         <>
