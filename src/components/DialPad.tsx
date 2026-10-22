@@ -180,8 +180,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const load = async (q = "") => {
     try {
       const r = await fetch(`/api/crm/phone${q ? `?q=${encodeURIComponent(q)}` : ""}`);
-      if (r.ok) setData(await r.json());
+      if (r.ok) { const j = await r.json() as PhoneData; dataRef.current = j; setData(j); return j; } // set the ref NOW so a call fired before render can pick a from-number
     } catch { /* panel still dials */ }
+    return null;
   };
   useEffect(() => { if (open && !data) load(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -216,12 +217,20 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     return () => window.removeEventListener("fo-call", h);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Pick the caller-ID number. "auto" = the one closest to the lead (same area
+  // code); if NONE is close, we still pick one — our default line, else the first
+  // available — so a call never silently fails for lack of a nearby number (Jon
+  // 2026-10-24). A manually-chosen number is used as-is, but still falls back to an
+  // available number if that pick isn't in our list.
   const pickFrom = (to: string): string | undefined => {
     const d = dataRef.current;
-    if (from !== "auto") return from;
-    if (!d) return undefined;
+    const nums = d?.numbers ?? [];
+    if (from !== "auto") return from; // a manually-chosen line is used as-is
+    if (!nums.length) return d?.defaultFrom || undefined; // nothing loaded/available → let Telnyx use the line default
     const ac = areaCode(to);
-    return d.numbers.find((n) => areaCode(n) === ac) ?? d.defaultFrom ?? d.numbers[0];
+    return nums.find((n) => areaCode(n) === ac)   // closest (same area code)
+      ?? (d?.defaultFrom && nums.includes(d.defaultFrom) ? d.defaultFrom : undefined) // our default line
+      ?? nums[0];                                  // else ANY available number — never fail
   };
 
   const finish = (ctx: Ctx | null) => {
@@ -511,11 +520,17 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     setOnCall({ ...ctx, dir: "out" }); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     dialStartRef.current = Date.now(); setEndConfirm(false);
     try {
+      // make sure our from-numbers are loaded (a call fired from a card 📞 before the
+      // panel ever opened had no numbers → callerNumber undefined → silent no-dial). Jon 2026-10-24
+      if (!dataRef.current?.numbers?.length) await load();
       // dialing from a standby tab → steal the phone from the leader tab first
       if (!leaderRef.current) { setMsg("Taking the line from your other tab…"); await holdLock(true); }
       const client = (await ensureClient()) as { newCall: (o: object) => unknown };
       setState("ringing");
-      callRef.current = client.newCall({ destinationNumber: to, callerNumber: pickFrom(to), audio: true, video: false }) as never;
+      const from = pickFrom(to);
+      const opts: { destinationNumber: string; callerNumber?: string; audio: boolean; video: boolean } = { destinationNumber: to, audio: true, video: false };
+      if (from) opts.callerNumber = from; // omit entirely if we truly have none → Telnyx uses the connection's default line (still dials)
+      callRef.current = client.newCall(opts) as never;
     } catch (e) { setState("error"); setMsg(String(e).slice(0, 120)); }
   };
 

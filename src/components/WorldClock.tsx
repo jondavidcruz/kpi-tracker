@@ -34,13 +34,29 @@ function offsetFromPT(tz: string, now: number): number {
 export default function WorldClock() {
   const [now, setNow] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
+  const [skew, setSkew] = useState(0); // serverNow - deviceNow (ms)
 
   useEffect(() => {
-    setNow(Date.now());
+    // 🧭 Anchor to SERVER time, not the device clock (Jon 2026-10-24). We run from
+    // PST and a rep's laptop can be badly wrong (Michelle's was ~12h off, flipping
+    // AM/PM). All zones are derived from the server instant so the clock is right
+    // even on a broken machine — the Philippines column is a reference, never the base.
+    let sk = 0;
+    const tick = () => setNow(Date.now() + sk);
+    (async () => {
+      try {
+        const t0 = Date.now();
+        const r = await fetch("/api/now", { cache: "no-store" });
+        if (r.ok) { const { now: sv } = await r.json(); const t1 = Date.now(); sk = sv - (t0 + (t1 - t0) / 2); setSkew(sk); }
+      } catch { /* offline — fall back to device time */ }
+      tick();
+    })();
     try { setOpen(localStorage.getItem(LS_KEY) === "1"); } catch { /* private mode */ }
-    const id = setInterval(() => setNow(Date.now()), 20_000);
+    tick();
+    const id = setInterval(tick, 20_000);
     return () => clearInterval(id);
   }, []);
+  const clockOff = Math.abs(skew) > 5 * 60_000;
 
   const toggle = () => setOpen((v) => { const n = !v; try { localStorage.setItem(LS_KEY, n ? "1" : "0"); } catch { /* ignore */ } return n; });
 
@@ -92,6 +108,7 @@ export default function WorldClock() {
           </div>
         ))}
       </div>
+      {clockOff && <div className="mt-1 text-center text-[7.5px] font-bold leading-tight text-amber-300">⚠ Your PC clock is wrong — showing the real (server) time. Fix: turn on auto date &amp; time.</div>}
     </button>
   );
 }
