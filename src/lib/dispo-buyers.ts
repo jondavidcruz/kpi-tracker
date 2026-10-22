@@ -92,18 +92,20 @@ export function isDispoDealPipeline(name: string | null | undefined): boolean {
 export const DISPO_DEV_PIPELINE = "DS: Developers";
 export const DISPO_AGENT_PIPELINE = "DS: Buyer Agents";
 
-const normPipe = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+// Normalize + STRIP a leading emoji/symbol run, so "🏗 DS: Developers" → "ds: developers"
+// (Jon put emojis on the pipeline names, which broke the old `^ds` anchor — 2026-10-24).
+const normPipe = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim().replace(/^[^a-z0-9]+/, "").trim();
 
 /** A buyer-NETWORK developer pipeline — tolerant of "DS: Developers",
- *  "DS: Unvetted Developers", trailing spaces, etc. */
+ *  "DS: Unvetted Developers", a leading emoji, trailing spaces, etc. */
 export function isDevNetworkName(name: string | null | undefined): boolean {
   const n = normPipe(name);
-  return /^ds[:\s]/.test(n) && (/\bdevelopers?\b/.test(n) || n.includes("unvetted"));
+  return /^ds\b/.test(n) && (/\bdevelopers?\b/.test(n) || n.includes("unvetted"));
 }
 /** A buyer-NETWORK buyer-agent pipeline — tolerant of "DS: Buyer Agents" variants. */
 export function isAgentNetworkName(name: string | null | undefined): boolean {
   const n = normPipe(name);
-  return /^ds[:\s]/.test(n) && /\bagents?\b/.test(n);
+  return /^ds\b/.test(n) && /\bagents?\b/.test(n);
 }
 
 /** The buyer-NETWORK pipelines (developers / agents) — these live in the Dispo CRM,
