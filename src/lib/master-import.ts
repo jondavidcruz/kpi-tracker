@@ -5,15 +5,17 @@
 import { db } from "@/lib/db";
 import { MASTER_BUYERS, type MasterBuyer } from "@/lib/master-buyers-data";
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\b(llc|inc|corp|corporation|co|ltd|company|group|homes|builders|construction|capital|invest|investments|ventures|development|consulting|services|properties|realty|the)\b/g, "").replace(/\s+/g, " ").trim();
+// Tight match key: strip punctuation + ONLY the trailing entity suffix, so distinct
+// builder names don't collapse (the old key over-stripped and false-matched everyone).
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\b(llc|inc|corp|corporation|co|ltd)\b/g, "").replace(/\s+/g, " ").trim();
 const phone10 = (s: string) => s.replace(/\(.*$/, "").replace(/\D/g, "").slice(-10);
 const isAgent = (t: string) => /realtor|agent|broker|wholesaler/i.test(t);
 const parsePrice = (s: string) => { const m = s.match(/\$[\d,]+(?:\s*[–-]\s*\$?[\d,]+)?\s*[kmKM]?/); return m ? m[0] : ""; };
 
 export type MasterPlan = {
-  total: number; toCreateHot: number; toCreateNew: number; developers: number; agents: number;
-  alreadyHave: number; skippedNoName: number; executed: boolean; created: number;
-  samples: { name: string; priority: string; stage: string; kind: string }[]; note: string;
+  total: number; createdHot: number; createdNew: number; movedToHot: number;
+  alreadyHave: number; skippedNoName: number; executed: boolean;
+  samples: { name: string; priority: string; action: string }[]; note: string;
 };
 
 export async function importMaster(execute: boolean): Promise<MasterPlan> {
@@ -22,50 +24,64 @@ export async function importMaster(execute: boolean): Promise<MasterPlan> {
   const devPipe = net.dev[0] || "DS: Developers";
   const agentPipe = net.agent[0] || "DS: Buyer Agents";
 
-  const [kanban, mcs] = await Promise.all([
-    db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.all.length ? net.all : [devPipe, agentPipe] } }, select: { contact: { select: { name: true, phone: true } } } }).catch(() => []),
-    db.marketContact.findMany({ where: { archivedAt: null }, select: { name: true, phone: true } }).catch(() => []),
-  ]);
-  const names = new Set<string>(); const phones = new Set<string>();
-  const seed = (name?: string | null, phone?: string | null) => { if (name) { const k = norm(name); if (k) names.add(k); } const p = phone10(phone ?? ""); if (p.length === 10) phones.add(p); };
-  for (const o of kanban) seed(o.contact?.name, o.contact?.phone);
-  for (const m of mcs) seed(m.name, m.phone);
+  // existing kanban opps (the kanban now holds unvetted + the migrated vetted buyers)
+  const kanban = await db.crmOpportunity.findMany({
+    where: { archivedAt: null, pipeline: { in: net.all.length ? net.all : [devPipe, agentPipe] } },
+    select: { id: true, stage: true, contactId: true, contact: { select: { name: true, phone: true } } },
+  }).catch(() => []);
+  const byName = new Map<string, typeof kanban[number]>();
+  const byPhone = new Map<string, typeof kanban[number]>();
+  for (const o of kanban) {
+    const nk = norm(o.contact?.name ?? ""); if (nk && !byName.has(nk)) byName.set(nk, o);
+    const p = phone10(o.contact?.phone ?? ""); if (p.length === 10 && !byPhone.has(p)) byPhone.set(p, o);
+  }
 
-  const plan: MasterPlan = { total: MASTER_BUYERS.length, toCreateHot: 0, toCreateNew: 0, developers: 0, agents: 0, alreadyHave: 0, skippedNoName: 0, executed: execute, created: 0, samples: [], note: "" };
+  const plan: MasterPlan = { total: MASTER_BUYERS.length, createdHot: 0, createdNew: 0, movedToHot: 0, alreadyHave: 0, skippedNoName: 0, executed: execute, samples: [] };
+  const usedNames = new Set<string>(); const usedPhones = new Set<string>();
 
   for (const b of MASTER_BUYERS as MasterBuyer[]) {
     if (!b.name.trim()) { plan.skippedNoName++; continue; }
     const nk = norm(b.name); const p10 = phone10(b.phone);
-    if ((nk && names.has(nk)) || (p10.length === 10 && phones.has(p10))) { plan.alreadyHave++; continue; }
-    if (nk) names.add(nk); if (p10.length === 10) phones.add(p10); // reserve (within-batch dedup)
+    const existing = (p10.length === 10 ? byPhone.get(p10) : undefined) ?? (nk ? byName.get(nk) : undefined);
+    const isP1 = b.p === "P1";
+
+    if (existing) {
+      // already in the system. P1 → make sure it's in the Hot stage; others leave alone.
+      if (isP1 && existing.stage !== "hot") {
+        plan.movedToHot++;
+        if (plan.samples.length < 14) plan.samples.push({ name: b.name, priority: b.p, action: "move → 🔥 Hot" });
+        if (execute) await db.crmOpportunity.update({ where: { id: existing.id }, data: { stage: "hot" } }).catch(() => {});
+      } else {
+        plan.alreadyHave++;
+      }
+      continue;
+    }
+    // genuinely new (after tightened matching). Within-batch dedup too.
+    if ((nk && usedNames.has(nk)) || (p10.length === 10 && usedPhones.has(p10))) { plan.alreadyHave++; continue; }
+    if (nk) usedNames.add(nk); if (p10.length === 10) usedPhones.add(p10);
 
     const agent = isAgent(b.type);
-    const pipeline = agent ? agentPipe : devPipe;
-    const stage = b.p === "P1" ? "hot" : "new";
-    if (stage === "hot") plan.toCreateHot++; else plan.toCreateNew++;
-    if (agent) plan.agents++; else plan.developers++;
-    if (plan.samples.length < 12) plan.samples.push({ name: b.name, priority: b.p, stage, kind: agent ? "agent" : "developer" });
+    const stage = isP1 ? "hot" : "new";
+    if (isP1) plan.createdHot++; else plan.createdNew++;
+    if (plan.samples.length < 14) plan.samples.push({ name: b.name, priority: b.p, action: `create → ${isP1 ? "🔥 Hot" : "🆕 New"}` });
 
     if (execute) {
       const phoneE164 = p10.length === 10 ? `+1${p10}` : "";
-      const contact = (p10.length === 10
-        ? await db.crmContact.findFirst({ where: { archivedAt: null, OR: [{ phone: { endsWith: p10 } }, { altPhone: { endsWith: p10 } }] }, orderBy: { updatedAt: "desc" } }).catch(() => null)
-        : null)
-        ?? await db.crmContact.create({ data: { name: b.name, phone: phoneE164, email: b.email, address: "", source: b.src || "Master buyer list" } });
+      const contact = await db.crmContact.create({ data: { name: b.name, phone: phoneE164, email: b.email, address: "", source: b.src || "Master buyer list" } });
       const box = agent
-        ? { areas: b.markets, priceRange: parsePrice(b.box), buyerTypes: b.type, brokerage: "", bestContact: b.phone2, notes: b.box }
-        : { buyCounties: b.markets, priceRange: parsePrice(b.box), landTypes: "", requirements: b.box, volume: "", decisionMaker: "", closeSpeed: "", proofOfFunds: b.p === "P1" || b.p === "P2" ? "Proven cash buyer (deed records)" : "" };
+        ? { areas: b.markets, priceRange: parsePrice(b.box), buyerTypes: b.type, bestContact: b.phone2, notes: b.box }
+        : { buyCounties: b.markets, priceRange: parsePrice(b.box), requirements: b.box, proofOfFunds: isP1 || b.p === "P2" ? "Proven cash buyer (deed records)" : "" };
       await db.crmOpportunity.create({ data: {
-        title: b.name, pipeline, stage, contactId: contact.id, assignedTo: "",
+        title: b.name, pipeline: agent ? agentPipe : devPipe, stage, contactId: contact.id, assignedTo: "",
         formData: { [agent ? "agent_profile" : "dev_buybox"]: box, __fromMaster: b.p, __import: { market: b.markets, buyBox: b.box } } as never,
       } });
       const bits = [b.box && `Buy box: ${b.box}`, b.notes && `Notes: ${b.notes}`, b.website && `Web: ${b.website}`, b.src && `Source: ${b.src}`].filter(Boolean).join(" · ");
       if (bits) await db.crmEvent.create({ data: { contactId: contact.id, kind: "note", body: `📇 ${b.p} buyer (master list). ${bits}`.slice(0, 1800), actor: "master-import" } }).catch(() => {});
-      plan.created++;
     }
   }
+  const acting = `${plan.createdHot} new → 🔥 Hot, ${plan.movedToHot} existing moved → 🔥 Hot, ${plan.createdNew} new → 🆕 New`;
   plan.note = execute
-    ? `Imported ${plan.created} buyers (${plan.toCreateHot} → 🔥 Hot, ${plan.toCreateNew} → 🆕 New). ${plan.alreadyHave} already in the system (kanban or Buyer Research).`
-    : `DRY RUN — would add ${plan.toCreateHot + plan.toCreateNew} (${plan.toCreateHot} P1 → 🔥 Hot, ${plan.toCreateNew} → 🆕 New; ${plan.developers} developers, ${plan.agents} agents). ${plan.alreadyHave} already in the system. Add ?mode=go. (Run /api/admin/add-dev-hot-stage first.)`;
+    ? `Done. ${acting}. ${plan.alreadyHave} already in place (no change).`
+    : `DRY RUN — ${acting}. ${plan.alreadyHave} already in place (no change). Add ?mode=go to apply.`;
   return plan;
 }
