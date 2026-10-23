@@ -2200,6 +2200,68 @@ export async function saveAssignmentDraftAction(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+/** 🖊 Send the assignment contract for signature via PandaDoc (Jon picked PandaDoc
+ *  + vendor email delivery, 2026-10-22). PandaDoc drafts + emails the assignee from
+ *  its own warm IPs (inbox-safe). Gated: needs PANDADOC_DRAFTING=1 (uses credits)
+ *  and PANDADOC_TEMPLATE_ASSIGNMENT set. When not ready, it logs exactly what to
+ *  flip so nothing fails silently. Also stashes a share link to text via Telnyx. */
+export async function sendAssignmentForSignatureAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  if (!oppId) return;
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true, contactId: true, title: true } });
+  if (!opp) return;
+  const { readAssignmentDraft, money } = await import("@/lib/assignment-contract");
+  const draft = readAssignmentDraft(opp.formData);
+  if (!draft) { if (opp.contactId) await logCrmEvent({ contactId: opp.contactId, oppId, kind: "system", body: `🖊 Send-for-signature stopped — generate the assignment contract first.`, actor: me.name }); revalidatePath(`/crm/${oppId}`); return; }
+  const { PANDADOC_DRAFTING_ENABLED, assignmentTemplateId, createAssignmentDoc, sendDocument, createShareLink } = await import("@/lib/pandadoc");
+  if (!PANDADOC_DRAFTING_ENABLED || !assignmentTemplateId()) {
+    const need = [!PANDADOC_DRAFTING_ENABLED ? "set PANDADOC_DRAFTING=1 (uses PandaDoc credits)" : "", !assignmentTemplateId() ? "set PANDADOC_TEMPLATE_ASSIGNMENT to your PandaDoc assignment template id" : ""].filter(Boolean).join(" and ");
+    if (opp.contactId) await logCrmEvent({ contactId: opp.contactId, oppId, kind: "system", body: `🖊 PandaDoc send not enabled yet — ${need}. (Until then: create the doc in PandaDoc and text the signing link below.)`, actor: me.name });
+    revalidatePath(`/crm/${oppId}`); return;
+  }
+  const tokens: Record<string, string> = {
+    "Property.Address": draft.propertyAddress, "APN": draft.apn,
+    "Purchase.Price": money(draft.purchasePrice), "Assignment.Fee": money(draft.assignmentFee),
+    "Assignee.Name": draft.assigneeName, "Assignor.Name": draft.assignorEntity,
+  };
+  const doc = await createAssignmentDoc({ name: `Assignment — ${draft.propertyAddress || opp.title}`, assigneeEmail: draft.assigneeEmail, assigneeName: draft.assigneeName, tokens, metadata: { oppId } });
+  if (doc.error || !doc.id) { if (opp.contactId) await logCrmEvent({ contactId: opp.contactId, oppId, kind: "system", body: `🖊 PandaDoc draft failed — ${doc.error ?? "no id"}`, actor: me.name }); revalidatePath(`/crm/${oppId}`); return; }
+  const sent = await sendDocument(doc.id, { subject: `Assignment contract — ${draft.propertyAddress}`, message: `Hi ${draft.assigneeName || "there"}, here's the assignment contract for ${draft.propertyAddress}. Review & sign at your convenience — reply with any questions.` });
+  let shareLink = "";
+  if (draft.assigneeEmail) { const sl = await createShareLink(doc.id, draft.assigneeEmail); shareLink = sl.url ?? ""; }
+  const fd = (opp.formData ?? {}) as Record<string, unknown>;
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __assignmentDraft: { ...draft, pandadocId: doc.id, shareLink, sentAt: new Date().toISOString() } } as never } });
+  if (opp.contactId) await logCrmEvent({ contactId: opp.contactId, oppId, kind: "system", body: sent.ok ? `🖊 Assignment contract sent for signature via PandaDoc to ${draft.assigneeName || draft.assigneeEmail || "the buyer"}.${shareLink ? ` Signing link ready to text.` : ""}` : `🖊 PandaDoc send failed — ${sent.error}`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** 📲 Text a signing link to the assignee via Telnyx (Jon picked SMS delivery,
+ *  2026-10-22). Works today with any signing URL — paste one from PandaDoc's UI
+ *  (no API credits needed) or use the link the send action stashed. Routes through
+ *  the same quiet-hours / DND / live-line SMS pipeline the composer uses. */
+export async function textSigningLinkAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const phone = String(formData.get("phone") ?? "").trim();
+  const link = String(formData.get("link") ?? "").trim();
+  if (!oppId || !phone || !/^https?:\/\//i.test(link)) return;
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { contactId: true, title: true } });
+  const name = String(formData.get("name") ?? "").trim().split(/\s+/)[0] || "there";
+  const text = `Hi ${name}, here's the contract for ${opp?.title || "the property"} to review & sign: ${link} — reply with any questions. (Freedom Offers)`;
+  const d10 = phone.replace(/\D/g, "").slice(-10);
+  const toE164 = phone.trim().startsWith("+") ? phone.replace(/[^+\d]/g, "") : d10.length === 10 ? `+1${d10}` : phone;
+  const sms = new FormData();
+  sms.set("oppId", oppId);
+  if (opp?.contactId) sms.set("contactId", opp.contactId);
+  sms.set("to", toE164);
+  sms.set("text", text);
+  await sendCrmSmsAction(sms);
+  revalidatePath(`/crm/${oppId}`);
+}
+
 /** 🔗 Attach a Buyer-Network lead (developer / buyer agent CrmOpportunity) to a
  *  DEAL (Jon 2026-10-20) — the integration: the deal's follow-up tracker now
  *  points at the real network lead (buyerId = its opp id), and the network lead

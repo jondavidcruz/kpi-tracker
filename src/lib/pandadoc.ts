@@ -46,10 +46,58 @@ async function pdPost(path: string, payload: object): Promise<Res> {
 }
 
 // Jon's two offer contracts (2026-10-07). Overridable via env without a deploy.
+// assignment (2026-10-22): the BUYER-side contract — set PANDADOC_TEMPLATE_ASSIGNMENT
+// to the PandaDoc template id once Jon builds it (recipient role = "Assignee").
 export const PANDADOC_TEMPLATES: Record<string, { id: string; label: string }> = {
   cash: { id: process.env.PANDADOC_TEMPLATE_CASH || "bwoowbYKoRiKecHdhWYZyJ", label: "Cash offer (quick close, 30–60 days)" },
   novation: { id: process.env.PANDADOC_TEMPLATE_NOVATION || "TeYMu3S3BYrzLbtX5dXiLA", label: "Novation offer (disclosures to list, 90–180 days)" },
+  assignment: { id: process.env.PANDADOC_TEMPLATE_ASSIGNMENT || "", label: "Assignment of Purchase & Sale Agreement (buyer side)" },
 };
+
+/** The assignment template id, if Jon has configured one in PandaDoc. */
+export function assignmentTemplateId(): string {
+  return PANDADOC_TEMPLATES.assignment.id || "";
+}
+
+/** Draft the ASSIGNMENT contract in PandaDoc for the end buyer (Assignee role).
+ *  Mirrors createOfferDraft but targets the assignment template + buyer recipient.
+ *  Returns {id} on success. Gated by PANDADOC_DRAFTING_ENABLED at the call site. */
+export async function createAssignmentDoc(o: { name: string; assigneeEmail: string; assigneeName: string; tokens: Record<string, string>; metadata?: Record<string, string> }): Promise<{ id?: string; error?: string }> {
+  const tpl = assignmentTemplateId();
+  if (!tpl) return { error: "no PandaDoc assignment template configured — set PANDADOC_TEMPLATE_ASSIGNMENT" };
+  const [first, ...rest] = (o.assigneeName || "Buyer").trim().split(/\s+/);
+  const r = await pdPost("/documents", {
+    name: o.name.slice(0, 120),
+    template_uuid: tpl,
+    recipients: [{ email: o.assigneeEmail || "unknown@freedom-offers.com", first_name: first || "Buyer", last_name: rest.join(" ") || "-", role: "Assignee" }],
+    tokens: Object.entries(o.tokens).map(([name, value]) => ({ name, value })),
+    metadata: o.metadata ?? {},
+  });
+  if (!r.ok) return { error: `PandaDoc ${r.status}: ${JSON.stringify(r.body).slice(0, 160)}` };
+  return { id: (r.body as { id?: string }).id };
+}
+
+/** Send a drafted document for signature (PandaDoc emails the recipient from its
+ *  own warm/authenticated IPs — the inbox-safe path Jon picked). The doc must be
+ *  out of "uploaded"/processing state; PandaDoc moves it to document.sent. */
+export async function sendDocument(id: string, opts?: { subject?: string; message?: string; silent?: boolean }): Promise<{ ok: boolean; error?: string }> {
+  const r = await pdPost(`/documents/${id}/send`, {
+    subject: opts?.subject || "Please review & sign",
+    message: opts?.message || "Here is your contract to review and sign. Reply with any questions.",
+    silent: opts?.silent ?? false,
+  });
+  if (!r.ok) return { ok: false, error: `PandaDoc ${r.status}: ${JSON.stringify(r.body).slice(0, 160)}` };
+  return { ok: true };
+}
+
+/** A recipient's share/session link for a sent document — the URL we can text via
+ *  Telnyx so the signer opens it straight from their phone. */
+export async function createShareLink(id: string, recipientEmail: string): Promise<{ url?: string; error?: string }> {
+  const r = await pdPost(`/documents/${id}/session`, { recipient: recipientEmail, lifetime: 2592000 });
+  if (!r.ok) return { error: `PandaDoc ${r.status}: ${JSON.stringify(r.body).slice(0, 160)}` };
+  const id2 = (r.body as { id?: string }).id;
+  return id2 ? { url: `https://app.pandadoc.com/s/${id2}` } : { error: "no session id returned" };
+}
 
 /** Draft a contract from a template (GHL-parity: auto-draft when a lead hits
  * the offer stage — cash vs novation chosen by tag or button). Doc stays a

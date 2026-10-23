@@ -628,6 +628,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             const sellerPrice = parseMoney(ff("sellerNumber")) ?? parseMoney(ff("ourOffer")) ?? opp.askPrice ?? (best ? Math.round((best * 0.8) / 500) * 500 : 0);
             const fee = best > 0 && sellerPrice > 0 ? Math.max(0, best - sellerPrice) : 0;
             const accepted = offers.find((o) => o.status === "accepted");
+            const assigneeNm = accepted?.buyer || st.bestBuyer || "";
+            const matchBuyer = readDispoBuyers(opp.formData).find((b) => b.name && assigneeNm && b.name.toLowerCase() === assigneeNm.toLowerCase());
+            const pandadocReady = Boolean(process.env.PANDADOC_DRAFTING === "1" && process.env.PANDADOC_TEMPLATE_ASSIGNMENT);
             const propAddr = opp.title && !/^\s*$/.test(opp.title) ? opp.title : (ff("address") || c.address || "");
             const stMatch = /,\s*([A-Z]{2})\s*\d{0,5}\s*$/.exec(propAddr);
             const defaults = {
@@ -639,7 +642,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               closingDays: 30, titleCompany: "",
               effectiveDate: new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }),
             };
-            return <AssignmentContractPanel oppId={opp.id} defaults={defaults} draft={readAssignmentDraft(opp.formData)} />;
+            return <AssignmentContractPanel oppId={opp.id} defaults={defaults} draft={readAssignmentDraft(opp.formData)} pandadocReady={pandadocReady} canSms={comms.sms} assigneePhone={matchBuyer?.phone || ""} />;
           })()}
 
           {comms.email && c.email && (

@@ -6,7 +6,7 @@
 // contract server-side and stores it on the deal. Copy / download / print; the
 // "send for signature" path is explained (we don't auto-send).
 import { useState } from "react";
-import { saveAssignmentDraftAction } from "@/app/crm/actions";
+import { saveAssignmentDraftAction, sendAssignmentForSignatureAction, textSigningLinkAction } from "@/app/crm/actions";
 import { money, assigneeAllIn, type AssignmentDraft } from "@/lib/assignment-contract";
 
 type Defaults = {
@@ -17,7 +17,7 @@ type Defaults = {
   closingDays: number; titleCompany: string; effectiveDate: string;
 };
 
-export default function AssignmentContractPanel({ oppId, defaults, draft }: { oppId: string; defaults: Defaults; draft: AssignmentDraft | null }) {
+export default function AssignmentContractPanel({ oppId, defaults, draft, pandadocReady = false, canSms = false, assigneePhone = "" }: { oppId: string; defaults: Defaults; draft: AssignmentDraft | null; pandadocReady?: boolean; canSms?: boolean; assigneePhone?: string }) {
   const [open, setOpen] = useState(false);
   const base = draft ?? defaults;
   const [purchase, setPurchase] = useState(String(base.purchasePrice || ""));
@@ -139,7 +139,36 @@ export default function AssignmentContractPanel({ oppId, defaults, draft }: { op
               </div>
               <pre className="max-h-80 overflow-auto rounded-lg bg-slate-900 p-3 text-[10.5px] leading-relaxed text-slate-100 whitespace-pre-wrap">{draft.text}</pre>
               <div className="rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 ring-1 ring-amber-200">
-                ⚠️ Draft for internal use + attorney review — not legal advice. To send for signature: download/print, or use the PandaDoc/e-sign flow (see Dispo SOP). We never auto-send contracts.
+                ⚠️ Draft for internal use + attorney review — not legal advice. We never auto-send; you send it below.
+              </div>
+
+              {/* 🖊 Send for signature — PandaDoc engine + Telnyx SMS / PandaDoc email (Jon's pick) */}
+              <div className="rounded-lg bg-indigo-50 p-2 ring-1 ring-indigo-200">
+                <div className="text-[10px] font-extrabold uppercase tracking-wide text-indigo-500">🖊 Send for signature</div>
+                {draft.sentAt && (
+                  <div className="mt-1 rounded bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700">✓ Sent via PandaDoc {new Date(draft.sentAt).toLocaleDateString()}{draft.shareLink ? " — link ready to text below" : ""}</div>
+                )}
+                {/* A) PandaDoc email send (vendor's warm IPs = inbox-safe) */}
+                <form action={sendAssignmentForSignatureAction} className="mt-1.5">
+                  <input type="hidden" name="oppId" value={oppId} />
+                  <button className="w-full rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700" title="PandaDoc drafts + emails the assignee from its own trusted servers">📧 Draft + email via PandaDoc {draft.sentAt ? "(resend)" : ""}</button>
+                </form>
+                {!pandadocReady && (
+                  <div className="mt-1 text-[10px] text-indigo-700">
+                    One-time switch-on: set <code className="rounded bg-white px-1">PANDADOC_DRAFTING=1</code> + <code className="rounded bg-white px-1">PANDADOC_TEMPLATE_ASSIGNMENT</code> (your PandaDoc assignment template). Until then, make the doc in PandaDoc and paste its signing link below.
+                  </div>
+                )}
+                {/* B) Telnyx SMS the signing link — works today with any link */}
+                <form action={textSigningLinkAction} className="mt-2 space-y-1 border-t border-indigo-100 pt-2">
+                  <input type="hidden" name="oppId" value={oppId} />
+                  <input type="hidden" name="name" value={base.assigneeName} />
+                  <div className="text-[10px] font-bold text-indigo-500">📲 Text the signing link (inbox-proof)</div>
+                  <input name="link" defaultValue={draft.shareLink || ""} placeholder="Paste PandaDoc signing link…" className="w-full rounded border border-indigo-200 px-1.5 py-1 text-[11px]" />
+                  <div className="flex gap-1">
+                    <input name="phone" defaultValue={assigneePhone} placeholder="Buyer's mobile #" className="min-w-0 flex-1 rounded border border-indigo-200 px-1.5 py-1 text-[11px]" />
+                    <button disabled={!canSms} className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-40" title={canSms ? "Text the link via Telnyx" : "SMS not enabled for your account"}>Send SMS</button>
+                  </div>
+                </form>
               </div>
             </div>
           )}

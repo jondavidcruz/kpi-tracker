@@ -31,6 +31,9 @@ export type AssignmentDraft = AssignmentInputs & {
   generatedAt?: string;     // ISO when last generated
   generatedBy?: string;
   text?: string;            // the rendered contract
+  pandadocId?: string;      // PandaDoc document id once sent for signature
+  shareLink?: string;       // recipient signing link (textable via Telnyx)
+  sentAt?: string;          // ISO when sent for signature
 };
 
 export function money(n: number): string {
@@ -92,6 +95,9 @@ export function readAssignmentDraft(formData: unknown): AssignmentDraft | null {
     generatedAt: r.generatedAt ? String(r.generatedAt) : undefined,
     generatedBy: r.generatedBy ? String(r.generatedBy) : undefined,
     text: r.text ? String(r.text) : undefined,
+    pandadocId: r.pandadocId ? String(r.pandadocId) : undefined,
+    shareLink: r.shareLink ? String(r.shareLink) : undefined,
+    sentAt: r.sentAt ? String(r.sentAt) : undefined,
   };
 }
 
