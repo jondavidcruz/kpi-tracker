@@ -70,7 +70,8 @@ export type Coverage = {
   price: BandCoverage[];
   acre: BandCoverage[];
   areas: AreaCoverage[];
-  buyerCount: number;
+  buyerCount: number;   // VETTED buyers (buy-box captured) — the usable supply
+  unvettedDevs: number; // developers in the network with no buy-box yet (to vet)
   dealCount: number;
   topGaps: string[]; // plain-English "we have deals but no buyers" headlines
 };
@@ -95,31 +96,39 @@ export async function getBuyerCoverage(): Promise<Coverage> {
     .filter((p) => p.name !== "War Room" && crmGroupOf(p.name, crmMap) === "dispositions" && !isDevNetworkName(p.name) && !isAgentNetworkName(p.name))
     .map((p) => p.name);
 
-  // ── supply: vetted buyers' buy-boxes ──
-  type Buyer = { priceMax: number | null; acre: [number, number] | null; areas: string[] };
+  // ── supply: buyers' buy-boxes. A buyer is VETTED when we've captured any buy-box
+  // (price / acreage / area) — i.e. we talked to them and know what they buy. An
+  // unvetted developer (no buy-box yet) is NOT usable coverage (Jon 2026-10-22). ──
+  type Buyer = { priceMax: number | null; acre: [number, number] | null; areas: string[]; vetted: boolean; isDev: boolean };
   const buyers: Buyer[] = [];
 
-  // (a) network leads
+  // (a) network leads (developers + buyer agents)
   if (net.all.length) {
-    const netOpps = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.all } }, select: { formData: true } }).catch(() => []);
+    const netOpps = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.all } }, select: { pipeline: true, formData: true } }).catch(() => []);
     for (const o of netOpps) {
       const fd = (o.formData ?? {}) as Record<string, Record<string, unknown>>;
       const dev = fd.dev_buybox ?? {}; const ag = fd.agent_profile ?? {};
-      const priceStr = String(dev.priceRange ?? ag.priceRange ?? "");
-      const acreStr = String(dev.lotSize ?? "");
-      const areaStr = String(dev.buyCounties ?? ag.areas ?? "");
-      buyers.push({ priceMax: parsePriceCeiling(priceStr), acre: parseAcreRange(acreStr), areas: areaTokens(areaStr) });
+      const priceMax = parsePriceCeiling(String(dev.priceRange ?? ag.priceRange ?? ""));
+      const acre = parseAcreRange(String(dev.lotSize ?? ""));
+      const areas = areaTokens(String(dev.buyCounties ?? ag.areas ?? ""));
+      // vetted = we captured a buy-box (any field) OR other buy-box detail is filled
+      const hasBoxDetail = !!(dev.landTypes || dev.closeSpeed || dev.volume || dev.requirements || ag.buyerTypes || ag.brokerage);
+      const vetted = !!(priceMax || acre || areas.length || hasBoxDetail);
+      buyers.push({ priceMax, acre, areas, vetted, isDev: isDevNetworkName(o.pipeline) });
     }
   }
-  // (b) MarketContact vetted directory
+  // (b) MarketContact vetted directory — these are already in the vetted/active stage
   const mcs = await db.marketContact.findMany({ where: { vetStage: { in: ["vetted", "active"] } }, select: { priceRange: true, buyBoxAreas: true, market: true, minLotSize: true } }).catch(() => []);
   for (const m of mcs) {
     buyers.push({
       priceMax: parsePriceCeiling(String(m.priceRange ?? "")),
       acre: parseAcreRange(String(m.minLotSize ?? "")),
       areas: areaTokens(`${m.buyBoxAreas ?? ""} ${m.market ?? ""}`),
+      vetted: true, isDev: false,
     });
   }
+  const vettedBuyers = buyers.filter((b) => b.vetted);
+  const unvettedDevs = buyers.filter((b) => b.isDev && !b.vetted).length;
 
   // ── demand: open dispo deals ──
   type Deal = { price: number | null; acre: number | null; areas: string[] };
@@ -133,22 +142,22 @@ export async function getBuyerCoverage(): Promise<Coverage> {
     }
   }
 
-  // ── roll up by band ──
+  // ── roll up by band (VETTED buyers only — unvetted devs aren't usable coverage) ──
   const price: BandCoverage[] = PRICE_BANDS.map((b) => {
-    const bu = buyers.filter((x) => x.priceMax != null && x.priceMax >= b.min).length;
+    const bu = vettedBuyers.filter((x) => x.priceMax != null && x.priceMax >= b.min).length;
     const de = deals.filter((d) => d.price != null && d.price >= b.min && d.price < b.max).length;
     return { ...b, buyers: bu, deals: de, status: statusFor(bu, de) };
   });
   const acre: BandCoverage[] = ACRE_BANDS.map((b) => {
-    const bu = buyers.filter((x) => x.acre && x.acre[0] <= b.max && x.acre[1] >= b.min).length;
+    const bu = vettedBuyers.filter((x) => x.acre && x.acre[0] <= b.max && x.acre[1] >= b.min).length;
     const de = deals.filter((d) => d.acre != null && d.acre >= b.min && d.acre < b.max).length;
     return { ...b, buyers: bu, deals: de, status: statusFor(bu, de) };
   });
 
-  // ── areas: union of tokens, count buyers + deals mentioning each ──
+  // ── areas: union of tokens, count vetted buyers + deals mentioning each ──
   const areaSet = new Map<string, { buyers: number; deals: number }>();
   const bump = (tok: string, which: "buyers" | "deals") => { const r = areaSet.get(tok) ?? { buyers: 0, deals: 0 }; r[which]++; areaSet.set(tok, r); };
-  for (const b of buyers) for (const t of new Set(b.areas)) bump(t, "buyers");
+  for (const b of vettedBuyers) for (const t of new Set(b.areas)) bump(t, "buyers");
   for (const d of deals) for (const t of new Set(d.areas)) bump(t, "deals");
   const areas: AreaCoverage[] = [...areaSet.entries()]
     .map(([area, r]) => ({ area, buyers: r.buyers, deals: r.deals, status: statusFor(r.buyers, r.deals) }))
@@ -160,5 +169,5 @@ export async function getBuyerCoverage(): Promise<Coverage> {
   for (const b of acre) if (b.status === "gap") topGaps.push(`${b.deals} deal${b.deals > 1 ? "s" : ""} at ${b.label} with no buyer`);
   for (const a of areas.filter((x) => x.status === "gap").slice(0, 6)) topGaps.push(`${a.deals} deal${a.deals > 1 ? "s" : ""} in "${a.area}" with no vetted buyer`);
 
-  return { price, acre, areas, buyerCount: buyers.length, dealCount: deals.length, topGaps };
+  return { price, acre, areas, buyerCount: vettedBuyers.length, unvettedDevs, dealCount: deals.length, topGaps };
 }

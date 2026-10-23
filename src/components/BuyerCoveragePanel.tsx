@@ -32,7 +32,10 @@ export default function BuyerCoveragePanel({ data }: { data: Coverage }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
         <div className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">🗺 Buy-box coverage</div>
-        <span className="text-[11px] text-slate-500">{data.buyerCount} vetted buyers · {data.dealCount} open deals</span>
+        <span className="text-[11px] text-slate-500"><b className="text-emerald-600">{data.buyerCount}</b> vetted buyers · <b className="text-slate-700">{data.dealCount}</b> open deals</span>
+        {data.unvettedDevs > 0 && (
+          <a href="/dispo?tab=developers" className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100" title="Developers in your network with no buy-box captured yet — vet them to turn them into usable coverage">🏗 {data.unvettedDevs} unvetted developers to vet →</a>
+        )}
         <div className="ml-auto flex flex-wrap gap-2 text-[10px]">
           <Key dot="bg-rose-500" text="deals, no buyers" /><Key dot="bg-amber-500" text="thin" /><Key dot="bg-emerald-500" text="covered" /><Key dot="bg-sky-400" text="buyers waiting" />
         </div>
