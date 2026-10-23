@@ -36,7 +36,7 @@ export type ScorecardInput = {
   buyBoxStruct?: BuyBox | null;
   geoPolygon?: unknown;
   land?: BuyerLand;
-  terms?: { pof?: boolean; maxOfferPct?: number };
+  terms?: { pof?: boolean; maxOfferPct?: number; whatTheyPay?: string };
   touches?: TouchLite[];
   // Phase 7 feedback loop (MarketContact.buyerFlags / blacklistedAt)
   flags?: { lowballer?: boolean; tireKicker?: boolean; sends?: number; offers?: number; avgOfferPct?: number | null; closes?: number } | null;
@@ -120,7 +120,7 @@ export function buildScorecard(b: ScorecardInput, today: string): Scorecard {
   // ── the 10 checks ──
   const assetTypes = bb?.asset?.types ?? [];
   const hasTypes = assetTypes.length > 0 || has(b.dealType) || has(b.buildType) || has(l.landTypes);
-  const priceKnown = num(bb?.price?.min) || num(bb?.price?.max) || has(b.priceRange) || num(l.priceMin) || num(l.priceMax) || num(l.pricePerLot);
+  const priceKnown = num(bb?.price?.min) || num(bb?.price?.max) || has(b.priceRange) || num(l.priceMin) || num(l.priceMax) || num(l.pricePerLot) || has(t.whatTheyPay);
   const sizeKnown = num(bb?.size?.acres_min) || num(bb?.size?.acres_max) || num(bb?.size?.lots_min) || num(bb?.size?.lot_sqft_min) || has(b.minLotSize) || num(l.lotMin) || num(l.lotMax);
   const fundingRaw = (bb?.terms?.funding ?? "") || (/cash/i.test(b.closingSpeed ?? "") || /cash/i.test(l.closeSpeed ?? "") ? "cash" : "");
   const fundingKnown = has(fundingRaw);
@@ -146,7 +146,7 @@ export function buildScorecard(b: ScorecardInput, today: string): Scorecard {
   const checks: ScoreCheck[] = [
     { key: "area", label: "Area", ok: hasArea, detail: counties.size ? `${counties.size} counties` : cities.size ? `${cities.size} cities` : nationwide ? "nationwide" : hasArea ? "text only" : "unknown" },
     { key: "types", label: "Asset types", ok: hasTypes, detail: assetTypes.length ? assetTypes.join(", ") : b.dealType || l.landTypes || "unknown" },
-    { key: "price", label: "Price", ok: !!priceKnown, detail: priceLabel(bb, b.priceRange, l) },
+    { key: "price", label: "Price", ok: !!priceKnown, detail: priceLabel(bb, b.priceRange, l, t.whatTheyPay) },
     { key: "size", label: "Acreage", ok: !!sizeKnown, detail: sizeLabel(bb, b.minLotSize, l) },
     { key: "funding", label: "Funding", ok: fundingKnown, detail: fundingRaw || "unknown" },
     { key: "close", label: "Close speed", ok: closeKnown, detail: closeDays !== null ? `≤${closeDays}d` : b.closingSpeed || l.closeSpeed || "unknown" },
@@ -174,7 +174,7 @@ export function buildScorecard(b: ScorecardInput, today: string): Scorecard {
   else if (cities.size) chips.push(`📍 ${firstN([...cities], 2).join(" · ")}`);
   else if (nationwide) chips.push("🌎 nationwide");
   else if (has(b.market)) chips.push(`📍 ${b.market}`);
-  if (priceKnown) chips.push(`💰 ${priceLabel(bb, b.priceRange, l)}`);
+  if (priceKnown) chips.push(`💰 ${priceLabel(bb, b.priceRange, l, t.whatTheyPay)}`);
   if (sizeKnown) chips.push(`📐 ${sizeLabel(bb, b.minLotSize, l)}`);
   if (/cash/i.test(fundingRaw)) chips.push(`⚡ cash${closeDays ? ` · ≤${closeDays}d` : ""}`);
   else if (closeDays) chips.push(`⏱ ≤${closeDays}d`);
@@ -194,7 +194,7 @@ export function buildScorecard(b: ScorecardInput, today: string): Scorecard {
 
 const firstN = <T,>(a: T[], n: number) => a.slice(0, n);
 const money = (n: number) => (n >= 1e6 ? `$${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${n}`);
-function priceLabel(bb: BuyBox | null, priceRange?: string, l?: BuyerLand): string {
+function priceLabel(bb: BuyBox | null, priceRange?: string, l?: BuyerLand, whatTheyPay?: string): string {
   const mn = bb?.price?.min, mx = bb?.price?.max, unit = bb?.price?.unit;
   const u = unit === "per_lot" ? "/lot" : unit === "per_acre" ? "/ac" : unit === "arv" ? " ARV" : "";
   if (num(mn) && num(mx)) return `${money(mn)}–${money(mx)}${u}`;
@@ -203,6 +203,7 @@ function priceLabel(bb: BuyBox | null, priceRange?: string, l?: BuyerLand): stri
   if (l && num(l.priceMin) && num(l.priceMax)) return `${money(l.priceMin)}–${money(l.priceMax)}`;
   if (l && num(l.pricePerLot)) return `${money(l.pricePerLot)}/lot`;
   if (has(priceRange)) return priceRange!.slice(0, 28);
+  if (has(whatTheyPay)) return whatTheyPay!.slice(0, 28);
   return "unknown";
 }
 function sizeLabel(bb: BuyBox | null, minLot?: string, l?: BuyerLand): string {

@@ -20,14 +20,13 @@ import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
 import DispoCommandCenter from "@/components/DispoCommandCenter";
-import BuyerCoveragePanel from "@/components/BuyerCoveragePanel";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline, PATH_META } from "@/lib/dispo-gates";
 import { parseAcres, fmtAcres, parseAcreQuery, acreInRange } from "@/lib/acreage";
 import { readDispoOffers, offerStats, OFFER_GOAL } from "@/lib/dispo-offers";
 
 export const dynamic = "force-dynamic";
 
-type Tab = "today" | "deals" | "developers" | "agents" | "team" | "nextup" | "coverage";
+type Tab = "today" | "deals" | "developers" | "agents" | "team" | "nextup";
 const PALETTE = ["bg-sky-100 text-sky-800", "bg-yellow-100 text-yellow-800", "bg-violet-100 text-violet-800", "bg-amber-100 text-amber-800", "bg-emerald-100 text-emerald-800", "bg-rose-100 text-rose-600", "bg-slate-200 text-slate-600"];
 
 // 🗺 Pull "City, ST" out of a canonical "Street, City, ST ZIP" address so we can
@@ -63,11 +62,11 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   // ⏭ Next Up folded into ☀️ Today (Jon 2026-10-22 de-dup) — old ?tab=nextup links redirect here.
   const tab: Tab = sp.tab === "nextup" ? "today"
-    : (sp.tab === "today" || sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" || sp.tab === "coverage" ? sp.tab : "deals");
-  // ☀️ Command Center + 🗺 coverage pull their own data (independent of the deal board).
-  // Wrapped so a parse hiccup can never 500 the whole dispo page for the team.
+    : (sp.tab === "today" || sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" ? sp.tab : "deals");
+  // ☀️ Command Center pulls its own data (independent of the deal board). Wrapped so a
+  // parse hiccup can never 500 the whole dispo page for the team. (Buy-box Coverage
+  // moved to Vetted Buyers — Jon 2026-10-22: Dispo CRM is the processing workspace.)
   const command = tab === "today" ? await (await import("@/lib/dispo-command")).getDispoCommandData().catch(() => null) : null;
-  const coverage = tab === "coverage" ? await (await import("@/lib/buyer-coverage")).getBuyerCoverage().catch(() => null) : null;
   const listView = sp.view === "list";
   const areasView = sp.view === "areas";
   const inventoryView = sp.view === "inventory";
@@ -419,7 +418,6 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     { key: "developers", label: "🏗 Developers", n: devCount },
     { key: "agents", label: "🧑‍💼 Buyer agents", n: agentCount },
     { key: "team", label: "👥 Team (Sharyn & Marie)", n: sharynQueue.length + marieQueue.length },
-    { key: "coverage", label: "🗺 Coverage", n: coverage ? coverage.topGaps.length : -1 },
   ];
   const qs = (over: Record<string, string>) => { const p = new URLSearchParams({ tab, ...(q ? { q } : {}), ...(listView ? { view: "list" } : {}), ...over }); for (const [k, v] of [...p.entries()]) if (!v) p.delete(k); return `/dispo?${p.toString()}`; };
 
@@ -472,17 +470,6 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
         </>
       )}
       {tab === "today" && !command && <Card className="p-8 text-center text-sm text-slate-400">Couldn&apos;t load the Command Center just now — refresh in a moment.</Card>}
-      {tab === "coverage" && !coverage && <Card className="p-8 text-center text-sm text-slate-400">Couldn&apos;t load coverage just now — refresh in a moment.</Card>}
-
-      {tab === "coverage" && coverage && (
-        <>
-          <Card className="border-l-4 border-emerald-400 p-4">
-            <div className="text-sm font-extrabold text-slate-800">🗺 Buy-box coverage — what we can &amp; can&apos;t move</div>
-            <p className="mt-0.5 text-[12px] text-slate-500">Where we have deals but no buyers (source one), and buyers but no deals (go find those). Compares open dispo deals against every vetted buyer&apos;s buy-box by price, acreage, and area.</p>
-          </Card>
-          <BuyerCoveragePanel data={coverage} />
-        </>
-      )}
 
       {tab === "deals" && (
         <>

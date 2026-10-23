@@ -30,7 +30,6 @@ export const NAV_GROUPS: NavGroup[] = [
   { group: "Dispositions", items: [
     { href: "/dispo?tab=today", label: "Dispo Command Center", gate: "marketing" },
     { href: "/dispo", label: "Dispo CRM", gate: "marketing" },
-    { href: "/dispo?tab=coverage", label: "Buyer Coverage", gate: "marketing" },
     { href: "/crm/conversations?dept=dispo", label: "Dispo Conversations", gate: "marketing" },
     { href: "/crm/tasks?dept=dispositions", label: "Dispo Tasks", gate: "marketing" },
     { href: "/crm/contacts?dept=dispo", label: "Dispo Contacts", gate: "marketing" },

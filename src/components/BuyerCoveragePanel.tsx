@@ -24,7 +24,7 @@ function Row({ label, buyers, deals, status }: { label: string; buyers: number; 
   );
 }
 
-export default function BuyerCoveragePanel({ data }: { data: Coverage }) {
+export default function BuyerCoveragePanel({ data, hideArea = false, vetHref = "/vetting" }: { data: Coverage; hideArea?: boolean; vetHref?: string }) {
   const bandRows = (bands: BandCoverage[]) => bands.map((b) => <Row key={b.key} label={b.label} buyers={b.buyers} deals={b.deals} status={b.status} />);
   const areaRows = (areas: AreaCoverage[]) => areas.slice(0, 16).map((a) => <Row key={a.area} label={a.area.replace(/\b\w/g, (c) => c.toUpperCase())} buyers={a.buyers} deals={a.deals} status={a.status} />);
 
@@ -34,7 +34,7 @@ export default function BuyerCoveragePanel({ data }: { data: Coverage }) {
         <div className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">🗺 Buy-box coverage</div>
         <span className="text-[11px] text-slate-500"><b className="text-emerald-600">{data.buyerCount}</b> vetted buyers · <b className="text-slate-700">{data.dealCount}</b> open deals</span>
         {data.unvettedDevs > 0 && (
-          <a href="/dispo?tab=developers" className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100" title="Developers in your network with no buy-box captured yet — vet them to turn them into usable coverage">🏗 {data.unvettedDevs} unvetted developers to vet →</a>
+          <a href={vetHref} className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100" title="Developers in your network with no buy-box captured yet — vet them to turn them into usable coverage">🏗 {data.unvettedDevs} unvetted developers to vet →</a>
         )}
         <div className="ml-auto flex flex-wrap gap-2 text-[10px]">
           <Key dot="bg-rose-500" text="deals, no buyers" /><Key dot="bg-amber-500" text="thin" /><Key dot="bg-emerald-500" text="covered" /><Key dot="bg-sky-400" text="buyers waiting" />
@@ -62,14 +62,16 @@ export default function BuyerCoveragePanel({ data }: { data: Coverage }) {
         </Card>
       </div>
 
-      <Card className="p-3">
-        <div className="mb-1.5 flex items-center gap-2">
-          <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">📍 By area</span>
-          <span className="text-[10px] text-slate-400">from buyers&apos; buy-boxes + deal locations (best-effort match)</span>
-        </div>
-        {data.areas.length === 0 ? <p className="px-2 py-3 text-center text-[11px] text-slate-400">Not enough area data on buy-boxes yet — fill in buyers&apos; target counties to light this up.</p>
-          : <div className="space-y-0.5">{areaRows(data.areas)}</div>}
-      </Card>
+      {!hideArea && (
+        <Card className="p-3">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">📍 By area</span>
+            <span className="text-[10px] text-slate-400">from buyers&apos; buy-boxes + deal locations (best-effort match)</span>
+          </div>
+          {data.areas.length === 0 ? <p className="px-2 py-3 text-center text-[11px] text-slate-400">Not enough area data on buy-boxes yet — fill in buyers&apos; target counties to light this up.</p>
+            : <div className="space-y-0.5">{areaRows(data.areas)}</div>}
+        </Card>
+      )}
     </div>
   );
 }

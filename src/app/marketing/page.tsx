@@ -19,6 +19,8 @@ import { buildScorecard, coverageByCounty } from "@/lib/buyers/scorecard";
 import type { BuyBox } from "@/lib/buybox/types";
 import VettedBuyersBoard from "@/components/VettedBuyersBoard";
 import type { CardBuyer } from "@/components/BuyerCards";
+import BuyerCoveragePanel from "@/components/BuyerCoveragePanel";
+import { getBuyerCoverage } from "@/lib/buyer-coverage";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +71,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   // Research, grouped by type so it reads consistently across both pages.
   const VETTED = (r: { vetStage: string }) => r.vetStage === "vetted" || r.vetStage === "active";
   const vettedRows = rows.filter((r) => VETTED(r) && !isJv(r));
-  const [buyerTerms, lastBackup, buyerLand, autoMaps] = await Promise.all([readBuyerTerms(), lastBuyerBackup(), readBuyerLand(), readAutoMaps()]);
+  const [buyerTerms, lastBackup, buyerLand, autoMaps, gapCoverage] = await Promise.all([readBuyerTerms(), lastBuyerBackup(), readBuyerLand(), readAutoMaps(), getBuyerCoverage().catch(() => null)]);
   const buyers: Buyer[] = rows
     .filter((r) => (r.vetStage === "vetted" || r.vetStage === "active") && !isJv(r))
     .map((r) => {
@@ -190,6 +192,16 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       {/* Section 3 — KPI strip · coverage heat board · buyer trading cards */}
       <VettedBuyersBoard buyers={cards} coverage={coverage} coldCount={cold.length} />
 
+      {/* 🗺 Coverage GAPS — demand (open dispo deals) vs our vetted buy-boxes by price
+          & acreage. The county heat above is supply; this is "where we have deals but
+          NO buyer" — the sourcing priority (moved here from Dispo CRM, Jon 2026-10-22). */}
+      {gapCoverage && (gapCoverage.dealCount > 0 || gapCoverage.topGaps.length > 0) && (
+        <details className="rounded-2xl bg-white p-4 ring-1 ring-slate-200" open={gapCoverage.topGaps.length > 0}>
+          <summary className="cursor-pointer text-sm font-bold text-slate-700">🗺 Coverage gaps — deals vs our buyers <span className="font-normal text-slate-400">— where we have deals but no matching buyer (by price &amp; acreage)</span></summary>
+          <div className="mt-3"><BuyerCoveragePanel data={gapCoverage} hideArea vetHref="/vetting" /></div>
+        </details>
+      )}
+
       {/* Buyers going cold — vetted buyers not touched in 30+ days */}
       {cold.length > 0 && (
         <Card className="p-4">
@@ -254,6 +266,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                   <span className="min-w-[160px] flex-1 font-semibold text-slate-800">{r.name}{l.isLandBuyer ? <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">🌱 LAND</span> : null}</span>
                   <label className="flex items-center gap-1.5 text-[13px] text-slate-600"><input type="checkbox" name="pof" defaultChecked={!!t.pof} className="h-4 w-4" /> 💵 Proof of funds</label>
                   <label className="flex items-center gap-1.5 text-[13px] text-slate-600">Max offer <input name="maxOfferPct" type="number" min="0" max="120" step="1" defaultValue={t.maxOfferPct ?? ""} placeholder="85" className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm" /> % ARV</label>
+                  <label className="flex min-w-[220px] flex-1 items-center gap-1.5 text-[13px] text-slate-600">💲 What they pay <input name="whatTheyPay" defaultValue={t.whatTheyPay ?? ""} placeholder="e.g. 10% below retail · $8k/ac · $1–3M/deal" className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
                   <button className="rounded-md bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
                 </form>
                 {/* Land questions moved to the standard Developer buy-box interview card (#interviews). */}

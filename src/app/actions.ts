@@ -1220,7 +1220,7 @@ export async function sendCascadeOffer(formData: FormData) {
 
 // ── Per-buyer terms: proof of funds + max offer % (no migration; Resource JSON) ──
 const BUYER_TERMS_CAT = "__buyer_terms__";
-type BuyerTerms = Record<string, { pof?: boolean; maxOfferPct?: number }>;
+type BuyerTerms = Record<string, { pof?: boolean; maxOfferPct?: number; whatTheyPay?: string }>;
 export async function readBuyerTerms(): Promise<BuyerTerms> {
   const row = await db.resource.findFirst({ where: { category: BUYER_TERMS_CAT } }).catch(() => null);
   if (!row) return {};
@@ -1234,9 +1234,10 @@ export async function saveBuyerTerms(formData: FormData) {
   const pof = formData.get("pof") === "on";
   const pctRaw = Number(String(formData.get("maxOfferPct") ?? "").replace(/[^0-9.]/g, ""));
   const maxOfferPct = Number.isFinite(pctRaw) && pctRaw > 0 ? Math.min(120, pctRaw) : undefined;
+  const whatTheyPay = String(formData.get("whatTheyPay") ?? "").trim().slice(0, 400) || undefined;
   const map = await readBuyerTerms();
-  map[buyerId] = { ...(pof ? { pof: true } : {}), ...(maxOfferPct ? { maxOfferPct } : {}) };
-  if (!pof && !maxOfferPct) delete map[buyerId];
+  map[buyerId] = { ...(pof ? { pof: true } : {}), ...(maxOfferPct ? { maxOfferPct } : {}), ...(whatTheyPay ? { whatTheyPay } : {}) };
+  if (!pof && !maxOfferPct && !whatTheyPay) delete map[buyerId];
   const row = await db.resource.findFirst({ where: { category: BUYER_TERMS_CAT } });
   if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(map) } });
   else await db.resource.create({ data: { title: "buyer-terms", category: BUYER_TERMS_CAT, url: "", description: JSON.stringify(map) } });

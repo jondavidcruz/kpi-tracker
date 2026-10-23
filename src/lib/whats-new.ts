@@ -24,16 +24,15 @@ export type WhatsNewEntry = {
 // Newest first. Keep each how-to to a few plain steps the team can follow cold.
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    id: "buyer-coverage", date: "2026-10-22", emoji: "🗺", title: "Buyer Coverage",
-    blurb: "Where we have deals but no buyers (source one) and buyers but no deals (go find those).",
-    audience: ["dispo", "leadership", "acq"], where: { label: "Coverage tab", href: "/dispo?tab=coverage" },
+    id: "buyer-coverage", date: "2026-10-22", emoji: "🗺", title: "Coverage gaps + 'what they pay'",
+    blurb: "In Vetted Buyers: where we have deals but no buyer (source one), plus a free-text 'what they pay' on each buyer.",
+    audience: ["dispo", "leadership", "acq"], where: { label: "Vetted Buyers", href: "/marketing" },
     steps: [
-      "Open Dispo CRM → 🗺 Coverage.",
-      "Start with the red 'Source a buyer for these' list — deals with no matching vetted buyer.",
-      "Check the price / acreage / area bands: 🔴 no buyers, 🟡 thin, 🟢 covered, 💤 buyers waiting.",
-      "💤 bands tell acquisitions what deals to go get; 🔴 tells dispo what buyer to vet next.",
+      "Open Vetted Buyers → 🃏 Buyers → expand '🗺 Coverage gaps — deals vs our buyers'.",
+      "Red 'Source a buyer for these' = deals with no matching vetted buyer (sourcing priority).",
+      "Price / acreage bands: 🔴 no buyers, 🟡 thin, 🟢 covered, 💤 buyers waiting.",
+      "Capture each developer's pricing: Vetted Buyers → 📥 Interviews → 'What they pay' (free text).",
     ],
-    playbook: "Dispo Deal Playbook",
   },
   {
     id: "dispo-command-center", date: "2026-10-22", emoji: "☀️", title: "Dispo Command Center (Today)",

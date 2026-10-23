@@ -37,7 +37,6 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/deals": "pipeline dispositions",
   "/dispo": "dispositions crm kanban follow-ups follow up buyer agents developers board sell land then sign",
   "/dispo?tab=today": "dispo command center today board run your day offers due follow-ups hot buyers replies stale",
-  "/dispo?tab=coverage": "buyer coverage buy-box gaps price acreage area source buyers no buyers deals",
   "/whats-new": "whats new what's new feature updates how to use training rollout release notes",
   "/sop/dispo": "dispo sop standard operating procedure pre-contract run sheet gates checklist packet cascade marie sharyn",
   "/sop/acquisitions": "acquisitions sop acq sales rep sop standard operating procedure process call script underwriting mao cash novation offer contract 5 minute speed to lead",
@@ -125,7 +124,6 @@ export default function Sidebar({
     { label: "Dispositions", items: [
       { href: "/dispo?tab=today", label: "Dispo Command Center", Icon: LayoutDashboard, marketingOrManager: true },
       { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOrManager: true },
-      { href: "/dispo?tab=coverage", label: "Buyer Coverage", Icon: Map, marketingOrManager: true },
       { href: "/crm/conversations?dept=dispo", label: "Dispo Conversations", Icon: MessagesSquare, marketingOrManager: true },
       { href: "/crm/tasks?dept=dispositions", label: "Dispo Tasks", Icon: ListChecks, marketingOrManager: true },
       { href: "/crm/contacts?dept=dispo", label: "Dispo Contacts", Icon: Contact, marketingOrManager: true },
