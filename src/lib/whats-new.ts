@@ -24,6 +24,28 @@ export type WhatsNewEntry = {
 // Newest first. Keep each how-to to a few plain steps the team can follow cold.
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: "deal-next-step", date: "2026-10-23", emoji: "⏭", title: "Next-step guidance on every deal",
+    blurb: "Each deal now tells you the ONE move that pushes it toward sold — no more guessing what to do next.",
+    audience: ["dispo"], where: { label: "Open a deal", href: "/dispo?tab=today" },
+    steps: [
+      "Open any dispo deal — a '⏭ Next step' banner is at the top of the buyer panels.",
+      "It reads your deal's state and tells you exactly what to do: run the cascade, chase offers, hand the best to the seller, draft/send the contract, or advance a stalled deal.",
+      "Do that step. The banner updates as the deal moves.",
+    ],
+  },
+  {
+    id: "dispo-velocity-accountability", date: "2026-10-23", emoji: "📋", title: "Command Center: velocity + accountability",
+    blurb: "The Today board now shows stuck deals, who owns what, and flags buyers that would slip — and lets you act in one click.",
+    audience: ["dispo", "leadership"], where: { label: "Today board", href: "/dispo?tab=today" },
+    steps: [
+      "🐌 Stuck — deals not advancing in 6+ days. Un-stick them (they're killing velocity).",
+      "📋 Accountability table — each rep's deals, overdue follow-ups, due today, stuck, stale. Red = act now.",
+      "👻 No next step — buyers with no follow-up scheduled; hit 📞 Touch to set one so they don't slip.",
+      "⚡ Cascade / More buttons — push a not-out deal to buyers, or add buyers to chase the 3rd offer, right from the board.",
+    ],
+    playbook: "Dispo Deal Playbook",
+  },
+  {
     id: "buyer-coverage", date: "2026-10-22", emoji: "🗺", title: "Coverage gaps + 'what they pay'",
     blurb: "In Vetted Buyers: where we have deals but no buyer (source one), plus a free-text 'what they pay' on each buyer.",
     audience: ["dispo", "leadership", "acq"], where: { label: "Vetted Buyers", href: "/marketing" },
