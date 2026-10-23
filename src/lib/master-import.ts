@@ -36,7 +36,7 @@ export async function importMaster(execute: boolean): Promise<MasterPlan> {
     const p = phone10(o.contact?.phone ?? ""); if (p.length === 10 && !byPhone.has(p)) byPhone.set(p, o);
   }
 
-  const plan: MasterPlan = { total: MASTER_BUYERS.length, createdHot: 0, createdNew: 0, movedToHot: 0, alreadyHave: 0, skippedNoName: 0, executed: execute, samples: [] };
+  const plan: MasterPlan = { total: MASTER_BUYERS.length, createdHot: 0, createdNew: 0, movedToHot: 0, alreadyHave: 0, skippedNoName: 0, executed: execute, samples: [], note: "" };
   const usedNames = new Set<string>(); const usedPhones = new Set<string>();
 
   for (const b of MASTER_BUYERS as MasterBuyer[]) {
