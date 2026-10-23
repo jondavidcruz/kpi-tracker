@@ -116,6 +116,7 @@ export function isDispoNetworkPipeline(name: string | null | undefined): boolean
 }
 export const DISPO_NETWORK_PIPELINES: { name: string; stages: { key: string; label: string }[] }[] = [
   { name: DISPO_DEV_PIPELINE, stages: [
+    { key: "hot", label: "🔥 Hot" },
     { key: "new", label: "🆕 New / to research" },
     { key: "researching", label: "🔎 Researching" },
     { key: "reached_out", label: "📞 Reached out" },
