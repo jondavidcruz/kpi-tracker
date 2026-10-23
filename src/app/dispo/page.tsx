@@ -129,6 +129,12 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   for (const t of dealTasks) { const d = (t.due || "").slice(0, 10); if (d && d >= today && (!nextTaskByDeal.has(t.oppId) || d < nextTaskByDeal.get(t.oppId)!)) nextTaskByDeal.set(t.oppId, d); }
   const nextApptByDeal = new Map<string, Date>();
   for (const a of dealAppts) { if (!nextApptByDeal.has(a.oppId)) nextApptByDeal.set(a.oppId, a.at); }
+  // 🕒 days-in-current-stage per deal (velocity) — from the latest stage-change event
+  const stageAtByDeal = new Map<string, Date>();
+  if (tab === "deals" && dealIds.length) {
+    const sevs = await db.crmEvent.findMany({ where: { oppId: { in: dealIds }, kind: "stage" }, orderBy: { at: "desc" }, select: { oppId: true, at: true } }).catch(() => [] as { oppId: string; at: Date }[]);
+    for (const e of sevs) if (e.oppId && !stageAtByDeal.has(e.oppId)) stageAtByDeal.set(e.oppId, e.at);
+  }
   // A closed/won stage — detected by the stage KEY or LABEL so it works even for
   // deals orphaned by a rename (their old key still says won/closed). Excludes
   // "closing scheduled" (still open) and died/dead (lost).
@@ -166,7 +172,8 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const closedTotal = closedDeals.reduce((a, d) => a + d.valueNum, 0);
   const dealCards: CrmCard[] = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => ({
     id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: formatAddress(o.title || "") || (o.contact?.address ? formatAddress(o.contact.address) : undefined),
-    phone: o.contact?.phone ? o.contact.phone.replace(/\.\d+$/, "") : undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
+    phone: o.contact?.phone ? o.contact.phone.replace(/\.\d+$/, "") : undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags),
+    badges: (() => { const d = Math.floor((Date.now() - (stageAtByDeal.get(o.id) ?? o.createdAt).getTime()) / 86400000); return !isClosedStage(o.stage) && d >= 3 ? [`🕒 ${d}d in stage`] : []; })(),
     money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
