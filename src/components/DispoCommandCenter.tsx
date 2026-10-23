@@ -39,15 +39,44 @@ export default function DispoCommandCenter({ data }: { data: DispoCommand }) {
   return (
     <div className="space-y-3">
       {/* summary */}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
         <Stat label="Out to buyers" value={s.out} tone="sky" />
         <Stat label="Need 3 offers" value={s.needOffers} tone="amber" />
         <Stat label="Due today" value={s.dueToday} tone="emerald" />
         <Stat label="Overdue" value={s.overdue} tone="red" />
         <Stat label="Going stale" value={s.aging} tone="amber" />
+        <Stat label="Stuck" value={s.stuck} tone="red" />
         <Stat label="Not out yet" value={s.notOut} tone="red" />
         <Stat label="New replies" value={s.replies} tone="sky" />
       </div>
+
+      {/* 📋 Accountability — Marie & Sharyn vs their deals */}
+      {data.reps.length > 0 && (
+        <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+          <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">📋 Accountability — who owns what</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead><tr className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                <th className="px-2 py-1 text-left">Rep</th><th className="px-2 py-1 text-right">Deals</th><th className="px-2 py-1 text-right">Overdue</th><th className="px-2 py-1 text-right">Due today</th><th className="px-2 py-1 text-right">Need offers</th><th className="px-2 py-1 text-right">Stuck</th><th className="px-2 py-1 text-right">Stale</th>
+              </tr></thead>
+              <tbody>
+                {data.reps.map((r) => (
+                  <tr key={r.name} className="border-t border-slate-100">
+                    <td className="px-2 py-1.5 font-bold text-slate-800">{r.name.split(" ")[0]}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{r.deals}</td>
+                    <td className={`px-2 py-1.5 text-right font-bold tabular-nums ${r.overdue > 0 ? "text-rose-600" : "text-slate-300"}`}>{r.overdue}</td>
+                    <td className={`px-2 py-1.5 text-right tabular-nums ${r.dueToday > 0 ? "text-emerald-600" : "text-slate-300"}`}>{r.dueToday}</td>
+                    <td className={`px-2 py-1.5 text-right tabular-nums ${r.needOffers > 0 ? "text-amber-600" : "text-slate-300"}`}>{r.needOffers}</td>
+                    <td className={`px-2 py-1.5 text-right tabular-nums ${r.stuck > 0 ? "text-rose-600" : "text-slate-300"}`}>{r.stuck}</td>
+                    <td className={`px-2 py-1.5 text-right tabular-nums ${r.idle > 0 ? "text-amber-600" : "text-slate-300"}`}>{r.idle}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1.5 text-[10px] text-slate-400">Red = needs action now. Each rep is accountable for clearing their overdue follow-ups and un-sticking their deals.</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {/* need offers */}
@@ -103,6 +132,21 @@ export default function DispoCommandCenter({ data }: { data: DispoCommand }) {
                   <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${m.cls}`}>{m.emoji} {b.heat.score}</span>
                 </li>
               ); })}
+            </ul>
+          )}
+        </Panel>
+
+        {/* stuck — no stage movement */}
+        <Panel title="🐌 Stuck — not advancing" count={data.stuck.length} tone="red" hint="same stage 6d+">
+          {data.stuck.length === 0 ? <Empty>Nothing stuck — deals are moving through stages.</Empty> : (
+            <ul className="space-y-1">
+              {data.stuck.map((d) => (
+                <li key={d.id}><Link href={`/crm/${d.id}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-800">{d.addr}</span>
+                  <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-700">{d.daysInStage}d in {d.stage}</span>
+                  {d.owner && <span className="shrink-0 text-[10px] text-slate-400">{d.owner.split(" ")[0]}</span>}
+                </Link></li>
+              ))}
             </ul>
           )}
         </Panel>
