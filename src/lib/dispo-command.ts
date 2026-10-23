@@ -26,6 +26,7 @@ export type DispoCommand = {
   summary: { out: number; needOffers: number; dueToday: number; overdue: number; aging: number; notOut: number; replies: number; stuck: number };
   needsOffers: CmdDeal[];
   followupsDue: CmdFollowup[];
+  noNextStep: CmdFollowup[];
   aging: CmdDeal[];
   notOut: CmdDeal[];
   stuck: CmdDeal[];
@@ -48,7 +49,7 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
   const dealNames = dealPipes.map((p) => p.name);
   const stagesByPipe = new Map(dealPipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]));
 
-  const empty: DispoCommand = { generatedAt: new Date().toISOString(), summary: { out: 0, needOffers: 0, dueToday: 0, overdue: 0, aging: 0, notOut: 0, replies: 0, stuck: 0 }, needsOffers: [], followupsDue: [], aging: [], notOut: [], stuck: [], hotReplies: [], hotBuyers: [], reps: [] };
+  const empty: DispoCommand = { generatedAt: new Date().toISOString(), summary: { out: 0, needOffers: 0, dueToday: 0, overdue: 0, aging: 0, notOut: 0, replies: 0, stuck: 0 }, needsOffers: [], followupsDue: [], noNextStep: [], aging: [], notOut: [], stuck: [], hotReplies: [], hotBuyers: [], reps: [] };
   if (!dealNames.length) return empty;
 
   const deals = await db.crmOpportunity.findMany({
@@ -83,6 +84,7 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
   const notOut: CmdDeal[] = [];
   const stuck: CmdDeal[] = [];
   const followupsDue: CmdFollowup[] = [];
+  const noNextStep: CmdFollowup[] = [];
   let outCount = 0;
   // per-rep accountability rollup (keyed by the deal's owner)
   const repMap = new Map<string, CmdRep>();
@@ -136,6 +138,10 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
         const overdueDays = Math.max(0, Math.round((Date.parse(today + "T00:00:00") - Date.parse(b.nextFollowUp + "T00:00:00")) / 86400000));
         followupsDue.push({ oppId: o.id, entryId: b.id, name: b.name, kind: b.kind, phone: b.phone, dealAddr, nextFollowUp: b.nextFollowUp, overdueDays, stage: b.stage });
         if (repRec) { if (overdueDays > 0) repRec.overdue++; else repRec.dueToday++; }
+      } else if (!b.nextFollowUp && b.stage !== "passed" && b.stage !== "offer_in") {
+        // 👻 attached buyer with NO next-follow-up date → it will never surface in the
+        // due list and silently slips. Flag it so a follow-up gets scheduled.
+        noNextStep.push({ oppId: o.id, entryId: b.id, name: b.name, kind: b.kind, phone: b.phone, dealAddr, nextFollowUp: "", overdueDays: 0, stage: b.stage });
       }
       // heat
       const key = b.buyerId || b.name.toLowerCase();
@@ -192,6 +198,7 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
     summary: { out: outCount, needOffers: needsOffers.length, dueToday: followupsDue.filter((f) => f.overdueDays === 0).length, overdue: followupsDue.filter((f) => f.overdueDays > 0).length, aging: aging.length, notOut: notOut.length, replies: hotReplies.length, stuck: stuck.length },
     needsOffers: needsOffers.slice(0, 12),
     followupsDue: followupsDue.slice(0, 20),
+    noNextStep: noNextStep.slice(0, 15),
     aging: aging.slice(0, 10),
     notOut: notOut.slice(0, 10),
     stuck: stuck.slice(0, 12),

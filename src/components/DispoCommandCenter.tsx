@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui";
 import { heatTierMeta } from "@/lib/buyer-heat";
 import { OFFER_GOAL } from "@/lib/dispo-offers";
+import { logDispoBuyerTouchAction } from "@/app/crm/actions";
 import type { DispoCommand } from "@/lib/dispo-command";
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: "slate" | "red" | "amber" | "emerald" | "sky" }) {
@@ -116,6 +117,26 @@ export default function DispoCommandCenter({ data }: { data: DispoCommand }) {
             </ul>
           )}
         </Panel>
+
+        {/* no next step — buyers that will silently slip */}
+        {data.noNextStep.length > 0 && (
+          <Panel title="👻 No next step set" count={data.noNextStep.length} tone="red" hint="will slip — schedule a touch">
+            <ul className="space-y-1">
+              {data.noNextStep.map((f) => (
+                <li key={f.oppId + f.entryId} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                  <Link href={`/crm/${f.oppId}`} className="min-w-0 flex-1">
+                    <span className="block truncate text-[12px] font-semibold text-slate-800">{f.name}</span>
+                    <span className="block truncate text-[10px] text-slate-400">{f.dealAddr}</span>
+                  </Link>
+                  <form action={logDispoBuyerTouchAction} className="shrink-0">
+                    <input type="hidden" name="oppId" value={f.oppId} /><input type="hidden" name="entryId" value={f.entryId} />
+                    <button className="rounded bg-sky-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-sky-700" title="Log a touch + auto-set the next follow-up">📞 Touch</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )}
 
         {/* hottest buyers */}
         <Panel title="🔥 Hottest buyers" count={data.hotBuyers.length} hint="by activity + recency">
