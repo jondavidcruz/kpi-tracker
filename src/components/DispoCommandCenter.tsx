@@ -79,6 +79,21 @@ export default function DispoCommandCenter({ data }: { data: DispoCommand }) {
         </div>
       )}
 
+      {/* 📄 ready to contract — accepted offer, no draft yet — close it out */}
+      {data.readyToContract.length > 0 && (
+        <div className="rounded-xl bg-indigo-50 p-3 ring-1 ring-indigo-200">
+          <div className="mb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-indigo-500">📄 Ready to contract — a buyer accepted, draft it now</div>
+          <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {data.readyToContract.map((d) => (
+              <li key={d.id}><Link href={`/crm/${d.id}`} className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 ring-1 ring-indigo-100 hover:bg-indigo-50">
+                <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-800">{d.addr}</span>
+                <span className="shrink-0 rounded bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold text-white">📄 draft</span>
+              </Link></li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {/* need offers */}
         <Panel title="🎯 Out — still chasing 3 offers" count={data.needsOffers.length} tone="amber" hint={`goal ${OFFER_GOAL}`}>

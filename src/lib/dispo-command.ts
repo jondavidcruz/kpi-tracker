@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { formatAddress } from "@/lib/address";
 import { readDispoBuyers } from "@/lib/dispo-buyers";
 import { readDispoOffers, offerStats, OFFER_GOAL } from "@/lib/dispo-offers";
+import { readAssignmentDraft } from "@/lib/assignment-contract";
 import { buyerHeat, type Heat } from "@/lib/buyer-heat";
 
 const ptToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
@@ -23,8 +24,9 @@ export type CmdRep = { name: string; deals: number; overdue: number; dueToday: n
 
 export type DispoCommand = {
   generatedAt: string;
-  summary: { out: number; needOffers: number; dueToday: number; overdue: number; aging: number; notOut: number; replies: number; stuck: number };
+  summary: { out: number; needOffers: number; dueToday: number; overdue: number; aging: number; notOut: number; replies: number; stuck: number; readyToContract: number };
   needsOffers: CmdDeal[];
+  readyToContract: CmdDeal[];
   followupsDue: CmdFollowup[];
   noNextStep: CmdFollowup[];
   aging: CmdDeal[];
@@ -49,7 +51,7 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
   const dealNames = dealPipes.map((p) => p.name);
   const stagesByPipe = new Map(dealPipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]));
 
-  const empty: DispoCommand = { generatedAt: new Date().toISOString(), summary: { out: 0, needOffers: 0, dueToday: 0, overdue: 0, aging: 0, notOut: 0, replies: 0, stuck: 0 }, needsOffers: [], followupsDue: [], noNextStep: [], aging: [], notOut: [], stuck: [], hotReplies: [], hotBuyers: [], reps: [] };
+  const empty: DispoCommand = { generatedAt: new Date().toISOString(), summary: { out: 0, needOffers: 0, dueToday: 0, overdue: 0, aging: 0, notOut: 0, replies: 0, stuck: 0, readyToContract: 0 }, needsOffers: [], readyToContract: [], followupsDue: [], noNextStep: [], aging: [], notOut: [], stuck: [], hotReplies: [], hotBuyers: [], reps: [] };
   if (!dealNames.length) return empty;
 
   const deals = await db.crmOpportunity.findMany({
@@ -80,6 +82,7 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
   const isClosedish = (stage: string) => /won|closed|sold|dead|died|nurtur|lost|no buyer/i.test(stage || "");
 
   const needsOffers: CmdDeal[] = [];
+  const readyToContract: CmdDeal[] = [];
   const aging: CmdDeal[] = [];
   const notOut: CmdDeal[] = [];
   const stuck: CmdDeal[] = [];
@@ -105,7 +108,8 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
     const open = !isClosedish(o.stage || "");
     const out = pastCascade(o.pipeline, o.stage || "");
     if (out && open) outCount++;
-    const offers = offerStats(readDispoOffers(o.formData));
+    const offerList = readDispoOffers(o.formData);
+    const offers = offerStats(offerList);
     const ageDays = ageOf(o.updatedAt);
     const daysInStage = ageOf(stageAt.get(o.id) ?? o.createdAt);
     const base: CmdDeal = { id: o.id, addr: addrOf(o), owner: o.assignedTo || "", stage: (o.stage || "").replace(/_/g, " "), liveOffers: offers.live, ageDays, value: money(o.value, o.askPrice), daysInStage };
@@ -113,6 +117,9 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
     const repRec = open ? rep(o.assignedTo || "") : null;
     if (repRec) repRec.deals++;
 
+    // 📄 ready to contract — a buyer accepted but no assignment draft yet. Highest-value
+    // slip: a basically-sold deal stalling at the finish line (Jon 2026-10-23).
+    if (open && offerList.some((of) => of.status === "accepted") && !readAssignmentDraft(o.formData)) readyToContract.push(base);
     // deals out that still need offers
     if (out && open && offers.live < OFFER_GOAL) { needsOffers.push(base); if (repRec) repRec.needOffers++; }
     // deals out, open, stale
@@ -195,8 +202,9 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
 
   return {
     generatedAt: new Date().toISOString(),
-    summary: { out: outCount, needOffers: needsOffers.length, dueToday: followupsDue.filter((f) => f.overdueDays === 0).length, overdue: followupsDue.filter((f) => f.overdueDays > 0).length, aging: aging.length, notOut: notOut.length, replies: hotReplies.length, stuck: stuck.length },
+    summary: { out: outCount, needOffers: needsOffers.length, dueToday: followupsDue.filter((f) => f.overdueDays === 0).length, overdue: followupsDue.filter((f) => f.overdueDays > 0).length, aging: aging.length, notOut: notOut.length, replies: hotReplies.length, stuck: stuck.length, readyToContract: readyToContract.length },
     needsOffers: needsOffers.slice(0, 12),
+    readyToContract: readyToContract.slice(0, 10),
     followupsDue: followupsDue.slice(0, 20),
     noNextStep: noNextStep.slice(0, 15),
     aging: aging.slice(0, 10),
