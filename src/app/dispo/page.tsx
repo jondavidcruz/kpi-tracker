@@ -19,13 +19,15 @@ import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispo
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
+import DispoCommandCenter from "@/components/DispoCommandCenter";
+import BuyerCoveragePanel from "@/components/BuyerCoveragePanel";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline, PATH_META } from "@/lib/dispo-gates";
 import { parseAcres, fmtAcres, parseAcreQuery, acreInRange } from "@/lib/acreage";
 import { readDispoOffers, offerStats, OFFER_GOAL } from "@/lib/dispo-offers";
 
 export const dynamic = "force-dynamic";
 
-type Tab = "deals" | "developers" | "agents" | "team" | "nextup";
+type Tab = "today" | "deals" | "developers" | "agents" | "team" | "nextup" | "coverage";
 const PALETTE = ["bg-sky-100 text-sky-800", "bg-yellow-100 text-yellow-800", "bg-violet-100 text-violet-800", "bg-amber-100 text-amber-800", "bg-emerald-100 text-emerald-800", "bg-rose-100 text-rose-600", "bg-slate-200 text-slate-600"];
 
 // 🗺 Pull "City, ST" out of a canonical "Street, City, ST ZIP" address so we can
@@ -59,7 +61,11 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     );
   }
   const sp = await searchParams;
-  const tab: Tab = sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" || sp.tab === "nextup" ? sp.tab : "deals";
+  const tab: Tab = sp.tab === "today" || sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" || sp.tab === "nextup" || sp.tab === "coverage" ? sp.tab : "deals";
+  // ☀️ Command Center + 🗺 coverage pull their own data (independent of the deal board).
+  // Wrapped so a parse hiccup can never 500 the whole dispo page for the team.
+  const command = tab === "today" ? await (await import("@/lib/dispo-command")).getDispoCommandData().catch(() => null) : null;
+  const coverage = tab === "coverage" ? await (await import("@/lib/buyer-coverage")).getBuyerCoverage().catch(() => null) : null;
   const listView = sp.view === "list";
   const areasView = sp.view === "areas";
   const inventoryView = sp.view === "inventory";
@@ -413,11 +419,13 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   }
 
   const TABS: { key: Tab; label: string; n: number }[] = [
+    { key: "today", label: "☀️ Today", n: command ? command.summary.needOffers + command.summary.overdue : -1 },
     { key: "nextup", label: "⏭ Next Up", n: dueToday },
     { key: "deals", label: "📇 Deals & follow-ups", n: followCards.length },
     { key: "developers", label: "🏗 Developers", n: devCount },
     { key: "agents", label: "🧑‍💼 Buyer agents", n: agentCount },
     { key: "team", label: "👥 Team (Sharyn & Marie)", n: sharynQueue.length + marieQueue.length },
+    { key: "coverage", label: "🗺 Coverage", n: coverage ? coverage.topGaps.length : -1 },
   ];
   const qs = (over: Record<string, string>) => { const p = new URLSearchParams({ tab, ...(q ? { q } : {}), ...(listView ? { view: "list" } : {}), ...over }); for (const [k, v] of [...p.entries()]) if (!v) p.delete(k); return `/dispo?${p.toString()}`; };
 
@@ -450,7 +458,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
         {TABS.map((t) => (
           <Link key={t.key} href={`/dispo?tab=${t.key}`} prefetch={false}
             className={`rounded-full px-3 py-1.5 text-sm font-bold ring-1 ${tab === t.key ? "bg-brand-navy text-white ring-transparent" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"}`}>
-            {t.label} <span className={`ml-1 rounded-full px-1.5 text-[11px] ${tab === t.key ? "bg-white/20" : "bg-slate-100"}`}>{t.n}</span>
+            {t.label}{t.n >= 0 && <span className={`ml-1 rounded-full px-1.5 text-[11px] ${tab === t.key ? "bg-white/20" : "bg-slate-100"}`}>{t.n}</span>}
           </Link>
         ))}
       </div>
@@ -459,6 +467,28 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
         <Link href="/dispo?tab=nextup" className="block rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-800 ring-1 ring-red-200 transition hover:bg-red-100">{scoreAlert}</Link>
       )}
       {(tab === "deals" || tab === "team" || tab === "nextup") && <DispoScoreboard reps={scoreReps} team={scoreTeam} />}
+
+      {tab === "today" && command && (
+        <>
+          <Card className="border-l-4 border-emerald-400 p-4">
+            <div className="text-sm font-extrabold text-slate-800">☀️ Command Center — run your day top to bottom</div>
+            <p className="mt-0.5 text-[12px] text-slate-500">Everything that needs you right now, in one place: deals out still chasing 3 offers, buyer follow-ups due, deals going stale, deals not out yet, new replies, and your hottest buyers. Click any row to open the deal.</p>
+          </Card>
+          <DispoCommandCenter data={command} />
+        </>
+      )}
+      {tab === "today" && !command && <Card className="p-8 text-center text-sm text-slate-400">Couldn&apos;t load the Command Center just now — refresh in a moment.</Card>}
+      {tab === "coverage" && !coverage && <Card className="p-8 text-center text-sm text-slate-400">Couldn&apos;t load coverage just now — refresh in a moment.</Card>}
+
+      {tab === "coverage" && coverage && (
+        <>
+          <Card className="border-l-4 border-emerald-400 p-4">
+            <div className="text-sm font-extrabold text-slate-800">🗺 Buy-box coverage — what we can &amp; can&apos;t move</div>
+            <p className="mt-0.5 text-[12px] text-slate-500">Where we have deals but no buyers (source one), and buyers but no deals (go find those). Compares open dispo deals against every vetted buyer&apos;s buy-box by price, acreage, and area.</p>
+          </Card>
+          <BuyerCoveragePanel data={coverage} />
+        </>
+      )}
 
       {tab === "nextup" && (
         <>
