@@ -6,7 +6,7 @@ import ArchivedBuyers from "@/components/ArchivedBuyers";
 import BackupNowButton from "@/components/BackupNowButton";
 import { lastBuyerBackup } from "@/lib/buyers/backup";
 import ImageUpload from "@/components/ImageUpload";
-import { getCurrentUser, isManager, canAccessMarketing, isOwner } from "@/lib/auth";
+import { getCurrentUser, isManager, canAccessMarketing, isOwner, canAccessCSuite } from "@/lib/auth";
 import { getSettings } from "@/lib/data";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
@@ -160,7 +160,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
               return <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${good ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`} title="Nightly buyer backup to Google Drive (red if older than 36h)">{good ? "🛡" : "⚠️"} {label}</span>;
             })()}
             <BackupNowButton />
-            <a href="/api/export/buyers" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" title="One clean spreadsheet: every contact + the full buy-box interview per row">⬇️ Export CSV</a>
+            {/* 🔒 CSV export = our most sensitive data — C-suite only (Jon 2026-10-22) */}
+            {canAccessCSuite(me) && <a href="/api/export/buyers" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" title="C-suite only — one clean spreadsheet: every contact + the full buy-box interview per row">⬇️ Export CSV</a>}
             <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🔎 Buyer Research</Link>
           </div>
         } />

@@ -4,7 +4,7 @@
 // in Excel/Sheets. Marketing-gated like the pages that show this data.
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, canAccessMarketing, isManager } from "@/lib/auth";
+import { getCurrentUser, isCSuitePerson } from "@/lib/auth";
 import { type BuyerLand, interviewScore } from "@/lib/buyer-land";
 
 export const dynamic = "force-dynamic";
@@ -15,9 +15,11 @@ const esc = (v: unknown): string => {
 };
 
 export async function GET() {
+  // 🔒 C-SUITE ONLY (Jon 2026-10-22): exporting the full buyer/seller list is our most
+  // sensitive data — strictly Jon/Viktoriia/Enrico, no toggle grants it to anyone else.
   const me = await getCurrentUser();
-  if (!me || (!canAccessMarketing(me) && !isManager(me))) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!isCSuitePerson(me)) {
+    return NextResponse.json({ error: "forbidden — CSV export is restricted to the C-suite" }, { status: 403 });
   }
 
   const [rows, landRow] = await Promise.all([
