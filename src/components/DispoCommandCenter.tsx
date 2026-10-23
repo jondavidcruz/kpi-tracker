@@ -39,6 +39,14 @@ export default function DispoCommandCenter({ data }: { data: DispoCommand }) {
 
   return (
     <div className="space-y-3">
+      {/* 📈 velocity — are we selling faster? */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-gradient-to-r from-brand-navy to-[#163a63] px-4 py-2.5 text-white">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">📈 This month</span>
+        <span className="text-[13px]"><b className="text-[16px] font-extrabold tabular-nums">{data.velocity.soldThisMonth}</b> deals sold</span>
+        {data.velocity.medianDaysToSold != null && <span className="text-[13px]">median <b className="text-[16px] font-extrabold tabular-nums">{data.velocity.medianDaysToSold}</b> days to sold</span>}
+        <span className="ml-auto text-[11px] text-white/50">lower days = faster</span>
+      </div>
+
       {/* summary */}
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
         <Stat label="Out to buyers" value={s.out} tone="sky" />

@@ -25,6 +25,7 @@ export type CmdRep = { name: string; deals: number; overdue: number; dueToday: n
 export type DispoCommand = {
   generatedAt: string;
   summary: { out: number; needOffers: number; dueToday: number; overdue: number; aging: number; notOut: number; replies: number; stuck: number; readyToContract: number };
+  velocity: { soldThisMonth: number; medianDaysToSold: number | null };
   needsOffers: CmdDeal[];
   readyToContract: CmdDeal[];
   followupsDue: CmdFollowup[];
@@ -51,7 +52,7 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
   const dealNames = dealPipes.map((p) => p.name);
   const stagesByPipe = new Map(dealPipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]));
 
-  const empty: DispoCommand = { generatedAt: new Date().toISOString(), summary: { out: 0, needOffers: 0, dueToday: 0, overdue: 0, aging: 0, notOut: 0, replies: 0, stuck: 0, readyToContract: 0 }, needsOffers: [], readyToContract: [], followupsDue: [], noNextStep: [], aging: [], notOut: [], stuck: [], hotReplies: [], hotBuyers: [], reps: [] };
+  const empty: DispoCommand = { generatedAt: new Date().toISOString(), summary: { out: 0, needOffers: 0, dueToday: 0, overdue: 0, aging: 0, notOut: 0, replies: 0, stuck: 0, readyToContract: 0 }, velocity: { soldThisMonth: 0, medianDaysToSold: null }, needsOffers: [], readyToContract: [], followupsDue: [], noNextStep: [], aging: [], notOut: [], stuck: [], hotReplies: [], hotBuyers: [], reps: [] };
   if (!dealNames.length) return empty;
 
   const deals = await db.crmOpportunity.findMany({
@@ -80,6 +81,10 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
     return si >= 0 && mi >= 0 && si >= mi;
   };
   const isClosedish = (stage: string) => /won|closed|sold|dead|died|nurtur|lost|no buyer/i.test(stage || "");
+  const isWon = (stage: string) => /won|closed|sold/i.test(stage || "") && !/dead|died|nurtur|lost/i.test(stage || "");
+  // 📈 velocity — deals SOLD this month + how long they took (created → sold)
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  const soldDays: number[] = [];
 
   const needsOffers: CmdDeal[] = [];
   const readyToContract: CmdDeal[] = [];
@@ -105,6 +110,7 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
   };
 
   for (const o of deals) {
+    if (isWon(o.stage || "") && o.updatedAt >= monthStart) soldDays.push(Math.max(0, Math.round((o.updatedAt.getTime() - o.createdAt.getTime()) / 86400000)));
     const open = !isClosedish(o.stage || "");
     const out = pastCascade(o.pipeline, o.stage || "");
     if (out && open) outCount++;
@@ -203,6 +209,7 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
   return {
     generatedAt: new Date().toISOString(),
     summary: { out: outCount, needOffers: needsOffers.length, dueToday: followupsDue.filter((f) => f.overdueDays === 0).length, overdue: followupsDue.filter((f) => f.overdueDays > 0).length, aging: aging.length, notOut: notOut.length, replies: hotReplies.length, stuck: stuck.length, readyToContract: readyToContract.length },
+    velocity: { soldThisMonth: soldDays.length, medianDaysToSold: soldDays.length ? [...soldDays].sort((a, b) => a - b)[Math.floor(soldDays.length / 2)] : null },
     needsOffers: needsOffers.slice(0, 12),
     readyToContract: readyToContract.slice(0, 10),
     followupsDue: followupsDue.slice(0, 20),
