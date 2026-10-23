@@ -11,6 +11,7 @@ export type MigratePlan = {
   agents: number;
   skippedMigrated: number;
   skippedDupe: number;
+  skippedDead: number;
   totalSource: number;
   executed: boolean;
   created: number;
@@ -99,14 +100,20 @@ export async function migrateBuyers(execute: boolean): Promise<MigratePlan> {
     if (p10.length === 10) existingPhones.add(p10);
   }
 
-  const plan: MigratePlan = { developers: 0, agents: 0, skippedMigrated: 0, skippedDupe: 0, totalSource: rows.length, executed: execute, created: 0, samples: [], note: "" };
+  const plan: MigratePlan = { developers: 0, agents: 0, skippedMigrated: 0, skippedDupe: 0, skippedDead: 0, totalSource: rows.length, executed: execute, created: 0, samples: [], note: "" };
 
   for (const mc of rows as unknown as MC[]) {
     if (migratedFrom.has(mc.id)) { plan.skippedMigrated++; continue; }
+    // skip dead / rejected buyers — they stay in Buyer Research until Phase 4 (Jon 2026-10-22)
+    if (mc.vetStage === "dead") { plan.skippedDead++; continue; }
     const isAgent = mc.type === "agent";
     const nameKey = (mc.name ?? "").trim().toLowerCase();
     const p10 = (mc.phone ?? "").replace(/\D/g, "").slice(-10);
+    // dedupe against the kanban AND against earlier rows in THIS batch (source dupes)
     if ((nameKey && existingNames.has(nameKey)) || (p10.length === 10 && existingPhones.has(p10))) { plan.skippedDupe++; continue; }
+    // reserve this name/phone now so a same-name source row later is skipped (both modes)
+    if (nameKey) existingNames.add(nameKey);
+    if (p10.length === 10) existingPhones.add(p10);
 
     const { formKey, box } = buildBox(mc, land[mc.id], terms[mc.id], isAgent);
     const pipeline = isAgent ? agentPipe : devPipe;
@@ -125,13 +132,12 @@ export async function migrateBuyers(execute: boolean): Promise<MigratePlan> {
         title: mc.name, pipeline, stage, contactId: contact.id, assignedTo: "",
         formData: { [formKey]: box, __fromMarketContact: mc.id, __import: { market: str(mc.market) || str(mc.region), buyBox: str(mc.buyBox) } } as never,
       } });
-      existingNames.add(nameKey); if (p10.length === 10) existingPhones.add(p10);
       plan.created++;
     }
   }
 
   plan.note = execute
-    ? `Migrated ${plan.created} buyers into the CRM kanban (${plan.developers} developers → ${devPipe}, ${plan.agents} agents → ${agentPipe}). Skipped ${plan.skippedMigrated} already-migrated + ${plan.skippedDupe} duplicates.`
-    : `DRY RUN — would create ${plan.developers} developers + ${plan.agents} agents. ${plan.skippedMigrated} already migrated, ${plan.skippedDupe} look like duplicates (same name/phone already in the kanban). Add ?mode=go to execute.`;
+    ? `Migrated ${plan.created} buyers into the CRM kanban (${plan.developers} developers → ${devPipe}, ${plan.agents} agents → ${agentPipe}). Skipped ${plan.skippedMigrated} already-migrated, ${plan.skippedDupe} duplicates, ${plan.skippedDead} dead/rejected.`
+    : `DRY RUN — would create ${plan.developers} developers + ${plan.agents} agents. Skipped: ${plan.skippedDupe} duplicates (already in the kanban or same name/phone in the source), ${plan.skippedDead} dead/rejected (stay in Buyer Research), ${plan.skippedMigrated} already migrated. Add ?mode=go to execute.`;
   return plan;
 }
