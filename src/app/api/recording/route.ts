@@ -1,46 +1,42 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { sendTeamChat } from "@/lib/notify";
+import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
+import { getAccessToken, gdriveConfigured } from "@/lib/gdrive";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-/**
- * File a meeting recording link (Fathom) — stores it + posts to Google Chat.
- * Wire Fathom → Zapier → this endpoint to auto-file + announce after a meeting.
- * Auth: ?secret=$INGEST_SECRET or Authorization: Bearer $INGEST_SECRET.
- * Params (query or JSON body): meeting=monday|leadership, title, url, date=YYYY-MM-DD.
- */
-async function handle(request: Request) {
-  const url = new URL(request.url);
-  const secret = process.env.INGEST_SECRET;
-  if (secret) {
-    const auth = request.headers.get("authorization");
-    const ok = auth === `Bearer ${secret}` || url.searchParams.get("secret") === secret;
-    if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  let body: Record<string, unknown> = {};
-  try { body = await request.json(); } catch { /* query-only is fine */ }
-  const get = (...keys: string[]) => {
-    for (const k of keys) {
-      const v = body[k] ?? url.searchParams.get(k);
-      if (v != null && String(v).trim()) return String(v).trim();
-    }
-    return "";
-  };
-
-  const meeting = get("meeting").toLowerCase() === "leadership" ? "leadership" : "monday";
-  const title = get("title") || "Meeting recording";
-  const link = get("url", "link", "share_url", "recording_url");
-  const meetingDate = get("date", "meetingDate");
-  if (!link) return NextResponse.json({ error: "missing recording url" }, { status: 400 });
-
-  const posted = await sendTeamChat(
-    `🎥 *${meeting === "leadership" ? "Leadership" : "Team"} meeting recording* — ${title}\n${link}`,
-  );
-  await db.meetingRecording.create({ data: { meeting, title, url: link, meetingDate, postedToChat: posted } });
-  return NextResponse.json({ ok: true, posted });
+// 🎧 Stream a call recording through the app so the in-app <audio> player can PLAY +
+// SEEK it (Jon 2026-10-23: recordings weren't playing). Google Drive's uc?export=
+// download URL doesn't honor HTTP Range, so the player shows 0:00/0:00. This proxies
+// the file from Drive via the service account WITH Range support. Auth-gated.
+function driveId(s: string): string {
+  const m = s.match(/[?&]id=([^&]+)/) || s.match(/\/d\/([^/]+)/) || s.match(/\/file\/d\/([^/]+)/);
+  return m ? decodeURIComponent(m[1]) : s;
 }
 
-export const POST = handle;
-export const GET = handle;
+export async function GET(req: NextRequest) {
+  const me = await getCurrentUser();
+  if (!me) return new NextResponse("unauthorized", { status: 401 });
+  if (!gdriveConfigured()) return new NextResponse("drive not configured", { status: 503 });
+  const raw = req.nextUrl.searchParams.get("id") || req.nextUrl.searchParams.get("url") || "";
+  const id = driveId(raw).trim();
+  if (!id) return new NextResponse("no id", { status: 400 });
+  try {
+    const token = await getAccessToken();
+    const range = req.headers.get("range") || "";
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&supportsAllDrives=true`, {
+      headers: { Authorization: `Bearer ${token}`, ...(range ? { Range: range } : {}) },
+      cache: "no-store",
+    });
+    if (r.status !== 200 && r.status !== 206) return new NextResponse("recording unavailable", { status: r.status === 404 ? 404 : 502 });
+    const headers = new Headers();
+    headers.set("Content-Type", r.headers.get("content-type") || "audio/mpeg");
+    headers.set("Accept-Ranges", "bytes");
+    const cr = r.headers.get("content-range"); if (cr) headers.set("Content-Range", cr);
+    const cl = r.headers.get("content-length"); if (cl) headers.set("Content-Length", cl);
+    headers.set("Cache-Control", "private, max-age=3600");
+    return new NextResponse(r.body, { status: r.status, headers });
+  } catch (e) {
+    return new NextResponse("error: " + String(e).slice(0, 120), { status: 500 });
+  }
+}

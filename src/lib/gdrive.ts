@@ -26,7 +26,7 @@ function serviceAccount(): SA {
 }
 
 let cachedToken: { token: string; exp: number } | null = null;
-async function getAccessToken(): Promise<string> {
+export async function getAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.exp > Date.now() + 60_000) return cachedToken.token;
   const sa = serviceAccount();
   const now = Math.floor(Date.now() / 1000);

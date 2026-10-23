@@ -255,6 +255,8 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                       // playable button with the most recent call").
                       const recLink = (e.meta as { link?: string; rep?: string } | null)?.link;
                       const isRec = recLink && clean.startsWith("🎙");
+                      // 🎧 stream Drive recordings through the app so they actually play + seek
+                      const playSrc = recLink && /drive\.google\.com/.test(recLink) ? `/api/recording?id=${encodeURIComponent(recLink)}` : recLink;
                       // 👤 who handled the call (rep) — skip system actors (Jon 2026-10-22)
                       const CALL_SYS = ["recorder", "inbound", "inbound-sms", "telnyx", "telnyx-dlr", "coach", "auto", "system"];
                       const metaRep = (e.meta as { rep?: string } | null)?.rep;
@@ -265,7 +267,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                             <div>{KIND_EMOJI[e.kind] ?? "📞"} {clean.replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}{who ? ` · ${who}` : ""}</div>
                             {isRec && (
                               /* eslint-disable-next-line jsx-a11y/media-has-caption */
-                              <audio controls preload="none" src={recLink} className="mt-1 h-8 w-64 max-w-full" />
+                              <audio controls preload="none" src={playSrc} className="mt-1 h-8 w-64 max-w-full" />
                             )}
                           </div>
                         </div>

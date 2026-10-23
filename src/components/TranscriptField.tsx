@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { recStreamSrc } from "@/lib/crm-shared";
 import { createClient } from "@/lib/supabase/client";
 
 // Upload a recording → it goes STRAIGHT to Supabase Storage (no Vercel size
@@ -60,7 +61,7 @@ export default function TranscriptField({ inputCls }: { inputCls: string }) {
           : audioUrl ? <span className="text-xs text-emerald-600">✓ Recording attached.</span>
           : <span className="text-xs font-semibold text-red-600">Required — upload the audio file (mp3, m4a, wav…). A transcript alone won&apos;t save.</span>}
       </div>
-      {audioUrl && <audio controls src={audioUrl} className="mb-2 h-9 w-full max-w-md" />}
+      {audioUrl && <audio controls src={recStreamSrc(audioUrl)} className="mb-2 h-9 w-full max-w-md" />}
       <input type="hidden" name="audioUrl" value={audioUrl} />
       <textarea name="transcript" value={value} onChange={(e) => setValue(e.target.value)} rows={8}
         placeholder="Paste the full call transcript here — get it from Gemini, then copy-paste it in…"

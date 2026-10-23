@@ -18,7 +18,7 @@ import { readDispoBuyers, isDispoDealPipeline, isDispoNetworkPipeline, isDevNetw
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
-import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels } from "@/lib/crm-shared";
+import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels, recStreamSrc } from "@/lib/crm-shared";
 import ParcelsPanel from "@/components/ParcelsPanel";
 import { formsForPipeline } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
@@ -413,7 +413,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                           <div className={`max-w-[85%] rounded-2xl px-3 py-1.5 text-[11px] font-semibold text-slate-500 ${isRec ? "bg-white ring-1 ring-slate-200" : "rounded-full bg-slate-100"}`}>
                             <div>{KIND_EMOJI[e.kind] ?? "📞"} {clean.replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}</div>
                             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                            {isRec && <audio controls preload="none" src={recLink} className="mt-1 h-8 w-64 max-w-full" />}
+                            {isRec && <audio controls preload="none" src={recStreamSrc(recLink)} className="mt-1 h-8 w-64 max-w-full" />}
                           </div>
                         </div>
                       );
@@ -465,7 +465,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
                 {(() => { const m = e.meta as { link?: string; transcript?: string } | null; if (!(m && e.body.startsWith("🎙"))) return null; return (
                   <div className="mt-1.5 space-y-1">
                     {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                    {m.link && <audio controls preload="none" src={m.link} className="h-9 w-full max-w-sm" />}
+                    {m.link && <audio controls preload="none" src={recStreamSrc(m.link)} className="h-9 w-full max-w-sm" />}
                     {m.transcript && <details className="text-[11px]"><summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">📄 Full transcript</summary><div className="mt-1 max-h-60 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 p-2 text-slate-600 ring-1 ring-slate-100">{m.transcript}</div></details>}
                   </div>
                 ); })()}

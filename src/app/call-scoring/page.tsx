@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
+import { recStreamSrc } from "@/lib/crm-shared";
 import { getActiveReps } from "@/lib/data";
 import { scoreCall, saveCallScript, deleteCallScore } from "@/app/actions";
 import { friendlyDate } from "@/lib/date";
@@ -113,7 +114,7 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
                   )}
                   {s.summary && <p className="mt-1 text-sm text-slate-600">{s.summary}</p>}
                   <CallReview id={s.id} stars={s.reviewStars} training={s.usedForTraining} canEdit={leader || me.name === s.scoredBy} />
-                  {s.audioUrl && <audio controls src={s.audioUrl} className="mt-2 h-9 w-full max-w-md" />}
+                  {s.audioUrl && <audio controls src={recStreamSrc(s.audioUrl)} className="mt-2 h-9 w-full max-w-md" />}
                   {breakdown.length > 0 && (
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {breakdown.map((b, i) => (

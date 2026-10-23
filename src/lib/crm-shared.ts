@@ -8,6 +8,14 @@ export type CrmStage = { key: string; label: string; cls: string };
 // pinned note looked terrible (Jon 2026-10-21). We stopped writing it; this strips
 // any leftover block at display so pinned notes read clean everywhere.
 export const AGENT_NOTES_MARK = "— 📇 Buyer/agent notes (auto) —";
+
+/** 🎧 Playable <audio> src for a call recording: Drive links get streamed through the
+ *  app's /api/recording proxy (range-capable) so they actually play; other links pass
+ *  through unchanged (Jon 2026-10-23). */
+export function recStreamSrc(link?: string | null): string {
+  if (!link) return "";
+  return /drive\.google\.com/.test(link) ? `/api/recording?id=${encodeURIComponent(link)}` : link;
+}
 export function stripAgentNotesBlock(note?: string | null): string {
   if (!note) return "";
   return note.split(AGENT_NOTES_MARK)[0].trimEnd();

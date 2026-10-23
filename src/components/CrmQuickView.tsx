@@ -10,7 +10,7 @@ import {
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
   runDispoCascadeAction,
 } from "@/app/crm/actions";
-import { KIND_EMOJI, stripAgentNotesBlock } from "@/lib/crm-shared";
+import { KIND_EMOJI, stripAgentNotesBlock, recStreamSrc } from "@/lib/crm-shared";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { isDispoDealPipeline } from "@/lib/dispo-buyers";
@@ -427,7 +427,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                             {e.recLink && (
                               <div className="mt-1.5 space-y-1" onClick={(ev) => ev.stopPropagation()}>
                                 {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                                <audio controls preload="none" src={e.recLink} className="h-8 w-full max-w-xs" />
+                                <audio controls preload="none" src={recStreamSrc(e.recLink)} className="h-8 w-full max-w-xs" />
                                 {e.transcript && <details className="text-[11px]"><summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">📄 Transcript</summary><div className="mt-1 max-h-48 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 p-2 text-slate-600 ring-1 ring-slate-100">{e.transcript}</div></details>}
                               </div>
                             )}
