@@ -90,7 +90,33 @@ in the body — your call):
 3. Your **webhook (4)** streams engagement back; the War Room shows opens/replies/call
    outcomes on that deal's buyer tracker and auto-feeds the 3-offer tracker.
 
+---
+
+## 5. Deal / property landing page  *(optional — you already have a site builder)*
+You already build websites in DirectREI; we'd love to generate a **public page per deal**
+(the "deal room" buyers open) from the War Room and get its URL back.
+
+`POST {BASE}/pages`  *(or whatever your site builder exposes)*
+```json
+{
+  "type": "deal",
+  "external_id": "opp_abc",
+  "property": { "address": "123 Main St", "apn": "123-456-789", "acres": "2.5",
+                "price": 120000, "features": ["Paved road frontage", "Creek"], "photos": ["https://…"] },
+  "cta": "offer_form"         // a built-in "make an offer" form that posts back to the webhook (section 4)
+}
+```
+**Returns:** `{ "url": "https://…/deal/123-main-st", "page_id": "…" }`
+
+- If offers submitted on that page come back through the **section-4 webhook** as
+  `event: "offer_submitted"` with the price/terms, the War Room drops them straight onto
+  the deal's offer tracker — fully closing the loop.
+- If a page API isn't exposed, no problem — tell us and we'll build the deal room on our side.
+
+---
+
 ## Open questions for you
 - Are SMS numbers A2P 10DLC-registered on your side, or do we register ours?
 - Any rate / volume caps per campaign we should respect?
 - Do you want `external_id` namespaced (e.g. prefixed `fo_`) to avoid collisions?
+- Can the site builder be driven by API (section 5), or is it UI-only today?
