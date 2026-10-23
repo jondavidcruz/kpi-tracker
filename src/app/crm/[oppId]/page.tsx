@@ -86,6 +86,10 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
   // pipelines — never on home/seller leads.
   const canSeeBuyers = isManager(me) || me?.position === "dispositions";
   const showMatches = canSeeBuyers && isDispoDealPipeline(opp.pipeline);
+  // 🕒 days in the current stage (for the next-step banner's "stalled" case) — dispo only
+  const dealDaysInStage = showMatches
+    ? Math.floor((Date.now() - ((await db.crmEvent.findFirst({ where: { oppId: opp.id, kind: "stage" }, orderBy: { at: "desc" }, select: { at: true } }).catch(() => null))?.at ?? opp.createdAt).getTime()) / 86400000)
+    : 0;
   // 🔙 Back goes to where this lead lives — AND to the SAME pipeline it's in, so
   // editing a lead never bounces you to a different board (Jon 2026-10-24: "stop
   // the resets, keep me on what I was working on").
@@ -529,7 +533,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             const out = si >= 0 && mi >= 0 && si >= mi;
             const closed = /won|closed|sold/i.test(opp.stage || "") && !/dead|died|nurtur|lost/i.test(opp.stage || "");
             const accepted = offers.some((o) => o.status === "accepted");
-            const n = nextDispoAction({ closed, out, buyerCount: buyers.length, liveOffers: st.live, offerGoal: OFFER_GOAL, accepted, hasDraft: !!draft, sentForSignature: !!(draft?.sentAt || draft?.pandadocId), daysInStage: 0 });
+            const n = nextDispoAction({ closed, out, buyerCount: buyers.length, liveOffers: st.live, offerGoal: OFFER_GOAL, accepted, hasDraft: !!draft, sentForSignature: !!(draft?.sentAt || draft?.pandadocId), daysInStage: dealDaysInStage });
             const tone: Record<string, string> = { sky: "from-sky-500 to-sky-600", amber: "from-amber-500 to-amber-600", emerald: "from-emerald-500 to-emerald-600", indigo: "from-indigo-500 to-indigo-600", rose: "from-rose-500 to-rose-600", slate: "from-slate-500 to-slate-600" };
             return (
               <div className={`rounded-2xl bg-gradient-to-r ${tone[n.tone]} p-[1.5px]`}>
