@@ -6,7 +6,7 @@
 // MarketContact Buyer Research). Pure + client-safe.
 
 export type DevKind = "developer" | "buyer_agent";
-export type DevVet = { filled: number; total: number; tier: "A" | "B" | "C"; missing: string[]; pct: number };
+export type DevVet = { filled: number; total: number; tier: "A" | "B" | "C"; missing: string[]; pct: number; responsive: boolean; hasPrice: boolean };
 
 const has = (v: unknown): boolean => {
   if (v == null) return false;
@@ -35,23 +35,27 @@ const AGENT_CHECKS: { label: string; key: string; core?: boolean }[] = [
   { label: "sends deals", key: "sendsDeals" },
 ];
 
-export function devVetScore(formData: unknown, kind: DevKind): DevVet {
+export function devVetScore(formData: unknown, kind: DevKind, responsive = false): DevVet {
   const f = (formData ?? {}) as Record<string, Record<string, unknown>>;
   const box = (kind === "buyer_agent" ? f.agent_profile : f.dev_buybox) ?? {};
   const checks = kind === "buyer_agent" ? AGENT_CHECKS : DEV_CHECKS;
   const missing: string[] = [];
   let filled = 0;
-  let coreFilled = 0, coreTotal = 0;
+  let hasPrice = false;
   for (const c of checks) {
     const ok = has(box[c.key]);
     if (ok) filled++; else missing.push(c.label);
-    if (c.core) { coreTotal++; if (ok) coreFilled++; }
+    if (c.key === "priceRange" && ok) hasPrice = true;
   }
   const total = checks.length;
   const pct = Math.round((filled / total) * 100);
-  // A = nearly complete AND both core fields (price + area) known; B = half; else C.
-  const tier: DevVet["tier"] = filled >= total - 1 && coreFilled === coreTotal ? "A" : filled >= Math.ceil(total / 2) ? "B" : "C";
-  return { filled, total, tier, missing, pct };
+  // A = VIP developers (Jon 2026-10-22): super-responsive AND we have their purchase
+  // price OR an almost-full buy-box. B = a decent box OR responsive. Else C.
+  const almostFull = filled >= total - 2;
+  const tier: DevVet["tier"] = responsive && (hasPrice || almostFull) ? "A"
+    : filled >= Math.ceil(total / 2) || responsive ? "B"
+    : "C";
+  return { filled, total, tier, missing, pct, responsive, hasPrice };
 }
 
 export function devTierMeta(tier: DevVet["tier"]): { emoji: string; cls: string } {

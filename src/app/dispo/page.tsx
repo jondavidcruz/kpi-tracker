@@ -399,13 +399,29 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     const needle = q.toLowerCase();
     const { devVetScore } = await import("@/lib/dev-vetting");
     const vetKind = tab === "developers" ? "developer" : "buyer_agent";
+    // ⚡ Responsiveness — a dev is "super responsive" (→ A-tier VIP) when they've replied
+    // or we've connected in the last 45 days. One query over all their contacts.
+    const vetContactIds = opps.map((o) => o.contactId).filter((x): x is string => !!x);
+    const respSet = new Set<string>();
+    if (vetContactIds.length) {
+      const evs = await db.crmEvent.findMany({
+        where: { contactId: { in: vetContactIds }, kind: { in: ["sms", "email", "call"] }, at: { gte: new Date(Date.now() - 45 * 86400000) } },
+        select: { contactId: true, kind: true, body: true, meta: true },
+      }).catch(() => [] as { contactId: string; kind: string; body: string; meta: unknown }[]);
+      for (const e of evs) {
+        const meta = (e.meta ?? {}) as { dir?: string };
+        const inbound = e.kind === "sms" ? /^⬅/.test(e.body) : meta.dir === "inbound";
+        const positive = /replied|spoke|talked|connected|answered|interested|good convo|sent (us|offer)/i.test(e.body);
+        if (inbound || positive) respSet.add(e.contactId);
+      }
+    }
     netCards = opps.map((o) => {
       const imp = ((o.formData ?? {}) as { __import?: { market?: string; buyBox?: string } }).__import ?? {};
       const area = imp.market || "";
       const buyBox = imp.buyBox || stripAgentNotesBlock(o.contact?.pinnedNote) || "";
-      // 🎯 vetting readiness — buy-box completeness + tier (consolidation Phase 1)
-      const v = devVetScore(o.formData, vetKind);
-      const badges = [`${v.tier === "A" ? "🅰" : v.tier === "B" ? "🅱" : "🅲"} ${v.filled}/${v.total} box`];
+      // 🎯 vetting readiness — buy-box completeness + responsiveness → A/B/C (Phase 1)
+      const v = devVetScore(o.formData, vetKind, o.contactId ? respSet.has(o.contactId) : false);
+      const badges = [`${v.tier === "A" ? "🅰" : v.tier === "B" ? "🅱" : "🅲"} ${v.filled}/${v.total} box${v.responsive ? " ⚡" : ""}`];
       if (v.missing.length && v.filled < v.total) badges.push(`need: ${v.missing.slice(0, 3).join(", ")}`);
       return {
         id: o.id, title: buyBox, contactName: o.contact?.name || o.title, contactId: o.contactId,
