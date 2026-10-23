@@ -37,8 +37,28 @@ export default function DispoCommandCenter({ data }: { data: DispoCommand }) {
   const { summary: s } = data;
   const agoMin = (iso: string) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
 
+  // 🎯 the single highest-leverage thing to do right now (money-first order)
+  const focus = s.readyToContract > 0
+    ? { text: `📄 ${s.readyToContract} deal${s.readyToContract > 1 ? "s" : ""} ready to contract — draft + send to lock the money.`, cls: "from-indigo-500 to-indigo-600" }
+    : s.overdue > 0
+    ? { text: `⏰ ${s.overdue} follow-up${s.overdue > 1 ? "s" : ""} overdue — clear these first.`, cls: "from-rose-500 to-rose-600" }
+    : s.replies > 0
+    ? { text: `💬 ${s.replies} new buyer repl${s.replies > 1 ? "ies" : "y"} — respond while they're warm.`, cls: "from-sky-500 to-sky-600" }
+    : s.notOut > 0
+    ? { text: `🚨 ${s.notOut} deal${s.notOut > 1 ? "s aren't" : " isn't"} out yet — cascade to buyers.`, cls: "from-rose-500 to-rose-600" }
+    : s.needOffers > 0
+    ? { text: `🎯 ${s.needOffers} deal${s.needOffers > 1 ? "s" : ""} still chasing 3 offers — work the buyers.`, cls: "from-amber-500 to-amber-600" }
+    : s.stuck > 0
+    ? { text: `🐌 ${s.stuck} deal${s.stuck > 1 ? "s" : ""} stuck — advance them.`, cls: "from-amber-500 to-amber-600" }
+    : { text: "✅ All clear — work your follow-ups and log every new offer.", cls: "from-emerald-500 to-emerald-600" };
+
   return (
     <div className="space-y-3">
+      {/* 🎯 do this first — the one highest-impact action right now */}
+      <div className={`rounded-xl bg-gradient-to-r ${focus.cls} px-4 py-2.5 text-[14px] font-extrabold text-white shadow-sm`}>
+        <span className="mr-2 text-[10px] font-bold uppercase tracking-widest text-white/70">Do this first</span>{focus.text}
+      </div>
+
       {/* 📈 velocity — are we selling faster? */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-gradient-to-r from-brand-navy to-[#163a63] px-4 py-2.5 text-white">
         <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">📈 This month</span>
