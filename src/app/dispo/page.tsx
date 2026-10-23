@@ -397,14 +397,20 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       select: { id: true, title: true, stage: true, assignedTo: true, tags: true, updatedAt: true, createdAt: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true, address: true, pinnedNote: true } } },
     });
     const needle = q.toLowerCase();
+    const { devVetScore } = await import("@/lib/dev-vetting");
+    const vetKind = tab === "developers" ? "developer" : "buyer_agent";
     netCards = opps.map((o) => {
       const imp = ((o.formData ?? {}) as { __import?: { market?: string; buyBox?: string } }).__import ?? {};
       const area = imp.market || "";
       const buyBox = imp.buyBox || stripAgentNotesBlock(o.contact?.pinnedNote) || "";
+      // 🎯 vetting readiness — buy-box completeness + tier (consolidation Phase 1)
+      const v = devVetScore(o.formData, vetKind);
+      const badges = [`${v.tier === "A" ? "🅰" : v.tier === "B" ? "🅱" : "🅲"} ${v.filled}/${v.total} box`];
+      if (v.missing.length && v.filled < v.total) badges.push(`need: ${v.missing.slice(0, 3).join(", ")}`);
       return {
         id: o.id, title: buyBox, contactName: o.contact?.name || o.title, contactId: o.contactId,
         address: area, phone: o.contact?.phone || undefined, email: o.contact?.email || undefined,
-        stage: o.stage || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
+        stage: o.stage || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges,
         money: "", valueNum: 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
         leadType: leadTypeBadge(tab === "developers" ? "developer" : "buyer_agent"),
       } as CrmCard;
