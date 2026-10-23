@@ -42,7 +42,7 @@ function toProspect(r: Record<string, unknown>): Prospect {
 }
 
 
-export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ saved?: string; imp?: string; addr?: string; price?: string; landpack?: string }> }) {
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ saved?: string; imp?: string; addr?: string; price?: string; landpack?: string; src?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me)) {
     return (
@@ -148,6 +148,29 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   });
   const coverage = coverageByCounty(cards);
 
+  // 🔀 Phase 3 preview (?src=kanban, Jon 2026-10-23): read the Buyers board + coverage
+  // from the CRM kanban's VETTED developers/agents (the single source of truth) instead
+  // of MarketContact, via the adapter. The live page is unchanged unless ?src=kanban.
+  const srcKanban = sp.src === "kanban";
+  let boardCards = cards;
+  let boardCoverage = coverage;
+  if (srcKanban) {
+    const { resolveNetworkPipelines } = await import("@/lib/dispo-network");
+    const { crmOppToCardBuyer } = await import("@/lib/buyers/crm-adapter");
+    const net = await resolveNetworkPipelines();
+    const kopps = net.all.length
+      ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.all }, stage: { in: ["vetted", "active"] } }, select: { id: true, stage: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true } } } }).catch(() => [])
+      : [];
+    const cids = kopps.map((o) => o.contactId).filter((x): x is string => !!x);
+    const tmap = new Map<string, { at: string; outcome?: string; note?: string }[]>();
+    if (cids.length) {
+      const tevs = await db.crmEvent.findMany({ where: { contactId: { in: cids }, kind: { in: ["call", "sms", "email"] } }, orderBy: { at: "desc" }, take: 4000, select: { contactId: true, kind: true, body: true, at: true } }).catch(() => []);
+      for (const e of tevs) { const arr = tmap.get(e.contactId) ?? []; if (arr.length < 5) { arr.push({ at: e.at.toISOString().slice(0, 10), outcome: e.kind, note: e.body.slice(0, 120) }); tmap.set(e.contactId, arr); } }
+    }
+    boardCards = kopps.map((o) => crmOppToCardBuyer(o, (o.contactId && tmap.get(o.contactId)) || [], today));
+    boardCoverage = coverageByCounty(boardCards);
+  }
+
   return (
     <div className="space-y-6">
       <SectionTitle title="🏛 Vetted Buyers" subtitle="Our vetted buyers & developers and their buy boxes — search a market to see exactly who'd want the deal. Sourcing new buyers? Start in Buyer Research." accent="bg-brand-gold"
@@ -191,7 +214,10 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           </div>,
           <div key="buyers" className="space-y-6">
       {/* Section 3 — KPI strip · coverage heat board · buyer trading cards */}
-      <VettedBuyersBoard buyers={cards} coverage={coverage} coldCount={cold.length} />
+      {srcKanban && (
+        <div className="rounded-xl bg-indigo-600 px-4 py-2 text-[12px] font-bold text-white">🔀 PREVIEW — this board is reading the CRM kanban ({boardCards.length} vetted developers/agents). <a href="/marketing" className="underline">back to live</a></div>
+      )}
+      <VettedBuyersBoard buyers={boardCards} coverage={boardCoverage} coldCount={cold.length} />
 
       {/* 🗺 Coverage GAPS — demand (open dispo deals) vs our vetted buy-boxes by price
           & acreage. The county heat above is supply; this is "where we have deals but
