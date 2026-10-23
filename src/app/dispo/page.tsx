@@ -132,7 +132,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // 🕒 days-in-current-stage per deal (velocity) — from the latest stage-change event
   const stageAtByDeal = new Map<string, Date>();
   if (tab === "deals" && dealIds.length) {
-    const sevs = await db.crmEvent.findMany({ where: { oppId: { in: dealIds }, kind: "stage" }, orderBy: { at: "desc" }, select: { oppId: true, at: true } }).catch(() => [] as { oppId: string; at: Date }[]);
+    const sevs = await db.crmEvent.findMany({ where: { oppId: { in: dealIds }, kind: "stage" }, orderBy: { at: "desc" }, take: 6000, select: { oppId: true, at: true } }).catch(() => [] as { oppId: string; at: Date }[]);
     for (const e of sevs) if (e.oppId && !stageAtByDeal.has(e.oppId)) stageAtByDeal.set(e.oppId, e.at);
   }
   // A closed/won stage — detected by the stage KEY or LABEL so it works even for

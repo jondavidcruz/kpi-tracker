@@ -64,7 +64,7 @@ export async function getDispoCommandData(): Promise<DispoCommand> {
 
   // 🕒 when each deal last changed stage — to measure days-in-stage (velocity). The
   // latest kind:"stage" event per deal; fall back to createdAt when never moved.
-  const stageEvs = await db.crmEvent.findMany({ where: { oppId: { in: deals.map((d) => d.id) }, kind: "stage" }, orderBy: { at: "desc" }, select: { oppId: true, at: true } }).catch(() => []);
+  const stageEvs = await db.crmEvent.findMany({ where: { oppId: { in: deals.map((d) => d.id) }, kind: "stage" }, orderBy: { at: "desc" }, take: 6000, select: { oppId: true, at: true } }).catch(() => []);
   const stageAt = new Map<string, Date>();
   for (const e of stageEvs) if (e.oppId && !stageAt.has(e.oppId)) stageAt.set(e.oppId, e.at);
 
