@@ -30,6 +30,8 @@ import DashWidgets, { DashSection } from "@/components/DashWidgets";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canAccessPayroll, tracksSpeedTest } from "@/lib/auth";
 import { Card, SectionTitle, Legend, ProgressBar, MetricCard, Pill } from "@/components/ui";
+import WhatsNewBanner from "@/components/WhatsNewBanner";
+import { entriesFor, audiencesFor } from "@/lib/whats-new";
 import { CircleCheck, TrendingDown, Bell, Users, Banknote, ShieldAlert, Building2, FileSignature, type LucideIcon } from "lucide-react";
 import type { Kpi, Target, User } from "@prisma/client";
 
@@ -292,8 +294,19 @@ export default async function DashboardPage({
 
   const inOnboarding = !!(me as { onboarding?: boolean } | null)?.onboarding;
 
+  // ✨ New-feature rollout banner — role-filtered, shows what shipped in the last 10 days
+  const freshFeatures = (() => {
+    const cut = Date.now() - 10 * 86400000;
+    const mine = entriesFor(audiencesFor(me?.position, isManager(me)));
+    const recent = mine.filter((e) => Date.parse(e.date + "T00:00:00") >= cut);
+    return { count: recent.length, latest: recent[0]?.date ?? "" };
+  })();
+
   return (
     <div className="space-y-7">
+      {/* ✨ What's-new rollout bar — unmistakably a NEW FEATURE callout (Jon 2026-10-22) */}
+      {freshFeatures.count > 0 && <WhatsNewBanner count={freshFeatures.count} latest={freshFeatures.latest} />}
+
       {/* New hires: their own onboarding checklist up top so they always know
           what's left to finish before certification (Jon 2026-10-16). */}
       {inOnboarding && me && <OnboardingProgressCard userId={me.id} name={me.name} position={me.position} />}

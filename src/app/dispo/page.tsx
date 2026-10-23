@@ -399,16 +399,13 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     const opps = await db.crmOpportunity.findMany({
       where: { archivedAt: null, pipeline: { in: tabNames } },
       orderBy: { updatedAt: "desc" },
-      select: { id: true, title: true, stage: true, assignedTo: true, tags: true, updatedAt: true, createdAt: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true, address: true, pinnedNote: true } } },
+      select: { id: true, title: true, pipeline: true, stage: true, assignedTo: true, tags: true, updatedAt: true, createdAt: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true, address: true, pinnedNote: true } } },
     });
     const needle = q.toLowerCase();
-    // ✅ Vetted = we've captured their buy-box (talked to them + know what they buy)
-    // vs 🆕 unvetted (in the network, not contacted yet). Jon 2026-10-22.
-    const hasBuyBox = (fd: unknown): boolean => {
-      const f = (fd ?? {}) as Record<string, Record<string, unknown>>;
-      const d = f.dev_buybox ?? {}; const a = f.agent_profile ?? {};
-      return !!(d.buyCounties || d.priceRange || d.landTypes || d.lotSize || d.closeSpeed || d.volume || d.requirements || d.dealBreakers || a.areas || a.priceRange || a.buyerTypes || a.brokerage);
-    };
+    // ✅ Vetted = moved to the "Vetted" stage column OR we've captured their buy-box.
+    // 🆕 Unvetted = still in an early stage, not contacted yet (Jon 2026-10-22:
+    // "vetted = anyone moved to the vetted column", not just ones with the form filled).
+    const { isVettedNetworkLead } = await import("@/lib/dispo-buyers");
     const netRows = opps.map((o) => {
       const imp = ((o.formData ?? {}) as { __import?: { market?: string; buyBox?: string } }).__import ?? {};
       const area = imp.market || "";
@@ -420,7 +417,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
         money: "", valueNum: 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
         leadType: leadTypeBadge(tab === "developers" ? "developer" : "buyer_agent"),
       } as CrmCard;
-      return { card, vetted: hasBuyBox(o.formData) };
+      return { card, vetted: isVettedNetworkLead({ formData: o.formData, stage: o.stage, pipeline: o.pipeline }) };
     }).filter((r) => !needle || `${r.card.contactName} ${r.card.address ?? ""} ${r.card.title ?? ""} ${r.card.phone ?? ""}`.toLowerCase().includes(needle));
     netVettedCount = netRows.filter((r) => r.vetted).length;
     netUnvettedCount = netRows.length - netVettedCount;
