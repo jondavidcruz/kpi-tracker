@@ -14,7 +14,7 @@ import DispoFollowupKanban, { type FollowupCard } from "@/components/DispoFollow
 import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban";
 import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
-import { importDispoNetworkCsv } from "@/app/actions";
+import { importDispoNetworkCsv, quickAddDispoNetworkAction } from "@/app/actions";
 import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispoCascadeAction, resortOrphanStagesAction, syncClosedDealsAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
@@ -47,7 +47,7 @@ function cityState(addr?: string): { city: string; st: string } {
 // already uses on the Seller CRM (Jon 2026-10-20: "make it look like what they
 // recognize"). Developers + Buyer Agents are their own pipelines here (not mixed
 // with sellers); the Deals tab tracks buyer follow-ups per deal.
-export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string; resorted?: string; pipedx?: string; synced?: string }> }) {
+export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; added?: string; bulk?: string; acmin?: string; acmax?: string; resorted?: string; pipedx?: string; synced?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me) && !isManager(me)) {
     return (
@@ -461,6 +461,8 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       />
 
       {sp.imp && /^\d+$/.test(sp.imp) && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Imported {sp.imp} lead{sp.imp === "1" ? "" : "s"}{sp.dev && sp.agent ? ` (${sp.dev} developers, ${sp.agent} buyer agents)` : ""}.{sp.dup && /^\d+$/.test(sp.dup) ? ` Skipped ${sp.dup} already here.` : ""}</div>}
+      {sp.added === "1" && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">{sp.dup === "1" ? "✓ Already in your list — no duplicate made." : `✓ Added to ${tab === "agents" ? "Buyer Agents" : "Developers"}.`}</div>}
+      {sp.added === "noname" && <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">Enter at least a name to add a lead.</div>}
 
       {/* 🔎 manager-only pipeline diagnostic (?pipedx=1): every pipeline → live opp count,
           so we can see exactly where the developers / buyer agents actually live. */}
@@ -781,6 +783,21 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
               <b className="text-violet-800">🏗 Developers = end-of-week vetting (lowest priority).</b> Work deals + buyer-agent follow-ups first; use the back half of the week to vet more developers here and keep building the vetted-developer pipeline.
             </Card>
           )}
+          {/* ➕ Quick-add ONE — the dispo twin of the Seller CRM "New lead" (Jon 2026-10-23) */}
+          <details className="rounded-2xl bg-white p-3 ring-1 ring-emerald-200">
+            <summary className="cursor-pointer text-[13px] font-bold text-emerald-800">➕ Add a {tab === "agents" ? "buyer agent" : "developer"} <span className="font-normal text-slate-400">— one lead, right now</span></summary>
+            <form action={quickAddDispoNetworkAction} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <input type="hidden" name="tab" value={tab} />
+              <input name="name" required placeholder={`${tab === "agents" ? "Agent / brokerage" : "Developer / company"} name *`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm sm:col-span-2" />
+              <input name="phone" placeholder="Phone" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+              <input name="email" placeholder="Email" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+              <input name="market" placeholder="Area / market (e.g. Polk County, FL)" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+              <input name="buyBox" placeholder="Buy box (acreage, price, lot type…)" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+              <textarea name="notes" rows={2} placeholder="Notes (optional)" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm sm:col-span-2" />
+              <div className="sm:col-span-2"><button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">➕ Add {tab === "agents" ? "buyer agent" : "developer"}</button></div>
+            </form>
+          </details>
+
           <details className="rounded-2xl bg-white p-3 ring-1 ring-slate-200" open={(tab === "developers" ? devCount : agentCount) === 0}>
             <summary className="cursor-pointer text-[13px] font-bold text-slate-700">📥 Import the Excel list <span className="font-normal text-slate-400">— auto-split by Type, duplicates skipped</span></summary>
             <p className="mt-2 mb-3 text-xs text-slate-500">Upload the <b>unvetted-developers-backfill.csv</b>. Each row becomes a CRM lead with its notes; developers + buyer agents split into their tabs. Re-uploading is safe.</p>

@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
+import { isDispoNetworkPipeline } from "@/lib/dispo-buyers";
 
 export const dynamic = "force-dynamic";
+
+// 🏷 Which side of the business is this caller? (Jon 2026-10-23: "note on the
+// caller ID whether it's a dispo contact or an acquisitions contact calling in").
+// A developer / buyer-agent (dispo buyer-NETWORK pipeline) → Dispositions.
+// Everyone else we track is a seller → Acquisitions. No opp at all → unknown.
+async function contactDept(contactId: string): Promise<{ dept: "" | "dispo" | "acquisitions"; label: string }> {
+  if (!contactId) return { dept: "", label: "" };
+  const opps = await db.crmOpportunity
+    .findMany({ where: { contactId, archivedAt: null }, select: { pipeline: true } })
+    .catch(() => [] as { pipeline: string | null }[]);
+  if (!opps.length) return { dept: "", label: "" };
+  const isBuyer = opps.some((o) => isDispoNetworkPipeline(o.pipeline));
+  return isBuyer
+    ? { dept: "dispo", label: "🤝 Dispo · buyer" }
+    : { dept: "acquisitions", label: "🏠 Acquisitions · seller" };
+}
 
 // ☎️ Caller-ID helper for the dialer (Jon 2026-10-12):
 // ?num=+19093956195 → who that is in the CRM (name on the incoming banner)
@@ -31,7 +48,8 @@ export async function GET(req: NextRequest) {
   const last10 = num.replace(/\D/g, "").slice(-10);
   if (last10.length !== 10) return NextResponse.json({ name: "" });
   const c = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true, name: true, address: true } });
-  return NextResponse.json({ name: c?.name ?? "", id: c?.id ?? "", address: c?.address ?? "" }, { headers: { "Cache-Control": "private, no-store" } });
+  const { dept, label: deptLabel } = c?.id ? await contactDept(c.id) : { dept: "" as const, label: "" };
+  return NextResponse.json({ name: c?.name ?? "", id: c?.id ?? "", address: c?.address ?? "", dept, deptLabel }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 // POST → "answer the ringing call on MY line" — written when someone clicks

@@ -34,7 +34,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [qi, setQi] = useState(0);
   const [onCall, setOnCall] = useState<Ctx | null>(null);
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
-  const [incoming, setIncoming] = useState<{ number: string; name?: string } | null>(null);
+  const [incoming, setIncoming] = useState<{ number: string; name?: string; deptLabel?: string } | null>(null);
   const [answeredBy, setAnsweredBy] = useState<{ agent: string; caller: string } | null>(null);
   const [micOk, setMicOk] = useState<boolean | null>(null); // null = unknown
   const claimUntilRef = useRef(0); // while fresh, the next native ring auto-answers here
@@ -361,10 +361,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             try { bcRef.current?.postMessage({ t: "incoming", number }); } catch { /* same-tab only */ }
             // 🏷 caller-ID: swap the raw number for the CRM name on every tab
             fetch(`/api/crm/callerid?num=${encodeURIComponent(number)}`, { cache: "no-store" }).then(async (r) => {
-              const j = (await r.json().catch(() => ({}))) as { name?: string };
-              if (j.name) {
-                setIncoming((cur) => (cur && cur.number === number ? { ...cur, name: j.name } : cur));
-                try { bcRef.current?.postMessage({ t: "incoming", number, name: j.name }); } catch { /* fine */ }
+              const j = (await r.json().catch(() => ({}))) as { name?: string; deptLabel?: string };
+              if (j.name || j.deptLabel) {
+                setIncoming((cur) => (cur && cur.number === number ? { ...cur, name: j.name ?? cur.name, deptLabel: j.deptLabel } : cur));
+                try { bcRef.current?.postMessage({ t: "incoming", number, name: j.name, deptLabel: j.deptLabel }); } catch { /* fine */ }
               }
             }).catch(() => {});
             return;
@@ -439,7 +439,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       bcRef.current = bc;
       bc.onmessage = (ev: MessageEvent<{ t?: string; number?: string }>) => {
         const m = ev.data ?? {};
-        if (m.t === "incoming" && !leaderRef.current) { setRemoteIncoming({ number: (m as { name?: string }).name || m.number || "unknown" }); setOpen(true); }
+        if (m.t === "incoming" && !leaderRef.current) { const mm = m as { name?: string; deptLabel?: string }; setRemoteIncoming({ number: [mm.name || m.number || "unknown", mm.deptLabel].filter(Boolean).join(" · ") }); setOpen(true); }
         if (m.t === "incoming-clear") { setRemoteIncoming((cur) => { if (cur) checkWhoAnswered(); return null; }); }
         if (m.t === "answer" && leaderRef.current) answerIncomingRef.current?.();
         if (m.t === "decline" && leaderRef.current) declineIncomingRef.current?.();
@@ -623,6 +623,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
                 <span className="block text-[10px] font-bold uppercase tracking-wide text-emerald-100">📲 Incoming call</span>
                 <span className="block truncate text-sm font-extrabold text-white">{incoming.name ?? incoming.number}</span>
                 {incoming.name && <span className="block truncate text-[10px] font-semibold text-emerald-100">{incoming.number}</span>}
+                {incoming.deptLabel && <span className="mt-0.5 inline-block rounded bg-white/25 px-1.5 py-0.5 text-[10px] font-bold text-white">{incoming.deptLabel}</span>}
               </span>
               <button onClick={answerIncoming} className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg text-emerald-700 shadow hover:bg-emerald-50" title="Answer">📞</button>
               <button onClick={declineIncoming} className="grid h-10 w-10 place-items-center rounded-full bg-red-600 text-lg text-white shadow hover:bg-red-700" title="Decline">⏹</button>

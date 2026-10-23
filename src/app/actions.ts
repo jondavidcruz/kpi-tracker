@@ -4689,3 +4689,79 @@ export async function importDispoNetworkCsv(formData: FormData) {
   revalidatePath("/crm");
   back(`imp=${dev + agent}&dev=${dev}&agent=${agent}${skipped ? `&dup=${skipped}` : ""}`);
 }
+
+// ➕ Quick-add ONE developer / buyer agent straight from the Developers or Buyer
+// Agents tab — the dispo twin of the Seller CRM's "New lead" (Jon 2026-10-23:
+// "make the same feature to add leads to dispo buyer agents and developers").
+// No seller welcome text / speed-to-lead task fires — these are OUR buyers we're
+// prospecting, not an inbound seller. Dedupes by phone so re-adding is safe.
+export async function quickAddDispoNetworkAction(formData: FormData) {
+  const me = await getCurrentUser();
+  const { canAccessMarketing, isManager } = await import("@/lib/auth");
+  if (!canAccessMarketing(me) && !isManager(me)) return;
+  const { DISPO_NETWORK_PIPELINES, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, isDevNetworkName, isAgentNetworkName } = await import("@/lib/dispo-buyers");
+  const { logCrmEvent } = await import("@/lib/crm");
+  const { toE164US } = await import("@/lib/crm-shared");
+
+  const tab = String(formData.get("tab") ?? "developers") === "agents" ? "agents" : "developers";
+  const back = (q: string) => redirect(`/dispo?tab=${tab}&${q}`);
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) back("added=noname");
+  const toAgent = tab === "agents";
+  const phone = toE164US(String(formData.get("phone") ?? "")) || "";
+  const email = String(formData.get("email") ?? "").trim();
+  const market = String(formData.get("market") ?? "").trim();
+  const buyBox = String(formData.get("buyBox") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  // Resolve the live pipeline name (tolerant of Jon's renames), creating it only if missing.
+  const PIPES_CAT = "__crm_pipelines__";
+  const pRow = await db.resource.findFirst({ where: { category: PIPES_CAT } }).catch(() => null);
+  let ghl: Array<{ name: string; stages: Array<{ key: string; label: string }> }> = [];
+  try { ghl = pRow?.description ? JSON.parse(pRow.description) : []; } catch { ghl = []; }
+  const pipeline = toAgent
+    ? (ghl.find((p) => isAgentNetworkName(p.name))?.name ?? DISPO_AGENT_PIPELINE)
+    : (ghl.find((p) => isDevNetworkName(p.name))?.name ?? DISPO_DEV_PIPELINE);
+  const exists = toAgent ? ghl.some((p) => isAgentNetworkName(p.name)) : ghl.some((p) => isDevNetworkName(p.name));
+  if (!exists) {
+    const np = DISPO_NETWORK_PIPELINES.find((p) => toAgent ? isAgentNetworkName(p.name) : isDevNetworkName(p.name));
+    if (np) {
+      ghl.push({ name: np.name, stages: np.stages });
+      if (pRow) await db.resource.update({ where: { id: pRow.id }, data: { description: JSON.stringify(ghl) } });
+      else await db.resource.create({ data: { title: "crm-pipelines", category: PIPES_CAT, url: "", description: JSON.stringify(ghl) } });
+    }
+  }
+
+  // Dedupe by phone (last 10) → attach to the existing contact rather than twin it.
+  const p10 = phone.replace(/\D/g, "").slice(-10);
+  const existing = p10.length === 10
+    ? await db.crmContact.findFirst({ where: { archivedAt: null, OR: [{ phone: { endsWith: p10 } }, { altPhone: { endsWith: p10 } }] }, orderBy: { updatedAt: "desc" } }).catch(() => null)
+    : null;
+  const contact = existing
+    ? await db.crmContact.update({ where: { id: existing.id }, data: {
+        ...(existing.email || !email ? {} : { email }),
+        ...(existing.pinnedNote ? {} : { pinnedNote: [market, buyBox].filter(Boolean).join(" · ").slice(0, 300) }),
+      } })
+    : await db.crmContact.create({ data: {
+        name, phone, email,
+        source: "Added by rep",
+        tags: [toAgent ? "buyer-agent" : "developer"].join(", "),
+        pinnedNote: [market, buyBox].filter(Boolean).join(" · ").slice(0, 300),
+      } });
+
+  // Don't duplicate an open card the contact already has in this pipeline.
+  const dupe = existing
+    ? await db.crmOpportunity.findFirst({ where: { contactId: contact.id, pipeline, archivedAt: null } }).catch(() => null)
+    : null;
+  const opp = dupe ?? await db.crmOpportunity.create({ data: {
+    contactId: contact.id, title: name, pipeline, stage: "new", assignedTo: me!.name,
+    formData: { __import: { type: toAgent ? "Buyer Agent" : "Developer", market, buyBox, source: "Added by rep" } } as never,
+  } });
+  await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: dupe
+    ? `Quick-add matched existing ${toAgent ? "buyer agent" : "developer"} card — no duplicate made`
+    : `${toAgent ? "Buyer agent" : "Developer"} added${existing ? ` (matched existing contact "${existing.name}" by phone)` : ""}`, actor: me!.name });
+  if (notes) await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "note", body: notes.slice(0, 4000), actor: me!.name });
+  revalidatePath("/dispo");
+  revalidatePath("/crm");
+  back(`added=1&dup=${dupe ? 1 : 0}`);
+}
