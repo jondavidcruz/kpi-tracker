@@ -85,14 +85,18 @@ export default function DispoCommandCenter({ data }: { data: DispoCommand }) {
           {data.needsOffers.length === 0 ? <Empty>Every deal that's out has its 3 offers. 🎉</Empty> : (
             <ul className="space-y-1">
               {data.needsOffers.map((d) => (
-                <li key={d.id}><Link href={`/crm/${d.id}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                <li key={d.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
                   <span className="flex items-center gap-0.5" title={`${d.liveOffers} of ${OFFER_GOAL} offers`}>
                     {Array.from({ length: OFFER_GOAL }).map((_, i) => <span key={i} className={`h-2 w-2.5 rounded-full ${i < d.liveOffers ? "bg-emerald-500" : "bg-slate-200"}`} />)}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-800">{d.addr}</span>
+                  <Link href={`/crm/${d.id}`} className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-800">{d.addr}</Link>
                   {d.ageDays >= 3 && <span className="shrink-0 rounded bg-amber-50 px-1 text-[9px] font-bold text-amber-600">{d.ageDays}d</span>}
                   {d.owner && <span className="shrink-0 text-[10px] text-slate-400">{d.owner.split(" ")[0]}</span>}
-                </Link></li>
+                  <form action={runDispoCascadeAction} className="shrink-0">
+                    <input type="hidden" name="oppId" value={d.id} />
+                    <button className="rounded bg-emerald-600 px-1.5 py-1 text-[10px] font-bold text-white hover:bg-emerald-700" title="Attach more matched buyers to chase the 3rd offer">⚡ More</button>
+                  </form>
+                </li>
               ))}
             </ul>
           )}
