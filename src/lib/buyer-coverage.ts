@@ -105,10 +105,14 @@ export async function getBuyerCoverage(): Promise<Coverage> {
   // (a) network leads (developers + buyer agents). For COVERAGE, "vetted" = usable
   // supply = we've captured a buy-box (any field), so we can actually match them to a
   // deal. A developer with no buy-box yet is unvetted supply (Jon 2026-10-22).
+  // the CRM kanban is the source of truth (consolidation Phase 3) — track which
+  // MarketContacts have been migrated into it so we never count a buyer twice.
+  const migratedMcIds = new Set<string>();
   if (net.all.length) {
     const netOpps = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.all } }, select: { pipeline: true, formData: true } }).catch(() => []);
     for (const o of netOpps) {
-      const fd = (o.formData ?? {}) as Record<string, Record<string, unknown>>;
+      const fd = (o.formData ?? {}) as Record<string, Record<string, unknown>> & { __fromMarketContact?: string };
+      if (fd.__fromMarketContact) migratedMcIds.add(String(fd.__fromMarketContact));
       const dev = fd.dev_buybox ?? {}; const ag = fd.agent_profile ?? {};
       const priceMax = parsePriceCeiling(String(dev.priceRange ?? ag.priceRange ?? ""));
       const acre = parseAcreRange(String(dev.lotSize ?? ""));
@@ -118,9 +122,11 @@ export async function getBuyerCoverage(): Promise<Coverage> {
       buyers.push({ priceMax, acre, areas, vetted, isDev: isDevNetworkName(o.pipeline) });
     }
   }
-  // (b) MarketContact vetted directory — these are already in the vetted/active stage
-  const mcs = await db.marketContact.findMany({ where: { vetStage: { in: ["vetted", "active"] } }, select: { priceRange: true, buyBoxAreas: true, market: true, minLotSize: true } }).catch(() => []);
+  // (b) MarketContact vetted directory — but SKIP any already migrated into the kanban
+  // (counted above), so Phase-2 migration doesn't double-count a buyer (Jon 2026-10-22).
+  const mcs = await db.marketContact.findMany({ where: { vetStage: { in: ["vetted", "active"] } }, select: { id: true, priceRange: true, buyBoxAreas: true, market: true, minLotSize: true } }).catch(() => []);
   for (const m of mcs) {
+    if (migratedMcIds.has(m.id)) continue;
     buyers.push({
       priceMax: parsePriceCeiling(String(m.priceRange ?? "")),
       acre: parseAcreRange(String(m.minLotSize ?? "")),
