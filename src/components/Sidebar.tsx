@@ -38,6 +38,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/dispo": "dispositions crm kanban follow-ups follow up buyer agents developers board sell land then sign",
   "/dispo?tab=today": "dispo command center today board run your day offers due follow-ups hot buyers replies stale",
   "/dispo?tab=coverage": "buyer coverage buy-box gaps price acreage area source buyers no buyers deals",
+  "/whats-new": "whats new what's new feature updates how to use training rollout release notes",
   "/sop/dispo": "dispo sop standard operating procedure pre-contract run sheet gates checklist packet cascade marie sharyn",
   "/sop/acquisitions": "acquisitions sop acq sales rep sop standard operating procedure process call script underwriting mao cash novation offer contract 5 minute speed to lead",
   "/reduction": "price reduction seller negotiate script calculator dom offers",
@@ -154,6 +155,7 @@ export default function Sidebar({
       { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
     ] },
     { label: "Coaching", items: [
+      { href: "/whats-new", label: "What's New", Icon: Sparkles },
       { href: "/training", label: "Training Portal", Icon: GraduationCap, trainingOnly: true },
       { href: "/tutorials", label: "Loom Tutorials", Icon: Play },
       { href: "/ai-training", label: "AI Training", Icon: Bot },

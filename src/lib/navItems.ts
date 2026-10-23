@@ -60,6 +60,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/internet", label: "Internet Speed", gate: "manager" },
   ] },
   { group: "Coaching", items: [
+    { href: "/whats-new", label: "What's New", gate: "all" },
     { href: "/training", label: "Training Portal", gate: "training" },
     { href: "/tutorials", label: "Loom Tutorials", gate: "all" },
     { href: "/ai-training", label: "AI Training", gate: "all" },
