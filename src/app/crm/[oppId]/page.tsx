@@ -521,7 +521,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
             <Card className="p-3">
               <div className="mb-1.5 flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Matching cash buyers</span>
-                <SendToBuyersButton oppId={opp.id} />
+                <SendToBuyersButton oppId={opp.id} launchReady={process.env.DIRECTREI_WRITE === "1" && Boolean(process.env.DIRECTREI_API_KEY)} />
               </div>
               <div className="space-y-1.5">
                 {buyerMatches.map((b) => (

@@ -7,12 +7,12 @@
 import { useActionState, useState } from "react";
 import { sendToMatchingBuyersAction } from "@/app/crm/actions";
 
-export default function SendToBuyersButton({ oppId }: { oppId: string }) {
+export default function SendToBuyersButton({ oppId, launchReady = false }: { oppId: string; launchReady?: boolean }) {
   const [state, action, pending] = useActionState(sendToMatchingBuyersAction, null);
   const [open, setOpen] = useState(false);
   const [verified, setVerified] = useState(false);
 
-  if (state?.ok) return <span className="ml-auto text-[10px] font-bold text-emerald-700">✓ Queued to {state.count} buyer{state.count === 1 ? "" : "s"} — go send it from Tasks (top-down).</span>;
+  if (state?.ok) return <span className="ml-auto text-[10px] font-bold text-emerald-700">{state.msg?.startsWith("launched") ? `⚡ Blast launched via DirectREI to ${state.count} buyer${state.count === 1 ? "" : "s"} — replies land on this deal.` : `✓ Queued to ${state.count} buyer${state.count === 1 ? "" : "s"} — go send it from Tasks (top-down).`}</span>;
 
   if (!open) {
     return (
@@ -33,12 +33,14 @@ export default function SendToBuyersButton({ oppId }: { oppId: string }) {
       <div className="mt-2 flex items-center gap-1.5">
         <form action={action}>
           <input type="hidden" name="oppId" value={oppId} />
-          <button disabled={!verified || pending} className="rounded-lg bg-indigo-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50" title={verified ? "Queue the send task (a human still sends it)" : "Verify the packet first"}>{pending ? "Arming…" : "📣 Arm the send"}</button>
+          <button disabled={!verified || pending} className="rounded-lg bg-indigo-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50" title={verified ? (launchReady ? "Launch the DirectREI blast to the matched buyers" : "Queue the send task (a human still sends it)") : "Verify the packet first"}>{pending ? (launchReady ? "Launching…" : "Arming…") : (launchReady ? "⚡ Arm & launch blast" : "📣 Arm the send")}</button>
         </form>
         <button onClick={() => { setOpen(false); setVerified(false); }} className="text-[10px] font-semibold text-slate-400 hover:text-slate-600">cancel</button>
         {state && !state.ok && <span className="text-[10px] font-semibold text-amber-600">{state.msg}</span>}
       </div>
-      <p className="mt-1 text-[9px] text-slate-400">Arming creates a tracked task with the ready message + matched buyers. You send the email/SMS from there — nothing goes out automatically.</p>
+      <p className="mt-1 text-[9px] text-slate-400">{launchReady
+        ? "Launches the blast through DirectREI's dialer/email/SMS to the matched buyers, and seeds the follow-up tracker. You clicked — a human armed it."
+        : "Arming creates a tracked task with the ready message + matched buyers. You send the email/SMS from there — nothing goes out automatically."}</p>
     </div>
   );
 }

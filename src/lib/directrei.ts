@@ -36,3 +36,62 @@ export async function directReiContacts(params?: Record<string, string>) { retur
 export async function directReiCampaigns() { return drei("/campaigns"); }
 export async function directReiDeals(params?: Record<string, string>) { return drei("/deals", params); }
 export async function directReiProperty(id: string) { return drei(`/properties/${encodeURIComponent(id)}`); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ✍️ WRITE side — launch a buyer Deal Blast through DirectREI's own dialer/email/
+// SMS automations (Jon 2026-10-22). Built to docs/directrei-integration-spec.md so
+// it's plug-and-play when Jon's friend ships those endpoints. OFF until he does:
+// needs DIRECTREI_WRITE=1 (so a half-configured key can never fire a blast).
+// One-click "arm & launch" per Jon — human reviews the deal, clicks once.
+
+async function dreiPost(path: string, payload: object): Promise<DreiResult> {
+  try {
+    const res = await fetch(BASE + path, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.DIRECTREI_API_KEY}`, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+      signal: AbortSignal.timeout(20000),
+    });
+    const text = await res.text();
+    let body: unknown; try { body = JSON.parse(text); } catch { body = text.slice(0, 400); }
+    return { ok: res.ok, status: res.status, body };
+  } catch (e) {
+    return { ok: false, status: 0, body: String(e) };
+  }
+}
+
+/** Blast is launchable only when the key is present AND writes are explicitly on. */
+export function directReiBlastConfigured(): boolean {
+  return Boolean(process.env.DIRECTREI_API_KEY) && process.env.DIRECTREI_WRITE === "1";
+}
+
+export type BlastContact = { name: string; phone?: string; email?: string; external_id: string };
+export type BlastChannel = "sms" | "email" | "cold_call";
+
+/** Create → add contacts → launch, in one call. Returns the campaign id + queued
+ *  count, or an error string (never throws). Matches the 4-endpoint spec. */
+export async function directReiLaunchBlast(o: {
+  name: string;
+  channels: BlastChannel[];
+  message: { sms?: string; email_subject?: string; email_body?: string };
+  contacts: BlastContact[];
+}): Promise<{ campaignId?: string; queued?: number; added?: number; error?: string }> {
+  if (!directReiBlastConfigured()) return { error: "DirectREI write API not enabled (set DIRECTREI_WRITE=1 once the endpoints are live)" };
+  if (!o.contacts.length) return { error: "no buyer contacts to blast" };
+  // 1) create (draft — we launch explicitly in step 3 so a contact-add failure
+  //    can't leave a half-empty campaign already sending)
+  const create = await dreiPost(`/campaigns`, { name: o.name.slice(0, 120), channels: o.channels, source: "war-room", message: o.message, launch: false });
+  if (!create.ok) return { error: `create ${create.status}: ${JSON.stringify(create.body).slice(0, 140)}` };
+  const campaignId = (create.body as { id?: string }).id;
+  if (!campaignId) return { error: "create returned no campaign id" };
+  // 2) add contacts
+  const add = await dreiPost(`/campaigns/${encodeURIComponent(campaignId)}/contacts`, { contacts: o.contacts.slice(0, 1000) });
+  if (!add.ok) return { campaignId, error: `add-contacts ${add.status}: ${JSON.stringify(add.body).slice(0, 140)}` };
+  const added = (add.body as { added?: number }).added ?? o.contacts.length;
+  // 3) launch
+  const launch = await dreiPost(`/campaigns/${encodeURIComponent(campaignId)}/launch`, {});
+  if (!launch.ok) return { campaignId, added, error: `launch ${launch.status}: ${JSON.stringify(launch.body).slice(0, 140)}` };
+  const queued = (launch.body as { queued?: number }).queued ?? added;
+  return { campaignId, added, queued };
+}

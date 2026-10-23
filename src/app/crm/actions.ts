@@ -1558,8 +1558,34 @@ export async function sendToMatchingBuyersAction(_prev: { ok: boolean; count: nu
     }));
     return [...cur, ...add];
   }).catch(() => {});
+
+  // ⚡ One-click launch through DirectREI's dialer/email/SMS automations, when the
+  // write API is live (Jon 2026-10-22). Human already reviewed + clicked; this fires
+  // the blast so dispo doesn't rebuild the list in DirectREI by hand. OFF until the
+  // endpoints ship — then it just starts working, no deploy.
+  let launched: { campaignId?: string; queued?: number; error?: string } | null = null;
+  try {
+    const { directReiBlastConfigured, directReiLaunchBlast } = await import("@/lib/directrei");
+    if (directReiBlastConfigured()) {
+      const contacts = matches
+        .filter((b) => b.phone || b.email)
+        .map((b) => ({ name: b.name, phone: b.phone || undefined, email: b.email || undefined, external_id: `${opp.id}:${b.id}` }));
+      launched = await directReiLaunchBlast({
+        name: `Deal Blast — ${addr} (War Room)`,
+        channels: ["sms", "email", "cold_call"],
+        message: { sms: blast, email_subject: `Off-market land: ${addr}`, email_body: blast.replace(/\n/g, "<br>") },
+        contacts,
+      });
+      if (launched.campaignId && !launched.error) {
+        const fd2 = (opp.formData ?? {}) as Record<string, unknown>;
+        await db.crmOpportunity.update({ where: { id: opp.id }, data: { formData: { ...fd2, __directReiBlast: { campaignId: launched.campaignId, queued: launched.queued ?? contacts.length, at: new Date().toISOString() } } as never } }).catch(() => {});
+      }
+      await logCrmEvent({ contactId: opp.contactId, oppId: opp.id, kind: "system", body: launched.error ? `⚡ DirectREI blast FAILED — ${launched.error} (buyers still queued on the tracker to work by hand)` : `⚡ Deal Blast launched via DirectREI — ${launched.queued ?? contacts.length} buyers queued (SMS · email · cold call). Replies will land on this deal.`, actor: "buyer-send" }).catch(() => {});
+    }
+  } catch { /* never let a blast error break the arm */ }
+
   revalidatePath(`/crm/${opp.id}`);
-  return { ok: true, count: matches.length };
+  return { ok: true, count: matches.length, msg: launched?.campaignId && !launched.error ? `launched ${launched.queued ?? matches.length} via DirectREI` : undefined };
 }
 
 /** Card buttons: 📝 Draft cash / novation contract on demand. */
