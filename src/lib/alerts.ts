@@ -348,6 +348,13 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
   ]);
   const month = monthOf(date);
 
+  // 🚫 Don't nag reps who weren't working today. A rep who never clocked in is on
+  // leave / absent (Sharyn on sick leave, or any no-show) — flagging their KPIs as
+  // "missed" and asking for a justification is noise (Jon 2026-10-23). This also
+  // backstops the schedule check for part-timers (Kyle Tue/Thu).
+  const inPunches = await db.punch.findMany({ where: { date, kind: "in" }, select: { userId: true } }).catch(() => []);
+  const checkedIn = new Set(inPunches.map((p) => p.userId));
+
   const created: NewAlert[] = [];
   for (const kpi of kpis) {
     const severity = alertSeverity(kpi);
@@ -356,6 +363,7 @@ export async function generateMissingEntryAlerts(date: string): Promise<NewAlert
       if (rep.role === "admin") continue; // the owner manages the team; no missing-entry nags
       if (rep.irregularSchedule) continue; // no set schedule, don't nag on off days
       if (shiftStartHour(date, rep.name) === null) continue; // scheduled off day (Kyle Tue/Thu)
+      if (!checkedIn.has(rep.id)) continue; // never clocked in today — on leave/absent, don't nag
       if (navAllowlist(rep)) continue; // restricted/part-time reps (Ethan) — not on the daily scorecard
       if (exemptForFocus(kpi.key, focusMap.get(rep.id))) continue; // off-focus KPI today
       const entry = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: rep.id, date } });
