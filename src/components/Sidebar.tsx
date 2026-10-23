@@ -124,7 +124,6 @@ export default function Sidebar({
     { label: "Dispositions", items: [
       { href: "/dispo?tab=today", label: "Dispo Command Center", Icon: LayoutDashboard, marketingOrManager: true },
       { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOrManager: true },
-      { href: "/dispo?tab=nextup", label: "Dispo Next Up", Icon: Zap, marketingOrManager: true },
       { href: "/dispo?tab=coverage", label: "Buyer Coverage", Icon: Map, marketingOrManager: true },
       { href: "/crm/conversations?dept=dispo", label: "Dispo Conversations", Icon: MessagesSquare, marketingOrManager: true },
       { href: "/crm/tasks?dept=dispositions", label: "Dispo Tasks", Icon: ListChecks, marketingOrManager: true },

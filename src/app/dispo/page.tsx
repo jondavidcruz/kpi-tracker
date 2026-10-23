@@ -61,7 +61,9 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     );
   }
   const sp = await searchParams;
-  const tab: Tab = sp.tab === "today" || sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" || sp.tab === "nextup" || sp.tab === "coverage" ? sp.tab : "deals";
+  // ⏭ Next Up folded into ☀️ Today (Jon 2026-10-22 de-dup) — old ?tab=nextup links redirect here.
+  const tab: Tab = sp.tab === "nextup" ? "today"
+    : (sp.tab === "today" || sp.tab === "developers" || sp.tab === "agents" || sp.tab === "team" || sp.tab === "coverage" ? sp.tab : "deals");
   // ☀️ Command Center + 🗺 coverage pull their own data (independent of the deal board).
   // Wrapped so a parse hiccup can never 500 the whole dispo page for the team.
   const command = tab === "today" ? await (await import("@/lib/dispo-command")).getDispoCommandData().catch(() => null) : null;
@@ -113,7 +115,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const dealPl = dealPipes.find((p) => p.name === sp.dealpl)?.name
     ?? dealPipes.find((p) => /sell land/i.test(p.name))?.name
     ?? dealNames[0] ?? "";
-  const dealOpps = (tab === "deals" || tab === "team" || tab === "nextup") && dealNames.length
+  const dealOpps = (tab === "deals" || tab === "team") && dealNames.length
     ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, pipeline: true, stage: true, assignedTo: true, tags: true, value: true, askPrice: true, updatedAt: true, createdAt: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true, address: true } } } })
     : [];
   // 📅 next upcoming task / appointment per deal (today or later) → green/red card chips
@@ -261,7 +263,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   let scoreReps: RepRow[] = [];
   let scoreTeam: TeamStats = { dealsPushed: 0, totalActive: 0, agentsReached: 0, thisHour: 0 };
   let scoreAlert: string | null = null;
-  if (tab === "deals" || tab === "team" || tab === "nextup") {
+  if (tab === "team") { // pace lives only on Team now (Jon 2026-10-22 de-dup) — top-right already tracks calls
     const tz = settings.orgTimezone;
     const p = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date());
     const gv = (t: string) => Number(p.find((x) => x.type === t)?.value ?? 0);
@@ -341,16 +343,9 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // ⏭ Next Up — one prioritized list of who to follow up with next (Jon 2026-10-21,
   // like acquisitions' Next Up). Overdue first (most overdue on top), then due today,
   // then upcoming. Follow-ups are outreach → Sharyn's job, but both can work it.
-  const nextUp = tab === "nextup"
-    ? followCards
-        .filter((c) => c.nextFollowUp && c.stage !== "passed" && c.stage !== "offer_in")
-        .map((c) => {
-          const overdueDays = c.nextFollowUp! < today ? Math.round((Date.parse(today) - Date.parse(c.nextFollowUp!)) / 86400000) : 0;
-          return { ...c, overdueDays, dueNow: c.nextFollowUp! <= today };
-        })
-        .sort((a, b) => (Number(b.dueNow) - Number(a.dueNow)) || (b.overdueDays - a.overdueDays) || (a.nextFollowUp! < b.nextFollowUp! ? -1 : 1))
-        .slice(0, 80)
-    : [];
+  // ⏭ Next Up folded into ☀️ Today (Jon 2026-10-22 de-dup) — its follow-ups-due list
+  // is the Today command center's "follow-ups due" panel now.
+  const nextUp: (FollowupCard & { overdueDays: number; dueNow: boolean })[] = [];
 
   // ── Team tab: Sharyn (outreach/phones) vs Marie (data/organization) work lanes,
   // so they stay on the same page with clear ownership (Jon 2026-10-20). ──
@@ -420,8 +415,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
 
   const TABS: { key: Tab; label: string; n: number }[] = [
     { key: "today", label: "☀️ Today", n: command ? command.summary.needOffers + command.summary.overdue : -1 },
-    { key: "nextup", label: "⏭ Next Up", n: dueToday },
-    { key: "deals", label: "📇 Deals & follow-ups", n: followCards.length },
+    { key: "deals", label: "📇 Deals board", n: followCards.length },
     { key: "developers", label: "🏗 Developers", n: devCount },
     { key: "agents", label: "🧑‍💼 Buyer agents", n: agentCount },
     { key: "team", label: "👥 Team (Sharyn & Marie)", n: sharynQueue.length + marieQueue.length },
@@ -464,9 +458,9 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       </div>
 
       {scoreAlert && (
-        <Link href="/dispo?tab=nextup" className="block rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-800 ring-1 ring-red-200 transition hover:bg-red-100">{scoreAlert}</Link>
+        <Link href="/dispo?tab=today" className="block rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-800 ring-1 ring-red-200 transition hover:bg-red-100">{scoreAlert}</Link>
       )}
-      {(tab === "deals" || tab === "team" || tab === "nextup") && <DispoScoreboard reps={scoreReps} team={scoreTeam} />}
+      {tab === "team" && <DispoScoreboard reps={scoreReps} team={scoreTeam} />}
 
       {tab === "today" && command && (
         <>
@@ -487,40 +481,6 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
             <p className="mt-0.5 text-[12px] text-slate-500">Where we have deals but no buyers (source one), and buyers but no deals (go find those). Compares open dispo deals against every vetted buyer&apos;s buy-box by price, acreage, and area.</p>
           </Card>
           <BuyerCoveragePanel data={coverage} />
-        </>
-      )}
-
-      {tab === "nextup" && (
-        <>
-          <Card className="border-l-4 border-emerald-400 p-4">
-            <div className="text-sm font-extrabold text-slate-800">⏭ Next Up — work this top to bottom</div>
-            <p className="mt-0.5 text-[12px] text-slate-500">Every follow-up ranked by urgency (most overdue first). These are outreach calls — Sharyn&apos;s lane — but either of you can clear them. Hit 📞 Touch when you reach out and it auto-sets the next follow-up.</p>
-          </Card>
-          {nextUp.length === 0 ? (
-            <Card className="p-8 text-center text-sm text-slate-400">✅ Nothing due — no follow-ups overdue or coming up. Attach buyers to deals to start new ones.</Card>
-          ) : (
-            <Card className="p-2">
-              <div className="space-y-1.5">
-                {nextUp.map((c, i) => {
-                  const km = DISPO_BUYER_KINDS.find((k) => k.key === c.kind);
-                  return (
-                    <div key={`${c.oppId}-${c.entryId}`} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 ring-1 ${c.overdueDays > 0 ? "bg-red-50 ring-red-200" : c.dueNow ? "bg-amber-50 ring-amber-200" : "bg-slate-50 ring-slate-100"}`}>
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[11px] font-extrabold text-white">{i + 1}</span>
-                      <span className="shrink-0 text-[13px]" title={km?.label}>{km?.emoji}</span>
-                      <div className="min-w-0 flex-1">
-                        <Link href={`/crm/${c.oppId}`} className="block truncate text-[13px] font-bold text-slate-800 hover:underline">{c.name} <span className="font-normal text-slate-400">· 📦 {c.dealAddr}</span></Link>
-                        <div className="truncate text-[11px] text-slate-500">{c.phone ? `${c.phone} · ` : ""}{c.overdueDays > 0 ? `⏰ overdue ${c.overdueDays}d` : c.dueNow ? "due today" : `next ${c.nextFollowUp}`}{c.price ? ` · 💵 ${c.price}` : ""}</div>
-                      </div>
-                      <form action={logDispoBuyerTouchAction} className="shrink-0">
-                        <input type="hidden" name="oppId" value={c.oppId} /><input type="hidden" name="entryId" value={c.entryId} />
-                        <button className="rounded bg-sky-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-sky-700">📞 Touch</button>
-                      </form>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
         </>
       )}
 
@@ -715,62 +675,9 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                   <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={movePipes.map((p) => p.name)} pipelineGroups={Object.fromEntries(movePipes.map((p) => [p.name, crmGroupOf(p.name, crmMap)]))} pipelineStages={moveStages} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
                 </Card>
 
-                {/* ⏰ Overdue buyer follow-ups — promised chases that slipped */}
-                {overdueFollowups.length > 0 && (
-                  <Card className="border-l-4 border-rose-400 p-3">
-                    <div className="mb-1.5 flex flex-wrap items-center gap-2 text-sm font-extrabold text-rose-800">⏰ {overdueFollowups.length} buyer follow-up{overdueFollowups.length === 1 ? "" : "s"} overdue <Link href="/dispo?tab=nextup" className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700 hover:bg-rose-200">open Next Up →</Link></div>
-                    <div className="space-y-1">
-                      {overdueFollowups.slice(0, 10).map((c) => (
-                        <div key={`${c.oppId}-${c.entryId}`} className="flex flex-wrap items-center gap-2 rounded-lg bg-rose-50/60 px-2.5 py-1.5 ring-1 ring-rose-100">
-                          <Link href={`/crm/${c.oppId}`} className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-800 hover:underline">{c.name} <span className="font-normal text-slate-400">· 📦 {c.dealAddr}</span></Link>
-                          <span className="shrink-0 text-[10px] font-semibold text-rose-600">due {c.nextFollowUp}</span>
-                          <form action={logDispoBuyerTouchAction} className="shrink-0"><input type="hidden" name="oppId" value={c.oppId} /><input type="hidden" name="entryId" value={c.entryId} /><button className="rounded bg-sky-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-sky-700">📞 Touch</button></form>
-                        </div>
-                      ))}
-                      {overdueFollowups.length > 10 && <div className="mt-1.5 text-[11px] text-slate-400">+ {overdueFollowups.length - 10} more overdue — see Next Up.</div>}
-                    </div>
-                  </Card>
-                )}
-
-                {/* 🥶 Going cold — out to buyers but under 3 offers and stalled 2+ days */}
-                {coldDeals.length > 0 && (
-                  <Card className="border-l-4 border-amber-400 p-3">
-                    <div className="mb-1.5 text-sm font-extrabold text-amber-800">🥶 {coldDeals.length} deal{coldDeals.length === 1 ? "" : "s"} going cold — out to buyers, under {OFFER_GOAL} offers, no movement in {COLD_DAYS}+ days</div>
-                    <p className="mb-2 text-[11px] text-slate-500">These are out but stalling below the {OFFER_GOAL}-offer goal. Chase the attached buyers for a price, run the cascade to more buyers, or log the offers you already have.</p>
-                    <div className="space-y-1">
-                      {coldDeals.slice(0, 12).map((c) => (
-                        <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50/60 px-2.5 py-1.5 ring-1 ring-amber-100">
-                          <Link href={`/crm/${c.id}`} className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-800 hover:underline">{c.contactName}{c.address ? <span className="font-normal text-slate-400"> · {c.address}</span> : null}</Link>
-                          <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">💰 {c.offers?.live ?? 0}/{OFFER_GOAL}</span>
-                          <span className="shrink-0 text-[10px] font-semibold text-slate-400">cold {c.ageDays}d</span>
-                          <form action={runDispoCascadeAction} className="shrink-0"><input type="hidden" name="oppId" value={c.id} /><button className="rounded bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700" title="Attach more matched buyers">⚡ More buyers</button></form>
-                        </div>
-                      ))}
-                      {coldDeals.length > 12 && <div className="mt-1.5 text-[11px] text-slate-400">+ {coldDeals.length - 12} more going cold.</div>}
-                    </div>
-                  </Card>
-                )}
-
-                {/* 🚨 Not out yet — pre-marketing deals with no buyers; one click arms the cascade. Below the board (Jon 2026-10-21: pipeline first) */}
-                {notOutDeals.length > 0 && (
-                  <Card className="border-l-4 border-red-400 p-3">
-                    <div className="mb-1.5 text-sm font-extrabold text-red-800">🚨 {notOutDeals.length} deal{notOutDeals.length === 1 ? "" : "s"} not out yet — before marketing, no buyers attached</div>
-                    <p className="mb-2 text-[11px] text-slate-500">These haven&apos;t reached the agents/buyers stage and have no buyers attached. Hit <b>⚡ Run cascade</b> to attach the top matched buyers, then work the follow-ups.</p>
-                    <div className="space-y-1">
-                      {notOutDeals.slice(0, 12).map((c) => (
-                        <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-red-50/60 px-2.5 py-1.5 ring-1 ring-red-100">
-                          <Link href={`/crm/${c.id}`} className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-800 hover:underline">{c.contactName}{c.address ? <span className="font-normal text-slate-400"> · {c.address}</span> : null}</Link>
-                          <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">{dealColumns.find((s) => s.key === c.stage)?.label ?? c.stage}</span>
-                          <form action={runDispoCascadeAction} className="shrink-0">
-                            <input type="hidden" name="oppId" value={c.id} />
-                            <button className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700">⚡ Run cascade</button>
-                          </form>
-                        </div>
-                      ))}
-                    </div>
-                    {notOutDeals.length > 12 && <div className="mt-1.5 text-[11px] text-slate-400">+ {notOutDeals.length - 12} more — work them top to bottom.</div>}
-                  </Card>
-                )}
+                {/* The board is just the board now. Follow-ups-due, going-cold, and
+                    not-out-yet moved to the ☀️ Today command center (Jon 2026-10-22 de-dup)
+                    — one home for "what to work now" instead of the same lists on 3 tabs. */}
                 </>
               ) : (
                 <>
