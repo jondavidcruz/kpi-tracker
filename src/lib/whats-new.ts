@@ -24,17 +24,6 @@ export type WhatsNewEntry = {
 // Newest first. Keep each how-to to a few plain steps the team can follow cold.
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    id: "dev-vetted-unvetted", date: "2026-10-22", emoji: "✅", title: "Vetted vs Unvetted developers",
-    blurb: "See which developers we've actually captured a buy-box for vs ones we haven't talked to yet.",
-    audience: ["dispo", "leadership"], where: { label: "Developers tab", href: "/dispo?tab=developers" },
-    steps: [
-      "Open Dispo CRM → 🏗 Developers.",
-      "Use the ✅ Vetted / 🆕 Unvetted / All toggle to filter.",
-      "Vetted = buy-box on file (usable buyers). Unvetted = work these: call, capture their buy-box, move to Vetted.",
-      "Coverage only counts Vetted developers as real supply.",
-    ],
-  },
-  {
     id: "buyer-coverage", date: "2026-10-22", emoji: "🗺", title: "Buyer Coverage",
     blurb: "Where we have deals but no buyers (source one) and buyers but no deals (go find those).",
     audience: ["dispo", "leadership", "acq"], where: { label: "Coverage tab", href: "/dispo?tab=coverage" },

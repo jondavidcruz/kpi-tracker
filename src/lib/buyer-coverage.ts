@@ -102,18 +102,19 @@ export async function getBuyerCoverage(): Promise<Coverage> {
   type Buyer = { priceMax: number | null; acre: [number, number] | null; areas: string[]; vetted: boolean; isDev: boolean };
   const buyers: Buyer[] = [];
 
-  // (a) network leads (developers + buyer agents). Vetted = same rule as the
-  // Developers tab: in the Vetted stage, a non-"unvetted" dev pipeline, or buy-box.
-  const { isVettedNetworkLead } = await import("@/lib/dispo-buyers");
+  // (a) network leads (developers + buyer agents). For COVERAGE, "vetted" = usable
+  // supply = we've captured a buy-box (any field), so we can actually match them to a
+  // deal. A developer with no buy-box yet is unvetted supply (Jon 2026-10-22).
   if (net.all.length) {
-    const netOpps = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.all } }, select: { pipeline: true, stage: true, formData: true } }).catch(() => []);
+    const netOpps = await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.all } }, select: { pipeline: true, formData: true } }).catch(() => []);
     for (const o of netOpps) {
       const fd = (o.formData ?? {}) as Record<string, Record<string, unknown>>;
       const dev = fd.dev_buybox ?? {}; const ag = fd.agent_profile ?? {};
       const priceMax = parsePriceCeiling(String(dev.priceRange ?? ag.priceRange ?? ""));
       const acre = parseAcreRange(String(dev.lotSize ?? ""));
       const areas = areaTokens(String(dev.buyCounties ?? ag.areas ?? ""));
-      const vetted = isVettedNetworkLead({ formData: o.formData, stage: o.stage, pipeline: o.pipeline });
+      const hasBoxDetail = !!(dev.landTypes || dev.closeSpeed || dev.volume || dev.requirements || ag.buyerTypes || ag.brokerage);
+      const vetted = !!(priceMax || acre || areas.length || hasBoxDetail);
       buyers.push({ priceMax, acre, areas, vetted, isDev: isDevNetworkName(o.pipeline) });
     }
   }

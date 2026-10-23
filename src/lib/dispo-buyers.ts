@@ -114,22 +114,6 @@ export function isAgentNetworkName(name: string | null | undefined): boolean {
 export function isDispoNetworkPipeline(name: string | null | undefined): boolean {
   return isDevNetworkName(name) || isAgentNetworkName(name);
 }
-
-/** Is a network developer/agent VETTED? (Jon 2026-10-22: "vetted = anyone moved to
- *  the Vetted column", not just ones with the buy-box form filled.) True when the
- *  lead is in a "vetted" stage, OR sits in a non-"unvetted" developers pipeline, OR
- *  we've captured any buy-box field. "unvetted" is excluded even though it contains
- *  "vetted" as a substring. */
-export function isVettedNetworkLead(opts: { formData?: unknown; stage?: string | null; pipeline?: string | null }): boolean {
-  const f = (opts.formData ?? {}) as Record<string, Record<string, unknown>>;
-  const d = f.dev_buybox ?? {}; const a = f.agent_profile ?? {};
-  const hasBox = !!(d.buyCounties || d.priceRange || d.landTypes || d.lotSize || d.closeSpeed || d.volume || d.requirements || d.dealBreakers || a.areas || a.priceRange || a.buyerTypes || a.brokerage);
-  const stage = (opts.stage ?? "").toLowerCase();
-  const stageVetted = /vetted/.test(stage) && !/unvetted/.test(stage);
-  const pipe = normPipe(opts.pipeline);
-  const pipeVetted = !!opts.pipeline && isDevNetworkName(opts.pipeline) && !pipe.includes("unvetted");
-  return hasBox || stageVetted || pipeVetted;
-}
 export const DISPO_NETWORK_PIPELINES: { name: string; stages: { key: string; label: string }[] }[] = [
   { name: DISPO_DEV_PIPELINE, stages: [
     { key: "new", label: "🆕 New / to research" },
