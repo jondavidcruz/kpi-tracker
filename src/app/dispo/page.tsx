@@ -48,7 +48,7 @@ function cityState(addr?: string): { city: string; st: string } {
 // already uses on the Seller CRM (Jon 2026-10-20: "make it look like what they
 // recognize"). Developers + Buyer Agents are their own pipelines here (not mixed
 // with sellers); the Deals tab tracks buyer follow-ups per deal.
-export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string; resorted?: string; pipedx?: string; synced?: string }> }) {
+export default async function DispoPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; view?: string; dealpl?: string; imp?: string; dev?: string; agent?: string; dup?: string; bulk?: string; acmin?: string; acmax?: string; resorted?: string; pipedx?: string; synced?: string; netview?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessMarketing(me) && !isManager(me)) {
     return (
@@ -387,6 +387,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   let netCards: CrmCard[] = [];
   let netCounts: Record<string, number> = {};
   let networkPipeline = "";
+  // ✅ Vetted / 🆕 Unvetted sub-filter for the Developers + Buyer-agents tabs
+  const netView: "all" | "vetted" | "unvetted" = sp.netview === "vetted" || sp.netview === "unvetted" ? sp.netview : "all";
+  let netVettedCount = 0;
+  let netUnvettedCount = 0;
   if (tab === "developers" || tab === "agents") {
     const tabNames = tab === "developers" ? net.dev : net.agent;         // real stored name(s)
     networkPipeline = tabNames[0] ?? (tab === "developers" ? DISPO_DEV_PIPELINE : DISPO_AGENT_PIPELINE);
@@ -398,18 +402,29 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       select: { id: true, title: true, stage: true, assignedTo: true, tags: true, updatedAt: true, createdAt: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true, address: true, pinnedNote: true } } },
     });
     const needle = q.toLowerCase();
-    netCards = opps.map((o) => {
+    // ✅ Vetted = we've captured their buy-box (talked to them + know what they buy)
+    // vs 🆕 unvetted (in the network, not contacted yet). Jon 2026-10-22.
+    const hasBuyBox = (fd: unknown): boolean => {
+      const f = (fd ?? {}) as Record<string, Record<string, unknown>>;
+      const d = f.dev_buybox ?? {}; const a = f.agent_profile ?? {};
+      return !!(d.buyCounties || d.priceRange || d.landTypes || d.lotSize || d.closeSpeed || d.volume || d.requirements || d.dealBreakers || a.areas || a.priceRange || a.buyerTypes || a.brokerage);
+    };
+    const netRows = opps.map((o) => {
       const imp = ((o.formData ?? {}) as { __import?: { market?: string; buyBox?: string } }).__import ?? {};
       const area = imp.market || "";
       const buyBox = imp.buyBox || stripAgentNotesBlock(o.contact?.pinnedNote) || "";
-      return {
+      const card = {
         id: o.id, title: buyBox, contactName: o.contact?.name || o.title, contactId: o.contactId,
         address: area, phone: o.contact?.phone || undefined, email: o.contact?.email || undefined,
         stage: o.stage || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges: [],
         money: "", valueNum: 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
         leadType: leadTypeBadge(tab === "developers" ? "developer" : "buyer_agent"),
       } as CrmCard;
-    }).filter((c) => !needle || `${c.contactName} ${c.address ?? ""} ${c.title ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(needle));
+      return { card, vetted: hasBuyBox(o.formData) };
+    }).filter((r) => !needle || `${r.card.contactName} ${r.card.address ?? ""} ${r.card.title ?? ""} ${r.card.phone ?? ""}`.toLowerCase().includes(needle));
+    netVettedCount = netRows.filter((r) => r.vetted).length;
+    netUnvettedCount = netRows.length - netVettedCount;
+    netCards = netRows.filter((r) => netView === "all" || (netView === "vetted") === r.vetted).map((r) => r.card);
     for (const c of netCards) netCounts[c.stage] = (netCounts[c.stage] ?? 0) + 1;
   }
 
@@ -421,7 +436,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     { key: "team", label: "👥 Team (Sharyn & Marie)", n: sharynQueue.length + marieQueue.length },
     { key: "coverage", label: "🗺 Coverage", n: coverage ? coverage.topGaps.length : -1 },
   ];
-  const qs = (over: Record<string, string>) => { const p = new URLSearchParams({ tab, ...(q ? { q } : {}), ...(listView ? { view: "list" } : {}), ...over }); for (const [k, v] of [...p.entries()]) if (!v) p.delete(k); return `/dispo?${p.toString()}`; };
+  const qs = (over: Record<string, string>) => { const p = new URLSearchParams({ tab, ...(q ? { q } : {}), ...(listView ? { view: "list" } : {}), ...(netView !== "all" ? { netview: netView } : {}), ...over }); for (const [k, v] of [...p.entries()]) if (!v) p.delete(k); return `/dispo?${p.toString()}`; };
 
   return (
     <div className="space-y-5">
@@ -784,8 +799,19 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
               <Link href={qs({ view: "" })} className={`px-3 py-1.5 text-xs font-bold ${!listView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📊 Board</Link>
               <Link href={qs({ view: "list" })} className={`px-3 py-1.5 text-xs font-bold ${listView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📇 List</Link>
             </div>
+            {/* ✅ Vetted (buy-box on file) vs 🆕 Unvetted (not contacted yet) */}
+            <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
+              <Link href={qs({ netview: "" })} className={`px-2.5 py-1.5 text-xs font-bold ${netView === "all" ? "bg-slate-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>All {netVettedCount + netUnvettedCount}</Link>
+              <Link href={qs({ netview: "vetted" })} className={`px-2.5 py-1.5 text-xs font-bold ${netView === "vetted" ? "bg-emerald-600 text-white" : "bg-white text-emerald-700 hover:bg-emerald-50"}`}>✅ Vetted {netVettedCount}</Link>
+              <Link href={qs({ netview: "unvetted" })} className={`px-2.5 py-1.5 text-xs font-bold ${netView === "unvetted" ? "bg-amber-600 text-white" : "bg-white text-amber-700 hover:bg-amber-50"}`}>🆕 Unvetted {netUnvettedCount}</Link>
+            </div>
             <span className="text-[11px] font-semibold text-slate-400">{netCards.length} shown</span>
           </Card>
+          {netView !== "all" && (
+            <div className="-mt-1 px-1 text-[11px] text-slate-500">{netView === "vetted"
+              ? "✅ Vetted — we've captured their buy-box (talked to them, know what they buy). These are your usable coverage."
+              : "🆕 Unvetted — in the network but no buy-box yet. Work these to vet them: call, capture their buy-box, move them to Vetted."}</div>
+          )}
 
           {netCards.length === 0 ? (
             <Card className="p-8 text-center text-sm text-slate-400">No {tab === "developers" ? "developers" : "buyer agents"} {q ? "match that search" : "yet — import the Excel list above"}.</Card>
