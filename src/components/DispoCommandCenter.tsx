@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui";
 import { heatTierMeta } from "@/lib/buyer-heat";
 import { OFFER_GOAL } from "@/lib/dispo-offers";
-import { logDispoBuyerTouchAction } from "@/app/crm/actions";
+import { logDispoBuyerTouchAction, runDispoCascadeAction } from "@/app/crm/actions";
 import type { DispoCommand } from "@/lib/dispo-command";
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: "slate" | "red" | "amber" | "emerald" | "sky" }) {
@@ -192,11 +192,14 @@ export default function DispoCommandCenter({ data }: { data: DispoCommand }) {
           {data.notOut.length === 0 ? <Empty>Every live deal is out. Great.</Empty> : (
             <ul className="space-y-1">
               {data.notOut.map((d) => (
-                <li key={d.id}><Link href={`/crm/${d.id}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
-                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-800">{d.addr}</span>
+                <li key={d.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                  <Link href={`/crm/${d.id}`} className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-800">{d.addr}</Link>
                   <span className="shrink-0 text-[10px] text-slate-400">{d.stage}</span>
-                  <span className="shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-500">send it</span>
-                </Link></li>
+                  <form action={runDispoCascadeAction} className="shrink-0">
+                    <input type="hidden" name="oppId" value={d.id} />
+                    <button className="rounded bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700" title="Attach the top matched buyers + start the follow-up">⚡ Cascade</button>
+                  </form>
+                </li>
               ))}
             </ul>
           )}
