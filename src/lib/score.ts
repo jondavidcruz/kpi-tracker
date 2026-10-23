@@ -33,14 +33,15 @@ Respond with ONLY valid JSON, no markdown:
 
 export async function scoreTranscript(
   transcript: string,
-  opts?: { label?: string; script?: string },
+  opts?: { label?: string; script?: string; gemini?: boolean },
 ): Promise<ScoreResult> {
   const empty: ScoreResult = { configured: false, overall: 0, breakdown: [], summary: "" };
   if (!AI_CONFIGURED()) return empty;
 
   try {
     const text = await aiText({
-      model: "claude-haiku-4-5-20251001",
+      // gemini:true → score on Gemini's free tier (the auto pipeline, ~zero cost).
+      ...(opts?.gemini ? { skipAnthropic: true } : { model: "claude-haiku-4-5-20251001" }),
       maxTokens: 1024,
       system: buildRubric(opts?.label, opts?.script),
       messages: [{ role: "user", content: `Score this ${opts?.label ?? "call"} transcript:\n\n${transcript.slice(0, 24000)}` }],

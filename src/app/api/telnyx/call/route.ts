@@ -303,7 +303,13 @@ export async function POST(req: NextRequest) {
       }
     }
     if (!contact) { await recCrumb({ ev: "rec.outcome", result: "noContact", from: (pr.from ?? "").slice(-10), to: (pr.to ?? "").slice(-10) }); return NextResponse.json({ ok: true, noContact: true }); }
-    const opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null }, select: { id: true, title: true, contact: { select: { address: true, name: true } } } });
+    const opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null }, select: { id: true, title: true, pipeline: true, formData: true, contact: { select: { address: true, name: true, phone: true } } } });
+    // 👤 Who handled this call — carry it onto the recording so the bubble shows the
+    // rep, not "recorder" (Jon 2026-10-22). Use the most recent human-actor call event
+    // for this contact (inbound answer, click-to-call, or dialer disposition).
+    const SYS_ACTORS = ["recorder", "inbound", "inbound-sms", "telnyx", "telnyx-dlr", "coach", "auto", "system"];
+    const priorCall = await db.crmEvent.findFirst({ where: { contactId: contact.id, kind: "call", actor: { notIn: SYS_ACTORS }, at: { gte: new Date(Date.now() - 30 * 60000) } }, orderBy: { at: "desc" }, select: { actor: true } }).catch(() => null);
+    const rep = (priorCall?.actor || "").trim();
     const secs = pr.recording_started_at && pr.recording_ended_at ? Math.max(0, Math.round((Date.parse(pr.recording_ended_at) - Date.parse(pr.recording_started_at)) / 1000)) : 0;
     try {
       const res = await fetch(url);
@@ -347,16 +353,62 @@ export async function POST(req: NextRequest) {
           if (summary) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📞 Call summary (AI) — ${secs ? `${Math.floor(secs / 60)}m ${secs % 60}s` : ""}\n${summary}`.slice(0, 2000), actor: "recorder" });
         } catch { /* recording itself is already filed below */ }
       }
-      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, secs, ccId, transcript: transcript.slice(0, 12000) }, actor: "recorder" });
+      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, secs, ccId, transcript: transcript.slice(0, 12000), rep: rep || undefined }, actor: rep || "recorder" });
       await recCrumb({ ev: "rec.outcome", result: "filed", hasLink: !!link, secs });
-      // 🎯 auto-score every real conversation (≥60s) against the coaching rubric
+
+      // whether this lead is a buyer (dispo network) vs a seller — drives the
+      // coaching rubric label + skips property pre-fill for buyer calls.
+      const { isDevNetworkName, isAgentNetworkName } = await import("@/lib/dispo-buyers");
+      const isBuyer = !!opp && (isDevNetworkName(opp.pipeline) || isAgentNetworkName(opp.pipeline));
+
+      // 📋 Pre-fill home/land intake from the call — ONLY empty fields, never overwrite
+      // (Jon 2026-10-22). Seller leads only. One extra Gemini (free-tier) extract.
+      if (transcript && opp && !isBuyer && process.env.GEMINI_API_KEY) {
+        try {
+          const { aiText } = await import("@/lib/ai");
+          const raw = await aiText({ skipAnthropic: true, maxTokens: 600, system: `Extract facts a real-estate acquisitions rep would log from this seller call. Use ONLY what was actually said; omit anything not stated. Respond with ONLY valid JSON (no markdown) using these keys when present: {"motivation": "...", "timeline": "...", "wants": "asking/desired $ or amount", "occupancy": "Vacant|Owner-occupied|Tenant|Unknown", "condition": "home condition in a few words", "repairs": "repairs mentioned", "acreage": "acres if land", "zoning": "zoning if mentioned"}. Keep each value short.`, messages: [{ role: "user", content: transcript.slice(0, 16000) }] });
+          const mjson = raw.match(/\{[\s\S]*\}/);
+          const ex = mjson ? (JSON.parse(mjson[0]) as Record<string, unknown>) : {};
+          const fd = (opp.formData ?? {}) as Record<string, Record<string, unknown>>;
+          const { sellerKind } = await import("@/lib/lead-type");
+          const kind = sellerKind(opp.formData, opp.pipeline);
+          const hasLand = fd.land && Object.keys(fd.land).length > 0;
+          const hasProp = fd.property && Object.keys(fd.property).length > 0;
+          const target = hasLand ? "land" : hasProp ? "property" : (kind === "seller_land" ? "land" : "property");
+          const CORE = ["motivation", "timeline", "wants", "occupancy"];
+          const allowed = target === "land" ? [...CORE, "acreage", "zoning"] : [...CORE, "condition", "repairs"];
+          const existing = (fd[target] ?? {}) as Record<string, unknown>;
+          const add: Record<string, string> = {};
+          for (const k of allowed) { const v = ex[k]; if (v && String(v).trim() && !String(existing[k] ?? "").trim()) add[k] = String(v).trim().slice(0, 300); }
+          if (Object.keys(add).length) {
+            await db.crmOpportunity.update({ where: { id: opp.id }, data: { formData: { ...fd, [target]: { ...existing, ...add } } as never } });
+            await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "note", body: `📋 Pre-filled ${target === "land" ? "Land" : "Home"} details from the call (empty fields only): ${Object.keys(add).join(", ")}. Review + edit as needed.`, actor: "recorder" });
+          }
+        } catch { /* pre-fill is a bonus — the recording + summary already landed */ }
+      }
+
+      // 🎯 auto-score every real conversation (≥60s) against the coaching rubric.
+      // Runs on Gemini's free tier (near-zero cost) and writes a CallScore row so it
+      // shows up in Call Scoring / coaching for the whole team (Jon 2026-10-22).
       if (transcript && secs >= 60) {
         try {
           const { scoreTranscript } = await import("@/lib/score");
-          const sc = await scoreTranscript(transcript, { label: "seller call" });
+          const label = isBuyer ? "buyer/disposition call" : "seller call";
+          const sc = await scoreTranscript(transcript, { label, gemini: true });
           if (sc.configured && sc.overall > 0) {
             const lines = sc.breakdown.slice(0, 5).map((b) => `• ${b.area}: ${b.score} — ${b.note}`).join("\n");
             await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `🎯 AI call score: ${sc.overall}/100\n${lines}\n💡 ${sc.summary}`.slice(0, 3800), actor: "coach" });
+            // write the coaching record (dedupe by this recording's audio link)
+            const dup = link ? await db.callScore.findFirst({ where: { audioUrl: link }, select: { id: true } }).catch(() => null) : null;
+            if (!dup) {
+              await db.callScore.create({ data: {
+                repName: rep || "Unknown", callType: isBuyer ? "buyer" : "seller",
+                direction: pr.direction === "incoming" ? "inbound" : pr.direction === "outgoing" ? "outbound" : "",
+                address: opp?.contact.address || opp?.title || "", sellerName: opp?.contact.name || "", sellerPhone: opp?.contact.phone || "",
+                scoredBy: "auto", overall: sc.overall, breakdown: JSON.stringify(sc.breakdown), summary: sc.summary,
+                transcript: transcript.slice(0, 20000), audioUrl: link || "",
+              } }).catch(() => {});
+            }
           }
         } catch { /* scoring is gravy — transcript already landed */ }
       }

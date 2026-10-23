@@ -4,9 +4,11 @@
 // both engines fail, so callers show one honest error instead of a billing one.
 type Msg = { role: string; content: string };
 
-export async function aiText(opts: { system?: string; messages: Msg[]; maxTokens?: number; model?: string; timeoutMs?: number }): Promise<string> {
-  const { system, messages, maxTokens = 1200, model = "claude-opus-4-8", timeoutMs = 50_000 } = opts;
-  if (process.env.ANTHROPIC_API_KEY) {
+export async function aiText(opts: { system?: string; messages: Msg[]; maxTokens?: number; model?: string; timeoutMs?: number; skipAnthropic?: boolean }): Promise<string> {
+  const { system, messages, maxTokens = 1200, model = "claude-opus-4-8", timeoutMs = 50_000, skipAnthropic = false } = opts;
+  // skipAnthropic: go straight to Gemini's free tier — used by the high-volume
+  // auto call-scoring pipeline to keep per-call cost at ~zero (Jon 2026-10-22).
+  if (!skipAnthropic && process.env.ANTHROPIC_API_KEY) {
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",

@@ -253,12 +253,16 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                       // 🎙 a recording event (body starts 🎙, has a Drive link) gets
                       // an inline player right in the thread (Jon 2026-10-13: "no
                       // playable button with the most recent call").
-                      const recLink = (e.meta as { link?: string } | null)?.link;
+                      const recLink = (e.meta as { link?: string; rep?: string } | null)?.link;
                       const isRec = recLink && clean.startsWith("🎙");
+                      // 👤 who handled the call (rep) — skip system actors (Jon 2026-10-22)
+                      const CALL_SYS = ["recorder", "inbound", "inbound-sms", "telnyx", "telnyx-dlr", "coach", "auto", "system"];
+                      const metaRep = (e.meta as { rep?: string } | null)?.rep;
+                      const who = (metaRep || (e.actor && !CALL_SYS.includes(e.actor) ? e.actor : "") || "").split(" ")[0];
                       return (
                         <div key={i} className="flex justify-center">
                           <div className={`max-w-[82%] rounded-2xl px-3 py-1.5 text-[11px] font-semibold text-slate-500 ${isRec ? "bg-white ring-1 ring-slate-200" : "rounded-full bg-slate-100"}`}>
-                            <div>{KIND_EMOJI[e.kind] ?? "📞"} {clean.replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}</div>
+                            <div>{KIND_EMOJI[e.kind] ?? "📞"} {clean.replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}{who ? ` · ${who}` : ""}</div>
                             {isRec && (
                               /* eslint-disable-next-line jsx-a11y/media-has-caption */
                               <audio controls preload="none" src={recLink} className="mt-1 h-8 w-64 max-w-full" />
