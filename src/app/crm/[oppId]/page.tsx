@@ -7,9 +7,10 @@ import SendToBuyersButton from "@/components/SendToBuyersButton";
 import { attachNetworkBuyerToDeal, runDispoCascadeAction } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoOffersPanel from "@/components/DispoOffersPanel";
-import { readDispoOffers, offerStats, parseMoney } from "@/lib/dispo-offers";
+import { readDispoOffers, offerStats, parseMoney, OFFER_GOAL } from "@/lib/dispo-offers";
 import AssignmentContractPanel from "@/components/AssignmentContractPanel";
 import { readAssignmentDraft } from "@/lib/assignment-contract";
+import { nextDispoAction } from "@/lib/dispo-next-action";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { readGateChecks } from "@/lib/dispo-gates";
@@ -515,6 +516,36 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
               <div className="mt-1.5 text-[10px] text-slate-400">Everything {c.name.split(" ")[0]} is working — update it from each deal&apos;s 📇 Buyers &amp; agents panel.</div>
             </Card>
           )}
+
+          {/* ⏭ Next best action — the one move that pushes this deal toward sold (Jon 2026-10-23) */}
+          {showMatches && (() => {
+            const offers = readDispoOffers(opp.formData);
+            const st = offerStats(offers);
+            const buyers = readDispoBuyers(opp.formData);
+            const draft = readAssignmentDraft(opp.formData);
+            const si = stages.findIndex((s) => s.key === opp.stage);
+            const mRx = /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i;
+            const mi = stages.findIndex((s) => mRx.test(s.label) || mRx.test(s.key));
+            const out = si >= 0 && mi >= 0 && si >= mi;
+            const closed = /won|closed|sold/i.test(opp.stage || "") && !/dead|died|nurtur|lost/i.test(opp.stage || "");
+            const accepted = offers.some((o) => o.status === "accepted");
+            const n = nextDispoAction({ closed, out, buyerCount: buyers.length, liveOffers: st.live, offerGoal: OFFER_GOAL, accepted, hasDraft: !!draft, sentForSignature: !!(draft?.sentAt || draft?.pandadocId), daysInStage: 0 });
+            const tone: Record<string, string> = { sky: "from-sky-500 to-sky-600", amber: "from-amber-500 to-amber-600", emerald: "from-emerald-500 to-emerald-600", indigo: "from-indigo-500 to-indigo-600", rose: "from-rose-500 to-rose-600", slate: "from-slate-500 to-slate-600" };
+            return (
+              <div className={`rounded-2xl bg-gradient-to-r ${tone[n.tone]} p-[1.5px]`}>
+                <div className="rounded-[15px] bg-white px-4 py-3">
+                  <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">⏭ Next step</div>
+                  <div className="mt-0.5 flex items-start gap-2">
+                    <span className="text-lg leading-tight">{n.icon}</span>
+                    <div className="min-w-0">
+                      <div className="text-[14px] font-extrabold text-slate-900">{n.text}</div>
+                      <div className="text-[12px] text-slate-500">{n.hint}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 🎯 Matching cash buyers — who to send this land to, ranked (marketing only) */}
           {showMatches && buyerMatches.length > 0 && (
