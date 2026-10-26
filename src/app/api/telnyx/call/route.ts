@@ -127,7 +127,14 @@ export async function POST(req: NextRequest) {
       // agent who is available"). busyAt within ~3min = on a call now. If that
       // leaves nobody, fall back to all fresh so we never black-hole a call.
       const available = fresh.filter((a) => !(a.onCall && a.busyAt && Date.now() - Date.parse(a.busyAt) < 3 * 60_000));
-      const pool = available.length > 0 ? available : fresh.length > 0 ? fresh : agentList;
+      // 📞 Cap simultaneous ring legs (Jon 2026-10-26): each leg = 1 Telnyx channel, and
+      // ringing the WHOLE team at once blew past the 10-concurrent cap → the answer-bridge
+      // got rejected and calls dropped on pickup. Ring the most-recently-active available
+      // agents (most likely to be at their desk), capped so one call can't exhaust channels.
+      const RING_CAP = Number(process.env.RING_CAP || 6);
+      type Ag = { sipUser: string; lastSeen?: string; onCall?: boolean; busyAt?: string };
+      const byRecent = (list: Ag[]) => [...list].sort((a, b) => Date.parse(b.lastSeen || "0") - Date.parse(a.lastSeen || "0")).slice(0, RING_CAP);
+      const pool = available.length > 0 ? byRecent(available) : fresh.length > 0 ? byRecent(fresh) : agentList.slice(0, RING_CAP);
       const targets = [...new Set([
         ...pool.map((a) => a.sipUser),
         ...(fresh.length > 0 ? [] : [cfg.sipUser ?? ""]),
