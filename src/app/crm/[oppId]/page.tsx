@@ -56,9 +56,9 @@ async function enrichDispoBuyers(buyers: Awaited<ReturnType<typeof readDispoBuye
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lbl = "block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5";
 
-// 🔧 TEMPORARY kill-switch for the dispo-panel block on the FULL contact page (Jon
-// 2026-10-26): it aborts the render stream on novation deals. Off = open-full works;
-// flip back to true once the offending panel is found + fixed.
+// 🔧 Dispo-panel block kill-switch (Jon 2026-10-26): the full page aborts the render
+// stream on the heaviest signed/novation deals (cumulative function budget). Keep OFF
+// until the common render is light enough across ALL deals, then re-enable.
 const DP_ON = false;
 
 // ⏱ Hard-bound a server call so a SLOW/HANGING query can never stall the whole page
@@ -150,7 +150,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
   const enrolled = seqState[opp.id];
   // 📁 auto-pull this deal's existing Google Drive files (best-effort; no manual
   // export needed). Matched by the property address / street number.
-  const driveFiles = await withTimeout(import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)), 2500, [] as { id: string; name: string; link: string; mimeType: string }[]);
+  const driveFiles = (await withTimeout(import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)), 2500, [] as { id: string; name: string; link: string; mimeType: string }[])).slice(0, 12);
   const pipe = pipelines.find((x) => x.name === (opp.pipeline || "War Room")) ?? pipelines[0];
   const stages = pipe.stages;
   const st = stages.find((s) => s.key === opp.stage);

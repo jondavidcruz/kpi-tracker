@@ -11,8 +11,16 @@ export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me || !isManager(me)) return NextResponse.json({ error: "managers only" }, { status: 403 });
   const id = req.nextUrl.searchParams.get("id") || "";
-  const opp = await db.crmOpportunity.findUnique({ where: { id }, include: { contact: true } });
-  if (!opp) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const q = req.nextUrl.searchParams.get("q") || "";
+  const opp = id
+    ? await db.crmOpportunity.findUnique({ where: { id }, include: { contact: true } })
+    : q
+    ? await db.crmOpportunity.findFirst({ where: { archivedAt: null, OR: [{ title: { contains: q, mode: "insensitive" } }, { contact: { name: { contains: q, mode: "insensitive" } } }] }, orderBy: { updatedAt: "desc" }, include: { contact: true } })
+    : null;
+  if (!opp) return NextResponse.json({ error: "not found — pass ?id= or ?q=name" }, { status: 404 });
+  // How many Drive files does this deal render? (the Documents section — a prime weight on listed deals)
+  let driveFileCount = -1;
+  try { const g = await import("@/lib/gdrive"); driveFileCount = (await g.listDealFiles(opp.contact?.address || opp.title || opp.contact?.name || "")).length; } catch { driveFileCount = -2; }
   const fd = (opp.formData ?? {}) as Record<string, unknown>;
   const keys = fd && typeof fd === "object" ? Object.keys(fd) : [];
   const sizes: Record<string, number> = {};
@@ -27,7 +35,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     pipeline: opp.pipeline, stage: opp.stage, title: opp.title,
     formDataKeys: keys, formDataSizes: sizes, formDataTotalLen: totalLen,
+    oppId: opp.id,
     eventCount: events.length, maxEventBodyLen: maxBody, totalEventBodyLen: totalBody,
+    driveFileCount,
     assignmentDraft: fd.__assignmentDraft ?? null,
     dispoOffers: fd.__dispoOffers ?? null,
     dispoBuyers: fd.__dispoBuyers ?? null,
