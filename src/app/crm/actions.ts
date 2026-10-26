@@ -2099,14 +2099,20 @@ export async function logDispoBuyerTouchAction(formData: FormData) {
   const oppId = String(formData.get("oppId") ?? "");
   const entryId = String(formData.get("entryId") ?? "");
   if (!oppId || !entryId) return;
+  const result = String(formData.get("result") ?? "").trim(); // what happened on the touch
   let touchedName = "";
   const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => {
     if (r.id !== entryId) return r;
     touchedName = String(r.name);
     const stage = r.stage === "to_contact" ? "contacted" : r.stage === "contacted" ? "following_up" : r.stage;
-    return { ...r, lastContact: PT_TODAY(), nextFollowUp: ymdAdd(3), stage };
+    return { ...r, lastContact: PT_TODAY(), nextFollowUp: ymdAdd(3), ...(result ? { notes: [r.notes, `${PT_TODAY()}: ${result}`].filter(Boolean).join("\n").slice(0, 2000) } : {}), stage };
   }));
-  if (o?.contactId && touchedName) await logCrmEvent({ contactId: o.contactId, oppId, kind: "call", body: `📞 Followed up with ${touchedName} (deal buyer tracker) — next touch ${ymdAdd(3)}`, actor: me.name });
+  // 🎙 Show WHO followed up + the RESULT (Jon 2026-10-26: "show the agent that called and the
+  // result, not just next touch"). The rep is the actor; the outcome goes right in the line.
+  if (o?.contactId && touchedName) {
+    const rep = me.name.split(" ")[0];
+    await logCrmEvent({ contactId: o.contactId, oppId, kind: "call", body: `📞 ${rep} followed up with ${touchedName}${result ? ` — ${result}` : ""} · next touch ${ymdAdd(3)}`, actor: me.name });
+  }
   revalidatePath(`/crm/${oppId}`);
 }
 

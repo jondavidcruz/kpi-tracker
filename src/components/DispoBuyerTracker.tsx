@@ -91,10 +91,21 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "",
                   <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="nextFollowUp" />
                   <input type="date" name="value" defaultValue={b.nextFollowUp ?? ""} onChange={(e) => e.currentTarget.form?.requestSubmit()} title="Next follow-up" className={`rounded border px-1 py-0.5 text-[10px] font-semibold ${overdue ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-500"}`} />
                 </form>
-                {/* log touch */}
+                {/* log touch + its RESULT (Jon 2026-10-26: capture who called + the outcome) */}
                 <form action={logDispoBuyerTouchAction} className="contents">
                   <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} />
-                  <button className="rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-sky-700" title="Stamp a touch today + bump the next follow-up">📞 Touch</button>
+                  <select name="result" defaultValue="" title="What happened on this touch?" className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] font-semibold text-slate-600">
+                    <option value="">result…</option>
+                    <option value="no answer">no answer</option>
+                    <option value="left voicemail">left voicemail</option>
+                    <option value="spoke — interested">spoke — interested</option>
+                    <option value="spoke — not interested">spoke — not interested</option>
+                    <option value="texted">texted</option>
+                    <option value="emailed">emailed</option>
+                    <option value="sent the packet">sent the packet</option>
+                    <option value="made an offer">made an offer</option>
+                  </select>
+                  <button className="rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-sky-700" title="Log this touch (with the result) + bump the next follow-up">📞 Log touch</button>
                 </form>
                 {/* 💰 log an OFFER from this buyer — tied to THIS deal + this buyer */}
                 <button type="button" onClick={() => setOfferFor(offerFor === b.id ? null : b.id)} className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700" title="Log an offer this buyer made on THIS deal">💰 +offer</button>

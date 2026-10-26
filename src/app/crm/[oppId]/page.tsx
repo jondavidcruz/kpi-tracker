@@ -486,6 +486,9 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           )}
 
           <div id="timeline" className="scroll-mt-4 pl-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline — everything, newest first</div>
+          {/* 📜 Scrollable timeline (Jon 2026-10-26) — a capped, scrolling panel instead of an
+              endless page-long list, so the rest of the page stays reachable. */}
+          <div className="max-h-[36rem] space-y-2.5 overflow-y-auto rounded-xl bg-slate-50/40 p-1.5 ring-1 ring-slate-100">
           {events.map((e) => (
             <Card key={e.id} className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""}`}>
               <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
@@ -548,6 +551,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             </Card>
           ))}
           {events.length === 0 && <Card className="p-6 text-center text-xs text-slate-400">Nothing yet — the first note starts the story.</Card>}
+          </div>
         </div>
         )}
 
