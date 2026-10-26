@@ -690,7 +690,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
 
           {/* 🚦 Option B — SOP gate wired into the pipeline; advance is blocked until it clears (Jon 2026-10-21) */}
           {showMatches && (
-            <PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} /></PanelGuard>
+            <PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} canOverride={manager} /></PanelGuard>
           )}
 
           {/* 📣 Marketing SOP checklist — dispo deals only (Jon 2026-10-20) */}
