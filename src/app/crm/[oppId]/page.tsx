@@ -29,7 +29,7 @@ import AutoSaveForm from "@/components/AutoSaveForm";
 import CrmFormFields from "@/components/CrmFormFields";
 import DocUploadForm from "@/components/DocUploadForm";
 import OppPipelineMover from "@/components/OppPipelineMover";
-import { setOppStageAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, deleteLeadDocAction } from "../actions";
+import { setOppStageAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, deleteLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
@@ -416,6 +416,75 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             <PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} canOverride={manager} /></PanelGuard>
           )}
 
+          {/* 📋 Discovery forms — moved to the LEFT under Opportunity (Jon 2026-10-26) */}
+          <Card className="p-4" id="discovery">
+            <details>
+            <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">📋 Discovery — fill as you talk <span className="normal-case text-slate-300">(click to open)</span></summary>
+            {/* 📄 Buyer-safe export (Jon 2026-10-26): the property/land details as a PDF for the
+                offer packet — leaves out seller motivation, their price, offers & urgency. */}
+            <a href={`/crm/${opp.id}/details-sheet`} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100" title="Open a clean, buyer-safe PDF of these property/land details — seller info left out">📄 Export buyer sheet (PDF)</a>
+            {(() => {
+              const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
+              // Forms follow the pipeline (= lead type): sellers get seller discovery,
+              // developers/buyer agents get their buy-box/agent form (Jon 2026-10-20).
+              return formsForPipeline(opp.pipeline).map((form) => {
+                const answers = fd[form.key] ?? {};
+                const count = Object.keys(answers).length;
+                return (
+                  <details key={form.key} className="mb-1.5 rounded-xl bg-slate-50 ring-1 ring-slate-100" open={count > 0 && count < form.fields.length}>
+                    <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-slate-700">
+                      {form.emoji} {form.name}
+                      <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold ${count ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{count}/{form.fields.length}</span>
+                    </summary>
+                    {/* Controlled fields — selects can't blank out on the React form reset (Jon 2026-10-26) */}
+                    <div className="px-3 pb-3">
+                      <CrmFormFields form={form} oppId={opp.id} contactId={c.id} initial={(answers ?? {}) as Record<string, string | string[]>} />
+                    </div>
+                  </details>
+                );
+              });
+            })()}
+            </details>
+          </Card>
+
+          {/* 🤝 parties in the deal — moved to the LEFT under Opportunity (Jon 2026-10-26) */}
+          <Card className="p-4">
+            <details id="parties" className="scroll-mt-4">
+            <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">🤝 Parties in this deal <span className="normal-case text-slate-300">(click to open)</span></summary>
+            <div className="space-y-1.5">
+              {parties.map((p) => (
+                <div key={p.id} className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs ring-1 ring-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-500 ring-1 ring-slate-200">{p.role || "party"}</span>
+                    <span className="font-bold text-slate-800">{p.name}</span>
+                    <form action={deleteCrmPartyAction} className="ml-auto"><input type="hidden" name="id" value={p.id} /><button className="text-[10px] text-slate-300 hover:text-red-500">✕</button></form>
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-brand-navy">{[p.phone, p.email].filter(Boolean).join(" · ")}</div>
+                  {p.note && <div className="text-[10px] text-slate-400">{p.note}</div>}
+                </div>
+              ))}
+              {parties.length === 0 && <p className="text-xs text-slate-400">No one attached yet — listing agent, escrow, title, attorney…</p>}
+            </div>
+            <form action={addCrmPartyAction} className="mt-2 grid grid-cols-2 gap-1.5">
+              <input type="hidden" name="oppId" value={opp.id} />
+              <select name="role" className="rounded-lg border border-slate-200 px-2 py-1 text-xs">
+                <option value="listing agent">listing agent</option>
+                {/* buyer agent removed (Jon 2026-10-26) — they live in the dispo buyer/agent network, not here */}
+                <option value="escrow">escrow</option>
+                <option value="title">title</option>
+                <option value="attorney">attorney</option>
+                <option value="JV partner">JV partner</option>
+                <option value="other">other</option>
+              </select>
+              <input name="name" placeholder="Name *" required className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+              <input name="phone" placeholder="Phone" className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+              <input name="email" placeholder="Email" className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+              <input name="note" placeholder="Note (company, file #…)" className="col-span-2 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+              <button className="col-span-2 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-bold text-white">＋ Attach party</button>
+            </form>
+            </details>
+          </Card>
+
         </div>
         )}
 
@@ -426,15 +495,8 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             {/* 📝 the SAME smart note editor as the quickview — bold, underline,
                 bullets, attach (Jon 2026-10-24: "make notes smart like quick notes") */}
             <LeadNoteComposer oppId={opp.id} contactId={c.id} />
-            <form action={logCrmTouchAction} className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
-              <input type="hidden" name="oppId" value={opp.id} />
-              <input type="hidden" name="contactId" value={c.id} />
-              <span className="font-bold text-slate-400">Or just log a touch:</span>
-              <button name="kind" value="call" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">📞 called</button>
-              <button name="kind" value="sms" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">💬 texted</button>
-              <button name="kind" value="email" className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">✉️ emailed</button>
-              <input name="body" placeholder="what was said (optional)" className="min-w-[120px] flex-1 rounded-lg border border-slate-200 px-2 py-1" />
-            </form>
+            {/* "Or just log a touch" row removed (Jon 2026-10-26) — the team puts the note in the
+                yellow note box; touches are captured by the dialer/SMS/email actions anyway. */}
           </Card>
 
           {/* 💬 Full conversation — texts + emails + calls combined, oldest→newest
@@ -762,75 +824,6 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               </select>
               <button className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-bold text-white">Add</button>
             </form>
-          </Card>
-
-          {/* 📋 Discovery forms — the GHL custom-field sections, simplified */}
-          <Card className="p-4" id="discovery">
-            <details>
-            <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">📋 Discovery — fill as you talk <span className="normal-case text-slate-300">(click to open)</span></summary>
-            {/* 📄 Buyer-safe export (Jon 2026-10-26): the property/land details as a PDF for the
-                offer packet — leaves out seller motivation, their price, offers & urgency. */}
-            <a href={`/crm/${opp.id}/details-sheet`} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100" title="Open a clean, buyer-safe PDF of these property/land details — seller info left out">📄 Export buyer sheet (PDF)</a>
-            {(() => {
-              const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
-              // Forms follow the pipeline (= lead type): sellers get seller discovery,
-              // developers/buyer agents get their buy-box/agent form (Jon 2026-10-20).
-              return formsForPipeline(opp.pipeline).map((form) => {
-                const answers = fd[form.key] ?? {};
-                const count = Object.keys(answers).length;
-                return (
-                  <details key={form.key} className="mb-1.5 rounded-xl bg-slate-50 ring-1 ring-slate-100" open={count > 0 && count < form.fields.length}>
-                    <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-slate-700">
-                      {form.emoji} {form.name}
-                      <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold ${count ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{count}/{form.fields.length}</span>
-                    </summary>
-                    {/* Controlled fields — selects can't blank out on the React form reset (Jon 2026-10-26) */}
-                    <div className="px-3 pb-3">
-                      <CrmFormFields form={form} oppId={opp.id} contactId={c.id} initial={(answers ?? {}) as Record<string, string | string[]>} />
-                    </div>
-                  </details>
-                );
-              });
-            })()}
-            </details>
-          </Card>
-
-          {/* parties in the deal */}
-          <Card className="p-4">
-            <details id="parties" className="scroll-mt-4">
-            <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">🤝 Parties in this deal <span className="normal-case text-slate-300">(click to open)</span></summary>
-            <div className="space-y-1.5">
-              {parties.map((p) => (
-                <div key={p.id} className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs ring-1 ring-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-500 ring-1 ring-slate-200">{p.role || "party"}</span>
-                    <span className="font-bold text-slate-800">{p.name}</span>
-                    <form action={deleteCrmPartyAction} className="ml-auto"><input type="hidden" name="id" value={p.id} /><button className="text-[10px] text-slate-300 hover:text-red-500">✕</button></form>
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-brand-navy">{[p.phone, p.email].filter(Boolean).join(" · ")}</div>
-                  {p.note && <div className="text-[10px] text-slate-400">{p.note}</div>}
-                </div>
-              ))}
-              {parties.length === 0 && <p className="text-xs text-slate-400">No one attached yet — listing agent, escrow, title, attorney…</p>}
-            </div>
-            <form action={addCrmPartyAction} className="mt-2 grid grid-cols-2 gap-1.5">
-              <input type="hidden" name="oppId" value={opp.id} />
-              <select name="role" className="rounded-lg border border-slate-200 px-2 py-1 text-xs">
-                <option value="listing agent">listing agent</option>
-                {/* buyer agent removed (Jon 2026-10-26) — they live in the dispo buyer/agent network, not here */}
-                <option value="escrow">escrow</option>
-                <option value="title">title</option>
-                <option value="attorney">attorney</option>
-                <option value="JV partner">JV partner</option>
-                <option value="other">other</option>
-              </select>
-              <input name="name" placeholder="Name *" required className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
-              <input name="phone" placeholder="Phone" className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
-              <input name="email" placeholder="Email" className="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
-              <input name="note" placeholder="Note (company, file #…)" className="col-span-2 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
-              <button className="col-span-2 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-bold text-white">＋ Attach party</button>
-            </form>
-            </details>
           </Card>
 
           {/* appointments */}

@@ -26,8 +26,9 @@ export default function NoteComposer({ onSubmit }: { onSubmit: (html: string, fi
     <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={onClick} title={title} className={`grid h-7 min-w-7 place-items-center rounded-md px-1.5 text-[12px] text-slate-600 hover:bg-slate-100 ${cls}`}>{children}</button>
   );
   return (
-    <div className="rounded-xl border border-slate-200 bg-white focus-within:ring-1 focus-within:ring-brand-navy/30">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-100 px-2 py-1.5">
+    // 🟡 Sticky-note look (Jon 2026-10-26) so notes are instantly recognizable + separated
+    <div className="rounded-xl border border-amber-300 bg-amber-50 shadow-sm focus-within:ring-2 focus-within:ring-amber-300/60">
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-amber-200/70 px-2 py-1.5">
         <Btn onClick={() => cmd("bold")} title="Bold (Ctrl/Cmd+B)" cls="font-extrabold">B</Btn>
         <Btn onClick={() => cmd("underline")} title="Underline (Ctrl/Cmd+U)" cls="underline">U</Btn>
         <Btn onClick={() => cmd("italic")} title="Italic (Ctrl/Cmd+I)" cls="italic">I</Btn>
@@ -43,7 +44,7 @@ export default function NoteComposer({ onSubmit }: { onSubmit: (html: string, fi
         <button type="button" onClick={add} className="ml-auto rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">📝 Add note</button>
       </div>
       <div className="relative">
-        {empty && <span className="pointer-events-none absolute left-3 top-2 text-sm text-slate-400">Write a note… use the toolbar for bold, underline &amp; bullets</span>}
+        {empty && <span className="pointer-events-none absolute left-3 top-2 text-sm text-amber-700/50">📝 Write a note… use the toolbar for bold, underline &amp; bullets</span>}
         <div
           ref={ref}
           contentEditable
