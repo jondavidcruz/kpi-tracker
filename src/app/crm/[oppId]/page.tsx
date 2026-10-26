@@ -72,8 +72,11 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   ]);
 }
 
-async function OpportunityPageInner({ params }: { params: Promise<{ oppId: string }> }) {
+async function OpportunityPageInner({ params, searchParams }: { params: Promise<{ oppId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { oppId } = await params;
+  // 🔧 TEMP debug: ?dbg=LMR skips the Left/Middle/Right columns to localize the
+  // novation "Connection closed" stream abort (Jon 2026-10-26).
+  const dbg = String((searchParams ? await searchParams : {})?.dbg ?? "").toUpperCase();
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   const manager = isManager(me);
@@ -230,6 +233,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
 
       <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[300px_minmax(0,1fr)_330px] xl:items-start">
         {/* ── LEFT: who they are ── */}
+        {!dbg.includes("L") && (
         <div className="order-2 flex min-w-0 flex-col gap-3 xl:order-none">
           {/* contact card */}
           <Card className="p-4">
@@ -394,8 +398,10 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
           </Card>
 
         </div>
+        )}
 
         {/* ── MIDDLE: comms — the main event (SMS / email / notes / timeline) ── */}
+        {!dbg.includes("M") && (
         <div className="order-1 min-w-0 space-y-2.5 xl:order-none">
           <Card className="p-3">
             {/* 📝 the SAME smart note editor as the quickview — bold, underline,
@@ -501,8 +507,10 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
           ))}
           {events.length === 0 && <Card className="p-6 text-center text-xs text-slate-400">Nothing yet — the first note starts the story.</Card>}
         </div>
+        )}
 
         {/* ── RIGHT: the work — tasks, appointments, discovery, parties ── */}
+        {!dbg.includes("R") && (
         <div className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
           <Card className="flex flex-wrap items-center gap-2 p-3">
             <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📝 Contracts</span>
@@ -893,6 +901,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
             </form>
           </Card>
         </div>
+        )}
       </div>
     </div>
     </PanelGuard>
@@ -902,7 +911,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
 // 🔧 TEMPORARY DIAGNOSTIC (Jon 2026-10-26: "contact in full isn't working" on EVERY
 // contact). Production redacts server-component error messages to a digest, so we wrap
 // the render to surface the real error/stack on-screen. REMOVE once the root cause is fixed.
-export default async function OpportunityPage(props: { params: Promise<{ oppId: string }> }) {
+export default async function OpportunityPage(props: { params: Promise<{ oppId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   try {
     return await OpportunityPageInner(props);
   } catch (e) {
