@@ -6,11 +6,11 @@ import { readPipelines, parseTags } from "@/lib/crm";
 import { commsFor } from "@/lib/crm-comms";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
-import { readDispoBuyers, isDevNetworkName, isAgentNetworkName, DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
+import { readDispoBuyers, isDevNetworkName, isAgentNetworkName, DISPO_BUYER_KINDS, DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, DISPO_NETWORK_PIPELINES } from "@/lib/dispo-buyers";
 import { resolveNetworkPipelines } from "@/lib/dispo-network";
 import DispoPipeSelect from "@/components/DispoPipeSelect";
 import LiveRefresh from "@/components/LiveRefresh";
-import DispoFollowupKanban, { type FollowupCard } from "@/components/DispoFollowupKanban";
+import { type FollowupCard } from "@/components/DispoFollowupKanban";
 import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban";
 import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
@@ -154,11 +154,21 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const prettyStage = (k: string) => k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const orphanOpps = dealOpps.filter((o) => o.pipeline === dealPl && o.stage && !dealStageKeys.has(o.stage));
   const orphanCount = orphanOpps.length;
+  // 🏠 A deal's display name is its PROPERTY ADDRESS, never the seller's name (Jon 2026-10-26).
+  // GHL-imported opps are named after the seller, but the property is what we're selling — so
+  // trust a real street address (one with a number) from the contact's address or the title.
+  const dealLabel = (title?: string | null, contactAddr?: string | null): string => {
+    const a = contactAddr ? formatAddress(contactAddr) : "";
+    const t = title ? formatAddress(title) : "";
+    if (a && /\d/.test(a)) return a;
+    if (t && /\d/.test(t)) return t;
+    return a || t || "";
+  };
   // ✅ Closed board — every CLOSED/WON deal across ALL three dispo pipelines, tagged
   // by its type (Jon 2026-10-24: "the final board that shows all deal types we closed").
   const closedDeals = (tab === "deals" ? dealOpps.filter((o) => isClosedStage(o.stage)) : []).map((o) => ({
     id: o.id,
-    address: o.contact?.address ? formatAddress(o.contact.address) : (o.title || o.contact?.name || "deal"),
+    address: dealLabel(o.title, o.contact?.address) || o.contact?.name || "deal",
     contactName: o.contact?.name || "",
     pipeline: o.pipeline,
     typeEmoji: PATH_META[pathForPipeline(o.pipeline)].emoji,
@@ -171,7 +181,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   })).sort((a, b) => b.at.getTime() - a.at.getTime());
   const closedTotal = closedDeals.reduce((a, d) => a + d.valueNum, 0);
   const dealCards: CrmCard[] = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => ({
-    id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: formatAddress(o.title || "") || (o.contact?.address ? formatAddress(o.contact.address) : undefined),
+    id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: dealLabel(o.title, o.contact?.address) || undefined,
     phone: o.contact?.phone ? o.contact.phone.replace(/\.\d+$/, "") : undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags),
     badges: (() => { const d = Math.floor((Date.now() - (stageAtByDeal.get(o.id) ?? o.createdAt).getTime()) / 86400000); return !isClosedStage(o.stage) && d >= 3 ? [`🕒 ${d}d in stage`] : []; })(),
     money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
@@ -223,7 +233,6 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     const dealAddr = formatAddress(o.contact?.address || "") || o.title || o.contact?.name || "deal";
     for (const b of readDispoBuyers(o.formData)) followCards.push({ oppId: o.id, entryId: b.id, name: b.name, kind: b.kind, phone: b.phone, email: b.email, price: b.price, stage: b.stage, nextFollowUp: b.nextFollowUp, lastContact: b.lastContact, dealAddr });
   }
-  const dueToday = followCards.filter((c) => c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in").length;
   // ⏰ Overdue buyer follow-ups (due BEFORE today) — surfaced on the board so Sharyn
   // & Marie can't miss a buyer they promised to chase (Jon 2026-10-24).
   const overdueFollowups = followCards
@@ -690,7 +699,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                 <Card className="p-3">
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
                   <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [dealPl]: dealColumns.map((s) => ({ key: s.key, label: s.label })) }} />
-                  <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={movePipes.map((p) => p.name)} pipelineGroups={Object.fromEntries(movePipes.map((p) => [p.name, crmGroupOf(p.name, crmMap)]))} pipelineStages={moveStages} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" />
+                  <CrmKanban columns={dealColumns} cards={dealCardsShown} counts={dealCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(dealPl)}` : ""} currentPipeline={dealPl} pipelineNames={movePipes.map((p) => p.name)} pipelineGroups={Object.fromEntries(movePipes.map((p) => [p.name, crmGroupOf(p.name, crmMap)]))} pipelineStages={moveStages} listHref={`/crm?pl=${encodeURIComponent(dealPl)}&view=list`} who="all" addressFirst />
                 </Card>
 
                 {/* The board is just the board now. Follow-ups-due, going-cold, and
@@ -754,21 +763,8 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
               )}
             </>
           )}
-
-          {/* the buyer follow-ups attached to these deals */}
-          <details className="rounded-2xl bg-white p-3 ring-1 ring-slate-200" open={followCards.length > 0}>
-            <summary className="cursor-pointer text-[13px] font-bold text-slate-700">📞 Buyer follow-ups on these deals <span className="ml-1 rounded-full bg-slate-100 px-1.5 text-[11px] font-bold text-slate-500">{followCards.length}</span>{dueToday > 0 && <span className="ml-1 rounded-full bg-red-100 px-1.5 text-[11px] font-bold text-red-700">{dueToday} due</span>}</summary>
-            {followCards.length === 0 ? (
-              <p className="mt-2 text-[12px] text-slate-500">None yet. Open a deal above → its <b>📇 Buyers &amp; agents</b> panel → <b>🔗 Attach from buyer network</b>, and the buyers you&apos;re chasing show up here.</p>
-            ) : (
-              <div className="mt-2">
-                <DispoFollowupKanban cards={followCards} today={today} />
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">
-                  {DISPO_BUYER_STAGES.map((s) => <span key={s.key}><span className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${s.dot}`} />{s.label}</span>)}
-                </div>
-              </div>
-            )}
-          </details>
+          {/* Buyer follow-ups board removed (Jon 2026-10-26) — follow-ups now live inside each
+              deal's 📇 Buyers & agents panel; overdue ones still surface in the deal cards above. */}
         </>
       )}
 
