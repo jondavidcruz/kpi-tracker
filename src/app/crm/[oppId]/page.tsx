@@ -26,7 +26,8 @@ import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import DraftOfferButton from "@/components/DraftOfferButton";
 import { PANDADOC_DRAFTING_ENABLED } from "@/lib/pandadoc";
-import EditableNote from "@/components/EditableNote";
+import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
+import { editCrmNoteAction, deleteCrmNoteAction } from "../actions";
 import LeadNoteComposer from "@/components/LeadNoteComposer";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import OppPipelineMover from "@/components/OppPipelineMover";
@@ -485,7 +486,39 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               <span className="text-base">{KIND_EMOJI[e.kind] ?? "•"}</span>
               <div className="min-w-0 flex-1">
                 {e.kind === "note"
-                  ? <EditableNote id={e.id} oppId={opp.id} actor={e.actor} body={e.body} canEdit={e.actor === me!.name || manager} />
+                  ? (() => {
+                      // 🪶 Notes render as pure server HTML (Jon 2026-10-26): the old per-note
+                      // client editor × 50+ notes blew the page's client-component budget and
+                      // aborted the stream on busy leads. Native <details> toggles the editor;
+                      // the forms submit via server actions (progressive enhancement, no JS).
+                      const rich = isHtmlNote(e.body);
+                      const canEdit = e.actor === me!.name || manager;
+                      return (
+                        <div className="group/note">
+                          {rich
+                            ? <span className="text-[13px] text-slate-800 [&_a]:text-indigo-600 [&_a]:underline [&_b]:font-bold [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-bold [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5"><b>{e.actor}:</b> <span dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(e.body) }} /></span>
+                            : <span className="whitespace-pre-line text-[13px] text-slate-800"><b>{e.actor}:</b> {e.body}</span>}
+                          {canEdit && (
+                            <details className="mt-0.5 text-[11px]">
+                              <summary className="cursor-pointer font-bold text-slate-300 opacity-0 transition group-hover/note:opacity-100 hover:text-indigo-600">✎ edit / delete</summary>
+                              <form action={editCrmNoteAction} className="mt-1 space-y-1.5">
+                                <input type="hidden" name="id" value={e.id} />
+                                <input type="hidden" name="oppId" value={opp.id} />
+                                <textarea name="body" defaultValue={rich ? htmlNoteToText(e.body) : e.body} rows={3} className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
+                                <div className="flex items-center gap-1.5">
+                                  <button className="rounded-lg bg-brand-navy px-3 py-1 text-[11px] font-bold text-white hover:opacity-90">Save</button>
+                                </div>
+                              </form>
+                              <form action={deleteCrmNoteAction} className="mt-1">
+                                <input type="hidden" name="id" value={e.id} />
+                                <input type="hidden" name="oppId" value={opp.id} />
+                                <button className="text-[11px] font-bold text-slate-300 hover:text-red-600">🗑 Delete this note</button>
+                              </form>
+                            </details>
+                          )}
+                        </div>
+                      );
+                    })()
                   : <div className="whitespace-pre-line text-[13px] text-slate-800"><b className="capitalize">{e.kind}</b> — {stripHtml(e.body)}</div>}
                 {/* 🎙 recording → play it right here + collapsed full transcript
                     (the AI summary is its own 📝 note; Jon 2026-10-12/13) */}

@@ -24,3 +24,12 @@ export function sanitizeNoteHtml(input: string): string {
 export function isHtmlNote(s: string): boolean {
   return /<\/?(b|strong|i|em|u|ul|ol|li|br|p|div|a)\b/i.test(s || "");
 }
+
+/** Rich-HTML note → editable plain text (so the edit box doesn't show raw tags). */
+export function htmlNoteToText(h: string): string {
+  return (h || "")
+    .replace(/<\s*(br|\/p|\/div|\/li|\/tr|\/h[1-6])\s*\/?>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ").replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/\n{3,}/g, "\n\n").trim();
+}
