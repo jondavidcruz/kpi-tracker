@@ -69,6 +69,34 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const clientRef = useRef<{ disconnect: () => void } | null>(null);
   const callRef = useRef<{ hangup: () => void; muteAudio: () => void; unmuteAudio: () => void; dtmf?: (digit: string) => void } | null>(null);
   const [dtmfTrail, setDtmfTrail] = useState("");
+  // 🔊 Local keypad feedback (Jon 2026-10-26): play the real DTMF dual-tone + flash the
+  // pressed key so it mirrors a physical phone. (The call's own dtmf() still sends the tone
+  // to the far end for phone trees; this is the sound + light the CALLER hears/sees.)
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const [pressedKey, setPressedKey] = useState<string | null>(null);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playDtmf = (k: string) => {
+    const F: Record<string, [number, number]> = {
+      "1": [697, 1209], "2": [697, 1336], "3": [697, 1477],
+      "4": [770, 1209], "5": [770, 1336], "6": [770, 1477],
+      "7": [852, 1209], "8": [852, 1336], "9": [852, 1477],
+      "*": [941, 1209], "0": [941, 1336], "#": [941, 1477],
+    };
+    const pair = F[k]; if (!pair) return;
+    try {
+      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = audioCtxRef.current ?? (audioCtxRef.current = new AC());
+      if (ctx.state === "suspended") void ctx.resume();
+      const now = ctx.currentTime;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      gain.connect(ctx.destination);
+      for (const freq of pair) { const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = freq; o.connect(gain); o.start(now); o.stop(now + 0.24); }
+    } catch { /* no audio context — stay silent, UI still flashes */ }
+  };
+  const flashKey = (k: string) => { setPressedKey(k); if (pressTimer.current) clearTimeout(pressTimer.current); pressTimer.current = setTimeout(() => setPressedKey(null), 160); };
   const dialStartRef = useRef(0); // when the attempt began (ring OR answer)
   const [endConfirm, setEndConfirm] = useState(false);
   // 🕐 Device-clock skew vs the server (Jon 2026-10-24): a wrong computer clock
@@ -573,6 +601,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // Mid-call, keypad presses must be TOUCH-TONES (phone trees, extensions,
   // "press 1" voicemail menus) — not edits to the dial box.
   const key = (k: string) => {
+    playDtmf(k); flashKey(k); // sound + light on every press, like a real keypad
     if (callRef.current && (stateRef.current === "active" || stateRef.current === "ringing")) {
       try { callRef.current.dtmf?.(k); } catch { /* tone lost, keep UI honest anyway */ }
       setDtmfTrail((v) => (v + k).slice(-20));
@@ -722,9 +751,11 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             {tab === "keypad" && (
               <span className="flex flex-col items-center gap-2">
                 <input value={num} onChange={(e) => setNum(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && state === "idle") call({ phone: num }); }} placeholder="+1 (555) 123-4567" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-center text-base font-bold tracking-wider" />
+                {/* 🔢 live touch-tone readout during a call — see the keys you've sent (Jon 2026-10-26) */}
+                {state === "active" && dtmfTrail && <span className="font-mono text-[12px] tracking-widest text-emerald-600">⌨ {dtmfTrail}</span>}
                 <span className="grid w-full grid-cols-3 gap-2">
                   {["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map((k) => (
-                    <button key={k} onClick={() => key(k)} className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-lg font-semibold text-slate-700 hover:bg-slate-200">{k}</button>
+                    <button key={k} onClick={() => key(k)} className={`mx-auto grid h-12 w-12 place-items-center rounded-full text-lg font-semibold transition-transform duration-75 active:scale-90 ${pressedKey === k ? "scale-90 bg-emerald-500 text-white ring-2 ring-emerald-300" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{k}</button>
                   ))}
                 </span>
                 <span className="flex w-full items-center justify-center gap-4 pt-1">
