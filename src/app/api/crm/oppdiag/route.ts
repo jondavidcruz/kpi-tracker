@@ -10,6 +10,14 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me || !isManager(me)) return NextResponse.json({ error: "managers only" }, { status: 403 });
+  // 🔧 Read the captured server errors (from instrumentation.ts) — the real cause behind
+  // the client's "Connection closed".
+  if (req.nextUrl.searchParams.get("errors") === "1") {
+    const row = await db.resource.findFirst({ where: { category: "__server_errors__" } }).catch(() => null);
+    let arr: unknown[] = [];
+    try { arr = row?.description ? JSON.parse(row.description) : []; } catch { arr = []; }
+    return NextResponse.json({ serverErrors: arr });
+  }
   const id = req.nextUrl.searchParams.get("id") || "";
   const q = req.nextUrl.searchParams.get("q") || "";
   const opp = id
