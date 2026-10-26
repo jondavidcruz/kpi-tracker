@@ -56,6 +56,17 @@ async function enrichDispoBuyers(buyers: Awaited<ReturnType<typeof readDispoBuye
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lbl = "block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5";
 
+// ⏱ Hard-bound a server call so a SLOW/HANGING query can never stall the whole page
+// render (Jon 2026-10-26: novation contact pages failed with "Connection closed" — a
+// stream abort a try/catch can't catch). On timeout we render with the fallback; the
+// buyer-match/network panels degrade gracefully instead of taking the page down.
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    Promise.resolve(p).catch(() => fallback),
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 async function OpportunityPageInner({ params }: { params: Promise<{ oppId: string }> }) {
   const { oppId } = await params;
   const me = await getCurrentUser();
@@ -99,9 +110,9 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
     : isDispoDealPipeline(opp.pipeline) ? `/dispo?tab=deals&dealpl=${encodeURIComponent(opp.pipeline)}`
     : `/crm?pl=${encodeURIComponent(opp.pipeline || "War Room")}`;
   const leadFeatures = (() => { const f = (opp.formData as { land?: { features?: unknown } } | null)?.land?.features; return Array.isArray(f) ? (f as string[]) : []; })();
-  const buyerMatches = showMatches ? await getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures) : [];
+  const buyerMatches = showMatches ? await withTimeout(getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures), 8000, []) : [];
   // 🎯 Smart Match from the buyer-network CRM (developers + agents), on dispo deals only.
-  const networkMatches = showMatches ? await getNetworkMatchesForDeal(c.address || opp.title) : [];
+  const networkMatches = showMatches ? await withTimeout(getNetworkMatchesForDeal(c.address || opp.title), 8000, []) : [];
   // 🔗 On a buyer-agent / developer lead: every deal they're on (last talk + offer + next follow-up).
   const isNetworkLead = isDevNetworkName(opp.pipeline) || isAgentNetworkName(opp.pipeline);
   const leadDeals = canSeeBuyers && isNetworkLead ? await getDealsForNetworkLead(opp.id) : [];
@@ -128,7 +139,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
   const enrolled = seqState[opp.id];
   // 📁 auto-pull this deal's existing Google Drive files (best-effort; no manual
   // export needed). Matched by the property address / street number.
-  const driveFiles = await import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)).catch(() => [] as { id: string; name: string; link: string; mimeType: string }[]);
+  const driveFiles = await withTimeout(import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)), 8000, [] as { id: string; name: string; link: string; mimeType: string }[]);
   const pipe = pipelines.find((x) => x.name === (opp.pipeline || "War Room")) ?? pipelines[0];
   const stages = pipe.stages;
   const st = stages.find((s) => s.key === opp.stage);
@@ -636,7 +647,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
 
           {/* 📇 Per-deal buyer/agent follow-up tracker — dispo reps only; shows buyer names (Jon 2026-10-21) */}
           {showMatches && (
-            <DispoBuyerTracker oppId={opp.id} buyers={await enrichDispoBuyers(readDispoBuyers(opp.formData))} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={comms.call} canSms={comms.sms} />
+            <DispoBuyerTracker oppId={opp.id} buyers={await withTimeout(enrichDispoBuyers(readDispoBuyers(opp.formData)), 8000, readDispoBuyers(opp.formData))} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={comms.call} canSms={comms.sms} />
           )}
 
           {/* 💰 Offers received — the 3-offer accountability tracker (Jon 2026-10-22) */}
