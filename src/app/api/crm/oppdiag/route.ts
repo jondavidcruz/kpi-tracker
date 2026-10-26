@@ -51,6 +51,16 @@ export async function GET(req: NextRequest) {
   let totalLen = -1;
   try { totalLen = JSON.stringify(fd ?? null).length; } catch { totalLen = -2; }
   const events = await db.crmEvent.findMany({ where: { contactId: opp.contactId }, select: { kind: true, body: true, meta: true }, orderBy: { at: "desc" }, take: 400 });
+  // 🔎 full event dump (?events=1) — to eyeball the value that breaks serialization
+  if (req.nextUrl.searchParams.get("events") === "1") {
+    const full = await db.crmEvent.findMany({ where: { contactId: opp.contactId }, orderBy: { at: "desc" }, take: 60 });
+    return NextResponse.json({
+      oppId: opp.id, pipeline: opp.pipeline, stage: opp.stage,
+      opp: { title: opp.title, value: opp.value, askPrice: opp.askPrice, nextFollowUp: opp.nextFollowUp, tags: opp.tags, devPricingSentAt: opp.devPricingSentAt, formData: opp.formData },
+      contact: opp.contact,
+      events: full.map((e) => ({ id: e.id, kind: e.kind, actor: e.actor, at: e.at, oppId: e.oppId, body: e.body, meta: e.meta })),
+    });
+  }
   let maxBody = 0, totalBody = 0, totalMeta = 0, maxMeta = 0, recCount = 0;
   const kinds: Record<string, number> = {};
   for (const e of events) {
