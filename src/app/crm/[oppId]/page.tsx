@@ -676,7 +676,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               agents for THIS deal; one-click attach (Jon 2026-10-20). */}
           {showMatches && networkMatches.length > 0 && (
             <Card className="p-3">
-              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Smart Match — your network buys here</div>
+              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Smart Match — your ✅ vetted network buys here</div>
               <div className="space-y-1.5">
                 {networkMatches.map((m, i) => {
                   const attached = attachedBuyerIds.has(m.oppId);

@@ -53,7 +53,11 @@ export async function getNetworkMatchesForDeal(address: string, limit = 8): Prom
     const { resolveNetworkPipelines } = await import("@/lib/dispo-network");
     const net = await resolveNetworkPipelines();
     const opps = await db.crmOpportunity.findMany({
-      where: { archivedAt: null, pipeline: { in: net.all } },
+      // ✅ VETTED ONLY (Jon 2026-10-26): the cascade / Smart Match must only surface buyers
+      // we've actually vetted — developers in the "✅ Vetted" stage and agents who are an
+      // "🤝 Active partner". New / researching / reached-out (unvetted) leads are excluded so
+      // we never blast a deal to a buyer we haven't qualified.
+      where: { archivedAt: null, pipeline: { in: net.all }, stage: { in: ["vetted", "active"] } },
       select: { id: true, title: true, pipeline: true, formData: true, contact: { select: { name: true, phone: true } } },
     });
     const STOP = new Set(["the", "and", "for", "llc", "inc", "ave", "street", "road", "drive", "lane", "blvd", "court", "circle", "unit", "ste"]);

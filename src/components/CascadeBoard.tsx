@@ -40,6 +40,9 @@ export default function CascadeBoard() {
   const [nearest, setNearest] = useState<{ name: string; miles: number } | null>(null);
   const [excluded, setExcluded] = useState<Excluded[]>([]);
   const [showExcluded, setShowExcluded] = useState(false);
+  // 🟢 Green-only by default (Jon 2026-10-26): match each deal to buyers who actually
+  // cover it — hide the amber "near miss / long shot" tiers unless the rep opts in.
+  const [showNearMiss, setShowNearMiss] = useState(false);
   const [error, setError] = useState("");
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState("");
@@ -114,7 +117,12 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
           {cards && cards.length > 0 && (
             <>
               <span className="text-slate-400">·</span>
-              <span className="font-semibold text-slate-600">{cards.filter((c) => c.tier === 1).length} match · {cards.filter((c) => c.tier === 2).length} near-miss · {cards.filter((c) => c.tier === 3).length} long shot</span>
+              <span className="font-semibold text-slate-600">{cards.filter((c) => c.tier === 1).length} match{cards.some((c) => c.tier !== 1) ? ` · ${cards.filter((c) => c.tier !== 1).length} near-miss / long shot` : ""}</span>
+              {cards.some((c) => c.tier !== 1) && (
+                <button onClick={() => setShowNearMiss((v) => !v)} className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100">
+                  {showNearMiss ? "Hide near-misses" : `Show ${cards.filter((c) => c.tier !== 1).length} near-misses`}
+                </button>
+              )}
               <span className="ml-auto flex gap-2">
                 <button onClick={() => copy(topN(5), "top")} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200">{copied === "top" ? "✅ Copied" : "📋 Copy top 5"}</button>
                 <button onClick={csv} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200">⬇ Ranked CSV</button>
@@ -133,7 +141,7 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
       )}
 
       <div className="space-y-2.5">
-        {(cards ?? []).map((c, i) => (
+        {(cards ?? []).filter((c) => showNearMiss || c.tier === 1).map((c, i) => (
           <div key={c.id} className={`rounded-2xl border bg-white p-3.5 shadow-sm ${c.tier === 1 ? "border-emerald-200" : c.tier === 2 ? "border-amber-200" : "border-slate-200"}`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-[13px] font-extrabold text-white">{i + 1}</span>
@@ -176,6 +184,13 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
             )}
           </div>
         ))}
+        {/* only near-misses matched → don't look empty; offer them explicitly */}
+        {cards && cards.length > 0 && !showNearMiss && cards.every((c) => c.tier !== 1) && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <b>No buyer squarely covers this deal</b> — {cards.length} {cards.length === 1 ? "is a" : "are"} near-miss worth a call.
+            <button onClick={() => setShowNearMiss(true)} className="ml-2 rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200 hover:bg-amber-200">Show them</button>
+          </div>
+        )}
       </div>
 
       {cards && excluded.length > 0 && (
