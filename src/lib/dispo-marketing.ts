@@ -12,10 +12,12 @@ export type MarketingStep = { key: string; label: string; group: "active" | "pas
 export const MARKETING_STEPS: MarketingStep[] = [
   // ACTIVE — we reach out (Sharyn)
   { key: "send_developers", label: "Send deal to matched vetted developers", group: "active", owner: "sharyn", hint: "Use the deal's Smart Match → attach + send top-down" },
+  // After the vetted developers, work the comps (Jon 2026-10-26): owners of recently SOLD
+  // comparable lots nearby who are LLCs or agents are almost always cash buyers / builders.
+  { key: "sold_comps_llc", label: "Contact nearby sold-comp owners (LLCs / agents)", group: "active", owner: "sharyn", hint: "Pull recent SOLD comps near this lot → the LLC / agent buyers = likely cash buyers" },
   { key: "call_agents", label: "Call buyer agents in the area", group: "active", owner: "sharyn", hint: "From DS: Buyer Agents — who has buyers there?" },
   { key: "email_buyers", label: "Email blast to vetted buyers", group: "active", owner: "sharyn" },
   { key: "text_buyers", label: "Text blast to vetted buyers", group: "active", owner: "sharyn" },
-  { key: "arm_cascade", label: "Arm the buyer cascade / ping-tree", group: "active", owner: "sharyn" },
   // POSTING — list it so buyers find it (Marie)
   { key: "fb_groups", label: "Post in FB land-investor groups", group: "passive", owner: "marie" },
   { key: "landsofamerica", label: "List on Lands of America / Land.com", group: "passive", owner: "marie" },

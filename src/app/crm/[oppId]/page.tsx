@@ -27,8 +27,9 @@ import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
 import { editCrmNoteAction, deleteCrmNoteAction } from "../actions";
 import LeadNoteComposer from "@/components/LeadNoteComposer";
 import AutoSaveForm from "@/components/AutoSaveForm";
+import CrmFormFields from "@/components/CrmFormFields";
 import OppPipelineMover from "@/components/OppPipelineMover";
-import { setOppStageAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, toggleDndAction, uploadLeadDocAction, deleteLeadDocAction } from "../actions";
+import { setOppStageAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, uploadLeadDocAction, deleteLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
@@ -779,34 +780,10 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                       {form.emoji} {form.name}
                       <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold ${count ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{count}/{form.fields.length}</span>
                     </summary>
-                    <AutoSaveForm action={saveCrmFormAction} className="space-y-2 px-3 pb-3">
-                      <input type="hidden" name="oppId" value={opp.id} />
-                      <input type="hidden" name="contactId" value={c.id} />
-                      <input type="hidden" name="formKey" value={form.key} />
-                      {form.fields.map((f) => (
-                        <label key={f.key} className="block">
-                          <span className={lbl}>{f.label}</span>
-                          {f.type === "text" && <input name={`f_${f.key}`} defaultValue={(answers[f.key] as string) ?? ""} placeholder={f.hint ?? ""} className={inputCls} />}
-                          {f.type === "textarea" && <textarea name={`f_${f.key}`} rows={2} defaultValue={(answers[f.key] as string) ?? ""} placeholder={f.hint ?? ""} className={inputCls} />}
-                          {f.type === "select" && (
-                            <select name={`f_${f.key}`} defaultValue={(answers[f.key] as string) ?? ""} className={inputCls}>
-                              <option value="">—</option>
-                              {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                            </select>
-                          )}
-                          {f.type === "checks" && (
-                            <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                              {f.options.map((o) => (
-                                <label key={o} className="flex items-center gap-1 text-[11px] font-medium text-slate-600">
-                                  <input type="checkbox" name={`f_${f.key}`} value={o} defaultChecked={Array.isArray(answers[f.key]) && (answers[f.key] as string[]).includes(o)} /> {o}
-                                </label>
-                              ))}
-                            </span>
-                          )}
-                        </label>
-                      ))}
-                      <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700">Save {form.name}</button>
-                    </AutoSaveForm>
+                    {/* Controlled fields — selects can't blank out on the React form reset (Jon 2026-10-26) */}
+                    <div className="px-3 pb-3">
+                      <CrmFormFields form={form} oppId={opp.id} contactId={c.id} initial={(answers ?? {}) as Record<string, string | string[]>} />
+                    </div>
                   </details>
                 );
               });
