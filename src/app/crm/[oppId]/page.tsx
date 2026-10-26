@@ -768,6 +768,9 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           <Card className="p-4" id="discovery">
             <details>
             <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">📋 Discovery — fill as you talk <span className="normal-case text-slate-300">(click to open)</span></summary>
+            {/* 📄 Buyer-safe export (Jon 2026-10-26): the property/land details as a PDF for the
+                offer packet — leaves out seller motivation, their price, offers & urgency. */}
+            <a href={`/crm/${opp.id}/details-sheet`} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100" title="Open a clean, buyer-safe PDF of these property/land details — seller info left out">📄 Export buyer sheet (PDF)</a>
             {(() => {
               const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
               // Forms follow the pipeline (= lead type): sellers get seller discovery,
