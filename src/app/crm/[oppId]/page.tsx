@@ -569,7 +569,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
             <Card className="p-3">
               <div className="mb-1.5 flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Matching cash buyers</span>
-                <SendToBuyersButton oppId={opp.id} launchReady={process.env.DIRECTREI_WRITE === "1" && Boolean(process.env.DIRECTREI_API_KEY)} />
+                <PanelGuard label="send-to-buyers"><SendToBuyersButton oppId={opp.id} launchReady={process.env.DIRECTREI_WRITE === "1" && Boolean(process.env.DIRECTREI_API_KEY)} /></PanelGuard>
               </div>
               <div className="space-y-1.5">
                 {buyerMatches.map((b) => (
@@ -628,12 +628,12 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
 
           {/* 🚦 Option B — SOP gate wired into the pipeline; advance is blocked until it clears (Jon 2026-10-21) */}
           {showMatches && (
-            <DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} />
+            <PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} /></PanelGuard>
           )}
 
           {/* 📣 Marketing SOP checklist — dispo deals only (Jon 2026-10-20) */}
           {showMatches && (
-            <DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} />
+            <PanelGuard label="marketing"><DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} /></PanelGuard>
           )}
 
           {/* ⚡ One-click cascade — attach the top matched developers + agents so the
@@ -647,7 +647,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
 
           {/* 📇 Per-deal buyer/agent follow-up tracker — dispo reps only; shows buyer names (Jon 2026-10-21) */}
           {showMatches && (
-            <DispoBuyerTracker oppId={opp.id} buyers={await withTimeout(enrichDispoBuyers(readDispoBuyers(opp.formData)), 8000, readDispoBuyers(opp.formData))} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={comms.call} canSms={comms.sms} />
+            <PanelGuard label="buyer-tracker"><DispoBuyerTracker oppId={opp.id} buyers={await withTimeout(enrichDispoBuyers(readDispoBuyers(opp.formData)), 8000, readDispoBuyers(opp.formData))} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={comms.call} canSms={comms.sms} /></PanelGuard>
           )}
 
           {/* 💰 Offers received — the 3-offer accountability tracker (Jon 2026-10-22) */}
@@ -655,7 +655,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
             const si = stages.findIndex((s) => s.key === opp.stage);
             const mi = stages.findIndex((s) => /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.label) || /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.key));
             const pastCascade = si >= 0 && mi >= 0 && si >= mi;
-            return <DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} askPrice={opp.askPrice ?? null} />;
+            return <PanelGuard label="offers"><DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} askPrice={opp.askPrice ?? null} /></PanelGuard>;
           })()}
 
           {/* 📄 Assignment contract auto-draft — build it from the deal's own numbers (Jon 2026-10-22) */}
@@ -690,7 +690,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
               closingDays: 30, titleCompany: "",
               effectiveDate: new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }),
             };
-            return <AssignmentContractPanel oppId={opp.id} defaults={defaults} draft={readAssignmentDraft(opp.formData)} pandadocReady={pandadocReady} canSms={comms.sms} assigneePhone={matchBuyer?.phone || ""} />;
+            return <PanelGuard label="assignment"><AssignmentContractPanel oppId={opp.id} defaults={defaults} draft={readAssignmentDraft(opp.formData)} pandadocReady={pandadocReady} canSms={comms.sms} assigneePhone={matchBuyer?.phone || ""} /></PanelGuard>;
           })()}
 
           {comms.email && c.email && (
