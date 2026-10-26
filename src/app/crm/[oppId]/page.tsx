@@ -4,11 +4,10 @@ import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { getBuyerMatchesForLead, getNetworkMatchesForDeal, getDealsForNetworkLead } from "@/lib/buyer-match-lead";
 import SendToBuyersButton from "@/components/SendToBuyersButton";
-import { attachNetworkBuyerToDeal, runDispoCascadeAction } from "@/app/crm/actions";
+import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoOffersPanel from "@/components/DispoOffersPanel";
-import { readDispoOffers, offerStats, parseMoney, OFFER_GOAL } from "@/lib/dispo-offers";
-import AssignmentContractPanel from "@/components/AssignmentContractPanel";
+import { readDispoOffers, offerStats, OFFER_GOAL } from "@/lib/dispo-offers";
 import { readAssignmentDraft } from "@/lib/assignment-contract";
 import { nextDispoAction } from "@/lib/dispo-next-action";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
@@ -24,8 +23,6 @@ import PanelGuard from "@/components/PanelGuard";
 import { formsForPipeline } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
-import DraftOfferButton from "@/components/DraftOfferButton";
-import { PANDADOC_DRAFTING_ENABLED } from "@/lib/pandadoc";
 import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
 import { editCrmNoteAction, deleteCrmNoteAction } from "../actions";
 import LeadNoteComposer from "@/components/LeadNoteComposer";
@@ -33,10 +30,9 @@ import AutoSaveForm from "@/components/AutoSaveForm";
 import OppPipelineMover from "@/components/OppPipelineMover";
 import { setOppStageAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, toggleDndAction, uploadLeadDocAction, deleteLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
-import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
+import { readSnippets } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
-import { enrollSequenceAction, unenrollSequenceAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 // ⏱ The contact page had no time budget set → the low platform default. Busy/active deals
@@ -152,8 +148,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
       ? db.crmContact.findMany({ where: { id: { not: c.id }, archivedAt: null, OR: [{ phone: { endsWith: last10 } }, { altPhone: { endsWith: last10 } }] }, select: { id: true, name: true, assignedTo: true, opportunities: { where: { archivedAt: null }, select: { id: true, title: true, stage: true }, take: 1 } }, take: 5 })
       : Promise.resolve([] as Array<{ id: string; name: string; assignedTo: string; opportunities: Array<{ id: string; title: string; stage: string }> }>),
   ]);
-  const [snippets, sequences, seqState] = await Promise.all([readSnippets(), readSequences(), readSeqState()]);
-  const enrolled = seqState[opp.id];
+  const snippets = await readSnippets();
   // 📁 auto-pull this deal's existing Google Drive files (best-effort; no manual
   // export needed). Matched by the property address / street number.
   const driveFiles = (await withTimeout(import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)), 2500, [] as { id: string; name: string; link: string; mimeType: string }[])).slice(0, 12);
@@ -586,16 +581,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
         {/* ── RIGHT: the work — tasks, appointments, discovery, parties ── */}
         {!dbg.includes("R") && (
         <div className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
-          <Card className="flex flex-wrap items-center gap-2 p-3">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📝 Contracts</span>
-            {PANDADOC_DRAFTING_ENABLED ? (<>
-              <DraftOfferButton oppId={opp.id} kind="cash" label="💵 Draft cash offer" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700" />
-              <DraftOfferButton oppId={opp.id} kind="novation" label="🏷 Draft novation offer" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700" />
-              <span className="text-[10px] text-slate-400">drafts in PandaDoc with seller, address &amp; price pre-filled — link lands on the timeline. Moving to an offer stage auto-drafts cash (tag the lead <b>novation</b> first to flip it).</span>
-            </>) : (
-              <span className="text-[11px] text-slate-500">Auto-drafting is <b>off</b> — PandaDoc&apos;s API charges per document. Create the cash/novation contract directly in PandaDoc for this lead.</span>
-            )}
-          </Card>
+          {/* 📝 Contracts card removed from the contact view (Jon 2026-10-26) — not needed here. */}
 
           {/* 🔗 Deals this agent/developer is on — last talk + offer + next follow-up,
               all in one place on their card (Jon 2026-10-21). */}
@@ -726,14 +712,8 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             <PanelGuard label="marketing"><DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} /></PanelGuard>
           )}
 
-          {/* ⚡ One-click cascade — attach the top matched developers + agents so the
-              deal goes out to more buyers fast (Jon 2026-10-21) */}
-          {showMatches && (
-            <form action={runDispoCascadeAction}>
-              <input type="hidden" name="oppId" value={opp.id} />
-              <button className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-emerald-700" title="Attach the top matched vetted developers + buyer agents to this deal's tracker, ready to work">⚡ Run the cascade — attach top matched buyers</button>
-            </form>
-          )}
+          {/* ⚡ Run-the-cascade button removed from the contact view (Jon 2026-10-26) — the
+              cascade still runs from /dispo and /marketing. */}
 
           {/* 📇 Per-deal buyer/agent follow-up tracker — dispo reps only; shows buyer names (Jon 2026-10-21) */}
           {showMatches && (
@@ -748,78 +728,8 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             return <PanelGuard label="offers"><DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} askPrice={opp.askPrice ?? null} /></PanelGuard>;
           })()}
 
-          {/* 📄 Assignment contract auto-draft — build it from the deal's own numbers (Jon 2026-10-22) */}
-          {showMatches && (() => {
-            const offers = readDispoOffers(opp.formData);
-            const st = offerStats(offers);
-            const fd = (opp.formData ?? {}) as Record<string, unknown>;
-            const ff = (k: string): string => {
-              for (const sec of Object.values(fd)) {
-                if (sec && typeof sec === "object" && !Array.isArray(sec) && k in (sec as Record<string, unknown>)) {
-                  const v = (sec as Record<string, unknown>)[k];
-                  if (v) return String(Array.isArray(v) ? v.join(", ") : v);
-                }
-              }
-              return "";
-            };
-            const best = st.best ?? 0;
-            const sellerPrice = parseMoney(ff("sellerNumber")) ?? parseMoney(ff("ourOffer")) ?? opp.askPrice ?? (best ? Math.round((best * 0.8) / 500) * 500 : 0);
-            const fee = best > 0 && sellerPrice > 0 ? Math.max(0, best - sellerPrice) : 0;
-            const accepted = offers.find((o) => o.status === "accepted");
-            const assigneeNm = accepted?.buyer || st.bestBuyer || "";
-            const matchBuyer = readDispoBuyers(opp.formData).find((b) => b.name && assigneeNm && b.name.toLowerCase() === assigneeNm.toLowerCase());
-            const pandadocReady = Boolean(process.env.PANDADOC_DRAFTING === "1" && process.env.PANDADOC_TEMPLATE_ASSIGNMENT);
-            const propAddr = opp.title && !/^\s*$/.test(opp.title) ? opp.title : (ff("address") || c.address || "");
-            const stMatch = /,\s*([A-Z]{2})\s*\d{0,5}\s*$/.exec(propAddr);
-            const defaults = {
-              assignorEntity: "Freedom Offers LLC", assignorSigner: me?.name || "",
-              assigneeName: accepted?.buyer || st.bestBuyer || "", assigneeEntity: "", assigneeEmail: "",
-              propertyAddress: propAddr, apn: ff("apn") || ((opp.formData as { property?: { apn?: string } } | null)?.property?.apn ?? ""),
-              county: "", state: stMatch ? stMatch[1] : "", acres: ff("acreage"),
-              purchasePrice: sellerPrice || 0, assignmentFee: fee, emd: 0,
-              closingDays: 30, titleCompany: "",
-              effectiveDate: new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }),
-            };
-            return <PanelGuard label="assignment"><AssignmentContractPanel oppId={opp.id} defaults={defaults} draft={readAssignmentDraft(opp.formData)} pandadocReady={pandadocReady} canSms={comms.sms} assigneePhone={matchBuyer?.phone || ""} /></PanelGuard>;
-          })()}
-
-          {comms.email && c.email && (
-            <Card className="p-0">
-              <details className="group" open={!!enrolled}>
-                <summary className="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📧 Sequences</span>
-                  {enrolled && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">▶ running</span>}
-                  <span className="ml-auto text-slate-300 transition-transform group-open:rotate-90">›</span>
-                </summary>
-                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 p-3">
-                  {enrolled ? (
-                    <>
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">
-                        ▶ {sequences.find((x) => x.id === enrolled.seqId)?.name ?? enrolled.seqId} — step {enrolled.step + 1}, next {enrolled.nextYmd}
-                      </span>
-                      <span className="text-[10px] text-slate-400">auto-stops the moment they reply</span>
-                      <form action={unenrollSequenceAction} className="ml-auto">
-                        <input type="hidden" name="oppId" value={opp.id} />
-                        <input type="hidden" name="contactId" value={c.id} />
-                        <button className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200">⏹ stop</button>
-                      </form>
-                    </>
-                  ) : (
-                    <form action={enrollSequenceAction} className="flex flex-1 flex-wrap items-center gap-1.5">
-                      <input type="hidden" name="oppId" value={opp.id} />
-                      <input type="hidden" name="contactId" value={c.id} />
-                      <input type="hidden" name="email" value={c.email} />
-                      <select name="seqId" className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold">
-                        {sequences.map((sq) => <option key={sq.id} value={sq.id}>{sq.name} ({sq.steps.length} emails)</option>)}
-                      </select>
-                      <button className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700">▶ Enroll</button>
-                      <span className="text-[10px] text-slate-400">like Direct REI's drip — ours, free, stops on reply</span>
-                    </form>
-                  )}
-                </div>
-              </details>
-            </Card>
-          )}
+          {/* 📄 Assignment-contract auto-draft + 📧 Sequences panels removed from the
+              contact view (Jon 2026-10-26) — not needed here. */}
 
           {/* tasks */}
           <Card className="p-4">

@@ -323,13 +323,10 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     <div className="flex items-start justify-between gap-1">
                       {selecting && <input type="checkbox" readOnly checked={selected.has(c.id)} className="mr-1 mt-0.5 h-4 w-4 shrink-0 accent-indigo-600" />}
                       {/* name → FULL card page; anywhere else on the card → quick view.
-                          addressFirst (dispo deals, Jon 2026-10-26): the PROPERTY ADDRESS is
-                          the card's identity, not the seller's name (shown below instead). */}
-                      {(() => {
-                        const addrHdr = addressFirst ? (formatAddress(c.address ?? "") || formatAddress(c.title ?? "")) : "";
-                        const useAddr = !!addrHdr && /\d/.test(addrHdr);
-                        return <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{useAddr ? `📍 ${addrHdr}` : titleCase(c.contactName)}</a>;
-                      })()}
+                          Seller name first, then the 📍 address below (Jon 2026-10-26). On dispo
+                          deals (addressFirst) the seller gets a ⭐ so it's distinct from the 👤
+                          lead-owner line. */}
+                      <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{addressFirst ? "⭐ " : ""}{titleCase(c.contactName)}</a>
                       <div className="flex shrink-0 items-center gap-1">
                         {c.gate && <span title={`SOP gate — ${c.gate.label}: ${c.gate.cleared ? "cleared, clear to advance" : "held, advance locked"}`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.gate.cleared ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-red-100 text-red-700 ring-red-200"}`}>{c.gate.cleared ? "✓ gate" : "🔒 gate"}</span>}
                         {!!c.parcels && c.parcels > 1 && <span title={`${c.parcels} parcels on this deal`} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 ring-1 ring-amber-200">📦 {c.parcels}</span>}
@@ -358,11 +355,6 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       // itself an address, that's the property line; otherwise fall
                       // back to the 📍 contact address. Never both.
                       const titleIsAddress = show.title && !!t && !titleIsName;
-                      // When the address is already the card header (dispo deals), show the
-                      // SELLER NAME on this line instead — never repeat the address.
-                      const addrHdr = addressFirst ? (addr || t) : "";
-                      const headerIsAddr = !!addrHdr && /\d/.test(addrHdr);
-                      if (headerIsAddr) return <div className="truncate text-[12px] font-semibold text-slate-500">👤 {titleCase(c.contactName)}</div>;
                       // Address + phone are the two things reps act on — make them
                       // big and colored so they pop off the card (Jon 2026-10-20).
                       return (<>
