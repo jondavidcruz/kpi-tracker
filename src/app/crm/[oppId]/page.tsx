@@ -56,6 +56,11 @@ async function enrichDispoBuyers(buyers: Awaited<ReturnType<typeof readDispoBuye
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lbl = "block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5";
 
+// 🔧 TEMPORARY kill-switch for the dispo-panel block on the FULL contact page (Jon
+// 2026-10-26): it aborts the render stream on novation deals. Off = open-full works;
+// flip back to true once the offending panel is found + fixed.
+const DP_ON = false;
+
 // ⏱ Hard-bound a server call so a SLOW/HANGING query can never stall the whole page
 // render (Jon 2026-10-26: novation contact pages failed with "Connection closed" — a
 // stream abort a try/catch can't catch). On timeout we render with the fallback; the
@@ -97,7 +102,10 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
   // and any acquisitions/new rep must NOT see them). And ONLY on the dispo land-deal
   // pipelines — never on home/seller leads.
   const canSeeBuyers = isManager(me) || me?.position === "dispositions";
-  const showMatches = canSeeBuyers && isDispoDealPipeline(opp.pipeline);
+  // 🔧 TEMPORARY (Jon 2026-10-26): the dispo-panel block aborts the page stream on
+  // novation deals ("Connection closed" — uncatchable by boundaries/try-catch). Disable
+  // it to restore open-full immediately; re-enable per-section with ?dp=1 to pinpoint.
+  const showMatches = DP_ON && canSeeBuyers && isDispoDealPipeline(opp.pipeline);
   // 🕒 days in the current stage (for the next-step banner's "stalled" case) — dispo only
   const dealDaysInStage = showMatches
     ? Math.floor((Date.now() - ((await db.crmEvent.findFirst({ where: { oppId: opp.id, kind: "stage" }, orderBy: { at: "desc" }, select: { at: true } }).catch(() => null))?.at ?? opp.createdAt).getTime()) / 86400000)
