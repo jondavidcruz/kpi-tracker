@@ -55,7 +55,7 @@ async function enrichDispoBuyers(buyers: Awaited<ReturnType<typeof readDispoBuye
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lbl = "block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5";
 
-export default async function OpportunityPage({ params }: { params: Promise<{ oppId: string }> }) {
+async function OpportunityPageInner({ params }: { params: Promise<{ oppId: string }> }) {
   const { oppId } = await params;
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
@@ -875,4 +875,22 @@ export default async function OpportunityPage({ params }: { params: Promise<{ op
       </div>
     </div>
   );
+}
+
+// 🔧 TEMPORARY DIAGNOSTIC (Jon 2026-10-26: "contact in full isn't working" on EVERY
+// contact). Production redacts server-component error messages to a digest, so we wrap
+// the render to surface the real error/stack on-screen. REMOVE once the root cause is fixed.
+export default async function OpportunityPage(props: { params: Promise<{ oppId: string }> }) {
+  try {
+    return await OpportunityPageInner(props);
+  } catch (e) {
+    const err = e as Error;
+    return (
+      <pre style={{ whiteSpace: "pre-wrap", padding: 16, fontSize: 12, color: "#b91c1c", fontFamily: "ui-monospace, monospace", background: "#fff1f2", borderRadius: 12, margin: 16 }}>
+        {"⚠️ Contact page error (temporary diagnostic — fixing this now):\n\n"}
+        {(err?.message || String(e)) + "\n\n"}
+        {err?.stack || ""}
+      </pre>
+    );
+  }
 }
