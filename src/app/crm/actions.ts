@@ -1390,9 +1390,9 @@ export async function saveCrmFormAction(formData: FormData) {
   // not wipe fields it didn't carry — this is what made dropdowns look like they "reset".
   const prevSection = (existing[formKey] && typeof existing[formKey] === "object" && !Array.isArray(existing[formKey])) ? (existing[formKey] as Record<string, unknown>) : {};
   await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...existing, [formKey]: { ...prevSection, ...answers } } as never } });
-  // 🧹 Roll repeat edits of the same form into one timeline entry (Jon 2026-10-26).
+  // 🧹 One rolling timeline row per form — shows completion (filled/total), not every save.
   const { logEditCoalesced } = await import("@/lib/edit-log");
-  await logEditCoalesced({ contactId, oppId, body: `${form.emoji} ${form.name} updated (${Object.keys(answers).length} answers)`, actor: me.name });
+  await logEditCoalesced({ contactId, oppId, body: `${form.emoji} ${form.name} — ${Object.keys(answers).length}/${form.fields.length} fields filled`, actor: me.name, editKey: `form:${formKey}` });
   revalidatePath(`/crm/${oppId}`);
 }
 
@@ -2461,7 +2461,7 @@ export async function saveLandParcelsAction(formData: FormData) {
     ...(first?.address ? { title: first.address } : {}),
   } });
   if (first?.address && o.contactId) await db.crmContact.update({ where: { id: o.contactId }, data: { address: first.address } }).catch(() => {});
-  if (o.contactId) { const { logEditCoalesced } = await import("@/lib/edit-log"); await logEditCoalesced({ contactId: o.contactId, oppId, body: `📦 Parcels updated — ${cleaned.length} parcel${cleaned.length === 1 ? "" : "s"} on this deal`, actor: me.name }); }
+  if (o.contactId) { const { logEditCoalesced } = await import("@/lib/edit-log"); await logEditCoalesced({ contactId: o.contactId, oppId, body: `📦 Parcels — ${cleaned.length} on this deal`, actor: me.name, editKey: "parcels" }); }
   revalidatePath(`/crm/${oppId}`);
 }
 

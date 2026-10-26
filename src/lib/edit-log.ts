@@ -1,28 +1,29 @@
 import { db } from "@/lib/db";
 import { logCrmEvent } from "@/lib/crm";
 
-// A rep fiddling with the same section of a deal (land details, parcels, a discovery form)
-// used to drop a fresh "… updated" row on the timeline for every save — so Michelle editing
-// the land fields a few times showed up many times (Jon 2026-10-26). Instead we roll repeat
-// edits of the SAME section by the SAME person, inside this window, into one entry that bumps
-// to the top and shows "· edited N×".
-const WINDOW_MS = 60 * 60 * 1000;
-
-export async function logEditCoalesced(opts: { contactId: string; oppId: string; body: string; actor: string }): Promise<void> {
+// A rep filling out a section (Home / Land details, a discovery form, parcels) used to drop a
+// FRESH "… updated" row on the timeline for every save — Nicholas filling Home Details showed
+// up 15+ times (Jon 2026-10-26: "it shouldn't log every single change — just bulk it, show how
+// many fields out of how many are complete"). Now there is exactly ONE rolling summary row per
+// section per deal: found by a stable `editKey` in meta (regardless of who/when), updated in
+// place, and bumped to the top. The first time we write a keyed summary we also sweep up the
+// old pre-coalescing duplicates for that deal so the timeline is clean.
+export async function logEditCoalesced(opts: { contactId: string; oppId: string; body: string; actor: string; editKey?: string }): Promise<void> {
   const { contactId, oppId, body, actor } = opts;
   if (!oppId) { if (contactId) await logCrmEvent({ contactId, oppId, kind: "system", body, actor }); return; }
-  // the section label = everything before the first " (" or " —" (e.g. "🏞 Land details updated")
-  const label = body.split(/\s[—(]/)[0].trim();
-  const since = new Date(Date.now() - WINDOW_MS);
-  const recent = await db.crmEvent.findFirst({
-    where: { oppId, kind: "system", actor, at: { gte: since }, body: { startsWith: label } },
-    orderBy: { at: "desc" }, select: { id: true, meta: true },
+  // section label = everything before the first " (", " —" or " ·" (e.g. "🏡 Home Details")
+  const label = body.split(/\s[—(·]/)[0].trim();
+  const editKey = opts.editKey ?? label;
+  const existing = await db.crmEvent.findFirst({
+    where: { oppId, kind: "system", meta: { path: ["editKey"], equals: editKey } },
+    orderBy: { at: "desc" }, select: { id: true },
   }).catch(() => null);
-  if (recent) {
-    const meta = (recent.meta as Record<string, unknown> | null) ?? {};
-    const n = (typeof meta.edits === "number" ? meta.edits : 1) + 1;
-    await db.crmEvent.update({ where: { id: recent.id }, data: { at: new Date(), body: `${body} · edited ${n}×`, meta: { ...meta, edits: n } as never } }).catch(() => {});
+  if (existing) {
+    await db.crmEvent.update({ where: { id: existing.id }, data: { at: new Date(), body, actor, meta: { editKey } as never } }).catch(() => {});
     return;
   }
-  if (contactId) await logCrmEvent({ contactId, oppId, kind: "system", body, actor });
+  // first keyed summary for this section → clear out the old un-keyed "… updated" spam on THIS
+  // deal so the timeline condenses to the single summary row we're about to write.
+  await db.crmEvent.deleteMany({ where: { oppId, kind: "system", body: { startsWith: label } } }).catch(() => {});
+  if (contactId) await logCrmEvent({ contactId, oppId, kind: "system", body, meta: { editKey } as never, actor });
 }
