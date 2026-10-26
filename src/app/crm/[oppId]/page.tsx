@@ -137,7 +137,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
   const [pipelines, reps, events, tasks, appts, siblingOpps, parties, dupContacts] = await Promise.all([
     readPipelines(),
     getActiveReps(),
-    db.crmEvent.findMany({ where: { contactId: c.id }, orderBy: { at: "desc" }, take: 400 }),
+    db.crmEvent.findMany({ where: { contactId: c.id }, orderBy: { at: "desc" }, take: 60 }),
     db.crmTask.findMany({ where: { oppId }, orderBy: [{ doneAt: "asc" }, { due: "asc" }] }),
     db.crmAppointment.findMany({ where: { oppId }, orderBy: { at: "asc" } }),
     db.crmOpportunity.findMany({ where: { contactId: c.id, archivedAt: null }, orderBy: { createdAt: "asc" }, select: { id: true, title: true, stage: true, pipeline: true, formData: true } }),
@@ -150,7 +150,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
   const enrolled = seqState[opp.id];
   // 📁 auto-pull this deal's existing Google Drive files (best-effort; no manual
   // export needed). Matched by the property address / street number.
-  const driveFiles = await withTimeout(import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)), 8000, [] as { id: string; name: string; link: string; mimeType: string }[]);
+  const driveFiles = await withTimeout(import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)), 2500, [] as { id: string; name: string; link: string; mimeType: string }[]);
   const pipe = pipelines.find((x) => x.name === (opp.pipeline || "War Room")) ?? pipelines[0];
   const stages = pipe.stages;
   const st = stages.find((s) => s.key === opp.stage);
