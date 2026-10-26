@@ -311,11 +311,25 @@ export async function POST(req: NextRequest) {
     const priorCall = await db.crmEvent.findFirst({ where: { contactId: contact.id, kind: "call", actor: { notIn: SYS_ACTORS }, at: { gte: new Date(Date.now() - 30 * 60000) } }, orderBy: { at: "desc" }, select: { actor: true } }).catch(() => null);
     const rep = (priorCall?.actor || "").trim();
     const secs = pr.recording_started_at && pr.recording_ended_at ? Math.max(0, Math.round((Date.parse(pr.recording_ended_at) - Date.parse(pr.recording_started_at)) / 1000)) : 0;
+    // 🎙 Only REAL conversations are filed to the deal's Drive (Jon 2026-10-26: "majority
+    // are just voicemails"). Keep when the call ran ≥ 60s AND the rep hasn't dispositioned
+    // it as a voicemail/no-answer. Short/VM calls still log a lightweight note — no Drive
+    // clutter, no wasted Gemini transcription. (A later voicemail disposition also pulls a
+    // kept recording back out — see dialerOutcome*Action.)
+    const { readRecentCallDispo, NO_KEEP_OUTCOMES } = await import("@/lib/call-dispo");
+    const recentDispo = await readRecentCallDispo(contact.id).catch(() => null);
+    const dispoVoicemail = !!recentDispo && NO_KEEP_OUTCOMES.includes(recentDispo.outcome);
+    if (secs < 60 || dispoVoicemail) {
+      const why = dispoVoicemail ? "voicemail / no answer" : "short — likely voicemail";
+      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `📞 Call${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""} — ${why}, recording not filed`, meta: { secs, ccId, skipped: "voicemail" }, actor: rep || "recorder" }).catch(() => {});
+      await recCrumb({ ev: "rec.outcome", result: "skip-voicemail", secs });
+      return NextResponse.json({ ok: true, skipped: "voicemail", secs });
+    }
     try {
       const res = await fetch(url);
       const bytes = new Uint8Array(await res.arrayBuffer());
       if (!res.ok || bytes.length === 0) throw new Error(`download ${res.status}`);
-      let link = "";
+      let link = "", driveId = "";
       if (bytes.length <= 15 * 1024 * 1024) {
         const { gdriveConfigured, ensureSubfolder, uploadToFolder, listFolder, dealsParent } = await import("@/lib/gdrive");
         if (gdriveConfigured()) {
@@ -330,7 +344,7 @@ export async function POST(req: NextRequest) {
           if (!folderId) folderId = await ensureSubfolder(DEALS_PARENT, label.slice(0, 80));
           const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
           const up = await uploadToFolder(folderId, `call ${stamp}.mp3`, bytes, "audio/mpeg", true); // public + streamable for the player
-          link = up.link;
+          link = up.link; driveId = up.id;
         }
       }
       // 📝 Transcribe + SUMMARIZE in one Gemini call (Jon 2026-10-13: "AI get the
@@ -353,7 +367,7 @@ export async function POST(req: NextRequest) {
           if (summary) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📞 Call summary (AI) — ${secs ? `${Math.floor(secs / 60)}m ${secs % 60}s` : ""}\n${summary}`.slice(0, 2000), actor: "recorder" });
         } catch { /* recording itself is already filed below */ }
       }
-      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, secs, ccId, transcript: transcript.slice(0, 12000), rep: rep || undefined }, actor: rep || "recorder" });
+      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, driveId: driveId || undefined, secs, ccId, transcript: transcript.slice(0, 12000), rep: rep || undefined }, actor: rep || "recorder" });
       await recCrumb({ ev: "rec.outcome", result: "filed", hasLink: !!link, secs });
 
       // whether this lead is a buyer (dispo network) vs a seller — drives the

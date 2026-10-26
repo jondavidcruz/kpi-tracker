@@ -1202,6 +1202,11 @@ export async function dialerOutcomeAction(formData: FormData) {
     await db.crmOpportunity.update({ where: { id: oppId }, data: { nextFollowUp: nf, ...(outcome === "not_interested" ? { stage: "nurture" } : {}) } });
     await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer: ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`, actor: me.name });
   }
+  // 🎙 Disposition decides whether a recording stays filed (Jon 2026-10-26): record it so a
+  // later recording.saved can skip Drive, and pull any already-filed recording if it was a VM.
+  const { recordCallDispo, removeRecentRecording, NO_KEEP_OUTCOMES } = await import("@/lib/call-dispo");
+  await recordCallDispo(contactId, outcome).catch(() => {});
+  if (NO_KEEP_OUTCOMES.includes(outcome)) await removeRecentRecording(contactId).catch(() => {});
   revalidatePath("/crm");
   redirect(`/crm/dialer?i=${next}${modeQs}`);
 }
@@ -1375,6 +1380,10 @@ export async function dialerOutcomeQuickAction(formData: FormData): Promise<void
     if (c && !/wrong-number/.test(c.tags)) await db.crmContact.update({ where: { id: contactId }, data: { tags: c.tags ? `${c.tags},wrong-number` : "wrong-number" } });
   }
   await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer disposition: ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`, actor: me.name });
+  // 🎙 Disposition decides whether the recording stays filed (Jon 2026-10-26).
+  const { recordCallDispo, removeRecentRecording, NO_KEEP_OUTCOMES } = await import("@/lib/call-dispo");
+  await recordCallDispo(contactId, outcome).catch(() => {});
+  if (NO_KEEP_OUTCOMES.includes(outcome)) await removeRecentRecording(contactId).catch(() => {});
   revalidatePath("/crm");
 }
 

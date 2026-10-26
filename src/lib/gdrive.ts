@@ -281,3 +281,26 @@ export async function moveToFolder(fileId: string, fromId: string, toId: string)
     body: "{}",
   });
 }
+
+/** Pull a Drive file id out of any link we store (webViewLink, uc?export, /file/d/…). */
+export function driveFileId(link?: string | null): string {
+  if (!link) return "";
+  const m = link.match(/[?&]id=([^&]+)/) || link.match(/\/d\/([^/]+)/) || link.match(/\/file\/d\/([^/]+)/);
+  return m ? decodeURIComponent(m[1]) : (/^[\w-]{20,}$/.test(link) ? link : "");
+}
+
+/** Trash a Drive file (reversible — goes to Drive trash, not hard-deleted). Used to pull
+ *  voicemail / no-answer recordings back out after the rep dispositions the call (Jon
+ *  2026-10-26: only real conversations should stay in the deal folder). Best-effort. */
+export async function trashDriveFile(fileId: string): Promise<boolean> {
+  if (!fileId || !gdriveConfigured()) return false;
+  try {
+    const token = await getAccessToken();
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ trashed: true }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
