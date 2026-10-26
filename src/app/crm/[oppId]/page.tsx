@@ -39,6 +39,10 @@ import GmailComposer from "@/components/GmailComposer";
 import { enrollSequenceAction, unenrollSequenceAction } from "../actions";
 
 export const dynamic = "force-dynamic";
+// ⏱ The contact page had no time budget set → the low platform default. Busy/active deals
+// render just over it and the function is killed mid-stream (client sees "Connection closed",
+// no server error logged). Give it the full 60s (Jon 2026-10-26).
+export const maxDuration = 60;
 
 // 🔗 Merge each tracked buyer's LIVE contact id + phone + email off its network
 // lead opp, so the tracker rows can call/text/email and the note-sync knows the
