@@ -6,10 +6,13 @@
 // Answers live in CrmOpportunity.formData {formKey: {field: value}}.
 import { isDevNetworkName, isAgentNetworkName } from "./dispo-buyers";
 
+// `sensitive` fields are SELLER-side intel (motivation, their number, offers, urgency) — kept
+// OUT of the buyer-facing property PDF (Jon 2026-10-26: "leave out what we don't want buyers
+// to know"). Everything else is a property/land characteristic that's safe to share.
 export type FormField =
-  | { key: string; label: string; type: "text" | "textarea"; hint?: string }
-  | { key: string; label: string; type: "select"; options: string[] }
-  | { key: string; label: string; type: "checks"; options: string[] };
+  | { key: string; label: string; type: "text" | "textarea"; hint?: string; sensitive?: boolean }
+  | { key: string; label: string; type: "select"; options: string[]; sensitive?: boolean }
+  | { key: string; label: string; type: "checks"; options: string[]; sensitive?: boolean };
 
 export type CrmForm = { key: string; name: string; emoji: string; fields: FormField[] };
 
@@ -22,13 +25,13 @@ export const LAND_FEATURES = ["Waterfront / lake frontage", "Water view", "Creek
 const CORE: FormField[] = [
   { key: "address", label: "Property address for sale", type: "text", hint: "Confirm the address — any other properties they need to sell?" },
   { key: "apn", label: "APN", type: "text" },
-  { key: "urgency", label: "Ready to sell today?", type: "select", options: ["Yes — hard offer & contract today", "Depends on offer — soft offer today", "No — get details & nurture"] },
-  { key: "motivation", label: "Motivation", type: "textarea", hint: "Dig deep — why sell, why now, how does it feel?" },
-  { key: "duration", label: "How long have they dealt with this?", type: "text" },
-  { key: "agent", label: "Tried an agent / already listed?", type: "text" },
-  { key: "wants", label: "Amount they want/need $", type: "text" },
-  { key: "offers", label: "Offers they've received", type: "text" },
-  { key: "creative", label: "Open to creative? (Sub2 / seller finance)", type: "textarea" },
+  { key: "urgency", label: "Ready to sell today?", type: "select", options: ["Yes — hard offer & contract today", "Depends on offer — soft offer today", "No — get details & nurture"], sensitive: true },
+  { key: "motivation", label: "Motivation", type: "textarea", hint: "Dig deep — why sell, why now, how does it feel?", sensitive: true },
+  { key: "duration", label: "How long have they dealt with this?", type: "text", sensitive: true },
+  { key: "agent", label: "Tried an agent / already listed?", type: "text", sensitive: true },
+  { key: "wants", label: "Amount they want/need $", type: "text", sensitive: true },
+  { key: "offers", label: "Offers they've received", type: "text", sensitive: true },
+  { key: "creative", label: "Open to creative? (Sub2 / seller finance)", type: "textarea", sensitive: true },
   { key: "occupancy", label: "Occupancy", type: "select", options: ["Vacant", "Owner-occupied", "Tenant", "Squatter", "Unknown"] },
   { key: "timeline", label: "Vacancy / close timeline", type: "text" },
 ];

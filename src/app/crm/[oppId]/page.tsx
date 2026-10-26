@@ -2,8 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
-import { getBuyerMatchesForLead, getNetworkMatchesForDeal, getDealsForNetworkLead } from "@/lib/buyer-match-lead";
-import SendToBuyersButton from "@/components/SendToBuyersButton";
+import { getNetworkMatchesForDeal, getDealsForNetworkLead } from "@/lib/buyer-match-lead";
 import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoOffersPanel from "@/components/DispoOffersPanel";
@@ -123,8 +122,6 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
     : isAgentNetworkName(opp.pipeline) ? "/dispo?tab=agents"
     : isDispoDealPipeline(opp.pipeline) ? `/dispo?tab=deals&dealpl=${encodeURIComponent(opp.pipeline)}`
     : `/crm?pl=${encodeURIComponent(opp.pipeline || "War Room")}`;
-  const leadFeatures = (() => { const f = (opp.formData as { land?: { features?: unknown } } | null)?.land?.features; return Array.isArray(f) ? (f as string[]) : []; })();
-  const buyerMatches = showMatches ? await withTimeout(getBuyerMatchesForLead(c.address || opp.title, opp.value ?? opp.askPrice, leadFeatures), 8000, []) : [];
   // 🎯 Smart Match from the buyer-network CRM (developers + agents), on dispo deals only.
   const networkMatches = showMatches ? await withTimeout(getNetworkMatchesForDeal(c.address || opp.title), 8000, []) : [];
   // 🔗 On a buyer-agent / developer lead: every deal they're on (last talk + offer + next follow-up).
@@ -426,6 +423,12 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             </AutoSaveForm>
           </Card>
 
+          {/* 🚦 SOP gate — moved under Opportunity on the LEFT (Jon 2026-10-26): keeps the right
+              column for buyers/agents + marketing. Advance is blocked until the gate clears. */}
+          {showMatches && (
+            <PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} canOverride={manager} /></PanelGuard>
+          )}
+
         </div>
         )}
 
@@ -645,39 +648,13 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             );
           })()}
 
-          {/* 🎯 Matching cash buyers — who to send this land to, ranked (marketing only) */}
-          {showMatches && buyerMatches.length > 0 && (
-            <Card className="p-3">
-              <div className="mb-1.5 flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Matching cash buyers</span>
-                <PanelGuard label="send-to-buyers"><SendToBuyersButton oppId={opp.id} launchReady={process.env.DIRECTREI_WRITE === "1" && Boolean(process.env.DIRECTREI_API_KEY)} /></PanelGuard>
-              </div>
-              <div className="space-y-1.5">
-                {buyerMatches.map((b) => (
-                  <div key={b.id} className="flex items-start gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 ring-1 ring-slate-100">
-                    <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-navy text-[10px] font-extrabold text-white">{b.rank}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-[12px] font-bold text-slate-800">{b.name}</span>
-                        {b.fast && <span className="shrink-0 rounded bg-emerald-50 px-1 text-[9px] font-bold text-emerald-700">fast</span>}
-                        {b.topPrice != null && <span className="shrink-0 text-[10px] font-semibold text-slate-400">to ${Math.round(b.topPrice / 1000)}k</span>}
-                      </div>
-                      {b.reasons.length > 0 && <div className="truncate text-[10px] text-slate-500">{b.reasons.join(" · ")}</div>}
-                      {(b.phone || b.email) && <div className="truncate text-[10px] font-semibold text-slate-400">{b.phone}{b.phone && b.email ? " · " : ""}{b.email}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-1.5 text-[10px] text-slate-400">Ranked by area + price fit from your vetted buyers. Send top-down.</div>
-            </Card>
-          )}
-
-          {/* 🎯 Smart Match from the buyer-network CRM — auto-ranked developers +
-              agents for THIS deal; one-click attach (Jon 2026-10-20). */}
+          {/* 🎯 SmartMatch = the cascade list (Jon 2026-10-26): VETTED DEVELOPERS in their own
+              section, BUYER AGENTS for the lead's area in theirs — no second developer list, and
+              the old Buyer-Research "cash buyers" panel is gone (buyers live in the kanban now). */}
           {showMatches && networkMatches.length > 0 && (() => {
-            // ✉️ Pre-written "new deal" email for a vetted developer (Jon 2026-10-26): says we
-            // locked up a deal in their buy-box area, with the address, APN and a LINK to the
-            // offer packet (mailto can't attach files, so the packet goes in as its Drive link).
+            // ✉️ Pre-written "new deal" email for a vetted developer: says we locked up a deal in
+            // their buy-box area, with the address, APN and a LINK to the offer packet (mailto
+            // can't attach files, so the packet goes in as its Drive link).
             const dealAddrFull = formatAddress(opp.title) || c.address || "";
             const fdAny = (opp.formData ?? {}) as { property?: { apn?: string }; land?: { apn?: string } };
             const dealApn = fdAny.property?.apn || fdAny.land?.apn || "";
@@ -700,50 +677,54 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               ];
               return `mailto:${m.email}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(lines.join("\n"))}`;
             };
-            return (
-            <Card className="p-3">
-              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Smart Match — your ✅ vetted network buys here</div>
-              <div className="space-y-1.5">
-                {networkMatches.map((m, i) => {
-                  const attached = attachedBuyerIds.has(m.oppId);
-                  return (
-                    <div key={m.oppId} className="flex items-start gap-2 rounded-lg bg-emerald-50/50 px-2.5 py-1.5 ring-1 ring-emerald-100">
-                      <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-600 text-[10px] font-extrabold text-white">{i + 1}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="shrink-0 text-[11px]">{m.kind === "buyer_agent" ? "🧑‍💼" : "🏗"}</span>
-                          <a href={`/crm/${m.oppId}`} className="truncate text-[12px] font-bold text-slate-800 hover:text-emerald-700 hover:underline">{m.name}</a>
-                        </div>
-                        {m.reason && <div className="truncate text-[10px] text-emerald-700">{m.reason}</div>}
-                        {m.phone && <div className="truncate text-[10px] font-semibold text-slate-400">{m.phone}</div>}
-                      </div>
-                      <div className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
-                        {attached
-                          ? <span className="text-[10px] font-bold text-emerald-600">✓ on deal</span>
-                          : (
-                            <form action={attachNetworkBuyerToDeal}>
-                              <input type="hidden" name="oppId" value={opp.id} /><input type="hidden" name="networkOppId" value={m.oppId} />
-                              <button className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700">＋ Attach</button>
-                            </form>
-                          )}
-                        {/* ✉️ Draft the pre-written "new deal" email (developers; needs an email on file) */}
-                        {m.kind === "developer" && m.email && comms.email && (
-                          <a href={draftEmail(m)} className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100" title="Draft a new-deal email to this vetted developer — address, APN & offer-packet link pre-filled">✉ Draft</a>
-                        )}
-                      </div>
+            const devs = networkMatches.filter((m) => m.kind === "developer");
+            const agents = networkMatches.filter((m) => m.kind === "buyer_agent");
+            const row = (m: typeof networkMatches[number], i: number) => {
+              const attached = attachedBuyerIds.has(m.oppId);
+              return (
+                <div key={m.oppId} className="flex items-start gap-2 rounded-lg bg-emerald-50/50 px-2.5 py-1.5 ring-1 ring-emerald-100">
+                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-600 text-[10px] font-extrabold text-white">{i + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="shrink-0 text-[11px]">{m.kind === "buyer_agent" ? "🧑‍💼" : "🏗"}</span>
+                      <a href={`/crm/${m.oppId}`} className="truncate text-[12px] font-bold text-slate-800 hover:text-emerald-700 hover:underline">{m.name}</a>
                     </div>
-                  );
-                })}
-              </div>
-              <div className="mt-1.5 text-[10px] text-slate-400">Auto-matched from your ✅ vetted developer + agent network by area. Attach, or ✉ draft the new-deal email.</div>
-            </Card>
-            );
+                    {m.reason && <div className="truncate text-[10px] text-emerald-700">{m.reason}</div>}
+                    {m.phone && <div className="truncate text-[10px] font-semibold text-slate-400">{m.phone}</div>}
+                  </div>
+                  <div className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
+                    {attached
+                      ? <span className="text-[10px] font-bold text-emerald-600">✓ on deal</span>
+                      : (
+                        <form action={attachNetworkBuyerToDeal}>
+                          <input type="hidden" name="oppId" value={opp.id} /><input type="hidden" name="networkOppId" value={m.oppId} />
+                          <button className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700">＋ Attach</button>
+                        </form>
+                      )}
+                    {m.kind === "developer" && m.email && comms.email && (
+                      <a href={draftEmail(m)} className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100" title="Draft a new-deal email — address, APN & offer-packet link pre-filled">✉ Draft</a>
+                    )}
+                  </div>
+                </div>
+              );
+            };
+            return (<>
+              {devs.length > 0 && (
+                <Card className="p-3">
+                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🏗 Vetted developers — the cascade list</div>
+                  <div className="space-y-1.5">{devs.map((m, i) => row(m, i))}</div>
+                  <div className="mt-1.5 text-[10px] text-slate-400">✅ Vetted developers whose buy-box covers this area — attach or ✉ draft the new-deal email, top-down.</div>
+                </Card>
+              )}
+              {agents.length > 0 && (
+                <Card className="p-3">
+                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🧑‍💼 Matching buyer agents</div>
+                  <div className="space-y-1.5">{agents.map((m, i) => row(m, i))}</div>
+                  <div className="mt-1.5 text-[10px] text-slate-400">Active buyer agents working this lead&apos;s area — they may already have a buyer.</div>
+                </Card>
+              )}
+            </>);
           })()}
-
-          {/* 🚦 Option B — SOP gate wired into the pipeline; advance is blocked until it clears (Jon 2026-10-21) */}
-          {showMatches && (
-            <PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} canOverride={manager} /></PanelGuard>
-          )}
 
           {/* 📣 Marketing SOP checklist — dispo deals only (Jon 2026-10-20) */}
           {showMatches && (
