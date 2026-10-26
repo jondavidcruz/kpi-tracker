@@ -18,6 +18,12 @@ export async function GET(req: NextRequest) {
     try { arr = row?.description ? JSON.parse(row.description) : []; } catch { arr = []; }
     return NextResponse.json({ serverErrors: arr });
   }
+  if (req.nextUrl.searchParams.get("probe") === "1") {
+    const row = await db.resource.findFirst({ where: { category: "__render_probe__" } }).catch(() => null);
+    let arr: unknown[] = [];
+    try { arr = row?.description ? JSON.parse(row.description) : []; } catch { arr = []; }
+    return NextResponse.json({ renderProbe: arr });
+  }
   const id = req.nextUrl.searchParams.get("id") || "";
   const q = req.nextUrl.searchParams.get("q") || "";
   const opp = id

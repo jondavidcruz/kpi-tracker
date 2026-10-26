@@ -77,6 +77,22 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   ]);
 }
 
+// 🔧 TEMPORARY render-completion probe (Jon 2026-10-26). Rendered LAST in the tree — if it
+// runs, the whole page render reached the end (so a crash is in transmission, not render).
+// It logs {oppId, at, ms} to a Resource read via /api/crm/oppdiag?probe=1. Remove once fixed.
+async function RenderProbe({ oppId, startedAt }: { oppId: string; startedAt: number }) {
+  try {
+    const row = await db.resource.findFirst({ where: { category: "__render_probe__" } }).catch(() => null);
+    let arr: unknown[] = [];
+    try { arr = row?.description ? JSON.parse(row.description) : []; } catch { arr = []; }
+    arr.unshift({ oppId, at: new Date().toISOString(), ms: Date.now() - startedAt });
+    const description = JSON.stringify(arr.slice(0, 12));
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "render-probe", category: "__render_probe__", url: "", description } });
+  } catch { /* best-effort */ }
+  return null;
+}
+
 async function OpportunityPageInner({ params, searchParams }: { params: Promise<{ oppId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { oppId } = await params;
   // 🔧 TEMP debug: ?dbg=LMR skips the Left/Middle/Right columns to localize the
@@ -164,6 +180,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
   const fmtAt = (d: Date) => d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const devH = opp.devPricingSentAt ? Math.round((Date.now() - opp.devPricingSentAt.getTime()) / 3_600_000) : null;
 
+  const renderStart = Date.now();
   return (
     <PanelGuard label="contact-full">
     <div className="space-y-4">
@@ -944,6 +961,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
         </div>
         )}
       </div>
+      <RenderProbe oppId={oppId} startedAt={renderStart} />
     </div>
     </PanelGuard>
   );
