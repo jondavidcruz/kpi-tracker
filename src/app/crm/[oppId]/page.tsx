@@ -20,6 +20,7 @@ import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
 import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels, recStreamSrc } from "@/lib/crm-shared";
 import ParcelsPanel from "@/components/ParcelsPanel";
+import PanelGuard from "@/components/PanelGuard";
 import { formsForPipeline } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
@@ -137,6 +138,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
   const devH = opp.devPricingSentAt ? Math.round((Date.now() - opp.devPricingSentAt.getTime()) / 3_600_000) : null;
 
   return (
+    <PanelGuard label="contact-full">
     <div className="space-y-4">
       {/* ── Header: who, stage, actions ── */}
       <Card className="p-4">
@@ -874,6 +876,7 @@ async function OpportunityPageInner({ params }: { params: Promise<{ oppId: strin
         </div>
       </div>
     </div>
+    </PanelGuard>
   );
 }
 
