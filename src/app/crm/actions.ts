@@ -395,6 +395,13 @@ export async function saveOppMetaAction(formData: FormData) {
   // submit a partial form) + a form that omits the owner field never wipe data
   // (Jon 2026-10-24). Owner is saved separately via setOppOwnerAction.
   const has = (k: string) => formData.get(k) != null;
+  // 🔎 Lead source (acquisitions) lives in formData — no schema column (Jon 2026-10-26).
+  let fdMerge: Record<string, unknown> | null = null;
+  if (has("leadSource")) {
+    const row = await db.crmOpportunity.findUnique({ where: { id }, select: { formData: true } });
+    const existing = (row?.formData as Record<string, unknown> | null) ?? {};
+    fdMerge = { ...existing, __leadSource: String(formData.get("leadSource")).trim().slice(0, 80) };
+  }
   await db.crmOpportunity.update({ where: { id }, data: {
     ...(plRaw != null ? { pipeline: String(plRaw) === "War Room" ? "" : String(plRaw) } : {}),
     ...(has("title") ? { title: formatAddress(String(formData.get("title") ?? "")) || undefined } : {}),
@@ -403,6 +410,7 @@ export async function saveOppMetaAction(formData: FormData) {
     ...(has("nextFollowUp") ? { nextFollowUp: String(formData.get("nextFollowUp")).trim() } : {}),
     ...(has("value") ? { value: num("value") } : {}),
     ...(has("askPrice") ? { askPrice: num("askPrice") } : {}),
+    ...(fdMerge ? { formData: fdMerge as never } : {}),
   } });
   revalidatePath(`/crm/${id}`);
   revalidatePath("/crm");
@@ -940,6 +948,37 @@ export async function uploadLeadDocAction(formData: FormData) {
   } catch (e) {
     await logCrmEvent({ contactId, oppId, kind: "system", body: `📎 Upload failed: ${String(e).slice(0, 120)}`, actor: me.name }).catch(() => {});
   }
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** 🗑 Delete an uploaded document (Jon 2026-10-26: Marie uploaded the same PDF 11+
+ *  times — the team needs to clear duplicates). Trashes the file in Google Drive
+ *  (recoverable from Drive trash for 30 days) and removes the clutter from the lead:
+ *  for an uploaded-file EVENT we delete the event row; for a file found directly in
+ *  the Drive folder we just trash it. Manager or anyone on the deal. */
+export async function deleteLeadDocAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const eventId = String(formData.get("eventId") ?? "");
+  let driveId = String(formData.get("driveId") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim().slice(0, 90);
+  if (!oppId) return;
+  const { driveFileId, trashDriveFile } = await import("@/lib/gdrive");
+  try {
+    if (eventId) {
+      const ev = await db.crmEvent.findUnique({ where: { id: eventId }, select: { meta: true, kind: true } });
+      if (!ev || ev.kind !== "file") return;
+      const meta = (ev.meta as { driveId?: string; link?: string } | null) ?? {};
+      if (!driveId) driveId = meta.driveId || driveFileId(meta.link);
+      if (driveId) await trashDriveFile(driveId).catch(() => {});
+      await db.crmEvent.delete({ where: { id: eventId } }).catch(() => {});
+    } else if (driveId) {
+      await trashDriveFile(driveId).catch(() => {});
+    } else return;
+    await logCrmEvent({ contactId, oppId, kind: "system", body: `🗑 ${me.name.split(" ")[0]} removed a document${name ? ` (${name})` : ""} — moved to Google Drive trash.`, actor: me.name });
+  } catch { /* best-effort */ }
   revalidatePath(`/crm/${oppId}`);
 }
 

@@ -31,7 +31,7 @@ import { editCrmNoteAction, deleteCrmNoteAction } from "../actions";
 import LeadNoteComposer from "@/components/LeadNoteComposer";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import OppPipelineMover from "@/components/OppPipelineMover";
-import { setOppStageAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, toggleDndAction, uploadLeadDocAction } from "../actions";
+import { setOppStageAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, saveCrmFormAction, toggleDndAction, uploadLeadDocAction, deleteLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets, readSequences, readSeqState } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
@@ -353,10 +353,17 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                   const link = (e.meta as { link?: string } | null)?.link;
                   const name = stripHtml(e.body).replace(/^📎\s*/, "").slice(0, 90);
                   return (
-                    <a key={e.id} href={link ?? "#"} target="_blank" rel="noreferrer" className={`block rounded-lg px-2.5 py-1.5 text-xs ring-1 ${link ? "bg-indigo-50/50 text-indigo-800 ring-indigo-100 hover:bg-indigo-50" : "bg-slate-50 text-slate-500 ring-slate-100"}`}>
-                      📄 {name}
-                      <span className="block text-[9px] text-slate-400">{e.at.toLocaleDateString("en-US")} · {e.actor}</span>
-                    </a>
+                    <div key={e.id} className={`group flex items-start gap-1 rounded-lg px-2.5 py-1.5 text-xs ring-1 ${link ? "bg-indigo-50/50 text-indigo-800 ring-indigo-100" : "bg-slate-50 text-slate-500 ring-slate-100"}`}>
+                      <a href={link ?? "#"} target="_blank" rel="noreferrer" className="min-w-0 flex-1 hover:underline">
+                        📄 {name}
+                        <span className="block text-[9px] text-slate-400">{e.at.toLocaleDateString("en-US")} · {e.actor}</span>
+                      </a>
+                      <form action={deleteLeadDocAction}>
+                        <input type="hidden" name="oppId" value={opp.id} /><input type="hidden" name="contactId" value={c.id} />
+                        <input type="hidden" name="eventId" value={e.id} /><input type="hidden" name="name" value={name} />
+                        <button className="rounded px-1 py-0.5 text-[11px] text-slate-300 hover:bg-red-100 hover:text-red-600" title="Delete this document (moves it to Drive trash)">🗑</button>
+                      </form>
+                    </div>
                   );
                 })}
                 {/* 📁 files that already live in the deal's Google Drive folder —
@@ -365,10 +372,17 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                   <>
                     <div className="pt-1 text-[9px] font-bold uppercase tracking-wide text-slate-300">📁 From Google Drive ({driveFiles.length})</div>
                     {driveFiles.map((f) => (
-                      <a key={f.id} href={f.link} target="_blank" rel="noreferrer" className="block rounded-lg bg-emerald-50/50 px-2.5 py-1.5 text-xs text-emerald-800 ring-1 ring-emerald-100 hover:bg-emerald-50">
-                        {f.mimeType.includes("image") ? "🖼" : f.mimeType.includes("pdf") ? "📕" : f.mimeType.includes("spreadsheet") ? "📊" : f.mimeType.includes("document") ? "📝" : "📄"} {f.name.slice(0, 90)}
-                        <span className="block text-[9px] text-emerald-500/70">in the deal&apos;s Drive folder</span>
-                      </a>
+                      <div key={f.id} className="flex items-start gap-1 rounded-lg bg-emerald-50/50 px-2.5 py-1.5 text-xs text-emerald-800 ring-1 ring-emerald-100">
+                        <a href={f.link} target="_blank" rel="noreferrer" className="min-w-0 flex-1 hover:underline">
+                          {f.mimeType.includes("image") ? "🖼" : f.mimeType.includes("pdf") ? "📕" : f.mimeType.includes("spreadsheet") ? "📊" : f.mimeType.includes("document") ? "📝" : "📄"} {f.name.slice(0, 90)}
+                          <span className="block text-[9px] text-emerald-500/70">in the deal&apos;s Drive folder</span>
+                        </a>
+                        <form action={deleteLeadDocAction}>
+                          <input type="hidden" name="oppId" value={opp.id} /><input type="hidden" name="contactId" value={c.id} />
+                          <input type="hidden" name="driveId" value={f.id} /><input type="hidden" name="name" value={f.name.slice(0, 90)} />
+                          <button className="rounded px-1 py-0.5 text-[11px] text-emerald-300 hover:bg-red-100 hover:text-red-600" title="Delete this file (moves it to Drive trash)">🗑</button>
+                        </form>
+                      </div>
                     ))}
                   </>
                 )}
@@ -399,6 +413,15 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                 <label><span className={lbl}>Next follow-up</span><input type="date" name="nextFollowUp" defaultValue={opp.nextFollowUp} className={inputCls} /></label>
               </div>
               <label><span className={lbl}>Tags</span><input name="tags" defaultValue={opp.tags} placeholder="hot, novation, flood-check…" className={inputCls} /></label>
+              {/* 📍 Lead source (acquisitions) — where this seller lead came from (Jon 2026-10-26). Stored in formData. */}
+              {!isDispoNetworkPipeline(opp.pipeline) && (
+                <label><span className={lbl}>📍 Lead source</span>
+                  <input name="leadSource" list="lead-source-opts" defaultValue={((opp.formData as { __leadSource?: string } | null)?.__leadSource) ?? ""} placeholder="PPC, Direct Mail, Cold Call, Referral…" className={inputCls} />
+                  <datalist id="lead-source-opts">
+                    <option value="PPC / Google Ads" /><option value="SEO / Website" /><option value="Direct Mail" /><option value="Cold Call" /><option value="SMS / Text" /><option value="Facebook / Social" /><option value="Referral" /><option value="Driving for Dollars" /><option value="Zillow / MLS" /><option value="Wholesaler" /><option value="Auction" /><option value="Other" />
+                  </datalist>
+                </label>
+              )}
               <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">Save</button>
             </AutoSaveForm>
           </Card>
