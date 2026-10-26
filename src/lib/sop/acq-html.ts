@@ -272,6 +272,7 @@ button.reset:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
       <li><strong>REI AI</strong> &mdash; comps + value.</li>
       <li><strong>Propwire</strong> &mdash; free comps (your own account).</li>
       <li><strong>Redfin / Zillow</strong> &mdash; free public comps and <strong>listing history</strong>: is it on the market now, when was it last listed, at what price, did it fail to sell?</li>
+      <li><strong>Elevation contours (land)</strong> &mdash; after you&rsquo;ve comped and checked flood zone + wetlands, pull the <strong>topo / contour lines</strong> (Regrid contour layer, or Google Earth / USGS topo) to confirm the <strong>slope</strong>. Flat &amp; buildable sells; steep grade or a ravine kills a build &mdash; know it before you offer.</li>
     </ul>
 
     <h3 class="step"><span class="dot">&#9656;</span> Start the financials</h3>
@@ -281,11 +282,12 @@ button.reset:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
     </ul>
 
     <div class="gate" data-gate="g2">
-      <div class="gbar"><span class="gl">Gate 2 &mdash; property verified</span><span class="gs" data-count>0 / 4</span></div>
+      <div class="gbar"><span class="gl">Gate 2 &mdash; property verified</span><span class="gs" data-count>0 / 5</span></div>
       <ul class="checks">
         <li><label><input type="checkbox"><span>Ran the address on <strong>Regrid, REI AI, Propwire, and Zillow/Redfin</strong>.</span></label></li>
         <li><label><input type="checkbox"><span>Listing status confirmed &mdash; <strong>listed now?</strong> last-listed date + price recorded.</span></label></li>
         <li><label><input type="checkbox"><span>Comps pulled &mdash; ARV (home) or $/acre (land) in hand.</span></label></li>
+        <li><label><input type="checkbox"><span>Land: flood zone + wetlands + <strong>elevation contours</strong> checked &mdash; slope confirmed (flat vs steep).</span></label></li>
         <li><label><input type="checkbox"><span>Beds / baths / sqft / lot / year confirmed from software, not from the seller.</span></label></li>
       </ul>
       <div class="gfail"><b>If held</b> &mdash; finish the lookups first. Walking into the call without the numbers means a second call to get them, and slow kills deals.</div>

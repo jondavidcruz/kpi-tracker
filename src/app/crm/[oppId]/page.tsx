@@ -27,8 +27,9 @@ import { editCrmNoteAction, deleteCrmNoteAction } from "../actions";
 import LeadNoteComposer from "@/components/LeadNoteComposer";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import CrmFormFields from "@/components/CrmFormFields";
+import DocUploadForm from "@/components/DocUploadForm";
 import OppPipelineMover from "@/components/OppPipelineMover";
-import { setOppStageAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, uploadLeadDocAction, deleteLeadDocAction } from "../actions";
+import { setOppStageAction, logCrmTouchAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, deleteLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
 import { readSnippets } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
@@ -327,21 +328,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           {/* 📎 Documents — every file saved on this lead (PandaDoc, Drive, uploads) */}
           <Card className="p-4">
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">📎 Documents</div>
-            <form action={uploadLeadDocAction} className="mb-2 flex flex-wrap items-center gap-1.5">
-              <input type="hidden" name="oppId" value={opp.id} />
-              <input type="hidden" name="contactId" value={c.id} />
-              <select name="docType" defaultValue="" className="rounded-lg border border-slate-200 px-1.5 py-1 text-[10px] font-semibold text-slate-600" title="What kind of document is this?">
-                <option value="">Type (auto)…</option>
-                <option>Purchase Agreement</option>
-                <option>Assignment Agreement</option>
-                <option>Listing Agreement</option>
-                <option>Disclosure Agreement</option>
-                <option>Addendum</option>
-                <option>Miscellaneous</option>
-              </select>
-              <input type="file" name="file" required className="min-w-0 flex-1 text-[10px] text-slate-500 file:mr-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[10px] file:font-bold file:text-slate-600" />
-              <button className="rounded-lg bg-brand-navy px-2.5 py-1 text-[10px] font-bold text-white">⬆ to Drive</button>
-            </form>
+            <DocUploadForm oppId={opp.id} contactId={c.id} />
             {events.filter((e) => e.kind === "file").length === 0 && driveFilesShown.length === 0 ? (
               <p className="text-xs text-slate-400">No documents yet — upload above, or signed PandaDocs attach automatically. Everything lands in the deal&apos;s Google Drive folder.</p>
             ) : (

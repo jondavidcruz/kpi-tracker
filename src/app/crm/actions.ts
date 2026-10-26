@@ -910,27 +910,25 @@ export async function bulkConvAction(formData: FormData) {
 /** 📎 Upload a document for this lead — stored in the deal's Google Drive
  *  folder (our SOP: files live in Drive, never Vercel/Supabase), linked on
  *  the lead's Documents panel + timeline. */
-export async function uploadLeadDocAction(formData: FormData) {
+// Returns a result so the upload form can show success/failure INLINE (Jon 2026-10-26:
+// "adding attachments is still not working" — the failure was only logged to the timeline
+// where it's easy to miss; now the rep sees the exact reason right at the upload box).
+export type UploadResult = { ok: boolean; msg: string };
+export async function uploadLeadDocAction(_prev: UploadResult | null, formData: FormData): Promise<UploadResult> {
   const me = await crmUser();
-  if (!me) return;
+  if (!me) return { ok: false, msg: "You're signed out — reload and sign in." };
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
   const docType = String(formData.get("docType") ?? "").trim(); // Purchase Agreement, Assignment, …
   const file = formData.get("file");
-  if (!oppId || !contactId || !(file instanceof File) || file.size === 0) return;
-  if (file.size > 15 * 1024 * 1024) {
-    await logCrmEvent({ contactId, oppId, kind: "system", body: "📎 Upload skipped — file over 15MB; compress it and retry.", actor: me.name });
-    revalidatePath(`/crm/${oppId}`);
-    return;
-  }
+  if (!oppId || !contactId) return { ok: false, msg: "Missing the lead — reopen this contact and retry." };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, msg: "Pick a file first." };
+  if (file.size > 15 * 1024 * 1024) return { ok: false, msg: `That file is ${(file.size / 1048576).toFixed(1)}MB — over the 15MB limit. Compress it and retry.` };
   // Auto-title: the chosen doc type, else the file's own name (team can change it).
   const title = docType || file.name.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim() || file.name;
   try {
     const { gdriveConfigured, ensureSubfolder, uploadToFolder, listFolder, dealsParent } = await import("@/lib/gdrive");
-    if (!gdriveConfigured()) {
-      await logCrmEvent({ contactId, oppId, kind: "system", body: "📎 Upload couldn't save — document storage isn't configured. Tell Jon.", actor: me.name });
-      revalidatePath(`/crm/${oppId}`); return;
-    }
+    if (!gdriveConfigured()) return { ok: false, msg: "Document storage isn't configured (Google Drive). Tell Jon." };
     const DEALS_PARENT = await dealsParent();
     const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contact: { select: { address: true, name: true } } } });
     const label = (opp?.contact.address || opp?.title || opp?.contact.name || "Unfiled").trim();
@@ -945,10 +943,14 @@ export async function uploadLeadDocAction(formData: FormData) {
     const driveName = `${docType ? docType + " - " : ""}${file.name}`.slice(0, 120);
     const up = await uploadToFolder(folderId, driveName, bytes, file.type || "application/octet-stream");
     await logCrmEvent({ contactId, oppId, kind: "file", body: `📎 ${title} — uploaded to the deal's Drive folder`, meta: { driveId: up.id, link: up.link, docType }, actor: me.name });
+    revalidatePath(`/crm/${oppId}`);
+    return { ok: true, msg: `✓ "${title}" uploaded to the deal's Drive folder.` };
   } catch (e) {
-    await logCrmEvent({ contactId, oppId, kind: "system", body: `📎 Upload failed: ${String(e).slice(0, 120)}`, actor: me.name }).catch(() => {});
+    const msg = String(e).slice(0, 180);
+    await logCrmEvent({ contactId, oppId, kind: "system", body: `📎 Upload failed: ${msg}`, actor: me.name }).catch(() => {});
+    revalidatePath(`/crm/${oppId}`);
+    return { ok: false, msg: `Upload failed: ${msg}` };
   }
-  revalidatePath(`/crm/${oppId}`);
 }
 
 /** 🗑 Delete an uploaded document (Jon 2026-10-26: Marie uploaded the same PDF 11+
