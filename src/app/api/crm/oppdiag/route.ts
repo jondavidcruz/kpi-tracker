@@ -1,0 +1,39 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { getCurrentUser, isManager } from "@/lib/auth";
+
+// 🔧 TEMPORARY manager-only diagnostic (Jon 2026-10-26): dump ONE opp's formData shape
+// + sizes so we can find the value that aborts the full-page render on novation deals.
+// Lives under /api/crm so it's already behind the auth middleware. DELETE after the fix.
+export const dynamic = "force-dynamic";
+
+export async function GET(req: NextRequest) {
+  const me = await getCurrentUser();
+  if (!me || !isManager(me)) return NextResponse.json({ error: "managers only" }, { status: 403 });
+  const id = req.nextUrl.searchParams.get("id") || "";
+  const opp = await db.crmOpportunity.findUnique({ where: { id }, include: { contact: true } });
+  if (!opp) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const fd = (opp.formData ?? {}) as Record<string, unknown>;
+  const keys = fd && typeof fd === "object" ? Object.keys(fd) : [];
+  const sizes: Record<string, number> = {};
+  for (const k of keys) {
+    try { sizes[k] = JSON.stringify(fd[k] ?? null).length; } catch { sizes[k] = -1; }
+  }
+  let totalLen = -1;
+  try { totalLen = JSON.stringify(fd ?? null).length; } catch { totalLen = -2; }
+  const events = await db.crmEvent.findMany({ where: { contactId: opp.contactId }, select: { kind: true, body: true }, orderBy: { at: "desc" }, take: 400 });
+  let maxBody = 0, totalBody = 0;
+  for (const e of events) { const l = (e.body || "").length; totalBody += l; if (l > maxBody) maxBody = l; }
+  return NextResponse.json({
+    pipeline: opp.pipeline, stage: opp.stage, title: opp.title,
+    formDataKeys: keys, formDataSizes: sizes, formDataTotalLen: totalLen,
+    eventCount: events.length, maxEventBodyLen: maxBody, totalEventBodyLen: totalBody,
+    assignmentDraft: fd.__assignmentDraft ?? null,
+    dispoOffers: fd.__dispoOffers ?? null,
+    dispoBuyers: fd.__dispoBuyers ?? null,
+    gates: fd.__gates ?? null,
+    marketing: fd.__marketing ?? null,
+    followers: fd.__followers ?? null,
+    contactAddress: opp.contact?.address ?? "",
+  });
+}
