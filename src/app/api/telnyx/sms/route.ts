@@ -105,11 +105,22 @@ export async function POST(req: NextRequest) {
     const status = p.to?.[0]?.status ?? "";
     if (["delivery_failed", "sending_failed", "failed", "undelivered"].includes(status)) {
       const toNum = p.to?.[0]?.phone_number ?? "";
+      const failedFrom = typeof p.from === "string" ? p.from : p.from?.phone_number ?? "";
+      const text = String(p.text ?? "");
       const last10 = toNum.replace(/\D/g, "").slice(-10);
       const contact = last10.length === 10 ? await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true } }) : null;
+      // 🔄 Auto-rotate the from-number (Jon 2026-10-26): a carrier rejection on a ported
+      // number auto-resends from the next known-good War Room number instead of failing.
+      const { rotateAndResend } = await import("@/lib/sms-rotate");
+      const rot = text ? await rotateAndResend(toNum, text, failedFrom).catch(() => ({ resent: false })) : { resent: false };
       if (contact) {
         const err = p.errors?.[0]?.title ?? status;
-        await logCrmEvent({ contactId: contact.id, oppId: "", kind: "sms", body: `⚠️ Text NOT delivered (${err}) — carrier rejected it; try calling or rotate the from-number.`, meta: { msgId: `dlr-${p.id}` }, actor: "telnyx-dlr" }).catch(() => {});
+        const body = "resent" in rot && rot.resent
+          ? `🔄 ${failedFrom || "That number"} was rejected (${err}) — automatically resent from ${(rot as { from?: string }).from}.`
+          : "exhausted" in rot && rot.exhausted
+          ? `⚠️ Text undeliverable after trying multiple numbers (${err}) — call them instead.`
+          : `⚠️ Text NOT delivered (${err}) — carrier rejected it; try calling or rotate the from-number.`;
+        await logCrmEvent({ contactId: contact.id, oppId: "", kind: "sms", body, meta: { msgId: `dlr-${p.id}` }, actor: "telnyx-dlr" }).catch(() => {});
       }
     }
     return NextResponse.json({ ok: true });
