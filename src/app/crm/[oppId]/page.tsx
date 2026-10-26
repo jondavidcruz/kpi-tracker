@@ -674,7 +674,33 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
 
           {/* 🎯 Smart Match from the buyer-network CRM — auto-ranked developers +
               agents for THIS deal; one-click attach (Jon 2026-10-20). */}
-          {showMatches && networkMatches.length > 0 && (
+          {showMatches && networkMatches.length > 0 && (() => {
+            // ✉️ Pre-written "new deal" email for a vetted developer (Jon 2026-10-26): says we
+            // locked up a deal in their buy-box area, with the address, APN and a LINK to the
+            // offer packet (mailto can't attach files, so the packet goes in as its Drive link).
+            const dealAddrFull = formatAddress(opp.title) || c.address || "";
+            const fdAny = (opp.formData ?? {}) as { property?: { apn?: string }; land?: { apn?: string } };
+            const dealApn = fdAny.property?.apn || fdAny.land?.apn || "";
+            const packetEv = events.find((e) => e.kind === "file" && /packet|offer/i.test(stripHtml(e.body)) && (e.meta as { link?: string } | null)?.link)
+              ?? events.find((e) => e.kind === "file" && (e.meta as { link?: string } | null)?.link);
+            const packetLink = (packetEv?.meta as { link?: string } | null)?.link || "";
+            const draftEmail = (m: typeof networkMatches[number]) => {
+              const first = m.name.split(/[\s,]+/)[0] || "there";
+              const area = m.area || dealAddrFull;
+              const subj = `New off-market deal — ${dealAddrFull}`;
+              const lines = [
+                `Hi ${first},`, "",
+                `We just locked up a new deal${area ? ` in ${area}` : ""} that matches your buy box — details below:`, "",
+                `📍 Property: ${dealAddrFull || "(address on request)"}`,
+                ...(dealApn ? [`🧭 APN: ${dealApn}`] : []),
+                ...(packetLink ? [`📄 Offer packet: ${packetLink}`] : []),
+                "",
+                `Want it? Reply here and we'll send the full details and take your offer.`, "",
+                `— Freedom Offers`,
+              ];
+              return `mailto:${m.email}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(lines.join("\n"))}`;
+            };
+            return (
             <Card className="p-3">
               <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Smart Match — your ✅ vetted network buys here</div>
               <div className="space-y-1.5">
@@ -691,21 +717,28 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                         {m.reason && <div className="truncate text-[10px] text-emerald-700">{m.reason}</div>}
                         {m.phone && <div className="truncate text-[10px] font-semibold text-slate-400">{m.phone}</div>}
                       </div>
-                      {attached
-                        ? <span className="mt-0.5 shrink-0 text-[10px] font-bold text-emerald-600">✓ on deal</span>
-                        : (
-                          <form action={attachNetworkBuyerToDeal} className="mt-0.5 shrink-0">
-                            <input type="hidden" name="oppId" value={opp.id} /><input type="hidden" name="networkOppId" value={m.oppId} />
-                            <button className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700">＋ Attach</button>
-                          </form>
+                      <div className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
+                        {attached
+                          ? <span className="text-[10px] font-bold text-emerald-600">✓ on deal</span>
+                          : (
+                            <form action={attachNetworkBuyerToDeal}>
+                              <input type="hidden" name="oppId" value={opp.id} /><input type="hidden" name="networkOppId" value={m.oppId} />
+                              <button className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700">＋ Attach</button>
+                            </form>
+                          )}
+                        {/* ✉️ Draft the pre-written "new deal" email (developers; needs an email on file) */}
+                        {m.kind === "developer" && m.email && comms.email && (
+                          <a href={draftEmail(m)} className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100" title="Draft a new-deal email to this vetted developer — address, APN & offer-packet link pre-filled">✉ Draft</a>
                         )}
+                      </div>
                     </div>
                   );
                 })}
               </div>
-              <div className="mt-1.5 text-[10px] text-slate-400">Auto-matched from your developer + agent network by area. Attach to start the follow-up.</div>
+              <div className="mt-1.5 text-[10px] text-slate-400">Auto-matched from your ✅ vetted developer + agent network by area. Attach, or ✉ draft the new-deal email.</div>
             </Card>
-          )}
+            );
+          })()}
 
           {/* 🚦 Option B — SOP gate wired into the pipeline; advance is blocked until it clears (Jon 2026-10-21) */}
           {showMatches && (
