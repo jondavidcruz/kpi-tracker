@@ -474,7 +474,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             </Card>
           )}
 
-          {comms.email && c.email && (
+          {!dbg.includes("G") && comms.email && c.email && (
             <GmailComposer
               history={[...events].reverse().filter((e) => e.kind === "email").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }; })}
               oppId={opp.id} contactId={c.id} to={c.email} leadName={c.name} rep={me!.name}

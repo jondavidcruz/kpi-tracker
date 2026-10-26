@@ -29,6 +29,13 @@ export async function GET(req: NextRequest) {
   // How many Drive files does this deal render? (the Documents section — a prime weight on listed deals)
   let driveFileCount = -1;
   try { const g = await import("@/lib/gdrive"); driveFileCount = (await g.listDealFiles(opp.contact?.address || opp.title || opp.contact?.name || "")).length; } catch { driveFileCount = -2; }
+  // snippet library size — the composers serialize these as props (prime payload suspect)
+  let snippetCount = -1, snippetBytes = -1, seqCount = -1, seqBytes = -1;
+  try {
+    const { readSnippets, readSequences } = await import("@/lib/crm-templates");
+    const sn = await readSnippets(); snippetCount = sn.length; snippetBytes = JSON.stringify(sn).length;
+    const sq = await readSequences(); seqCount = sq.length; seqBytes = JSON.stringify(sq).length;
+  } catch { /* ignore */ }
   const fd = (opp.formData ?? {}) as Record<string, unknown>;
   const keys = fd && typeof fd === "object" ? Object.keys(fd) : [];
   const sizes: Record<string, number> = {};
@@ -53,7 +60,7 @@ export async function GET(req: NextRequest) {
     oppId: opp.id,
     eventCount: events.length, maxEventBodyLen: maxBody, totalEventBodyLen: totalBody,
     totalMetaLen: totalMeta, maxMetaLen: maxMeta, recordingEvents: recCount, eventKinds: kinds,
-    driveFileCount,
+    driveFileCount, snippetCount, snippetBytes, seqCount, seqBytes,
     assignmentDraft: fd.__assignmentDraft ?? null,
     dispoOffers: fd.__dispoOffers ?? null,
     dispoBuyers: fd.__dispoBuyers ?? null,
