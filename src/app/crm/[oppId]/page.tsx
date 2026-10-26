@@ -61,10 +61,10 @@ async function enrichDispoBuyers(buyers: Awaited<ReturnType<typeof readDispoBuye
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const lbl = "block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5";
 
-// 🔧 Dispo-panel block kill-switch (Jon 2026-10-26): the full page aborts the render
-// stream on the heaviest signed/novation deals (cumulative function budget). Keep OFF
-// until the common render is light enough across ALL deals, then re-enable.
-const DP_ON = false;
+// Dispo-panel block (buyer tracker, smart-match, offers, assignment, gate). The render
+// stream abort that forced this off was a malformed GHL note tag breaking the HTML — fixed
+// in sanitizeNoteHtml (Jon 2026-10-26) — so the panels are back on.
+const DP_ON = true;
 
 // ⏱ Hard-bound a server call so a SLOW/HANGING query can never stall the whole page
 // render (Jon 2026-10-26: novation contact pages failed with "Connection closed" — a
@@ -77,21 +77,6 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   ]);
 }
 
-// 🔧 TEMPORARY render-completion probe (Jon 2026-10-26). Rendered LAST in the tree — if it
-// runs, the whole page render reached the end (so a crash is in transmission, not render).
-// It logs {oppId, at, ms} to a Resource read via /api/crm/oppdiag?probe=1. Remove once fixed.
-async function RenderProbe({ oppId, startedAt }: { oppId: string; startedAt: number }) {
-  try {
-    const row = await db.resource.findFirst({ where: { category: "__render_probe__" } }).catch(() => null);
-    let arr: unknown[] = [];
-    try { arr = row?.description ? JSON.parse(row.description) : []; } catch { arr = []; }
-    arr.unshift({ oppId, at: new Date().toISOString(), ms: Date.now() - startedAt });
-    const description = JSON.stringify(arr.slice(0, 12));
-    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
-    else await db.resource.create({ data: { title: "render-probe", category: "__render_probe__", url: "", description } });
-  } catch { /* best-effort */ }
-  return null;
-}
 
 async function OpportunityPageInner({ params, searchParams }: { params: Promise<{ oppId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { oppId } = await params;
@@ -180,7 +165,6 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
   const fmtAt = (d: Date) => d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const devH = opp.devPricingSentAt ? Math.round((Date.now() - opp.devPricingSentAt.getTime()) / 3_600_000) : null;
 
-  const renderStart = Date.now();
   return (
     <PanelGuard label="contact-full">
     <div className="space-y-4">
@@ -961,7 +945,6 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
         </div>
         )}
       </div>
-      <RenderProbe oppId={oppId} startedAt={renderStart} />
     </div>
     </PanelGuard>
   );

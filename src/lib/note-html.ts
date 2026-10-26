@@ -7,6 +7,11 @@ const ALLOWED = new Set(["b", "strong", "i", "em", "u", "ul", "ol", "li", "br", 
 export function sanitizeNoteHtml(input: string): string {
   let s = String(input || "");
   s = s.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style)[\s\S]*?<\/\1>/gi, "");
+  // 🛡 Drop a trailing UNCLOSED tag (Jon 2026-10-26): GHL imports truncated a giant
+  // <p style="…"> mid-attribute. Left in dangerouslySetInnerHTML it swallows the rest of
+  // the page — including React's streaming <script> tags — so the browser's stream reader
+  // hits an incomplete stream ("Connection closed") and the whole page fails to load.
+  s = s.replace(/<\/?[a-zA-Z][^>]*$/, "");
   s = s.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (_m, close: string, tag: string, attrs: string) => {
     const t = tag.toLowerCase();
     if (!ALLOWED.has(t)) return "";
@@ -17,6 +22,9 @@ export function sanitizeNoteHtml(input: string): string {
     }
     return `<${t}>`;
   });
+  // Belt-and-suspenders: neutralize any stray "<" that isn't the start of a clean tag, so
+  // no malformed fragment can ever reach the DOM and break the stream.
+  s = s.replace(/<(?![a-zA-Z/])/g, "&lt;");
   return s.slice(0, 8000);
 }
 
