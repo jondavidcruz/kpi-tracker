@@ -32,14 +32,35 @@ const PALETTE = ["bg-sky-100 text-sky-800", "bg-yellow-100 text-yellow-800", "bg
 // 🗺 Pull "City, ST" out of a canonical "Street, City, ST ZIP" address so we can
 // group deals by market. Street is parts[0], the state/zip tail is last; the city
 // is the first part after the street. Guards against street-only / junk rows.
+// Street-type suffixes + leading directionals — used to pull the city out of a "street city"
+// chunk when there's no comma before the city (Jon 2026-10-26: GHL addresses like
+// "10960 SE 102nd Pl Ocala, FL 34472" were all landing in "No city on file").
+const STREET_SUFFIX = /^(st|street|ave|avenue|rd|road|dr|drive|ln|lane|blvd|ct|court|cir|circle|way|pkwy|parkway|ter|terrace|trl|trail|hwy|highway|pl|place|loop|run|pass|path|row|cv|cove|pt|point|sq|xing|crossing|bnd|bend|holw|hollow|psge|aly|alley|plz|plaza|expy|frwy)$/i;
+const DIR_TOKEN = /^(n|s|e|w|ne|nw|se|sw|north|south|east|west)$/i;
 function cityState(addr?: string): { city: string; st: string } {
   if (!addr) return { city: "", st: "" };
   const parts = addr.split(",").map((s) => s.trim()).filter(Boolean);
   if (parts.length < 2) return { city: "", st: "" };
-  const tail = parts[parts.length - 1];
-  const st = (tail.match(/\b([A-Z]{2})\b/) || [])[1] || "";
-  const c = parts[1];
-  const city = c && !/^\d/.test(c) && !/^[A-Z]{2}\b/.test(c) ? c : "";
+  const st = (parts[parts.length - 1].match(/\b([A-Z]{2})\b/) || [])[1] || "";
+  let city = "";
+  // "street, CITY, ST ZIP" — the city is the part just before "ST ZIP"
+  if (parts.length >= 3) {
+    const cand = parts[parts.length - 2];
+    if (cand && !/^\d/.test(cand) && !/^[A-Z]{2}\b/.test(cand)) city = cand;
+  }
+  // "street CITY, ST ZIP" — no comma before the city: pull the words after the LAST street
+  // suffix in the street chunk (dropping a leading directional like SW).
+  if (!city) {
+    const toks = parts[parts.length - 2].split(/\s+/);
+    let lastSuffix = -1;
+    toks.forEach((t, i) => { if (STREET_SUFFIX.test(t.replace(/\.$/, ""))) lastSuffix = i; });
+    if (lastSuffix >= 0 && lastSuffix < toks.length - 1) {
+      let cityToks = toks.slice(lastSuffix + 1);
+      while (cityToks.length && DIR_TOKEN.test(cityToks[0])) cityToks = cityToks.slice(1);
+      city = cityToks.join(" ");
+    }
+  }
+  if (/\d/.test(city)) city = "";
   return { city, st };
 }
 
