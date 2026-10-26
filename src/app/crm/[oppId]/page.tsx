@@ -846,7 +846,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               <input type="hidden" name="oppId" value={opp.id} />
               <select name="role" className="rounded-lg border border-slate-200 px-2 py-1 text-xs">
                 <option value="listing agent">listing agent</option>
-                <option value="buyer agent">buyer agent</option>
+                {/* buyer agent removed (Jon 2026-10-26) — they live in the dispo buyer/agent network, not here */}
                 <option value="escrow">escrow</option>
                 <option value="title">title</option>
                 <option value="attorney">attorney</option>
