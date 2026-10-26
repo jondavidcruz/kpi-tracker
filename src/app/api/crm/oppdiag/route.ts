@@ -29,14 +29,22 @@ export async function GET(req: NextRequest) {
   }
   let totalLen = -1;
   try { totalLen = JSON.stringify(fd ?? null).length; } catch { totalLen = -2; }
-  const events = await db.crmEvent.findMany({ where: { contactId: opp.contactId }, select: { kind: true, body: true }, orderBy: { at: "desc" }, take: 400 });
-  let maxBody = 0, totalBody = 0;
-  for (const e of events) { const l = (e.body || "").length; totalBody += l; if (l > maxBody) maxBody = l; }
+  const events = await db.crmEvent.findMany({ where: { contactId: opp.contactId }, select: { kind: true, body: true, meta: true }, orderBy: { at: "desc" }, take: 400 });
+  let maxBody = 0, totalBody = 0, totalMeta = 0, maxMeta = 0, recCount = 0;
+  const kinds: Record<string, number> = {};
+  for (const e of events) {
+    const l = (e.body || "").length; totalBody += l; if (l > maxBody) maxBody = l;
+    kinds[e.kind] = (kinds[e.kind] || 0) + 1;
+    let ml = 0; try { ml = JSON.stringify(e.meta ?? null).length; } catch { ml = -1; }
+    totalMeta += Math.max(0, ml); if (ml > maxMeta) maxMeta = ml;
+    if ((e.body || "").startsWith("🎙")) recCount++;
+  }
   return NextResponse.json({
     pipeline: opp.pipeline, stage: opp.stage, title: opp.title,
     formDataKeys: keys, formDataSizes: sizes, formDataTotalLen: totalLen,
     oppId: opp.id,
     eventCount: events.length, maxEventBodyLen: maxBody, totalEventBodyLen: totalBody,
+    totalMetaLen: totalMeta, maxMetaLen: maxMeta, recordingEvents: recCount, eventKinds: kinds,
     driveFileCount,
     assignmentDraft: fd.__assignmentDraft ?? null,
     dispoOffers: fd.__dispoOffers ?? null,
