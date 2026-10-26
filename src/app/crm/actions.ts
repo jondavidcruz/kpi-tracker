@@ -1245,7 +1245,11 @@ export async function dialerOutcomeAction(formData: FormData) {
   if (outcome in NEXT_DAYS) {
     const nf = new Date(Date.now() + NEXT_DAYS[outcome] * 86400000).toISOString().slice(0, 10);
     await db.crmOpportunity.update({ where: { id: oppId }, data: { nextFollowUp: nf, ...(outcome === "not_interested" ? { stage: "nurture" } : {}) } });
-    await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer: ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`, actor: me.name });
+    // 🧹 Fold into the call's recording entry if it's already there (one clean timeline row).
+    const { foldDispoIntoRecording } = await import("@/lib/call-merge");
+    const summary = `📞 ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`;
+    if (!(await foldDispoIntoRecording(contactId, summary)))
+      await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer: ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`, actor: me.name });
   }
   // 🎙 Disposition decides whether a recording stays filed (Jon 2026-10-26): record it so a
   // later recording.saved can skip Drive, and pull any already-filed recording if it was a VM.
@@ -1381,7 +1385,9 @@ export async function saveCrmFormAction(formData: FormData) {
   }
   const existing = (opp.formData ?? {}) as Record<string, unknown>;
   await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...existing, [formKey]: answers } as never } });
-  if (contactId) await logCrmEvent({ contactId, oppId, kind: "system", body: `${form.emoji} ${form.name} updated (${Object.keys(answers).length} answers)`, actor: me.name });
+  // 🧹 Roll repeat edits of the same form into one timeline entry (Jon 2026-10-26).
+  const { logEditCoalesced } = await import("@/lib/edit-log");
+  await logEditCoalesced({ contactId, oppId, body: `${form.emoji} ${form.name} updated (${Object.keys(answers).length} answers)`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
 }
 
@@ -1424,7 +1430,13 @@ export async function dialerOutcomeQuickAction(formData: FormData): Promise<void
     const c = await db.crmContact.findUnique({ where: { id: contactId }, select: { tags: true } });
     if (c && !/wrong-number/.test(c.tags)) await db.crmContact.update({ where: { id: contactId }, data: { tags: c.tags ? `${c.tags},wrong-number` : "wrong-number" } });
   }
-  await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer disposition: ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`, actor: me.name });
+  // 🧹 Fold into the call's recording entry if it's already there (one clean timeline row).
+  {
+    const { foldDispoIntoRecording } = await import("@/lib/call-merge");
+    const summary = `📞 ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`;
+    if (!(await foldDispoIntoRecording(contactId, summary)))
+      await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer disposition: ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`, actor: me.name });
+  }
   // 🎙 Disposition decides whether the recording stays filed (Jon 2026-10-26).
   const { recordCallDispo, removeRecentRecording, NO_KEEP_OUTCOMES } = await import("@/lib/call-dispo");
   await recordCallDispo(contactId, outcome).catch(() => {});
@@ -1592,7 +1604,9 @@ export async function sendToMatchingBuyersAction(_prev: { ok: boolean; count: nu
   if (!matches.length) return { ok: false, count: 0, msg: "No vetted buyers match this area/price yet — add buyers in Buyer Research." };
 
   const feats = featuresArr.join(", ");
-  const lot = String(fd.land?.lot ?? "");
+  // acres for the blast — prefer the new single "acreage" field, fall back to any legacy "lot"
+  const acRaw = String(fd.land?.acreage ?? fd.land?.lot ?? "").trim();
+  const lot = acRaw ? (/ac/i.test(acRaw) ? acRaw : `${acRaw} ac`) : "";
   const blast = `🏞 Land available: ${addr}${price != null ? ` — asking ${`$${price.toLocaleString()}`}` : ""}${lot ? ` · ${lot}` : ""}${feats ? `\nFeatures: ${feats}` : ""}\nCash/fast close preferred. Interested or want details? Reply here.`;
   const list = matches.map((b, i) => `${i + 1}. ${b.name}${b.topPrice != null ? ` (to $${Math.round(b.topPrice / 1000)}k)` : ""}${b.phone ? ` · ${b.phone}` : ""}${b.email ? ` · ${b.email}` : ""}${b.reasons.length ? ` — ${b.reasons.join(", ")}` : ""}`).join("\n");
 
@@ -2442,7 +2456,7 @@ export async function saveLandParcelsAction(formData: FormData) {
     ...(first?.address ? { title: first.address } : {}),
   } });
   if (first?.address && o.contactId) await db.crmContact.update({ where: { id: o.contactId }, data: { address: first.address } }).catch(() => {});
-  if (o.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "system", body: `📦 Parcels updated — ${cleaned.length} parcel${cleaned.length === 1 ? "" : "s"} on this deal`, actor: me.name });
+  if (o.contactId) { const { logEditCoalesced } = await import("@/lib/edit-log"); await logEditCoalesced({ contactId: o.contactId, oppId, body: `📦 Parcels updated — ${cleaned.length} parcel${cleaned.length === 1 ? "" : "s"} on this deal`, actor: me.name }); }
   revalidatePath(`/crm/${oppId}`);
 }
 

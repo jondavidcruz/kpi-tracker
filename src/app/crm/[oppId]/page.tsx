@@ -152,6 +152,10 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
   // 📁 auto-pull this deal's existing Google Drive files (best-effort; no manual
   // export needed). Matched by the property address / street number.
   const driveFiles = (await withTimeout(import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)), 2500, [] as { id: string; name: string; link: string; mimeType: string }[])).slice(0, 12);
+  // 🧹 Don't list a Drive file twice (Jon 2026-10-26): a file uploaded through the app already
+  // shows as an upload event, so drop its Google-Drive-listing twin (match by Drive file id).
+  const uploadedDriveIds = new Set(events.filter((e) => e.kind === "file").map((e) => (e.meta as { driveId?: string } | null)?.driveId).filter(Boolean));
+  const driveFilesShown = driveFiles.filter((f) => !uploadedDriveIds.has(f.id));
   const pipe = pipelines.find((x) => x.name === (opp.pipeline || "War Room")) ?? pipelines[0];
   const stages = pipe.stages;
   const st = stages.find((s) => s.key === opp.stage);
@@ -340,7 +344,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               <input type="file" name="file" required className="min-w-0 flex-1 text-[10px] text-slate-500 file:mr-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[10px] file:font-bold file:text-slate-600" />
               <button className="rounded-lg bg-brand-navy px-2.5 py-1 text-[10px] font-bold text-white">⬆ to Drive</button>
             </form>
-            {events.filter((e) => e.kind === "file").length === 0 && driveFiles.length === 0 ? (
+            {events.filter((e) => e.kind === "file").length === 0 && driveFilesShown.length === 0 ? (
               <p className="text-xs text-slate-400">No documents yet — upload above, or signed PandaDocs attach automatically. Everything lands in the deal&apos;s Google Drive folder.</p>
             ) : (
               <div className="space-y-1.5">
@@ -363,10 +367,10 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                 })}
                 {/* 📁 files that already live in the deal's Google Drive folder —
                     auto-synced so the team doesn't export/re-import by hand */}
-                {driveFiles.length > 0 && (
+                {driveFilesShown.length > 0 && (
                   <>
-                    <div className="pt-1 text-[9px] font-bold uppercase tracking-wide text-slate-300">📁 From Google Drive ({driveFiles.length})</div>
-                    {driveFiles.map((f) => (
+                    <div className="pt-1 text-[9px] font-bold uppercase tracking-wide text-slate-300">📁 From Google Drive ({driveFilesShown.length})</div>
+                    {driveFilesShown.map((f) => (
                       <div key={f.id} className="flex items-start gap-1 rounded-lg bg-emerald-50/50 px-2.5 py-1.5 text-xs text-emerald-800 ring-1 ring-emerald-100">
                         <a href={f.link} target="_blank" rel="noreferrer" className="min-w-0 flex-1 hover:underline">
                           {f.mimeType.includes("image") ? "🖼" : f.mimeType.includes("pdf") ? "📕" : f.mimeType.includes("spreadsheet") ? "📊" : f.mimeType.includes("document") ? "📝" : "📄"} {f.name.slice(0, 90)}

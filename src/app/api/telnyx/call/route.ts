@@ -374,7 +374,14 @@ export async function POST(req: NextRequest) {
           if (summary) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📞 Call summary (AI) — ${secs ? `${Math.floor(secs / 60)}m ${secs % 60}s` : ""}\n${summary}`.slice(0, 2000), actor: "recorder" });
         } catch { /* recording itself is already filed below */ }
       }
-      await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? ` — ${link}` : " (Drive upload unavailable — Telnyx copy expires)"}`, meta: { link, driveId: driveId || undefined, secs, ccId, transcript: transcript.slice(0, 12000), rep: rep || undefined }, actor: rep || "recorder" });
+      // 🧹 One clean timeline row (Jon 2026-10-26): no raw Drive URL in the body (the audio
+      // player + transcript already link it), and if the rep already logged a disposition for
+      // this call, fold the recording INTO that entry instead of adding a second "Call" row.
+      const recBody = `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? "" : " (Drive upload unavailable — Telnyx copy expires)"}`;
+      const recMeta = { link, driveId: driveId || undefined, secs, ccId, transcript: transcript.slice(0, 12000), rep: rep || undefined };
+      const { foldRecordingIntoDispo } = await import("@/lib/call-merge");
+      if (!(await foldRecordingIntoDispo(contact.id, recBody, recMeta).catch(() => false)))
+        await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: recBody, meta: recMeta, actor: rep || "recorder" });
       await recCrumb({ ev: "rec.outcome", result: "filed", hasLink: !!link, secs });
 
       // whether this lead is a buyer (dispo network) vs a seller — drives the
