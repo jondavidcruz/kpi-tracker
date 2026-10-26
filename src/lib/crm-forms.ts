@@ -14,7 +14,9 @@ export type FormField =
 export type CrmForm = { key: string; name: string; emoji: string; fields: FormField[] };
 
 // Land buyer sell-points — shared by the Land Details form + the CRM feature filter.
-export const LAND_FEATURES = ["Waterfront / lake frontage", "Water view", "Creek / river on property", "Pond on property", "Paved road frontage", "Dirt / gravel road access", "Corner lot", "Cleared / build-ready", "Wooded / treed", "Flat / level", "Gentle slope", "Mountain / hill views", "Fenced", "Flood zone", "Wetlands", "Mineral rights included", "Off-grid", "Gated community"];
+// Flood zone / Wetlands removed (Jon 2026-10-26): they're NEGATIVES, not buyer sell-points,
+// and already captured by the "Flood zone?" / "Wetlands?" selects in the Land Details form.
+export const LAND_FEATURES = ["Waterfront / lake frontage", "Water view", "Creek / river on property", "Pond on property", "Paved road frontage", "Dirt / gravel road access", "Corner lot", "Cleared / build-ready", "Wooded / treed", "Flat / level", "Gentle slope", "Mountain / hill views", "Fenced", "Mineral rights included", "Off-grid", "Gated community"];
 
 // Shared opener — identical on Home and Land so reps build one habit.
 const CORE: FormField[] = [

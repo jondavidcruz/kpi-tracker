@@ -6,12 +6,12 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import {
   setOppStageAction, setOppPipelineAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
-  addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, saveCrmFormAction,
+  addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction,
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
-  runDispoCascadeAction,
 } from "@/app/crm/actions";
 import { KIND_EMOJI, stripAgentNotesBlock, recStreamSrc } from "@/lib/crm-shared";
 import AutoSaveForm from "@/components/AutoSaveForm";
+import CrmFormFields from "@/components/CrmFormFields";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { readGateChecks } from "@/lib/dispo-gates";
@@ -161,11 +161,19 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
             {/* 🚦 Option B — SOP gate for dispo deals; advance is locked until it clears
                 (Jon 2026-10-21). Uses the board's own `stages` (the open deal's pipeline)
                 rather than a name-keyed lookup, which broke on aliased pipeline names. */}
+            {/* 🚦 Gate is now collapsible + closed by default (Jon 2026-10-26: it took up too
+                much of the modal and squeezed the notes). The cascade runs automatically, so its
+                manual button is gone from here too. */}
             {isDispoDealPipeline(d.pipeline) && (pipelineStages?.[d.pipeline] ?? stages).length > 0 && (
-              <div className="border-b border-slate-100 px-5 py-3">
-                <DispoGatePanel oppId={d.id} pipeline={d.pipeline} currentStage={d.stage} stages={pipelineStages?.[d.pipeline] ?? stages} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} />
-                <button type="button" onClick={() => { const fd = new FormData(); fd.set("oppId", d.id); submit(runDispoCascadeAction)(fd); }} disabled={pending} className="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50" title="Attach the top matched vetted developers + buyer agents, ready to work">⚡ Run the cascade — attach top matched buyers</button>
-              </div>
+              <details className="border-b border-slate-100 px-5 py-2">
+                <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] font-bold text-slate-600 [&::-webkit-details-marker]:hidden">
+                  🚦 SOP gate <span className="font-normal text-slate-400">— open to work the stage checklist</span>
+                  <span className="ml-auto text-slate-300">▸</span>
+                </summary>
+                <div className="pt-2">
+                  <DispoGatePanel oppId={d.id} pipeline={d.pipeline} currentStage={d.stage} stages={pipelineStages?.[d.pipeline] ?? stages} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} />
+                </div>
+              </details>
             )}
 
             <div className="flex min-h-0 flex-1">
@@ -276,47 +284,11 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                 )}
 
                 {formsForPipeline(d.pipeline).map((f) => tab === `form:${f.key}` && (
-                  <AutoSaveForm key={f.key} action={submit(saveCrmFormAction, { oppId: d.id, contactId: d.contact.id, formKey: f.key })} className="space-y-3">
-                    <div className="text-sm font-extrabold text-slate-800">{f.emoji} {f.name}</div>
+                  <div key={f.key} className="space-y-3">
                     {f.key === "financial" && <UnderwriteBlock d={d} />}
-                    {f.fields.map((fld) => {
-                      const cur = d.formData?.[f.key]?.[fld.key];
-                      if (fld.type === "select") return (
-                        <div key={fld.key}>
-                          <label className={labelCls}>{fld.label}</label>
-                          <select name={`f_${fld.key}`} defaultValue={typeof cur === "string" ? cur : ""} className={inputCls}>
-                            <option value="">—</option>
-                            {fld.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                          </select>
-                        </div>
-                      );
-                      if (fld.type === "checks") return (
-                        <div key={fld.key}>
-                          <label className={labelCls}>{fld.label}</label>
-                          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                            {fld.options.map((o) => (
-                              <label key={o} className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2 py-1.5 text-xs text-slate-700 ring-1 ring-slate-100">
-                                <input type="checkbox" name={`f_${fld.key}`} value={o} defaultChecked={Array.isArray(cur) && cur.includes(o)} />
-                                {o}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                      if (fld.type === "textarea") return (
-                        <div key={fld.key}>
-                          <label className={labelCls}>{fld.label}</label>
-                          <textarea name={`f_${fld.key}`} defaultValue={typeof cur === "string" ? cur : ""} rows={2} placeholder={fld.hint ?? ""} className={inputCls} />
-                        </div>
-                      );
-                      return (
-                        <div key={fld.key}>
-                          <label className={labelCls}>{fld.label}</label>
-                          <input name={`f_${fld.key}`} defaultValue={typeof cur === "string" ? cur : ""} placeholder={fld.hint ?? ""} className={inputCls} />
-                        </div>
-                      );
-                    })}
-                  </AutoSaveForm>
+                    {/* controlled fields — never blank out the rep's dropdown choices (Jon 2026-10-26) */}
+                    <CrmFormFields form={f} oppId={d.id} contactId={d.contact.id} initial={(d.formData?.[f.key] ?? {}) as Record<string, string | string[]>} />
+                  </div>
                 ))}
 
                 {tab === "tasks" && (

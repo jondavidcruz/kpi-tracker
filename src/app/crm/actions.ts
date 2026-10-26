@@ -1384,7 +1384,10 @@ export async function saveCrmFormAction(formData: FormData) {
     }
   }
   const existing = (opp.formData ?? {}) as Record<string, unknown>;
-  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...existing, [formKey]: answers } as never } });
+  // 🛟 MERGE into the section, never replace it (Jon 2026-10-26): a partial/stray submit must
+  // not wipe fields it didn't carry — this is what made dropdowns look like they "reset".
+  const prevSection = (existing[formKey] && typeof existing[formKey] === "object" && !Array.isArray(existing[formKey])) ? (existing[formKey] as Record<string, unknown>) : {};
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...existing, [formKey]: { ...prevSection, ...answers } } as never } });
   // 🧹 Roll repeat edits of the same form into one timeline entry (Jon 2026-10-26).
   const { logEditCoalesced } = await import("@/lib/edit-log");
   await logEditCoalesced({ contactId, oppId, body: `${form.emoji} ${form.name} updated (${Object.keys(answers).length} answers)`, actor: me.name });
