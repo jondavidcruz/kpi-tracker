@@ -493,7 +493,11 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                   <div className="mt-1.5 space-y-1">
                     {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                     {m.link && <audio controls preload="none" src={recStreamSrc(m.link)} className="h-9 w-full max-w-sm" />}
-                    {m.transcript && <details className="text-[11px]"><summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">📄 Full transcript</summary><div className="mt-1 max-h-60 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 p-2 text-slate-600 ring-1 ring-slate-100">{m.transcript}</div></details>}
+                    {/* ⚠️ Cap the inline transcript (Jon 2026-10-26): rendering every call's FULL
+                        transcript inline on an active deal with many calls ballooned the page payload
+                        past the function limit → "Connection closed". Show a preview; full text lives
+                        in 🎧 Call Scoring. */}
+                    {m.transcript && <details className="text-[11px]"><summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">📄 Transcript preview</summary><div className="mt-1 max-h-60 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 p-2 text-slate-600 ring-1 ring-slate-100">{m.transcript.slice(0, 1000)}{m.transcript.length > 1000 ? "\n\n…(preview — open the full transcript in 🎧 Call Scoring)" : ""}</div></details>}
                   </div>
                 ); })()}
                 {/* 📎 attached document (on a note or a file upload) → clickable link;
