@@ -211,6 +211,28 @@ export async function uploadCsvAsSheet(folderId: string, name: string, csv: stri
 }
 
 /** List files directly inside a folder (id, name, createdTime). */
+// 📎 Start a RESUMABLE upload session straight to Drive and return the one-time
+// session URL. The browser PUTs the file bytes to this URL directly, so a large
+// file (phone photo, scanned contract) NEVER passes through our Vercel function —
+// which rejects any request body over ~4.5MB with a non-JSON 413 ("the server
+// sent a bad response"). This is the real reason doc/note uploads failed for
+// Marie & Michelle on real-world files (Jon 2026-10-27).
+export async function initResumableUpload(folderId: string, name: string, mime: string): Promise<string> {
+  const token = await getAccessToken();
+  const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,webViewLink", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Upload-Content-Type": mime || "application/octet-stream",
+    },
+    body: JSON.stringify({ name, parents: [folderId] }),
+  });
+  const loc = res.headers.get("location") || res.headers.get("Location");
+  if (!res.ok || !loc) throw new Error("resumable init failed: " + (await res.text().catch(() => "")).slice(0, 160));
+  return loc;
+}
+
 export async function listFolder(folderId: string): Promise<{ id: string; name: string; createdTime: string; mimeType: string }[]> {
   const token = await getAccessToken();
   const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);

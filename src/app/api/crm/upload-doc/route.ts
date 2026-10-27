@@ -17,6 +17,12 @@ export async function POST(req: Request) {
   const oppId = String(form.get("oppId") ?? "");
   const contactId = String(form.get("contactId") ?? "");
   const docType = String(form.get("docType") ?? "").trim();
+  // 📝 When the quick-view / lead-page NOTE composer attaches a file, it posts here
+  // (route = maxDuration 60, so a Drive upload can't time out the way the note
+  // server action did — Jon 2026-10-27 "attaching files from the quick view notes
+  // section still not working"). `asNote` + optional `body` log a note instead of a doc.
+  const asNote = String(form.get("asNote") ?? "") === "1";
+  const rawBody = String(form.get("body") ?? "");
   const file = form.get("file");
   if (!oppId || !contactId) return NextResponse.json({ ok: false, msg: "Missing the lead — reopen this contact and retry." });
   if (!(file instanceof File) || file.size === 0) return NextResponse.json({ ok: false, msg: "Pick a file first." });
@@ -39,6 +45,15 @@ export async function POST(req: Request) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const driveName = `${docType ? docType + " - " : ""}${file.name}`.slice(0, 120);
     const up = await uploadToFolder(folderId, driveName, bytes, file.type || "application/octet-stream");
+    if (asNote) {
+      // Log as a NOTE (same shape as addCrmNoteAction) so it lands in the notes feed,
+      // with the Drive link in meta and the typed note text (if any) as the body.
+      const { sanitizeNoteHtml } = await import("@/lib/note-html");
+      const body = sanitizeNoteHtml(rawBody.trim()).slice(0, 8000);
+      const hasText = !!body.replace(/<[^>]*>/g, "").trim();
+      await logCrmEvent({ contactId, oppId, kind: "note", body: hasText ? body : `📎 ${file.name}`, meta: { driveId: up.id, link: up.link, name: file.name }, actor: me.name });
+      return NextResponse.json({ ok: true, msg: `✓ Note saved with “${file.name}”.` });
+    }
     await logCrmEvent({ contactId, oppId, kind: "file", body: `📎 ${title} — uploaded to the deal's Drive folder`, meta: { driveId: up.id, link: up.link, docType }, actor: me.name });
     return NextResponse.json({ ok: true, msg: `✓ "${title}" uploaded to the deal's Drive folder.` });
   } catch (e) {

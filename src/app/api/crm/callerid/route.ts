@@ -47,7 +47,23 @@ export async function GET(req: NextRequest) {
   const num = req.nextUrl.searchParams.get("num") ?? "";
   const last10 = num.replace(/\D/g, "").slice(-10);
   if (last10.length !== 10) return NextResponse.json({ name: "" });
-  const c = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true, name: true, address: true } });
+  // 🏷 Match on DIGITS ONLY (Jon 2026-10-27: inbound caller ID showed the number,
+  // not the name). A stored phone like "(909) 395-6195" has its 10 digits split by
+  // punctuation, so `contains: "9093956195"` never matched. Strip non-digits in SQL
+  // and compare the last 10 — works regardless of formatting, a leading 1, or a ".0".
+  let c: { id: string; name: string; address: string | null } | null = null;
+  try {
+    const rows = await db.$queryRaw<Array<{ id: string; name: string; address: string | null }>>`
+      SELECT id, name, address FROM "CrmContact"
+      WHERE "archivedAt" IS NULL AND (
+        right(regexp_replace(coalesce("phone", ''), '[^0-9]', '', 'g'), 10) = ${last10}
+        OR right(regexp_replace(coalesce("altPhone", ''), '[^0-9]', '', 'g'), 10) = ${last10}
+      ) LIMIT 1`;
+    c = rows[0] ?? null;
+  } catch {
+    // Fallback for E.164-stored numbers if the raw query ever fails.
+    c = await db.crmContact.findFirst({ where: { phone: { contains: last10 } }, select: { id: true, name: true, address: true } });
+  }
   const { dept, label: deptLabel } = c?.id ? await contactDept(c.id) : { dept: "" as const, label: "" };
   return NextResponse.json({ name: c?.name ?? "", id: c?.id ?? "", address: c?.address ?? "", dept, deptLabel }, { headers: { "Cache-Control": "private, no-store" } });
 }

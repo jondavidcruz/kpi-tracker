@@ -245,7 +245,13 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     // /api/now isn't hit by every user on every page all day (Vercel free-tier economy, Jon
     // 2026-10-26). A call re-reads the current offset regardless, so this is just the safety net.
     const id = setInterval(measureSkew, 600_000);
-    return () => clearInterval(id);
+    // 🔄 Re-measure the instant the rep comes back to the tab — so after they fix their
+    // computer clock in System Settings and click back, the warning clears right away
+    // instead of lingering up to 10 min (Jon 2026-10-27: Michelle's still showed 3h off).
+    const onFocus = () => { if (document.visibilityState === "visible") measureSkew(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => { clearInterval(id); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const clockOff = Math.abs(clockSkew) > 5 * 60_000; // >5 min = materially wrong
   const clockOffLabel = () => { const m = Math.round(Math.abs(clockSkew) / 60000); const h = Math.floor(m / 60); const mm = m % 60; return `${h ? `${h}h ` : ""}${mm}m ${clockSkew > 0 ? "behind" : "ahead"}`; };

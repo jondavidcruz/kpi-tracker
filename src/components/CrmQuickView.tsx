@@ -22,6 +22,7 @@ import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
 import LienBuilder from "@/components/LienBuilder";
 import NoteComposer from "@/components/NoteComposer";
+import { uploadLeadFile } from "@/lib/upload-lead-file";
 import { sanitizeNoteHtml, isHtmlNote } from "@/lib/note-html";
 
 type Payload = {
@@ -383,7 +384,18 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <span className="text-[11px] font-semibold text-red-800">Seller signed but won&apos;t close? Compile everything into a recordable lien.</span>
                       <button type="button" onClick={() => setLienOpen(true)} className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-red-700">🔴 File a Lien</button>
                     </div>
-                    <NoteComposer onSubmit={(html, file) => { const fd = new FormData(); fd.set("body", html); if (file) fd.set("file", file); submit(addCrmNoteAction, { oppId: d.id, contactId: d.contact.id })(fd); }} />
+                    <NoteComposer onSubmit={(html, file) => {
+                      // 📎 File → straight to Drive (no Vercel 4.5MB cap); text-only → fast server action.
+                      if (file) {
+                        start(async () => {
+                          const r = await uploadLeadFile({ oppId: d.id, contactId: d.contact.id, file, asNote: true, body: html });
+                          if (!r.ok) alert(r.msg);
+                          if (oppId) await refetch(oppId);
+                        });
+                        return;
+                      }
+                      const fd = new FormData(); fd.set("body", html); submit(addCrmNoteAction, { oppId: d.id, contactId: d.contact.id })(fd);
+                    }} />
                     <div className="space-y-1.5">
                       {d.events.map((e, i) => {
                         const mine = e.kind === "note" && !!e.id && e.actor === d.me.name;

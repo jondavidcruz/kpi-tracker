@@ -1,13 +1,14 @@
 "use client";
-// 📎 Upload a document to a lead's Drive folder, WITH visible feedback. Posts to the
-// /api/crm/upload-doc ROUTE (maxDuration=60) instead of a server action — a server action
-// timed out on bigger files and the client got "unexpected response" (Jon 2026-10-27).
+// 📎 Upload a document to a lead's Drive folder, WITH visible feedback. Sends the file
+// BYTES straight to Drive (resumable session) instead of through a Vercel function —
+// the function caps request bodies at ~4.5MB and returned a non-JSON 413 on real-world
+// files ("the server sent a bad response"), which is why uploads failed (Jon 2026-10-27).
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import type { UploadResult } from "@/app/crm/actions";
+import { uploadLeadFile } from "@/lib/upload-lead-file";
 
 export default function DocUploadForm({ oppId, contactId }: { oppId: string; contactId: string }) {
-  const [res, setRes] = useState<UploadResult | null>(null);
+  const [res, setRes] = useState<{ ok: boolean; msg: string } | null>(null);
   const [pending, setPending] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -15,15 +16,14 @@ export default function DocUploadForm({ oppId, contactId }: { oppId: string; con
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const file = fd.get("file");
+    const docType = String(fd.get("docType") ?? "");
+    if (!(file instanceof File) || file.size === 0) { setRes({ ok: false, msg: "Pick a file first." }); return; }
     setPending(true); setRes(null);
-    try {
-      const r = await fetch("/api/crm/upload-doc", { method: "POST", body: fd });
-      const j = (await r.json().catch(() => ({ ok: false, msg: "Upload failed — the server sent a bad response." }))) as UploadResult;
-      setRes(j);
-      if (j.ok) { formRef.current?.reset(); router.refresh(); }
-    } catch {
-      setRes({ ok: false, msg: "Upload failed — network error. Check your connection and retry." });
-    } finally { setPending(false); }
+    const j = await uploadLeadFile({ oppId, contactId, file, docType });
+    setRes(j);
+    if (j.ok) { formRef.current?.reset(); router.refresh(); }
+    setPending(false);
   };
 
   return (
