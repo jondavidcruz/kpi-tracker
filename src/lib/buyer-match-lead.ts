@@ -66,14 +66,23 @@ export async function getNetworkMatchesForDeal(address: string, limit = 8): Prom
       const fd = (o.formData ?? {}) as Record<string, Record<string, string> & { market?: string; buyBox?: string }>;
       const imp = (fd.__import ?? {}) as { market?: string; buyBox?: string };
       const form = (fd.dev_buybox ?? fd.agent_profile ?? {}) as Record<string, string>;
-      const areaText = `${imp.market ?? ""} ${form.buyCounties ?? ""} ${form.areas ?? ""} ${imp.buyBox ?? ""}`.toLowerCase();
+      // 🎯 Palm Bay fix (Jon 2026-10-27): fold in the STRUCTURED buy-box geo + the migrated
+      // source's areas so the deal card matches the SAME way the Vetted Buyers cascade does —
+      // the migration preserved these on every card (__buyBoxStruct / __migratedSource). A
+      // nationwide buyer always matches. Falls back to the old text match when there's no struct.
+      const bb = (fd.__buyBoxStruct ?? null) as { geo?: { counties?: string[]; cities?: string[]; states?: string[]; regions?: string[]; zips?: string[]; nationwide?: boolean } } | null;
+      const src = (fd.__migratedSource ?? {}) as { buyBoxAreas?: string; market?: string; buyBox?: string };
+      const geo = bb?.geo;
+      const geoParts = geo ? [...(geo.counties ?? []), ...(geo.cities ?? []), ...(geo.states ?? []), ...(geo.regions ?? []), ...(geo.zips ?? [])] : [];
+      const nationwide = geo?.nationwide === true;
+      const areaText = [imp.market, form.buyCounties, form.areas, imp.buyBox, src.buyBoxAreas, src.market, src.buyBox, ...geoParts].filter(Boolean).join(" ").toLowerCase();
       const hits = tokens.filter((t) => areaText.includes(t));
       return {
         oppId: o.id, name: o.contact?.name || o.title, phone: o.contact?.phone || "", email: o.contact?.email || "",
         kind: (isAgentNetworkName(o.pipeline) ? "buyer_agent" : "developer") as NetworkMatch["kind"],
-        area: imp.market || form.buyCounties || form.areas || "",
-        reason: hits.length ? `📍 ${hits.slice(0, 3).join(", ")}` : "",
-        score: hits.length,
+        area: imp.market || form.buyCounties || form.areas || geoParts[0] || (nationwide ? "nationwide" : ""),
+        reason: nationwide ? "🌎 buys nationwide" : hits.length ? `📍 ${hits.slice(0, 3).join(", ")}` : "",
+        score: nationwide ? Math.max(hits.length, 1) : hits.length,
       };
     }).filter((m) => m.score > 0).sort((a, b) => b.score - a.score).slice(0, limit);
     return scored;
