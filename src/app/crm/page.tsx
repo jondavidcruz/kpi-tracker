@@ -222,10 +222,15 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // 🔴 unread-SMS counts per contact (Jon 2026-10-08): inbound texts newer
   // than the last outbound reply AND newer than the thread's last-read stamp.
   const cardCids = [...new Set(opps.map((o) => o.contactId))];
-  const [recentSms, readRow] = await Promise.all([
+  const cardOids = opps.map((o) => o.id);
+  const [recentSms, readRow, touchEvs] = await Promise.all([
     cardCids.length ? db.crmEvent.findMany({ where: { contactId: { in: cardCids }, kind: "sms" }, orderBy: { at: "desc" }, take: 1500, select: { contactId: true, body: true, at: true } }) : [],
     db.resource.findFirst({ where: { category: "__conv_read__" } }),
+    // ✋ last REAL human touch per opp (Jon 2026-10-27) — note/call/text/email/task/appt/stage, no auto/system.
+    cardOids.length ? db.crmEvent.findMany({ where: { oppId: { in: cardOids }, kind: { in: ["note", "call", "sms", "email", "task", "appt", "stage"] } }, orderBy: { at: "desc" }, take: 9000, select: { oppId: true, at: true } }) : [],
   ]);
+  const lastTouchByOpp = new Map<string, Date>();
+  for (const e of touchEvs) if (e.oppId && !lastTouchByOpp.has(e.oppId)) lastTouchByOpp.set(e.oppId, e.at);
   let convRead: Record<string, string> = {};
   try { convRead = readRow?.description ? JSON.parse(readRow.description) : {}; } catch { /* none */ }
   const smsUnread = new Map<string, number>();
@@ -271,6 +276,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       money: money(o.value) || (o.askPrice != null ? `ask ${money(o.askPrice)}` : ""),
       email: o.contact.email, smsUnread: smsUnread.get(o.contactId) ?? 0,
       valueNum: o.value ?? o.askPrice ?? 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
+      lastTouch: lastTouchByOpp.get(o.id)?.toISOString() ?? "",
       apn: fd.property?.apn ?? "", apptDueToday: apptToday.length > 0, taskDueToday: due.length > 0,
       // next upcoming (after today) task + appointment dates for the card chips
       nextTask: (tasksByOpp.get(o.id) ?? []).map((t) => (t.due || "").slice(0, 10)).filter((d) => d >= today).sort()[0] ?? "",

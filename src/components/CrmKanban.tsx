@@ -25,6 +25,8 @@ export type CrmCard = {
   valueNum?: number;
   updatedAt?: string;   // ISO — drives sort + age coloring
   createdAt?: string;
+  lastTouch?: string;   // ISO of the last REAL human activity (note/call/text/email/task); "" = never touched
+  stageMoved?: boolean; // did this lead ever actually change stage? (so "in stage" isn't a dupe of "in system")
   apn?: string;         // parcel number — shown in place of address for land
   apptDueToday?: boolean; // 📅 appointment due today → red card
   taskDueToday?: boolean; // ⏰ task due today → green card
@@ -52,7 +54,6 @@ const FIELDS = [
   ["badges", "⏳ status badges"],
   ["tags", "# tags"],
   ["rep", "👤 rep"],
-  ["repTop", "👤 owner top-right (GHL style)"],
   ["title", "🏠 property line"],
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
@@ -69,7 +70,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   const [overCol, setOverCol] = useState<string | null>(null);
   const [pending, start] = useTransition();
   // ⚙ per-person card customization (saved on this device)
-  const [show, setShow] = useState<Record<FieldKey, boolean>>({ money: true, badges: true, tags: true, rep: true, repTop: false, title: true });
+  const [show, setShow] = useState<Record<FieldKey, boolean>>({ money: true, badges: true, tags: true, rep: true, title: true });
   const [cfgOpen, setCfgOpen] = useState(false);
   // 👁 privacy blur (phone + address), 🔀 sort, 🎨 coloring, ☑️ multi-select
   const [privacy, setPrivacy] = useState(false);
@@ -183,7 +184,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     try { localStorage.setItem("fo_crm_collapsed", JSON.stringify(next)); } catch { /* fine */ }
   };
   useEffect(() => {
-    try { const raw = localStorage.getItem("fo_crm_card_fields"); if (raw) setShow({ ...{ money: true, badges: true, tags: true, rep: true, repTop: false, title: true }, ...JSON.parse(raw) }); } catch { /* defaults */ }
+    try { const raw = localStorage.getItem("fo_crm_card_fields"); if (raw) setShow({ ...{ money: true, badges: true, tags: true, rep: true, title: true }, ...JSON.parse(raw) }); } catch { /* defaults */ }
   }, []);
   const toggleField = (k: FieldKey) => {
     const next = { ...show, [k]: !show[k] };
@@ -334,7 +335,6 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         {c.offers && c.offers.live > 0 && <span title={`${c.offers.live} of ${c.offers.goal} offers received`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.offers.live >= c.offers.goal ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>💰 {c.offers.live}/{c.offers.goal}</span>}
                         {c.staleStage && <span title={`This deal's saved stage ("${c.staleStage}") no longer exists in this pipeline after a rename — use "Re-sort deals" to file it correctly.`} className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700 ring-1 ring-orange-200">⚠️ was: {c.staleStage}</span>}
                         {c.leadType && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.leadType.cls}`}>{c.leadType.label}</span>}
-                        {show.repTop && c.assignedTo && <span title={c.assignedTo} className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-extrabold text-white">{c.assignedTo.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>}
                       </div>
                     </div>
                     {/* property line — opp title only when it's NOT just the name (Jon
@@ -373,6 +373,15 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         const cls = d >= 30 ? "bg-red-50 text-red-700" : d >= 7 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700";
                         const txt = d <= 0 ? "today" : `${d}d in system`;
                         return <span title={`In the system ${d} day${d === 1 ? "" : "s"} — keep it moving`} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${cls}`}>🕒 {txt}</span>;
+                      })()}
+                      {/* ✋ Last-touched (Jon 2026-10-27: "when's the last time anyone actually did
+                          something on this lead") — the real activity signal, from notes/calls/texts/
+                          emails/tasks, NOT updatedAt. ⚠️ never = nobody has worked it since import. */}
+                      {(() => {
+                        if (!c.lastTouch) return <span title="No note, call, text, email or task has ever been logged on this lead" className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-700">⚠️ never touched</span>;
+                        const d = Math.floor((Date.now() - new Date(c.lastTouch).getTime()) / 86400_000);
+                        const cls = d >= 7 ? "bg-red-50 text-red-700" : d >= 3 ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600";
+                        return <span title={`Last worked ${d} day${d === 1 ? "" : "s"} ago (note / call / text / email / task)`} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${cls}`}>✋ {d <= 0 ? "touched today" : `touched ${d}d ago`}</span>;
                       })()}
                       {show.badges && c.badges.map((b, i) => (
                         <span key={i} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${b.startsWith("⏳") || b.startsWith("🔴") ? "bg-red-50 text-red-700" : b.startsWith("⏰") ? "bg-amber-50 text-amber-700" : "bg-slate-50 text-slate-600"}`}>{b}</span>

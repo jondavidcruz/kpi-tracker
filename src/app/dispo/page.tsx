@@ -152,9 +152,16 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   for (const a of dealAppts) { if (!nextApptByDeal.has(a.oppId)) nextApptByDeal.set(a.oppId, a.at); }
   // 🕒 days-in-current-stage per deal (velocity) — from the latest stage-change event
   const stageAtByDeal = new Map<string, Date>();
+  // ✋ last REAL human touch per deal (note/call/text/email/task/appt/stage-move) — the
+  // "has anyone actually worked this?" signal (Jon 2026-10-27). System/auto events excluded.
+  const lastTouchByDeal = new Map<string, Date>();
   if (tab === "deals" && dealIds.length) {
-    const sevs = await db.crmEvent.findMany({ where: { oppId: { in: dealIds }, kind: "stage" }, orderBy: { at: "desc" }, take: 6000, select: { oppId: true, at: true } }).catch(() => [] as { oppId: string; at: Date }[]);
+    const [sevs, tevs] = await Promise.all([
+      db.crmEvent.findMany({ where: { oppId: { in: dealIds }, kind: "stage" }, orderBy: { at: "desc" }, take: 6000, select: { oppId: true, at: true } }).catch(() => [] as { oppId: string; at: Date }[]),
+      db.crmEvent.findMany({ where: { oppId: { in: dealIds }, kind: { in: ["note", "call", "sms", "email", "task", "appt", "stage"] } }, orderBy: { at: "desc" }, take: 9000, select: { oppId: true, at: true } }).catch(() => [] as { oppId: string; at: Date }[]),
+    ]);
     for (const e of sevs) if (e.oppId && !stageAtByDeal.has(e.oppId)) stageAtByDeal.set(e.oppId, e.at);
+    for (const e of tevs) if (e.oppId && !lastTouchByDeal.has(e.oppId)) lastTouchByDeal.set(e.oppId, e.at);
   }
   // A closed/won stage — detected by the stage KEY or LABEL so it works even for
   // deals orphaned by a rename (their old key still says won/closed). Excludes
@@ -204,9 +211,12 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const dealCards: CrmCard[] = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => ({
     id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: dealLabel(o.title, o.contact?.address) || undefined,
     phone: o.contact?.phone ? o.contact.phone.replace(/\.\d+$/, "") : undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags),
-    badges: (() => { const d = Math.floor((Date.now() - (stageAtByDeal.get(o.id) ?? o.createdAt).getTime()) / 86400000); return !isClosedStage(o.stage) && d >= 3 ? [`🕒 ${d}d in stage`] : []; })(),
+    // "in stage" only when the lead ACTUALLY moved stages — otherwise it just duplicated
+    // "in system" for never-moved imports (Jon 2026-10-27).
+    badges: (() => { const moved = stageAtByDeal.get(o.id); if (isClosedStage(o.stage) || !moved) return []; const d = Math.floor((Date.now() - moved.getTime()) / 86400000); return d >= 3 ? [`🕒 ${d}d in stage`] : []; })(),
     money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
+    lastTouch: lastTouchByDeal.get(o.id)?.toISOString() ?? "", stageMoved: stageAtByDeal.has(o.id),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
