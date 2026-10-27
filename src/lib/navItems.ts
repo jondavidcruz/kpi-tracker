@@ -38,7 +38,6 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/deals", label: "Deals", gate: "all" },
     { href: "/crm/dealboard", label: "Deal Board", gate: "all" },
     { href: "/marketing", label: "Vetted Buyers", gate: "marketing" },
-    { href: "/vetting", label: "Buyer Research", gate: "marketing" },
     { href: "/closing-calc", label: "Closing Calculator", gate: "manager" },
   ] },
   { group: "Marketing", items: [

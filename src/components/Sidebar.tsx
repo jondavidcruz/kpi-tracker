@@ -133,7 +133,6 @@ export default function Sidebar({
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/crm/dealboard", label: "Deal Board", Icon: Presentation },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
-      { href: "/vetting", label: "Buyer Research", Icon: Search, marketingOnly: true },
       { href: "/closing-calc", label: "Closing Calculator", Icon: Receipt, managerOnly: true },
     ] },
     { label: "Marketing", items: [

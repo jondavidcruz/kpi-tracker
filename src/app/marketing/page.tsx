@@ -212,7 +212,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
             <BackupNowButton />
             {/* 🔒 CSV export = our most sensitive data — C-suite only (Jon 2026-10-22) */}
             {canAccessCSuite(me) && <a href="/api/export/buyers" className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" title="C-suite only — one clean spreadsheet: every contact + the full buy-box interview per row">⬇️ Export CSV</a>}
-            <Link href="/vetting" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🔎 Buyer Research</Link>
+            <Link href="/dispo?tab=developers" className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">🏗 Developers kanban</Link>
           </div>
         } />
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
