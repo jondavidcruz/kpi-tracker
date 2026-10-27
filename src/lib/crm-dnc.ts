@@ -18,14 +18,26 @@ export async function ensureDncPipeline(): Promise<void> {
   } catch { /* defs unreadable — skip */ }
 }
 
-/** Tag the contact DNC and park every live opportunity in the DNC pipeline. */
+/** Handle a STOP/opt-out. For a lead with a LIVE DEAL in progress (a dispo deal pipeline),
+ *  this only SUPPRESSES TEXTING (dnd_sms) and leaves the lead in place — Jon 2026-10-27:
+ *  "they're still interested, they just didn't want the text, so we'll still process it."
+ *  A cold/unassigned lead is tagged full DNC and parked in the DNC pipeline as before. */
 export async function dncContact(contactId: string, why: string): Promise<void> {
   const { logCrmEvent } = await import("@/lib/crm");
-  await ensureDncPipeline();
+  const { isDispoDealPipeline } = await import("@/lib/dispo-buyers");
   const c = await db.crmContact.findUnique({ where: { id: contactId }, select: { tags: true } });
   if (!c) return;
+  const opps = await db.crmOpportunity.findMany({ where: { contactId, archivedAt: null }, select: { id: true, pipeline: true } });
+  // In an active deal pipeline = a live, interested lead. STOP = stop TEXTING, not "dead".
+  const hasLiveDeal = opps.some((o) => isDispoDealPipeline(o.pipeline));
+  if (hasLiveDeal) {
+    if (!/\bdnd_sms\b|\bdnc\b/i.test(c.tags)) await db.crmContact.update({ where: { id: contactId }, data: { tags: c.tags ? `${c.tags},dnd_sms` : "dnd_sms" } });
+    await logCrmEvent({ contactId, oppId: opps[0]?.id ?? "", kind: "system", body: `🔕 No-text set: ${why} — texts suppressed, but this lead has a live deal so it STAYS in its pipeline (still workable by call). Not moved to DNC.`, actor: "dnc-guard" }).catch(() => {});
+    return;
+  }
+  // Cold / no live deal → full DNC + park in the DNC pipeline (original behavior).
+  await ensureDncPipeline();
   if (!/\bdnc\b/i.test(c.tags)) await db.crmContact.update({ where: { id: contactId }, data: { tags: c.tags ? `${c.tags},dnc` : "dnc" } });
-  const opps = await db.crmOpportunity.findMany({ where: { contactId, archivedAt: null }, select: { id: true } });
   for (const o of opps) await db.crmOpportunity.update({ where: { id: o.id }, data: { pipeline: DNC_PIPELINE, stage: "dnc" } });
   await logCrmEvent({ contactId, oppId: opps[0]?.id ?? "", kind: "system", body: `🚫 AUTO-DNC: ${why} — tagged dnc + moved to the DNC pipeline. Do not text or call.`, actor: "dnc-guard" }).catch(() => {});
 }
