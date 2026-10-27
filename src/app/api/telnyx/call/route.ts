@@ -318,6 +318,14 @@ export async function POST(req: NextRequest) {
     const priorCall = await db.crmEvent.findFirst({ where: { contactId: contact.id, kind: "call", actor: { notIn: SYS_ACTORS }, at: { gte: new Date(Date.now() - 30 * 60000) } }, orderBy: { at: "desc" }, select: { actor: true } }).catch(() => null);
     const rep = (priorCall?.actor || "").trim();
     const secs = pr.recording_started_at && pr.recording_ended_at ? Math.max(0, Math.round((Date.parse(pr.recording_ended_at) - Date.parse(pr.recording_started_at)) / 1000)) : 0;
+    // 🔁 Belt-and-suspenders dedupe (Jon 2026-10-27: recordings were logging TWICE). A double
+    // record_start can emit two recording.saved events with DIFFERENT call_control_ids, which
+    // slip past the ccId check above — so also skip if we already filed a recording of the SAME
+    // length for this contact in the last 25 min. Runs before the Drive upload/transcription.
+    if (secs > 0) {
+      const dupDur = await db.crmEvent.findFirst({ where: { contactId: contact.id, kind: "call", body: { startsWith: "🎙" }, at: { gte: new Date(Date.now() - 25 * 60000) }, meta: { path: ["secs"], equals: secs } }, select: { id: true } }).catch(() => null);
+      if (dupDur) { await recCrumb({ ev: "rec.outcome", result: "deduped-dur", secs }); return NextResponse.json({ ok: true, deduped: "duration" }); }
+    }
     // 🎙 Only REAL conversations are filed to the deal's Drive (Jon 2026-10-26: "majority
     // are just voicemails"). Keep when the call ran ≥ 60s AND the rep hasn't dispositioned
     // it as a voicemail/no-answer. Short/VM calls still log a lightweight note — no Drive
