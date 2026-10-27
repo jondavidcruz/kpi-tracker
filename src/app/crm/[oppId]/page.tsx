@@ -580,9 +580,12 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             // stand out from auto entries — recordings 🎙, AI summaries 📝, logged follow-ups 📞
             // (Jon 2026-10-26). `!` forces the tint over Card's hardcoded white.
             const isManualNote = e.kind === "note" && !/^\s*(🎙|📝|📞|🤖|👑|🔒|🗑)/.test(stripHtml(e.body));
+            // 🔵 SMS reads like an iMessage — blue card — so texts stand apart from the
+            // yellow notes and the plain activity rows (Jon 2026-10-27).
+            const isSms = e.kind === "sms";
             return (
-            <div key={e.id} data-tlrow data-note={e.kind === "note" ? "1" : "0"}>
-            <Card className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""} ${isManualNote ? "!border-amber-200 !bg-amber-50/70" : ""}`}>
+            <div key={e.id} data-tlrow data-kind={e.kind} data-note={e.kind === "note" ? "1" : "0"}>
+            <Card className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""} ${isManualNote ? "!border-amber-200 !bg-amber-50/70" : ""} ${isSms ? "!border-sky-200 !bg-sky-50/70" : ""}`}>
               <span className="text-base">{isManualNote ? "🟡" : KIND_EMOJI[e.kind] ?? "•"}</span>
               <div className="min-w-0 flex-1">
                 {e.kind === "note"

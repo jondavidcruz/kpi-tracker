@@ -19,6 +19,21 @@ type PhoneData = {
 type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string; dir?: "in" | "out"; secs?: number };
 
 const areaCode = (e164: string) => e164.replace(/\D/g, "").replace(/^1/, "").slice(0, 3);
+// "City, ST" → "ST" (empty for toll-free / unknown NPAs)
+const stateOf = (e164: string) => { const g = geoForPhone(e164); if (!g || g === "Toll-free") return ""; return (g.split(",")[1] || "").trim().toUpperCase(); };
+
+// 🔁 Local-presence rotation (Jon 2026-10-27): remember which of OUR lines we've
+// already used to call each lead, so a 2nd/3rd UNANSWERED attempt dials from a
+// FRESH number — same city/state first, else any other. Resets the moment the lead
+// actually answers, so a future sequence starts from the closest line again.
+// Device-local (localStorage), auto-expires after 7 days.
+const ROT_KEY = "fo_from_rotation_v1";
+type RotStore = Record<string, { nums: string[]; at: number }>;
+const leadKey = (to: string) => to.replace(/\D/g, "").slice(-10);
+const readRot = (): RotStore => { try { const r = JSON.parse(localStorage.getItem(ROT_KEY) || "{}") as RotStore; const cut = Date.now() - 7 * 86400000; let dirty = false; for (const k of Object.keys(r)) if ((r[k]?.at ?? 0) < cut) { delete r[k]; dirty = true; } if (dirty) localStorage.setItem(ROT_KEY, JSON.stringify(r)); return r; } catch { return {}; } };
+const usedFor = (to: string): string[] => { try { return readRot()[leadKey(to)]?.nums ?? []; } catch { return []; } };
+const recordFrom = (to: string, fromN: string) => { if (!fromN) return; try { const r = readRot(); const k = leadKey(to); const prev = r[k]?.nums ?? []; r[k] = { nums: [fromN, ...prev.filter((n) => n !== fromN)].slice(0, 8), at: Date.now() }; localStorage.setItem(ROT_KEY, JSON.stringify(r)); } catch { /* ignore */ } };
+const clearRot = (to: string) => { try { const r = readRot(); delete r[leadKey(to)]; localStorage.setItem(ROT_KEY, JSON.stringify(r)); } catch { /* ignore */ } };
 
 export default function DialPad({ floating = false }: { floating?: boolean } = {}) {
   const [open, setOpen] = useState(false);
@@ -282,9 +297,19 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     if (from !== "auto") return from; // a manually-chosen line is used as-is
     if (!nums.length) return d?.defaultFrom || undefined; // nothing loaded/available → let Telnyx use the line default
     const ac = areaCode(to);
-    return nums.find((n) => areaCode(n) === ac)   // closest (same area code)
-      ?? (d?.defaultFrom && nums.includes(d.defaultFrom) ? d.defaultFrom : undefined) // our default line
-      ?? nums[0];                                  // else ANY available number — never fail
+    const st = stateOf(to);
+    // 🔁 Rotate off the lines we've ALREADY used on this lead (unanswered attempts),
+    // preferring a fresh same-city line, then a fresh same-state line, then any fresh
+    // number. If every line's been used, cycle — just don't repeat the last one.
+    const used = usedFor(to);
+    const fresh = (n: string) => !used.includes(n);
+    return nums.find((n) => areaCode(n) === ac && fresh(n))                    // 1) same city/area code, unused
+      ?? (st ? nums.find((n) => stateOf(n) === st && fresh(n)) : undefined)    // 2) same state, unused
+      ?? nums.find(fresh)                                                       // 3) any unused number
+      ?? nums.filter((n) => n !== used[0]).find((n) => areaCode(n) === ac)      // 4) all used → same area, not the last one
+      ?? nums.find((n) => n !== used[0])                                        // 5) any, just not the last one
+      ?? (d?.defaultFrom && nums.includes(d.defaultFrom) ? d.defaultFrom : undefined)
+      ?? nums[0];                                                               // never fail
   };
 
   const finish = (ctx: Ctx | null) => {
@@ -422,6 +447,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
               timerRef.current = setInterval(() => setSecs(Math.round((Date.now() - startRef.current) / 1000)), 1000);
             }
             setState("active"); setMsg("");
+            // 🔁 Lead answered → reset their line rotation so a future sequence starts
+            // from the closest line again (the rotation is only for chasing no-answers).
+            if (onCallRef.current?.dir === "out" && onCallRef.current?.phone) clearRot(onCallRef.current.phone);
             if (audioRef.current && n.call.remoteStream) { audioRef.current.srcObject = n.call.remoteStream; audioRef.current.play().catch(() => {}); }
             // 🎙 outbound WebRTC calls aren't recorded by the webhook reliably —
             // start recording here the moment it connects (Jon 2026-10-13). The
@@ -588,6 +616,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       setState("ringing");
       const from = pickFrom(to);
       lastFromRef.current = from ?? ""; setLiveFrom(from ?? "");
+      if (from && ctx.dir !== "in") recordFrom(to, from); // 🔁 remember this line for the lead's next unanswered attempt
       const opts: { destinationNumber: string; callerNumber?: string; audio: boolean; video: boolean } = { destinationNumber: to, audio: true, video: false };
       if (from) opts.callerNumber = from; // omit entirely if we truly have none → Telnyx uses the connection's default line (still dials)
       callRef.current = client.newCall(opts) as never;
@@ -657,7 +686,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             <span>
               <span className="block text-[13px] font-extrabold text-slate-800">Calling From</span>
               <select value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 w-52 rounded-md border border-slate-200 px-1.5 py-1 text-[13px] font-semibold text-slate-700">
-                <option value="auto">📍 Closest to the contact (auto)</option>
+                <option value="auto">📍 Closest to the contact (auto · rotates on no-answer)</option>
                 {(data?.numbers ?? []).map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{n}{g ? ` — ${g}` : ""}</option>; })}
               </select>
             </span>
