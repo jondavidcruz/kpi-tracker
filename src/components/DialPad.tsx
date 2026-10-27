@@ -738,7 +738,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
                 ))}
                 <button onClick={() => { setLastCall(null); setDispoOutcome(null); }} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600">skip</button>
               </span>
-              {dispoOutcome === "talked" && (
+              {/* Only reps on a scorecard see the KPI picker — the owner/admin/managers aren't
+                  tracked, so don't show it (Jon 2026-10-27: "do you even need my numbers?"). */}
+              {dispoOutcome === "talked" && ["dispositions", "acquisitions", "cc_lm"].includes(mePosRef.current) && (
                 <span className="mt-1 flex flex-col gap-1 border-t border-amber-200/60 pt-1.5">
                   <span className="text-[10px] font-bold text-amber-800">🏷 What kind of call was it? <span className="font-semibold text-amber-600">(counts your KPI automatically)</span></span>
                   {typeLogged === lastCall.phone ? (
