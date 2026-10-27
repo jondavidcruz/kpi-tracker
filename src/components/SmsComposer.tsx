@@ -26,6 +26,10 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   ];
   const [text, setText] = useState("");
   const [from, setFrom] = useState("");
+  // 📱 Editable recipient (Jon 2026-10-27: a bad/partial number in the phone field was texting
+  // the wrong place). Pre-filled from the contact; fix or paste the right one here.
+  const [toNum, setToNum] = useState(to);
+  useEffect(() => { setToNum(to); }, [to]);
   const [numbers, setNumbers] = useState<string[]>([]);
   // 📷 MMS attachment (Jon 2026-10-12) — compressed in the browser so it
   // always fits carrier limits (max 1280px, jpeg q0.8, ~<500KB)
@@ -70,7 +74,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
     if (history.length === 0 && !confirming) { setConfirming(true); return; }
     setConfirming(false);
     const fd = new FormData();
-    fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", to); fd.set("text", text);
+    fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", toNum); fd.set("text", text);
     if (from) fd.set("from", from);
     if (photo) fd.set("photo", photo.blob, "photo.jpg");
     start(async () => { await sendCrmSmsAction(fd); setText(""); setPhoto(null); setSent("✓ Sent"); setTimeout(() => setSent(""), 2500); router.refresh(); });
@@ -87,7 +91,9 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
             <option value="">Default line</option>
             {numbers.map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{fmt(n)}{g ? ` — ${g}` : ""}</option>; })}
           </select>
-          <span className="font-bold">→ To</span> {fmt(to)}
+          <span className="font-bold">→ To</span>
+          <input value={toNum} onChange={(e) => setToNum(e.target.value)} placeholder="recipient #" title="The number we'll text — edit if it's wrong or incomplete" className={`w-28 rounded border bg-white px-1.5 py-0.5 text-[11px] font-semibold ${toNum.replace(/\D/g, "").slice(-10).length === 10 && /[2-9]/.test(toNum.replace(/\D/g, "").slice(-10)[0]) ? "border-slate-200 text-slate-700" : "border-red-300 bg-red-50 text-red-700"}`} />
+          <span className="text-[10px] text-slate-400">{geoForPhone(toNum) ?? ""}</span>
         </div>
         <textarea
           value={text} onChange={(e) => setText(e.target.value)} rows={compact ? 3 : 5}

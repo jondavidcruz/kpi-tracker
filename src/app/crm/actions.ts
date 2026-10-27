@@ -732,7 +732,16 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   if (!(await commsFor(me)).sms) return;
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
-  const to = String(formData.get("to") ?? "").replace(/[^+\d]/g, "");
+  // Normalize + validate the recipient to a real US number (Jon 2026-10-27: a partial
+  // "(178) 482-2710" was being sent and Telnyx rejected it, appending the error to the text).
+  const toRaw = String(formData.get("to") ?? "");
+  const d10 = toRaw.replace(/\D/g, "").slice(-10);
+  const to = d10.length === 10 && /[2-9]/.test(d10[0]) && /[2-9]/.test(d10[3]) ? `+1${d10}` : "";
+  if (!to) {
+    await logCrmEvent({ contactId, oppId, kind: "sms", body: `📵 SMS NOT SENT — "${toRaw.slice(0, 40)}" isn't a valid number (check the To field). Nothing was sent.`, actor: me.name }).catch(() => {});
+    if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
+    return;
+  }
   const text = String(formData.get("text") ?? "").trim().slice(0, 900);
   const hasPhoto = (() => { const f = formData.get("photo"); return f instanceof File && f.size > 0; })();
   let from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
