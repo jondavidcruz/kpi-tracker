@@ -411,27 +411,32 @@ export async function runOrphanSweep(actor: string) {
   const { upsertNetworkLead } = await import("./dispo-network-write");
   const rows = await loadOrphanSources();
   const row = await db.resource.findFirst({ where: { category: SWEEP_CAT } }).catch(() => null);
-  let done: string[] = []; try { done = row?.description ? (JSON.parse(row.description).ids ?? []) : []; } catch { done = []; }
-  const doneSet = new Set(done);
-  let created = 0, skipped = 0, processed = 0;
+  // doneSet tracks processed SOURCE ids (so each run advances); createdIds tracks created opp
+  // ids (for undo). Earlier bug loaded opp ids into the source tracker → every run reprocessed.
+  let createdIds: string[] = []; let sweptSrc: string[] = [];
+  try { const j = row?.description ? JSON.parse(row.description) : {}; createdIds = j.ids ?? []; sweptSrc = j.sweptSrc ?? []; } catch { /* fresh */ }
+  const doneSet = new Set(sweptSrc);
+  let created = 0, skipped = 0, noContact = 0, processed = 0;
   for (const r of rows) {
     if (doneSet.has(r.id)) continue;
-    if (processed >= 400) break; // stay under the 60s function cap; re-run for the rest
+    if (processed >= 400) break; // cap the UPSERTS per run (contactless rows are skipped cheaply)
+    const phone = s2(r.phone) || s2(r.phone2); const email = s2(r.email);
+    doneSet.add(r.id); // mark processed no matter what, so it's never reprocessed
+    if (!phone && !email) { noContact++; continue; } // can't dedupe a contactless row → skip it
     processed++;
     const res = await upsertNetworkLead({
-      name: r.name, phone: s2(r.phone) || s2(r.phone2), email: s2(r.email),
+      name: r.name, phone, email,
       kind: s2(r.type).toLowerCase() === "agent" ? "agent" : "developer",
       market: s2(r.market), buyBox: [s2(r.buyBox), s2(r.buyBoxAreas)].filter(Boolean).join(" · "),
       notes: s2(r.notes), source: "Buyer Research sweep", actor,
     }).catch(() => null);
-    doneSet.add(r.id);
-    if (res?.created) { created++; done.push(res.oppId); } else skipped++;
+    if (res?.created) { created++; createdIds.push(res.oppId); } else skipped++;
   }
   const remaining = rows.filter((r) => !doneSet.has(r.id)).length;
-  const payload = JSON.stringify({ ids: done, sweptSrc: [...doneSet], ranAt: new Date().toISOString(), actor });
+  const payload = JSON.stringify({ ids: createdIds, sweptSrc: [...doneSet], ranAt: new Date().toISOString(), actor });
   if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
   else await db.resource.create({ data: { title: "orphan-sweep", category: SWEEP_CAT, url: "", description: payload } });
-  return { mode: "sweep", processed, created, skippedAlreadyInKanban: skipped, remaining, note: remaining ? "Run ?sweepgo=1 again to continue." : "All swept." };
+  return { mode: "sweep", processed, created, skippedAlreadyInKanban: skipped, skippedNoContact: noContact, remaining, note: remaining ? "Run ?sweepgo=1 again to continue." : "All swept." };
 }
 
 /** UNDO — archive the cards this sweep created. */
