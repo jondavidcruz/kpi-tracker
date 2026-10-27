@@ -45,7 +45,7 @@ type ColorRange = { max: number | null; color: string };
 const DEFAULT_RANGES: ColorRange[] = [
   { max: 10, color: "#22c55e" }, { max: 20, color: "#eab308" }, { max: 30, color: "#ef4444" }, { max: null, color: "#06b6d4" },
 ];
-type SortKey = "fresh" | "created" | "value" | "name";
+type SortKey = "untouched" | "fresh" | "created" | "value" | "name";
 export type CrmColumn = { key: string; label: string; cls: string };
 const LANE_TINTS = ["bg-sky-50/70 ring-sky-100", "bg-yellow-50/70 ring-yellow-100", "bg-violet-50/70 ring-violet-100", "bg-amber-50/70 ring-amber-100", "bg-blue-50/70 ring-blue-100", "bg-emerald-50/70 ring-emerald-100", "bg-rose-50/70 ring-rose-100", "bg-indigo-50/70 ring-indigo-100", "bg-teal-50/70 ring-teal-100", "bg-slate-100/70 ring-slate-200/60"];
 
@@ -74,7 +74,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   const [cfgOpen, setCfgOpen] = useState(false);
   // 👁 privacy blur (phone + address), 🔀 sort, 🎨 coloring, ☑️ multi-select
   const [privacy, setPrivacy] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>("fresh");
+  // Default: UNTOUCHED first (Jon 2026-10-27) — leads nobody has worked rise to the top,
+  // and the moment you log a touch/note the lead drops toward the bottom.
+  const [sortKey, setSortKey] = useState<SortKey>("untouched");
   const [colorOn, setColorOn] = useState(false);
   const [ranges, setRanges] = useState<ColorRange[]>(DEFAULT_RANGES);
   const [selecting, setSelecting] = useState(false);
@@ -105,6 +107,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     if (sortKey === "value") a.sort((x, y) => (y.valueNum ?? 0) - (x.valueNum ?? 0));
     else if (sortKey === "name") a.sort((x, y) => x.contactName.localeCompare(y.contactName));
     else if (sortKey === "created") a.sort((x, y) => (y.createdAt ?? "").localeCompare(x.createdAt ?? ""));
+    // "untouched" = never-touched first, then oldest touch → most-recently-touched last.
+    else if (sortKey === "untouched") a.sort((x, y) => (x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0));
     return a; // "fresh" = server order (updated desc)
   };
   const toggleSel = (id: string) => { setStageScope(null); setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
@@ -214,6 +218,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
         <span className="ml-auto flex items-center gap-1.5">
           <button onClick={() => savePrivacy(!privacy)} title={privacy ? "Show phone + address" : "Privacy: blur phone + address (screen-share safe)"} className={`rounded-lg px-2.5 py-1 font-bold ${privacy ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{privacy ? "🙈" : "👁"}</button>
           <select value={sortKey} onChange={(e) => saveSort(e.target.value as SortKey)} title="Sort cards inside each stage" className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-bold text-slate-600">
+            <option value="untouched">✋ Untouched first</option>
             <option value="fresh">↕ Last activity</option>
             <option value="created">🆕 Newest created</option>
             <option value="value">💵 Highest value</option>
