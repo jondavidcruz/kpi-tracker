@@ -126,6 +126,9 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
               {d.contact.phone && d.me.canCall && (
                 <button onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: d.contact.phone, name: d.contact.name, oppId: d.id, contactId: d.contact.id } }))} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">📞 Call</button>
               )}
+              {/* 📄 Buyer-safe details export, right in the quick-view (Jon 2026-10-27:
+                  Marie builds the offer packet from here, not just the full page). */}
+              <a href={`/crm/${d.id}/details-sheet`} target="_blank" rel="noopener noreferrer" title="Open a clean, buyer-safe PDF of the property/land details — seller info left out" className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">📄 Export buyer sheet</a>
               <a href={`/crm/${d.id}`} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Open full ↗</a>
               <button
                 title="Delete this lead (goes to the archive — recoverable, never truly gone)"
