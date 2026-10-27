@@ -389,7 +389,9 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const sharynQueue: LaneItem[] = [];
   const marieQueue: LaneItem[] = [];
   if (tab === "team") {
-    const { MARKETING_STEPS, readMarketingDone } = await import("@/lib/dispo-marketing");
+    const { readMarketingDone } = await import("@/lib/dispo-marketing");
+    const { readMarketingSteps } = await import("@/lib/dispo-marketing-store");
+    const MARKETING_STEPS = await readMarketingSteps();
     // Sharyn — phone/outreach: every overdue/ due follow-up is a call to make
     for (const c of followCards) {
       if (c.nextFollowUp && c.nextFollowUp <= today && c.stage !== "passed" && c.stage !== "offer_in") {

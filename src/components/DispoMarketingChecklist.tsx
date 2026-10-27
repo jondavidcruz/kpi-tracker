@@ -1,13 +1,16 @@
 "use client";
 // 📣 Per-deal marketing SOP checklist (Jon 2026-10-20) — every dispo deal gets the
 // same active + passive channel list so it's always marketed correctly.
+import Link from "next/link";
 import { toggleDispoMarketingAction } from "@/app/crm/actions";
-import { MARKETING_STEPS } from "@/lib/dispo-marketing";
+import { MARKETING_STEPS, type MarketingStep } from "@/lib/dispo-marketing";
 
-export default function DispoMarketingChecklist({ oppId, done }: { oppId: string; done: string[] }) {
+// `steps` is passed in from the server now (owner-editable), falling back to the defaults.
+export default function DispoMarketingChecklist({ oppId, done, steps = MARKETING_STEPS, canEdit = false }: { oppId: string; done: string[]; steps?: MarketingStep[]; canEdit?: boolean }) {
+  const MARKETING_STEPS_LIVE = steps;
   const doneSet = new Set(done);
-  const total = MARKETING_STEPS.length;
-  const n = MARKETING_STEPS.filter((s) => doneSet.has(s.key)).length;
+  const total = MARKETING_STEPS_LIVE.length;
+  const n = MARKETING_STEPS_LIVE.filter((s) => doneSet.has(s.key)).length;
   const groups: { group: "active" | "passive"; label: string }[] = [
     { group: "active", label: "📞 Active outreach — Sharyn (calls / emails / texts)" },
     { group: "passive", label: "📰 Posting & listing — Marie (the platforms)" },
@@ -17,13 +20,14 @@ export default function DispoMarketingChecklist({ oppId, done }: { oppId: string
       <div className="mb-2 flex items-center gap-2">
         <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📣 Marketing checklist</span>
         <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n === total ? "bg-emerald-100 text-emerald-700" : n > 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{n}/{total} done</span>
+        {canEdit && <Link href="/marketing-steps" className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Edit the marketing steps">✏️ Edit</Link>}
       </div>
       <div className="space-y-2">
         {groups.map((g) => (
           <div key={g.group}>
             <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">{g.label}</div>
             <div className="space-y-1">
-              {MARKETING_STEPS.filter((s) => s.group === g.group).map((s) => {
+              {MARKETING_STEPS_LIVE.filter((s) => s.group === g.group).map((s) => {
                 const isDone = doneSet.has(s.key);
                 return (
                   <form key={s.key} action={toggleDispoMarketingAction}>

@@ -14,6 +14,20 @@ async function crmUser() {
   return null;
 }
 
+/** 📣 Save the marketing checklist steps (manager-only, Jon 2026-10-26). The team can keep the
+ *  active/passive channel list current without a code change. Stored in Resource. */
+export async function saveMarketingStepsAction(formData: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  let steps: unknown = [];
+  try { steps = JSON.parse(String(formData.get("steps") ?? "[]")); } catch { return; }
+  if (!Array.isArray(steps)) return;
+  const { writeMarketingSteps } = await import("@/lib/dispo-marketing-store");
+  await writeMarketingSteps(steps as import("@/lib/dispo-marketing").MarketingStep[]);
+  revalidatePath("/marketing-steps");
+  revalidatePath("/dispo");
+}
+
 /** 🧩 Save this user's contact-page widget layout (order + hidden). Per-user, no migration. */
 export async function saveCrmLayoutAction(formData: FormData): Promise<void> {
   const me = await crmUser();

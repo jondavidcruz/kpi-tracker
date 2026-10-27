@@ -14,6 +14,7 @@ import DispoGatePanel from "@/components/DispoGatePanel";
 import { readGateChecks } from "@/lib/dispo-gates";
 import { readDispoBuyers, isDispoDealPipeline, isDispoNetworkPipeline, isDevNetworkName, isAgentNetworkName, stageMeta } from "@/lib/dispo-buyers";
 import { readMarketingDone } from "@/lib/dispo-marketing";
+import { readMarketingSteps } from "@/lib/dispo-marketing-store";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
 import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels, recStreamSrc } from "@/lib/crm-shared";
@@ -126,6 +127,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
     : `/crm?pl=${encodeURIComponent(opp.pipeline || "War Room")}`;
   // 🎯 Smart Match from the buyer-network CRM (developers + agents), on dispo deals only.
   const networkMatches = showMatches ? await withTimeout(getNetworkMatchesForDeal(c.address || opp.title), 8000, []) : [];
+  const marketingSteps = showMatches ? await readMarketingSteps() : [];
   // 🔗 On a buyer-agent / developer lead: every deal they're on (last talk + offer + next follow-up).
   const isNetworkLead = isDevNetworkName(opp.pipeline) || isAgentNetworkName(opp.pipeline);
   const leadDeals = canSeeBuyers && isNetworkLead ? await getDealsForNetworkLead(opp.id) : [];
@@ -779,7 +781,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
 
           {/* 📣 Marketing SOP checklist — dispo deals only (Jon 2026-10-20) */}
           {showMatches && (
-            <div data-widget="marketing"><PanelGuard label="marketing"><DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} /></PanelGuard></div>
+            <div data-widget="marketing"><PanelGuard label="marketing"><DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} steps={marketingSteps} canEdit={manager} /></PanelGuard></div>
           )}
 
           {/* ⚡ Run-the-cascade button removed from the contact view (Jon 2026-10-26) — the
