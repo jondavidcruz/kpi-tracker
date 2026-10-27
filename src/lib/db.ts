@@ -1,3 +1,9 @@
+// 🛡️ SAFEGUARD (Jon 2026-10-26): importing this (or anything that imports it) into a CLIENT
+// component now fails the BUILD instead of shipping Prisma to the browser and crashing the page
+// at runtime — which is what took the contact page down today. If a build errors with
+// "server-only cannot be imported from a Client Component", a "use client" file is importing
+// server code through a non-action path; move the shared bits to a client-safe module.
+import "server-only";
 import { PrismaClient } from "@prisma/client";
 
 // Buyer data is NEVER deleted — archive only (vetted-buyers rebuild rule zero).
