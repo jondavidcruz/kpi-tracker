@@ -583,9 +583,11 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             // 🔵 SMS reads like an iMessage — blue card — so texts stand apart from the
             // yellow notes and the plain activity rows (Jon 2026-10-27).
             const isSms = e.kind === "sms";
+            // 🔴 Email reads like Gmail — red card — like SMS is blue and notes are yellow (Jon 2026-10-27).
+            const isEmail = e.kind === "email";
             return (
             <div key={e.id} data-tlrow data-kind={e.kind} data-note={e.kind === "note" ? "1" : "0"}>
-            <Card className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""} ${isManualNote ? "!border-amber-200 !bg-amber-50/70" : ""} ${isSms ? "!border-sky-200 !bg-sky-50/70" : ""}`}>
+            <Card className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""} ${isManualNote ? "!border-amber-200 !bg-amber-50/70" : ""} ${isSms ? "!border-sky-200 !bg-sky-50/70" : ""} ${isEmail ? "!border-red-200 !bg-red-50/70" : ""}`}>
               <span className="text-base">{isManualNote ? "🟡" : KIND_EMOJI[e.kind] ?? "•"}</span>
               <div className="min-w-0 flex-1">
                 {e.kind === "note"

@@ -53,6 +53,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // dialing + on the timeline, since "auto" doesn't say which of our numbers got picked).
   const [liveFrom, setLiveFrom] = useState<string>("");
   const lastFromRef = useRef<string>("");
+  // 📌 Per-lead "sticky line": the number we used on a prior 2-min+ conversation, from
+  // the server (call history). If present we call back from it and DON'T rotate.
+  const stickyRef = useRef<Map<string, string>>(new Map());
   // The disposition the rep picked — the "what kind of call" KPI picker only opens on "talked"
   // (Jon 2026-10-27: don't show both at once — you only categorize a call you actually talked on).
   const [dispoOutcome, setDispoOutcome] = useState<string | null>(null);
@@ -280,6 +283,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       setTab("keypad");
       setNum(d.phone);
       if (!dataRef.current) load();
+      if (d.phone) loadSticky(d.phone).catch(() => {}); // 📌 warm the sticky-line cache
       setTimeout(() => call(d), 350);
     };
     window.addEventListener("fo-call", h);
@@ -291,11 +295,30 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // available — so a call never silently fails for lack of a nearby number (Jon
   // 2026-10-24). A manually-chosen number is used as-is, but still falls back to an
   // available number if that pick isn't in our list.
+  // 📌 Ask the server whether we've had a real conversation (answered call ≥2 min) with
+  // this lead; if so it returns the line we used — call back from it, no rotation. Cached
+  // per lead so repeated dials don't refetch.
+  const loadSticky = async (to: string): Promise<string> => {
+    const k = leadKey(to);
+    if (stickyRef.current.has(k)) return stickyRef.current.get(k) || "";
+    try {
+      const r = await fetch(`/api/crm/callerid?stick=${encodeURIComponent(to)}`, { cache: "no-store" });
+      const j = (await r.json()) as { from?: string };
+      const f = typeof j?.from === "string" ? j.from : "";
+      stickyRef.current.set(k, f);
+      return f;
+    } catch { stickyRef.current.set(k, ""); return ""; }
+  };
+
   const pickFrom = (to: string): string | undefined => {
     const d = dataRef.current;
     const nums = d?.numbers ?? [];
     if (from !== "auto") return from; // a manually-chosen line is used as-is
     if (!nums.length) return d?.defaultFrom || undefined; // nothing loaded/available → let Telnyx use the line default
+    // 📌 Sticky line wins: a lead we actually talked to gets called back from the same
+    // number (they saved it) — never rotated.
+    const sticky = stickyRef.current.get(leadKey(to));
+    if (sticky && nums.includes(sticky)) return sticky;
     const ac = areaCode(to);
     const st = stateOf(to);
     // 🔁 Rotate off the lines we've ALREADY used on this lead (unanswered attempts),
@@ -614,6 +637,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       if (!leaderRef.current) { setMsg("Taking the line from your other tab…"); await holdLock(true); }
       const client = (await ensureClient()) as { newCall: (o: object) => unknown };
       setState("ringing");
+      await loadSticky(to); // 📌 pin the line if we've already had a real conversation
       const from = pickFrom(to);
       lastFromRef.current = from ?? ""; setLiveFrom(from ?? "");
       if (from && ctx.dir !== "in") recordFrom(to, from); // 🔁 remember this line for the lead's next unanswered attempt

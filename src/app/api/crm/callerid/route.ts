@@ -44,6 +44,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(d, { headers: { "Cache-Control": "private, no-store" } });
   }
 
+  // 📌 Sticky line (Jon 2026-10-27): if we've ALREADY had a real conversation with this
+  // lead — an answered call of 2+ minutes — call back from the SAME number next time
+  // (they likely saved it). Returns that line so the dialer uses it instead of rotating.
+  // Rotation is only for leads we've never actually reached.
+  const stick = req.nextUrl.searchParams.get("stick");
+  if (stick) {
+    const d10 = stick.replace(/\D/g, "").slice(-10);
+    if (d10.length !== 10) return NextResponse.json({ from: "" });
+    let cid = "";
+    try {
+      const rows = await db.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM "CrmContact"
+        WHERE right(regexp_replace(coalesce("phone", ''), '[^0-9]', '', 'g'), 10) = ${d10}
+           OR right(regexp_replace(coalesce("altPhone", ''), '[^0-9]', '', 'g'), 10) = ${d10}
+        LIMIT 1`;
+      cid = rows[0]?.id ?? "";
+    } catch { cid = ""; }
+    if (!cid) return NextResponse.json({ from: "" });
+    const calls = await db.crmEvent.findMany({ where: { contactId: cid, kind: "call" }, orderBy: { at: "desc" }, take: 60, select: { meta: true } });
+    for (const c of calls) {
+      const m = (c.meta ?? {}) as { secs?: number; from?: string };
+      if ((m.secs ?? 0) >= 120 && m.from) return NextResponse.json({ from: m.from }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    return NextResponse.json({ from: "" }, { headers: { "Cache-Control": "private, no-store" } });
+  }
+
   const num = req.nextUrl.searchParams.get("num") ?? "";
   const last10 = num.replace(/\D/g, "").slice(-10);
   if (last10.length !== 10) return NextResponse.json({ name: "" });
