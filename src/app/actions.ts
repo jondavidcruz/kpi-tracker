@@ -3020,26 +3020,62 @@ export async function cascadeRank(formData: FormData): Promise<{
   const g = await geocode(address);
   if (!g) return { ok: false, error: `Couldn't locate “${address}” — try “City, ST” or a ZIP.` };
 
-  const rows = await db.marketContact.findMany({
-    where: { archivedAt: null },
-    select: {
-      id: true, name: true, company: true, type: true, phone: true, email: true,
-      buyBoxStruct: true, geoPolygon: true, geoCentroidLat: true, geoCentroidLng: true,
-      priceRange: true, buyBox: true,
-      buyerFlags: true, blacklistedAt: true, blacklistReason: true,
-      touches: { orderBy: { at: "desc" }, take: 1, select: { at: true } },
-    },
+  // 🧲 SINGLE SOURCE OF TRUTH = the KANBAN (Jon 2026-10-27: "it should be pulling all buyers
+  // that are vetted in the Kanban"). Read vetted developers (✅ Vetted) + active agents
+  // (🤝 Active partner) from the dispo network pipelines — NOT the old MarketContact table —
+  // so the Vetted Buyers cascade shows the SAME buyers as a deal card's Smart Match. Each card
+  // carries its structured buy-box + geo (preserved by the migration) for precise ranking, and
+  // a text fallback covers cards that only have free-text areas.
+  const { resolveNetworkPipelines } = await import("@/lib/dispo-network");
+  const { isAgentNetworkName } = await import("@/lib/dispo-buyers");
+  const net = await resolveNetworkPipelines();
+  const opps = net.all.length ? await db.crmOpportunity.findMany({
+    where: { archivedAt: null, pipeline: { in: net.all }, stage: { in: ["vetted", "active"] } },
+    select: { id: true, title: true, pipeline: true, formData: true, updatedAt: true, contact: { select: { name: true, phone: true, email: true } } },
+  }) : [];
+  type BB = import("@/lib/buybox/types").BuyBox;
+  const STOP = new Set(["the", "and", "for", "llc", "inc", "county", "ave", "street", "road", "drive", "lane", "blvd", "court", "circle", "unit", "ste", "usa"]);
+  const cards = opps.map((o) => {
+    const fd = (o.formData ?? {}) as Record<string, unknown>;
+    const bb = ((fd.__buyBoxStruct ?? null) as unknown as BB | null);
+    const geoc = (fd.__geoCentroid ?? null) as { lat?: number; lng?: number } | null;
+    const imp = (fd.__import ?? {}) as { market?: string; buyBox?: string };
+    const src = (fd.__migratedSource ?? {}) as { buyBoxAreas?: string; market?: string; buyBox?: string; priceRange?: string; type?: string; company?: string };
+    const form = (fd.dev_buybox ?? fd.agent_profile ?? {}) as Record<string, string>;
+    const agent = isAgentNetworkName(o.pipeline);
+    const geo = bb?.geo;
+    const geoParts = geo ? [...(geo.counties ?? []), ...(geo.cities ?? []), ...(geo.states ?? []), ...(geo.regions ?? []), ...(geo.zips ?? [])] : [];
+    const areaText = [imp.market, form.buyCounties, form.areas, imp.buyBox, src.buyBoxAreas, src.market, src.buyBox, ...geoParts].filter(Boolean).join(" ").toLowerCase();
+    return {
+      id: o.id, name: o.contact?.name || o.title, company: src.company || form.brokerage || "",
+      type: agent ? "agent" : (src.type || "developer"), phone: o.contact?.phone ?? "", email: o.contact?.email ?? "",
+      bb, geoPolygon: (fd.__geoPolygon ?? null) as never, geoCentroidLat: geoc?.lat ?? null, geoCentroidLng: geoc?.lng ?? null,
+      priceText: (form.priceRange || src.priceRange || src.buyBox || "").trim(),
+      areaText, nationwide: geo?.nationwide === true, lastTouchAt: o.updatedAt as Date,
+    };
   });
+  const cardById = new Map(cards.map((c) => [c.id, c]));
   const { rankBuyers, nearestMiss } = await import("@/lib/buybox/match");
-  const buyers = rows.map((r) => ({
-    id: r.id, name: r.name, buyBox: (r.buyBoxStruct as never) ?? null, geoPolygon: (r.geoPolygon as never) ?? null,
-    geoCentroidLat: r.geoCentroidLat, geoCentroidLng: r.geoCentroidLng, lastTouchAt: r.touches[0]?.at ?? null,
-    flags: (r.buyerFlags as { lowballer?: boolean; tireKicker?: boolean } | null) ?? null, blacklistedAt: r.blacklistedAt,
+  const buyers = cards.map((c) => ({
+    id: c.id, name: c.name, buyBox: c.bb, geoPolygon: c.geoPolygon,
+    geoCentroidLat: c.geoCentroidLat, geoCentroidLng: c.geoCentroidLng, lastTouchAt: c.lastTouchAt, flags: null, blacklistedAt: null,
   }));
-  const excluded = rows.filter((r) => r.blacklistedAt).map((r) => ({ name: r.name, reason: r.blacklistReason ?? "" }));
+  const excluded: Array<{ name: string; reason: string }> = [];
   const deal = { lat: g.lat, lng: g.lng, county: g.county || undefined, city: g.city || undefined, state: g.state || undefined, zip: g.zip || undefined, price, acres, assetType };
-  const ranked = rankBuyers(deal, buyers);
-  const byId = new Map(rows.map((r) => [r.id, r]));
+  const geoRanked = rankBuyers(deal, buyers);
+  const rankedIds = new Set(geoRanked.map((r) => r.buyer.id));
+  // 📍 Text fallback (mirrors a deal card's Smart Match): a vetted buyer whose area TEXT covers
+  // the deal location but who has no structured geo polygon still shows, as a near-miss.
+  const tokens = [...new Set([address, g.county, g.city, g.state, g.zip].filter(Boolean).join(" ").toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3 && !STOP.has(t)))];
+  type RankRow = (typeof geoRanked)[number];
+  const textRanked = cards.filter((c) => !rankedIds.has(c.id)).map((c): RankRow | null => {
+    const buyer = { id: c.id, name: c.name, buyBox: c.bb, geoPolygon: c.geoPolygon, geoCentroidLat: c.geoCentroidLat, geoCentroidLng: c.geoCentroidLng, lastTouchAt: c.lastTouchAt, flags: null, blacklistedAt: null };
+    if (c.nationwide) return { buyer, score: 52, tier: 2, why: [{ ok: true, label: "🌎 buys nationwide" }], geoBasis: "nationwide" };
+    const hits = tokens.filter((t) => c.areaText.includes(t));
+    if (!hits.length) return null;
+    return { buyer, score: Math.min(60, 38 + hits.length * 4), tier: 2, why: hits.slice(0, 3).map((h) => ({ ok: "warn", label: `📍 ${h}` })), geoBasis: "area match" };
+  }).filter((x): x is RankRow => !!x);
+  const ranked = [...geoRanked, ...textRanked].sort((a, b) => b.score - a.score);
 
   // Remember the search (cap ~20 rows — CascadeSearch is ours, not buyer data).
   try {
@@ -3057,15 +3093,12 @@ export async function cascadeRank(formData: FormData): Promise<{
     excluded,
     nearest: ranked.length ? null : nearestMiss(deal, buyers),
     ranked: ranked.map((r) => {
-      const c = byId.get(r.buyer.id);
-      // 💰 the buy box, summarized for the cascade row expansion (Jon 2026-10-12:
-      // "I can see the buyers but not what they pay")
-      const bb = (c?.buyBoxStruct ?? null) as import("@/lib/buybox/types").BuyBox | null;
-      // 💰 Price SYNC fix (Jon 2026-10-27): the cascade used to read price ONLY from the
-      // structured buyBoxStruct, so a buyer who had a price in the text `priceRange`/`buyBox`
-      // field (what the individual Buyer screen shows) looked like "price range unknown" here.
-      // Fall back to that text so the two views agree.
-      const priceText = (c?.priceRange || c?.buyBox || "").trim();
+      const c = cardById.get(r.buyer.id);
+      // 💰 the buy box, summarized for the cascade row expansion — now from the kanban card.
+      const bb = (c?.bb ?? null) as import("@/lib/buybox/types").BuyBox | null;
+      // 💰 Price fallback to the text field so a buyer with a price but no structured box
+      // doesn't read "price range unknown" (Jon 2026-10-27).
+      const priceText = (c?.priceText || "").trim();
       const box = (bb || priceText) ? {
         priceMin: bb?.price?.min ?? null, priceMax: bb?.price?.max ?? null, priceUnit: bb?.price?.unit ?? null,
         priceText,
