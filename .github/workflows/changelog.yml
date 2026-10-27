@@ -1,0 +1,42 @@
+# 📰 Auto-log each deploy to the War Room daily changelog (Jon 2026-10-27: "why aren't the
+# updates posting to War Room Chat at EOD?"). The nightly cron (?daychangelog=1, ~8pm PT) posts
+# whatever is queued in __daily_updates__ — but nothing was queuing it. This posts every pushed
+# commit's summary line to ?updateslog=add, so the nightly post actually has content.
+#
+# Needs two things set once:
+#   • repo secret CRON_SECRET  = the same value as Vercel's CRON_SECRET env var
+#   • Vercel env WARROOM_CHAT_WEBHOOK = the War Room Updates Google Chat webhook (for the 8pm post)
+# Internal/plumbing commits (safeguards, housekeeping, usage, docs) are skipped so the team only
+# sees user-facing changes.
+name: changelog
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Queue commit summaries to the War Room changelog
+        env:
+          SECRET: ${{ secrets.CRON_SECRET }}
+          COMMITS: ${{ toJSON(github.event.commits) }}
+        run: |
+          if [ -z "$SECRET" ]; then echo "CRON_SECRET not set — skipping (add it in repo Settings → Secrets)"; exit 0; fi
+          BASE="https://kpi-tracker-lovat.vercel.app"
+          # first line of each pushed commit, drop merges + internal-only prefixes
+          echo "$COMMITS" | jq -r '.[].message | split("\n")[0]' | while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            case "$line" in
+              Merge*|"🚑"*|"🧹"*|"🛡️"*|"💸"*|"📜"*|"🤖 Uptime"*|chore*|ci*|build*|refactor*) echo "skip (internal): $line"; continue;;
+            esac
+            # strip a leading gitmoji so the team reads plain text; cap length
+            clean="$(printf '%s' "$line" | sed -E 's/^[^A-Za-z0-9]+//' | cut -c1-200)"
+            [ -z "$clean" ] && continue
+            enc="$(jq -rn --arg s "$clean" '$s|@uri')"
+            code="$(curl -s -o /dev/null -w "%{http_code}" --max-time 25 \
+              -H "Authorization: Bearer $SECRET" \
+              "$BASE/api/cron?updateslog=add&text=$enc")"
+            echo "queued ($code): $clean"
+          done
