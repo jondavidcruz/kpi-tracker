@@ -21,7 +21,7 @@ export async function saveCrmLayoutAction(formData: FormData): Promise<void> {
   const uid = (me as { id?: string }).id || me.name;
   let order: string[] = [], hidden: string[] = [];
   try { const j = JSON.parse(String(formData.get("layout") ?? "{}")); if (Array.isArray(j.order)) order = j.order.map(String); if (Array.isArray(j.hidden)) hidden = j.hidden.map(String); } catch { return; }
-  const { writeCrmLayout } = await import("@/lib/crm-layout");
+  const { writeCrmLayout } = await import("@/lib/crm-layout-store");
   await writeCrmLayout(uid, { order, hidden });
 }
 

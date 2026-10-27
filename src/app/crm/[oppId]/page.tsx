@@ -29,7 +29,7 @@ import AutoSaveForm from "@/components/AutoSaveForm";
 import CrmFormFields from "@/components/CrmFormFields";
 import DocUploadForm from "@/components/DocUploadForm";
 import CrmLayoutController from "@/components/CrmLayoutController";
-import { readCrmLayout } from "@/lib/crm-layout";
+import { readCrmLayout } from "@/lib/crm-layout-store";
 import OppPipelineMover from "@/components/OppPipelineMover";
 import { setOppStageAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, deleteLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
