@@ -84,8 +84,15 @@ export async function getNetworkMatchesForDeal(address: string, limit = 8): Prom
         reason: nationwide ? "🌎 buys nationwide" : hits.length ? `📍 ${hits.slice(0, 3).join(", ")}` : "",
         score: nationwide ? Math.max(hits.length, 1) : hits.length,
       };
-    }).filter((m) => m.score > 0).sort((a, b) => b.score - a.score).slice(0, limit);
-    return scored;
+    }).filter((m) => m.score > 0).sort((a, b) => b.score - a.score);
+    // 🧹 one card per buyer — collapse migration twins (phone, else name), then cap.
+    const seen = new Set<string>();
+    return scored.filter((m) => {
+      const key = String(m.phone ?? "").replace(/\D/g, "").slice(-10) || m.name.trim().toLowerCase();
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).slice(0, limit);
   } catch {
     return [];
   }

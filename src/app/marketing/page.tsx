@@ -151,7 +151,11 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   // 🔀 Phase 3 preview (?src=kanban, Jon 2026-10-23): read the Buyers board + coverage
   // from the CRM kanban's VETTED developers/agents (the single source of truth) instead
   // of MarketContact, via the adapter. The live page is unchanged unless ?src=kanban.
-  const srcKanban = sp.src === "kanban";
+  // 🧲 The KANBAN is the vetted-buyers home now (Jon 2026-10-27: "the kanban is just a method
+  // to vet developers — once vetted they rest in the Vetted Buyers cascade"). Read the board
+  // from the kanban's ✅ Vetted devs + 🤝 Active agents BY DEFAULT (?src=marketcontact for the
+  // legacy table).
+  const srcKanban = sp.src !== "marketcontact";
   let boardCards = cards;
   let boardCoverage = coverage;
   if (srcKanban) {
@@ -168,6 +172,18 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       for (const e of tevs) { const arr = tmap.get(e.contactId) ?? []; if (arr.length < 5) { arr.push({ at: e.at.toISOString().slice(0, 10), outcome: e.kind, note: e.body.slice(0, 120) }); tmap.set(e.contactId, arr); } }
     }
     boardCards = kopps.map((o) => crmOppToCardBuyer(o, (o.contactId && tmap.get(o.contactId)) || [], today));
+  }
+  // 🧹 Collapse duplicate buyer cards — the two migrations (Oct 22 + Oct 27) created some
+  // twins (e.g. Folstein / Sunlife showed twice). Keep one per phone, else per name.
+  {
+    const seen = new Set<string>();
+    boardCards = boardCards.filter((b) => {
+      const rec = b as { phone?: string; name?: string };
+      const key = String(rec.phone ?? "").replace(/\D/g, "").slice(-10) || String(rec.name ?? "").trim().toLowerCase();
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    });
     boardCoverage = coverageByCounty(boardCards);
   }
 
@@ -197,7 +213,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         id="vetted-buyers"
         tabs={[
           { key: "cascade", label: "🎯 Cascade" },
-          { key: "buyers", label: "🃏 Buyers", badge: vettedRows.length },
+          { key: "buyers", label: "🃏 Buyers", badge: boardCards.length },
           { key: "interviews", label: "📥 Interviews" },
           { key: "markets", label: "🗺 Map & Markets" },
           { key: "jv", label: "🤝 JV Partners", badge: jvPartners.length },
@@ -214,8 +230,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           </div>,
           <div key="buyers" className="space-y-6">
       {/* Section 3 — KPI strip · coverage heat board · buyer trading cards */}
-      {srcKanban && (
-        <div className="rounded-xl bg-indigo-600 px-4 py-2 text-[12px] font-bold text-white">🔀 PREVIEW — this board is reading the CRM kanban ({boardCards.length} vetted developers/agents). <a href="/marketing" className="underline">back to live</a></div>
+      {!srcKanban && (
+        <div className="rounded-xl bg-amber-500 px-4 py-2 text-[12px] font-bold text-white">📁 Showing the legacy buyer table ({vettedRows.length}). <a href="/marketing" className="underline">Back to the live kanban board</a></div>
       )}
       <VettedBuyersBoard buyers={boardCards} coverage={boardCoverage} coldCount={cold.length} />
 

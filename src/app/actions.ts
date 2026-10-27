@@ -3075,7 +3075,18 @@ export async function cascadeRank(formData: FormData): Promise<{
     if (!hits.length) return null;
     return { buyer, score: Math.min(60, 38 + hits.length * 4), tier: 2, why: hits.slice(0, 3).map((h) => ({ ok: "warn", label: `📍 ${h}` })), geoBasis: "area match" };
   }).filter((x): x is RankRow => !!x);
-  const ranked = [...geoRanked, ...textRanked].sort((a, b) => b.score - a.score);
+  // 🧹 Collapse duplicate buyers (migration twins) — one per phone, else name; keep best score.
+  const ranked = (() => {
+    const merged = [...geoRanked, ...textRanked].sort((a, b) => b.score - a.score);
+    const seenB = new Set<string>();
+    return merged.filter((r) => {
+      const cc = cardById.get(r.buyer.id);
+      const key = (cc?.phone || "").replace(/\D/g, "").slice(-10) || (r.buyer.name || "").trim().toLowerCase();
+      if (!key) return true;
+      if (seenB.has(key)) return false;
+      seenB.add(key); return true;
+    });
+  })();
 
   // Remember the search (cap ~20 rows — CascadeSearch is ours, not buyer data).
   try {
