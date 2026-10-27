@@ -3000,7 +3000,7 @@ export async function cascadeRank(formData: FormData): Promise<{
     id: string; name: string; company: string; type: string; phone: string; email: string;
     score: number; tier: 1 | 2 | 3; why: Array<{ ok: boolean | "warn"; label: string }>; geoBasis: string;
     box: null | {
-      priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string;
+      priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; priceText: string;
       discount: number | null; acresMin: number | null; acresMax: number | null; types: string[];
       closeDays: number | null; funding: string | null; where: string[]; volumeNote: string; buyingNow: boolean | null;
     };
@@ -3025,6 +3025,7 @@ export async function cascadeRank(formData: FormData): Promise<{
     select: {
       id: true, name: true, company: true, type: true, phone: true, email: true,
       buyBoxStruct: true, geoPolygon: true, geoCentroidLat: true, geoCentroidLng: true,
+      priceRange: true, buyBox: true,
       buyerFlags: true, blacklistedAt: true, blacklistReason: true,
       touches: { orderBy: { at: "desc" }, take: 1, select: { at: true } },
     },
@@ -3060,15 +3061,21 @@ export async function cascadeRank(formData: FormData): Promise<{
       // 💰 the buy box, summarized for the cascade row expansion (Jon 2026-10-12:
       // "I can see the buyers but not what they pay")
       const bb = (c?.buyBoxStruct ?? null) as import("@/lib/buybox/types").BuyBox | null;
-      const box = bb ? {
-        priceMin: bb.price?.min ?? null, priceMax: bb.price?.max ?? null, priceUnit: bb.price?.unit ?? null,
-        priceNotes: [bb.price?.notes, bb.geo?.neighborhood_notes].filter(Boolean).join(" · ").slice(0, 300),
-        discount: typeof bb.price?.discount_to_market_pct === "number" ? bb.price.discount_to_market_pct : null,
-        acresMin: bb.size?.acres_min ?? null, acresMax: bb.size?.acres_max ?? null,
-        types: (bb.asset?.types ?? []).map((t) => String(t).replace(/_/g, " ")),
-        closeDays: bb.terms?.close_days ?? null, funding: bb.terms?.funding ?? null,
-        where: [bb.geo?.nationwide ? "nationwide" : "", ...(bb.geo?.regions ?? []), ...(bb.geo?.counties ?? []), ...(bb.geo?.cities ?? []), ...(bb.geo?.states ?? [])].filter(Boolean).slice(0, 10),
-        volumeNote: bb.status?.volume_note ?? "", buyingNow: bb.status?.buying_now ?? null,
+      // 💰 Price SYNC fix (Jon 2026-10-27): the cascade used to read price ONLY from the
+      // structured buyBoxStruct, so a buyer who had a price in the text `priceRange`/`buyBox`
+      // field (what the individual Buyer screen shows) looked like "price range unknown" here.
+      // Fall back to that text so the two views agree.
+      const priceText = (c?.priceRange || c?.buyBox || "").trim();
+      const box = (bb || priceText) ? {
+        priceMin: bb?.price?.min ?? null, priceMax: bb?.price?.max ?? null, priceUnit: bb?.price?.unit ?? null,
+        priceText,
+        priceNotes: [bb?.price?.notes, bb?.geo?.neighborhood_notes].filter(Boolean).join(" · ").slice(0, 300),
+        discount: typeof bb?.price?.discount_to_market_pct === "number" ? bb.price.discount_to_market_pct : null,
+        acresMin: bb?.size?.acres_min ?? null, acresMax: bb?.size?.acres_max ?? null,
+        types: (bb?.asset?.types ?? []).map((t) => String(t).replace(/_/g, " ")),
+        closeDays: bb?.terms?.close_days ?? null, funding: bb?.terms?.funding ?? null,
+        where: [bb?.geo?.nationwide ? "nationwide" : "", ...(bb?.geo?.regions ?? []), ...(bb?.geo?.counties ?? []), ...(bb?.geo?.cities ?? []), ...(bb?.geo?.states ?? [])].filter(Boolean).slice(0, 10),
+        volumeNote: bb?.status?.volume_note ?? "", buyingNow: bb?.status?.buying_now ?? null,
       } : null;
       return { id: r.buyer.id, name: r.buyer.name, company: c?.company ?? "", type: c?.type ?? "", phone: c?.phone ?? "", email: c?.email ?? "", score: r.score, tier: r.tier, why: r.why, geoBasis: r.geoBasis, box };
     }),
