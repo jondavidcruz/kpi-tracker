@@ -26,6 +26,7 @@ import CallButton from "@/components/CallButton";
 import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
 import { editCrmNoteAction, deleteCrmNoteAction } from "../actions";
 import LeadNoteComposer from "@/components/LeadNoteComposer";
+import PartyActions from "@/components/PartyActions";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import PhoneField from "@/components/PhoneField";
 import TimelineFilter from "@/components/TimelineFilter";
@@ -465,6 +466,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                     <form action={deleteCrmPartyAction} className="ml-auto"><input type="hidden" name="id" value={p.id} /><button className="text-[10px] text-slate-300 hover:text-red-500">✕</button></form>
                   </div>
                   <div className="mt-0.5 text-[11px] text-brand-navy">{[p.phone, p.email].filter(Boolean).join(" · ")}</div>
+                  <PartyActions phone={p.phone} email={p.email} name={p.name} oppId={opp.id} />
                   {p.note && <div className="text-[10px] text-slate-400">{p.note}</div>}
                 </div>
               ))}
