@@ -41,7 +41,7 @@ function cityState(addr?: string): { city: string; st: string } {
   if (!addr) return { city: "", st: "" };
   const parts = addr.split(",").map((s) => s.trim()).filter(Boolean);
   if (parts.length < 2) return { city: "", st: "" };
-  const st = (parts[parts.length - 1].match(/\b([A-Z]{2})\b/) || [])[1] || "";
+  const st = ((parts[parts.length - 1].match(/\b([A-Za-z]{2})\b/) || [])[1] || "").toUpperCase();
   let city = "";
   // "street, CITY, ST ZIP" — the city is the part just before "ST ZIP"
   if (parts.length >= 3) {
@@ -62,6 +62,21 @@ function cityState(addr?: string): { city: string; st: string } {
   }
   if (/\d/.test(city)) city = "";
   return { city, st };
+}
+// 🧩 A deal can list MULTIPLE parcels (separated by | ; or newlines) in different cities —
+// parse each and return the distinct cities so the deal shows under EACH area (Jon 2026-10-27).
+function citiesOf(addr?: string): { city: string; st: string }[] {
+  if (!addr) return [];
+  const out: { city: string; st: string }[] = [];
+  const seen = new Set<string>();
+  for (const parcel of addr.split(/[|\n;]+/).map((s) => s.trim()).filter(Boolean)) {
+    const { city, st } = cityState(parcel);
+    if (!city) continue;
+    const k = `${city.toLowerCase()}|${st}`;
+    if (seen.has(k)) continue; seen.add(k);
+    out.push({ city, st });
+  }
+  return out;
 }
 
 // 🎯 Dispositions CRM — dispo's buyer side, built with the SAME Kanban the team
@@ -364,10 +379,14 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   if (tab === "deals" && areasView) {
     const map = new Map<string, CrmCard[]>();
     for (const c of dealCardsShown) {
-      const { city, st } = cityState(c.address);
-      const key = city ? `${city}|${st}` : "__none";
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(c);
+      const cities = citiesOf(c.address);
+      if (!cities.length) { if (!map.has("__none")) map.set("__none", []); map.get("__none")!.push(c); continue; }
+      // list a multi-parcel deal under EACH of its cities (Jon 2026-10-27)
+      for (const { city, st } of cities) {
+        const key = `${city}|${st}`;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(c);
+      }
     }
     const dealIdSet = new Set(dealCardsShown.map((c) => c.id));
     const byDeal = new Map<string, FollowupCard[]>();
