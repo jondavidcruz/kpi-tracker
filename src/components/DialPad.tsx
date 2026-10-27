@@ -38,6 +38,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // dialing + on the timeline, since "auto" doesn't say which of our numbers got picked).
   const [liveFrom, setLiveFrom] = useState<string>("");
   const lastFromRef = useRef<string>("");
+  // The disposition the rep picked — the "what kind of call" KPI picker only opens on "talked"
+  // (Jon 2026-10-27: don't show both at once — you only categorize a call you actually talked on).
+  const [dispoOutcome, setDispoOutcome] = useState<string | null>(null);
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
   const [incoming, setIncoming] = useState<{ number: string; name?: string; deptLabel?: string } | null>(null);
   const [answeredBy, setAnsweredBy] = useState<{ agent: string; caller: string } | null>(null);
@@ -727,13 +730,15 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
                     fd.set("to", lastCall.phone ?? "");
                     fd.set("outcome", k);
                     dialerOutcomeQuickAction(fd).catch(() => {});
-                    setLastCall(null);
-                    setTimeout(() => load(), 800);
-                  }} className="rounded-md bg-white px-2 py-1 text-[10px] font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100">{l}</button>
+                    // Only "Talked" (on a real ≥60s call) opens the call-type KPI picker; every
+                    // other outcome just logs + closes (Jon 2026-10-27).
+                    if (k === "talked" && (lastCall.secs ?? 0) >= 60) { setDispoOutcome("talked"); }
+                    else { setLastCall(null); setDispoOutcome(null); setTimeout(() => load(), 800); }
+                  }} className={`rounded-md px-2 py-1 text-[10px] font-bold ring-1 hover:bg-slate-100 ${dispoOutcome === k ? "bg-emerald-100 text-emerald-700 ring-emerald-300" : "bg-white text-slate-700 ring-slate-200"}`}>{l}</button>
                 ))}
-                <button onClick={() => setLastCall(null)} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600">skip</button>
+                <button onClick={() => { setLastCall(null); setDispoOutcome(null); }} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600">skip</button>
               </span>
-              {(lastCall.secs ?? 0) >= 60 && (
+              {dispoOutcome === "talked" && (
                 <span className="mt-1 flex flex-col gap-1 border-t border-amber-200/60 pt-1.5">
                   <span className="text-[10px] font-bold text-amber-800">🏷 What kind of call was it? <span className="font-semibold text-amber-600">(counts your KPI automatically)</span></span>
                   {typeLogged === lastCall.phone ? (

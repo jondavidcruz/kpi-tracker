@@ -322,10 +322,15 @@ export async function POST(req: NextRequest) {
     // record_start can emit two recording.saved events with DIFFERENT call_control_ids, which
     // slip past the ccId check above — so also skip if we already filed a recording of the SAME
     // length for this contact in the last 25 min. Runs before the Drive upload/transcription.
-    if (secs > 0) {
-      const dupDur = await db.crmEvent.findFirst({ where: { contactId: contact.id, kind: "call", body: { startsWith: "🎙" }, at: { gte: new Date(Date.now() - 25 * 60000) }, meta: { path: ["secs"], equals: secs } }, select: { id: true } }).catch(() => null);
-      if (dupDur) { await recCrumb({ ev: "rec.outcome", result: "deduped-dur", secs }); return NextResponse.json({ ok: true, deduped: "duration" }); }
-    }
+    // Tolerant (±3s) match on the recent recordings for this contact — rounding made two
+    // copies of the same call differ by a second and slip past an exact match (Jon 2026-10-27:
+    // transcripts were posting 3× and eating Drive storage).
+    const recDupe = async () => {
+      if (secs <= 0) return false;
+      const recent = await db.crmEvent.findMany({ where: { contactId: contact.id, kind: "call", body: { startsWith: "🎙" }, at: { gte: new Date(Date.now() - 25 * 60000) } }, select: { meta: true } }).catch(() => []);
+      return recent.some((r) => { const s = (r.meta as { secs?: number } | null)?.secs; return typeof s === "number" && Math.abs(s - secs) <= 3; });
+    };
+    if (await recDupe()) { await recCrumb({ ev: "rec.outcome", result: "deduped-dur", secs }); return NextResponse.json({ ok: true, deduped: "duration" }); }
     // 🎙 Only REAL conversations are filed to the deal's Drive (Jon 2026-10-26: "majority
     // are just voicemails"). Keep when the call ran ≥ 60s AND the rep hasn't dispositioned
     // it as a voicemail/no-answer. Short/VM calls still log a lightweight note — no Drive
@@ -387,6 +392,9 @@ export async function POST(req: NextRequest) {
       // this call, fold the recording INTO that entry instead of adding a second "Call" row.
       const recBody = `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? "" : " (Drive upload unavailable — Telnyx copy expires)"}`;
       const recMeta = { link, driveId: driveId || undefined, secs, ccId, transcript: transcript.slice(0, 12000), rep: rep || undefined };
+      // Re-check right before writing: a CONCURRENT recording.saved for the same call may have
+      // finished and logged while this one was uploading (Jon 2026-10-27). If so, drop this copy.
+      if (await recDupe()) { await recCrumb({ ev: "rec.outcome", result: "deduped-late", secs }); return NextResponse.json({ ok: true, deduped: "late" }); }
       const { foldRecordingIntoDispo } = await import("@/lib/call-merge");
       if (!(await foldRecordingIntoDispo(contact.id, recBody, recMeta).catch(() => false)))
         await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: recBody, meta: recMeta, actor: rep || "recorder" });

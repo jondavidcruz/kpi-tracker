@@ -220,15 +220,37 @@ function sizeLabel(bb: BuyBox | null, minLot?: string, l?: BuyerLand): string {
 
 /** County coverage: for each county, who covers it and at what tier. Sorted by A-count then total. */
 export type CoverageRow = { county: string; state: string; a: number; b: number; c: number; total: number; buyers: { id: string; name: string; tier: Tier }[] };
+// 🧹 Only REAL places belong on the coverage board (Jon 2026-10-27: it was showing buy-box
+// NOTES like "well water is permitted in approved areas" and duplicate casings). Drop note
+// phrases + sentences, pull a bare ZIP out of a noisy entry, strip "all over …", title-case.
+const AREA_NOTE = /\b(water|permitt|requir|approv|neighborhood|hoa|zoning|utilit|septic|sewer|flood|wetland|acre|parcel|build|cash|financ|primarily|preferr|budget|price|min|max)\b/i;
+function cleanArea(raw: string): string | null {
+  const t0 = String(raw ?? "").replace(/\s+/g, " ").trim();
+  if (!t0) return null;
+  const zip = t0.match(/^\d{5}\b/); // "32909) (well water…)" → "32909"
+  if (zip) return zip[0];
+  let t = t0.replace(/[()]/g, " ").replace(/\s+/g, " ").trim().replace(/^all over\s+/i, "").replace(/^all\s+/i, "").replace(/[.,;:]+$/, "").trim();
+  if (!t || AREA_NOTE.test(t)) return null;
+  if (t.split(/\s+/).length > 4) return null;       // a sentence, not a place
+  if (/^\d/.test(t)) return null;                    // leading-number junk that wasn't a clean ZIP
+  t = t.replace(/\b([a-z])([a-z']*)/gi, (_, a, b) => a.toUpperCase() + b.toLowerCase()); // Title Case
+  return t;
+}
+
 export function coverageByCounty(cards: Scorecard[]): CoverageRow[] {
   const map = new Map<string, CoverageRow>();
   for (const c of cards) {
-    for (const county of c.counties) {
-      const st = county.split(",").pop()?.trim().toUpperCase() ?? "";
-      const row = map.get(county) ?? { county, state: st, a: 0, b: 0, c: 0, total: 0, buyers: [] };
+    const seen = new Set<string>(); // one buyer shouldn't count the same area twice
+    for (const raw of c.counties) {
+      const label = cleanArea(raw);
+      if (!label) continue;
+      const key = label.toUpperCase();
+      if (seen.has(key)) continue; seen.add(key);
+      const st = label.split(",").pop()?.trim().toUpperCase() ?? "";
+      const row = map.get(key) ?? { county: label, state: st, a: 0, b: 0, c: 0, total: 0, buyers: [] };
       row[c.tier.toLowerCase() as "a" | "b" | "c"] += 1; row.total += 1;
       row.buyers.push({ id: c.id, name: c.name, tier: c.tier });
-      map.set(county, row);
+      map.set(key, row);
     }
   }
   return [...map.values()].sort((x, y) => y.a - x.a || y.total - x.total || x.county.localeCompare(y.county));

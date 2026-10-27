@@ -382,6 +382,68 @@ export async function undoVetAudit() {
   return { mode: "undo-audit", restored };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧹 ORPHAN SWEEP (Jon 2026-10-27): after retiring Buyer Research, any UNVETTED buyer that
+// lived only in the old MarketContact research pool (vetStage NOT vetted/active) and was
+// never migrated into the kanban would be stranded. Sweep them into the kanban's 🆕 research
+// stage via upsertNetworkLead (which dedupes by phone/email, so ones already in the kanban
+// are skipped). Reversible via the __orphan_sweep__ marker.
+// ─────────────────────────────────────────────────────────────────────────────
+const SWEEP_CAT = "__orphan_sweep__";
+const s2 = (v: unknown) => (v == null ? "" : String(v)).trim();
+
+async function loadOrphanSources() {
+  return db.marketContact.findMany({
+    where: { archivedAt: null, vetStage: { notIn: ["vetted", "active"] }, type: { not: "jv_partner" } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, type: true, email: true, phone: true, phone2: true, market: true, buyBox: true, buyBoxAreas: true, notes: true },
+  });
+}
+
+/** DRY RUN — how many unvetted research-pool buyers exist (candidates to sweep). */
+export async function sweepOrphansDry() {
+  const rows = await loadOrphanSources();
+  return { mode: "dry-run", unvettedCandidates: rows.length, note: "?sweepgo=1 moves ones NOT already in the kanban into 🆕 research (dedup by phone/email); ?undosweep=1 reverses. Processes up to 400/run.", sample: rows.slice(0, 15).map((r) => r.name) };
+}
+
+/** EXECUTE — sweep unvetted orphans into the kanban 🆕 research stage (idempotent, batched). */
+export async function runOrphanSweep(actor: string) {
+  const { upsertNetworkLead } = await import("./dispo-network-write");
+  const rows = await loadOrphanSources();
+  const row = await db.resource.findFirst({ where: { category: SWEEP_CAT } }).catch(() => null);
+  let done: string[] = []; try { done = row?.description ? (JSON.parse(row.description).ids ?? []) : []; } catch { done = []; }
+  const doneSet = new Set(done);
+  let created = 0, skipped = 0, processed = 0;
+  for (const r of rows) {
+    if (doneSet.has(r.id)) continue;
+    if (processed >= 400) break; // stay under the 60s function cap; re-run for the rest
+    processed++;
+    const res = await upsertNetworkLead({
+      name: r.name, phone: s2(r.phone) || s2(r.phone2), email: s2(r.email),
+      kind: s2(r.type).toLowerCase() === "agent" ? "agent" : "developer",
+      market: s2(r.market), buyBox: [s2(r.buyBox), s2(r.buyBoxAreas)].filter(Boolean).join(" · "),
+      notes: s2(r.notes), source: "Buyer Research sweep", actor,
+    }).catch(() => null);
+    doneSet.add(r.id);
+    if (res?.created) { created++; done.push(res.oppId); } else skipped++;
+  }
+  const remaining = rows.filter((r) => !doneSet.has(r.id)).length;
+  const payload = JSON.stringify({ ids: done, sweptSrc: [...doneSet], ranAt: new Date().toISOString(), actor });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
+  else await db.resource.create({ data: { title: "orphan-sweep", category: SWEEP_CAT, url: "", description: payload } });
+  return { mode: "sweep", processed, created, skippedAlreadyInKanban: skipped, remaining, note: remaining ? "Run ?sweepgo=1 again to continue." : "All swept." };
+}
+
+/** UNDO — archive the cards this sweep created. */
+export async function undoOrphanSweep() {
+  const row = await db.resource.findFirst({ where: { category: SWEEP_CAT } }).catch(() => null);
+  let ids: string[] = []; try { ids = row?.description ? (JSON.parse(row.description).ids ?? []) : []; } catch { ids = []; }
+  let archived = 0;
+  for (const id of ids) { const r = await db.crmOpportunity.updateMany({ where: { id, archivedAt: null }, data: { archivedAt: new Date() } }).catch(() => ({ count: 0 })); archived += r.count; }
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify({ ids: [], ranAt: new Date().toISOString(), undone: true }) } });
+  return { mode: "undo-sweep", archived };
+}
+
 /** UNDO — archives (never deletes) every card this migration created, clears the marker. */
 export async function undoMigration(actor: string) {
   const marker = await readMarker();

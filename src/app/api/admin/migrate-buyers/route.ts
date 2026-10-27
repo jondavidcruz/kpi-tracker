@@ -3,7 +3,7 @@
 // ?undo=1 reverses. Gated to Jon (owner session) OR Bearer/`?secret=` CRON_SECRET.
 import { NextResponse } from "next/server";
 import { getCurrentUser, isOwner } from "@/lib/auth";
-import { planMigration, runMigration, undoMigration, auditVetted, runVetAudit, undoVetAudit, auditDupes, runDedup, undoDedup } from "@/lib/buyer-migration";
+import { planMigration, runMigration, undoMigration, auditVetted, runVetAudit, undoVetAudit, auditDupes, runDedup, undoDedup, sweepOrphansDry, runOrphanSweep, undoOrphanSweep } from "@/lib/buyer-migration";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -23,6 +23,10 @@ export async function GET(request: Request) {
   const actor = me?.name ?? "owner";
 
   try {
+    // 🧹 Orphan sweep (unvetted research-pool buyers → kanban) — Jon 2026-10-27
+    if (url.searchParams.get("sweep") === "1") return NextResponse.json(await sweepOrphansDry());
+    if (url.searchParams.get("sweepgo") === "1") return NextResponse.json(await runOrphanSweep(actor));
+    if (url.searchParams.get("undosweep") === "1") return NextResponse.json(await undoOrphanSweep());
     // 🧹 De-dup twin cards — Jon 2026-10-27
     if (url.searchParams.get("dedup") === "1") return NextResponse.json(await auditDupes());
     if (url.searchParams.get("dedupgo") === "1") return NextResponse.json(await runDedup(actor));
