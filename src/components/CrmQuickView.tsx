@@ -36,7 +36,7 @@ type Payload = {
   underwrites: Array<{ tab: string; mao: number; fee: number; confidence: number; by: string; at: string }>;
   offers?: Array<{ at: string; from: string; amount: number; subject: string }>;
   contact: { id: string; name: string; phone: string; altPhone: string; email: string; altEmail: string; address: string; pinnedNote: string; tags: string };
-  tasks: Array<{ id: string; title: string; due: string }>;
+  tasks: Array<{ id: string; title: string; due: string; assignedTo: string; doneAt: string | null; doneBy: string }>;
   appts: Array<{ id: string; title: string; at: string; withWho: string }>;
   events: Array<{ id?: string; kind: string; body: string; actor: string; at: string; link?: string; fileName?: string; recLink?: string; transcript?: string }>;
 };
@@ -79,6 +79,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
 
   if (!oppId) return null;
   const d = data;
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local — for overdue-task flagging
   const submit = (action: (fd: FormData) => Promise<unknown>, extra?: Record<string, string>) => (fd: FormData) => {
     for (const [k, v] of Object.entries(extra ?? {})) fd.set(k, v);
     start(async () => { await action(fd); setSaved("✓ Saved"); setTimeout(() => setSaved(""), 2000); if (oppId) await refetch(oppId); });
@@ -292,14 +293,26 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       </select>
                       <button className="rounded-xl bg-brand-navy px-3 py-1.5 text-xs font-bold text-white">Add</button>
                     </form>
-                    {d.tasks.length === 0 && <div className="text-xs text-slate-400">No open tasks.</div>}
-                    {d.tasks.map((t) => (
-                      <form key={t.id} action={submit(toggleCrmTaskAction, { id: t.id })} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
-                        <button className="grid h-5 w-5 place-items-center rounded border border-slate-300 bg-white text-[10px] text-transparent hover:text-emerald-600" title="Mark done">✓</button>
-                        <span className="flex-1 text-sm text-slate-700">{t.title}</span>
-                        {t.due && <span className="text-[11px] font-bold text-slate-400">{t.due}</span>}
-                      </form>
-                    ))}
+                    {d.tasks.length === 0 && <div className="text-xs text-slate-400">No tasks yet.</div>}
+                    {d.tasks.map((t) => {
+                      const done = !!t.doneAt;
+                      const deleted = t.doneBy.startsWith("🗑");
+                      const overdue = !done && t.due && t.due.slice(0, 10) < today;
+                      return (
+                        <form key={t.id} action={submit(toggleCrmTaskAction, { id: t.id })} className={`flex items-center gap-2 rounded-lg px-3 py-2 ring-1 ${done ? "bg-slate-50/60 ring-slate-100" : overdue ? "bg-rose-50 ring-rose-200" : "bg-slate-50 ring-slate-100"}`}>
+                          <button className={`grid h-5 w-5 place-items-center rounded border text-[10px] ${done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white text-transparent hover:text-emerald-600"}`} title={done ? "Mark not done" : "Mark done"}>✓</button>
+                          <div className="min-w-0 flex-1">
+                            <span className={`block text-sm ${done ? "text-slate-400 line-through" : "text-slate-700"}`}>{t.title}</span>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-semibold">
+                              {t.assignedTo && <span className="text-indigo-500">👤 {t.assignedTo.split(" ")[0]}</span>}
+                              {t.due && <span className={overdue ? "text-rose-600" : "text-slate-400"}>📅 {t.due.replace("T", " ")}{overdue ? " · overdue" : ""}</span>}
+                              {done && !deleted && <span className="text-emerald-600">✓ done {new Date(t.doneAt!).toLocaleDateString([], { month: "short", day: "numeric" })}{t.doneBy ? ` by ${t.doneBy.split(" ")[0]}` : ""}</span>}
+                              {deleted && <span className="text-slate-400">{t.doneBy} {new Date(t.doneAt!).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}
+                            </div>
+                          </div>
+                        </form>
+                      );
+                    })}
                   </div>
                 )}
 

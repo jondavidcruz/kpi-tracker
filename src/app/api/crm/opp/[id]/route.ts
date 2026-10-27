@@ -20,7 +20,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { readSnippets } = await import("@/lib/crm-templates");
   const [events, tasks, appts, comms, sigs, snippets, smsEvents, emailEvents] = await Promise.all([
     db.crmEvent.findMany({ where: { contactId: opp.contactId }, orderBy: { at: "desc" }, take: 40 }),
-    db.crmTask.findMany({ where: { oppId: id, doneAt: null }, orderBy: { due: "asc" }, take: 10 }),
+    // Open tasks first (doneAt null), then completed ones kept as checked-off history
+    // with who/when (Jon 2026-10-27: "don't delete — show when they completed it").
+    db.crmTask.findMany({ where: { oppId: id }, orderBy: [{ doneAt: { sort: "desc", nulls: "first" } }, { due: "asc" }], take: 30 }),
     db.crmAppointment.findMany({ where: { oppId: id, at: { gte: new Date(Date.now() - 86400_000) } }, orderBy: { at: "asc" }, take: 8 }),
     commsFor(me!),
     readSignatures(),
@@ -71,7 +73,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       id: opp.contact.id, name: opp.contact.name, phone: opp.contact.phone, altPhone: opp.contact.altPhone,
       email: opp.contact.email, altEmail: opp.contact.altEmail, address: opp.contact.address, pinnedNote: opp.contact.pinnedNote, tags: opp.contact.tags,
     },
-    tasks: tasks.map((t) => ({ id: t.id, title: t.title, due: t.due })),
+    tasks: tasks.map((t) => ({ id: t.id, title: t.title, due: t.due, assignedTo: t.assignedTo, doneAt: t.doneAt ? t.doneAt.toISOString() : null, doneBy: t.doneBy })),
     appts: appts.map((a) => ({ id: a.id, title: a.title, at: a.at.toISOString(), withWho: a.withWho })),
     events: events.map((e) => {
       const m = e.meta as { link?: string; name?: string; transcript?: string } | null;
