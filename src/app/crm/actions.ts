@@ -100,8 +100,11 @@ export async function createCrmLeadAction(formData: FormData) {
   const repFirst = contact.assignedTo.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   const repPipe = repFirst ? pls.find((p) => p.name.toLowerCase().includes(repFirst)) : undefined;
   const michellePipe = pls.find((p) => /michelle/i.test(p.name));
-  const landPipe = repPipe ?? michellePipe;
-  const owner = repPipe ? contact.assignedTo : (michellePipe ? "Michelle Lagudas" : contact.assignedTo);
+  // Optional pipeline override (Jon 2026-10-27): the dispo "New lead" form passes the current
+  // dispo pipeline so the deal lands THERE, not the acquisitions default.
+  const forcedPipe = (() => { const n = String(formData.get("pipeline") ?? "").trim(); return n ? pls.find((p) => p.name === n) : undefined; })();
+  const landPipe = forcedPipe ?? repPipe ?? michellePipe;
+  const owner = forcedPipe ? contact.assignedTo : (repPipe ? contact.assignedTo : (michellePipe ? "Michelle Lagudas" : contact.assignedTo));
   if (!repPipe && michellePipe && owner !== contact.assignedTo) {
     await db.crmContact.update({ where: { id: contact.id }, data: { assignedTo: owner } }).catch(() => {});
   }

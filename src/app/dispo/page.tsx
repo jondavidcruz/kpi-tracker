@@ -15,7 +15,7 @@ import CrmKanban, { type CrmCard, type CrmColumn } from "@/components/CrmKanban"
 import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv, quickAddDispoNetworkAction } from "@/app/actions";
-import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispoCascadeAction, resortOrphanStagesAction, syncClosedDealsAction } from "@/app/crm/actions";
+import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispoCascadeAction, resortOrphanStagesAction, syncClosedDealsAction, createCrmLeadAction } from "@/app/crm/actions";
 import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
@@ -748,6 +748,24 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                 </Card>
               ) : !areasView ? (
                 <>
+                {/* ＋ New lead straight into this dispo pipeline (Jon 2026-10-27: same as the Seller CRM). */}
+                {dealPl && (
+                  <details className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+                    <summary className="cursor-pointer text-[13px] font-bold text-emerald-800">＋ New lead in {dealPl} <span className="font-normal text-slate-400">— add a deal straight into this pipeline</span></summary>
+                    <form action={createCrmLeadAction} className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <input type="hidden" name="pipeline" value={dealPl} />
+                      <input type="hidden" name="assignedTo" value={me?.name ?? ""} />
+                      <input name="name" placeholder="Seller / deal name *" required className="col-span-2 rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                      <input name="phone" placeholder="Phone" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                      <input name="email" placeholder="Email" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                      <input name="street" placeholder="Property street" className="col-span-2 rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                      <input name="city" placeholder="City" className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                      <input name="state" placeholder="ST" maxLength={20} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+                      <textarea name="notes" rows={2} placeholder="Notes from the first call…" className="col-span-2 rounded-lg border border-slate-200 px-2 py-1.5 text-xs sm:col-span-4" />
+                      <div className="col-span-2 sm:col-span-4"><button className="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-bold text-white hover:bg-slate-700">Add lead → opens the card</button></div>
+                    </form>
+                  </details>
+                )}
                 <Card className="p-3">
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dealPl} — {dealCardsShown.length} deal{dealCardsShown.length === 1 ? "" : "s"}</div>
                   <CrmQuickView stages={dealColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={moveStages} />
