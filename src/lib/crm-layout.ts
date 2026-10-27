@@ -24,4 +24,7 @@ export const CRM_WIDGETS: WidgetDef[] = [
   { id: "appointments", label: "📅 Appointments", column: "right" },
 ];
 
-export type CrmLayout = { order: string[]; hidden: string[] };
+export type ColId = "left" | "center" | "right";
+// `order` = global within-column sort order; `hidden` = widgets to hide; `cols` = per-widget
+// column OVERRIDE (drag-anywhere). A widget with no override stays in its registry default column.
+export type CrmLayout = { order: string[]; hidden: string[]; cols?: Record<string, ColId> };

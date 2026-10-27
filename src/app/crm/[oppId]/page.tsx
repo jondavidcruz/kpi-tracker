@@ -242,7 +242,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
       <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[300px_minmax(0,1fr)_330px] xl:items-start">
         {/* ── LEFT: who they are ── */}
         {(
-        <div className="order-2 flex min-w-0 flex-col gap-3 xl:order-none">
+        <div data-col="left" className="order-2 flex min-w-0 flex-col gap-3 xl:order-none">
           {/* contact card */}
           <Card className="p-4" widget="contact">
             <details open id="contact" className="scroll-mt-4">
@@ -494,7 +494,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
 
         {/* ── MIDDLE: comms — the main event (SMS / email / notes / timeline) ── */}
         {(
-        <div className="order-1 min-w-0 space-y-2.5 xl:order-none">
+        <div data-col="center" className="order-1 min-w-0 space-y-2.5 xl:order-none">
           <Card className="p-3">
             {/* 📝 the SAME smart note editor as the quickview — bold, underline,
                 bullets, attach (Jon 2026-10-24: "make notes smart like quick notes") */}
@@ -641,7 +641,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
 
         {/* ── RIGHT: the work — tasks, appointments, discovery, parties ── */}
         {(
-        <div className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
+        <div data-col="right" className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
           {/* 📝 Contracts card removed from the contact view (Jon 2026-10-26) — not needed here. */}
 
           {/* 🔗 Deals this agent/developer is on — last talk + offer + next follow-up,
