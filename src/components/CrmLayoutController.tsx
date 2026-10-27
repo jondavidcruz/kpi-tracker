@@ -15,6 +15,8 @@ export default function CrmLayoutController({ initial }: { initial: CrmLayout })
   const [order, setOrder] = useState<string[]>(seed);
   const [hidden, setHidden] = useState<string[]>(initial.hidden.filter((id) => defaultOrder.includes(id)));
   const [open, setOpen] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // apply to the DOM whenever order/hidden change
@@ -35,18 +37,18 @@ export default function CrmLayoutController({ initial }: { initial: CrmLayout })
       void saveCrmLayoutAction(fd);
     }, 500);
   };
-  const move = (id: string, dir: -1 | 1) => {
+  // 🖱 Drag-to-reorder (Jon 2026-10-26: "make it drag-and-drop, not clicky"): drop the dragged
+  // widget just before the target. Only within the same column (left stays left, right right).
+  const dropBefore = (targetId: string) => {
+    const id = dragId;
+    setDragId(null); setOverId(null);
+    if (!id || id === targetId) return;
+    const colOf = (x: string) => CRM_WIDGETS.find((w) => w.id === x)?.column;
+    if (colOf(id) !== colOf(targetId)) return; // don't cross columns
     setOrder((prev) => {
-      // reorder only among same-column widgets so ↑/↓ stays within the column
-      const col = CRM_WIDGETS.find((w) => w.id === id)?.column;
-      const colIds = prev.filter((x) => CRM_WIDGETS.find((w) => w.id === x)?.column === col);
-      const i = colIds.indexOf(id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= colIds.length) return prev;
-      [colIds[i], colIds[j]] = [colIds[j], colIds[i]];
-      // splice the reordered column ids back into the global order at the column's positions
-      let k = 0;
-      const next = prev.map((x) => (CRM_WIDGETS.find((w) => w.id === x)?.column === col ? colIds[k++] : x));
+      const without = prev.filter((x) => x !== id);
+      const at = without.indexOf(targetId);
+      const next = [...without.slice(0, at), id, ...without.slice(at)];
       persist(next, hidden);
       return next;
     });
@@ -72,19 +74,24 @@ export default function CrmLayoutController({ initial }: { initial: CrmLayout })
               <span className="text-sm font-extrabold text-slate-800">⚙ Customize layout</span>
               <button onClick={() => setOpen(false)} className="ml-auto text-slate-300 hover:text-slate-500">✕</button>
             </div>
-            <p className="mb-3 text-[11px] text-slate-400">Reorder with ↑ ↓ and hide what you don&apos;t use. Saved to your login, just for you.</p>
+            <p className="mb-3 text-[11px] text-slate-400">Drag ⠿ to reorder, and hide what you don&apos;t use. Saved to your login, just for you.</p>
             {(["left", "right"] as const).map((col) => (
               <div key={col} className="mb-3">
                 <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">{col} column</div>
                 <div className="space-y-1">
-                  {colList(col).map((id, i, arr) => {
+                  {colList(col).map((id) => {
                     const isHidden = hidden.includes(id);
+                    const isDragging = dragId === id;
+                    const isOver = overId === id && dragId !== id;
                     return (
-                      <div key={id} className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] ring-1 ${isHidden ? "bg-slate-50 text-slate-400 ring-slate-100" : "bg-white text-slate-700 ring-slate-200"}`}>
-                        <span className="flex flex-col leading-none">
-                          <button disabled={i === 0} onClick={() => move(id, -1)} className="text-[9px] text-slate-400 hover:text-brand-navy disabled:opacity-20">▲</button>
-                          <button disabled={i === arr.length - 1} onClick={() => move(id, 1)} className="text-[9px] text-slate-400 hover:text-brand-navy disabled:opacity-20">▼</button>
-                        </span>
+                      <div key={id}
+                        draggable
+                        onDragStart={() => setDragId(id)}
+                        onDragEnd={() => { setDragId(null); setOverId(null); }}
+                        onDragOver={(e) => { e.preventDefault(); if (overId !== id) setOverId(id); }}
+                        onDrop={(e) => { e.preventDefault(); dropBefore(id); }}
+                        className={`flex cursor-grab items-center gap-2 rounded-lg px-2 py-2 text-[12px] ring-1 transition active:cursor-grabbing ${isDragging ? "opacity-40" : ""} ${isOver ? "ring-2 ring-brand-navy" : isHidden ? "bg-slate-50 text-slate-400 ring-slate-100" : "bg-white text-slate-700 ring-slate-200"}`}>
+                        <span className="select-none text-slate-300" title="Drag to reorder">⠿</span>
                         <span className={`min-w-0 flex-1 truncate ${isHidden ? "line-through" : ""}`}>{labelOf(id)}</span>
                         <button onClick={() => toggleHide(id)} title={isHidden ? "Show" : "Hide"} className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${isHidden ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
                           {isHidden ? "Show" : "Hide"}
