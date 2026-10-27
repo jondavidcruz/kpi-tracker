@@ -1,0 +1,67 @@
+# 🤖 War Room uptime watchdog (Jon 2026-10-26: "make sure the system going down never lands on
+# me again"). Runs OUTSIDE Vercel so it still works when the app is down. Pings the critical
+# routes every ~10 min; if any is unhealthy it posts to Google Chat so the team is told
+# instantly instead of a person having to notice. To go live, add one repo secret:
+#   MONITOR_CHAT_WEBHOOK = a Google Chat "incoming webhook" URL (Settings → Secrets → Actions).
+# Until that secret exists the check still runs and fails loudly in the Actions tab, just
+# without the Chat ping.
+name: uptime
+
+on:
+  schedule:
+    - cron: "*/10 * * * *" # every 10 minutes (GitHub may batch/delay slightly)
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping critical routes
+        id: ping
+        run: |
+          set +e
+          BASE="https://kpi-tracker-lovat.vercel.app"
+          FAIL=""
+          # one retry after 15s so a single transient blip / cold-start doesn't false-alarm
+          check() {
+            local path="$1"; local want="$2"
+            code=$(curl -s -o /tmp/body -w "%{http_code}" --max-time 25 "$BASE$path")
+            if [ "$code" != "$want" ]; then
+              sleep 15
+              code=$(curl -s -o /tmp/body -w "%{http_code}" --max-time 25 "$BASE$path")
+            fi
+            if [ "$code" != "$want" ]; then
+              FAIL="$FAIL\n• $path → HTTP $code (expected $want)"
+            fi
+          }
+          # /api/version must return the live commit sha; /tv is the always-on scoreboard
+          check "/api/version" "200"
+          check "/tv" "200"
+          # version must actually contain a sha (catches a 200 that's really an error page)
+          if ! grep -q '"sha"' /tmp/body 2>/dev/null; then
+            code=$(curl -s -o /tmp/v -w "%{http_code}" --max-time 25 "$BASE/api/version")
+            grep -q '"sha"' /tmp/v || FAIL="$FAIL\n• /api/version returned no sha (app likely unhealthy)"
+          fi
+          if [ -n "$FAIL" ]; then
+            echo "unhealthy=true" >> "$GITHUB_OUTPUT"
+            printf "WAR ROOM DOWN:%b\n" "$FAIL"
+            echo "msg<<EOF" >> "$GITHUB_OUTPUT"
+            printf "🚨 War Room health check FAILED:%b\n\n%s" "$FAIL" "$BASE" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          else
+            echo "unhealthy=false" >> "$GITHUB_OUTPUT"
+            echo "✅ All critical routes healthy."
+          fi
+
+      - name: Alert Google Chat on failure
+        if: steps.ping.outputs.unhealthy == 'true' && env.HOOK != ''
+        env:
+          HOOK: ${{ secrets.MONITOR_CHAT_WEBHOOK }}
+          MSG: ${{ steps.ping.outputs.msg }}
+        run: |
+          curl -s -X POST -H "Content-Type: application/json" \
+            -d "$(jq -n --arg t "$MSG" '{text:$t}')" "$HOOK" >/dev/null || true
+
+      - name: Fail the job so it shows red in Actions
+        if: steps.ping.outputs.unhealthy == 'true'
+        run: exit 1
