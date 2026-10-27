@@ -30,6 +30,7 @@ export type CrmCard = {
   apn?: string;         // parcel number — shown in place of address for land
   apptDueToday?: boolean; // 📅 appointment due today → red card
   taskDueToday?: boolean; // ⏰ task due today → green card
+  followUpDue?: boolean;  // 📞 follow-up due/overdue → blue card
   nextTask?: string;      // next upcoming (after today) task due date — green chip
   nextAppt?: string;      // next upcoming (after today) appointment ISO — red chip
   leadType?: { label: string; cls: string }; // 🏷 seller / land seller / buyer agent / developer — top-right
@@ -225,6 +226,12 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
             <option value="name">🔤 Name A–Z</option>
           </select>
           <button onClick={() => { setSelecting((v) => !v); setSelected(new Set()); setStageScope(null); }} className={`rounded-lg px-2.5 py-1 font-bold ${selecting ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>☑ Select</button>
+          {/* 🔑 What the card colors mean (Jon 2026-10-27: define task vs appt vs follow-up). */}
+          <span className="flex flex-wrap items-center gap-2 text-[9px] font-semibold text-slate-400" title="A card is tinted by what's due: 📅 Appointment = a scheduled meeting · ✅ Task = a to-do you assigned · 📞 Follow-up = a date to reach back out">
+            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" /> 📅 appt today</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" /> ✅ task today</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-blue-500" /> 📞 follow-up due</span>
+          </span>
         </span>
         <span className="relative">
           <button onClick={() => setCfgOpen((v) => !v)} className="rounded-lg bg-slate-100 px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-200">⚙ Cards</button>
@@ -323,8 +330,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     }}
                     onDragEnd={() => { setDragId(null); setOverCol(null); }}
                     onClick={() => selecting ? toggleSel(c.id) : window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id } }))}
-                    style={c.apptDueToday ? { border: "2px solid #ef4444" } : c.taskDueToday ? { border: "2px solid #22c55e" } : ageColor(c) ? { border: `2px solid ${ageColor(c)}` } : undefined}
-                    className={`cursor-pointer rounded-xl p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${c.apptDueToday ? "bg-red-50/60" : c.taskDueToday ? "bg-emerald-50/50" : "bg-white"} ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : ""}`}
+                    style={c.apptDueToday ? { border: "2px solid #ef4444" } : c.taskDueToday ? { border: "2px solid #22c55e" } : c.followUpDue ? { border: "2px solid #3b82f6" } : ageColor(c) ? { border: `2px solid ${ageColor(c)}` } : undefined}
+                    className={`cursor-pointer rounded-xl p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${c.apptDueToday ? "bg-red-50/60" : c.taskDueToday ? "bg-emerald-50/50" : c.followUpDue ? "bg-blue-50/50" : "bg-white"} ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-1">
                       {selecting && <input type="checkbox" readOnly checked={selected.has(c.id)} className="mr-1 mt-0.5 h-4 w-4 shrink-0 accent-indigo-600" />}

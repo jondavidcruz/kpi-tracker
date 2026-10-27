@@ -151,7 +151,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     ?? dealPipes.find((p) => /sell land/i.test(p.name))?.name
     ?? dealNames[0] ?? "";
   const dealOpps = (tab === "deals" || tab === "team") && dealNames.length
-    ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, pipeline: true, stage: true, assignedTo: true, tags: true, value: true, askPrice: true, updatedAt: true, createdAt: true, formData: true, contactId: true, contact: { select: { name: true, phone: true, email: true, address: true } } } })
+    ? await db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: dealNames } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, pipeline: true, stage: true, assignedTo: true, tags: true, value: true, askPrice: true, updatedAt: true, createdAt: true, formData: true, contactId: true, nextFollowUp: true, contact: { select: { name: true, phone: true, email: true, address: true } } } })
     : [];
   // 📅 next upcoming task / appointment per deal (today or later) → green/red card chips
   const dealIds = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => o.id);
@@ -232,6 +232,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
     lastTouch: lastTouchByDeal.get(o.id)?.toISOString() ?? "", stageMoved: stageAtByDeal.has(o.id),
+    followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),

@@ -278,6 +278,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       valueNum: o.value ?? o.askPrice ?? 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
       lastTouch: lastTouchByOpp.get(o.id)?.toISOString() ?? "",
       apn: fd.property?.apn ?? "", apptDueToday: apptToday.length > 0, taskDueToday: due.length > 0,
+      followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
       // next upcoming (after today) task + appointment dates for the card chips
       nextTask: (tasksByOpp.get(o.id) ?? []).map((t) => (t.due || "").slice(0, 10)).filter((d) => d >= today).sort()[0] ?? "",
       nextAppt: nextApptByOpp.get(o.id)?.toISOString() ?? "",
