@@ -297,6 +297,77 @@ export async function runVetAudit(actor: string) {
   return { mode: "demote", demoted: targets.length, names: targets.slice(0, 60).map((t) => t.name) };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧹 DE-DUP (Jon 2026-10-27): two migrations (Oct 22 + Oct 27) created twin cards for the
+// same buyer (Folstein/Sunlife showed twice). Group all network cards by phone (else name)
+// and ARCHIVE the extras, keeping the single most-complete card per buyer (vetted stage +
+// fullest buy-box + newest). Never deletes; reversible via the __dedup__ marker.
+// ─────────────────────────────────────────────────────────────────────────────
+const DEDUP_CAT = "__dedup__";
+
+async function loadDupeGroups() {
+  const { resolveNetworkPipelines } = await import("./dispo-network");
+  const net = await resolveNetworkPipelines();
+  const opps = net.all.length ? await db.crmOpportunity.findMany({
+    where: { archivedAt: null, pipeline: { in: net.all } },
+    select: { id: true, title: true, pipeline: true, stage: true, formData: true, updatedAt: true, contactId: true, contact: { select: { name: true, phone: true } } },
+  }) : [];
+  const groups = new Map<string, typeof opps>();
+  for (const o of opps) {
+    const key = (o.contact?.phone || "").replace(/\D/g, "").slice(-10) || (o.contact?.name || o.title || "").trim().toLowerCase();
+    if (!key) continue;
+    const arr = groups.get(key) ?? []; arr.push(o); groups.set(key, arr);
+  }
+  return { opps, dupeGroups: [...groups.values()].filter((g) => g.length > 1) };
+}
+
+/** DRY RUN — how many duplicate buyer cards exist. Writes nothing. */
+export async function auditDupes() {
+  const { opps, dupeGroups } = await loadDupeGroups();
+  const extra = dupeGroups.reduce((n, g) => n + (g.length - 1), 0);
+  return {
+    mode: "dry-run", totalNetworkCards: opps.length, duplicateBuyers: dupeGroups.length, cardsToArchive: extra, uniqueAfter: opps.length - extra,
+    sample: dupeGroups.sort((a, b) => b.length - a.length).slice(0, 20).map((g) => ({ buyer: g[0].contact?.name || g[0].title, cards: g.length })),
+    note: "Archives the EXTRA cards per buyer (keeps the most complete one). Nothing deleted. ?dedupgo=1 executes, ?undodedup=1 reverses.",
+  };
+}
+
+/** EXECUTE — archive the extra cards per buyer, keeping the best. Reversible. */
+export async function runDedup(actor: string) {
+  const { devVetScore } = await import("./dev-vetting");
+  const { isAgentNetworkName } = await import("./dispo-buyers");
+  const { dupeGroups } = await loadDupeGroups();
+  const VETTED = new Set(["vetted", "active"]);
+  const archived: string[] = [];
+  for (const g of dupeGroups) {
+    const scored = g.map((o) => {
+      const kind = isAgentNetworkName(o.pipeline) ? "buyer_agent" as const : "developer" as const;
+      return { o, vetted: VETTED.has(o.stage) ? 1 : 0, filled: devVetScore(o.formData, kind).filled, at: o.updatedAt.getTime() };
+    }).sort((a, b) => b.vetted - a.vetted || b.filled - a.filled || b.at - a.at);
+    const keeper = scored[0].o;
+    for (const s of scored.slice(1)) {
+      const r = await db.crmOpportunity.updateMany({ where: { id: s.o.id, archivedAt: null }, data: { archivedAt: new Date() } }).catch(() => ({ count: 0 }));
+      if (r.count && s.o.contactId) { await logCrmEvent({ contactId: s.o.contactId, oppId: s.o.id, kind: "system", body: `Archived duplicate buyer card (kept "${keeper.title}" ${keeper.id})`, actor }).catch(() => {}); archived.push(s.o.id); }
+    }
+  }
+  const row = await db.resource.findFirst({ where: { category: DEDUP_CAT } }).catch(() => null);
+  const payload = JSON.stringify({ ids: archived, ranAt: new Date().toISOString(), actor });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
+  else await db.resource.create({ data: { title: "dedup", category: DEDUP_CAT, url: "", description: payload } });
+  return { mode: "dedup", duplicateBuyers: dupeGroups.length, archived: archived.length };
+}
+
+/** UNDO — un-archive the cards this de-dup archived. */
+export async function undoDedup() {
+  const row = await db.resource.findFirst({ where: { category: DEDUP_CAT } }).catch(() => null);
+  let ids: string[] = [];
+  try { ids = row?.description ? (JSON.parse(row.description).ids ?? []) : []; } catch { ids = []; }
+  let restored = 0;
+  for (const id of ids) { const r = await db.crmOpportunity.updateMany({ where: { id, archivedAt: { not: null } }, data: { archivedAt: null } }).catch(() => ({ count: 0 })); restored += r.count; }
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify({ ids: [], ranAt: new Date().toISOString(), undone: true }) } });
+  return { mode: "undo-dedup", restored };
+}
+
 /** UNDO the demotion — restore demoted cards to Vetted (dev) / Active (agent). */
 export async function undoVetAudit() {
   const row = await db.resource.findFirst({ where: { category: AUDIT_CAT } }).catch(() => null);

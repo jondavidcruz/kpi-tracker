@@ -3,7 +3,7 @@
 // ?undo=1 reverses. Gated to Jon (owner session) OR Bearer/`?secret=` CRON_SECRET.
 import { NextResponse } from "next/server";
 import { getCurrentUser, isOwner } from "@/lib/auth";
-import { planMigration, runMigration, undoMigration, auditVetted, runVetAudit, undoVetAudit } from "@/lib/buyer-migration";
+import { planMigration, runMigration, undoMigration, auditVetted, runVetAudit, undoVetAudit, auditDupes, runDedup, undoDedup } from "@/lib/buyer-migration";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -23,6 +23,10 @@ export async function GET(request: Request) {
   const actor = me?.name ?? "owner";
 
   try {
+    // 🧹 De-dup twin cards — Jon 2026-10-27
+    if (url.searchParams.get("dedup") === "1") return NextResponse.json(await auditDupes());
+    if (url.searchParams.get("dedupgo") === "1") return NextResponse.json(await runDedup(actor));
+    if (url.searchParams.get("undodedup") === "1") return NextResponse.json(await undoDedup());
     // 🔎 Vetted audit (empty-buy-box demotion) — Jon 2026-10-27
     if (url.searchParams.get("audit") === "1") return NextResponse.json(await auditVetted());
     if (url.searchParams.get("demote") === "1") return NextResponse.json(await runVetAudit(actor));
