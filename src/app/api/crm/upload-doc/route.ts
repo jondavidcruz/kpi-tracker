@@ -3,11 +3,23 @@
 // got "unexpected response" and the panel crashed. A route gives us maxDuration=60 + clean JSON.
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isOwner } from "@/lib/auth";
 import { logCrmEvent } from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+// 🔎 GET ?diag=1 (owner only) → the LAST upload failure recorded by any stage of the
+// upload pipeline, so Jon/dev can see exactly why a rep's upload failed.
+export async function GET(req: Request) {
+  const me = await getCurrentUser().catch(() => null);
+  if (!isOwner(me)) return NextResponse.json({ error: "owner only" }, { status: 403 });
+  if (new URL(req.url).searchParams.get("diag") !== "1") return NextResponse.json({ ok: true });
+  const row = await db.resource.findFirst({ where: { category: "__upload_diag__" } });
+  let d: unknown = null;
+  try { d = row?.description ? JSON.parse(row.description) : null; } catch { /* none */ }
+  return NextResponse.json({ ok: true, lastFailure: d });
+}
 
 export async function POST(req: Request) {
   const me = await getCurrentUser();

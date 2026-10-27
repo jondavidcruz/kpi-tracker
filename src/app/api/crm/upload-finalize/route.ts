@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { logCrmEvent } from "@/lib/crm";
+import { noteUploadDiag } from "@/lib/upload-diag";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
   const me = await getCurrentUser();
   if (!me) return NextResponse.json({ ok: false, msg: "You're signed out — reload and sign in." });
   const b = (await req.json().catch(() => null)) as
-    | { oppId?: string; contactId?: string; folderId?: string; driveName?: string; fileName?: string; docType?: string; asNote?: boolean; body?: string }
+    | { oppId?: string; contactId?: string; folderId?: string; driveName?: string; fileName?: string; docType?: string; asNote?: boolean; body?: string; fileId?: string; link?: string }
     | null;
   if (!b) return NextResponse.json({ ok: false, msg: "Couldn't finish the upload — try again." });
   const oppId = String(b.oppId ?? "");
@@ -23,14 +24,21 @@ export async function POST(req: Request) {
   const driveName = String(b.driveName ?? "");
   const docType = String(b.docType ?? "").trim();
   const fileName = String(b.fileName ?? "").trim() || driveName.replace(/\s*\[[0-9a-z]+\]$/i, "");
-  if (!oppId || !contactId || !folderId || !driveName) return NextResponse.json({ ok: false, msg: "Missing upload details — retry." });
+  if (!oppId || !contactId || !driveName) return NextResponse.json({ ok: false, msg: "Missing upload details — retry." });
 
   try {
-    const { listFolder } = await import("@/lib/gdrive");
-    const files = await listFolder(folderId).catch(() => [] as { id: string; name: string; createdTime: string }[]);
-    const hit = files.filter((f) => f.name === driveName).sort((a, b2) => (b2.createdTime || "").localeCompare(a.createdTime || ""))[0];
-    if (!hit) return NextResponse.json({ ok: false, msg: "Upload didn't land in Drive — try again." });
-    const link = `https://drive.google.com/file/d/${hit.id}/view`;
+    // Prefer the fileId the chunk relay already returned; only fall back to a
+    // folder scan (by the unique name init assigned) if we didn't get one.
+    let fileId = String(b.fileId ?? "").trim();
+    if (!fileId) {
+      const { listFolder } = await import("@/lib/gdrive");
+      const files = folderId ? await listFolder(folderId).catch(() => [] as { id: string; name: string; createdTime: string }[]) : [];
+      const hit = files.filter((f) => f.name === driveName).sort((a, b2) => (b2.createdTime || "").localeCompare(a.createdTime || ""))[0];
+      fileId = hit?.id ?? "";
+    }
+    if (!fileId) { await noteUploadDiag("finalize", `no file found (folder=${folderId}, name=${driveName})`, me.name); return NextResponse.json({ ok: false, msg: "Upload didn't land in Drive — try again." }); }
+    const link = String(b.link ?? "").trim() || `https://drive.google.com/file/d/${fileId}/view`;
+    const hit = { id: fileId };
 
     if (b.asNote) {
       const { sanitizeNoteHtml } = await import("@/lib/note-html");

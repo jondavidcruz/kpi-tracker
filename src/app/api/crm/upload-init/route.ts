@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { noteUploadDiag } from "@/lib/upload-diag";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
 
   try {
     const { gdriveConfigured, ensureSubfolder, listFolder, dealsParent, initResumableUpload } = await import("@/lib/gdrive");
-    if (!gdriveConfigured()) return NextResponse.json({ ok: false, msg: "Document storage isn't configured (Google Drive). Tell Jon." });
+    if (!gdriveConfigured()) { await noteUploadDiag("init", "gdrive not configured", me.name); return NextResponse.json({ ok: false, msg: "Document storage isn't configured (Google Drive). Tell Jon." }); }
     const DEALS_PARENT = await dealsParent();
     const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { title: true, contact: { select: { address: true, name: true } } } });
     const label = (opp?.contact?.address || opp?.title || opp?.contact?.name || "Unfiled").trim();
@@ -42,6 +43,8 @@ export async function POST(req: Request) {
     const uploadUrl = await initResumableUpload(folderId, driveName, String(b.mime ?? "") || "application/octet-stream");
     return NextResponse.json({ ok: true, uploadUrl, folderId, driveName });
   } catch (e) {
-    return NextResponse.json({ ok: false, msg: `Couldn't start the upload: ${String((e as Error)?.message ?? e).slice(0, 140)}` });
+    const msg = String((e as Error)?.message ?? e);
+    await noteUploadDiag("init", msg, me.name);
+    return NextResponse.json({ ok: false, msg: `Couldn't start the upload: ${msg.slice(0, 140)}` });
   }
 }
