@@ -400,6 +400,24 @@ async function loadOrphanSources() {
   });
 }
 
+/** 🧹 Clean up the orphan CONTACTS the first (botched) sweep created for contactless rows —
+ *  their opps were archived by the undo, so they have no live card (Jon 2026-10-27). Archive
+ *  (reversible) any "Buyer Research sweep" contact with zero non-archived opportunities. */
+export async function sweepOrphanContactsDry() {
+  const orphans = await db.crmContact.findMany({
+    where: { archivedAt: null, source: "Buyer Research sweep", opportunities: { none: { archivedAt: null } } },
+    select: { id: true, name: true }, take: 2000,
+  });
+  return { mode: "dry-run", orphanContacts: orphans.length, note: "Contacts from the botched sweep with no live card. ?orphansgo=1 archives them (reversible).", sample: orphans.slice(0, 12).map((o) => o.name) };
+}
+export async function runSweepOrphanContacts() {
+  const r = await db.crmContact.updateMany({
+    where: { archivedAt: null, source: "Buyer Research sweep", opportunities: { none: { archivedAt: null } } },
+    data: { archivedAt: new Date() },
+  }).catch(() => ({ count: 0 }));
+  return { mode: "cleanup", archivedContacts: r.count };
+}
+
 /** DRY RUN — how many unvetted research-pool buyers exist (candidates to sweep). */
 export async function sweepOrphansDry() {
   const rows = await loadOrphanSources();
