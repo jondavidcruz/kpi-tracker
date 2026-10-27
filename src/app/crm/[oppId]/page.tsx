@@ -262,7 +262,6 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                     Details (Jon 2026-10-24). */}
                 <label><span className={lbl}>📬 Mailing address — where they live (not the property)</span><input name="address" defaultValue={c.address} placeholder="Seller's home / mailing address" className={inputCls} /></label>
                 <label><span className={lbl}>Contact tags</span><input name="ctags" defaultValue={c.tags} placeholder="motivated, probate…" className={inputCls} /></label>
-                <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">Save contact</button>
               </AutoSaveForm>
             </details>
             <div className="mt-2 space-y-1 text-[13px] text-slate-700">
@@ -410,7 +409,6 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                   </datalist>
                 </label>
               )}
-              <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">Save</button>
             </AutoSaveForm>
           </Card>
 
