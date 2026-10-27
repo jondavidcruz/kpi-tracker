@@ -785,10 +785,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           {/* ⚡ Run-the-cascade button removed from the contact view (Jon 2026-10-26) — the
               cascade still runs from /dispo and /marketing. */}
 
-          {/* 📇 Per-deal buyer/agent follow-up tracker — dispo reps only; shows buyer names (Jon 2026-10-21) */}
-          {showMatches && (
-            <div data-widget="buyers"><PanelGuard label="buyer-tracker"><DispoBuyerTracker oppId={opp.id} buyers={await withTimeout(enrichDispoBuyers(readDispoBuyers(opp.formData)), 8000, readDispoBuyers(opp.formData))} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={comms.call} canSms={comms.sms} /></PanelGuard></div>
-          )}
+          {/* 📇 Buyer/agent tracker moved to a FULL-WIDTH row below the grid for visibility (Jon 2026-10-26) */}
 
           {/* 💰 Offers received — the 3-offer accountability tracker (Jon 2026-10-22) */}
           {showMatches && (() => {
@@ -867,6 +864,12 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
         </div>
         )}
       </div>
+
+      {/* 📇 FULL-WIDTH buyer/agent follow-up board — below the grid (under the timeline) for
+          max visibility, true kanban columns by stage (Jon 2026-10-26). */}
+      {showMatches && (
+        <PanelGuard label="buyer-tracker"><DispoBuyerTracker oppId={opp.id} buyers={await withTimeout(enrichDispoBuyers(readDispoBuyers(opp.formData)), 8000, readDispoBuyers(opp.formData))} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={comms.call} canSms={comms.sms} board /></PanelGuard>
+      )}
     </div>
     </PanelGuard>
   );

@@ -10,7 +10,7 @@ import { addDispoBuyerAction, updateDispoBuyerAction, logDispoBuyerTouchAction, 
 import { DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, stageMeta, type DispoBuyer } from "@/lib/dispo-buyers";
 import AttachBuyerPanel from "@/components/AttachBuyerPanel";
 
-export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "", canCall = false, canSms = false }: { oppId: string; buyers: DispoBuyer[]; today: string; dealArea?: string; canCall?: boolean; canSms?: boolean }) {
+export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "", canCall = false, canSms = false, board = false }: { oppId: string; buyers: DispoBuyer[]; today: string; dealArea?: string; canCall?: boolean; canSms?: boolean; board?: boolean }) {
   const [adding, setAdding] = useState(false);
   const [offerFor, setOfferFor] = useState<string | null>(null); // entryId whose quick-offer form is open
   const counts = DISPO_BUYER_STAGES.map((s) => ({ ...s, n: buyers.filter((b) => b.stage === s.key).length }));
@@ -128,7 +128,24 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "",
           lots of attached agents doesn't make the page endless (Jon 2026-10-26) */}
       {buyers.length === 0
         ? <p className="py-1 text-[11px] text-slate-400">No buyers yet. Add the developers + buyer agents you send this deal to, then work the follow-ups.</p>
-        : (
+        : board ? (
+          // 🗂 TRUE kanban — stages as side-by-side columns (full-width placement, Jon 2026-10-26)
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {DISPO_BUYER_STAGES.map((s) => {
+              const group = buyers.filter((b) => b.stage === s.key);
+              return (
+                <div key={s.key} className="flex w-72 shrink-0 flex-col rounded-lg bg-slate-50/60 p-1.5 ring-1 ring-slate-100">
+                  <div className={`mb-1.5 flex items-center gap-1.5 rounded px-1.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${s.cls}`}>
+                    {s.label} <span className="rounded-full bg-white/70 px-1.5 text-[9px] tabular-nums">{group.length}</span>
+                  </div>
+                  <div className="max-h-[32rem] space-y-1.5 overflow-y-auto">
+                    {group.length === 0 ? <p className="px-1 py-2 text-[10px] text-slate-300">—</p> : group.map((b) => card(b))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
           <div className="max-h-[44rem] space-y-2 overflow-y-auto rounded-lg bg-slate-50/50 p-1.5 ring-1 ring-slate-100">
             {DISPO_BUYER_STAGES.map((s) => {
               const group = buyers.filter((b) => b.stage === s.key);

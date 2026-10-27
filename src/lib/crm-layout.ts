@@ -19,7 +19,6 @@ export const CRM_WIDGETS: WidgetDef[] = [
   { id: "developers", label: "🏗 Vetted developers", column: "right" },
   { id: "agents", label: "🧑‍💼 Matching buyer agents", column: "right" },
   { id: "marketing", label: "📣 Marketing checklist", column: "right" },
-  { id: "buyers", label: "📇 Buyers & agents on this deal", column: "right" },
   { id: "offers", label: "💰 Offers received", column: "right" },
   { id: "tasks", label: "⏰ Tasks", column: "right" },
   { id: "appointments", label: "📅 Appointments", column: "right" },

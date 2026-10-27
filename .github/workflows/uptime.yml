@@ -34,9 +34,10 @@ jobs:
               FAIL="$FAIL\n• $path → HTTP $code (expected $want)"
             fi
           }
-          # /api/version must return the live commit sha; /tv is the always-on scoreboard
+          # Only hit /api/version — it's a tiny JSON response, so the watchdog itself adds
+          # almost nothing to Vercel usage (Jon is near the free-tier limit). If the app is
+          # down this still fails, since the route won't serve.
           check "/api/version" "200"
-          check "/tv" "200"
           # version must actually contain a sha (catches a 200 that's really an error page)
           if ! grep -q '"sha"' /tmp/body 2>/dev/null; then
             code=$(curl -s -o /tmp/v -w "%{http_code}" --max-time 25 "$BASE/api/version")
