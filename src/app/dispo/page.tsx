@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, canAccessMarketing, isManager } from "@/lib/auth";
+import { getCurrentUser, canAccessMarketing, isManager, canAccessCSuite } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { readPipelines, parseTags } from "@/lib/crm";
@@ -851,6 +851,11 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
             <p className="mt-2 mb-3 text-xs text-slate-500">Upload the <b>unvetted-developers-backfill.csv</b>. Each row becomes a CRM lead with its notes; developers + buyer agents split into their tabs. Re-uploading is safe.</p>
             <CsvMapImport action={importDispoNetworkCsv} returnTo={`/dispo?tab=${tab}`} />
           </details>
+
+          {/* ⬇️ Export the unvetted developers for a DirectREI mass-call (Jon 2026-10-27). C-suite only. */}
+          {tab === "developers" && canAccessCSuite(me) && (
+            <a href="/api/export/unvetted-devs" className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-900" title="Download the unvetted developers as a CSV to bulk-upload into DirectREI for Marie to mass-call (C-suite only)">⬇️ Export unvetted developers (CSV) <span className="font-normal text-slate-300">— for DirectREI</span></a>
+          )}
 
           {/* search + view toggle */}
           <Card className="flex flex-wrap items-center gap-2 p-3">
