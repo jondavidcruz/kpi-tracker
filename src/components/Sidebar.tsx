@@ -130,7 +130,6 @@ export default function Sidebar({
       { href: "/crm/contacts?dept=dispo", label: "Dispo Contacts", Icon: Contact, marketingOrManager: true },
       { href: "/crm/calendar?dept=dispo", label: "Dispo Calendar", Icon: CalendarDays, marketingOrManager: true },
       { href: "/sop/dispo", label: "Dispo SOP", Icon: BookOpen, marketingOrManager: true, external: true },
-      { href: "/sop/list-recycle", label: "List Recycle SOP", Icon: BookOpen, marketingOrManager: true, external: true },
       { href: "/deals", label: "Deals", Icon: Building2 },
       { href: "/crm/dealboard", label: "Deal Board", Icon: Presentation },
       { href: "/marketing", label: "Vetted Buyers", Icon: Megaphone, marketingOnly: true },
@@ -139,6 +138,8 @@ export default function Sidebar({
     ] },
     { label: "Marketing", items: [
       { href: "/lead-sourcing", label: "Lead Sourcing", Icon: TrendingUp, marketingOnly: true },
+      { href: "/sop/list-recycle", label: "List Recycle SOP", Icon: BookOpen, marketingOrManager: true, external: true },
+      { href: "/marketing-steps", label: "Marketing Checklist", Icon: ListChecks, managerOnly: true },
     ] },
     { label: "Business Heartbeat", items: [
       { href: "/comms-health", label: "Comms Guardian", Icon: Activity, managerOnly: true },
