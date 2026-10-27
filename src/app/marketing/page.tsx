@@ -186,6 +186,10 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     });
     boardCoverage = coverageByCounty(boardCards);
   }
+  // 🏗/🧑‍💼 Split the count so "vetted developers" is one consistent number everywhere
+  // (Jon 2026-10-27: the blended "94" read as "94 developers" — it's 74 devs + 20 agents).
+  const devCount = boardCards.filter((b) => (b as { type?: string }).type !== "agent").length;
+  const agentCount = boardCards.filter((b) => (b as { type?: string }).type === "agent").length;
 
   return (
     <div className="space-y-6">
@@ -233,6 +237,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       {!srcKanban && (
         <div className="rounded-xl bg-amber-500 px-4 py-2 text-[12px] font-bold text-white">📁 Showing the legacy buyer table ({vettedRows.length}). <a href="/marketing" className="underline">Back to the live kanban board</a></div>
       )}
+      {/* Consistent counts — these match the kanban (DS: Developers ✅ Vetted / DS: Buyer Agents 🤝 Active). */}
+      <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+        <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 ring-1 ring-emerald-200">🏗 {devCount} vetted developers</span>
+        <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700 ring-1 ring-sky-200">🧑‍💼 {agentCount} active agents</span>
+        <span className="text-xs font-normal text-slate-400">— all with a buy box on file; matches the kanban</span>
+      </div>
       <VettedBuyersBoard buyers={boardCards} coverage={boardCoverage} coldCount={cold.length} />
 
       {/* 🗺 Coverage GAPS — demand (open dispo deals) vs our vetted buy-boxes by price
