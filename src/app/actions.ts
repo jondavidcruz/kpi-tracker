@@ -3003,6 +3003,7 @@ export async function cascadeRank(formData: FormData): Promise<{
       priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; priceText: string;
       discount: number | null; acresMin: number | null; acresMax: number | null; types: string[];
       closeDays: number | null; funding: string | null; where: string[]; volumeNote: string; buyingNow: boolean | null;
+      details: Array<{ label: string; value: string }>;
     };
   }>;
   nearest?: { name: string; miles: number } | null;
@@ -3051,6 +3052,10 @@ export async function cascadeRank(formData: FormData): Promise<{
       type: agent ? "agent" : (src.type || "developer"), phone: o.contact?.phone ?? "", email: o.contact?.email ?? "",
       bb, geoPolygon: (fd.__geoPolygon ?? null) as never, geoCentroidLat: geoc?.lat ?? null, geoCentroidLng: geoc?.lng ?? null,
       priceText: (form.priceRange || src.priceRange || src.buyBox || "").trim(),
+      // 🗂 everything the interview / Excel import captured, so the cascade can show the
+      // FULL per-field detail Jon sees in the spreadsheet (Jon 2026-10-27), not a summary.
+      importBuyBox: (src.buyBox || imp.buyBox || "").trim(),
+      form, // raw dev_buybox / agent_profile answers (free text per field)
       areaText, nationwide: geo?.nationwide === true, lastTouchAt: o.updatedAt as Date,
     };
   });
@@ -3110,16 +3115,52 @@ export async function cascadeRank(formData: FormData): Promise<{
       // 💰 Price fallback to the text field so a buyer with a price but no structured box
       // doesn't read "price range unknown" (Jon 2026-10-27).
       const priceText = (c?.priceText || "").trim();
-      const box = (bb || priceText) ? {
+      // 🗂 FULL per-field detail (Jon 2026-10-27: "include all the notes relating to each
+      // field — the Excel has more detail"). Every populated buy-box field + its notes,
+      // untruncated, plus the raw imported buy-box text and any free-text interview answers
+      // not already covered, so nothing from the spreadsheet is lost on the card.
+      const pr = bb?.price, ge = bb?.geo, sz = bb?.size, as = bb?.asset, te = bb?.terms, st = bb?.status;
+      const num = (n: number | null | undefined) => (n == null ? "" : `$${n.toLocaleString()}`);
+      const list = (a?: (string | null | undefined)[]) => (a ?? []).filter(Boolean).join(", ");
+      const details: Array<{ label: string; value: string }> = [];
+      const addD = (label: string, value: string) => { const v = value.trim(); if (v) details.push({ label, value: v }); };
+      addD("💰 Price", (pr?.min != null || pr?.max != null) ? `${num(pr?.min)} – ${num(pr?.max)}${pr?.unit ? ` (${String(pr.unit).replace(/_/g, " ")})` : ""}` : priceText);
+      addD("📝 Price notes", String(pr?.notes ?? ""));
+      addD("📉 Discount to market", typeof pr?.discount_to_market_pct === "number" ? `~${pr.discount_to_market_pct}%` : String(pr?.discount_to_market_pct ?? ""));
+      addD("🏷 Asset types", list((as?.types ?? []).map((t) => String(t).replace(/_/g, " "))));
+      addD("🚫 Won't buy", list(as?.exclusions));
+      addD("📐 Acreage", (sz?.acres_min != null || sz?.acres_max != null) ? `${sz?.acres_min ?? "?"} – ${sz?.acres_max ?? "?"} acres` : "");
+      addD("📐 Lots / lot size", [sz?.lots_min != null ? `${sz.lots_min}+ lots` : "", sz?.lot_sqft_min != null ? `${sz.lot_sqft_min}+ sqft` : "", (sz?.lot_width_ft ?? []).length ? `width ${list((sz?.lot_width_ft ?? []).map(String))} ft` : ""].filter(Boolean).join(" · "));
+      addD("📍 Areas", list([ge?.nationwide ? "nationwide" : "", ...(ge?.regions ?? []), ...(ge?.counties ?? []), ...(ge?.cities ?? []), ...(ge?.states ?? []), ...(ge?.zips ?? [])]));
+      addD("🚫 Excludes areas", list(ge?.exclusions));
+      addD("🏘 Neighborhood notes", String(ge?.neighborhood_notes ?? ""));
+      addD("⏱ Close speed", te?.close_days != null ? `~${te.close_days} days` : "");
+      addD("💵 Funding", te?.funding ? String(te.funding).replace(/_/g, " ") : "");
+      addD("✅ Proof of funds", te?.proof_of_funds == null ? "" : te.proof_of_funds ? "yes" : "no");
+      addD("📦 Volume", String(st?.volume_note ?? ""));
+      addD("📨 Submission requirements", list(st?.submission_requirements));
+      addD("👤 Best contact", String(st?.best_contact ?? ""));
+      addD("🟢 Buying now", st?.buying_now == null ? "" : st.buying_now ? "yes" : "⚠️ paused");
+      // Raw interview answers not already represented as structured fields.
+      const covered = new Set(["priceRange", "buyCounties", "areas", "landTypes", "buyerTypes", "lotSize", "closeSpeed", "proofOfFunds", "volume", "brokerage"]);
+      for (const [k, v] of Object.entries((c?.form ?? {}) as Record<string, string>)) {
+        if (covered.has(k) || !v || typeof v !== "string") continue;
+        addD(`📄 ${k.replace(/([A-Z])/g, " $1").replace(/_/g, " ").toLowerCase().trim()}`, String(v));
+      }
+      // The raw buy-box text as imported from the spreadsheet — the catch-all so no Excel detail is lost.
+      if (c?.importBuyBox && !details.some((d) => d.value === c.importBuyBox)) addD("🗂 Buy-box (as imported)", c.importBuyBox);
+
+      const box = (bb || priceText || details.length) ? {
         priceMin: bb?.price?.min ?? null, priceMax: bb?.price?.max ?? null, priceUnit: bb?.price?.unit ?? null,
         priceText,
-        priceNotes: [bb?.price?.notes, bb?.geo?.neighborhood_notes].filter(Boolean).join(" · ").slice(0, 300),
+        priceNotes: [bb?.price?.notes, bb?.geo?.neighborhood_notes].filter(Boolean).join(" · "),
         discount: typeof bb?.price?.discount_to_market_pct === "number" ? bb.price.discount_to_market_pct : null,
         acresMin: bb?.size?.acres_min ?? null, acresMax: bb?.size?.acres_max ?? null,
         types: (bb?.asset?.types ?? []).map((t) => String(t).replace(/_/g, " ")),
         closeDays: bb?.terms?.close_days ?? null, funding: bb?.terms?.funding ?? null,
         where: [bb?.geo?.nationwide ? "nationwide" : "", ...(bb?.geo?.regions ?? []), ...(bb?.geo?.counties ?? []), ...(bb?.geo?.cities ?? []), ...(bb?.geo?.states ?? [])].filter(Boolean).slice(0, 10),
         volumeNote: bb?.status?.volume_note ?? "", buyingNow: bb?.status?.buying_now ?? null,
+        details,
       } : null;
       return { id: r.buyer.id, name: r.buyer.name, company: c?.company ?? "", type: c?.type ?? "", phone: c?.phone ?? "", email: c?.email ?? "", score: r.score, tier: r.tier, why: r.why, geoBasis: r.geoBasis, box };
     }),

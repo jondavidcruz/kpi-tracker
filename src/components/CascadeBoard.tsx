@@ -6,7 +6,7 @@ import { useRef, useState, useTransition } from "react";
 import { cascadeRank, logBuyerOutreach } from "@/app/actions";
 
 type Chip = { ok: boolean | "warn"; label: string };
-type Box = { priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; priceText: string; discount: number | null; acresMin: number | null; acresMax: number | null; types: string[]; closeDays: number | null; funding: string | null; where: string[]; volumeNote: string; buyingNow: boolean | null };
+type Box = { priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; priceText: string; discount: number | null; acresMin: number | null; acresMax: number | null; types: string[]; closeDays: number | null; funding: string | null; where: string[]; volumeNote: string; buyingNow: boolean | null; details?: { label: string; value: string }[] };
 type Card = { id: string; name: string; company: string; type: string; phone: string; email: string; score: number; tier: 1 | 2 | 3; why: Chip[]; geoBasis: string; box: Box | null };
 type Geo = { lat: number; lng: number; formatted: string; county: string; city: string; state: string; zip: string };
 type Excluded = { name: string; reason: string };
@@ -177,13 +177,29 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
             {!collapsed.has(c.id) && (
               <div className="mt-3 rounded-xl bg-slate-50 p-3 text-[12px] ring-1 ring-slate-100">
                 {c.box ? (
-                  <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
-                    <div><span className="font-extrabold text-emerald-700">💰 Pays:</span> {c.box.priceMin == null && c.box.priceMax == null ? (c.box.priceText ? c.box.priceText.slice(0, 80) : "price range unknown") : `${money(c.box.priceMin)} – ${money(c.box.priceMax)}`}{c.box.priceUnit ? ` (${c.box.priceUnit.replace(/_/g, " ")})` : ""}{c.box.discount != null ? ` · ~${c.box.discount}% of market` : ""}</div>
-                    <div><span className="font-extrabold text-slate-700">📐 Size:</span> {c.box.acresMin == null && c.box.acresMax == null ? "any" : `${c.box.acresMin ?? "?"} – ${c.box.acresMax ?? "?"} acres`}</div>
-                    <div><span className="font-extrabold text-slate-700">🏷 Buys:</span> {c.box.types.length ? c.box.types.join(", ") : "unknown"}</div>
-                    <div><span className="font-extrabold text-slate-700">⏱ Close:</span> {c.box.closeDays != null ? `~${c.box.closeDays} days` : "unknown"}{c.box.funding ? ` · ${c.box.funding.replace(/_/g, " ")}` : ""}{c.box.buyingNow === false ? " · ⚠️ buying paused" : ""}</div>
-                    {c.box.where.length > 0 && <div className="sm:col-span-2"><span className="font-extrabold text-slate-700">🗺 Where:</span> {c.box.where.join(" · ")}</div>}
-                    {(c.box.priceNotes || c.box.volumeNote) && <div className="sm:col-span-2 text-slate-500"><span className="font-extrabold text-slate-700">📝 Notes:</span> {[c.box.priceNotes, c.box.volumeNote].filter(Boolean).join(" · ")}</div>}
+                  <div className="space-y-2">
+                    <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                      <div><span className="font-extrabold text-emerald-700">💰 Pays:</span> {c.box.priceMin == null && c.box.priceMax == null ? (c.box.priceText || "price range unknown") : `${money(c.box.priceMin)} – ${money(c.box.priceMax)}`}{c.box.priceUnit ? ` (${c.box.priceUnit.replace(/_/g, " ")})` : ""}{c.box.discount != null ? ` · ~${c.box.discount}% of market` : ""}</div>
+                      <div><span className="font-extrabold text-slate-700">📐 Size:</span> {c.box.acresMin == null && c.box.acresMax == null ? "any" : `${c.box.acresMin ?? "?"} – ${c.box.acresMax ?? "?"} acres`}</div>
+                      <div><span className="font-extrabold text-slate-700">🏷 Buys:</span> {c.box.types.length ? c.box.types.join(", ") : "unknown"}</div>
+                      <div><span className="font-extrabold text-slate-700">⏱ Close:</span> {c.box.closeDays != null ? `~${c.box.closeDays} days` : "unknown"}{c.box.funding ? ` · ${c.box.funding.replace(/_/g, " ")}` : ""}{c.box.buyingNow === false ? " · ⚠️ buying paused" : ""}</div>
+                      {c.box.where.length > 0 && <div className="sm:col-span-2"><span className="font-extrabold text-slate-700">🗺 Where:</span> {c.box.where.join(" · ")}</div>}
+                    </div>
+                    {/* 🗂 FULL per-field detail from the interview / Excel import (Jon 2026-10-27:
+                        "include all the notes relating to each field — the Excel has more detail"). */}
+                    {c.box.details && c.box.details.length > 0 && (
+                      <details className="rounded-lg bg-white/70 px-2.5 py-1.5 ring-1 ring-slate-100">
+                        <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">🗂 Full buy-box detail ({c.box.details.length}) <span className="normal-case text-slate-300">— click to open</span></summary>
+                        <dl className="mt-1.5 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                          {c.box.details.map((d, di) => (
+                            <div key={di} className="break-words">
+                              <dt className="inline font-extrabold text-slate-700">{d.label}:</dt>{" "}
+                              <dd className="inline whitespace-pre-line text-slate-600">{d.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </details>
+                    )}
                   </div>
                 ) : (
                   <p className="text-slate-400">No structured buy box on file for this buyer yet — open them in the <b>Buyers</b> tab to fill it in (or book an interview).</p>

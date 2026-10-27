@@ -50,10 +50,15 @@ export function devVetScore(formData: unknown, kind: DevKind, responsive = false
   const total = checks.length;
   const pct = Math.round((filled / total) * 100);
   // A = VIP developers (Jon 2026-10-22): super-responsive AND we have their purchase
-  // price OR an almost-full buy-box. B = a decent box OR responsive. Else C.
+  // price OR an almost-full buy-box.
+  // B = workable: we KNOW THEIR PURCHASE PRICE, or a decent box, or they're responsive.
+  // C = we can't even price them AND the box is thin.
+  // Price is the field that matters most (Jon 2026-10-27: "why is a buyer with a
+  // purchase price rated C while a B buyer has none?") — so any buyer whose price we
+  // have is at least B, never below an unpriced one.
   const almostFull = filled >= total - 2;
   const tier: DevVet["tier"] = responsive && (hasPrice || almostFull) ? "A"
-    : filled >= Math.ceil(total / 2) || responsive ? "B"
+    : hasPrice || filled >= Math.ceil(total / 2) || responsive ? "B"
     : "C";
   return { filled, total, tier, missing, pct, responsive, hasPrice };
 }
