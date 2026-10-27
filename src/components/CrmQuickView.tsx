@@ -200,20 +200,8 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <label className={labelCls}>🏠 Property address <span className="font-normal normal-case text-slate-400">— the deal / property (this lead is named after the seller: {d.contact.name})</span></label>
                       <input name="title" defaultValue={formatAddress(d.title)} placeholder="123 Main St, City, ST ZIP" className={inputCls} />
                     </div>
-                    <div>
-                      <label className={labelCls}>Pipeline (pick the destination stage)</label>
-                      <PipelineMover d={d} pipelineStages={pipelineStages} setSaved={setSaved} block />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Stage</label>
-                      <select
-                        value={d.stage}
-                        onChange={(e) => { const stage = e.target.value; setData({ ...d, stage }); const fd = new FormData(); fd.set("id", d.id); fd.set("stage", stage); start(async () => { await setOppStageAction(fd); }); }}
-                        className={inputCls}
-                      >
-                        {stages.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-                      </select>
-                    </div>
+                    <PipelineStage d={d} pipelineStages={pipelineStages} stages={stages} setSaved={setSaved} setData={setData} />
+
                     <div>
                       <label className={labelCls}>Owner (saves instantly)</label>
                       <select
@@ -551,6 +539,58 @@ function PipelineMover({ d, pipelineStages, setSaved, block }: { d: Payload; pip
         </>
       )}
     </span>
+  );
+}
+
+// 🔀 Unified Pipeline + Stage picker (Jon 2026-10-27): ONE control, not a confusing "land in +
+// Move" sub-button next to a separate Stage dropdown. Changing the Pipeline repopulates the main
+// Stage dropdown with THAT pipeline's full stage list; picking a stage in the SAME pipeline saves
+// instantly; picking a different pipeline shows a single "→ Move to …" button that commits the
+// move to the chosen stage. Renders two grid cells (Pipeline, Stage) for the 2-col details grid.
+function PipelineStage({ d, pipelineStages, stages, setSaved, setData }: {
+  d: Payload; pipelineStages?: Record<string, Array<{ key: string; label: string }>>; stages: Array<{ key: string; label: string }>;
+  setSaved: (s: string) => void; setData: (d: Payload) => void;
+}) {
+  const [pipe, setPipe] = useState(d.pipeline);
+  const [stage, setStage] = useState(d.stage);
+  const [moving, startMove] = useTransition();
+  const names = d.pipelines ?? [d.pipeline];
+  const changed = pipe !== d.pipeline;
+  const curStages = pipelineStages?.[pipe] ?? (changed ? [] : stages);
+  const onPipe = (p: string) => { setPipe(p); setStage(p === d.pipeline ? d.stage : ((pipelineStages?.[p] ?? [])[0]?.key ?? "")); };
+  const onStage = (s: string) => {
+    setStage(s);
+    if (pipe === d.pipeline) { // same pipeline → save the stage instantly
+      setData({ ...d, stage: s });
+      const fd = new FormData(); fd.set("id", d.id); fd.set("stage", s);
+      startMove(async () => { await setOppStageAction(fd); setSaved("✓ saved"); });
+    }
+  };
+  const doMove = () => {
+    const fd = new FormData(); fd.set("id", d.id); fd.set("pipeline", pipe); if (stage) fd.set("stage", stage);
+    startMove(async () => { await setOppPipelineAction(fd); setSaved("✓ Moved — refreshing"); window.location.reload(); });
+  };
+  return (
+    <>
+      <div>
+        <label className={labelCls}>Pipeline</label>
+        <select value={pipe} onChange={(e) => onPipe(e.target.value)} className={inputCls}>
+          {names.map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className={labelCls}>Stage{changed && <span className="font-normal normal-case text-amber-600"> — in {pipe}</span>}</label>
+        <select value={stage} onChange={(e) => onStage(e.target.value)} className={inputCls}>
+          {curStages.length === 0 && <option value="">(first stage)</option>}
+          {curStages.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
+        {changed && (
+          <button type="button" onClick={doMove} disabled={moving} className="mt-1.5 w-full rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50">
+            {moving ? "Moving…" : `→ Move to ${pipe}`}
+          </button>
+        )}
+      </div>
+    </>
   );
 }
 
