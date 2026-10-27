@@ -95,14 +95,17 @@ export function Card({
   children,
   className = "",
   id,
+  widget,
 }: {
   children: React.ReactNode;
   className?: string;
   id?: string;
+  widget?: string; // data-widget tag for the per-user layout customizer (Jon 2026-10-26)
 }) {
   return (
     <div
       id={id}
+      data-widget={widget}
       className={`rounded-2xl border border-slate-200/60 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-16px_rgba(15,23,42,0.12)] transition-shadow duration-200 hover:shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-16px_rgba(15,23,42,0.18)] ${className}`}
     >
       {children}

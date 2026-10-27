@@ -28,6 +28,8 @@ import LeadNoteComposer from "@/components/LeadNoteComposer";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import CrmFormFields from "@/components/CrmFormFields";
 import DocUploadForm from "@/components/DocUploadForm";
+import CrmLayoutController from "@/components/CrmLayoutController";
+import { readCrmLayout } from "@/lib/crm-layout";
 import OppPipelineMover from "@/components/OppPipelineMover";
 import { setOppStageAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, deleteLeadDocAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
@@ -84,6 +86,8 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   const manager = isManager(me);
   if (!allowed) return <Card className="p-10 text-center text-slate-400">The Seller CRM is for acquisitions + managers.</Card>;
+  // 🧩 this user's saved widget layout (reorder + hidden), applied client-side (Jon 2026-10-26)
+  const crmLayout = await readCrmLayout((me as { id?: string }).id || me!.name);
   const settings = await getSettings();
   const tz = settings.orgTimezone;
 
@@ -165,6 +169,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
 
   return (
     <PanelGuard label="contact-full">
+    <CrmLayoutController initial={crmLayout} />
     <div className="space-y-4">
       {/* ── Header: who, stage, actions ── */}
       <Card className="p-4">
@@ -240,7 +245,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
         {!dbg.includes("L") && (
         <div className="order-2 flex min-w-0 flex-col gap-3 xl:order-none">
           {/* contact card */}
-          <Card className="p-4">
+          <Card className="p-4" widget="contact">
             <details open id="contact" className="scroll-mt-4">
               <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">👤 Contact — all phones &amp; emails (edit)</summary>
               <AutoSaveForm action={saveCrmContactAction} className="mt-2 space-y-2">
@@ -306,7 +311,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           </Card>
 
           {/* 🔕 DND by channel (GHL-style, Jon 2026-10-08) — blocks senders cold */}
-          <Card className="p-4">
+          <Card className="p-4" widget="dnd">
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">🔕 DND — Do Not Disturb</div>
             <div className="grid grid-cols-2 gap-1.5">
               {([["all", "🚫 ALL channels"], ["sms", "💬 Text messages"], ["email", "✉️ Email"], ["call", "📞 Calls"]] as const).map(([ch, label]) => {
@@ -326,7 +331,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           </Card>
 
           {/* 📎 Documents — every file saved on this lead (PandaDoc, Drive, uploads) */}
-          <Card className="p-4">
+          <Card className="p-4" widget="documents">
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">📎 Documents</div>
             <DocUploadForm oppId={opp.id} contactId={c.id} />
             {events.filter((e) => e.kind === "file").length === 0 && driveFilesShown.length === 0 ? (
@@ -375,7 +380,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           </Card>
 
           {/* opportunity meta */}
-          <Card className="p-4">
+          <Card className="p-4" widget="opportunity">
             <div id="opp" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">🎯 Opportunity</div>
             {/* Pipeline lives OUTSIDE the autosave form: changing it reveals the
                 target pipeline's stages + an explicit Move button (Nick's ticket). */}
@@ -413,11 +418,11 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           {/* 🚦 SOP gate — moved under Opportunity on the LEFT (Jon 2026-10-26): keeps the right
               column for buyers/agents + marketing. Advance is blocked until the gate clears. */}
           {showMatches && (
-            <PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} canOverride={manager} /></PanelGuard>
+            <div data-widget="gate"><PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} canOverride={manager} /></PanelGuard></div>
           )}
 
           {/* 📋 Discovery forms — moved to the LEFT under Opportunity (Jon 2026-10-26) */}
-          <Card className="p-4" id="discovery">
+          <Card className="p-4" id="discovery" widget="discovery">
             <details>
             <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">📋 Discovery — fill as you talk <span className="normal-case text-slate-300">(click to open)</span></summary>
             {/* 📄 Buyer-safe export (Jon 2026-10-26): the property/land details as a PDF for the
@@ -448,7 +453,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           </Card>
 
           {/* 🤝 parties in the deal — moved to the LEFT under Opportunity (Jon 2026-10-26) */}
-          <Card className="p-4">
+          <Card className="p-4" widget="parties">
             <details id="parties" className="scroll-mt-4">
             <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">🤝 Parties in this deal <span className="normal-case text-slate-300">(click to open)</span></summary>
             <div className="space-y-1.5">
@@ -759,14 +764,14 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             };
             return (<>
               {devs.length > 0 && (
-                <Card className="p-3">
+                <Card className="p-3" widget="developers">
                   <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🏗 Vetted developers — the cascade list</div>
                   <div className="space-y-1.5">{devs.map((m, i) => row(m, i))}</div>
                   <div className="mt-1.5 text-[10px] text-slate-400">✅ Vetted developers whose buy-box covers this area — attach or ✉ draft the new-deal email, top-down.</div>
                 </Card>
               )}
               {agents.length > 0 && (
-                <Card className="p-3">
+                <Card className="p-3" widget="agents">
                   <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">🧑‍💼 Matching buyer agents</div>
                   <div className="space-y-1.5">{agents.map((m, i) => row(m, i))}</div>
                   <div className="mt-1.5 text-[10px] text-slate-400">Active buyer agents working this lead&apos;s area — they may already have a buyer.</div>
@@ -777,7 +782,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
 
           {/* 📣 Marketing SOP checklist — dispo deals only (Jon 2026-10-20) */}
           {showMatches && (
-            <PanelGuard label="marketing"><DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} /></PanelGuard>
+            <div data-widget="marketing"><PanelGuard label="marketing"><DispoMarketingChecklist oppId={opp.id} done={readMarketingDone(opp.formData)} /></PanelGuard></div>
           )}
 
           {/* ⚡ Run-the-cascade button removed from the contact view (Jon 2026-10-26) — the
@@ -785,7 +790,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
 
           {/* 📇 Per-deal buyer/agent follow-up tracker — dispo reps only; shows buyer names (Jon 2026-10-21) */}
           {showMatches && (
-            <PanelGuard label="buyer-tracker"><DispoBuyerTracker oppId={opp.id} buyers={await withTimeout(enrichDispoBuyers(readDispoBuyers(opp.formData)), 8000, readDispoBuyers(opp.formData))} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={comms.call} canSms={comms.sms} /></PanelGuard>
+            <div data-widget="buyers"><PanelGuard label="buyer-tracker"><DispoBuyerTracker oppId={opp.id} buyers={await withTimeout(enrichDispoBuyers(readDispoBuyers(opp.formData)), 8000, readDispoBuyers(opp.formData))} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={comms.call} canSms={comms.sms} /></PanelGuard></div>
           )}
 
           {/* 💰 Offers received — the 3-offer accountability tracker (Jon 2026-10-22) */}
@@ -793,14 +798,14 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             const si = stages.findIndex((s) => s.key === opp.stage);
             const mi = stages.findIndex((s) => /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.label) || /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.key));
             const pastCascade = si >= 0 && mi >= 0 && si >= mi;
-            return <PanelGuard label="offers"><DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} askPrice={opp.askPrice ?? null} /></PanelGuard>;
+            return <div data-widget="offers"><PanelGuard label="offers"><DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} askPrice={opp.askPrice ?? null} /></PanelGuard></div>;
           })()}
 
           {/* 📄 Assignment-contract auto-draft + 📧 Sequences panels removed from the
               contact view (Jon 2026-10-26) — not needed here. */}
 
           {/* tasks */}
-          <Card className="p-4">
+          <Card className="p-4" widget="tasks">
             <div id="tasks" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">⏰ Tasks</div>
             <div className="space-y-1.5">
               {tasks.map((t) => (
@@ -827,7 +832,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           </Card>
 
           {/* appointments */}
-          <Card className="p-4">
+          <Card className="p-4" widget="appointments">
             <div id="appts" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">📅 Appointments <span className="normal-case text-slate-300">(alarm posts to the huddle chat ~1h before)</span></div>
             <div className="space-y-1.5">
               {appts.map((a) => (
