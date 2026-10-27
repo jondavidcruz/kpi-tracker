@@ -1,17 +1,34 @@
 "use client";
-// 📎 Upload a document to a lead's Drive folder, WITH visible feedback (Jon 2026-10-26:
-// uploads were failing silently — the error only went to the timeline). useActionState shows
-// uploading / ✓ done / ✗ the exact error right at the box so nothing is a mystery.
-import { useActionState, useEffect, useRef } from "react";
-import { uploadLeadDocAction, type UploadResult } from "@/app/crm/actions";
+// 📎 Upload a document to a lead's Drive folder, WITH visible feedback. Posts to the
+// /api/crm/upload-doc ROUTE (maxDuration=60) instead of a server action — a server action
+// timed out on bigger files and the client got "unexpected response" (Jon 2026-10-27).
+import { useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import type { UploadResult } from "@/app/crm/actions";
 
 export default function DocUploadForm({ oppId, contactId }: { oppId: string; contactId: string }) {
-  const [res, action, pending] = useActionState<UploadResult | null, FormData>(uploadLeadDocAction, null);
+  const [res, setRes] = useState<UploadResult | null>(null);
+  const [pending, setPending] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  useEffect(() => { if (res?.ok) formRef.current?.reset(); }, [res]);
+  const router = useRouter();
+
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    setPending(true); setRes(null);
+    try {
+      const r = await fetch("/api/crm/upload-doc", { method: "POST", body: fd });
+      const j = (await r.json().catch(() => ({ ok: false, msg: "Upload failed — the server sent a bad response." }))) as UploadResult;
+      setRes(j);
+      if (j.ok) { formRef.current?.reset(); router.refresh(); }
+    } catch {
+      setRes({ ok: false, msg: "Upload failed — network error. Check your connection and retry." });
+    } finally { setPending(false); }
+  };
+
   return (
     <div className="mb-2">
-      <form ref={formRef} action={action} className="flex flex-wrap items-center gap-1.5">
+      <form ref={formRef} onSubmit={onSubmit} className="flex flex-wrap items-center gap-1.5">
         <input type="hidden" name="oppId" value={oppId} />
         <input type="hidden" name="contactId" value={contactId} />
         <select name="docType" defaultValue="" className="rounded-lg border border-slate-200 px-1.5 py-1 text-[10px] font-semibold text-slate-600" title="What kind of document is this?">
