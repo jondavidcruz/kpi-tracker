@@ -188,8 +188,15 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   }
   // 🏗/🧑‍💼 Split the count so "vetted developers" is one consistent number everywhere
   // (Jon 2026-10-27: the blended "94" read as "94 developers" — it's 74 devs + 20 agents).
-  const devCount = boardCards.filter((b) => (b as { type?: string }).type !== "agent").length;
-  const agentCount = boardCards.filter((b) => (b as { type?: string }).type === "agent").length;
+  // Separate vetted DEVELOPERS from vetted AGENTS so each has its own board + count
+  // (Jon 2026-10-27: "separate actual vetted developers from vetted agents so we know
+  // which is which when we're searching").
+  const devCards = boardCards.filter((b) => (b as { type?: string }).type !== "agent");
+  const agentCards = boardCards.filter((b) => (b as { type?: string }).type === "agent");
+  const devCount = devCards.length;
+  const agentCount = agentCards.length;
+  const devCoverage = coverageByCounty(devCards);
+  const agentCoverage = coverageByCounty(agentCards);
 
   return (
     <div className="space-y-6">
@@ -218,7 +225,6 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         tabs={[
           { key: "cascade", label: "🎯 Cascade" },
           { key: "buyers", label: "🃏 Buyers", badge: boardCards.length },
-          { key: "interviews", label: "📥 Interviews" },
           { key: "markets", label: "🗺 Map & Markets" },
           { key: "jv", label: "🤝 JV Partners", badge: jvPartners.length },
         ]}
@@ -243,7 +249,15 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700 ring-1 ring-sky-200">🧑‍💼 {agentCount} active agents</span>
         <span className="text-xs font-normal text-slate-400">— all with a buy box on file; matches the kanban</span>
       </div>
-      <VettedBuyersBoard buyers={boardCards} coverage={boardCoverage} coldCount={cold.length} />
+      {/* 🏗 Developers and 🧑‍💼 Agents in SEPARATE boards (Jon 2026-10-27). */}
+      <div className="space-y-2">
+        <h3 className="flex items-center gap-2 text-sm font-extrabold text-emerald-700">🏗 Vetted Developers <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700">{devCount}</span></h3>
+        {devCards.length ? <VettedBuyersBoard buyers={devCards} coverage={devCoverage} coldCount={0} /> : <Card className="p-4 text-center text-xs text-slate-400">No vetted developers yet — vet them in the Developers kanban.</Card>}
+      </div>
+      <div className="space-y-2">
+        <h3 className="flex items-center gap-2 text-sm font-extrabold text-sky-700">🧑‍💼 Vetted Agents <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-700">{agentCount}</span></h3>
+        {agentCards.length ? <VettedBuyersBoard buyers={agentCards} coverage={agentCoverage} coldCount={0} /> : <Card className="p-4 text-center text-xs text-slate-400">No vetted agents yet.</Card>}
+      </div>
 
       {/* 🗺 Coverage GAPS — demand (open dispo deals) vs our vetted buy-boxes by price
           & acreage. The county heat above is supply; this is "where we have deals but
@@ -291,45 +305,6 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       </details>
 
       <ArchivedBuyers rows={archivedRows} />
-          </div>,
-          <div key="interviews" className="space-y-6">
-      {/* Where developers buy (demand board) + the standard buy-box interviews */}
-      <DevInterviews
-        rows={vettedRows.filter((r) => isDevRow(r) || buyerLand[r.id]?.isLandBuyer).map((r) => ({
-          id: r.id, name: r.name, company: r.company,
-          // ⊕ buy-box CRM fields — pre-fill unanswered interview questions.
-          market: r.market, buyBoxAreas: r.buyBoxAreas, closingSpeed: r.closingSpeed,
-          dealType: r.dealType, priceRange: r.priceRange, minLotSize: r.minLotSize, companySize: r.companySize,
-        }))}
-        land={buyerLand}
-      />
-
-      {/* Per-buyer terms — feed the cascade's "pays the most / cleanest close" ranking */}
-      <details id="terms" className="scroll-mt-4 rounded-xl bg-white p-4 ring-1 ring-slate-200">
-        <summary className="cursor-pointer text-sm font-bold text-slate-800">⚙️ Buyer terms — proof of funds &amp; max offer % <span className="font-normal text-slate-400">({vettedRows.length} vetted buyers)</span></summary>
-        <p className="mt-1 text-[12px] text-slate-500">These sharpen the cascade: a buyer with verified funds and a higher % of ARV ranks nearer the top. Set what you know; blanks are fine.</p>
-        <div className="mt-3 divide-y divide-slate-100">
-          {vettedRows.map((r) => {
-            const t = buyerTerms[r.id] ?? {};
-            const l = buyerLand[r.id] ?? {};
-            return (
-              <div key={r.id} className="py-2">
-                <form action={saveBuyerTerms} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                  <input type="hidden" name="buyerId" value={r.id} />
-                  <span className="min-w-[160px] flex-1 font-semibold text-slate-800">{r.name}{l.isLandBuyer ? <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">🌱 LAND</span> : null}</span>
-                  <label className="flex items-center gap-1.5 text-[13px] text-slate-600"><input type="checkbox" name="pof" defaultChecked={!!t.pof} className="h-4 w-4" /> 💵 Proof of funds</label>
-                  <label className="flex items-center gap-1.5 text-[13px] text-slate-600">Max offer <input name="maxOfferPct" type="number" min="0" max="120" step="1" defaultValue={t.maxOfferPct ?? ""} placeholder="85" className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm" /> % ARV</label>
-                  <label className="flex min-w-[220px] flex-1 items-center gap-1.5 text-[13px] text-slate-600">💲 What they pay <input name="whatTheyPay" defaultValue={t.whatTheyPay ?? ""} placeholder="e.g. 10% below retail · $8k/ac · $1–3M/deal" className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
-                  <button className="rounded-md bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900">Save</button>
-                </form>
-                {/* Land questions moved to the standard Developer buy-box interview card (#interviews). */}
-              </div>
-            );
-          })}
-          {vettedRows.length === 0 && <p className="py-2 text-sm text-slate-400">No vetted buyers yet.</p>}
-        </div>
-      </details>
-
           </div>,
           <div key="markets" className="space-y-6">
       {/* The interactive map + searchable rolodex */}

@@ -521,7 +521,9 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                       return (
                         <div key={e.id} className="flex justify-center">
                           <div className={`max-w-[85%] rounded-2xl px-3 py-1.5 text-[11px] font-semibold text-slate-500 ${isRec ? "bg-white ring-1 ring-slate-200" : "rounded-full bg-slate-100"}`}>
-                            <div>{KIND_EMOJI[e.kind] ?? "📞"} {clean.replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}</div>
+                            {/* single leading emoji (Jon 2026-10-27: it was doubling up —
+                                the icon AND the body both started with 📞). */}
+                            <div>{isRec ? "🎙" : (KIND_EMOJI[e.kind] ?? "📞")} {clean.replace(/^(?:📞|🎙|📲|☎️|📼)\s*/u, "").replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}</div>
                             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                             {isRec && <audio controls preload="none" src={recStreamSrc(recLink)} className="mt-1 h-8 w-64 max-w-full" />}
                           </div>
