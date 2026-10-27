@@ -233,7 +233,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   };
   useEffect(() => {
     measureSkew();
-    const id = setInterval(measureSkew, 60_000);
+    // 💸 Clock drift doesn't change minute-to-minute — re-check every 10 min, not every 60s, so
+    // /api/now isn't hit by every user on every page all day (Vercel free-tier economy, Jon
+    // 2026-10-26). A call re-reads the current offset regardless, so this is just the safety net.
+    const id = setInterval(measureSkew, 600_000);
     return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const clockOff = Math.abs(clockSkew) > 5 * 60_000; // >5 min = materially wrong
