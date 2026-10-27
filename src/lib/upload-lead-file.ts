@@ -24,13 +24,16 @@ export async function uploadLeadFile({ oppId, contactId, file, docType, asNote, 
     }).then((r) => r.json()).catch(() => null);
     if (!initRes?.ok || !initRes.uploadUrl) return { ok: false, msg: initRes?.msg || "Couldn't start the upload — try again." };
 
-    // 2) PUT the bytes straight to Google (no Vercel in the path → no 4.5MB cap)
-    const put = await fetch(initRes.uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-      body: file,
-    });
-    if (!put.ok && put.status !== 200 && put.status !== 201) return { ok: false, msg: `Drive rejected the file (${put.status}). Try again.` };
+    // 2) PUT the bytes straight to Google (no Vercel in the path → no 4.5MB cap).
+    //    If a cross-origin quirk hides the PUT response, don't fail here — finalize
+    //    checks Drive for the file and is the real source of truth.
+    try {
+      await fetch(initRes.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+    } catch { /* finalize verifies whether the bytes actually landed */ }
 
     // 3) log it to the lead's timeline (finds the file we just wrote by its name)
     const fin = await fetch("/api/crm/upload-finalize", {
