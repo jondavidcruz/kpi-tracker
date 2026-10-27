@@ -5,6 +5,7 @@ import { Card, SectionTitle } from "@/components/ui";
 import { readCommsMap, firstOf } from "@/lib/crm-comms";
 import { readPipelines, readPipelineLocks, locksToArray } from "@/lib/crm";
 import { saveCommsPermsAction, saveCrmPipelineLockAction } from "../actions";
+import AutoSaveForm from "@/components/AutoSaveForm";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export default async function CrmAccessPage() {
         right={<Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link>} />
 
       <Card className="p-4">
-        <p className="text-xs text-slate-500">Unticked = the paid buttons are hidden and blocked server-side for that agent. 👑 leadership (and anyone with a manager role) starts with everything ON until you save a row for them; 🔑 you always keep full access.</p>
+        <p className="text-xs text-slate-500">Unticked = the paid buttons are hidden and blocked server-side for that agent. 👑 leadership (and anyone with a manager role) starts with everything ON until you save a row for them; 🔑 you always keep full access. <b className="text-slate-600">Changes save themselves</b> — no Save button.</p>
         <div className="mt-3 space-y-1.5">
           {users.map((r) => {
             const first = firstOf(r.name);
@@ -40,14 +41,14 @@ export default async function CrmAccessPage() {
             const owner = first === "jon" || first === "jonathan";
             const p = owner || (!commsMap[first] && mgr) ? { call: true, sms: true, email: true } : commsMap[first] ?? { call: false, sms: false, email: false };
             return (
-              <form key={r.id} action={saveCommsPermsAction} className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs ring-1 ring-slate-100">
+              <AutoSaveForm key={r.id} action={saveCommsPermsAction} className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs ring-1 ring-slate-100">
                 <input type="hidden" name="first" value={first} />
                 <span className="w-28 font-bold text-slate-700">{r.name.split(" ")[0]}{owner ? " 🔑" : crown ? " 👑" : ""}</span>
                 <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="call" defaultChecked={p.call} disabled={owner} /> 📞 call</label>
                 <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="sms" defaultChecked={p.sms} disabled={owner} /> 💬 SMS</label>
                 <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="email" defaultChecked={p.email} disabled={owner} /> ✉️ email</label>
-                {owner ? <span className="ml-auto text-[10px] font-bold text-slate-400">owner — always on</span> : <button className="ml-auto rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-700">Save</button>}
-              </form>
+                {owner && <span className="ml-auto text-[10px] font-bold text-slate-400">owner — always on</span>}
+              </AutoSaveForm>
             );
           })}
         </div>
@@ -62,14 +63,13 @@ export default async function CrmAccessPage() {
             const first = firstOf(r.name);
             const locked = locksToArray(lockMap[first]);
             return (
-              <form key={r.id} action={saveCrmPipelineLockAction} className="rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+              <AutoSaveForm key={r.id} action={saveCrmPipelineLockAction} className="rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
                 <input type="hidden" name="first" value={first} />
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="w-28 text-xs font-bold text-slate-700">{r.name.split(" ")[0]}</span>
                   {locked.length === 0
                     ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">all pipelines (no lock)</span>
                     : <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">🔒 locked to {locked.length} pipeline{locked.length > 1 ? "s" : ""}</span>}
-                  <button className="ml-auto rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-700">Save</button>
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 pl-28">
                   {pipelines.map((p) => (
@@ -78,7 +78,7 @@ export default async function CrmAccessPage() {
                     </label>
                   ))}
                 </div>
-              </form>
+              </AutoSaveForm>
             );
           })}
         </div>
