@@ -237,6 +237,80 @@ export async function runMigration(actor: string) {
   return { mode: "run", totalVettedBuyers: rows.length, created, reusedExistingContact: reusedContact, skippedAlreadyMigrated: skipped, results: results.slice(0, 50) };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔎 VETTED AUDIT (Jon 2026-10-27): "if they're completely not filled out on the buy
+// boxes, then that means they're not really vetted." Scans the "✅ Vetted" developer
+// stage + "🤝 Active" agent stage and demotes any card whose interview is EMPTY (zero
+// buy-box fields) back to 🆕 research. Partial buy boxes stay — "even if it's not fully
+// filled out, we have a majority of the information" counts as vetted. Reversible.
+// ─────────────────────────────────────────────────────────────────────────────
+const AUDIT_CAT = "__vet_audit__"; // demoted-id map for undo
+
+async function loadVettedNetwork() {
+  const { resolveNetworkPipelines } = await import("./dispo-network");
+  const net = await resolveNetworkPipelines();
+  const sel = { id: true, title: true, contactId: true, formData: true, contact: { select: { name: true } } } as const;
+  const [devOpps, agentOpps] = await Promise.all([
+    net.dev.length ? db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.dev }, stage: "vetted" }, select: sel }) : [],
+    net.agent.length ? db.crmOpportunity.findMany({ where: { archivedAt: null, pipeline: { in: net.agent }, stage: "active" }, select: sel }) : [],
+  ]);
+  return { devOpps, agentOpps };
+}
+
+/** DRY RUN — who in "Vetted"/"Active" has a completely empty buy box. Writes nothing. */
+export async function auditVetted() {
+  const { devVetScore } = await import("./dev-vetting");
+  const { devOpps, agentOpps } = await loadVettedNetwork();
+  const dist: Record<number, number> = {};
+  for (const o of devOpps) { const f = devVetScore(o.formData, "developer").filled; dist[f] = (dist[f] ?? 0) + 1; }
+  const emptyDevs = devOpps.filter((o) => devVetScore(o.formData, "developer").filled === 0);
+  const emptyAgents = agentOpps.filter((o) => devVetScore(o.formData, "buyer_agent").filled === 0);
+  return {
+    mode: "dry-run",
+    vettedDevelopers: devOpps.length,
+    activeAgents: agentOpps.length,
+    notReallyVetted_emptyBuyBox: { developers: emptyDevs.length, agents: emptyAgents.length },
+    developerFillDistribution: dist, // {0: n, 1: n, …} — how many vetted devs have N of 8 fields
+    sampleEmpty: [...emptyDevs, ...emptyAgents].slice(0, 20).map((o) => o.contact?.name || o.title),
+    note: "Empty = ZERO buy-box fields = not truly vetted. ?demote=1 moves ONLY these to 🆕 research; partials stay. ?undoaudit=1 restores them.",
+  };
+}
+
+/** DEMOTE — move the empty ones to 🆕 research (reversible). Partial buy boxes untouched. */
+export async function runVetAudit(actor: string) {
+  const { devVetScore } = await import("./dev-vetting");
+  const { devOpps, agentOpps } = await loadVettedNetwork();
+  const targets = [
+    ...devOpps.filter((o) => devVetScore(o.formData, "developer").filled === 0).map((o) => ({ id: o.id, contactId: o.contactId, name: o.contact?.name || o.title, kind: "developer" as const })),
+    ...agentOpps.filter((o) => devVetScore(o.formData, "buyer_agent").filled === 0).map((o) => ({ id: o.id, contactId: o.contactId, name: o.contact?.name || o.title, kind: "agent" as const })),
+  ];
+  const map: Record<string, "developer" | "agent"> = {};
+  for (const t of targets) {
+    await db.crmOpportunity.update({ where: { id: t.id }, data: { stage: "new" } }).catch(() => {});
+    if (t.contactId) await logCrmEvent({ contactId: t.contactId, oppId: t.id, kind: "system", body: "Demoted from Vetted → research: buy box is empty (not truly vetted)", actor }).catch(() => {});
+    map[t.id] = t.kind;
+  }
+  const row = await db.resource.findFirst({ where: { category: AUDIT_CAT } }).catch(() => null);
+  const payload = JSON.stringify({ map, ranAt: new Date().toISOString(), actor });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
+  else await db.resource.create({ data: { title: "vet-audit", category: AUDIT_CAT, url: "", description: payload } });
+  return { mode: "demote", demoted: targets.length, names: targets.slice(0, 60).map((t) => t.name) };
+}
+
+/** UNDO the demotion — restore demoted cards to Vetted (dev) / Active (agent). */
+export async function undoVetAudit() {
+  const row = await db.resource.findFirst({ where: { category: AUDIT_CAT } }).catch(() => null);
+  let map: Record<string, "developer" | "agent"> = {};
+  try { map = row?.description ? (JSON.parse(row.description).map ?? {}) : {}; } catch { map = {}; }
+  let restored = 0;
+  for (const [id, kind] of Object.entries(map)) {
+    const r = await db.crmOpportunity.updateMany({ where: { id, stage: "new" }, data: { stage: kind === "agent" ? "active" : "vetted" } }).catch(() => ({ count: 0 }));
+    restored += r.count;
+  }
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify({ map: {}, ranAt: new Date().toISOString(), undone: true }) } });
+  return { mode: "undo-audit", restored };
+}
+
 /** UNDO — archives (never deletes) every card this migration created, clears the marker. */
 export async function undoMigration(actor: string) {
   const marker = await readMarker();
