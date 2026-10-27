@@ -34,6 +34,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [autoNext, setAutoNext] = useState(false);
   const [qi, setQi] = useState(0);
   const [onCall, setOnCall] = useState<Ctx | null>(null);
+  // 📤 The caller-ID number actually used for THIS call (Jon 2026-10-27: show From→To while
+  // dialing + on the timeline, since "auto" doesn't say which of our numbers got picked).
+  const [liveFrom, setLiveFrom] = useState<string>("");
+  const lastFromRef = useRef<string>("");
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
   const [incoming, setIncoming] = useState<{ number: string; name?: string; deptLabel?: string } | null>(null);
   const [answeredBy, setAnsweredBy] = useState<{ agent: string; caller: string } | null>(null);
@@ -288,6 +292,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       fd.set("contactId", ctx.contactId ?? "");
       fd.set("secs", String(dur));
       fd.set("to", ctx.phone ?? "");
+      fd.set("from", ctx.dir === "in" ? "" : lastFromRef.current);
       logBrowserCallAction(fd).catch(() => {});
     }
     setMsg(dur ? `Ended · ${Math.floor(dur / 60)}m ${dur % 60}s` : "Call ended");
@@ -573,6 +578,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       const client = (await ensureClient()) as { newCall: (o: object) => unknown };
       setState("ringing");
       const from = pickFrom(to);
+      lastFromRef.current = from ?? ""; setLiveFrom(from ?? "");
       const opts: { destinationNumber: string; callerNumber?: string; audio: boolean; video: boolean } = { destinationNumber: to, audio: true, video: false };
       if (from) opts.callerNumber = from; // omit entirely if we truly have none → Telnyx uses the connection's default line (still dials)
       callRef.current = client.newCall(opts) as never;
@@ -677,9 +683,15 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
           {/* live call bar */}
           {state !== "idle" && (
             <span className="relative mb-4 flex items-center gap-2 bg-emerald-50 px-3.5 py-2 ring-1 ring-emerald-200">
-              <span className="min-w-0 flex-1 truncate text-xs font-bold text-emerald-800">
-                {state === "active" ? `🟢 ${onCall?.name ?? onCall?.phone} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `📡 ${state} — ${onCall?.name ?? onCall?.phone ?? ""}`}
-                {dtmfTrail && <span className="ml-1 rounded bg-white px-1 py-0.5 font-mono text-[10px] text-slate-500 ring-1 ring-slate-200">⌨ {dtmfTrail}</span>}
+              <span className="min-w-0 flex-1 text-xs font-bold text-emerald-800">
+                <span className="block truncate">
+                  {state === "active" ? `🟢 ${onCall?.name ?? onCall?.phone} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `📡 ${state} — ${onCall?.name ?? onCall?.phone ?? ""}`}
+                  {dtmfTrail && <span className="ml-1 rounded bg-white px-1 py-0.5 font-mono text-[10px] text-slate-500 ring-1 ring-slate-200">⌨ {dtmfTrail}</span>}
+                </span>
+                {/* 📤 which of OUR numbers this call is going out from (Jon 2026-10-27) */}
+                {onCall?.dir !== "in" && liveFrom && (
+                  <span className="block truncate text-[10px] font-semibold text-emerald-600">📤 from {liveFrom}{geoForPhone(liveFrom) ? ` (${geoForPhone(liveFrom)})` : ""} → {onCall?.phone}</span>
+                )}
               </span>
               {endConfirm && <span className="absolute -bottom-5 left-3 right-3 truncate text-[9px] font-bold text-red-600">🔒 under 8s — abandoned calls get surcharged; the call can be ended at 0:08</span>}
               {state === "active" && <button onClick={toggleMute} className={`rounded-md px-2 py-1 text-[10px] font-bold ${muted ? "bg-amber-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>}

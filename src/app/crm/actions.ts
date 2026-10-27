@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
+import { geoForPhone } from "@/lib/npa-geo";
 import { logCrmEvent, CRM_STAGES, readPipelines } from "@/lib/crm";
 
 async function crmUser() {
@@ -1504,6 +1505,7 @@ export async function logBrowserCallAction(formData: FormData) {
   const oppId = String(formData.get("oppId") ?? "");
   const secs = Number(formData.get("secs")) || 0;
   const to = String(formData.get("to") ?? "");
+  const from = String(formData.get("from") ?? "").trim();
   // Keypad dials to numbers NOT in contacts used to vanish (Jon 2026-10-08:
   // "I called myself and have nowhere to see it") — find-or-create the
   // contact so EVERY call lands in Conversations like a phone's recents.
@@ -1518,8 +1520,8 @@ export async function logBrowserCallAction(formData: FormData) {
   if (!cId) return;
   await logCrmEvent({
     contactId: cId, oppId, kind: "call",
-    body: `Browser call → ${to}${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : " · no answer"}`,
-    meta: { secs, via: "telnyx-webrtc" }, actor: me.name,
+    body: `Browser call${from ? ` from ${from}${geoForPhone(from) ? ` (${geoForPhone(from)})` : ""}` : ""} → ${to}${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : " · no answer"}`,
+    meta: { secs, via: "telnyx-webrtc", from }, actor: me.name,
   });
   revalidatePath(`/crm/${oppId}`);
   revalidatePath("/crm/conversations");
