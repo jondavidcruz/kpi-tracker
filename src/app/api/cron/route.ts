@@ -1953,7 +1953,6 @@ export async function GET(request: Request) {
   // Chat space as a Sheet. Runs daily via vercel.json. (Web-research expansion
   // still lives in the optional dispo-optimizer task.)
   if (url.searchParams.get("buyernightly") === "1") {
-    const { createBuyer } = await import("@/lib/buyers/write");
     const todayPT = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     // gather candidates from our own free data (same sources as ?minebuyers=1)
     type Cand = { name: string; company?: string; phone?: string; email?: string; notes?: string; source: string };
@@ -1974,46 +1973,24 @@ export async function GET(request: Request) {
         }
       }
     } catch { /* drei best-effort */ }
-    let created = 0;
-    for (const c of cands) { if (!c.name.trim()) continue; const res = await createBuyer({ name: c.name, company: c.company, phone: c.phone, email: c.email, notes: c.notes, status: "Mined — our data", source: c.source, vetStage: "to_vet" }, "buyer-miner", { isLand: true }); if (res.created) created++; }
-    // post ONLY buyers we've never posted to Chat before (so re-runs never spam
-    // the space). A rolling Resource tracks posted buyer IDs.
-    const postedRow = await db.resource.findFirst({ where: { category: "__buyers_posted__" } }).catch(() => null);
-    let postedIds: string[] = [];
-    try { postedIds = postedRow?.description ? JSON.parse(postedRow.description) : []; } catch { postedIds = []; }
-    const postedSet = new Set(postedIds);
-    // One-time seed: mark all CURRENT system buyers as already-posted so the first
-    // real nightly run only posts genuinely new buyers (run ?buyernightly=1&seed=1 once).
-    if (url.searchParams.get("seed") === "1") {
-      const all = await db.marketContact.findMany({ where: { addedById: "system", archivedAt: null }, select: { id: true } });
-      const merged = [...new Set([...postedSet, ...all.map((r) => r.id)])].slice(-60000);
-      const desc = JSON.stringify(merged);
-      if (postedRow) await db.resource.update({ where: { id: postedRow.id }, data: { description: desc } }).catch(() => {});
-      else await db.resource.create({ data: { title: "buyers-posted", category: "__buyers_posted__", url: "", description: desc } }).catch(() => {});
-      return NextResponse.json({ ok: true, seeded: merged.length, createdTonight: created });
+    // 🏗 Land them in the UNVETTED DEVELOPERS kanban (DS: Developers, "🆕 New / to research"),
+    // not Buyer Research (Jon 2026-10-27). upsertNetworkLead dedupes + never twins an open card,
+    // so re-runs only ever create genuinely new cards — those are what we post to Chat.
+    const { upsertNetworkLead } = await import("@/lib/dispo-network-write");
+    const createdLeads: Array<{ name: string; phone: string; email: string }> = [];
+    for (const c of cands) {
+      if (!c.name.trim()) continue;
+      const res = await upsertNetworkLead({ name: c.name, phone: c.phone, email: c.email, kind: "developer", market: c.company, notes: c.notes, source: c.source }).catch(() => null);
+      if (res?.created) createdLeads.push({ name: res.name, phone: res.phone, email: res.email });
     }
-    const todaysRows = await db.marketContact.findMany({ where: { addedById: "system", addedOn: todayPT, archivedAt: null }, orderBy: [{ region: "asc" }, { name: "asc" }] });
-    const newRows = todaysRows.filter((r) => !postedSet.has(r.id));
-    let posted = false, sheetLink = "";
-    if (newRows.length > 0) {
-      const esc = (s: string) => { const v = String(s ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
-      const cols: Array<[string, (r: typeof newRows[number]) => string]> = [["Company / Name", (r) => r.company || r.name], ["Type", (r) => r.type], ["Markets", (r) => r.region || r.market], ["Phone", (r) => r.phone], ["Email", (r) => r.email], ["Website", (r) => r.website], ["Submit-a-deal / links", (r) => (r.links || "").replace(/\n/g, " | ")], ["Source", (r) => r.status], ["Notes", (r) => (r.notes || "").replace(/\n/g, " ")]];
-      const csv = [cols.map((c) => c[0]).join(","), ...newRows.map((r) => cols.map((c) => esc(c[1](r))).join(","))].join("\n") + "\n";
-      const byState: Record<string, number> = {};
-      for (const r of newRows) { const st = (r.region || r.market || "?").split(/[,\s]+/)[0].toUpperCase() || "?"; byState[st] = (byState[st] ?? 0) + 1; }
-      try {
-        const { gdriveConfigured, ensureSubfolder, uploadCsvAsSheet, rootFolderId } = await import("@/lib/gdrive");
-        if (gdriveConfigured() && rootFolderId()) sheetLink = (await uploadCsvAsSheet(await ensureSubfolder(rootFolderId(), "Buyers To Vet"), `New buyers to vet — ${todayPT}`, csv)).link;
-      } catch { /* sheet best-effort */ }
-      try { const { postBuyerListToChat } = await import("@/lib/buyers-chat"); posted = await postBuyerListToChat({ title: `New buyers to vet — ${todayPT}`, count: newRows.length, sheetLink, byState, note: "Call each, capture their buy box, then mark Vetted in Buyer Research. Scrub DNC first." }); } catch { /* chat best-effort */ }
-      if (posted) {
-        const merged = [...postedSet, ...newRows.map((r) => r.id)].slice(-60000);
-        const desc = JSON.stringify(merged);
-        if (postedRow) await db.resource.update({ where: { id: postedRow.id }, data: { description: desc } }).catch(() => {});
-        else await db.resource.create({ data: { title: "buyers-posted", category: "__buyers_posted__", url: "", description: desc } }).catch(() => {});
-      }
+    let posted = false;
+    if (createdLeads.length > 0) {
+      const { sendGoogleChat } = await import("@/lib/notify");
+      const lines = createdLeads.slice(0, 40).map((l) => `• ${l.name}${l.phone ? ` · ${l.phone}` : ""}${l.email ? ` · ${l.email}` : ""}`).join("\n");
+      const more = createdLeads.length > 40 ? `\n…and ${createdLeads.length - 40} more` : "";
+      posted = await sendGoogleChat(`🏗 *${createdLeads.length} new developers to research — ${todayPT}*\nAdded to the Unvetted Developers kanban (/dispo → Developers). Call each, capture their buy box, then move them to ✅ Vetted. Scrub DNC first.\n${lines}${more}`);
     }
-    return NextResponse.json({ ok: true, candidates: cands.length, createdTonight: created, newToPost: newRows.length, chatPosted: posted, sheetLink });
+    return NextResponse.json({ ok: true, candidates: cands.length, createdTonight: createdLeads.length, chatPosted: posted });
   }
 
   // ⛏️ Mine OUR OWN data for cash buyers → Vetted Buyers (Jon 2026-10-16 overnight:

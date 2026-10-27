@@ -127,6 +127,7 @@ export const DISPO_AGENT_FORM: CrmForm = {
     { key: "brokerage", label: "Brokerage / company", type: "text" },
     { key: "areas", label: "Areas they cover", type: "textarea", hint: "Counties / cities they list + sell in" },
     { key: "buyerTypes", label: "Buyers they represent", type: "text", hint: "builders, developers, investors, funds…" },
+    { key: "representsDevs", label: "Developers they represent", type: "textarea", hint: "The specific builders/developers they bring to deals + that buyer's buy box — one per line" },
     { key: "priceRange", label: "Price range their buyers want $", type: "text" },
     { key: "bestContact", label: "Best way to reach them", type: "select", options: ["Call", "Text", "Email"] },
     { key: "sendsDeals", label: "Will they bring buyers to our deals?", type: "select", options: ["Yes — actively", "Maybe", "Not yet"] },
