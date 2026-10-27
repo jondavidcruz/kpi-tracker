@@ -667,21 +667,24 @@ export async function saveSignatureImageAction(formData: FormData) {
 }
 
 /** ✉️ Send a real email to the seller from the card (Resend, reply-to us). */
-export async function sendCrmEmailAction(formData: FormData) {
+export async function sendCrmEmailAction(formData: FormData): Promise<{ ok: boolean; msg?: string }> {
+  // Returns a real result so the composer stops flashing a fake "✓ Sent" when nothing
+  // actually sent (Jon 2026-10-27: emailed Roland but it never hit the timeline — the
+  // send silently returned here and the UI said "Sent" anyway).
   const me = await crmUser();
-  if (!me) return;
+  if (!me) return { ok: false, msg: "You're signed out — refresh and sign in." };
   const { commsFor } = await import("@/lib/crm-comms");
-  if (!(await commsFor(me)).email) return;
+  if (!(await commsFor(me)).email) return { ok: false, msg: "Email sending isn't enabled for your account yet — ask Jon to turn on Email in CRM Access." };
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
   const to = String(formData.get("to") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim().slice(0, 150);
   const body = String(formData.get("body") ?? "").trim().slice(0, 4000);
-  if (!to || !subject || !body) return;
+  if (!to || !subject || !body) return { ok: false, msg: "Add a recipient, subject, and message before sending." };
   if (contactId && await isDnd(contactId, "email")) {
     await logCrmEvent({ contactId, oppId, kind: "email", body: `🔕 EMAIL NOT SENT — this contact is DND for email.`, actor: me.name });
     revalidatePath(`/crm/${oppId}`);
-    return;
+    return { ok: false, msg: "This contact is set to Do-Not-Disturb for email." };
   }
   // GHL-style agent identity: From = the rep (on our domain), reply-to their
   // real inbox, their own signature appended.
@@ -715,6 +718,7 @@ export async function sendCrmEmailAction(formData: FormData) {
   }
   await logCrmEvent({ contactId, oppId, kind: "email", body: `➡️ Us: ${subject}${attachNote} — ${body.slice(0, 300)}${ok ? "" : ` (SEND FAILED${errOut.msg ? `: ${errOut.msg}` : ""})`}`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
+  return ok ? { ok: true } : { ok: false, msg: errOut.msg ? `Email failed: ${errOut.msg}` : "Email failed to send — check the address and try again." };
 }
 
 /** 💬 Send a real SMS via Telnyx from the card. */

@@ -30,7 +30,13 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
   const first = leadName.split(" ")[0] || "there";
 
   const reallySend = (fd: FormData) => {
-    start(async () => { await sendCrmEmailAction(fd); setSent("✓ Sent"); setTimeout(() => setSent(""), 2500); router.refresh(); });
+    start(async () => {
+      const res = await sendCrmEmailAction(fd);
+      // Honest feedback: only say "Sent" when it actually sent + logged (Jon 2026-10-27).
+      setSent(res?.ok ? "✓ Sent" : `⚠️ ${res?.msg || "Not sent"}`);
+      setTimeout(() => setSent(""), res?.ok ? 2500 : 7000);
+      router.refresh();
+    });
   };
   const send = () => {
     if (!subject.trim() || !body.trim()) return;
@@ -70,7 +76,7 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
     <div className="overflow-hidden rounded-xl shadow-md ring-1 ring-slate-200">
       <div className="flex items-center justify-between bg-[#404043] px-4 py-2">
         <span className="text-xs font-semibold text-white">New Message</span>
-        {sent && <span className="text-xs font-bold text-emerald-300">{sent}</span>}
+        {sent && <span className={`text-xs font-bold ${sent.startsWith("✓") ? "text-emerald-300" : "text-amber-300"}`}>{sent}</span>}
       </div>
       <div className="bg-white px-4 pb-3 text-sm">
         {history.length > 0 && (
