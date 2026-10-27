@@ -350,14 +350,6 @@ export default function VettingTable({ areas, canEdit, today, allowAdd = true, l
                                   {STATUS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                                 </select>
                               </form>
-                              {p.touchOn === today ? (
-                                <span className="rounded bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700" title="Already logged a touch on this lead today — counts once toward Developers Contacted">✓ Logged today</span>
-                              ) : (
-                                <form action={logBuyerOutreach}>
-                                  <input type="hidden" name="id" value={p.id} />
-                                  <button className="rounded-md bg-sky-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm hover:bg-sky-700" title="Log a developer touch — counts toward Developers Contacted + sets a 3-day follow-up. Save your note first.">📇 Log touch</button>
-                                </form>
-                              )}
                               <form action={deleteProspect}>
                                 <input type="hidden" name="id" value={p.id} />
                                 <button onClick={(e) => { if (!confirm(`Archive ${p.name}? This is NOT a delete — restorable any time from the Archived list.`)) e.preventDefault(); }} className="rounded px-1.5 py-1 text-[10px] font-semibold text-slate-300 hover:bg-amber-50 hover:text-amber-700" title="Archive this buyer (never deleted — restorable)">🗂</button>

@@ -166,7 +166,10 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
               </div>
               <button onClick={() => toggleBox(c.id)} title="What this buyer pays — their full buy box" className="shrink-0 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">💰 Buy box {collapsed.has(c.id) ? "▾" : "▴"}</button>
               <div className="flex shrink-0 flex-wrap gap-1.5">
-                <button onClick={() => logTouchFor(c.id)} disabled={touched.has(c.id)} title="I called/texted this buyer — logs the touch to your KPIs and sets their next follow-up 3 days out" className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100 disabled:opacity-60">{touched.has(c.id) ? "✅ Logged" : "📇 Log touch"}</button>
+                {/* Call/text the buyer right here — no hunting them down (Jon 2026-10-27). Call pops
+                    the app-wide dialer; Text opens their lead (the SMS composer lives there). */}
+                {c.phone && <button onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: c.phone, name: c.name, oppId: c.id } }))} title={`Call ${c.name} — ${c.phone}`} className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">📞 Call</button>}
+                {c.phone && <a href={`/crm/${c.id}`} title={`Open ${c.name}'s lead to text them`} className="rounded-lg bg-sky-100 px-2.5 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-sky-200 hover:bg-sky-200">💬 Text</a>}
                 {c.email && <a href={mailto(c)} title="Opens your email app with the offer message pre-written to this buyer" className="rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">✉ Draft email</a>}
                 <button onClick={() => copy(rowText(c), c.id)} title="Copy this buyer's name, phone & email — paste into a text message" className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">{copied === c.id ? "✅ Copied" : "📋 Copy"}</button>
               </div>

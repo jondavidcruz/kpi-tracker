@@ -27,8 +27,19 @@ export async function GET(req: NextRequest) {
   const wantAgents = kind !== "developer";
   const wantDevs = kind !== "agent";
 
+  // 🔎 Push the name/phone search INTO the query so it hits the WHOLE pipeline, not just the
+  // 400 most-recently-updated (Jon 2026-10-27: "dsld" found nothing because DSLD Homes wasn't
+  // in that recent window out of 1,100+ developers).
+  const qDigits = q.replace(/\D/g, "");
   const pull = async (pipelines: string[]) => pipelines.length ? (await db.crmOpportunity.findMany({
-    where: { archivedAt: null, pipeline: { in: pipelines } },
+    where: {
+      archivedAt: null, pipeline: { in: pipelines },
+      ...(q ? { OR: [
+        { title: { contains: q, mode: "insensitive" } },
+        { contact: { is: { name: { contains: q, mode: "insensitive" } } } },
+        ...(qDigits.length >= 4 ? [{ contact: { is: { phone: { contains: qDigits } } } }] : []),
+      ] } : {}),
+    },
     orderBy: { updatedAt: "desc" },
     take: 400,
     select: { id: true, title: true, pipeline: true, formData: true, contact: { select: { name: true, phone: true, email: true, pinnedNote: true } } },
@@ -40,9 +51,9 @@ export async function GET(req: NextRequest) {
     wantDevs ? pull(net.dev) : Promise.resolve([] as Row[]),
   ]);
 
-  const match = (r: ReturnType<typeof shape>) => !q || `${r.name} ${r.area} ${r.buyBox} ${r.phone}`.toLowerCase().includes(q);
-  const agents = agentRows.map(shape).filter(match);
-  const devs = devRows.map(shape).filter(match);
+  // The DB query already applied the search; just shape the rows.
+  const agents = agentRows.map(shape);
+  const devs = devRows.map(shape);
 
   // Balance: give agents a guaranteed share so they never get buried under developers.
   // Agents first (they're dispo's daily-priority buyers), then developers, up to 30.
