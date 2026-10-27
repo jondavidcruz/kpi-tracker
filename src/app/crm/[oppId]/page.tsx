@@ -79,9 +79,6 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
 
 async function OpportunityPageInner({ params, searchParams }: { params: Promise<{ oppId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { oppId } = await params;
-  // 🔧 TEMP debug: ?dbg=LMR skips the Left/Middle/Right columns to localize the
-  // novation "Connection closed" stream abort (Jon 2026-10-26).
-  const dbg = String((searchParams ? await searchParams : {})?.dbg ?? "").toUpperCase();
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
   const manager = isManager(me);
@@ -242,7 +239,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
 
       <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[300px_minmax(0,1fr)_330px] xl:items-start">
         {/* ── LEFT: who they are ── */}
-        {!dbg.includes("L") && (
+        {(
         <div className="order-2 flex min-w-0 flex-col gap-3 xl:order-none">
           {/* contact card */}
           <Card className="p-4" widget="contact">
@@ -494,7 +491,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
         )}
 
         {/* ── MIDDLE: comms — the main event (SMS / email / notes / timeline) ── */}
-        {!dbg.includes("M") && (
+        {(
         <div className="order-1 min-w-0 space-y-2.5 xl:order-none">
           <Card className="p-3">
             {/* 📝 the SAME smart note editor as the quickview — bold, underline,
@@ -555,7 +552,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             </Card>
           )}
 
-          {!dbg.includes("G") && comms.email && c.email && (
+          {comms.email && c.email && (
             <GmailComposer
               history={[...events].reverse().filter((e) => e.kind === "email").map((e) => { const b = stripHtml(e.body); return { body: b.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: b.startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }; })}
               oppId={opp.id} contactId={c.id} to={c.email} leadName={c.name} rep={me!.name}
@@ -641,7 +638,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
         )}
 
         {/* ── RIGHT: the work — tasks, appointments, discovery, parties ── */}
-        {!dbg.includes("R") && (
+        {(
         <div className="order-3 flex min-w-0 flex-col gap-3 xl:order-none">
           {/* 📝 Contracts card removed from the contact view (Jon 2026-10-26) — not needed here. */}
 
@@ -875,20 +872,20 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
   );
 }
 
-// 🔧 TEMPORARY DIAGNOSTIC (Jon 2026-10-26: "contact in full isn't working" on EVERY
-// contact). Production redacts server-component error messages to a digest, so we wrap
-// the render to surface the real error/stack on-screen. REMOVE once the root cause is fixed.
+// Graceful error boundary for the page render — if something throws, show a clean card with a
+// Back link instead of a white screen or Next's redacted digest. (The per-panel PanelGuards
+// still surface which section failed; the error is logged server-side by Next.)
 export default async function OpportunityPage(props: { params: Promise<{ oppId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   try {
     return await OpportunityPageInner(props);
   } catch (e) {
-    const err = e as Error;
+    console.error("[contact page] render failed:", e);
     return (
-      <pre style={{ whiteSpace: "pre-wrap", padding: 16, fontSize: 12, color: "#b91c1c", fontFamily: "ui-monospace, monospace", background: "#fff1f2", borderRadius: 12, margin: 16 }}>
-        {"⚠️ Contact page error (temporary diagnostic — fixing this now):\n\n"}
-        {(err?.message || String(e)) + "\n\n"}
-        {err?.stack || ""}
-      </pre>
+      <Card className="m-6 p-8 text-center">
+        <div className="text-base font-bold text-slate-800">This contact didn&apos;t load</div>
+        <p className="mt-1 text-sm text-slate-500">Something went wrong opening this lead. Try again, and if it keeps happening, let Jon know.</p>
+        <Link href="/crm" className="mt-3 inline-block rounded-lg bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:opacity-90">← Back to the pipeline</Link>
+      </Card>
     );
   }
 }
