@@ -28,6 +28,7 @@ import { editCrmNoteAction, deleteCrmNoteAction } from "../actions";
 import LeadNoteComposer from "@/components/LeadNoteComposer";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import PhoneField from "@/components/PhoneField";
+import TimelineFilter from "@/components/TimelineFilter";
 import CrmFormFields from "@/components/CrmFormFields";
 import DocUploadForm from "@/components/DocUploadForm";
 import CrmLayoutController from "@/components/CrmLayoutController";
@@ -568,6 +569,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           <div id="timeline" className="scroll-mt-4 pl-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline — everything, newest first</div>
           {/* 📜 Scrollable timeline (Jon 2026-10-26) — a capped, scrolling panel instead of an
               endless page-long list, so the rest of the page stays reachable. */}
+          <TimelineFilter>
           <div className="max-h-[36rem] space-y-2.5 overflow-y-auto rounded-xl bg-slate-50/40 p-1.5 ring-1 ring-slate-100">
           {events.map((e) => {
             // 🟡 Manual notes (a person typed them) get a yellow sticky-note look so they
@@ -575,7 +577,8 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             // (Jon 2026-10-26). `!` forces the tint over Card's hardcoded white.
             const isManualNote = e.kind === "note" && !/^\s*(🎙|📝|📞|🤖|👑|🔒|🗑)/.test(stripHtml(e.body));
             return (
-            <Card key={e.id} className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""} ${isManualNote ? "!border-amber-200 !bg-amber-50/70" : ""}`}>
+            <div key={e.id} data-tlrow data-note={e.kind === "note" ? "1" : "0"}>
+            <Card className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""} ${isManualNote ? "!border-amber-200 !bg-amber-50/70" : ""}`}>
               <span className="text-base">{isManualNote ? "🟡" : KIND_EMOJI[e.kind] ?? "•"}</span>
               <div className="min-w-0 flex-1">
                 {e.kind === "note"
@@ -634,9 +637,11 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                 <div className="mt-0.5 text-[10px] text-slate-400">{fmtAt(e.at)}{e.actor && e.kind !== "note" ? ` · ${e.actor}` : ""}{e.oppId && e.oppId !== opp.id ? " · other opportunity" : ""}</div>
               </div>
             </Card>
+            </div>
           );})}
           {events.length === 0 && <Card className="p-6 text-center text-xs text-slate-400">Nothing yet — the first note starts the story.</Card>}
           </div>
+          </TimelineFilter>
         </div>
         )}
 

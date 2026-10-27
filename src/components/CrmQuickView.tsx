@@ -6,7 +6,7 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import {
   setOppStageAction, setOppPipelineAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
-  addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction,
+  addCrmTaskAction, toggleCrmTaskAction, reassignTaskAction, addCrmApptAction, deleteCrmApptAction,
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
 } from "@/app/crm/actions";
 import { KIND_EMOJI, stripAgentNotesBlock, recStreamSrc } from "@/lib/crm-shared";
@@ -308,7 +308,14 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                           <div className="min-w-0 flex-1">
                             <span className={`block text-sm ${done ? "text-slate-400 line-through" : "text-slate-700"}`}>{t.title}</span>
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-semibold">
-                              {t.assignedTo && <span className="text-indigo-500">👤 {t.assignedTo.split(" ")[0]}</span>}
+                              {/* Reassign the task to anyone (Jon 2026-10-27) — e.g. hand it to Nick. */}
+                              {t.assignedTo && (
+                                <select value={t.assignedTo} title="Reassign this task" onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => { e.stopPropagation(); const fd = new FormData(); fd.set("id", t.id); fd.set("assignedTo", e.target.value); start(async () => { await reassignTaskAction(fd); setSaved("✓ reassigned"); setTimeout(() => setSaved(""), 1500); if (oppId) await refetch(oppId); }); }}
+                                  className="rounded border border-slate-200 bg-white px-1 py-0 text-[10px] font-semibold text-indigo-600">
+                                  {[...new Set([t.assignedTo, ...d.reps].filter(Boolean))].map((r) => <option key={r} value={r}>👤 {r.split(" ")[0]}</option>)}
+                                </select>
+                              )}
                               {t.due && <span className={overdue ? "text-rose-600" : "text-slate-400"}>📅 {t.due.replace("T", " ")}{overdue ? " · overdue" : ""}</span>}
                               {done && !deleted && <span className="text-emerald-600">✓ done {new Date(t.doneAt!).toLocaleDateString([], { month: "short", day: "numeric" })}{t.doneBy ? ` by ${t.doneBy.split(" ")[0]}` : ""}</span>}
                               {deleted && <span className="text-slate-400">{t.doneBy} {new Date(t.doneAt!).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}

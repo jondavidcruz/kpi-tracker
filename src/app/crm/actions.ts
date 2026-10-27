@@ -2172,14 +2172,23 @@ export async function updateDispoBuyerAction(formData: FormData) {
   const entryId = String(formData.get("entryId") ?? "");
   const field = String(formData.get("field") ?? "");
   const value = String(formData.get("value") ?? "").trim();
-  if (!oppId || !entryId || !["stage", "price", "nextFollowUp", "notes", "phone", "email"].includes(field)) return;
+  if (!oppId || !entryId || !["stage", "price", "nextFollowUp", "notes", "phone", "email", "addNote"].includes(field)) return;
   let entryName = "";
   let entryBuyerId = "";
-  const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => { if (r.id === entryId) { entryName = String(r.name ?? ""); entryBuyerId = String(r.buyerId ?? ""); } return r.id === entryId ? { ...r, [field]: value || undefined } : r; }));
+  // 📝 "addNote" APPENDS a dated line to the buyer's running notes (newest first) so the card
+  // reads like a timeline (Jon 2026-10-27), instead of overwriting the single notes field.
+  const { getSettings } = await import("@/lib/data");
+  const stamp = new Intl.DateTimeFormat("en-CA", { timeZone: (await getSettings()).orgTimezone }).format(new Date());
+  const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => {
+    if (r.id !== entryId) return r;
+    entryName = String(r.name ?? ""); entryBuyerId = String(r.buyerId ?? "");
+    if (field === "addNote") { if (!value) return r; const line = `${stamp}: ${value}`; return { ...r, notes: r.notes ? `${line}\n${r.notes}` : line }; }
+    return { ...r, [field]: value || undefined };
+  }));
   // a saved note = working that agent → log it to the TIMELINE as a tracked highlight
   // (not crammed into the pinned note). Buyer Conversations stays a MANUAL KPI (Jon
   // 2026-10-21: auto-counting notes inflated it — 53 vs the real 7).
-  if (field === "notes") {
+  if (field === "notes" || field === "addNote") {
     await cleanPinnedAgentBlock(oppId); // strip any old auto block left in the pinned note
     if (value && o?.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "note", body: `📝 ${entryName || "Agent"}: ${value.slice(0, 500)}`, actor: me.name });
     // 🔁 Mirror the note onto the AGENT'S OWN contact card (Jon 2026-10-24): a note

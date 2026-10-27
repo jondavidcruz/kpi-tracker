@@ -58,27 +58,8 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "",
             </select>
           </form>
           <form action={updateDispoBuyerAction} className="contents">
-            <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="price" />
-            <input name="value" defaultValue={b.price ?? ""} placeholder="💵 will pay…" onBlur={(e) => { if (e.currentTarget.value !== (b.price ?? "")) e.currentTarget.form?.requestSubmit(); }} className="w-20 rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] font-semibold" />
-          </form>
-          <form action={updateDispoBuyerAction} className="contents">
             <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="nextFollowUp" />
             <input type="date" name="value" defaultValue={b.nextFollowUp ?? ""} onChange={(e) => e.currentTarget.form?.requestSubmit()} title="Next follow-up" className={`rounded border px-1 py-0.5 text-[10px] font-semibold ${overdue ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-500"}`} />
-          </form>
-          <form action={logDispoBuyerTouchAction} className="contents">
-            <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} />
-            <select name="result" defaultValue="" title="What happened on this touch?" className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] font-semibold text-slate-600">
-              <option value="">result…</option>
-              <option value="no answer">no answer</option>
-              <option value="left voicemail">left voicemail</option>
-              <option value="spoke — interested">spoke — interested</option>
-              <option value="spoke — not interested">spoke — not interested</option>
-              <option value="texted">texted</option>
-              <option value="emailed">emailed</option>
-              <option value="sent the packet">sent the packet</option>
-              <option value="made an offer">made an offer</option>
-            </select>
-            <button className="rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-sky-700" title="Log this touch (with the result) + bump the next follow-up">📞 Log touch</button>
           </form>
           <button type="button" onClick={() => setOfferFor(offerFor === b.id ? null : b.id)} className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-emerald-700" title="Log an offer this buyer made on THIS deal">💰 +offer</button>
         </div>
@@ -93,11 +74,15 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "",
             <button type="button" onClick={() => setOfferFor(null)} className="text-[10px] font-semibold text-slate-400">cancel</button>
           </form>
         )}
+        {/* 📜 Notes read like the rest of our timeline — a scrollable, newest-first history that
+            grows as you add notes (Jon 2026-10-27), instead of one overwritable box. */}
+        {b.notes && <div className="mt-1 max-h-24 overflow-y-auto whitespace-pre-line rounded border border-slate-100 bg-slate-50 px-1.5 py-1 text-[10px] leading-relaxed text-slate-600">{b.notes}</div>}
         <form action={updateDispoBuyerAction} className="mt-1">
-          <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="notes" />
-          <textarea name="value" defaultValue={b.notes ?? ""} rows={2} placeholder={b.buyerId ? "📝 Notes on this agent (also saved to their lead card) — what they want, next step…" : "📝 Notes on this agent — what they said, what they want, next step…"}
-            onBlur={(e) => { if (e.currentTarget.value !== (b.notes ?? "")) e.currentTarget.form?.requestSubmit(); }}
-            className="w-full resize-y rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-700 placeholder:text-slate-300" />
+          <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="addNote" />
+          <input name="value" placeholder="📝 add a note…" autoComplete="off"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (e.currentTarget.value.trim()) e.currentTarget.form?.requestSubmit(); } }}
+            onBlur={(e) => { if (e.currentTarget.value.trim()) e.currentTarget.form?.requestSubmit(); }}
+            className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-700 placeholder:text-slate-300" />
         </form>
         {b.lastContact && <div className="mt-0.5 text-[9px] text-slate-400">last touch {b.lastContact}</div>}
       </div>
