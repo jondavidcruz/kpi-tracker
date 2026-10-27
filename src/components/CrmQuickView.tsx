@@ -22,6 +22,7 @@ import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
 import LienBuilder from "@/components/LienBuilder";
 import NoteComposer from "@/components/NoteComposer";
+import TimelineFilter from "@/components/TimelineFilter";
 import { uploadLeadFile } from "@/lib/upload-lead-file";
 import { sanitizeNoteHtml, isHtmlNote } from "@/lib/note-html";
 
@@ -396,6 +397,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       }
                       const fd = new FormData(); fd.set("body", html); submit(addCrmNoteAction, { oppId: d.id, contactId: d.contact.id })(fd);
                     }} />
+                    <TimelineFilter>
                     <div className="space-y-1.5">
                       {d.events.map((e, i) => {
                         const mine = e.kind === "note" && !!e.id && e.actor === d.me.name;
@@ -412,8 +414,9 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                         // automated timeline (stage moves, automations, form updates)
                         // stays plain so the real notes stand out (Jon 2026-10-20).
                         const isNote = e.kind === "note";
+                        const isSms = e.kind === "sms"; // 🔵 blue iMessage-style card
                         return (
-                          <div key={e.id ?? i} className={`group/qn rounded-lg px-3 py-2 text-xs ring-1 ${isNote ? "border-l-4 border-amber-400 bg-amber-50 text-slate-800 ring-amber-200" : "bg-white text-slate-700 ring-slate-100"}`}>
+                          <div key={e.id ?? i} data-tlrow data-kind={e.kind} className={`group/qn rounded-lg px-3 py-2 text-xs ring-1 ${isNote ? "border-l-4 border-amber-400 bg-amber-50 text-slate-800 ring-amber-200" : isSms ? "border-l-4 border-sky-400 bg-sky-50 text-slate-800 ring-sky-200" : "bg-white text-slate-700 ring-slate-100"}`}>
                             <span className="mr-1">{isNote ? "🟡" : (KIND_EMOJI[e.kind] ?? "•")}</span>
                             {isNote && isHtmlNote(e.body)
                               ? <div className="mt-1 text-[13px] leading-relaxed [&_a]:text-indigo-600 [&_a]:underline [&_b]:font-bold [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-bold [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(e.body) }} />
@@ -434,6 +437,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                         );
                       })}
                     </div>
+                    </TimelineFilter>
                   </div>
                 )}
               </div>
