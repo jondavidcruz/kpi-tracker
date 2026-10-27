@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendCrmSmsAction } from "@/app/crm/actions";
+import { geoForPhone } from "@/lib/npa-geo";
 import { GOOGLE_REVIEW_LINK } from "@/lib/crm-shared";
 
 type Snip = { id: string; name: string; kind: string; subject?: string; body: string };
@@ -84,7 +85,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
           <span className="font-bold">From</span>
           <select value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-semibold">
             <option value="">Default line</option>
-            {numbers.map((n) => <option key={n} value={n}>{fmt(n)}</option>)}
+            {numbers.map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{fmt(n)}{g ? ` — ${g}` : ""}</option>; })}
           </select>
           <span className="font-bold">→ To</span> {fmt(to)}
         </div>

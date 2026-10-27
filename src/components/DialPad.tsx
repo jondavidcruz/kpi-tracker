@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { logBrowserCallAction, dialerOutcomeQuickAction, logCallTypeKpiAction } from "@/app/crm/actions";
 import { quietHoursWarning } from "@/lib/npa-tz";
+import { geoForPhone } from "@/lib/npa-geo";
 
 type CallState = "idle" | "connecting" | "ringing" | "active" | "error";
 type PhoneData = {
@@ -637,7 +638,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
               <span className="block text-[13px] font-extrabold text-slate-800">Calling From</span>
               <select value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 w-52 rounded-md border border-slate-200 px-1.5 py-1 text-[13px] font-semibold text-slate-700">
                 <option value="auto">📍 Closest to the contact (auto)</option>
-                {(data?.numbers ?? []).map((n) => <option key={n} value={n}>{n}</option>)}
+                {(data?.numbers ?? []).map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{n}{g ? ` — ${g}` : ""}</option>; })}
               </select>
             </span>
             <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-slate-500">✕</button>
