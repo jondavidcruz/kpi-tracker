@@ -35,7 +35,7 @@ import CrmLayoutController from "@/components/CrmLayoutController";
 import { readCrmLayout } from "@/lib/crm-layout-store";
 import OppPipelineMover from "@/components/OppPipelineMover";
 import { setOppStageAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, deleteLeadDocAction } from "../actions";
-import { commsFor, readSignatures, firstOf, defaultSignature } from "@/lib/crm-comms";
+import { commsFor, readSignatures, firstOf, defaultSignature, hasSignatureImage } from "@/lib/crm-comms";
 import { readSnippets } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
@@ -165,6 +165,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
   const st = stages.find((s) => s.key === opp.stage);
   const comms = await commsFor(me!);
   const mySignature = (await readSignatures())[firstOf(me!.name)] || defaultSignature(me!.name);
+  const mySigImageUrl = (await hasSignatureImage(firstOf(me!.name))) ? `/api/sig/${encodeURIComponent(firstOf(me!.name))}` : "";
   const fmtAt = (d: Date) => d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const devH = opp.devPricingSentAt ? Math.round((Date.now() - opp.devPricingSentAt.getTime()) / 3_600_000) : null;
 
@@ -562,6 +563,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               oppId={opp.id} contactId={c.id} to={c.email} leadName={c.name} rep={me!.name}
               fromLabel={`${me!.name} <${me!.name.split(" ")[0].toLowerCase()}@freedom-offers.com>`}
               signature={mySignature}
+              sigImageUrl={mySigImageUrl}
               snippets={snippets.filter((x) => x.kind === "email")}
             />
           )}

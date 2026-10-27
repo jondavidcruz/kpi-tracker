@@ -636,8 +636,13 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
         📞
         <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${lineOk ? "bg-emerald-400" : standby ? "bg-sky-400" : "bg-amber-400 animate-pulse"}`} />
       </button>
+      {/* 📣 Big, unmissable "someone else answered" banner so you don't double-dial a lead that
+          a teammate already picked up (Jon 2026-10-27 — the old tiny badge was easy to miss). */}
       {answeredBy && (
-        <span className="absolute right-12 top-1 z-50 whitespace-nowrap rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-extrabold text-white shadow-lg">✅ {answeredBy.agent} answered a call from {answeredBy.caller || "unknown"}</span>
+        <div className="fixed left-1/2 top-16 z-[60] -translate-x-1/2 rounded-2xl bg-emerald-600 px-6 py-3 text-center text-white shadow-2xl ring-2 ring-emerald-300">
+          <div className="flex items-center gap-2 text-base font-black"><span className="text-xl">✅</span> {answeredBy.agent} answered this call</div>
+          {answeredBy.caller && <div className="mt-0.5 text-[13px] font-semibold text-emerald-50">from {answeredBy.caller}</div>}
+        </div>
       )}
       {open && (
         <span className={`absolute z-50 flex w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 ${floating ? "right-0 top-12" : "right-0 top-10"}`}>

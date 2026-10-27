@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!opp) return NextResponse.json({ error: "not found" }, { status: 404 });
   const followersList = Array.isArray((opp.formData as Record<string, unknown> | null)?.__followers) ? ((opp.formData as Record<string, unknown>).__followers as string[]) : [];
   if (!canManageAllLeads(me!) && opp.assignedTo && opp.assignedTo !== me!.name && !followersList.includes(me!.name)) return NextResponse.json({ error: "not your lead" }, { status: 403 });
-  const { commsFor, readSignatures, firstOf, defaultSignature } = await import("@/lib/crm-comms");
+  const { commsFor, readSignatures, firstOf, defaultSignature, hasSignatureImage } = await import("@/lib/crm-comms");
   const { readSnippets } = await import("@/lib/crm-templates");
   const [events, tasks, appts, comms, sigs, snippets, smsEvents, emailEvents] = await Promise.all([
     db.crmEvent.findMany({ where: { contactId: opp.contactId }, orderBy: { at: "desc" }, take: 40 }),
@@ -58,6 +58,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       name: me!.name,
       fromLabel: `${me!.name} <${firstOf(me!.name)}@freedom-offers.com>`,
       signature: sigs[firstOf(me!.name)] || defaultSignature(me!.name),
+      // 🖼 the uploaded signature IMAGE (Jon 2026-10-27: only the text sig was showing in the composer)
+      sigImageUrl: (await hasSignatureImage(firstOf(me!.name))) ? `/api/sig/${encodeURIComponent(firstOf(me!.name))}` : "",
       canSms: comms.sms, canEmail: comms.email, canCall: comms.call,
     },
     snippets: snippets.map((s) => ({ id: s.id, name: s.name, kind: s.kind, subject: s.subject, body: s.body })),

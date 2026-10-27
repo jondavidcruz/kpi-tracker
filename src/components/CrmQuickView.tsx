@@ -28,7 +28,7 @@ type Payload = {
   id: string; title: string; stage: string; pipeline: string; pipelines?: string[]; assignedTo: string; tags: string;
   nextFollowUp: string; value: number | null; askPrice: number | null;
   formData: Record<string, Record<string, string | string[]>>;
-  me: { name: string; fromLabel: string; signature: string; canSms: boolean; canEmail: boolean; canCall: boolean };
+  me: { name: string; fromLabel: string; signature: string; sigImageUrl?: string; canSms: boolean; canEmail: boolean; canCall: boolean };
   followers: string[];
   reps: string[];
   snippets: Array<{ id: string; name: string; kind: string; subject?: string; body: string }>;
@@ -372,7 +372,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                 {tab === "email" && (
                   !d.me.canEmail ? <div className="text-xs text-amber-600">Email isn&apos;t enabled for you — ask Jon (Comms access on /crm).</div>
                   : !d.contact.email ? <div className="text-xs text-slate-400">No email on file.</div>
-                  : <GmailComposer history={d.emailHistory} oppId={d.id} contactId={d.contact.id} to={d.contact.email} leadName={d.contact.name} rep={d.me.name} fromLabel={d.me.fromLabel} signature={d.me.signature} snippets={d.snippets.filter((s) => s.kind === "email")} />
+                  : <GmailComposer history={d.emailHistory} oppId={d.id} contactId={d.contact.id} to={d.contact.email} leadName={d.contact.name} rep={d.me.name} fromLabel={d.me.fromLabel} signature={d.me.signature} sigImageUrl={d.me.sigImageUrl} snippets={d.snippets.filter((s) => s.kind === "email")} />
                 )}
 
                 {tab === "notes" && (
