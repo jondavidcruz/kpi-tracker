@@ -1,0 +1,251 @@
+// 🏆 PHASE 2 — migrate the Vetted Buyers (MarketContact) into the dispo kanban
+// (DS: Developers / DS: Buyer Agents), the single home for buyers now (Jon 2026-10-27:
+// "move the vetted buyers into the vetted section on the Kanban. Do not delete any of
+// their information. That's our gold. Make that always your priority to protect.").
+//
+// NON-NEGOTIABLE SAFETY (this is the gold):
+//   • NEVER deletes or edits a MarketContact row — the source table stays intact as a
+//     permanent backup. We only CREATE kanban cards.
+//   • A FULL snapshot of every source record is stashed on the card (formData.__migratedSource)
+//     so nothing is ever lost, even a field that doesn't map to a form input.
+//   • Idempotent: a per-source marker set in Resource(__buyer_migration__) means a re-run
+//     skips anything already migrated — no twins.
+//   • Reversible: undo() archives (never deletes) the cards this migration created.
+//
+// VETTING RULE (Jon 2026-10-27): a developer is only truly VETTED if they have a buy box —
+// i.e. the interview has been filled in SOME capacity. No buy box → they land in 🆕 research,
+// NOT the ✅ Vetted stage ("if we don't have buy box, then they're not vetted").
+import "server-only";
+import { db } from "./db";
+import { logCrmEvent } from "./crm";
+import { DISPO_DEV_PIPELINE, DISPO_AGENT_PIPELINE, isDevNetworkName, isAgentNetworkName, DISPO_NETWORK_PIPELINES } from "./dispo-buyers";
+
+const MIGRATION_CAT = "__buyer_migration__"; // Resource row holding the migrated-id map
+
+type SourceRow = {
+  id: string; name: string; type: string; vetStage: string;
+  email: string; phone: string; phone2: string; website: string; links: string;
+  company: string; title: string; preferredContact: string; decisionMaker: string;
+  companySize: string; buyingFrequency: string; priceRange: string; closingSpeed: string;
+  dealType: string; buildType: string; minLotSize: string; marketDetails: string;
+  market: string; buyBox: string; buyBoxAreas: string; buyBoxStruct: unknown;
+  geoPolygon: unknown; geoCentroidLat: number | null; geoCentroidLng: number | null;
+  notes: string; outreachLog: string; vettedOn: string; vettedById: string;
+};
+
+const SELECT = {
+  id: true, name: true, type: true, vetStage: true,
+  email: true, phone: true, phone2: true, website: true, links: true,
+  company: true, title: true, preferredContact: true, decisionMaker: true,
+  companySize: true, buyingFrequency: true, priceRange: true, closingSpeed: true,
+  dealType: true, buildType: true, minLotSize: true, marketDetails: true,
+  market: true, buyBox: true, buyBoxAreas: true, buyBoxStruct: true,
+  geoPolygon: true, geoCentroidLat: true, geoCentroidLng: true,
+  notes: true, outreachLog: true, vettedOn: true, vettedById: true,
+} as const;
+
+const s = (v: unknown) => (v == null ? "" : String(v)).trim();
+
+/** A developer is VETTED only if they have a buy box in SOME capacity (Jon's rule). */
+function hasBuyBox(r: SourceRow): boolean {
+  const struct = r.buyBoxStruct;
+  const structFilled = !!struct && typeof struct === "object" && Object.keys(struct as object).length > 0;
+  return structFilled || [r.buyBox, r.buyBoxAreas, r.priceRange, r.minLotSize, r.dealType, r.buildType, r.market, r.closingSpeed, r.marketDetails].some((x) => s(x) !== "");
+}
+
+/** Agents get the agent pipeline; everything else is a developer/cash buyer. */
+function isAgentRow(r: SourceRow): boolean {
+  return s(r.type).toLowerCase() === "agent";
+}
+
+type Plan = {
+  srcId: string; name: string; kind: "developer" | "agent"; vetted: boolean;
+  pipeline: string; stage: string; phone: string; email: string; reason: string;
+};
+
+function planRow(r: SourceRow): Plan {
+  const agent = isAgentRow(r);
+  const vetted = agent ? true : hasBuyBox(r); // agents: an active partner IS the vetted state
+  const pipeline = agent ? DISPO_AGENT_PIPELINE : DISPO_DEV_PIPELINE;
+  const stage = agent ? "active" : vetted ? "vetted" : "new";
+  return {
+    srcId: r.id, name: r.name, kind: agent ? "agent" : "developer", vetted,
+    pipeline, stage, phone: s(r.phone) || s(r.phone2), email: s(r.email),
+    reason: agent ? "agent → active partner" : vetted ? "has buy box → ✅ Vetted" : "NO buy box → 🆕 research (not vetted)",
+  };
+}
+
+/** Map a source row onto the dispo Developer Buy-Box / Buyer-Agent form fields.
+ *  Loss-tolerant: anything that doesn't fit a field is preserved in __migratedSource. */
+function formDataFor(r: SourceRow, p: Plan) {
+  const areas = [s(r.buyBoxAreas), s(r.market)].filter(Boolean).join("\n");
+  const price = s(r.priceRange) || s(r.buyBox);
+  const form = p.kind === "agent"
+    ? { agent_profile: {
+        relationship: "Active partner",
+        brokerage: s(r.company),
+        areas,
+        buyerTypes: s(r.type),
+        representsDevs: "",
+        priceRange: price,
+        bestContact: ["Call", "Text", "Email"].includes(s(r.preferredContact)) ? s(r.preferredContact) : "",
+        sendsDeals: "Maybe",
+        notes: [s(r.notes), s(r.outreachLog)].filter(Boolean).join("\n\n").slice(0, 2000),
+      } }
+    : { dev_buybox: {
+        relationship: p.vetted ? "Vetted — good buyer" : "Researching them",
+        buyCounties: areas,
+        landTypes: [],
+        lotSize: s(r.minLotSize),
+        priceRange: price,
+        closeSpeed: "",
+        volume: s(r.buyingFrequency),
+        requirements: [s(r.dealType) && `Deal type: ${s(r.dealType)}`, s(r.buildType) && `Build type: ${s(r.buildType)}`, s(r.closingSpeed) && `Close: ${s(r.closingSpeed)}`].filter(Boolean).join(" · "),
+        dealBreakers: "",
+        decisionMaker: s(r.decisionMaker),
+        proofOfFunds: "",
+      } };
+  return {
+    ...form,
+    // 🔒 the gold — a full, lossless snapshot of the source MarketContact on the card.
+    __migratedSource: {
+      marketContactId: r.id, name: r.name, type: r.type, vetStage: r.vetStage,
+      email: r.email, phone: r.phone, phone2: r.phone2, website: r.website, links: r.links,
+      company: r.company, title: r.title, decisionMaker: r.decisionMaker, companySize: r.companySize,
+      buyingFrequency: r.buyingFrequency, priceRange: r.priceRange, closingSpeed: r.closingSpeed,
+      dealType: r.dealType, buildType: r.buildType, minLotSize: r.minLotSize, marketDetails: r.marketDetails,
+      market: r.market, buyBox: r.buyBox, buyBoxAreas: r.buyBoxAreas, notes: r.notes, outreachLog: r.outreachLog,
+      vettedOn: r.vettedOn,
+    },
+    // structured buy-box + geo kept verbatim for the future cascade ranking rebuild
+    __buyBoxStruct: (r.buyBoxStruct ?? null) as never,
+    __geoPolygon: (r.geoPolygon ?? null) as never,
+    __geoCentroid: (r.geoCentroidLat != null && r.geoCentroidLng != null ? { lat: r.geoCentroidLat, lng: r.geoCentroidLng } : null) as never,
+    __import: { type: p.kind === "agent" ? "Buyer Agent" : "Developer", market: s(r.market), source: "Vetted Buyers migration" },
+  };
+}
+
+async function loadSources(): Promise<SourceRow[]> {
+  return db.marketContact.findMany({
+    where: { archivedAt: null, vetStage: { in: ["vetted", "active"] }, type: { not: "jv_partner" } },
+    orderBy: [{ name: "asc" }],
+    select: SELECT,
+  }) as unknown as Promise<SourceRow[]>;
+}
+
+async function readMarker(): Promise<{ id: string | null; map: Record<string, string>; ranAt?: string }> {
+  const row = await db.resource.findFirst({ where: { category: MIGRATION_CAT } }).catch(() => null);
+  let map: Record<string, string> = {}; let ranAt: string | undefined;
+  try { const j = row?.description ? JSON.parse(row.description) : {}; map = j.map ?? {}; ranAt = j.ranAt; } catch { map = {}; }
+  return { id: row?.id ?? null, map, ranAt };
+}
+async function writeMarker(id: string | null, map: Record<string, string>, actor: string) {
+  const payload = JSON.stringify({ map, ranAt: new Date().toISOString(), actor });
+  if (id) await db.resource.update({ where: { id }, data: { description: payload } });
+  else await db.resource.create({ data: { title: "buyer-migration", category: MIGRATION_CAT, url: "", description: payload } });
+}
+
+/** Ensure the DS: Developers / DS: Buyer Agents pipelines exist in the CRM registry. */
+async function ensurePipelines() {
+  const PIPES_CAT = "__crm_pipelines__";
+  const row = await db.resource.findFirst({ where: { category: PIPES_CAT } }).catch(() => null);
+  let ghl: Array<{ name: string; stages: Array<{ key: string; label: string }> }> = [];
+  try { ghl = row?.description ? JSON.parse(row.description) : []; } catch { ghl = []; }
+  let changed = false;
+  for (const np of DISPO_NETWORK_PIPELINES) {
+    const match = np.name === DISPO_AGENT_PIPELINE ? isAgentNetworkName : isDevNetworkName;
+    if (!ghl.some((p) => match(p.name))) { ghl.push({ name: np.name, stages: np.stages }); changed = true; }
+  }
+  if (changed) {
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(ghl) } });
+    else await db.resource.create({ data: { title: "crm-pipelines", category: PIPES_CAT, url: "", description: JSON.stringify(ghl) } });
+  }
+}
+
+/** Resolve an existing kanban contact by phone/email (never create a twin). */
+async function findContact(phone: string, email: string) {
+  const p10 = phone.replace(/\D/g, "").slice(-10);
+  if (p10.length === 10) {
+    const byPhone = await db.crmContact.findFirst({ where: { archivedAt: null, OR: [{ phone: { endsWith: p10 } }, { altPhone: { endsWith: p10 } }] }, orderBy: { updatedAt: "desc" } }).catch(() => null);
+    if (byPhone) return byPhone;
+  }
+  if (email) return db.crmContact.findFirst({ where: { archivedAt: null, email: { equals: email, mode: "insensitive" } } }).catch(() => null);
+  return null;
+}
+
+/** DRY RUN — read-only. Returns exactly what a real run would do, writing nothing. */
+export async function planMigration() {
+  const [rows, marker] = await Promise.all([loadSources(), readMarker()]);
+  const plans = rows.map(planRow);
+  const already = plans.filter((p) => marker.map[p.srcId]);
+  const todo = plans.filter((p) => !marker.map[p.srcId]);
+  const count = (f: (p: Plan) => boolean) => todo.filter(f).length;
+  return {
+    mode: "dry-run",
+    totalVettedBuyers: rows.length,
+    alreadyMigrated: already.length,
+    toMigrate: todo.length,
+    breakdown: {
+      developersVetted: count((p) => p.kind === "developer" && p.vetted),
+      developersToResearch_noBuyBox: count((p) => p.kind === "developer" && !p.vetted),
+      agentsActive: count((p) => p.kind === "agent"),
+    },
+    sample: todo.slice(0, 12).map((p) => ({ name: p.name, kind: p.kind, stage: p.stage, reason: p.reason, phone: p.phone, email: p.email })),
+    note: "Nothing written. MarketContact rows are untouched. Add ?run=1 to execute, ?undo=1 to reverse.",
+  };
+}
+
+/** EXECUTE — idempotent. Creates kanban cards for not-yet-migrated vetted buyers. */
+export async function runMigration(actor: string) {
+  await ensurePipelines();
+  const [rows, marker] = await Promise.all([loadSources(), readMarker()]);
+  const map = { ...marker.map };
+  let created = 0, reusedContact = 0, skipped = 0;
+  const results: Array<{ name: string; stage: string; oppId: string; reusedContact: boolean }> = [];
+
+  for (const r of rows) {
+    if (map[r.id]) { skipped++; continue; } // already migrated
+    const p = planRow(r);
+    const fd = formDataFor(r, p);
+
+    let contact = await findContact(p.phone, p.email);
+    const reused = !!contact;
+    if (!contact) {
+      contact = await db.crmContact.create({ data: {
+        name: r.name, phone: s(r.phone), altPhone: s(r.phone2), email: s(r.email),
+        source: "Vetted Buyers migration",
+        tags: p.kind === "agent" ? "buyer-agent" : "developer",
+        pinnedNote: [s(r.market), s(r.priceRange) || s(r.buyBox)].filter(Boolean).join(" · ").slice(0, 300),
+      } });
+    } else { reusedContact++; }
+
+    // don't double-create an opp in the same pipeline for a reused contact
+    const dupe = reused ? await db.crmOpportunity.findFirst({ where: { contactId: contact.id, pipeline: p.pipeline, archivedAt: null } }).catch(() => null) : null;
+    const opp = dupe ?? await db.crmOpportunity.create({ data: {
+      contactId: contact.id, title: r.name, pipeline: p.pipeline, stage: p.stage,
+      assignedTo: "buyer-migration", formData: fd as never,
+    } });
+    if (!dupe) {
+      await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `${p.kind === "agent" ? "Buyer agent" : "Developer"} migrated from Vetted Buyers — ${p.reason}`, actor });
+      created++;
+    }
+    map[r.id] = opp.id;
+    results.push({ name: r.name, stage: p.stage, oppId: opp.id, reusedContact: reused });
+  }
+
+  await writeMarker(marker.id, map, actor);
+  return { mode: "run", totalVettedBuyers: rows.length, created, reusedExistingContact: reusedContact, skippedAlreadyMigrated: skipped, results: results.slice(0, 50) };
+}
+
+/** UNDO — archives (never deletes) every card this migration created, clears the marker. */
+export async function undoMigration(actor: string) {
+  const marker = await readMarker();
+  const oppIds = Object.values(marker.map);
+  let archived = 0;
+  for (const oppId of oppIds) {
+    const r = await db.crmOpportunity.updateMany({ where: { id: oppId, assignedTo: "buyer-migration", archivedAt: null }, data: { archivedAt: new Date() } }).catch(() => ({ count: 0 }));
+    archived += r.count;
+  }
+  if (marker.id) await db.resource.update({ where: { id: marker.id }, data: { description: JSON.stringify({ map: {}, ranAt: new Date().toISOString(), actor, undone: true }) } });
+  return { mode: "undo", archivedCards: archived, note: "MarketContact rows were never touched; your Vetted Buyers are fully intact." };
+}

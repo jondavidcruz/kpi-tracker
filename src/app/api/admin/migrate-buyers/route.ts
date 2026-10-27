@@ -1,22 +1,32 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser, isCSuitePerson } from "@/lib/auth";
-import { migrateBuyers } from "@/lib/buyer-migrate";
+// 🏆 Owner-gated endpoint for the Vetted Buyers → kanban migration (Phase 2).
+// Safe by default: a bare GET is a DRY RUN that writes nothing. ?run=1 executes,
+// ?undo=1 reverses. Gated to Jon (owner session) OR Bearer/`?secret=` CRON_SECRET.
+import { NextResponse } from "next/server";
+import { getCurrentUser, isOwner } from "@/lib/auth";
+import { planMigration, runMigration, undoMigration } from "@/lib/buyer-migration";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// 🔀 Phase-2 buyer migration (Jon triggers). C-suite only. Default is a DRY RUN that
-// reports what WOULD migrate; add ?mode=go to actually create the CRM opportunities.
-//   dry:  https://kpi-tracker-lovat.vercel.app/api/admin/migrate-buyers
-//   go:   https://kpi-tracker-lovat.vercel.app/api/admin/migrate-buyers?mode=go
-export async function GET(req: NextRequest) {
-  const me = await getCurrentUser();
-  if (!isCSuitePerson(me)) return NextResponse.json({ error: "forbidden — C-suite only" }, { status: 403 });
-  const execute = req.nextUrl.searchParams.get("mode") === "go";
+export async function POST(request: Request) { return GET(request); }
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const secret = process.env.CRON_SECRET;
+  const auth = request.headers.get("authorization");
+  const bySecret = !!secret && (auth === `Bearer ${secret}` || url.searchParams.get("secret") === secret);
+
+  const me = await getCurrentUser().catch(() => null);
+  if (!bySecret && !isOwner(me)) {
+    return NextResponse.json({ error: "owner only" }, { status: 403 });
+  }
+  const actor = me?.name ?? "owner";
+
   try {
-    const plan = await migrateBuyers(execute);
-    return NextResponse.json(plan);
+    if (url.searchParams.get("undo") === "1") return NextResponse.json(await undoMigration(actor));
+    if (url.searchParams.get("run") === "1") return NextResponse.json(await runMigration(actor));
+    return NextResponse.json(await planMigration()); // default = dry run
   } catch (e) {
-    return NextResponse.json({ error: String(e).slice(0, 300) }, { status: 500 });
+    return NextResponse.json({ error: String((e as Error)?.message ?? e) }, { status: 500 });
   }
 }
