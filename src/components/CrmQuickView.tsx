@@ -11,6 +11,7 @@ import {
 } from "@/app/crm/actions";
 import { KIND_EMOJI, stripAgentNotesBlock, recStreamSrc } from "@/lib/crm-shared";
 import AutoSaveForm from "@/components/AutoSaveForm";
+import PhoneField from "@/components/PhoneField";
 import CrmFormFields from "@/components/CrmFormFields";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { isDispoDealPipeline } from "@/lib/dispo-buyers";
@@ -253,11 +254,11 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                     </div>
                     <div>
                       <label className={labelCls}>Phone</label>
-                      <input name="phone" defaultValue={d.contact.phone} className={inputCls} />
+                      <PhoneField name="phone" defaultValue={d.contact.phone} className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Phone 2</label>
-                      <input name="altPhone" defaultValue={d.contact.altPhone} className={inputCls} />
+                      <PhoneField name="altPhone" defaultValue={d.contact.altPhone} className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Email</label>

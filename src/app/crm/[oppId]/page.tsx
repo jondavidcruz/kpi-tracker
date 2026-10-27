@@ -27,6 +27,7 @@ import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
 import { editCrmNoteAction, deleteCrmNoteAction } from "../actions";
 import LeadNoteComposer from "@/components/LeadNoteComposer";
 import AutoSaveForm from "@/components/AutoSaveForm";
+import PhoneField from "@/components/PhoneField";
 import CrmFormFields from "@/components/CrmFormFields";
 import DocUploadForm from "@/components/DocUploadForm";
 import CrmLayoutController from "@/components/CrmLayoutController";
@@ -252,8 +253,8 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                 <input type="hidden" name="oppId" value={opp.id} />
                 <div className="grid grid-cols-2 gap-2">
                   <label><span className={lbl}>Name</span><input name="name" defaultValue={c.name} className={inputCls} /></label>
-                  <label><span className={lbl}>Phone</span><input name="phone" defaultValue={c.phone} className={inputCls} /></label>
-                  <label><span className={lbl}>Phone 2</span><input name="altPhone" defaultValue={c.altPhone} className={inputCls} /></label>
+                  <label><span className={lbl}>Phone</span><PhoneField name="phone" defaultValue={c.phone} className={inputCls} /></label>
+                  <label><span className={lbl}>Phone 2</span><PhoneField name="altPhone" defaultValue={c.altPhone} className={inputCls} /></label>
                   <label><span className={lbl}>Email</span><input name="email" defaultValue={c.email} className={inputCls} /></label>
                   <label><span className={lbl}>Email 2</span><input name="altEmail" defaultValue={c.altEmail} className={inputCls} /></label>
                 </div>
