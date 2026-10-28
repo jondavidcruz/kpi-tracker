@@ -3,7 +3,7 @@
 // (left section nav like GHL's opportunity modal). Everything is editable
 // here — details, contact, discovery forms, tasks, appointments, notes —
 // without opening the full card page.
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   setOppStageAction, setOppPipelineAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
   addCrmTaskAction, toggleCrmTaskAction, reassignTaskAction, addCrmApptAction, deleteCrmApptAction,
@@ -68,6 +68,16 @@ const tabsFor = (pipeline: string | null | undefined) => [
 const pipeRank = (n: string) => (/^aq/i.test(n) ? 0 : /^ds/i.test(n) ? 1 : 2);
 const sortPipes = (names: string[]) => names.map((n, i) => [n, i] as const).sort((a, b) => pipeRank(a[0]) - pipeRank(b[0]) || a[1] - b[1]).map(([n]) => n);
 
+// 🔀 Apply the viewer's saved tab order (Jon 2026-10-28: "let me reorder the quick-view
+// tabs"). Stored keys come first in their saved order; any tab not in the saved order
+// (e.g. a new form) keeps its default position after them.
+const TAB_ORDER_KEY = "fo_qv_tab_order";
+function applyTabOrder<T extends { key: string }>(tabs: T[], order: string[]): T[] {
+  if (!order.length) return tabs;
+  const pos = (k: string) => { const i = order.indexOf(k); return i < 0 ? 1000 + tabs.findIndex((t) => t.key === k) : i; };
+  return [...tabs].sort((a, b) => pos(a.key) - pos(b.key));
+}
+
 const inputCls = "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm";
 const labelCls = "mb-0.5 block text-[11px] font-bold text-slate-500";
 
@@ -80,6 +90,22 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
   const [navMin, setNavMin] = useState(false);
   const [lienOpen, setLienOpen] = useState(false);
   const [pending, start] = useTransition();
+  // 🔀 Drag-to-reorder the left-nav tabs, saved on this device (Jon 2026-10-28).
+  const [tabOrder, setTabOrder] = useState<string[]>([]);
+  const dragTabRef = useRef<string | null>(null);
+  const [dragTab, setDragTab] = useState<string | null>(null);
+  useEffect(() => { try { const s = localStorage.getItem(TAB_ORDER_KEY); if (s) setTabOrder(JSON.parse(s)); } catch { /* none */ } }, []);
+  const reorderTabs = (displayKeys: string[], targetKey: string) => {
+    const from = dragTabRef.current; dragTabRef.current = null; setDragTab(null);
+    if (!from || from === targetKey) return;
+    const keys = [...displayKeys];
+    const fi = keys.indexOf(from); if (fi < 0) return;
+    keys.splice(fi, 1);
+    const ti = keys.indexOf(targetKey);
+    keys.splice(ti < 0 ? keys.length : ti, 0, from); // drop before the target
+    setTabOrder(keys);
+    try { localStorage.setItem(TAB_ORDER_KEY, JSON.stringify(keys)); } catch { /* ignore */ }
+  };
 
   useEffect(() => {
     const h = (e: Event) => { const d2 = (e as CustomEvent).detail as { id?: string; tab?: string }; if (d2?.id) { setOppId(d2.id); setData(null); setTab(d2.tab || "opp"); setSaved(""); } };
@@ -202,12 +228,21 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                 <button onClick={() => setNavMin((v) => !v)} title={navMin ? "Expand menu" : "Minimize menu"} className="mb-1 block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-bold text-slate-400 hover:bg-slate-100">
                   {navMin ? "»" : "« minimize"}
                 </button>
-                {tabsFor(d.pipeline).map((t) => (
-                  <button key={t.key} onClick={() => setTab(t.key)} title={t.label}
-                    className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold ${navMin ? "text-center" : ""} ${tab === t.key ? "bg-brand-navy text-white" : "text-slate-600 hover:bg-slate-100"}`}>
-                    {t.emoji}{navMin ? "" : ` ${t.label}`}
-                  </button>
-                ))}
+                {(() => {
+                  const displayTabs = applyTabOrder(tabsFor(d.pipeline), tabOrder);
+                  const keys = displayTabs.map((t) => t.key);
+                  return displayTabs.map((t) => (
+                    <button key={t.key} onClick={() => setTab(t.key)} title={`${t.label} — drag to reorder`}
+                      draggable
+                      onDragStart={() => { dragTabRef.current = t.key; setDragTab(t.key); }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => { e.preventDefault(); reorderTabs(keys, t.key); }}
+                      onDragEnd={() => { dragTabRef.current = null; setDragTab(null); }}
+                      className={`block w-full cursor-grab rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold active:cursor-grabbing ${navMin ? "text-center" : ""} ${dragTab === t.key ? "opacity-40" : ""} ${tab === t.key ? "bg-brand-navy text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                      {t.emoji}{navMin ? "" : ` ${t.label}`}
+                    </button>
+                  ));
+                })()}
               </nav>
 
               <div className="min-w-0 flex-1 overflow-y-auto p-5">
