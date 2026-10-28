@@ -12,9 +12,12 @@ export const maxDuration = 60;
 // 🔎 GET ?diag=1 (owner only) → the LAST upload failure recorded by any stage of the
 // upload pipeline, so Jon/dev can see exactly why a rep's upload failed.
 export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const secret = process.env.CRON_SECRET;
+  const bySecret = !!secret && (req.headers.get("authorization") === `Bearer ${secret}` || url.searchParams.get("secret") === secret);
   const me = await getCurrentUser().catch(() => null);
-  if (!isOwner(me)) return NextResponse.json({ error: "owner only" }, { status: 403 });
-  if (new URL(req.url).searchParams.get("diag") !== "1") return NextResponse.json({ ok: true });
+  if (!bySecret && !isOwner(me)) return NextResponse.json({ error: "owner only" }, { status: 403 });
+  if (url.searchParams.get("diag") !== "1") return NextResponse.json({ ok: true });
   const row = await db.resource.findFirst({ where: { category: "__upload_diag__" } });
   let d: unknown = null;
   try { d = row?.description ? JSON.parse(row.description) : null; } catch { /* none */ }
