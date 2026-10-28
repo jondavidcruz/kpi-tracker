@@ -458,8 +458,14 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   if (tab === "developers" || tab === "agents") {
     const tabNames = tab === "developers" ? net.dev : net.agent;         // real stored name(s)
     networkPipeline = tabNames[0] ?? (tab === "developers" ? DISPO_DEV_PIPELINE : DISPO_AGENT_PIPELINE);
-    const stages = (DISPO_NETWORK_PIPELINES.find((p) => tab === "developers" ? isDevNetworkName(p.name) : isAgentNetworkName(p.name))?.stages) ?? [];
-    netColumns = stages.map((s, i) => ({ key: s.key, label: s.label, cls: PALETTE[i % PALETTE.length] }));
+    // 🏷 Stage order comes from the EDITABLE pipeline (what Jon reorders in the pipeline
+    // editor), NOT the hardcoded default — otherwise reordering a developer stage didn't
+    // stick on the board (Jon 2026-10-28: "I moved Hot to 2nd but it stays 1st"). Fall back
+    // to the built-in default only if the pipeline isn't in the store yet.
+    const editableStages = pipelines.find((p) => p.name === networkPipeline)?.stages;
+    const stages = (editableStages && editableStages.length ? editableStages
+      : (DISPO_NETWORK_PIPELINES.find((p) => tab === "developers" ? isDevNetworkName(p.name) : isAgentNetworkName(p.name))?.stages)) ?? [];
+    netColumns = stages.map((s, i) => ({ key: s.key, label: s.label, cls: (s as { cls?: string }).cls || PALETTE[i % PALETTE.length] }));
     const opps = await db.crmOpportunity.findMany({
       where: { archivedAt: null, pipeline: { in: tabNames } },
       orderBy: { updatedAt: "desc" },
