@@ -4857,3 +4857,37 @@ export async function quickAddDispoNetworkAction(formData: FormData) {
   revalidatePath("/crm");
   back(`added=1&dup=${dupe ? 1 : 0}`);
 }
+
+// 💬 Chat-room webhooks (Jon 2026-10-27): store/replace each Google Chat room's
+// incoming webhook in a DB override (Resource "__chat_webhooks__") so the owner can
+// wire rooms from inside the app — no env change + redeploy. postToSpace prefers this
+// over CHAT_WEBHOOKS_JSON. Owner only. URLs are validated to Google Chat endpoints.
+export async function saveChatWebhooksAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const spaces = ["contracts", "kpi", "phonehealth", "receipts", "leadership", "team", "acquisitions", "directrei"];
+  const row = await db.resource.findFirst({ where: { category: "__chat_webhooks__" } });
+  let cur: Record<string, string> = {};
+  try { cur = row?.description ? JSON.parse(row.description) : {}; } catch { cur = {}; }
+  const next = { ...cur };
+  for (const s of spaces) {
+    const v = String(formData.get(`wh_${s}`) ?? "").trim();
+    if (v === "__clear__") delete next[s];
+    else if (v && /^https:\/\/chat\.googleapis\.com\/v1\/spaces\//.test(v)) next[s] = v;
+  }
+  const payload = JSON.stringify(next);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
+  else await db.resource.create({ data: { title: "chat-webhooks", category: "__chat_webhooks__", url: "", description: payload } });
+  revalidatePath("/admin/chat-webhooks");
+  redirect("/admin/chat-webhooks?saved=1");
+}
+
+export async function testChatWebhookAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const space = String(formData.get("space") ?? "").trim();
+  if (!space) return;
+  const { postToSpace } = await import("@/lib/chat-spaces");
+  const ok = await postToSpace(space as never, `✅ Test ping from the War Room — the “${space}” room is wired up. (sent by ${me?.name ?? "owner"})`);
+  redirect(`/admin/chat-webhooks?tested=${encodeURIComponent(space)}&ok=${ok ? 1 : 0}`);
+}

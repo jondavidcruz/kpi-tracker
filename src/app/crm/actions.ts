@@ -1895,6 +1895,24 @@ export async function setOppPipelineAction(formData: FormData) {
   }
   await db.crmOpportunity.update({ where: { id }, data: data as never });
   await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "stage", body: `📂 Moved ${opp.pipeline || "War Room"} → ${pipeline}${owner ? ` · owner ${owner}` : ""}${followNote}`, actor: me.name });
+
+  // 🎉 Contract-signed announcement (Jon 2026-10-27): a lead ENTERING a SIGNED
+  // pipeline (e.g. "DS: SIGNED - OFF MARKET" / "DS: SIGNED - NOVATION") is great
+  // news — ping the whole Freedom Office team AND the contracts room. Only fires
+  // on the first entry into signed-land (prev pipeline wasn't a signed one), so a
+  // drag within the pipeline or between two signed pipelines doesn't re-announce.
+  if (!/signed/i.test(opp.pipeline || "") && /signed/i.test(pipeline)) {
+    try {
+      const c = await db.crmContact.findUnique({ where: { id: opp.contactId }, select: { name: true, address: true } });
+      const addr = (c?.address || "").trim();
+      const kind = /novation/i.test(pipeline) ? "Novation" : /off.?market/i.test(pipeline) ? "Off-Market" : "";
+      const who = me.name.split(" ")[0];
+      const msg = `🖊🎉 CONTRACT SIGNED${kind ? ` (${kind})` : ""} — ${c?.name ?? "seller"}${addr ? ` · ${addr}` : ""} · signed by ${who}. Great work, team! 🙌`;
+      const { postToSpace } = await import("@/lib/chat-spaces");
+      postToSpace("team", msg).catch(() => {});
+      postToSpace("contracts", msg).catch(() => {});
+    } catch { /* announcement is best-effort — never block the move */ }
+  }
   revalidatePath("/crm");
 }
 
