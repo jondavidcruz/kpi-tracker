@@ -4893,3 +4893,43 @@ export async function testChatWebhookAction(formData: FormData) {
   const ok = await postToSpace(space as never, `✅ Test ping from the War Room — the “${space}” room is wired up. (sent by ${me?.name ?? "owner"})`);
   redirect(`/admin/chat-webhooks?tested=${encodeURIComponent(space)}&ok=${ok ? 1 : 0}`);
 }
+
+// 🛠 Form-builder: add/remove custom Home/Land Details fields (Jon 2026-10-27, #20).
+// Appended to the base form; stored in Resource "__crm_custom_fields__" (no migration).
+export async function addCustomFieldAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me) && !isManager(me)) return;
+  const formKey = String(formData.get("formKey") ?? "");
+  if (!["property", "land"].includes(formKey)) return;
+  const emoji = String(formData.get("emoji") ?? "").trim().slice(0, 4);
+  const labelRaw = String(formData.get("label") ?? "").trim().slice(0, 70);
+  if (!labelRaw) return;
+  const label = (emoji ? emoji + " " : "") + labelRaw;
+  const type = String(formData.get("type") ?? "text");
+  const options = String(formData.get("options") ?? "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean).slice(0, 40);
+  const { normalizeCustomField } = await import("@/lib/crm-forms");
+  const field = normalizeCustomField({ label, type, options });
+  if (!field) { redirect("/admin/form-builder?err=1"); return; }
+  const { loadCustomFieldsRaw, saveCustomFieldsRaw } = await import("@/lib/crm-forms-store");
+  const map = await loadCustomFieldsRaw();
+  const arr = Array.isArray(map[formKey]) ? map[formKey] : [];
+  arr.push(field as unknown as Record<string, unknown>);
+  map[formKey] = arr;
+  await saveCustomFieldsRaw(map);
+  revalidatePath("/admin/form-builder");
+  redirect("/admin/form-builder?added=1");
+}
+
+export async function deleteCustomFieldAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me) && !isManager(me)) return;
+  const formKey = String(formData.get("formKey") ?? "");
+  const key = String(formData.get("key") ?? "");
+  if (!formKey || !key) return;
+  const { loadCustomFieldsRaw, saveCustomFieldsRaw } = await import("@/lib/crm-forms-store");
+  const map = await loadCustomFieldsRaw();
+  if (Array.isArray(map[formKey])) map[formKey] = map[formKey].filter((f) => String((f as Record<string, unknown>).key ?? "") !== key);
+  await saveCustomFieldsRaw(map);
+  revalidatePath("/admin/form-builder");
+  redirect("/admin/form-builder?deleted=1");
+}

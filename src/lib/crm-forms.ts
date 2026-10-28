@@ -151,3 +151,32 @@ export function formsForPipeline(pipeline: string | null | undefined): CrmForm[]
   // details don't disappear when a lead moves to dispo").
   return CRM_FORMS;
 }
+
+// 🛠 Custom fields Jon adds on /admin/form-builder (Jon 2026-10-27: "edit home/land
+// details, add columns, dropdowns, emojis"). Stored as a client-safe map {formKey:
+// FormField[]} and APPENDED to the base form — purely additive, so an empty/broken
+// store leaves the daily forms exactly as they are. Keys are prefixed "cf_".
+export type CustomFieldMap = Record<string, FormField[]>;
+
+export function applyCustomFields(forms: CrmForm[], custom?: CustomFieldMap | null): CrmForm[] {
+  if (!custom) return forms;
+  return forms.map((f) => {
+    const extra = Array.isArray(custom[f.key]) ? custom[f.key] : [];
+    return extra.length ? { ...f, fields: [...f.fields, ...extra] } : f;
+  });
+}
+
+/** Normalize a raw custom-field record from the store into a valid FormField (or null). */
+export function normalizeCustomField(raw: unknown): FormField | null {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const label = String(r.label ?? "").trim().slice(0, 80);
+  if (!label) return null;
+  const key = String(r.key ?? "").trim() || `cf_${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40)}_${Math.random().toString(36).slice(2, 6)}`;
+  const type = r.type === "select" ? "select" : r.type === "textarea" ? "textarea" : "text";
+  if (type === "select") {
+    const options = Array.isArray(r.options) ? r.options.map((o) => String(o).trim()).filter(Boolean).slice(0, 40) : [];
+    if (!options.length) return null;
+    return { key, label, type: "select", options };
+  }
+  return { key, label, type };
+}

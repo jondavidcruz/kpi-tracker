@@ -68,6 +68,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     followers: followersList,
     reps: (await db.user.findMany({ where: { active: true }, select: { name: true }, orderBy: { name: "asc" } })).map((u) => u.name),
     pipelines: pipelineNames,
+    // 🛠 custom Home/Land Details fields (appended to the base form in the quick-view)
+    customFields: await (await import("@/lib/crm-forms-store")).loadCustomFormFields(),
     id: opp.id, title: opp.title, stage: opp.stage, pipeline: opp.pipeline || "War Room", assignedTo: opp.assignedTo,
     tags: opp.tags, nextFollowUp: opp.nextFollowUp, value: opp.value, askPrice: opp.askPrice,
     formData: (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>,

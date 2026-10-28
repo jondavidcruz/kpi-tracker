@@ -20,7 +20,7 @@ import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm
 import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels, recStreamSrc } from "@/lib/crm-shared";
 import ParcelsPanel from "@/components/ParcelsPanel";
 import PanelGuard from "@/components/PanelGuard";
-import { formsForPipeline } from "@/lib/crm-forms";
+import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
@@ -155,6 +155,8 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
       : Promise.resolve([] as Array<{ id: string; name: string; assignedTo: string; opportunities: Array<{ id: string; title: string; stage: string }> }>),
   ]);
   const snippets = await readSnippets();
+  // 🛠 Custom Home/Land Details fields Jon added on /admin/form-builder (appended to the base form).
+  const customFields = await (await import("@/lib/crm-forms-store")).loadCustomFormFields();
   // 📁 auto-pull this deal's existing Google Drive files (best-effort; no manual
   // export needed). Matched by the property address / street number.
   const driveFiles = (await withTimeout(import("@/lib/gdrive").then((m) => m.listDealFiles(c.address || opp.title || c.name)), 2500, [] as { id: string; name: string; link: string; mimeType: string }[])).slice(0, 12);
@@ -434,7 +436,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
               // Forms follow the pipeline (= lead type): sellers get seller discovery,
               // developers/buyer agents get their buy-box/agent form (Jon 2026-10-20).
-              return formsForPipeline(opp.pipeline).map((form) => {
+              return applyCustomFields(formsForPipeline(opp.pipeline), customFields).map((form) => {
                 const answers = fd[form.key] ?? {};
                 const count = Object.keys(answers).length;
                 return (

@@ -17,7 +17,7 @@ import DispoGatePanel from "@/components/DispoGatePanel";
 import { isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { readGateChecks } from "@/lib/dispo-gates";
 import { formatAddress } from "@/lib/address";
-import { formsForPipeline } from "@/lib/crm-forms";
+import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
 import LienBuilder from "@/components/LienBuilder";
@@ -31,6 +31,7 @@ type Payload = {
   id: string; title: string; stage: string; pipeline: string; pipelines?: string[]; assignedTo: string; tags: string;
   nextFollowUp: string; value: number | null; askPrice: number | null;
   formData: Record<string, Record<string, string | string[]>>;
+  customFields?: import("@/lib/crm-forms").CustomFieldMap;
   me: { name: string; fromLabel: string; signature: string; sigImageUrl?: string; canSms: boolean; canEmail: boolean; canCall: boolean };
   followers: string[];
   reps: string[];
@@ -279,7 +280,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                   </AutoSaveForm>
                 )}
 
-                {formsForPipeline(d.pipeline).map((f) => tab === `form:${f.key}` && (
+                {applyCustomFields(formsForPipeline(d.pipeline), d.customFields).map((f) => tab === `form:${f.key}` && (
                   <div key={f.key} className="space-y-3">
                     {f.key === "financial" && <UnderwriteBlock d={d} />}
                     {/* ✨ pull details straight out of the notes (Home/Land only) */}
