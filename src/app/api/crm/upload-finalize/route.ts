@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const me = await getCurrentUser();
   if (!me) return NextResponse.json({ ok: false, msg: "You're signed out — reload and sign in." });
   const b = (await req.json().catch(() => null)) as
-    | { oppId?: string; contactId?: string; folderId?: string; driveName?: string; fileName?: string; docType?: string; asNote?: boolean; body?: string; fileId?: string; link?: string }
+    | { oppId?: string; contactId?: string; folderId?: string; driveName?: string; fileName?: string; docType?: string; asNote?: boolean; body?: string; fileId?: string; link?: string; makePublic?: boolean }
     | null;
   if (!b) return NextResponse.json({ ok: false, msg: "Couldn't finish the upload — try again." });
   const oppId = String(b.oppId ?? "");
@@ -37,8 +37,21 @@ export async function POST(req: Request) {
       fileId = hit?.id ?? "";
     }
     if (!fileId) { await noteUploadDiag("finalize", `no file found (folder=${folderId}, name=${driveName})`, me.name); return NextResponse.json({ ok: false, msg: "Upload didn't land in Drive — try again." }); }
-    const link = String(b.link ?? "").trim() || `https://drive.google.com/file/d/${fileId}/view`;
+    let link = String(b.link ?? "").trim() || `https://drive.google.com/file/d/${fileId}/view`;
     const hit = { id: fileId };
+    // 🔗 For an emailed attachment, grant anyone-with-link read so the external recipient
+    // can open it (Jon 2026-10-27: large email attachments must still reach the seller).
+    if (b.makePublic) {
+      try {
+        const { getAccessToken } = await import("@/lib/gdrive");
+        const token = await getAccessToken();
+        await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions?supportsAllDrives=true`, {
+          method: "POST", headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ role: "reader", type: "anyone" }),
+        }).catch(() => {});
+        link = `https://drive.google.com/file/d/${fileId}/view`;
+      } catch { /* link still returned; may require sign-in */ }
+    }
 
     if (b.asNote) {
       const { sanitizeNoteHtml } = await import("@/lib/note-html");

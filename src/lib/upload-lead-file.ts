@@ -11,12 +11,13 @@ type UploadArgs = {
   docType?: string;
   asNote?: boolean;
   body?: string; // note HTML, when asNote
+  makePublic?: boolean; // grant anyone-with-link read (for an emailed attachment)
   onProgress?: (pct: number) => void;
 };
 
 const CHUNK = 4 * 1024 * 1024; // 4MB — under the 4.5MB cap, a multiple of 256KB (Drive requirement)
 
-export async function uploadLeadFile({ oppId, contactId, file, docType, asNote, body, onProgress }: UploadArgs): Promise<{ ok: boolean; msg: string }> {
+export async function uploadLeadFile({ oppId, contactId, file, docType, asNote, body, makePublic, onProgress }: UploadArgs): Promise<{ ok: boolean; msg: string; link?: string }> {
   if (!file || file.size === 0) return { ok: false, msg: "Pick a file first." };
   if (file.size > 100 * 1024 * 1024) return { ok: false, msg: `That file is ${(file.size / 1048576).toFixed(0)}MB — over the 100MB limit. Compress it and retry.` };
   try {
@@ -53,10 +54,10 @@ export async function uploadLeadFile({ oppId, contactId, file, docType, asNote, 
     const fin = await fetch("/api/crm/upload-finalize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ oppId, contactId, folderId: initRes.folderId, driveName: initRes.driveName, fileName: file.name, docType, asNote, body, fileId, link }),
+      body: JSON.stringify({ oppId, contactId, folderId: initRes.folderId, driveName: initRes.driveName, fileName: file.name, docType, asNote, body, fileId, link, makePublic }),
     }).then((r) => r.json()).catch(() => null);
     if (!fin?.ok) return { ok: false, msg: fin?.msg || "Uploaded, but couldn't log it — refresh to check." };
-    return { ok: true, msg: fin.msg };
+    return { ok: true, msg: fin.msg, link: fin.link };
   } catch (e) {
     return { ok: false, msg: `Upload failed: ${String((e as Error)?.message ?? e).slice(0, 120)}` };
   }

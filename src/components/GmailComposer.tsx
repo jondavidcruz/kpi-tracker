@@ -5,6 +5,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendCrmEmailAction } from "@/app/crm/actions";
+import { uploadLeadFile } from "@/lib/upload-lead-file";
 import { GOOGLE_REVIEW_LINK } from "@/lib/crm-shared";
 
 type Snip = { id: string; name: string; kind: string; subject?: string; body: string };
@@ -20,7 +21,7 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
   ];
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [attach, setAttach] = useState<File | null>(null); // 📎 ≤10MB, sent via Resend
+  const [attach, setAttach] = useState<File | null>(null); // 📎 ≤25MB; small files attach via Resend, big ones go as a Drive link
   const [sent, setSent] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [undoLeft, setUndoLeft] = useState(0); // Gmail-style send delay
@@ -38,19 +39,46 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
       router.refresh();
     });
   };
+  // 📎 A real attachment must fit through the server action, but Vercel caps the
+  // request body at ~4.5MB and base64 inflates it ~33% — so anything over ~3MB fails
+  // silently. For a big file we upload it to Drive and send a link instead (Jon 2026-10-27).
+  const ATTACH_INLINE_MAX = 3 * 1024 * 1024;
+
   const send = () => {
     if (!subject.trim() || !body.trim()) return;
     // first email to this seller → explicit confirmation (Jon 2026-10-07)
     if (history.length === 0 && !confirming) { setConfirming(true); return; }
     setConfirming(false);
-    const fd = new FormData();
-    fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", to);
-    fd.set("subject", subject); fd.set("body", body);
-    if (attach) fd.set("file", attach, attach.name);
+    const bigFile = attach && attach.size > ATTACH_INLINE_MAX ? attach : null;
+    const smallFile = attach && !bigFile ? attach : null;
     setAttach(null);
+
+    const fire = (linkLine: string) => {
+      const fd = new FormData();
+      fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", to);
+      fd.set("subject", subject); fd.set("body", body + linkLine);
+      if (smallFile) fd.set("file", smallFile, smallFile.name);
+      setSubject(""); setBody("");
+      undoRef.current.fd = fd;
+      startCountdown();
+    };
+
+    if (bigFile) {
+      // upload now (chunked → Drive, public link), then queue the send with the link appended
+      setSent("📎 Uploading attachment…");
+      start(async () => {
+        const r = await uploadLeadFile({ oppId, contactId, file: bigFile, makePublic: true });
+        setSent("");
+        if (!r.ok || !r.link) { setSent(`⚠️ Attachment failed: ${r.msg}`); setTimeout(() => setSent(""), 7000); return; }
+        fire(`\n\n📎 ${bigFile.name}: ${r.link}`);
+      });
+      return;
+    }
+    fire("");
+  };
+
+  const startCountdown = () => {
     // 20-second undo window (like Gmail): the email leaves AFTER the countdown
-    setSubject(""); setBody("");
-    undoRef.current.fd = fd;
     setUndoLeft(20);
     undoRef.current.timer = setInterval(() => {
       setUndoLeft((n) => {
@@ -123,7 +151,7 @@ export default function GmailComposer({ oppId, contactId, to, leadName, rep, fro
               <button onClick={send} disabled={pending || !subject.trim() || !body.trim()} className="rounded-full bg-[#0b57d0] px-5 py-2 text-[13px] font-bold text-white hover:bg-[#0a4bb8] disabled:opacity-40">{pending ? "Sending…" : "Send"}</button>
               <label className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] hover:bg-slate-50" title="Attach a file (max 10MB)">
                 📎{attach ? ` ${attach.name.slice(0, 18)}${attach.name.length > 18 ? "…" : ""}` : ""}
-                <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f && f.size <= 10 * 1024 * 1024) setAttach(f); e.target.value = ""; }} />
+                <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f && f.size <= 25 * 1024 * 1024) setAttach(f); else if (f) alert("That file is over 25MB — compress it and retry."); e.target.value = ""; }} />
               </label>
               {attach && <button onClick={() => setAttach(null)} className="text-[10px] font-bold text-red-500 hover:text-red-700">✕</button>}
             </>
