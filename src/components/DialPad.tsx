@@ -90,6 +90,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const bcRef = useRef<BroadcastChannel | null>(null);
   const [lineOk, setLineOk] = useState(false); // 🟢 socket registered = inbound will ring here
   const incomingCallRef = useRef<{ answer: () => void; hangup: () => void } | null>(null);
+  // 🚫 Callers I just DECLINED → auto-silence any re-ring of the same call to my tab for
+  // a short window, so a reject passes the call on instead of ringing me again (Jon 2026-10-28).
+  const declinedRef = useRef<Map<string, number>>(new Map());
+  const DECLINE_SILENCE_MS = 45_000;
   const readyRef = useRef(false);
   const connectingRef = useRef<Promise<unknown> | null>(null);
   const clientRef = useRef<{ disconnect: () => void } | null>(null);
@@ -427,6 +431,14 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
           const cs = n.call.state ?? "";
           const inbound = n.call.direction === "inbound";
           if (inbound && cs === "ringing") {
+            // 🚫 I just declined this caller → silently hang up the re-ring so it passes
+            // to someone else and doesn't ring me again (Jon 2026-10-28).
+            const ringNum = n.call.options?.remoteCallerNumber ?? "unknown";
+            const declinedAt = declinedRef.current.get(ringNum);
+            if (declinedAt && Date.now() - declinedAt < DECLINE_SILENCE_MS) {
+              try { n.call.hangup?.(); } catch { /* already gone */ }
+              return;
+            }
             incomingCallRef.current = n.call as never;
             ringStartRef.current = Date.now(); // stamp this ring so only a claim filed AFTER it can auto-answer
             // ⚡ cross-profile answer: if I click Answer in ANOTHER browser
@@ -594,7 +606,14 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     setMicOk(true);
     try { (incomingCallRef.current as { answer: () => void } | null)?.answer(); setOnCall({ phone: incoming?.number ?? "", dir: "in" }); } catch { /* gone */ }
   };
-  const declineIncoming = () => { try { incomingCallRef.current?.hangup(); } catch { /* gone */ } incomingCallRef.current = null; setIncoming(null); try { bcRef.current?.postMessage({ t: "incoming-clear" }); } catch { /* fine */ } };
+  const declineIncoming = () => {
+    // remember this caller so Telnyx re-offering the SAME call doesn't ring me again
+    const num = incoming?.number || (incomingCallRef.current as { options?: { remoteCallerNumber?: string } } | null)?.options?.remoteCallerNumber;
+    if (num) { declinedRef.current.set(num, Date.now()); setTimeout(() => declinedRef.current.delete(num), DECLINE_SILENCE_MS + 1000); }
+    try { incomingCallRef.current?.hangup(); } catch { /* gone */ }
+    incomingCallRef.current = null; setIncoming(null);
+    try { bcRef.current?.postMessage({ t: "incoming-clear" }); } catch { /* fine */ }
+  };
   // refs so the BroadcastChannel handler (bound once on mount) always calls
   // the latest versions
   const answerIncomingRef = useRef(answerIncoming);

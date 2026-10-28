@@ -63,6 +63,11 @@ const tabsFor = (pipeline: string | null | undefined) => [
   { key: "notes", label: "Notes & activity", emoji: "📝" },
 ];
 
+// 🔀 Order pipelines AQ first, then DS, then everything else (Jon 2026-10-28: the list
+// was mixed). Stable within each group. "AQjr:" counts as acquisitions.
+const pipeRank = (n: string) => (/^aq/i.test(n) ? 0 : /^ds/i.test(n) ? 1 : 2);
+const sortPipes = (names: string[]) => names.map((n, i) => [n, i] as const).sort((a, b) => pipeRank(a[0]) - pipeRank(b[0]) || a[1] - b[1]).map(([n]) => n);
+
 const inputCls = "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm";
 const labelCls = "mb-0.5 block text-[11px] font-bold text-slate-500";
 
@@ -572,7 +577,7 @@ function PipelineMover({ d, pipelineStages, setSaved, block }: { d: Payload; pip
   const [pendingPipe, setPendingPipe] = useState<string | null>(null);
   const [pendingStage, setPendingStage] = useState<string>("");
   const [moving, startMove] = useTransition();
-  const names = d.pipelines ?? [d.pipeline];
+  const names = sortPipes(d.pipelines ?? [d.pipeline]);
   const targetStages = pendingPipe ? (pipelineStages?.[pendingPipe] ?? []) : [];
   const selCls = "rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-bold text-slate-700";
   const doMove = () => {
@@ -613,7 +618,7 @@ function PipelineStage({ d, pipelineStages, stages, setSaved, setData }: {
   const [pipe, setPipe] = useState(d.pipeline);
   const [stage, setStage] = useState(d.stage);
   const [moving, startMove] = useTransition();
-  const names = d.pipelines ?? [d.pipeline];
+  const names = sortPipes(d.pipelines ?? [d.pipeline]);
   const changed = pipe !== d.pipeline;
   const curStages = pipelineStages?.[pipe] ?? (changed ? [] : stages);
   const onPipe = (p: string) => { setPipe(p); setStage(p === d.pipeline ? d.stage : ((pipelineStages?.[p] ?? [])[0]?.key ?? "")); };

@@ -1913,7 +1913,11 @@ export async function setOppPipelineAction(formData: FormData) {
       postToSpace("contracts", msg).catch(() => {});
     } catch { /* announcement is best-effort — never block the move */ }
   }
-  revalidatePath("/crm");
+  // NOTE: no revalidatePath here — BOTH callers (the quick-view pipeline move) do a full
+  // window.location.reload() right after, and the extra in-place revalidate re-rendered the
+  // board (recomputing the default pipeline → a "War Room" flash) a beat before the reload,
+  // which is the 3–5s flutter Jon saw switching back and forth (2026-10-28). The reload alone
+  // refreshes the dynamic board cleanly.
 }
 
 /** 🔀 Reorder the pipeline tabs (Jon 2026-10-13: drag/move pipelines, not just
