@@ -2998,7 +2998,7 @@ export async function cascadeRank(formData: FormData): Promise<{
   geocode?: { lat: number; lng: number; formatted: string; county: string; city: string; state: string; zip: string };
   ranked?: Array<{
     id: string; name: string; company: string; type: string; phone: string; email: string;
-    score: number; tier: 1 | 2 | 3; grade: "A" | "B" | "C"; why: Array<{ ok: boolean | "warn"; label: string }>; geoBasis: string;
+    score: number; tier: 1 | 2 | 3; grade: "A" | "B" | "C"; builderSize: "mompop" | "big"; why: Array<{ ok: boolean | "warn"; label: string }>; geoBasis: string;
     box: null | {
       priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; priceText: string;
       discount: number | null; acresMin: number | null; acresMax: number | null; types: string[];
@@ -3036,6 +3036,7 @@ export async function cascadeRank(formData: FormData): Promise<{
   }) : [];
   type BB = import("@/lib/buybox/types").BuyBox;
   const { devVetScore } = await import("@/lib/dev-vetting"); // 🅰🅱🅲 vetting grade per buyer
+  const { classifyBuilderSize } = await import("@/lib/builder-size"); // 🏠🏢 builder size
   const STOP = new Set(["the", "and", "for", "llc", "inc", "county", "ave", "street", "road", "drive", "lane", "blvd", "court", "circle", "unit", "ste", "usa"]);
   const cards = opps.map((o) => {
     const fd = (o.formData ?? {}) as Record<string, unknown>;
@@ -3058,6 +3059,15 @@ export async function cascadeRank(formData: FormData): Promise<{
       importBuyBox: (src.buyBox || imp.buyBox || "").trim(),
       form, // raw dev_buybox / agent_profile answers (free text per field)
       grade: devVetScore(fd, agent ? "buyer_agent" : "developer").tier, // 🅰🅱🅲
+      // 🏠🏢 mom-and-pop vs big builder (Jon 2026-10-28) — team override wins.
+      builderSize: classifyBuilderSize({
+        name: o.contact?.name || o.title,
+        override: (fd.__builderSize as string | undefined) ?? null,
+        nationwide: geo?.nationwide === true,
+        statesCount: geo?.states?.length ?? 0,
+        volumeText: bb?.status?.volume_note || form.volume || "",
+        extraText: (src.buyBox || imp.buyBox || "") + " " + (form.brokerage || src.company || ""),
+      }),
       areaText, nationwide: geo?.nationwide === true, lastTouchAt: o.updatedAt as Date,
     };
   });
@@ -3164,7 +3174,7 @@ export async function cascadeRank(formData: FormData): Promise<{
         volumeNote: bb?.status?.volume_note ?? "", buyingNow: bb?.status?.buying_now ?? null,
         details,
       } : null;
-      return { id: r.buyer.id, name: r.buyer.name, company: c?.company ?? "", type: c?.type ?? "", phone: c?.phone ?? "", email: c?.email ?? "", score: r.score, tier: r.tier, grade: c?.grade ?? "C", why: r.why, geoBasis: r.geoBasis, box };
+      return { id: r.buyer.id, name: r.buyer.name, company: c?.company ?? "", type: c?.type ?? "", phone: c?.phone ?? "", email: c?.email ?? "", score: r.score, tier: r.tier, grade: c?.grade ?? "C", builderSize: c?.builderSize ?? "mompop", why: r.why, geoBasis: r.geoBasis, box };
     }),
   };
 }
@@ -4932,4 +4942,22 @@ export async function deleteCustomFieldAction(formData: FormData) {
   await saveCustomFieldsRaw(map);
   revalidatePath("/admin/form-builder");
   redirect("/admin/form-builder?deleted=1");
+}
+
+// 🏠🏢 Correct a buyer's mom-and-pop / big-builder tag (Jon 2026-10-28). Stored on the
+// buyer's formData.__builderSize; the cascade classifier treats it as the override.
+export async function setBuilderSizeAction(formData: FormData): Promise<{ ok: boolean }> {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return { ok: false };
+  const id = String(formData.get("id") ?? "");
+  const size = String(formData.get("size") ?? "");
+  if (!id || !["mompop", "big", ""].includes(size)) return { ok: false };
+  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { formData: true } });
+  if (!opp) return { ok: false };
+  const fd = (opp.formData ?? {}) as Record<string, unknown>;
+  const next = { ...fd };
+  if (size) next.__builderSize = size; else delete next.__builderSize;
+  await db.crmOpportunity.update({ where: { id }, data: { formData: next as never } });
+  revalidatePath("/marketing");
+  return { ok: true };
 }

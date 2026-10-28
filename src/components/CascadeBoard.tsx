@@ -3,11 +3,12 @@
 // One search → geocode → every active buyer scored against the deal's location,
 // price, acreage, and asset type, with WHY chips on every card.
 import { useRef, useState, useTransition } from "react";
-import { cascadeRank, logBuyerOutreach } from "@/app/actions";
+import { cascadeRank, logBuyerOutreach, setBuilderSizeAction } from "@/app/actions";
+import { builderSizeMeta } from "@/lib/builder-size";
 
 type Chip = { ok: boolean | "warn"; label: string };
 type Box = { priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; priceText: string; discount: number | null; acresMin: number | null; acresMax: number | null; types: string[]; closeDays: number | null; funding: string | null; where: string[]; volumeNote: string; buyingNow: boolean | null; details?: { label: string; value: string }[] };
-type Card = { id: string; name: string; company: string; type: string; phone: string; email: string; score: number; tier: 1 | 2 | 3; grade?: "A" | "B" | "C"; why: Chip[]; geoBasis: string; box: Box | null };
+type Card = { id: string; name: string; company: string; type: string; phone: string; email: string; score: number; tier: 1 | 2 | 3; grade?: "A" | "B" | "C"; builderSize?: "mompop" | "big"; why: Chip[]; geoBasis: string; box: Box | null };
 // 🅰🅱🅲 vetting grade (completeness + price), separate from the deal-match ring.
 const GRADE_CLS: Record<string, string> = { A: "bg-emerald-100 text-emerald-700 ring-emerald-200", B: "bg-amber-100 text-amber-700 ring-amber-200", C: "bg-slate-100 text-slate-500 ring-slate-200" };
 type Geo = { lat: number; lng: number; formatted: string; county: string; city: string; state: string; zip: string };
@@ -45,6 +46,13 @@ export default function CascadeBoard() {
   // 🟢 Green-only by default (Jon 2026-10-26): match each deal to buyers who actually
   // cover it — hide the amber "near miss / long shot" tiers unless the rep opts in.
   const [showNearMiss, setShowNearMiss] = useState(false);
+  // 🏠 Mom-and-pop builders give the fastest feedback (Jon 2026-10-28) — work them first.
+  const [momFirst, setMomFirst] = useState(false);
+  const setBuilderSize = (id: string, size: "mompop" | "big") => {
+    setCards((cur) => (cur ? cur.map((c) => (c.id === id ? { ...c, builderSize: size } : c)) : cur));
+    const fd = new FormData(); fd.set("id", id); fd.set("size", size);
+    setBuilderSizeAction(fd).catch(() => {});
+  };
   const [error, setError] = useState("");
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState("");
@@ -130,6 +138,11 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
                   {showNearMiss ? "Hide near-misses" : `Show ${cards.filter((c) => c.tier !== 1).length} near-misses`}
                 </button>
               )}
+              {cards.some((c) => c.builderSize === "mompop") && (
+                <button onClick={() => setMomFirst((v) => !v)} title="Mom & pop builders give the fastest feedback — surface them to the top" className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ${momFirst ? "bg-emerald-600 text-white ring-emerald-600" : "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"}`}>
+                  🏠 Mom &amp; Pop first
+                </button>
+              )}
               <span className="ml-auto flex gap-2">
                 <button onClick={() => copy(topN(5), "top")} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200">{copied === "top" ? "✅ Copied" : "📋 Copy top 5"}</button>
                 <button onClick={csv} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200">⬇ Ranked CSV</button>
@@ -148,7 +161,7 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
       )}
 
       <div className="space-y-2.5">
-        {(cards ?? []).filter((c) => showNearMiss || c.tier === 1).map((c, i) => (
+        {(cards ?? []).filter((c) => showNearMiss || c.tier === 1).slice().sort((a, b) => momFirst ? ((a.builderSize === "mompop" ? 0 : 1) - (b.builderSize === "mompop" ? 0 : 1)) : 0).map((c, i) => (
           <div key={c.id} className={`rounded-2xl border bg-white p-3.5 shadow-sm ${c.tier === 1 ? "border-emerald-200" : c.tier === 2 ? "border-amber-200" : "border-slate-200"}`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-[13px] font-extrabold text-white">{i + 1}</span>
@@ -156,6 +169,9 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[15px] font-extrabold text-slate-800">{c.name}</span>
+                  {c.builderSize && (() => { const m = builderSizeMeta(c.builderSize); return (
+                    <button type="button" title={m.title} onClick={() => setBuilderSize(c.id, c.builderSize === "big" ? "mompop" : "big")} className={`rounded-full px-2 py-0.5 text-[11px] font-bold ring-1 ${m.cls} hover:opacity-80`}>{m.emoji} {m.label}</button>
+                  ); })()}
                   {c.grade && <span title="Vetting grade — how complete this buyer's buy box is (A = VIP, B = workable, C = thin). Separate from the deal-match score." className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ring-1 ${GRADE_CLS[c.grade] ?? GRADE_CLS.C}`}>{c.grade}</span>}
                   {c.company && <span className="text-sm text-slate-400">{c.company}</span>}
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ring-1 ${TIER_LABEL[c.tier].cls}`}>{TIER_LABEL[c.tier].text}</span>
