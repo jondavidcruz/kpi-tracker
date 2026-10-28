@@ -23,6 +23,7 @@ import GmailComposer from "@/components/GmailComposer";
 import LienBuilder from "@/components/LienBuilder";
 import NoteComposer from "@/components/NoteComposer";
 import TimelineFilter from "@/components/TimelineFilter";
+import DetailsAutofill from "@/components/DetailsAutofill";
 import { uploadLeadFile } from "@/lib/upload-lead-file";
 import { sanitizeNoteHtml, isHtmlNote } from "@/lib/note-html";
 
@@ -281,6 +282,8 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                 {formsForPipeline(d.pipeline).map((f) => tab === `form:${f.key}` && (
                   <div key={f.key} className="space-y-3">
                     {f.key === "financial" && <UnderwriteBlock d={d} />}
+                    {/* ✨ pull details straight out of the notes (Home/Land only) */}
+                    {(f.key === "property" || f.key === "land") && <DetailsAutofill oppId={d.id} formKey={f.key} onApplied={() => refetch(d.id)} />}
                     {/* controlled fields — never blank out the rep's dropdown choices (Jon 2026-10-26) */}
                     <CrmFormFields form={f} oppId={d.id} contactId={d.contact.id} initial={(d.formData?.[f.key] ?? {}) as Record<string, string | string[]>} />
                   </div>

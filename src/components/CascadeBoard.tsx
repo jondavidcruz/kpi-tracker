@@ -7,7 +7,9 @@ import { cascadeRank, logBuyerOutreach } from "@/app/actions";
 
 type Chip = { ok: boolean | "warn"; label: string };
 type Box = { priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; priceText: string; discount: number | null; acresMin: number | null; acresMax: number | null; types: string[]; closeDays: number | null; funding: string | null; where: string[]; volumeNote: string; buyingNow: boolean | null; details?: { label: string; value: string }[] };
-type Card = { id: string; name: string; company: string; type: string; phone: string; email: string; score: number; tier: 1 | 2 | 3; why: Chip[]; geoBasis: string; box: Box | null };
+type Card = { id: string; name: string; company: string; type: string; phone: string; email: string; score: number; tier: 1 | 2 | 3; grade?: "A" | "B" | "C"; why: Chip[]; geoBasis: string; box: Box | null };
+// 🅰🅱🅲 vetting grade (completeness + price), separate from the deal-match ring.
+const GRADE_CLS: Record<string, string> = { A: "bg-emerald-100 text-emerald-700 ring-emerald-200", B: "bg-amber-100 text-amber-700 ring-amber-200", C: "bg-slate-100 text-slate-500 ring-slate-200" };
 type Geo = { lat: number; lng: number; formatted: string; county: string; city: string; state: string; zip: string };
 type Excluded = { name: string; reason: string };
 
@@ -154,6 +156,7 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[15px] font-extrabold text-slate-800">{c.name}</span>
+                  {c.grade && <span title="Vetting grade — how complete this buyer's buy box is (A = VIP, B = workable, C = thin). Separate from the deal-match score." className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ring-1 ${GRADE_CLS[c.grade] ?? GRADE_CLS.C}`}>{c.grade}</span>}
                   {c.company && <span className="text-sm text-slate-400">{c.company}</span>}
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ring-1 ${TIER_LABEL[c.tier].cls}`}>{TIER_LABEL[c.tier].text}</span>
                 </div>

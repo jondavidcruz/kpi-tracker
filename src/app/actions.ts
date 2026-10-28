@@ -2998,7 +2998,7 @@ export async function cascadeRank(formData: FormData): Promise<{
   geocode?: { lat: number; lng: number; formatted: string; county: string; city: string; state: string; zip: string };
   ranked?: Array<{
     id: string; name: string; company: string; type: string; phone: string; email: string;
-    score: number; tier: 1 | 2 | 3; why: Array<{ ok: boolean | "warn"; label: string }>; geoBasis: string;
+    score: number; tier: 1 | 2 | 3; grade: "A" | "B" | "C"; why: Array<{ ok: boolean | "warn"; label: string }>; geoBasis: string;
     box: null | {
       priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; priceText: string;
       discount: number | null; acresMin: number | null; acresMax: number | null; types: string[];
@@ -3035,6 +3035,7 @@ export async function cascadeRank(formData: FormData): Promise<{
     select: { id: true, title: true, pipeline: true, formData: true, updatedAt: true, contact: { select: { name: true, phone: true, email: true } } },
   }) : [];
   type BB = import("@/lib/buybox/types").BuyBox;
+  const { devVetScore } = await import("@/lib/dev-vetting"); // 🅰🅱🅲 vetting grade per buyer
   const STOP = new Set(["the", "and", "for", "llc", "inc", "county", "ave", "street", "road", "drive", "lane", "blvd", "court", "circle", "unit", "ste", "usa"]);
   const cards = opps.map((o) => {
     const fd = (o.formData ?? {}) as Record<string, unknown>;
@@ -3056,6 +3057,7 @@ export async function cascadeRank(formData: FormData): Promise<{
       // FULL per-field detail Jon sees in the spreadsheet (Jon 2026-10-27), not a summary.
       importBuyBox: (src.buyBox || imp.buyBox || "").trim(),
       form, // raw dev_buybox / agent_profile answers (free text per field)
+      grade: devVetScore(fd, agent ? "buyer_agent" : "developer").tier, // 🅰🅱🅲
       areaText, nationwide: geo?.nationwide === true, lastTouchAt: o.updatedAt as Date,
     };
   });
@@ -3162,7 +3164,7 @@ export async function cascadeRank(formData: FormData): Promise<{
         volumeNote: bb?.status?.volume_note ?? "", buyingNow: bb?.status?.buying_now ?? null,
         details,
       } : null;
-      return { id: r.buyer.id, name: r.buyer.name, company: c?.company ?? "", type: c?.type ?? "", phone: c?.phone ?? "", email: c?.email ?? "", score: r.score, tier: r.tier, why: r.why, geoBasis: r.geoBasis, box };
+      return { id: r.buyer.id, name: r.buyer.name, company: c?.company ?? "", type: c?.type ?? "", phone: c?.phone ?? "", email: c?.email ?? "", score: r.score, tier: r.tier, grade: c?.grade ?? "C", why: r.why, geoBasis: r.geoBasis, box };
     }),
   };
 }

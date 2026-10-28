@@ -2612,3 +2612,62 @@ export async function toggleDispoMarketingAction(formData: FormData) {
   await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __marketing: next } as never } });
   revalidatePath(`/crm/${oppId}`);
 }
+
+// ✨ Notes → Home/Land Details autofill (Jon 2026-10-27, queue item A). Reads the lead's
+// notes + call/text/email bodies and proposes values for the EMPTY detail fields only.
+// Returns proposals for the rep to review — it never writes here, so nothing is overwritten
+// silently. Uses the shared AI front door (Anthropic → Gemini fallback).
+export async function autofillDetailsFromNotesAction(formData: FormData): Promise<{ ok: boolean; proposals?: Record<string, string>; labels?: Record<string, string>; msg?: string }> {
+  const me = await crmUser();
+  if (!me) return { ok: false, msg: "You're signed out — reload." };
+  const oppId = String(formData.get("oppId") ?? "");
+  const formKey = String(formData.get("formKey") ?? "");
+  if (!oppId || !["property", "land"].includes(formKey)) return { ok: false, msg: "Bad request." };
+  const { CRM_FORMS } = await import("@/lib/crm-forms");
+  const form = CRM_FORMS.find((f) => f.key === formKey);
+  if (!form) return { ok: false, msg: "No such form." };
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
+  const existing = ((opp?.formData as Record<string, Record<string, string>> | null) ?? {})[formKey] ?? {};
+  const notes = await db.crmEvent.findMany({ where: { oppId, kind: { in: ["note", "call", "sms", "email"] } }, orderBy: { at: "desc" }, take: 80, select: { body: true } });
+  const corpus = notes.map((n) => String(n.body).replace(/<[^>]*>/g, " ")).join("\n").slice(0, 12000);
+  if (!corpus.trim()) return { ok: false, msg: "No notes to read yet — add a note or log a call first." };
+  const fields = form.fields.filter((f) => f.type !== "checks" && !String(existing[f.key] ?? "").trim());
+  if (!fields.length) return { ok: false, msg: "Every detail field is already filled." };
+  const spec = fields.map((f) => f.type === "select" ? `- ${f.key}: pick ONE of [${(f as { options: string[] }).options.join(" | ")}] — ${f.label}` : `- ${f.key}: ${f.label}`).join("\n");
+  const { aiText } = await import("@/lib/ai");
+  const sys = "You extract property details from a real-estate lead's notes and call/text logs. Return ONLY a compact JSON object mapping field keys to values you can clearly support from the text. OMIT any field not clearly stated — never guess. For select fields the value MUST be one of the given options verbatim. Keep text values short and factual.";
+  const out = await aiText({ system: sys, messages: [{ role: "user", content: `FIELDS:\n${spec}\n\nLEAD NOTES & CALL/TEXT LOGS:\n${corpus}\n\nReturn JSON only, no prose.` }], maxTokens: 800 });
+  let parsed: Record<string, unknown> = {};
+  try { parsed = JSON.parse(out.replace(/```json\s*|```/g, "").trim()); } catch { return { ok: false, msg: "Couldn't read the AI result — try again." }; }
+  const proposals: Record<string, string> = {};
+  const labels: Record<string, string> = {};
+  for (const f of fields) {
+    const v = String(parsed[f.key] ?? "").trim();
+    if (!v) continue;
+    if (f.type === "select" && !(f as { options: string[] }).options.includes(v)) continue;
+    proposals[f.key] = v.slice(0, 400);
+    labels[f.key] = f.label;
+  }
+  if (!Object.keys(proposals).length) return { ok: false, msg: "Nothing new to pull from the notes yet." };
+  return { ok: true, proposals, labels };
+}
+
+export async function applyDetailsAutofillAction(formData: FormData): Promise<{ ok: boolean; msg?: string }> {
+  const me = await crmUser();
+  if (!me) return { ok: false, msg: "You're signed out — reload." };
+  const oppId = String(formData.get("oppId") ?? "");
+  const formKey = String(formData.get("formKey") ?? "");
+  let vals: Record<string, string> = {};
+  try { vals = JSON.parse(String(formData.get("values") ?? "{}")); } catch { return { ok: false, msg: "Bad values." }; }
+  if (!oppId || !["property", "land"].includes(formKey) || !Object.keys(vals).length) return { ok: false, msg: "Nothing to apply." };
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true, contactId: true } });
+  const fd = (opp?.formData as Record<string, Record<string, string>> | null) ?? {};
+  const section = { ...(fd[formKey] ?? {}) };
+  let applied = 0;
+  for (const [k, v] of Object.entries(vals)) { if (v && !String(section[k] ?? "").trim()) { section[k] = String(v).slice(0, 400); applied++; } }
+  if (!applied) return { ok: false, msg: "Those fields were already filled." };
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, [formKey]: section } as never } });
+  await logCrmEvent({ contactId: opp!.contactId, oppId, kind: "system", body: `✨ Autofilled ${applied} ${formKey === "property" ? "Home" : "Land"} Details field${applied > 1 ? "s" : ""} from the notes.`, actor: me.name });
+  revalidatePath(`/crm/${oppId}`);
+  return { ok: true, msg: `✓ Filled ${applied} field${applied > 1 ? "s" : ""}.` };
+}

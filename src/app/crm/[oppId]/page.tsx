@@ -31,6 +31,7 @@ import AutoSaveForm from "@/components/AutoSaveForm";
 import PhoneField from "@/components/PhoneField";
 import TimelineFilter from "@/components/TimelineFilter";
 import CrmFormFields from "@/components/CrmFormFields";
+import DetailsAutofill from "@/components/DetailsAutofill";
 import DocUploadForm from "@/components/DocUploadForm";
 import CrmLayoutController from "@/components/CrmLayoutController";
 import { readCrmLayout } from "@/lib/crm-layout-store";
@@ -444,6 +445,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                     </summary>
                     {/* Controlled fields — selects can't blank out on the React form reset (Jon 2026-10-26) */}
                     <div className="px-3 pb-3">
+                      {(form.key === "property" || form.key === "land") && <DetailsAutofill oppId={opp.id} formKey={form.key} />}
                       <CrmFormFields form={form} oppId={opp.id} contactId={c.id} initial={(answers ?? {}) as Record<string, string | string[]>} />
                     </div>
                   </details>
