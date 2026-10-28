@@ -24,6 +24,10 @@ import LienBuilder from "@/components/LienBuilder";
 import NoteComposer from "@/components/NoteComposer";
 import TimelineFilter from "@/components/TimelineFilter";
 import DetailsAutofill from "@/components/DetailsAutofill";
+import DispoBuyerTracker from "@/components/DispoBuyerTracker";
+import DispoOffersPanel from "@/components/DispoOffersPanel";
+import { readDispoBuyers } from "@/lib/dispo-buyers";
+import { readDispoOffers } from "@/lib/dispo-offers";
 import { uploadLeadFile } from "@/lib/upload-lead-file";
 import { sanitizeNoteHtml, isHtmlNote } from "@/lib/note-html";
 
@@ -51,6 +55,7 @@ const tabsFor = (pipeline: string | null | undefined) => [
   { key: "opp", label: "Opportunity details", emoji: "📁" },
   { key: "contact", label: "Contact info", emoji: "👤" },
   ...formsForPipeline(pipeline).map((f) => ({ key: `form:${f.key}`, label: f.name, emoji: f.emoji })),
+  { key: "buyers", label: "Buyers & Offers", emoji: "🤝" },
   { key: "tasks", label: "Tasks", emoji: "✅" },
   { key: "appts", label: "Appointments", emoji: "📅" },
   { key: "sms", label: "Text message", emoji: "💬" },
@@ -289,6 +294,15 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                     <CrmFormFields form={f} oppId={d.id} contactId={d.contact.id} initial={(d.formData?.[f.key] ?? {}) as Record<string, string | string[]>} />
                   </div>
                 ))}
+
+                {/* 🤝 Buyers on the deal + offers received — the SAME trackers as the full
+                    contact view, read from formData so they stay in sync (Jon 2026-10-28). */}
+                {tab === "buyers" && (
+                  <div className="space-y-3">
+                    <DispoOffersPanel oppId={d.id} offers={readDispoOffers(d.formData)} buyerNames={readDispoBuyers(d.formData).map((b) => b.name)} askPrice={d.askPrice} />
+                    <DispoBuyerTracker oppId={d.id} buyers={readDispoBuyers(d.formData)} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={d.me.canCall} canSms={d.me.canSms} board />
+                  </div>
+                )}
 
                 {tab === "tasks" && (
                   <div className="space-y-3">

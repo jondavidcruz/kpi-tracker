@@ -99,6 +99,27 @@ export const CRM_FORMS: CrmForm[] = [
       { key: "confidence", label: "Deal confidence", type: "select", options: ["🔥 Hot — ready now", "Warm — needs the right number", "Cold — long nurture"] },
     ],
   },
+  // 📝 Closing & Escrow (Jon 2026-10-28) — the escrow/title tracker + closing checklist,
+  // mirroring the "Closing Details" the team keeps in GHL. Shows on every seller/deal lead
+  // (quick-view + full page) and saves to formData.closing like any other form, so it's
+  // synced everywhere. Checklist is a multi-check so progress is visible at a glance.
+  {
+    key: "closing", name: "Closing & Escrow", emoji: "📝",
+    fields: [
+      { key: "checklist", label: "✅ Closing checklist", type: "checks", options: [
+        "Contracts saved to Drive", "Preliminary escrow started", "Buyer contract signed",
+        "Backup buyers identified", "Escrow opened", "Earnest money deposited",
+        "Title clean & clear to close", "Closing docs signed", "Confirmed closing 2 days prior",
+        "Closing day confirmed & recorded", "Wire / check / HUD received",
+      ] },
+      { key: "escrowFile", label: "🗂 Escrow file number", type: "text" },
+      { key: "escrowDetails", label: "🏦 Escrow office — address, agent, phone, email, website", type: "textarea" },
+      { key: "titleFile", label: "🗂 Title file number", type: "text" },
+      { key: "titleDetails", label: "📜 Title office — address, agent, phone, email, website", type: "textarea" },
+      { key: "closingDate", label: "📅 Escrow closing date", type: "text", hint: "YYYY-MM-DD" },
+      { key: "problems", label: "⚠️ Title or closing problems?", type: "textarea", sensitive: true },
+    ],
+  },
 ];
 
 // 🏗/🧑‍💼 Dispo buyer-NETWORK forms (Jon 2026-10-20). Developers + buyer agents are
