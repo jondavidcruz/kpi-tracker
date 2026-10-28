@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!canManageAllLeads(me!) && opp.assignedTo && opp.assignedTo !== me!.name && !followersList.includes(me!.name)) return NextResponse.json({ error: "not your lead" }, { status: 403 });
   const { commsFor, readSignatures, firstOf, defaultSignature, hasSignatureImage } = await import("@/lib/crm-comms");
   const { readSnippets } = await import("@/lib/crm-templates");
-  const [events, tasks, appts, comms, sigs, snippets, smsEvents, emailEvents] = await Promise.all([
+  const [events, tasks, appts, comms, sigs, snippets, smsEvents, emailEvents, siblingOpps] = await Promise.all([
     db.crmEvent.findMany({ where: { contactId: opp.contactId }, orderBy: { at: "desc" }, take: 40 }),
     // Open tasks first (doneAt null), then completed ones kept as checked-off history
     // with who/when (Jon 2026-10-27: "don't delete — show when they completed it").
@@ -29,7 +29,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     readSnippets(),
     db.crmEvent.findMany({ where: { contactId: opp.contactId, kind: "sms" }, orderBy: { at: "desc" }, take: 15 }),
     db.crmEvent.findMany({ where: { contactId: opp.contactId, kind: "email" }, orderBy: { at: "desc" }, take: 8 }),
+    // 🧩 Other opportunities on the SAME contact (Jon 2026-10-28: "show if this contact
+    // has other opportunities") — so a multi-property seller is obvious in the quick-view.
+    db.crmOpportunity.findMany({ where: { contactId: opp.contactId, archivedAt: null, id: { not: id } }, select: { id: true, title: true, stage: true, pipeline: true }, orderBy: { createdAt: "asc" }, take: 12 }),
   ]);
+  // 📁 This deal's Google Drive files (best-effort, capped so a slow Drive call never
+  // stalls the quick-view) — mirrors the full contact view's Documents (Jon 2026-10-28).
+  const driveFiles = await Promise.race([
+    import("@/lib/gdrive").then((m) => m.listDealFiles(opp.contact.address || opp.title || opp.contact.name)).catch(() => [] as { id: string; name: string; link: string; mimeType: string }[]),
+    new Promise<{ id: string; name: string; link: string; mimeType: string }[]>((res) => setTimeout(() => res([]), 2500)),
+  ]).then((fs) => fs.slice(0, 15)).catch(() => [] as { id: string; name: string; link: string; mimeType: string }[]);
   // Saved underwriting for THIS property (matched by address) — powers the
   // Financials & Offer tab: MAO per exit + offer-vs-accepted + negotiation tips.
   const { readUnderwrites } = await import("@/app/actions");
@@ -70,6 +79,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     pipelines: pipelineNames,
     // 🛠 custom Home/Land Details fields (appended to the base form in the quick-view)
     customFields: await (await import("@/lib/crm-forms-store")).loadCustomFormFields(),
+    driveFiles,
+    siblingOpps: siblingOpps.map((o) => ({ id: o.id, title: o.title, stage: o.stage, pipeline: o.pipeline || "War Room" })),
     id: opp.id, title: opp.title, stage: opp.stage, pipeline: opp.pipeline || "War Room", assignedTo: opp.assignedTo,
     tags: opp.tags, nextFollowUp: opp.nextFollowUp, value: opp.value, askPrice: opp.askPrice,
     formData: (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>,

@@ -24,6 +24,7 @@ import LienBuilder from "@/components/LienBuilder";
 import NoteComposer from "@/components/NoteComposer";
 import TimelineFilter from "@/components/TimelineFilter";
 import DetailsAutofill from "@/components/DetailsAutofill";
+import DocUploadForm from "@/components/DocUploadForm";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoOffersPanel from "@/components/DispoOffersPanel";
 import { readDispoBuyers } from "@/lib/dispo-buyers";
@@ -36,6 +37,8 @@ type Payload = {
   nextFollowUp: string; value: number | null; askPrice: number | null;
   formData: Record<string, Record<string, string | string[]>>;
   customFields?: import("@/lib/crm-forms").CustomFieldMap;
+  driveFiles?: Array<{ id: string; name: string; link: string; mimeType: string }>;
+  siblingOpps?: Array<{ id: string; title: string; stage: string; pipeline: string }>;
   me: { name: string; fromLabel: string; signature: string; sigImageUrl?: string; canSms: boolean; canEmail: boolean; canCall: boolean };
   followers: string[];
   reps: string[];
@@ -56,6 +59,7 @@ const tabsFor = (pipeline: string | null | undefined) => [
   { key: "contact", label: "Contact info", emoji: "👤" },
   ...formsForPipeline(pipeline).map((f) => ({ key: `form:${f.key}`, label: f.name, emoji: f.emoji })),
   { key: "buyers", label: "Buyers & Offers", emoji: "🤝" },
+  { key: "files", label: "Files & docs", emoji: "📎" },
   { key: "tasks", label: "Tasks", emoji: "✅" },
   { key: "appts", label: "Appointments", emoji: "📅" },
   { key: "sms", label: "Text message", emoji: "💬" },
@@ -254,6 +258,19 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <label className={labelCls}>🏠 Property address <span className="font-normal normal-case text-slate-400">— the deal / property (this lead is named after the seller: {d.contact.name})</span></label>
                       <input name="title" defaultValue={formatAddress(d.title)} placeholder="123 Main St, City, ST ZIP" className={inputCls} />
                     </div>
+                    {/* 🧩 Other opportunities on the SAME contact — click to jump to one (Jon 2026-10-28). */}
+                    {(d.siblingOpps?.length ?? 0) > 0 && (
+                      <div className="col-span-2 rounded-lg bg-amber-50/60 p-2 ring-1 ring-amber-100">
+                        <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-amber-600">🧩 {d.siblingOpps!.length} other {d.siblingOpps!.length === 1 ? "opportunity" : "opportunities"} on {d.contact.name.split(" ")[0]}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {d.siblingOpps!.map((o) => (
+                            <button key={o.id} type="button" title={`${o.pipeline} · ${o.stage}`} onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: o.id } }))} className="rounded-lg bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
+                              📁 {o.title || "(untitled)"} <span className="text-slate-400">· {o.pipeline}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <PipelineStage d={d} pipelineStages={pipelineStages} stages={stages} setSaved={setSaved} setData={setData} />
 
                     <div>
@@ -343,6 +360,41 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                     <DispoBuyerTracker oppId={d.id} buyers={readDispoBuyers(d.formData)} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={d.me.canCall} canSms={d.me.canSms} board />
                   </div>
                 )}
+
+                {/* 📎 Files & docs — upload here (streams to Drive) + every file on this deal,
+                    the same documents the full contact view shows (Jon 2026-10-28). */}
+                {tab === "files" && (() => {
+                  const evFiles = d.events.filter((e) => e.kind === "file" && e.link).map((e) => ({ id: e.id ?? e.link!, name: e.fileName || "Document", link: e.link!, at: e.at }));
+                  const seen = new Set(evFiles.map((f) => f.link));
+                  const drive = (d.driveFiles ?? []).filter((f) => !seen.has(f.link));
+                  const empty = evFiles.length === 0 && drive.length === 0;
+                  return (
+                    <div className="space-y-3">
+                      <DocUploadForm oppId={d.id} contactId={d.contact.id} />
+                      {empty && <p className="text-xs text-slate-400">No files on this lead yet — upload one above. It saves to the deal&apos;s Drive folder.</p>}
+                      {evFiles.length > 0 && (
+                        <div className="space-y-1">
+                          {evFiles.map((f) => (
+                            <a key={f.id} href={f.link} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs text-sky-700 ring-1 ring-slate-100 hover:bg-slate-50">
+                              <span className="truncate font-semibold">📎 {f.name}</span>
+                              <span className="shrink-0 text-[10px] text-slate-400">{new Date(f.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      {drive.length > 0 && (
+                        <div>
+                          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">📁 In the deal&apos;s Drive folder</div>
+                          <div className="space-y-1">
+                            {drive.map((f) => (
+                              <a key={f.id} href={f.link} target="_blank" rel="noopener noreferrer" className="block truncate rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 ring-1 ring-slate-100 hover:bg-slate-50">📄 {f.name}</a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {tab === "tasks" && (
                   <div className="space-y-3">
