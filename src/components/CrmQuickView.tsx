@@ -16,7 +16,7 @@ import AutoSaveForm from "@/components/AutoSaveForm";
 import PhoneField from "@/components/PhoneField";
 import CrmFormFields from "@/components/CrmFormFields";
 import DispoGatePanel from "@/components/DispoGatePanel";
-import { isDispoDealPipeline } from "@/lib/dispo-buyers";
+import { isDispoDealPipeline, isDevNetworkName, isAgentNetworkName } from "@/lib/dispo-buyers";
 import { readGateChecks } from "@/lib/dispo-gates";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { readDealHeat } from "@/lib/deal-heat";
@@ -67,7 +67,9 @@ const tabsFor = (pipeline: string | null | undefined) => [
   { key: "opp", label: "Opportunity details", emoji: "📁" },
   { key: "contact", label: "Contact info", emoji: "👤" },
   ...formsForPipeline(pipeline).map((f) => ({ key: `form:${f.key}`, label: f.name, emoji: f.emoji })),
-  { key: "listing", label: "Listing history", emoji: "📈" },
+  // 📈 Listing history is a SELLER-lead concept only (what the property listed/sold for) — not
+  // for developer / buyer-agent leads (Jon 2026-10-29).
+  ...(!isDevNetworkName(pipeline) && !isAgentNetworkName(pipeline) ? [{ key: "listing", label: "Listing history", emoji: "📈" }] : []),
   { key: "buyers", label: "Buyers & Offers", emoji: "🤝" },
   { key: "files", label: "Files & docs", emoji: "📎" },
   { key: "tasks", label: "Tasks", emoji: "✅" },
@@ -415,7 +417,7 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
 
                 {/* 🤝 Buyers on the deal + offers received — the SAME trackers as the full
                     contact view, read from formData so they stay in sync (Jon 2026-10-28). */}
-                {tab === "listing" && (
+                {tab === "listing" && !isDevNetworkName(d.pipeline) && !isAgentNetworkName(d.pipeline) && (
                   <ListingHistoryPanel oppId={d.id} rows={readListingHistory(d.formData)} address={formatAddress(d.title) || d.contact.address} onSaved={() => refetch(d.id)} />
                 )}
 

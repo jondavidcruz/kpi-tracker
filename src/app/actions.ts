@@ -4908,7 +4908,7 @@ export async function testChatWebhookAction(formData: FormData) {
 // Appended to the base form; stored in Resource "__crm_custom_fields__" (no migration).
 export async function addCustomFieldAction(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isOwner(me) && !isManager(me)) return;
+  if (!isOwner(me)) return; // 🔒 foundation/core editing is OWNER-ONLY (Jon 2026-10-29)
   const formKey = String(formData.get("formKey") ?? "");
   if (!["property", "land"].includes(formKey)) return;
   const emoji = String(formData.get("emoji") ?? "").trim().slice(0, 4);
@@ -4932,7 +4932,7 @@ export async function addCustomFieldAction(formData: FormData) {
 
 export async function deleteCustomFieldAction(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isOwner(me) && !isManager(me)) return;
+  if (!isOwner(me)) return; // 🔒 foundation/core editing is OWNER-ONLY (Jon 2026-10-29)
   const formKey = String(formData.get("formKey") ?? "");
   const key = String(formData.get("key") ?? "");
   if (!formKey || !key) return;
@@ -4949,7 +4949,7 @@ export async function deleteCustomFieldAction(formData: FormData) {
 // saved answers are untouched. Empty label + unhidden removes the override.
 export async function setFieldOverrideAction(formData: FormData) {
   const me = await getCurrentUser();
-  if (!isOwner(me) && !isManager(me)) return;
+  if (!isOwner(me)) return; // 🔒 renaming/hiding core fields is OWNER-ONLY (Jon 2026-10-29)
   const formKey = String(formData.get("formKey") ?? "");
   const fieldKey = String(formData.get("fieldKey") ?? "");
   if (!formKey || !fieldKey) return;

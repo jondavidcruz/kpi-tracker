@@ -232,11 +232,23 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const [recentSms, readRow, touchEvs] = await Promise.all([
     cardCids.length ? db.crmEvent.findMany({ where: { contactId: { in: cardCids }, kind: "sms" }, orderBy: { at: "desc" }, take: 1500, select: { contactId: true, body: true, at: true } }) : [],
     db.resource.findFirst({ where: { category: "__conv_read__" } }),
-    // ✋ last REAL human touch per opp (Jon 2026-10-27) — note/call/text/email/task/appt/stage, no auto/system.
-    cardOids.length ? db.crmEvent.findMany({ where: { oppId: { in: cardOids }, kind: { in: ["note", "call", "sms", "email", "task", "appt", "stage"] } }, orderBy: { at: "desc" }, take: 9000, select: { oppId: true, at: true } }) : [],
+    // ✋ last REAL human touch (Jon 2026-10-27) — note/call/text/email/task/appt/stage, no auto/system.
+    // Query by CONTACT, not opp: many calls/texts are logged with oppId:"" (dialer, SMS receipts,
+    // inbound) so an opp-only match wrongly showed "never touched" after Marie worked the lead
+    // (Jon 2026-10-29). We match the event to the opp OR to the opp's contact.
+    cardCids.length ? db.crmEvent.findMany({ where: { contactId: { in: cardCids }, kind: { in: ["note", "call", "sms", "email", "task", "appt", "stage"] } }, orderBy: { at: "desc" }, take: 12000, select: { oppId: true, contactId: true, at: true } }) : [],
   ]);
   const lastTouchByOpp = new Map<string, Date>();
-  for (const e of touchEvs) if (e.oppId && !lastTouchByOpp.has(e.oppId)) lastTouchByOpp.set(e.oppId, e.at);
+  const lastTouchByContact = new Map<string, Date>();
+  for (const e of touchEvs) {
+    if (e.oppId && !lastTouchByOpp.has(e.oppId)) lastTouchByOpp.set(e.oppId, e.at);
+    if (e.contactId && !lastTouchByContact.has(e.contactId)) lastTouchByContact.set(e.contactId, e.at);
+  }
+  // latest of the opp-level touch and the contact-level touch
+  const lastTouchFor = (oppId: string, contactId: string): Date | undefined => {
+    const a = lastTouchByOpp.get(oppId), b = lastTouchByContact.get(contactId);
+    return a && b ? (a > b ? a : b) : (a ?? b);
+  };
   let convRead: Record<string, string> = {};
   try { convRead = readRow?.description ? JSON.parse(readRow.description) : {}; } catch { /* none */ }
   const smsUnread = new Map<string, number>();
@@ -283,7 +295,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       money: money(o.value) || (o.askPrice != null ? `ask ${money(o.askPrice)}` : ""),
       email: o.contact.email, smsUnread: smsUnread.get(o.contactId) ?? 0,
       valueNum: o.value ?? o.askPrice ?? 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
-      lastTouch: lastTouchByOpp.get(o.id)?.toISOString() ?? "",
+      lastTouch: lastTouchFor(o.id, o.contactId)?.toISOString() ?? "",
       apn: fd.property?.apn ?? "", apptDueToday: apptToday.length > 0, taskDueToday: due.length > 0,
       followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
       waterfront: isWaterfront(o.formData),

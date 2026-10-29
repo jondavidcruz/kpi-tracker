@@ -174,14 +174,25 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // ✋ last REAL human touch per deal (note/call/text/email/task/appt/stage-move) — the
   // "has anyone actually worked this?" signal (Jon 2026-10-27). System/auto events excluded.
   const lastTouchByDeal = new Map<string, Date>();
+  const lastTouchByContactD = new Map<string, Date>();
+  // deal contacts — so a call/text logged with oppId:"" (dialer/SMS receipt/inbound) still counts
+  // as a touch on the lead (Jon 2026-10-29: "Marie called + texted but it still said never touched").
+  const dealCids = [...new Set(dealOpps.filter((o) => o.pipeline === dealPl).map((o) => o.contactId).filter((x): x is string => !!x))];
   if (tab === "deals" && dealIds.length) {
     const [sevs, tevs] = await Promise.all([
       db.crmEvent.findMany({ where: { oppId: { in: dealIds }, kind: "stage" }, orderBy: { at: "desc" }, take: 6000, select: { oppId: true, at: true } }).catch(() => [] as { oppId: string; at: Date }[]),
-      db.crmEvent.findMany({ where: { oppId: { in: dealIds }, kind: { in: ["note", "call", "sms", "email", "task", "appt", "stage"] } }, orderBy: { at: "desc" }, take: 9000, select: { oppId: true, at: true } }).catch(() => [] as { oppId: string; at: Date }[]),
+      dealCids.length ? db.crmEvent.findMany({ where: { contactId: { in: dealCids }, kind: { in: ["note", "call", "sms", "email", "task", "appt", "stage"] } }, orderBy: { at: "desc" }, take: 12000, select: { oppId: true, contactId: true, at: true } }).catch(() => [] as { oppId: string; contactId: string; at: Date }[]) : [],
     ]);
     for (const e of sevs) if (e.oppId && !stageAtByDeal.has(e.oppId)) stageAtByDeal.set(e.oppId, e.at);
-    for (const e of tevs) if (e.oppId && !lastTouchByDeal.has(e.oppId)) lastTouchByDeal.set(e.oppId, e.at);
+    for (const e of tevs) {
+      if (e.oppId && !lastTouchByDeal.has(e.oppId)) lastTouchByDeal.set(e.oppId, e.at);
+      if (e.contactId && !lastTouchByContactD.has(e.contactId)) lastTouchByContactD.set(e.contactId, e.at);
+    }
   }
+  const lastTouchForDeal = (oppId: string, contactId?: string | null): Date | undefined => {
+    const a = lastTouchByDeal.get(oppId), b = contactId ? lastTouchByContactD.get(contactId) : undefined;
+    return a && b ? (a > b ? a : b) : (a ?? b);
+  };
   // A closed/won stage — detected by the stage KEY or LABEL so it works even for
   // deals orphaned by a rename (their old key still says won/closed). Excludes
   // "closing scheduled" (still open) and died/dead (lost).
@@ -239,7 +250,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     badges: (() => { const moved = stageAtByDeal.get(o.id); if (isClosedStage(o.stage) || !moved) return []; const d = Math.floor((Date.now() - moved.getTime()) / 86400000); return d >= 3 ? [`🕒 ${d}d in stage`] : []; })(),
     money: o.value != null ? `$${o.value.toLocaleString()}` : o.askPrice != null ? `ask $${o.askPrice.toLocaleString()}` : "", valueNum: o.value ?? o.askPrice ?? 0,
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
-    lastTouch: lastTouchByDeal.get(o.id)?.toISOString() ?? "", stageMoved: stageAtByDeal.has(o.id),
+    lastTouch: lastTouchForDeal(o.id, o.contactId)?.toISOString() ?? "", stageMoved: stageAtByDeal.has(o.id),
     followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
     waterfront: isWaterfront(o.formData),
     leadKind: leadKind(o.formData),

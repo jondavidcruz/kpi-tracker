@@ -1,7 +1,7 @@
 // 🛠 Owner/manager form-builder (Jon 2026-10-27, #20): add your own columns, dropdowns
 // and emojis to the Home & Land Details forms. Custom fields are APPENDED to the base
 // form everywhere (quick-view + full lead page) and saved like any other answer.
-import { getCurrentUser, isOwner, isManager } from "@/lib/auth";
+import { getCurrentUser, isOwner } from "@/lib/auth";
 import { CRM_FORMS, type FormField } from "@/lib/crm-forms";
 import { loadCustomFieldsRaw, loadFieldOverrides } from "@/lib/crm-forms-store";
 import { addCustomFieldAction, deleteCustomFieldAction, setFieldOverrideAction } from "@/app/actions";
@@ -17,12 +17,12 @@ const EDITABLE = [
 export default async function FormBuilderPage({ searchParams }: { searchParams: Promise<{ added?: string; deleted?: string; err?: string; saved?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
-  if (!isOwner(me) && !isManager(me)) {
+  if (!isOwner(me)) {
     return (
       <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
         <div className="mb-2 text-3xl">🔒</div>
-        <h1 className="text-xl font-bold">Managers only</h1>
-        <p className="mt-2 text-sm text-slate-500">The form builder is limited to managers and the owner.</p>
+        <h1 className="text-xl font-bold">Owner only</h1>
+        <p className="mt-2 text-sm text-slate-500">Editing the foundation forms (renaming, hiding, or adding fields) is limited to the owner.</p>
       </div>
     );
   }

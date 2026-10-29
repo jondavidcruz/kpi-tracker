@@ -470,13 +470,15 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             </details>
           </Card>
 
-          {/* 📈 Listing / price history (Jon 2026-10-29) — Zillow-style table to judge novation */}
+          {/* 📈 Listing / price history (Jon 2026-10-29) — SELLER leads only (not developers/agents) */}
+          {!isNetworkLead && (
           <Card className={`border-l-4 border-teal-400 p-4 ${sectionColor("listing").tint}`} widget="listing">
             <details id="listing" className="scroll-mt-4">
               <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-teal-700">📈 Listing history <span className="normal-case text-slate-300">(what it listed / sold for — click to open)</span></summary>
               <div className="mt-2"><ListingHistoryPanel oppId={opp.id} rows={readListingHistory(opp.formData)} address={formatAddress(opp.title) || c.address} /></div>
             </details>
           </Card>
+          )}
 
           {/* 🤝 parties in the deal — moved to the LEFT under Opportunity (Jon 2026-10-26) */}
           <Card className="p-4" widget="parties">

@@ -179,7 +179,14 @@ export async function setOppStageAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const stage = String(formData.get("stage") ?? "");
   const pipes = await readPipelines();
-  const valid = pipes.some((p) => p.stages.some((st) => st.key === stage));
+  let valid = pipes.some((p) => p.stages.some((st) => st.key === stage));
+  if (!valid) {
+    // 🏗 Developer / buyer-agent (network) pipelines may use their BUILT-IN default stages when
+    // the pipeline isn't saved in the store yet — those keys aren't in readPipelines(), so moves
+    // were silently rejected (Jon 2026-10-29: "Marie can't move developers/buyers between stages").
+    const { DISPO_NETWORK_PIPELINES } = await import("@/lib/dispo-buyers");
+    valid = DISPO_NETWORK_PIPELINES.some((p) => p.stages.some((st) => st.key === stage));
+  }
   if (!id || !valid) return;
   const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, stage: true, pipeline: true, formData: true } });
   if (!opp || opp.stage === stage) return;
