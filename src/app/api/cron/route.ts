@@ -1946,6 +1946,58 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: url.searchParams.get("commit") === "1" ? "COMMITTED (emailed + Drive + Chat)" : "DRY RUN", toVetCount: rows.length, byFirstMarket: byState, driveLink: link });
   }
 
+  // 🏗→📣 Nightly: researched developers (Unvetted Developers kanban) → DirectREI "unvetted buyers"
+  // campaign for mass email/call/SMS (Jon 2026-10-29: "DirectREI = mass marketing, War Room = real
+  // leads"). DRY RUN by default; ?commit=1 emails the DirectREI-formatted CSV + Drive backup + adds
+  // to the campaign via API only when DIRECTREI_WRITE=1 (so it can't auto-fire outreach unarmed).
+  if (url.searchParams.get("devdrop") === "1") {
+    const { collectUnvettedDevelopers, buildDevCsv, commitDevsPushed } = await import("@/lib/directrei-dev-push");
+    const { buyerKey } = await import("@/lib/buyer-sheet");
+    const { total, fresh, skippedDup, skippedNoContact } = await collectUnvettedDevelopers();
+    const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    if (!fresh.length) return NextResponse.json({ ok: true, mode: "none", message: "no new unvetted developers to push", scanned: total, skippedDup, skippedNoContact });
+    const csv = buildDevCsv(fresh);
+    const filename = `unvetted-developers-${date}.csv`;
+    const commit = url.searchParams.get("commit") === "1";
+    let link = "";
+    try {
+      const { gdriveConfigured, ensureSubfolder, uploadToFolder, rootFolderId } = await import("@/lib/gdrive");
+      if (gdriveConfigured() && rootFolderId()) {
+        const folderId = await ensureSubfolder(rootFolderId(), "DirectREI Unvetted Buyers");
+        link = (await uploadToFolder(folderId, filename, new TextEncoder().encode(csv), "text/csv", true)).link;
+      }
+    } catch { /* drive best-effort */ }
+    let api: unknown = null;
+    if (commit) {
+      // 1) CSV email for import (human launches) — the safe default
+      try {
+        const { sendEmailWithAttachment } = await import("@/lib/notify");
+        const recipient = url.searchParams.get("to") || "info@freedom-offers.com";
+        const html = `<div style="font-family:-apple-system,Arial,sans-serif;color:#1f2937"><h2 style="color:#0b1f3a">🏗 ${fresh.length} researched developers → DirectREI “unvetted buyers”</h2><p>Tonight's newly-researched developers from the Unvetted Developers kanban, formatted to the DirectREI import template (tagged <b>developer, unvetted buyer</b>). Import into the <b>unvetted buyers</b> campaign for email / call / SMS. CSV attached.${link ? ` Drive: <a href="${link}">open</a>.` : ""}</p><p style="font-size:12px;color:#94a3b8">These are mass-marketing buyer prospects, not War Room leads. Scrub DNC before dialing.</p></div>`;
+        await sendEmailWithAttachment([recipient], `🏗 ${fresh.length} developers → DirectREI unvetted buyers — ${date}`, html, { filename, content: Buffer.from(csv).toString("base64") });
+      } catch { /* email best-effort */ }
+      // 2) Direct API add to the campaign — ONLY when writes are armed (DIRECTREI_WRITE=1)
+      try {
+        const { directReiBlastConfigured, directReiAddToCampaignByName } = await import("@/lib/directrei");
+        if (directReiBlastConfigured()) {
+          api = await directReiAddToCampaignByName({
+            name: /unvetted buyer/i, createIfMissing: true, channels: ["email", "sms", "cold_call"],
+            contacts: fresh.map((r) => ({ name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || r.company || "Developer", phone: r.phone, email: r.email, external_id: buyerKey(r) })),
+          });
+        }
+      } catch (e) { api = { error: String(e) }; }
+      // 3) Ops note to the team Chat (not the KPI room)
+      try {
+        const { sendTeamChat } = await import("@/lib/notify");
+        const added = (api as { added?: number } | null)?.added;
+        await sendTeamChat(`🏗 *${fresh.length} researched developers → DirectREI unvetted buyers — ${date}*\nDirectREI-formatted CSV ready${link ? ` (<${link}|Drive>)` : ""}.${added ? ` Added ${added} to the campaign via API.` : " Import it into the unvetted buyers campaign."}`);
+      } catch { /* chat best-effort */ }
+      // 4) dedupe — don't re-push these tomorrow
+      await commitDevsPushed(fresh);
+    }
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pushCount: fresh.length, scanned: total, skippedDup, skippedNoContact, driveLink: link, api });
+  }
+
   // 🌙 Nightly FREE buyer growth — NO agent, NO tool approvals (Jon 2026-10-18:
   // "the dispo optimizer task isn't working"). The scheduled Claude task hangs on
   // a one-time permission prompt; this app cron does the reliable part by itself:

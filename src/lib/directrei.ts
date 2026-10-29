@@ -69,6 +69,36 @@ export function directReiBlastConfigured(): boolean {
 export type BlastContact = { name: string; phone?: string; email?: string; external_id: string };
 export type BlastChannel = "sms" | "email" | "cold_call";
 
+/** Add contacts to an EXISTING campaign matched by name (e.g. "unvetted buyers") — for the
+ *  nightly developer push (Jon 2026-10-29). Best-effort; gated behind DIRECTREI_WRITE=1 so it
+ *  can never auto-enroll people into live outreach until Jon arms it. Creates the campaign if
+ *  `createIfMissing` and it isn't found. */
+export async function directReiAddToCampaignByName(o: {
+  name: RegExp | string; contacts: BlastContact[]; channels?: BlastChannel[]; createIfMissing?: boolean;
+}): Promise<{ campaignId?: string; added?: number; created?: boolean; error?: string }> {
+  if (!directReiBlastConfigured()) return { error: "DirectREI write API not enabled (set DIRECTREI_WRITE=1)" };
+  if (!o.contacts.length) return { error: "no contacts to add" };
+  const list = await directReiCampaigns();
+  if (!list.ok) return { error: `campaigns ${list.status}: ${JSON.stringify(list.body).slice(0, 140)}` };
+  const rows = ((list.body as { rows?: Array<{ id: string; name: string }> })?.rows) ?? [];
+  const rx = typeof o.name === "string" ? new RegExp(o.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : o.name;
+  let campaignId = rows.find((c) => rx.test(c.name || ""))?.id;
+  let created = false;
+  if (!campaignId) {
+    if (!o.createIfMissing) return { error: `no campaign matching ${rx}` };
+    const label = typeof o.name === "string" ? o.name : "Unvetted Buyers";
+    const create = await dreiPost(`/campaigns`, { name: label.slice(0, 120), channels: o.channels ?? ["email", "sms", "cold_call"], source: "war-room", launch: false });
+    if (!create.ok) return { error: `create ${create.status}: ${JSON.stringify(create.body).slice(0, 140)}` };
+    campaignId = (create.body as { id?: string }).id;
+    created = true;
+    if (!campaignId) return { error: "create returned no campaign id" };
+  }
+  const add = await dreiPost(`/campaigns/${encodeURIComponent(campaignId)}/contacts`, { contacts: o.contacts.slice(0, 1000) });
+  if (!add.ok) return { campaignId, created, error: `add-contacts ${add.status}: ${JSON.stringify(add.body).slice(0, 140)}` };
+  const added = (add.body as { added?: number }).added ?? o.contacts.length;
+  return { campaignId, created, added };
+}
+
 /** Create → add contacts → launch, in one call. Returns the campaign id + queued
  *  count, or an error string (never throws). Matches the 4-endpoint spec. */
 export async function directReiLaunchBlast(o: {
