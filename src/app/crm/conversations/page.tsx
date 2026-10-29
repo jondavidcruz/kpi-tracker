@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
-import { stripHtml, KIND_EMOJI, titleCase } from "@/lib/crm-shared";
+import { stripHtml, KIND_EMOJI, rowIcon, titleCase } from "@/lib/crm-shared";
 import { commsFor, readSignatures, firstOf, defaultSignature, hasSignatureImage } from "@/lib/crm-comms";
 import { readSnippets } from "@/lib/crm-templates";
 import CallButton from "@/components/CallButton";
@@ -206,7 +206,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                         <span className="truncate text-sm font-bold text-slate-800">{titleCase(t.name)}</span>
                         <span className="shrink-0 text-[10px] text-slate-400">{timeAgo(t.last.at)}</span>
                       </span>
-                      <span className="block truncate text-xs text-slate-500">{KIND_EMOJI[t.last.kind] ?? "•"} {stripHtml(t.last.body).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "")}</span>
+                      <span className="block truncate text-xs text-slate-500">{(() => { const b = stripHtml(t.last.body).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, ""); return <>{rowIcon(t.last.kind, b)} {b}</>; })()}</span>
                     </span>
                   </Link>
                 </div>
@@ -245,7 +245,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     if (!["sms", "email", "call", "voicemail"].includes(e.kind)) return (
                       <div key={i} className="flex justify-center">
                         <span className="max-w-[88%] rounded-full bg-slate-50 px-3 py-1 text-[10px] font-medium text-slate-400 ring-1 ring-slate-100">
-                          {KIND_EMOJI[e.kind] ?? "•"} {e.kind === "note" ? <><b className="text-slate-500">{e.actor?.split(" ")[0]}:</b> {clean}</> : clean} · {when}
+                          {rowIcon(e.kind, clean)} {e.kind === "note" ? <><b className="text-slate-500">{e.actor?.split(" ")[0]}:</b> {clean}</> : clean} · {when}
                         </span>
                       </div>
                     );
@@ -264,7 +264,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                       return (
                         <div key={i} className="flex justify-center">
                           <div className={`max-w-[82%] rounded-2xl px-3 py-1.5 text-[11px] font-semibold text-slate-500 ${isRec ? "bg-white ring-1 ring-slate-200" : "rounded-full bg-slate-100"}`}>
-                            <div>{KIND_EMOJI[e.kind] ?? "📞"} {clean.replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}{who ? ` · ${who}` : ""}</div>
+                            <div>{rowIcon(e.kind, clean, "📞")} {clean.replace(/\s*—\s*https?:\/\/\S+$/, "")} · {when}{who ? ` · ${who}` : ""}</div>
                             {isRec && (
                               /* eslint-disable-next-line jsx-a11y/media-has-caption */
                               <audio controls preload="none" src={playSrc} className="mt-1 h-8 w-64 max-w-full" />

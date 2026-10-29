@@ -17,7 +17,7 @@ import { readMarketingDone } from "@/lib/dispo-marketing";
 import { readMarketingSteps } from "@/lib/dispo-marketing-store";
 import { getActiveReps, getSettings } from "@/lib/data";
 import { readPipelines, parseTags, KIND_EMOJI, pipelineLockFor } from "@/lib/crm";
-import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels, recStreamSrc } from "@/lib/crm-shared";
+import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels, recStreamSrc, rowIcon } from "@/lib/crm-shared";
 import ParcelsPanel from "@/components/ParcelsPanel";
 import PanelGuard from "@/components/PanelGuard";
 import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
@@ -404,7 +404,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                     <option value="">unassigned</option>
                     {reps.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
                   </select></label>
-                <label><span className={lbl}>Next follow-up</span><input type="date" name="nextFollowUp" defaultValue={opp.nextFollowUp} className={inputCls} /></label>
+                <label><span className={lbl}>Next follow-up</span><input type="datetime-local" name="nextFollowUp" defaultValue={((opp.formData as Record<string, unknown> | null)?.__fuAt as string) || (opp.nextFollowUp ? `${opp.nextFollowUp}T09:00` : "")} className={inputCls} /></label>
               </div>
               <label><span className={lbl}>Tags</span><input name="tags" defaultValue={opp.tags} placeholder="hot, novation, flood-check…" className={inputCls} /></label>
               {/* 📍 Lead source (acquisitions) — where this seller lead came from (Jon 2026-10-26). Stored in formData. */}
@@ -592,7 +592,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             return (
             <div key={e.id} data-tlrow data-kind={e.kind} data-note={e.kind === "note" ? "1" : "0"}>
             <Card className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""} ${isManualNote ? "!border-amber-200 !bg-amber-50/70" : ""} ${isSms ? "!border-sky-200 !bg-sky-50/70" : ""} ${isEmail ? "!border-red-200 !bg-red-50/70" : ""}`}>
-              <span className="text-base">{isManualNote ? "🟡" : KIND_EMOJI[e.kind] ?? "•"}</span>
+              <span className="text-base">{isManualNote ? "🟡" : rowIcon(e.kind, e.body)}</span>
               <div className="min-w-0 flex-1">
                 {e.kind === "note"
                   ? (() => {

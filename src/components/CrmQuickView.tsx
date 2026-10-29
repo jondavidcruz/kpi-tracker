@@ -9,7 +9,7 @@ import {
   addCrmTaskAction, toggleCrmTaskAction, reassignTaskAction, addCrmApptAction, deleteCrmApptAction,
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
 } from "@/app/crm/actions";
-import { KIND_EMOJI, stripAgentNotesBlock, recStreamSrc } from "@/lib/crm-shared";
+import { KIND_EMOJI, rowIcon, stripAgentNotesBlock, recStreamSrc } from "@/lib/crm-shared";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import PhoneField from "@/components/PhoneField";
 import CrmFormFields from "@/components/CrmFormFields";
@@ -305,7 +305,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                     </div>
                     <div>
                       <label className={labelCls}>Next follow-up</label>
-                      <input name="nextFollowUp" type="date" defaultValue={d.nextFollowUp} className={inputCls} />
+                      <input name="nextFollowUp" type="datetime-local" defaultValue={(d.formData as Record<string, unknown> | undefined)?.__fuAt as string || (d.nextFollowUp ? `${d.nextFollowUp}T09:00` : "")} className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Tags (comma-separated)</label>
@@ -530,7 +530,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                         const isEmail = e.kind === "email"; // 🔴 red Gmail-style card
                         return (
                           <div key={e.id ?? i} data-tlrow data-kind={e.kind} className={`group/qn rounded-lg px-3 py-2 text-xs ring-1 ${isNote ? "border-l-4 border-amber-400 bg-amber-50 text-slate-800 ring-amber-200" : isSms ? "border-l-4 border-sky-400 bg-sky-50 text-slate-800 ring-sky-200" : isEmail ? "border-l-4 border-red-400 bg-red-50 text-slate-800 ring-red-200" : "bg-white text-slate-700 ring-slate-100"}`}>
-                            <span className="mr-1">{isNote ? "🟡" : (KIND_EMOJI[e.kind] ?? "•")}</span>
+                            <span className="mr-1">{isNote ? "🟡" : rowIcon(e.kind, e.body)}</span>
                             {isNote && isHtmlNote(e.body)
                               ? <div className="mt-1 text-[13px] leading-relaxed [&_a]:text-indigo-600 [&_a]:underline [&_b]:font-bold [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-bold [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(e.body) }} />
                               : <span className={`whitespace-pre-line break-words ${isNote ? "font-medium" : ""}`}>{cleanLinkify(e.body)}</span>}

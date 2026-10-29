@@ -48,6 +48,9 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   };
   const [sent, setSent] = useState("");
   const [confirming, setConfirming] = useState(false);
+  // 🟢 optimistic just-sent texts — cleared when the server sends a fresh (larger) history.
+  const [localMsgs, setLocalMsgs] = useState<HistMsg[]>([]);
+  useEffect(() => { setLocalMsgs([]); }, [history.length]);
   const [pending, start] = useTransition();
   const threadRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight; }, [text, history.length]);
@@ -77,7 +80,14 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
     fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", toNum); fd.set("text", text);
     if (from) fd.set("from", from);
     if (photo) fd.set("photo", photo.blob, "photo.jpg");
-    start(async () => { await sendCrmSmsAction(fd); setText(""); setPhoto(null); setSent("✓ Sent"); setTimeout(() => setSent(""), 2500); router.refresh(); });
+    const sentText = text;
+    start(async () => {
+      await sendCrmSmsAction(fd);
+      // 🟢 Show the sent text in the thread INSTANTLY (Jon 2026-10-29: "it didn't update in
+      // real time, only on refresh") — reconciles with the server copy on the next refetch.
+      setLocalMsgs((p) => [...p, { body: sentText, inbound: false, at: new Date().toISOString() }]);
+      setText(""); setPhoto(null); setSent("✓ Sent"); setTimeout(() => setSent(""), 2500); router.refresh();
+    });
   };
 
   return (
@@ -142,7 +152,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
             <div ref={threadRef} className={`flex flex-col gap-1 overflow-y-auto bg-white px-2.5 pb-2 pt-1 ${compact ? "h-[230px]" : "h-[260px]"}`}>
               <div className="mt-auto" />
               <div className="text-center text-[8px] font-semibold text-slate-400">Text Message · SMS{history.length ? "" : " · Today"}</div>
-              {history.map((m, i) => (
+              {[...history, ...localMsgs].map((m, i) => (
                 <div key={i} className={`flex ${m.inbound ? "justify-start" : "justify-end"}`}>
                   <div className="max-w-[80%] whitespace-pre-line break-words rounded-2xl px-2.5 py-1.5 text-[11px] leading-snug" style={m.inbound ? { backgroundColor: "#e9e9eb", color: "#111", borderBottomLeftRadius: 4 } : { backgroundColor: "#34c759", color: "#fff", borderBottomRightRadius: 4 }}>{m.body}</div>
                 </div>

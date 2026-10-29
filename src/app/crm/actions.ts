@@ -422,19 +422,26 @@ export async function saveOppMetaAction(formData: FormData) {
   // submit a partial form) + a form that omits the owner field never wipe data
   // (Jon 2026-10-24). Owner is saved separately via setOppOwnerAction.
   const has = (k: string) => formData.get(k) != null;
+  // 📅 Follow-up can now carry a TIME (Jon 2026-10-29). The datetime-local input sends
+  // "YYYY-MM-DDTHH:mm"; we keep nextFollowUp as the DATE (so every existing date comparison
+  // still works) and stash the full timestamp in formData.__fuAt for display + reminders.
+  const fuRaw = has("nextFollowUp") ? String(formData.get("nextFollowUp")).trim() : "";
+  const fuHasTime = fuRaw.includes("T");
   // 🔎 Lead source (acquisitions) lives in formData — no schema column (Jon 2026-10-26).
   let fdMerge: Record<string, unknown> | null = null;
-  if (has("leadSource")) {
+  if (has("leadSource") || (has("nextFollowUp"))) {
     const row = await db.crmOpportunity.findUnique({ where: { id }, select: { formData: true } });
     const existing = (row?.formData as Record<string, unknown> | null) ?? {};
-    fdMerge = { ...existing, __leadSource: String(formData.get("leadSource")).trim().slice(0, 80) };
+    fdMerge = { ...existing };
+    if (has("leadSource")) fdMerge.__leadSource = String(formData.get("leadSource")).trim().slice(0, 80);
+    if (has("nextFollowUp")) { if (fuHasTime) fdMerge.__fuAt = fuRaw; else delete fdMerge.__fuAt; }
   }
   await db.crmOpportunity.update({ where: { id }, data: {
     ...(plRaw != null ? { pipeline: String(plRaw) === "War Room" ? "" : String(plRaw) } : {}),
     ...(has("title") ? { title: formatAddress(String(formData.get("title") ?? "")) || undefined } : {}),
     ...(has("assignedTo") ? { assignedTo: String(formData.get("assignedTo")).trim() } : {}),
     ...(has("tags") ? { tags: String(formData.get("tags")).trim().slice(0, 300) } : {}),
-    ...(has("nextFollowUp") ? { nextFollowUp: String(formData.get("nextFollowUp")).trim() } : {}),
+    ...(has("nextFollowUp") ? { nextFollowUp: fuRaw.slice(0, 10) } : {}),
     ...(has("value") ? { value: num("value") } : {}),
     ...(has("askPrice") ? { askPrice: num("askPrice") } : {}),
     ...(fdMerge ? { formData: fdMerge as never } : {}),

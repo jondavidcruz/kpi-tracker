@@ -73,6 +73,14 @@ export const KIND_EMOJI: Record<string, string> = {
   note: "📝", call: "📞", sms: "💬", email: "✉️", stage: "🔀", task: "✅", appt: "📅", system: "✨",
 };
 
+// 🪧 Row icon that never DOUBLES the emoji (Jon 2026-10-29: "it's showing the emoji twice").
+// Many event bodies already START with their own emoji (📎 …, ✅ …, 📞 …) — so if the body
+// leads with any emoji, show the body's own and skip the kind icon.
+export function rowIcon(kind: string, body: string, fallback = "•"): string {
+  if (/^\s*\p{Extended_Pictographic}/u.test(String(body || ""))) return "";
+  return KIND_EMOJI[kind] ?? fallback;
+}
+
 export function parseTags(s: string): string[] {
   return s.split(",").map((t) => t.trim()).filter(Boolean);
 }
