@@ -333,7 +333,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
               onDragOver={(e) => { if (dragId) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.key); } }}
               onDragLeave={() => setOverCol((o) => (o === col.key ? null : o))}
               onDrop={(e) => { e.preventDefault(); drop(col.key); setOverCol(null); }}
-              className={`min-w-[270px] flex-1 rounded-2xl p-2.5 ring-1 transition ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : tint}`}
+              className={`min-w-[190px] flex-1 rounded-2xl p-2.5 ring-1 transition ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : tint}`}
             >
               <div className="mb-0.5 flex items-center justify-between px-1">
                 <span className="flex items-center gap-1">
@@ -463,7 +463,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     </div>
                     {show.rep && c.assignedTo && <div className="mt-1 text-[9px] font-semibold text-slate-400">👤 {c.assignedTo}</div>}
                     {/* GHL-style quick actions — popovers, zero page hops */}
-                    <div className="relative mt-1.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="relative mt-1.5 flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       {canCall && c.phone && (
                         <button
                           type="button"
