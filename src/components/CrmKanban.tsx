@@ -94,6 +94,11 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   // Default: UNTOUCHED first (Jon 2026-10-27) — leads nobody has worked rise to the top,
   // and the moment you log a touch/note the lead drops toward the bottom.
   const [sortKey, setSortKey] = useState<SortKey>("untouched");
+  // 🚀 Perf (Jon 2026-10-29: "developer pipeline lags — 1000+ leads"): render at most COL_CAP
+  // cards per column, with a "show more" to expand that column. Keeps the DOM small so big
+  // pipelines scroll smoothly; all data is still here (counts show the real totals).
+  const COL_CAP = 60;
+  const [expandedCols, setExpandedCols] = useState<Set<string>>(new Set());
   // 🔥 optimistic spread-rating overrides (card id → heat) so a click updates instantly.
   const [heatOverride, setHeatOverride] = useState<Record<string, DealHeat | "">>({});
   const heatOf = (c: CrmCard): DealHeat | "" => (c.id in heatOverride ? heatOverride[c.id] : (c.heat ?? ""));
@@ -304,6 +309,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-2">
         {columns.map((col, colIdx) => {
           const colCards = sortCards(cards.filter((c) => c.stage === col.key || (colIdx === 0 && !columns.some((cc) => cc.key === c.stage))));
+          const shownCards = expandedCols.has(col.key) ? colCards : colCards.slice(0, COL_CAP);
           const tint = LANE_TINTS[colIdx % LANE_TINTS.length];
           if (collapsed[col.key]) {
             return (
@@ -361,7 +367,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                 </div>
               )}
               <div className="max-h-[calc(100vh-290px)] overflow-y-auto overscroll-contain pr-0.5 space-y-1.5">
-                {colCards.map((c) => (
+                {shownCards.map((c) => (
                   <div
                     key={c.id}
                     draggable
@@ -521,6 +527,12 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                   </div>
                 ))}
                 {colCards.length === 0 && <div className="rounded-xl border border-dashed border-slate-200 px-2 py-3 text-center text-[10px] text-slate-300">empty</div>}
+                {/* 🚀 render cap — expand this column in place (keeps big pipelines fast) */}
+                {colCards.length > shownCards.length && (
+                  <button onClick={() => setExpandedCols((p) => new Set(p).add(col.key))} className="block w-full rounded-xl bg-white/70 px-2 py-2 text-center text-[10px] font-bold text-indigo-600 ring-1 ring-slate-200 hover:bg-white">
+                    ▾ Show {(colCards.length - shownCards.length).toLocaleString()} more in this column
+                  </button>
+                )}
                 {(counts[col.key] ?? 0) > colCards.length && (
                   <a href={`${listHref}&stage=${col.key}`} className="block rounded-xl bg-white/70 px-2 py-2 text-center text-[10px] font-bold text-slate-500 ring-1 ring-slate-200 hover:bg-white">
                     + {((counts[col.key] ?? 0) - colCards.length).toLocaleString()} more — open in List

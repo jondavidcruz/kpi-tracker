@@ -17,14 +17,17 @@ export default function AutoSaveForm({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>("idle");
 
-  const submit = () => {
-    if (!dirtyRef.current || !formRef.current) return;
+  // ⚠️ Submit IMPERATIVELY — do NOT use the <form action> prop. React 19 auto-resets a form to
+  // its defaultValues after its `action` resolves, which wiped characters typed around an autosave
+  // (Jon 2026-10-29: "typing an underscore in email wouldn't stick"). Calling the action ourselves
+  // with a FormData snapshot keeps the uncontrolled inputs exactly as typed.
+  const submit = (force = false) => {
+    if ((!force && !dirtyRef.current) || !formRef.current) return;
     dirtyRef.current = false;
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     setStatus("saving");
-    formRef.current.requestSubmit();
-    // The server action re-renders the tree; show "saved" shortly after.
-    setTimeout(() => setStatus((s) => (s === "saving" ? "saved" : s)), 700);
+    try { Promise.resolve(action(new FormData(formRef.current))).finally(() => setTimeout(() => setStatus((s) => (s === "saving" ? "saved" : s)), 500)); }
+    catch { setStatus("unsaved"); }
   };
 
   const onInput = () => {
@@ -45,11 +48,11 @@ export default function AutoSaveForm({
   }, []);
 
   return (
-    <form ref={formRef} action={action} className={className}
+    <form ref={formRef} className={className}
       onInput={onInput}
       onChange={onInput}
       onBlurCapture={() => { if (dirtyRef.current) submit(); }}
-      onSubmit={() => { dirtyRef.current = false; }}
+      onSubmit={(e) => { e.preventDefault(); submit(true); }}
     >
       {children}
       <div className="mt-1 h-3 text-[10px] font-semibold">
