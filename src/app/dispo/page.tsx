@@ -525,6 +525,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // 🏠🏢 Developer mix (Jon 2026-10-28) — how many of our developers are mom & pop (work first) vs big.
   const momPopCount = tab === "developers" ? netCards.filter((c) => c.builderSize === "mompop").length : 0;
   const bigBuilderCount = tab === "developers" ? netCards.filter((c) => c.builderSize === "big").length : 0;
+  // ⚡ DirectREI blast readiness (env checks only — no network call). Shown on the dev board.
+  const { directReiConfigured, directReiBlastConfigured } = await import("@/lib/directrei");
+  const dreiReady = tab === "developers" ? directReiConfigured() : false;
+  const dreiBlastOn = tab === "developers" ? directReiBlastConfigured() : false;
 
   const TABS: { key: Tab; label: string; n: number }[] = [
     { key: "today", label: "☀️ Today", n: command ? command.summary.needOffers + command.summary.overdue : -1 },
@@ -901,6 +905,25 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
               <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 font-bold text-emerald-700 ring-1 ring-emerald-200">🏠 {momPopCount} Mom &amp; Pop — work first</span>
               <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-bold text-slate-500 ring-1 ring-slate-200">🏢 {bigBuilderCount} Big Builder</span>
               <span className="text-slate-400">Mom &amp; pop give the fastest feedback — click a card&apos;s badge to correct a tag.</span>
+            </Card>
+          )}
+
+          {/* ⚡ DirectREI blast readiness — the two ways to blast mom & pop developers (Jon 2026-10-28). */}
+          {tab === "developers" && canAccessCSuite(me) && (
+            <Card className="space-y-1.5 border-l-4 border-indigo-400 p-3 text-[12px]">
+              <div className="flex flex-wrap items-center gap-2 font-bold">
+                <span className="text-slate-700">⚡ DirectREI deal blast:</span>
+                <span className={`rounded-full px-2 py-0.5 ring-1 ${dreiReady ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-red-100 text-red-700 ring-red-200"}`}>{dreiReady ? "✅ API connected" : "❌ API key not set"}</span>
+                <span className={`rounded-full px-2 py-0.5 ring-1 ${dreiBlastOn ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>{dreiBlastOn ? "✅ One-click blasting ON" : "⚠️ One-click blasting OFF"}</span>
+              </div>
+              <div className="text-slate-500">
+                <b>Blast today (works now):</b> click <b>Export Mom &amp; Pop developers (CSV)</b> below → upload it into DirectREI → send the SMS/email blast from DirectREI.
+              </div>
+              {!dreiBlastOn && (
+                <div className="text-slate-500">
+                  <b>One-click from the War Room:</b> set <code className="rounded bg-slate-100 px-1">DIRECTREI_WRITE=1</code> in Vercel (and redeploy). Then a deal&apos;s <b>📤 Send to matched buyers</b> fires the SMS·email·call blast through DirectREI automatically — no manual upload. Safety gate stays until you flip it.
+                </div>
+              )}
             </Card>
           )}
 
