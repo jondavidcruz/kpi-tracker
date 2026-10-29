@@ -226,6 +226,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     at: o.updatedAt,
   })).sort((a, b) => b.at.getTime() - a.at.getTime());
   const closedTotal = closedDeals.reduce((a, d) => a + d.valueNum, 0);
+  // Marketing checklist steps — the "sent to buyers" gate badge mirrors this list (Jon 2026-10-29).
+  const { readMarketingDone: readMktDone, marketingComplete: mktComplete } = await import("@/lib/dispo-marketing");
+  const { readMarketingSteps: readMktSteps } = await import("@/lib/dispo-marketing-store");
+  const dispoMktSteps = await readMktSteps();
   const dealCards: CrmCard[] = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => ({
     id: o.id, title: o.title, contactName: o.contact?.name || o.title, contactId: o.contactId, address: dealLabel(o.title, o.contact?.address) || undefined,
     phone: o.contact?.phone ? o.contact.phone.replace(/\.\d+$/, "") : undefined, email: o.contact?.email || undefined, stage: o.stage || dealColumns[0]?.key || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags),
@@ -247,7 +251,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     staleStage: o.stage && !dealStageKeys.has(o.stage) ? prettyStage(o.stage) : undefined,
     gate: (() => {
       const gt = gateForCurrentStage(pathForPipeline(o.pipeline), dealColumns.map((s) => ({ key: s.key, label: s.label })), o.stage);
-      return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData)), label: gt.label } : undefined;
+      return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData), mktComplete(dispoMktSteps, readMktDone(o.formData))), label: gt.label } : undefined;
     })(),
   }));
   // 🔎 search the deal board (name / address / phone) — parity with the Seller CRM —

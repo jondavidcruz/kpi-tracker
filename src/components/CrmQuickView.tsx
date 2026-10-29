@@ -8,14 +8,17 @@ import {
   setOppStageAction, setOppPipelineAction, addCrmNoteAction, saveOppMetaAction, saveCrmContactAction,
   addCrmTaskAction, toggleCrmTaskAction, reassignTaskAction, addCrmApptAction, deleteCrmApptAction,
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
+  addOpportunityAction,
 } from "@/app/crm/actions";
-import { KIND_EMOJI, rowIcon, stripAgentNotesBlock, recStreamSrc, sortPipesAqThenDs } from "@/lib/crm-shared";
+import { KIND_EMOJI, rowIcon, stripAgentNotesBlock, recStreamSrc, sortPipesAqThenDs, readParcels, splitCrammedParcels } from "@/lib/crm-shared";
+import ParcelsPanel from "@/components/ParcelsPanel";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import PhoneField from "@/components/PhoneField";
 import CrmFormFields from "@/components/CrmFormFields";
 import DispoGatePanel from "@/components/DispoGatePanel";
 import { isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { readGateChecks } from "@/lib/dispo-gates";
+import { readMarketingDone } from "@/lib/dispo-marketing";
 import { formatAddress } from "@/lib/address";
 import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
@@ -103,7 +106,7 @@ const sectionMeta = (k: string) => SECTION_META[k] ?? { tint: "", active: "bg-br
 const inputCls = "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm";
 const labelCls = "mb-0.5 block text-[11px] font-bold text-slate-500";
 
-export default function CrmQuickView({ stages, pipelineStages }: { stages: Array<{ key: string; label: string }>; pipelineStages?: Record<string, Array<{ key: string; label: string }>> }) {
+export default function CrmQuickView({ stages, pipelineStages, marketingSteps = [] }: { stages: Array<{ key: string; label: string }>; pipelineStages?: Record<string, Array<{ key: string; label: string }>>; marketingSteps?: import("@/lib/dispo-marketing").MarketingStep[] }) {
   const [oppId, setOppId] = useState<string | null>(null);
   const [data, setData] = useState<Payload | null>(null);
   const [tab, setTab] = useState("opp");
@@ -243,7 +246,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                   <span className="ml-auto text-slate-300">▸</span>
                 </summary>
                 <div className="pt-2">
-                  <DispoGatePanel oppId={d.id} pipeline={d.pipeline} currentStage={d.stage} stages={pipelineStages?.[d.pipeline] ?? stages} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} />
+                  <DispoGatePanel oppId={d.id} pipeline={d.pipeline} currentStage={d.stage} stages={pipelineStages?.[d.pipeline] ?? stages} checks={readGateChecks(d.formData)} onChanged={() => refetch(d.id)} marketingSteps={marketingSteps} marketingDone={readMarketingDone(d.formData)} />
                 </div>
               </details>
             )}
@@ -282,19 +285,43 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       <label className={labelCls}>🏠 Property address <span className="font-normal normal-case text-slate-400">— the deal / property (this lead is named after the seller: {d.contact.name})</span></label>
                       <input name="title" defaultValue={formatAddress(d.title)} placeholder="123 Main St, City, ST ZIP" className={inputCls} />
                     </div>
-                    {/* 🧩 Other opportunities on the SAME contact — click to jump to one (Jon 2026-10-28). */}
-                    {(d.siblingOpps?.length ?? 0) > 0 && (
-                      <div className="col-span-2 rounded-lg bg-amber-50/60 p-2 ring-1 ring-amber-100">
-                        <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-amber-600">🧩 {d.siblingOpps!.length} other {d.siblingOpps!.length === 1 ? "opportunity" : "opportunities"} on {d.contact.name.split(" ")[0]}</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {d.siblingOpps!.map((o) => (
-                            <button key={o.id} type="button" title={`${o.pipeline} · ${o.stage}`} onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: o.id } }))} className="rounded-lg bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
-                              📁 {o.title || "(untitled)"} <span className="text-slate-400">· {o.pipeline}</span>
+                    {/* 🔗 Parcels + all opportunities for this contact (Jon 2026-10-29: mirror the
+                        full view — add individual parcels/APNs instead of cramming four into one
+                        address, and show every opportunity on this contact from the card you're on). */}
+                    <div className="col-span-2 space-y-3 rounded-xl bg-amber-50/50 p-3 ring-1 ring-amber-100">
+                      {(() => {
+                        const parcels = readParcels(d.formData);
+                        const crammedApn = (d.formData as { property?: { apn?: string } } | undefined)?.property?.apn ?? "";
+                        const show = parcels.length > 0 || splitCrammedParcels(d.contact.address, crammedApn).length > 0;
+                        return show ? <ParcelsPanel oppId={d.id} parcels={parcels} crammedAddress={d.contact.address} crammedApn={crammedApn} /> : null;
+                      })()}
+                      <div>
+                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">🔗 All opportunities for {d.contact.name.split(" ")[0]} ({(d.siblingOpps?.length ?? 0) + 1}) — each is its own card with its own notes</div>
+                        <div className="space-y-1">
+                          {/* the card we're viewing right now */}
+                          <div className="flex items-center gap-2 rounded-lg bg-brand-navy/5 px-2.5 py-1.5 text-xs font-semibold text-brand-navy ring-1 ring-brand-navy/20">
+                            <span className="shrink-0 rounded bg-brand-navy px-1 py-0.5 text-[8px] font-bold text-white">● viewing</span>
+                            <span className="flex-1 truncate">{d.title || "(untitled)"}</span>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">{d.stage}</span>
+                          </div>
+                          {(d.siblingOpps ?? []).map((o) => (
+                            <button key={o.id} type="button" onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: o.id } }))} title={`${o.pipeline} · ${o.stage}`} className="flex w-full items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
+                              <span className="flex-1 truncate text-left">📁 {o.title || "(untitled)"} <span className="font-normal text-slate-400">· {o.pipeline}</span></span>
+                              <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">{o.stage}</span>
                             </button>
                           ))}
                         </div>
+                        {/* add another parcel as its OWN opportunity card — address + APN */}
+                        <form action={addOpportunityAction} className="mt-1.5 space-y-1.5">
+                          <input type="hidden" name="contactId" value={d.contact.id} />
+                          <input name="title" required placeholder="＋ another property / address (required) …" className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                          <div className="flex gap-1.5">
+                            <input name="apn" placeholder="🧭 APN / Parcel # (optional)" className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                            <button className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-bold text-white hover:bg-slate-700">Add</button>
+                          </div>
+                        </form>
                       </div>
-                    )}
+                    </div>
                     <DripControl oppId={d.id} contactId={d.contact.id} drip={(d.formData as Record<string, unknown> | undefined)?.__drip as { seq?: string; step?: number; nextAt?: string } | null} onChanged={() => refetch(d.id)} />
                     <PipelineStage d={d} pipelineStages={pipelineStages} stages={stages} setSaved={setSaved} setData={setData} />
 

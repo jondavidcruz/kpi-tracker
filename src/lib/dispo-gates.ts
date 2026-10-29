@@ -39,7 +39,15 @@ export function isSideStage(stage: Stage): boolean {
   return SIDE_STAGE.test(stage.label) || SIDE_STAGE.test(stage.key);
 }
 
-export type DispoGate = { key: string; label: string; match: RegExp; checks: string[] };
+// `source: "marketing"` (Jon 2026-10-29): this gate is NOT its own checklist — it mirrors
+// the per-deal Marketing checklist (active + passive channels). It's "cleared" only when every
+// marketing channel is done. The old 4 generic checks were a confusing duplicate of that list.
+export type DispoGate = { key: string; label: string; match: RegExp; checks: string[]; source?: "marketing" };
+
+/** Is this the "sent to buyers/agents" cascade gate that mirrors the Marketing checklist? */
+export function isMarketingGate(gate?: DispoGate | null): boolean {
+  return gate?.source === "marketing";
+}
 
 // `match` identifies WHICH stage each gate guards. First match wins, so order the
 // gates so earlier/narrower patterns come first.
@@ -57,12 +65,7 @@ export const GATE_PATHS: Record<GatePath, DispoGate[]> = {
       "Owner name blurred, no asking price in the packet",
       "Jon signed off for release",
     ] },
-    { key: "land_cascade", label: "Cascade fired", match: /sent to (buyer|agent)|cascade|\bjvp\b/i, checks: [
-      "Tier 1 vetted developers called + texted + emailed",
-      "Tier 2 cash buyers in the market area",
-      "Tier 3 buyer agents, then Tier 4 passive channels",
-      "Every touch logged — nothing untracked",
-    ] },
+    { key: "land_cascade", label: "Out to buyers — marketing complete", match: /sent to (buyer|agent)|cascade|\bjvp\b/i, source: "marketing", checks: [] },
     { key: "land_offers", label: "Offers worked", match: /received.*offer|offers in|3 offers/i, checks: [
       "Every offer logged with all five fields",
       "Best offer handed back to acquisitions / the seller",
@@ -76,11 +79,7 @@ export const GATE_PATHS: Record<GatePath, DispoGate[]> = {
       "Vetted cash-buyer + agent list pulled for this market",
       "Deal armed to go out",
     ] },
-    { key: "cash_cascade", label: "Cascade fired — out to buyers", match: /sent to (buyer|agent)|cascade/i, checks: [
-      "Matched cash buyers + agents called + texted + emailed",
-      "Every buyer logged in the tracker — nothing untracked",
-      "Top-tier buyers chased for a price",
-    ] },
+    { key: "cash_cascade", label: "Out to buyers — marketing complete", match: /sent to (buyer|agent)|cascade/i, source: "marketing", checks: [] },
     { key: "cash_offers", label: "Offers worked (goal: 3)", match: /offers? in|received.*offer|3 offers/i, checks: [
       "At least 3 offers logged (the minimum goal)",
       "Best offer selected",
@@ -124,7 +123,10 @@ export function readGateChecks(formData: unknown): Record<string, boolean[]> {
   return g && typeof g === "object" && !Array.isArray(g) ? (g as Record<string, boolean[]>) : {};
 }
 
-export function gateCleared(gate: DispoGate, checks: Record<string, boolean[]>): boolean {
+// `marketingDone` = is the deal's Marketing checklist fully complete? Required for a
+// marketing-sourced gate (the "sent to buyers" cascade), ignored for the others.
+export function gateCleared(gate: DispoGate, checks: Record<string, boolean[]>, marketingDone?: boolean): boolean {
+  if (gate.source === "marketing") return !!marketingDone;
   const arr = checks[gate.key] ?? [];
   return gate.checks.every((_, i) => !!arr[i]);
 }
@@ -158,6 +160,7 @@ export function stageMoveBlocked(
   currentStage: string,
   targetStage: string,
   checks: Record<string, boolean[]>,
+  marketingDone?: boolean,
 ): { blocked: boolean; gate?: DispoGate } {
   const curIdx = stages.findIndex((s) => s.key === currentStage);
   const tgtIdx = stages.findIndex((s) => s.key === targetStage);
@@ -167,7 +170,7 @@ export function stageMoveBlocked(
   if (tgtIdx <= curIdx) return { blocked: false }; // backward / same
   for (let i = curIdx; i < tgtIdx; i++) {
     const g = gateForStage(path, stages[i]);
-    if (g && !gateCleared(g, checks)) return { blocked: true, gate: g };
+    if (g && !gateCleared(g, checks, marketingDone)) return { blocked: true, gate: g };
   }
   return { blocked: false };
 }

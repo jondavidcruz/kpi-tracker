@@ -21,6 +21,7 @@ import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels, recS
 import ParcelsPanel from "@/components/ParcelsPanel";
 import PanelGuard from "@/components/PanelGuard";
 import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
+import { sectionColor } from "@/lib/section-colors";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
@@ -422,7 +423,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           {/* 🚦 SOP gate — moved under Opportunity on the LEFT (Jon 2026-10-26): keeps the right
               column for buyers/agents + marketing. Advance is blocked until the gate clears. */}
           {showMatches && (
-            <div data-widget="gate"><PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} canOverride={manager} /></PanelGuard></div>
+            <div data-widget="gate"><PanelGuard label="gate"><DispoGatePanel oppId={opp.id} pipeline={opp.pipeline || ""} currentStage={opp.stage} stages={stages.map((s) => ({ key: s.key, label: s.label }))} checks={readGateChecks(opp.formData)} canOverride={manager} marketingSteps={marketingSteps} marketingDone={readMarketingDone(opp.formData)} /></PanelGuard></div>
           )}
 
           {/* 📋 Discovery forms — moved to the LEFT under Opportunity (Jon 2026-10-26) */}
@@ -439,9 +440,11 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               return applyCustomFields(formsForPipeline(opp.pipeline), customFields).map((form) => {
                 const answers = fd[form.key] ?? {};
                 const count = Object.keys(answers).length;
+                // 🎨 Same section colors as the Quick Notes view (Jon 2026-10-29).
+                const sc = sectionColor(form.key);
                 return (
-                  <details key={form.key} className="mb-1.5 rounded-xl bg-slate-50 ring-1 ring-slate-100" open={count > 0 && count < form.fields.length}>
-                    <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-slate-700">
+                  <details key={form.key} className={`mb-1.5 rounded-xl ring-1 ${sc.tint || "bg-slate-50"} ${sc.border ? `ring-0 border-l-4 ${sc.border}` : "ring-slate-100"}`} open={count > 0 && count < form.fields.length}>
+                    <summary className={`cursor-pointer px-3 py-2 text-xs font-bold ${sc.text || "text-slate-700"}`}>
                       {form.emoji} {form.name}
                       <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold ${count ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{count}/{form.fields.length}</span>
                     </summary>
@@ -819,9 +822,9 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           {/* 📄 Assignment-contract auto-draft + 📧 Sequences panels removed from the
               contact view (Jon 2026-10-26) — not needed here. */}
 
-          {/* tasks */}
-          <Card className="p-4" widget="tasks">
-            <div id="tasks" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">⏰ Tasks</div>
+          {/* tasks — ✅ emerald, same as Quick Notes (Jon 2026-10-29) */}
+          <Card className={`border-l-4 border-emerald-400 p-4 ${sectionColor("tasks").tint}`} widget="tasks">
+            <div id="tasks" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-emerald-700">✅ Tasks</div>
             <div className="space-y-1.5">
               {tasks.map((t) => (
                 <form key={t.id} action={toggleCrmTaskAction} className="flex items-center gap-2 text-sm">
@@ -846,9 +849,9 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             </form>
           </Card>
 
-          {/* appointments */}
-          <Card className="p-4" widget="appointments">
-            <div id="appts" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">📅 Appointments <span className="normal-case text-slate-300">(alarm posts to the huddle chat ~1h before)</span></div>
+          {/* appointments — 📅 pink, same as Quick Notes (Jon 2026-10-29) */}
+          <Card className={`border-l-4 border-pink-400 p-4 ${sectionColor("appts").tint}`} widget="appointments">
+            <div id="appts" className="mb-1.5 scroll-mt-4 text-[11px] font-bold uppercase tracking-wide text-pink-700">📅 Appointments <span className="normal-case text-pink-300">(alarm posts to the huddle chat ~1h before)</span></div>
             <div className="space-y-1.5">
               {appts.map((a) => (
                 <div key={a.id} className="flex items-center gap-2 rounded-lg bg-indigo-50/70 px-2.5 py-1.5 text-xs ring-1 ring-indigo-100">

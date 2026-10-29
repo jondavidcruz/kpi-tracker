@@ -189,9 +189,13 @@ export async function setOppStageAction(formData: FormData) {
     const { isDispoDealPipeline } = await import("@/lib/dispo-buyers");
     if (isDispoDealPipeline(opp.pipeline)) {
       const { pathForPipeline, readGateChecks, stageMoveBlocked } = await import("@/lib/dispo-gates");
+      const { readMarketingDone, marketingComplete } = await import("@/lib/dispo-marketing");
+      const { readMarketingSteps } = await import("@/lib/dispo-marketing-store");
       const path = pathForPipeline(opp.pipeline);
       const stages = pipes.find((p) => p.name === opp.pipeline)?.stages.map((s) => ({ key: s.key, label: s.label })) ?? [];
-      const block = stageMoveBlocked(path, stages, opp.stage, stage, readGateChecks(opp.formData));
+      // The "sent to buyers" gate mirrors the Marketing checklist (Jon 2026-10-29).
+      const mktDone = marketingComplete(await readMarketingSteps(), readMarketingDone(opp.formData));
+      const block = stageMoveBlocked(path, stages, opp.stage, stage, readGateChecks(opp.formData), mktDone);
       if (block.blocked && block.gate) {
         // 🚦 NAG, don't BLOCK (Jon 2026-10-29: "don't make it where the girls can't move the
         // stage — just keep reminding them"). Anyone can advance; we log that the SOP gate

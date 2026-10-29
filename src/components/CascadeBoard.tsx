@@ -43,11 +43,15 @@ export default function CascadeBoard() {
   const [nearest, setNearest] = useState<{ name: string; miles: number } | null>(null);
   const [excluded, setExcluded] = useState<Excluded[]>([]);
   const [showExcluded, setShowExcluded] = useState(false);
-  // 🟢 Green-only by default (Jon 2026-10-26): match each deal to buyers who actually
-  // cover it — hide the amber "near miss / long shot" tiers unless the rep opts in.
-  const [showNearMiss, setShowNearMiss] = useState(false);
-  // 🏠 Mom-and-pop builders give the fastest feedback (Jon 2026-10-28) — work them first.
-  const [momFirst, setMomFirst] = useState(false);
+  // 🟢 Show the FULL ranked list by default (Jon 2026-10-29: "why is it only showing the one
+  // buyer — I keep having to click to show the rest, and the near-misses have lots of mom & pops").
+  // Tier-1 "squarely covers" buyers are still sorted + bordered green up top; the rep can hide the
+  // near-miss / long-shot tail with the toggle. (Supersedes the 2026-10-26 green-only default.)
+  const [showNearMiss, setShowNearMiss] = useState(true);
+  // 🏠 Builder-size view (Jon 2026-10-29): "all sizes" (mom & pop sorted first for speed),
+  // or filter to just mom & pop, or just the big builders. Picking a size reveals near-misses
+  // of that size too, so you see every builder of that kind — not just the squarely-covered one.
+  const [sizeFilter, setSizeFilter] = useState<"all" | "mompop" | "big">("all");
   const setBuilderSize = (id: string, size: "mompop" | "big") => {
     setCards((cur) => (cur ? cur.map((c) => (c.id === id ? { ...c, builderSize: size } : c)) : cur));
     const fd = new FormData(); fd.set("id", id); fd.set("size", size);
@@ -138,11 +142,21 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
                   {showNearMiss ? "Hide near-misses" : `Show ${cards.filter((c) => c.tier !== 1).length} near-misses`}
                 </button>
               )}
-              {cards.some((c) => c.builderSize === "mompop") && (
-                <button onClick={() => setMomFirst((v) => !v)} title="Mom & pop builders give the fastest feedback — surface them to the top" className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ${momFirst ? "bg-emerald-600 text-white ring-emerald-600" : "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"}`}>
-                  🏠 Mom &amp; Pop first
-                </button>
-              )}
+              {/* 🏠🏢 builder-size filter (Jon 2026-10-29): see mom & pops OR big builders, not just the one match */}
+              {cards.some((c) => c.builderSize) && (() => {
+                const nMom = cards.filter((c) => c.builderSize === "mompop").length;
+                const nBig = cards.filter((c) => c.builderSize === "big").length;
+                const seg = (key: "all" | "mompop" | "big", label: string) => (
+                  <button key={key} onClick={() => setSizeFilter(key)} className={`px-2.5 py-0.5 text-[11px] font-bold transition ${sizeFilter === key ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{label}</button>
+                );
+                return (
+                  <span className="inline-flex overflow-hidden rounded-full ring-1 ring-emerald-200" title="Filter the list by builder size. Mom & pop give the fastest feedback; big builders take down more volume.">
+                    {seg("all", "All sizes")}
+                    {nMom > 0 && seg("mompop", `🏠 Mom & Pop ${nMom}`)}
+                    {nBig > 0 && seg("big", `🏢 Big builders ${nBig}`)}
+                  </span>
+                );
+              })()}
               <span className="ml-auto flex gap-2">
                 <button onClick={() => copy(topN(5), "top")} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200">{copied === "top" ? "✅ Copied" : "📋 Copy top 5"}</button>
                 <button onClick={csv} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200">⬇ Ranked CSV</button>
@@ -161,7 +175,14 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
       )}
 
       <div className="space-y-2.5">
-        {(cards ?? []).filter((c) => showNearMiss || c.tier === 1).slice().sort((a, b) => momFirst ? ((a.builderSize === "mompop" ? 0 : 1) - (b.builderSize === "mompop" ? 0 : 1)) : 0).map((c, i) => (
+        {(cards ?? [])
+          // size filter (picking a size reveals near-misses of that size too)
+          .filter((c) => sizeFilter === "all" || c.builderSize === sizeFilter)
+          .filter((c) => showNearMiss || sizeFilter !== "all" || c.tier === 1)
+          .slice()
+          // in "all" view, surface mom & pop first (fastest feedback); otherwise keep score order
+          .sort((a, b) => sizeFilter === "all" ? ((a.builderSize === "mompop" ? 0 : 1) - (b.builderSize === "mompop" ? 0 : 1)) : 0)
+          .map((c, i) => (
           <div key={c.id} className={`rounded-2xl border bg-white p-3.5 shadow-sm ${c.tier === 1 ? "border-emerald-200" : c.tier === 2 ? "border-amber-200" : "border-slate-200"}`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-[13px] font-extrabold text-white">{i + 1}</span>

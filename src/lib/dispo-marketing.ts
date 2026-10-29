@@ -33,3 +33,11 @@ export function readMarketingDone(formData: unknown): string[] {
   const raw = fd?.__marketing;
   return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
 }
+
+/** Every marketing channel done? Used by the "Sent to buyers" SOP gate, which now mirrors
+ *  this checklist instead of keeping its own duplicate list (Jon 2026-10-29). */
+export function marketingComplete(steps: MarketingStep[], done: string[]): boolean {
+  if (!steps.length) return false;
+  const set = new Set(done);
+  return steps.every((s) => set.has(s.key));
+}

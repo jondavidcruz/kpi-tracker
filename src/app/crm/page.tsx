@@ -21,6 +21,8 @@ import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
 import { isAgentNetworkName, isDevNetworkName, isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { parcelCount } from "@/lib/crm-shared";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline } from "@/lib/dispo-gates";
+import { readMarketingDone, marketingComplete } from "@/lib/dispo-marketing";
+import { readMarketingSteps } from "@/lib/dispo-marketing-store";
 import { parseAcres } from "@/lib/acreage";
 import { commsFor } from "@/lib/crm-comms";
 import { createCrmLeadAction, bulkOppAction } from "./actions";
@@ -248,6 +250,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   }
 
   const money = (n: number | null) => (n == null ? "" : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
+  const mktSteps = await readMarketingSteps(); // for the "sent to buyers" gate badge (mirrors the marketing checklist)
   const cards: CrmCard[] = opps.map((o) => {
     const badges: string[] = [];
     if (o.stage === "at_developers" && o.devPricingSentAt) {
@@ -293,7 +296,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       acres: parseAcres(o.formData) ?? undefined,
       gate: isDispoDealPipeline(o.pipeline) ? (() => {
         const gt = gateForCurrentStage(pathForPipeline(o.pipeline), stages.map((s) => ({ key: s.key, label: s.label })), o.stage);
-        return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData)), label: gt.label } : undefined;
+        return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData), marketingComplete(mktSteps, readMarketingDone(o.formData))), label: gt.label } : undefined;
       })() : undefined,
     };
   });
@@ -427,7 +430,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       <DueTodayReminder tasks={myDueTasks} appts={myApptsToday} />
       {view === "kanban" ? (
-        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} pipelineStages={Object.fromEntries(allPipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={allPipes.map((p) => p.name)} pipelineGroups={Object.fromEntries(allPipes.map((p) => [p.name, crmGroupOf(p.name, crmMap)]))} pipelineStages={Object.fromEntries(allPipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} currentPipeline={plName} who={whoRaw || "all"} dialerBase={!isLocked && comms.call ? `/crm/dialer?pl=${encodeURIComponent(plName)}` : ""} /></>
+        <><CrmQuickView stages={stages.map((st) => ({ key: st.key, label: st.label }))} pipelineStages={Object.fromEntries(allPipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} marketingSteps={mktSteps} /><CrmKanban columns={stages} cards={cards} counts={stageCounts} sums={stageSums} canSms={comms.sms} canCall={comms.call} listHref={`/crm?view=list${whoQ}`} reps={reps.map((r) => r.name)} pipelineNames={allPipes.map((p) => p.name)} pipelineGroups={Object.fromEntries(allPipes.map((p) => [p.name, crmGroupOf(p.name, crmMap)]))} pipelineStages={Object.fromEntries(allPipes.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))} currentPipeline={plName} who={whoRaw || "all"} dialerBase={!isLocked && comms.call ? `/crm/dialer?pl=${encodeURIComponent(plName)}` : ""} /></>
       ) : view === "cal" ? (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-slate-700">📅 This week — appointments &amp; due follow-ups</div>
