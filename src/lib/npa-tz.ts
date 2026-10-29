@@ -19,6 +19,18 @@ export function tzForPhone(phone: string): string | null {
   return NPA[npa] ?? null;
 }
 
+// 🕐 Lead's local time + zone abbreviation + an east→west priority rank (Jon 2026-10-29:
+// work the East Coast first — they're ahead of us — then move west). Lower rank = more east
+// = work sooner. Returns null for an unknown area code.
+const TZ_ABBR: Record<string, string> = { [E]: "ET", [C]: "CT", [M]: "MT", [MA]: "MST", [P]: "PT", [AK]: "AKT", [H]: "HT" };
+const TZ_RANK: Record<string, number> = { [E]: 0, [C]: 1, [M]: 2, [MA]: 2, [P]: 3, [AK]: 4, [H]: 5 };
+export function localTimeForPhone(phone: string, nowMs: number = Date.now()): { time: string; abbr: string; rank: number } | null {
+  const tz = tzForPhone(phone);
+  if (!tz) return null;
+  const time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(new Date(nowMs)).replace(/\s/g, "").toLowerCase();
+  return { time, abbr: TZ_ABBR[tz] ?? "", rank: TZ_RANK[tz] ?? 9 };
+}
+
 /** Returns a human warning when it's quiet hours (9pm–8am) where the lead lives, else
  *  null. `nowMs` lets the caller pass a CLOCK-SKEW-CORRECTED time (server-trusted) so a
  *  wrong device clock can't falsely block a call (Jon 2026-10-24). */

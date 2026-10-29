@@ -45,6 +45,8 @@ export type CrmCard = {
   builderSize?: "mompop" | "big"; // 🏠🏢 developer cards — mom & pop (work first) vs big builder
   waterfront?: boolean; // 🌊 land is on/near water — market these first (rate-proof buyers)
   leadKind?: "land" | "home" | ""; // 🏞🏡 detected by which details form has more type-specific fields
+  tzLabel?: string; // 🕐 lead's local time + zone, e.g. "2:45pm ET"
+  tzRank?: number;  // east→west priority (0 = East Coast = work first)
 };
 // 🎨 GHL-style age coloring (Jon 2026-10-08): customizable ranges + colors,
 // saved per device. Days since last stage activity (updatedAt).
@@ -52,7 +54,7 @@ type ColorRange = { max: number | null; color: string };
 const DEFAULT_RANGES: ColorRange[] = [
   { max: 10, color: "#22c55e" }, { max: 20, color: "#eab308" }, { max: 30, color: "#ef4444" }, { max: null, color: "#06b6d4" },
 ];
-type SortKey = "untouched" | "fresh" | "created" | "value" | "name" | "mompop";
+type SortKey = "untouched" | "fresh" | "created" | "value" | "name" | "mompop" | "tz";
 export type CrmColumn = { key: string; label: string; cls: string };
 const LANE_TINTS = ["bg-sky-50/70 ring-sky-100", "bg-yellow-50/70 ring-yellow-100", "bg-violet-50/70 ring-violet-100", "bg-amber-50/70 ring-amber-100", "bg-blue-50/70 ring-blue-100", "bg-emerald-50/70 ring-emerald-100", "bg-rose-50/70 ring-rose-100", "bg-indigo-50/70 ring-indigo-100", "bg-teal-50/70 ring-teal-100", "bg-slate-100/70 ring-slate-200/60"];
 
@@ -124,6 +126,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     else if (sortKey === "untouched") a.sort((x, y) => (x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0));
     // 🏠 "mompop" = mom & pop builders first (work first), then untouched within each group.
     else if (sortKey === "mompop") a.sort((x, y) => ((x.builderSize === "mompop" ? 0 : 1) - (y.builderSize === "mompop" ? 0 : 1)) || ((x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0)));
+    // 🌅 "tz" = East Coast first (they're ahead of us) → work west last, then untouched within.
+    else if (sortKey === "tz") a.sort((x, y) => ((x.tzRank ?? 9) - (y.tzRank ?? 9)) || ((x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0)));
     return a; // "fresh" = server order (updated desc)
   };
   const toggleSel = (id: string) => { setStageScope(null); setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
@@ -246,6 +250,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
             <option value="value">💵 Highest value</option>
             <option value="name">🔤 Name A–Z</option>
             {cards.some((c) => c.builderSize) && <option value="mompop">🏠 Mom &amp; Pop first</option>}
+            {cards.some((c) => c.tzLabel) && <option value="tz">🌅 East Coast first (by time zone)</option>}
           </select>
           <button onClick={() => { setSelecting((v) => !v); setSelected(new Set()); setStageScope(null); }} className={`rounded-lg px-2.5 py-1 font-bold ${selecting ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>☑ Select</button>
           {/* 🔑 What the card colors mean (Jon 2026-10-27: define task vs appt vs follow-up). */}
@@ -371,6 +376,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         {c.leadType && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.leadType.cls}`}>{c.leadType.label}</span>}
                         {c.waterfront && <span title="Waterfront land — market these first (wealthy buyers keep building through rate hikes)" className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[9px] font-bold text-cyan-700 ring-1 ring-cyan-200">🌊 Waterfront</span>}
                         {c.leadKind && (() => { const m = leadKindMeta(c.leadKind); return m ? <span title={`Detected as a ${m.label} lead (more ${m.label}-specific details filled)`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls}`}>{m.emoji} {m.label}</span> : null; })()}
+                        {c.tzLabel && <span title="The lead's local time. Work East Coast leads first — they're ahead of us — then move west. Use the 🌅 sort." className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 ring-1 ring-slate-200">🕐 {c.tzLabel}</span>}
                         {c.builderSize && (() => { const m = builderSizeMeta(c.builderSize); return (
                           <button type="button" title={m.title} onClick={(e) => { e.stopPropagation(); flipBuilderSize(c.id, c.builderSize === "big" ? "mompop" : "big"); }} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls} hover:opacity-80`}>{m.emoji} {m.label}</button>
                         ); })()}

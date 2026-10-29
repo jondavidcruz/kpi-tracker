@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/data";
 import { readPipelines, parseTags } from "@/lib/crm";
 import { isWaterfront } from "@/lib/waterfront";
 import { leadKind } from "@/lib/lead-kind";
+import { localTimeForPhone } from "@/lib/npa-tz";
 import { commsFor } from "@/lib/crm-comms";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
@@ -237,6 +238,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
     waterfront: isWaterfront(o.formData),
     leadKind: leadKind(o.formData),
+    ...(() => { const t = localTimeForPhone(o.contact?.phone || ""); return t ? { tzLabel: `${t.time} ${t.abbr}`, tzRank: t.rank } : {}; })(),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
