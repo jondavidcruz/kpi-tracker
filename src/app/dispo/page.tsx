@@ -529,6 +529,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   const { directReiConfigured, directReiBlastConfigured } = await import("@/lib/directrei");
   const dreiReady = tab === "developers" ? directReiConfigured() : false;
   const dreiBlastOn = tab === "developers" ? directReiBlastConfigured() : false;
+  // 🏠 Continual-vetting queue: the mom & pop developers still unvetted = work-first targets.
+  const vetQueue = tab === "developers"
+    ? netCards.filter((c) => c.builderSize === "mompop" && !["vetted", "not_fit"].includes(c.stage)).slice(0, 24)
+    : [];
 
   const TABS: { key: Tab; label: string; n: number }[] = [
     { key: "today", label: "☀️ Today", n: command ? command.summary.needOffers + command.summary.overdue : -1 },
@@ -906,6 +910,21 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
               <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-bold text-slate-500 ring-1 ring-slate-200">🏢 {bigBuilderCount} Big Builder</span>
               <span className="text-slate-400">Mom &amp; pop give the fastest feedback — click a card&apos;s badge to correct a tag.</span>
             </Card>
+          )}
+
+          {/* 🏠 Continual vetting — the next mom & pop developers to vet (work-first). */}
+          {tab === "developers" && vetQueue.length > 0 && (
+            <details className="rounded-2xl bg-white p-3 ring-1 ring-emerald-200">
+              <summary className="cursor-pointer text-[13px] font-bold text-emerald-800">🏠 Vet these mom &amp; pops next <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] text-emerald-700">{vetQueue.length}</span> <span className="font-normal text-slate-400">— work-first builders still missing a buy box</span></summary>
+              <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {vetQueue.map((c) => (
+                  <a key={c.id} href={`/crm/${c.id}`} className="flex items-center justify-between gap-2 rounded-lg bg-emerald-50/60 px-2.5 py-1.5 text-[12px] ring-1 ring-emerald-100 hover:bg-emerald-50">
+                    <span className="min-w-0"><b className="text-slate-800">{c.contactName}</b>{c.address ? <span className="text-slate-400"> · {c.address}</span> : null}</span>
+                    <span className="shrink-0 text-[10px] font-semibold text-amber-600">{(c.badges || []).find((b) => b.startsWith("need:")) || "vet now"}</span>
+                  </a>
+                ))}
+              </div>
+            </details>
           )}
 
           {/* ⚡ DirectREI blast readiness — the two ways to blast mom & pop developers (Jon 2026-10-28). */}
