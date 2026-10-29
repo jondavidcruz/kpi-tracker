@@ -2548,6 +2548,24 @@ export async function saveLandParcelsAction(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+/** 🔥 Rate a deal's potential spread (Jon 2026-10-29): manual "how big a win is this"
+ *  flag — big ($50k+) / medium / small / thin — eyeballed from the comps. Lets Jon
+ *  prioritize fat-spread deals over thin ones. Stored on formData.__spread; no migration. */
+export async function setDealHeatAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const heat = String(formData.get("heat") ?? "");
+  const valid = heat === "" || heat === "big" || heat === "med" || heat === "small" || heat === "thin";
+  if (!oppId || !valid) return;
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
+  if (!o) return;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  if (heat) fd.__spread = heat; else delete fd.__spread;
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: fd as never } });
+  revalidatePath("/crm");
+}
+
 /** ⚡ Run the cascade in one click (Jon 2026-10-21): auto-attach the top matched
  *  vetted developers + buyer agents to this deal's follow-up tracker, so the rep works
  *  a ready list instead of building one — the fastest path to getting a deal out to

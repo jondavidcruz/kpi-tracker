@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { readPipelines, parseTags } from "@/lib/crm";
 import { isWaterfront } from "@/lib/waterfront";
+import { readDealHeat } from "@/lib/deal-heat";
 import { leadKind } from "@/lib/lead-kind";
 import { localTimeForPhone } from "@/lib/npa-tz";
 import { commsFor } from "@/lib/crm-comms";
@@ -247,6 +248,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
     acres: parseAcres(o.formData) ?? undefined,
+    heat: readDealHeat(o.formData),
     offers: (() => { const s = offerStats(readDispoOffers(o.formData)); return { live: s.live, goal: OFFER_GOAL }; })(),
     staleStage: o.stage && !dealStageKeys.has(o.stage) ? prettyStage(o.stage) : undefined,
     gate: (() => {

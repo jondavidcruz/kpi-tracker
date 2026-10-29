@@ -2,10 +2,11 @@
 // Acquisitions CRM Kanban — same battle-tested HTML5 DnD as DealKanban
 // (set dataTransfer payload, defer state past dragstart). Click a card →
 // its opportunity page.
-import { useEffect, useLayoutEffect, useState, useTransition } from "react";
-import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction, bulkOppStageAction, addCrmNoteAction } from "@/app/crm/actions";
+import { useEffect, useLayoutEffect, useState, useTransition, type MouseEvent } from "react";
+import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction, sendCrmSmsAction, bulkOppAction, bulkOppStageAction, addCrmNoteAction, setDealHeatAction } from "@/app/crm/actions";
 import { setBuilderSizeAction } from "@/app/actions";
 import { builderSizeMeta } from "@/lib/builder-size";
+import { HEAT_META, cycleHeat, heatRank, type DealHeat } from "@/lib/deal-heat";
 import { leadKindMeta } from "@/lib/lead-kind";
 import { STAGE_PROB, titleCase } from "@/lib/crm-shared";
 import { formatAddress } from "@/lib/address";
@@ -47,6 +48,7 @@ export type CrmCard = {
   leadKind?: "land" | "home" | ""; // 🏞🏡 detected by which details form has more type-specific fields
   tzLabel?: string; // 🕐 lead's local time + zone, e.g. "2:45pm ET"
   tzRank?: number;  // east→west priority (0 = East Coast = work first)
+  heat?: import("@/lib/deal-heat").DealHeat | ""; // 🔥 manual spread rating (big/med/small/thin)
 };
 // 🎨 GHL-style age coloring (Jon 2026-10-08): customizable ranges + colors,
 // saved per device. Days since last stage activity (updatedAt).
@@ -54,7 +56,7 @@ type ColorRange = { max: number | null; color: string };
 const DEFAULT_RANGES: ColorRange[] = [
   { max: 10, color: "#22c55e" }, { max: 20, color: "#eab308" }, { max: 30, color: "#ef4444" }, { max: null, color: "#06b6d4" },
 ];
-type SortKey = "untouched" | "fresh" | "created" | "value" | "name" | "mompop" | "tz";
+type SortKey = "untouched" | "fresh" | "created" | "value" | "name" | "mompop" | "tz" | "heat";
 export type CrmColumn = { key: string; label: string; cls: string };
 const LANE_TINTS = ["bg-sky-50/70 ring-sky-100", "bg-yellow-50/70 ring-yellow-100", "bg-violet-50/70 ring-violet-100", "bg-amber-50/70 ring-amber-100", "bg-blue-50/70 ring-blue-100", "bg-emerald-50/70 ring-emerald-100", "bg-rose-50/70 ring-rose-100", "bg-indigo-50/70 ring-indigo-100", "bg-teal-50/70 ring-teal-100", "bg-slate-100/70 ring-slate-200/60"];
 
@@ -92,6 +94,16 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   // Default: UNTOUCHED first (Jon 2026-10-27) — leads nobody has worked rise to the top,
   // and the moment you log a touch/note the lead drops toward the bottom.
   const [sortKey, setSortKey] = useState<SortKey>("untouched");
+  // 🔥 optimistic spread-rating overrides (card id → heat) so a click updates instantly.
+  const [heatOverride, setHeatOverride] = useState<Record<string, DealHeat | "">>({});
+  const heatOf = (c: CrmCard): DealHeat | "" => (c.id in heatOverride ? heatOverride[c.id] : (c.heat ?? ""));
+  const bumpHeat = (c: CrmCard, e: MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const next = cycleHeat(heatOf(c));
+    setHeatOverride((p) => ({ ...p, [c.id]: next }));
+    const fd = new FormData(); fd.set("oppId", c.id); fd.set("heat", next);
+    start(() => { setDealHeatAction(fd); });
+  };
   const [colorOn, setColorOn] = useState(false);
   const [ranges, setRanges] = useState<ColorRange[]>(DEFAULT_RANGES);
   const [selecting, setSelecting] = useState(false);
@@ -128,6 +140,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     else if (sortKey === "mompop") a.sort((x, y) => ((x.builderSize === "mompop" ? 0 : 1) - (y.builderSize === "mompop" ? 0 : 1)) || ((x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0)));
     // 🌅 "tz" = East Coast first (they're ahead of us) → work west last, then untouched within.
     else if (sortKey === "tz") a.sort((x, y) => ((x.tzRank ?? 9) - (y.tzRank ?? 9)) || ((x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0)));
+    // 🔥 "heat" = biggest potential spread first (Jon 2026-10-29), then untouched within each level.
+    else if (sortKey === "heat") a.sort((x, y) => (heatRank(heatOf(y)) - heatRank(heatOf(x))) || ((x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0)));
     return a; // "fresh" = server order (updated desc)
   };
   const toggleSel = (id: string) => { setStageScope(null); setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
@@ -251,6 +265,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
             <option value="name">🔤 Name A–Z</option>
             {cards.some((c) => c.builderSize) && <option value="mompop">🏠 Mom &amp; Pop first</option>}
             {cards.some((c) => c.tzLabel) && <option value="tz">🌅 East Coast first (by time zone)</option>}
+            <option value="heat">🔥 Hottest spread first</option>
           </select>
           <button onClick={() => { setSelecting((v) => !v); setSelected(new Set()); setStageScope(null); }} className={`rounded-lg px-2.5 py-1 font-bold ${selecting ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>☑ Select</button>
           {/* 🔑 What the card colors mean (Jon 2026-10-27: define task vs appt vs follow-up). */}
@@ -368,6 +383,11 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                           lead-owner line. */}
                       <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{addressFirst ? "⭐ " : ""}{titleCase(c.contactName)}</a>
                       <div className="flex shrink-0 items-center gap-1">
+                        {/* 🔥 Spread rating (Jon 2026-10-29): click to cycle how big the potential
+                            spread is — big ($50k+) → med → small → thin → unrated. Sort by 🔥. */}
+                        {(() => { const h = heatOf(c); const m = h ? HEAT_META[h] : null; return (
+                          <button type="button" onClick={(e) => bumpHeat(c, e)} title={m ? `Spread: ${m.label} — click to change` : "Rate this deal's potential spread (based on the comps) — click to set 🔥🔥🔥 big → 🔥🔥 med → 🔥 small → 🧊 thin"} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m ? m.cls : "bg-white text-slate-300 ring-slate-200 hover:text-amber-500 hover:ring-amber-300"}`}>{m ? `${m.emoji} ${m.short}` : "🔥 rate"}</button>
+                        ); })()}
                         {c.gate && <span title={`SOP gate — ${c.gate.label}: ${c.gate.cleared ? "cleared, clear to advance" : "held, advance locked"}`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.gate.cleared ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-red-100 text-red-700 ring-red-200"}`}>{c.gate.cleared ? "✓ gate" : "🔒 gate"}</span>}
                         {!!c.parcels && c.parcels > 1 && <span title={`${c.parcels} parcels on this deal`} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 ring-1 ring-amber-200">📦 {c.parcels}</span>}
                         {c.acres != null && <span title={`${c.acres} acres`} className="rounded-full bg-lime-100 px-1.5 py-0.5 text-[9px] font-bold text-lime-800 ring-1 ring-lime-200">⛰️ {c.acres % 1 === 0 ? c.acres : c.acres.toFixed(2)} ac</span>}

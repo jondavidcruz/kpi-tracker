@@ -22,6 +22,7 @@ import { isAgentNetworkName, isDevNetworkName, isDispoDealPipeline } from "@/lib
 import { parcelCount } from "@/lib/crm-shared";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline } from "@/lib/dispo-gates";
 import { readMarketingDone, marketingComplete } from "@/lib/dispo-marketing";
+import { readDealHeat } from "@/lib/deal-heat";
 import { readMarketingSteps } from "@/lib/dispo-marketing-store";
 import { parseAcres } from "@/lib/acreage";
 import { commsFor } from "@/lib/crm-comms";
@@ -294,6 +295,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       leadType: isAgentNetworkName(o.pipeline) ? leadTypeBadge("buyer_agent") : isDevNetworkName(o.pipeline) ? leadTypeBadge("developer") : leadTypeBadge(sellerKind(o.formData, o.pipeline)),
       parcels: parcelCount(o.formData, o.contact.address, fd.property?.apn),
       acres: parseAcres(o.formData) ?? undefined,
+      heat: readDealHeat(o.formData),
       gate: isDispoDealPipeline(o.pipeline) ? (() => {
         const gt = gateForCurrentStage(pathForPipeline(o.pipeline), stages.map((s) => ({ key: s.key, label: s.label })), o.stage);
         return gt ? { cleared: gateCleared(gt, readGateChecks(o.formData), marketingComplete(mktSteps, readMarketingDone(o.formData))), label: gt.label } : undefined;
