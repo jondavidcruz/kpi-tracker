@@ -220,8 +220,11 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   useLayoutEffect(() => {
     try { const raw = localStorage.getItem("fo_crm_collapsed"); if (raw) setCollapsed(JSON.parse(raw)); } catch { /* none */ }
   }, []);
-  const toggleCollapse = (k: string) => {
-    const next = { ...collapsed, [k]: !collapsed[k] };
+  const toggleCollapse = (k: string, current?: boolean) => {
+    // `current` = the EFFECTIVE collapsed state shown (incl. the empty-stage auto-collapse), so a
+    // click always flips what the user sees rather than the raw (possibly-undefined) stored value.
+    const now = current ?? !!collapsed[k];
+    const next = { ...collapsed, [k]: !now };
     setCollapsed(next);
     try { localStorage.setItem("fo_crm_collapsed", JSON.stringify(next)); } catch { /* fine */ }
   };
@@ -311,11 +314,16 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
           const colCards = sortCards(cards.filter((c) => c.stage === col.key || (colIdx === 0 && !columns.some((cc) => cc.key === c.stage))));
           const shownCards = expandedCols.has(col.key) ? colCards : colCards.slice(0, COL_CAP);
           const tint = LANE_TINTS[colIdx % LANE_TINTS.length];
-          if (collapsed[col.key]) {
+          // 📐 EMPTY stages auto-collapse to thin strips so the stages WITH cards get the full
+          // width and every card is entirely visible without left/right scrolling (Jon 2026-10-29).
+          // A manual toggle still wins; drops still work on a collapsed strip.
+          const colTotal = counts[col.key] ?? colCards.length;
+          const isCollapsed = collapsed[col.key] ?? (colTotal === 0);
+          if (isCollapsed) {
             return (
               <button
                 key={col.key}
-                onClick={() => toggleCollapse(col.key)}
+                onClick={() => toggleCollapse(col.key, true)}
                 onDragOver={(e) => { if (dragId) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.key); } }}
                 onDrop={(e) => { e.preventDefault(); drop(col.key); setOverCol(null); }}
                 title={`${col.label} — click to expand`}
@@ -358,7 +366,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     <button onClick={() => selectWholeStage(col.key)} title={`Select all ${(counts[col.key] ?? colCards.length).toLocaleString()} leads in this stage for a bulk action`} className={`grid h-5 w-5 place-items-center rounded text-[11px] font-bold ${stageScope?.stage === col.key ? "bg-indigo-600 text-white" : "bg-white/70 text-slate-400 hover:text-indigo-600"}`}>☑</button>
                   )}
                   <span className="text-xs font-extrabold tabular-nums text-slate-500">{(counts[col.key] ?? colCards.length).toLocaleString()}</span>
-                  <button onClick={() => toggleCollapse(col.key)} title="Minimize this stage" className="grid h-5 w-5 place-items-center rounded text-[11px] font-extrabold text-slate-400 hover:bg-white/70 hover:text-slate-600">‹</button>
+                  <button onClick={() => toggleCollapse(col.key, false)} title="Minimize this stage" className="grid h-5 w-5 place-items-center rounded text-[11px] font-extrabold text-slate-400 hover:bg-white/70 hover:text-slate-600">‹</button>
                 </span>
               </div>
               {(sums[col.key] ?? 0) > 0 && (
