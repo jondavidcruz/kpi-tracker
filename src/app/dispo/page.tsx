@@ -3,6 +3,7 @@ import { getCurrentUser, canAccessMarketing, isManager, canAccessCSuite } from "
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { readPipelines, parseTags } from "@/lib/crm";
+import { isWaterfront } from "@/lib/waterfront";
 import { commsFor } from "@/lib/crm-comms";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
@@ -233,6 +234,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
     lastTouch: lastTouchByDeal.get(o.id)?.toISOString() ?? "", stageMoved: stageAtByDeal.has(o.id),
     followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
+    waterfront: isWaterfront(o.formData),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),

@@ -42,6 +42,7 @@ export type CrmCard = {
   staleStage?: string;  // ⚠️ stored stage no longer in this pipeline (rename orphan) — real stage to show
   gate?: { cleared: boolean; label: string }; // 🚦 Option B — this stage's SOP gate status
   builderSize?: "mompop" | "big"; // 🏠🏢 developer cards — mom & pop (work first) vs big builder
+  waterfront?: boolean; // 🌊 land is on/near water — market these first (rate-proof buyers)
 };
 // 🎨 GHL-style age coloring (Jon 2026-10-08): customizable ranges + colors,
 // saved per device. Days since last stage activity (updatedAt).
@@ -359,6 +360,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         {c.offers && c.offers.live > 0 && <span title={`${c.offers.live} of ${c.offers.goal} offers received`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.offers.live >= c.offers.goal ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>💰 {c.offers.live}/{c.offers.goal}</span>}
                         {c.staleStage && <span title={`This deal's saved stage ("${c.staleStage}") no longer exists in this pipeline after a rename — use "Re-sort deals" to file it correctly.`} className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700 ring-1 ring-orange-200">⚠️ was: {c.staleStage}</span>}
                         {c.leadType && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.leadType.cls}`}>{c.leadType.label}</span>}
+                        {c.waterfront && <span title="Waterfront land — market these first (wealthy buyers keep building through rate hikes)" className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[9px] font-bold text-cyan-700 ring-1 ring-cyan-200">🌊 Waterfront</span>}
                         {c.builderSize && (() => { const m = builderSizeMeta(c.builderSize); return (
                           <button type="button" title={m.title} onClick={(e) => { e.stopPropagation(); flipBuilderSize(c.id, c.builderSize === "big" ? "mompop" : "big"); }} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls} hover:opacity-80`}>{m.emoji} {m.label}</button>
                         ); })()}

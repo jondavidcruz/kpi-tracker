@@ -1,6 +1,7 @@
 import Link from "next/link";
 import LiveRefresh from "@/components/LiveRefresh";
 import { formatAddress } from "@/lib/address";
+import { isWaterfront } from "@/lib/waterfront";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
@@ -279,6 +280,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       lastTouch: lastTouchByOpp.get(o.id)?.toISOString() ?? "",
       apn: fd.property?.apn ?? "", apptDueToday: apptToday.length > 0, taskDueToday: due.length > 0,
       followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
+      waterfront: isWaterfront(o.formData),
       // next upcoming (after today) task + appointment dates for the card chips
       nextTask: (tasksByOpp.get(o.id) ?? []).map((t) => (t.due || "").slice(0, 10)).filter((d) => d >= today).sort()[0] ?? "",
       nextAppt: nextApptByOpp.get(o.id)?.toISOString() ?? "",
