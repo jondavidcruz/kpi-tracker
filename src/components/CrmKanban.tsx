@@ -216,6 +216,13 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     // opacity-50 ("grayed out") after a move (Jon 2026-10-20).
     setDragId(null); setOverCol(null);
     if (!c || c.stage === stage) return;
+    // 🚦 SOP-gate NAG (Jon 2026-10-29): if the current stage's gate isn't complete and this
+    // is a FORWARD move, remind them — but let them move if they confirm (never hard-block).
+    if (c.gate && !c.gate.cleared) {
+      const fromIdx = columns.findIndex((col) => col.key === c.stage);
+      const toIdx = columns.findIndex((col) => col.key === stage);
+      if (toIdx > fromIdx && fromIdx >= 0 && !confirm(`⚠️ The SOP gate “${c.gate.label}” isn't marked complete.\n\nDid you finish the checklist? Move anyway?`)) return;
+    }
     setCards(cards.map((x) => (x.id === c.id ? { ...x, stage } : x)));
     const fd = new FormData();
     fd.set("id", c.id);

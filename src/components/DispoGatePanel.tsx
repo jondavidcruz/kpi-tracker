@@ -27,9 +27,11 @@ export default function DispoGatePanel({ oppId, pipeline, currentStage, stages, 
     const fd = new FormData(); fd.set("oppId", oppId); fd.set("gateKey", gk); fd.set("idx", String(i)); fd.set("checked", val ? "1" : "0");
     start(() => { toggleDispoGateAction(fd); });
   };
-  const advance = (override = false) => {
-    if (!next || (!cleared && !override)) return;
-    if (override && !confirm(`Move past the gate without clearing it? (manager override — this will be logged)`)) return;
+  const advance = () => {
+    if (!next) return;
+    // 🚦 Nag, don't block (Jon 2026-10-29): anyone can advance; if the gate isn't complete,
+    // remind them first, then let them move.
+    if (!cleared && !confirm(`⚠️ The SOP gate “${gate?.label ?? "checklist"}” isn't marked complete.\n\nDid you finish the checklist? Advance anyway?`)) return;
     const fd = new FormData(); fd.set("id", oppId); fd.set("stage", next.key);
     start(async () => { await setOppStageAction(fd); onChanged?.(); });
   };
@@ -77,16 +79,9 @@ export default function DispoGatePanel({ oppId, pipeline, currentStage, stages, 
             })}
           </div>
           {next && (
-            <button type="button" onClick={() => advance(false)} disabled={!cleared}
-              className={`mt-2 w-full rounded-lg px-3 py-1.5 text-[12px] font-bold ${cleared ? "bg-emerald-600 text-white hover:bg-emerald-700" : "cursor-not-allowed bg-slate-100 text-slate-400"}`}>
-              {cleared ? `Advance to ${next.label.replace(/^[^ ]+ /, "")} →` : "🔒 Locked — clear the gate to advance"}
-            </button>
-          )}
-          {/* 👑 Manager override — move past a held gate (e.g. a mis-filed lead), logged (Jon 2026-10-26) */}
-          {next && !cleared && canOverride && (
-            <button type="button" onClick={() => advance(true)}
-              className="mt-1 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-100">
-              👑 Override — advance to {next.label.replace(/^[^ ]+ /, "")} anyway
+            <button type="button" onClick={advance}
+              className={`mt-2 w-full rounded-lg px-3 py-1.5 text-[12px] font-bold ${cleared ? "bg-emerald-600 text-white hover:bg-emerald-700" : "border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"}`}>
+              {cleared ? `Advance to ${next.label.replace(/^[^ ]+ /, "")} →` : `⚠️ Gate not complete — advance to ${next.label.replace(/^[^ ]+ /, "")} anyway?`}
             </button>
           )}
         </>

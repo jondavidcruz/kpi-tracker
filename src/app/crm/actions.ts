@@ -193,15 +193,13 @@ export async function setOppStageAction(formData: FormData) {
       const stages = pipes.find((p) => p.name === opp.pipeline)?.stages.map((s) => ({ key: s.key, label: s.label })) ?? [];
       const block = stageMoveBlocked(path, stages, opp.stage, stage, readGateChecks(opp.formData));
       if (block.blocked && block.gate) {
-        // 👑 Manager override (Jon 2026-10-26: "always allow a manager to override it" — e.g.
-        // a mis-filed lead that shouldn't be stuck behind a gate). Logged so it's auditable.
-        if (isManager(me)) {
-          await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: `👑 ${me.name.split(" ")[0]} moved this past the gate “${block.gate.label}” (manager override).`, actor: me.name });
-        } else {
-          await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: `🔒 Stage held — clear the gate “${block.gate.label}” before advancing. (Option B: the SOP gate for this stage isn't complete.)`, actor: me.name });
-          revalidatePath(`/crm/${id}`); revalidatePath("/crm"); revalidatePath("/dispo"); // snap the board card back
-          return; // refuse the forward move
-        }
+        // 🚦 NAG, don't BLOCK (Jon 2026-10-29: "don't make it where the girls can't move the
+        // stage — just keep reminding them"). Anyone can advance; we log that the SOP gate
+        // wasn't complete so it's auditable and the reminder stays visible on the timeline.
+        // The client shows a "did you finish the checklist?" confirm before the move.
+        await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: isManager(me)
+          ? `👑 ${me.name.split(" ")[0]} advanced past the gate “${block.gate.label}”.`
+          : `⚠️ ${me.name.split(" ")[0]} advanced past the SOP gate “${block.gate.label}” before it was marked complete — reminder to finish the checklist.`, actor: me.name });
       }
     }
   }
