@@ -4966,6 +4966,23 @@ export async function setFieldOverrideAction(formData: FormData) {
   redirect("/admin/form-builder?saved=1");
 }
 
+// ⚙️ Save the Master Workflow config (Jon 2026-10-29): the inbound-reply auto-tag keywords +
+// follow-up timings. OWNER-ONLY (core automation — see owner-only-foundation memory).
+export async function saveWorkflowAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const lines = (v: string) => String(v ?? "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean).slice(0, 150);
+  const { saveWorkflowConfig } = await import("@/lib/master-workflow-store");
+  await saveWorkflowConfig({
+    realtorKeywords: lines(String(formData.get("realtorKeywords") ?? "")),
+    qualifiedKeywords: lines(String(formData.get("qualifiedKeywords") ?? "")),
+    notInterestedDays: Number(formData.get("notInterestedDays") ?? 30),
+    realtorDays: Number(formData.get("realtorDays") ?? 50),
+  });
+  revalidatePath("/admin/workflow");
+  redirect("/admin/workflow?saved=1");
+}
+
 // 🏠🏢 Correct a buyer's mom-and-pop / big-builder tag (Jon 2026-10-28). Stored on the
 // buyer's formData.__builderSize; the cascade classifier treats it as the override.
 export async function setBuilderSizeAction(formData: FormData): Promise<{ ok: boolean }> {

@@ -27,6 +27,49 @@ export function followUpDaysFor(intent: ReplyIntent): number {
   }
 }
 
+// ⚙️ Owner-editable config (Jon 2026-10-29: "let me tune the keywords + timings myself").
+// Stored in Resource __master_workflow__; falls back to these defaults (which mirror the
+// built-in regexes above). Keep it keyword-based so there's no AI cost on every inbound text.
+export type WorkflowConfig = {
+  realtorKeywords: string[];
+  qualifiedKeywords: string[];
+  notInterestedDays: number;
+  realtorDays: number;
+};
+
+export const DEFAULT_WORKFLOW: WorkflowConfig = {
+  realtorKeywords: ["realtor", "real estate agent", "listing agent", "already listed", "on the market", "working with an agent", "working with a realtor", "my agent", "our agent", "have an agent", "using an agent", "broker"],
+  qualifiedKeywords: ["how much", "what's your", "price", "pricing", "offer", "cash", "interested", "call me", "text me", "send me", "more info", "tell me more", "make an offer", "let's talk", "yes", "sure", "okay", "details", "where is", "which lot", "which property"],
+  notInterestedDays: 30,
+  realtorDays: 50,
+};
+
+/** Build a case-insensitive phrase matcher from a keyword list (spaces = flexible whitespace). */
+export function keywordRegex(words: string[]): RegExp | null {
+  const parts = words
+    .map((w) => String(w).trim())
+    .filter(Boolean)
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"));
+  return parts.length ? new RegExp(`(^|\\b)(${parts.join("|")})(\\b|$)`, "i") : null;
+}
+
+/** Config-driven version of replyIntentKeywords — uses the owner's edited keyword lists. */
+export function replyIntentWith(text: string, cfg: WorkflowConfig): "working_with_realtor" | "qualified" | null {
+  const t = String(text || "");
+  const r = keywordRegex(cfg.realtorKeywords); if (r && r.test(t)) return "working_with_realtor";
+  const q = keywordRegex(cfg.qualifiedKeywords); if (q && q.test(t)) return "qualified";
+  return null;
+}
+
+/** Config-driven follow-up days (0 = work now). */
+export function followUpDaysWith(intent: ReplyIntent, cfg: WorkflowConfig): number {
+  switch (intent) {
+    case "not_interested": return cfg.notInterestedDays;
+    case "working_with_realtor": return cfg.realtorDays;
+    default: return 0;
+  }
+}
+
 export function intentTag(intent: ReplyIntent): string {
   switch (intent) {
     case "not_interested": return "not-interested";

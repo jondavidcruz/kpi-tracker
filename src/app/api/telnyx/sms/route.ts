@@ -54,9 +54,11 @@ export async function POST(req: NextRequest) {
     // Not-Interested stage (NOT a full DNC); anything else → a reply task.
     try {
       const { DNC_REGEX, dncContact } = await import("@/lib/crm-dnc");
-      const { replyIntentKeywords } = await import("@/lib/master-workflow");
+      const { replyIntentWith } = await import("@/lib/master-workflow");
+      const { loadWorkflowConfig } = await import("@/lib/master-workflow-store");
+      const wfCfg = await loadWorkflowConfig(); // ⚙️ owner-edited keywords + timings (/admin/workflow)
       const DECLINE_REGEX = /\b(not\s*(interested|selling)|no\s*thank|already\s*sold|we\s*sold|don'?t\s*(want|wish|need)\s*to\s*sell|\bpass\b)\b|^\s*(no|nope)\b[.! ]*$/i;
-      const kw = replyIntentKeywords(text); // 🤖 Master Workflow: realtor / qualified keywords
+      const kw = replyIntentWith(text, wfCfg); // 🤖 Master Workflow: realtor / qualified keywords
       if (DNC_REGEX.test(text)) { wasDnced = true; await dncContact(contact.id, `inbound text matched the STOP/hostile filter: "${text.slice(0, 80)}"`); }
       else if (DECLINE_REGEX.test(text)) { declined = true; }
       else if (kw === "working_with_realtor") { realtor = true; }
@@ -76,10 +78,10 @@ export async function POST(req: NextRequest) {
       // 🤖 MASTER WORKFLOW (Jonathan Duong 2026-10-28): auto-tag + auto-SCHEDULE the
       // next follow-up so snoozed leads resurface instead of being lost, and the VA only
       // works qualified ones. Not-interested → circle back in 30d; realtor → 50d.
-      const { intentTag, followUpDaysFor, followUpDate } = await import("@/lib/master-workflow");
+      const { intentTag, followUpDaysWith, followUpDate } = await import("@/lib/master-workflow");
       const applyIntent = async (intent: "not_interested" | "working_with_realtor" | "qualified", moveStage: boolean) => {
         if (!opp) return;
-        const days = followUpDaysFor(intent);
+        const days = followUpDaysWith(intent, wfCfg);
         const tag = intentTag(intent);
         const tags = tag && !new RegExp(tag, "i").test(opp.tags || "") ? [opp.tags, tag].filter(Boolean).join(",") : (opp.tags || "");
         let stageData: Record<string, unknown> = {};
