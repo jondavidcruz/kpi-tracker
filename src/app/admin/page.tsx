@@ -330,6 +330,15 @@ export default async function AdminPage({
             <Link href="/admin/calibration" className="inline-flex items-center gap-2 rounded-lg bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-200">
               📐 Underwriting calibration (predicted vs actual)
             </Link>
+            <Link href="/admin/crm-audit" className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-200">
+              🔎 CRM audit — find the leaks
+            </Link>
+            <Link href="/admin/form-builder" className="inline-flex items-center gap-2 rounded-lg bg-violet-100 px-4 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-200">
+              🛠 Home/Land form builder
+            </Link>
+            <Link href="/admin/chat-webhooks" className="inline-flex items-center gap-2 rounded-lg bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-200">
+              💬 Chat webhooks
+            </Link>
             {!kpis.some((k) => k.key.startsWith("land_")) && (
               <form action={installLandKpis}>
                 <button className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-200">🌱 Install land KPI pack</button>
