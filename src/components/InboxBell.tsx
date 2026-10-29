@@ -207,8 +207,10 @@ export default function InboxBell() {
         {count > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-0.5 text-[9px] font-extrabold text-white">{count}</span>}
         {muted && <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 rounded bg-slate-700 px-1 text-[7px] font-extrabold uppercase tracking-wide text-white">muted</span>}
       </button>
+      {/* 📱 Open to the LEFT of the dialer on wider screens so you can text + dial at the
+          same time without the windows covering each other (Jon 2026-10-29). */}
       {open && (
-        <span className="absolute right-0 top-12 flex w-[300px] max-w-[92vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+        <span className="absolute right-0 md:right-[300px] top-12 flex w-[300px] max-w-[92vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
           {/* panel header */}
           <span className="flex items-center gap-1.5 border-b border-slate-100 px-3 py-2">
             <span className="text-[12px] font-extrabold text-slate-800">📱 Texts</span>
