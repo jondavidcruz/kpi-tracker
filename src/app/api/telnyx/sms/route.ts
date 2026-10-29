@@ -100,6 +100,8 @@ export async function POST(req: NextRequest) {
       if (declined && opp) await applyIntent("not_interested", true);
       else if (realtor && opp) await applyIntent("working_with_realtor", true);
       else if (qualified && opp) await applyIntent("qualified", false);
+      // 📨 Any reply STOPS the drip sequence — they engaged, hand it to a human (Jon 2026-10-29).
+      if (opp) { try { const { stopDrip } = await import("@/lib/drip"); await stopDrip(opp.id, "seller replied"); } catch { /* ok */ } }
     } catch { /* guard never breaks intake */ }
     // 📣 nudge the owner only if they're actually engaged (dup-guarded per day)
     try {

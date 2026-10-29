@@ -4454,6 +4454,10 @@ export async function GET(request: Request) {
   // change (Jon 2026-10-21: "this system can never go down"). Best-effort, non-blocking.
   let comms: { ok: boolean; down: string[] } | null = null;
   try { const { checkAndRecordComms } = await import("@/lib/comms-health"); const s = await checkAndRecordComms(true); comms = { ok: s.ok, down: s.lanes.filter((l) => !l.ok).map((l) => l.key) }; } catch { /* non-blocking */ }
+  // 📨 Drip sequences — advance every due follow-up step (assisted tasks, or auto-send when
+  // DRIP_SEND=1). Best-effort; never blocks the rest of the daily run (Jon 2026-10-29).
+  let drips: unknown = null;
+  try { const { runDueDrips } = await import("@/lib/drip"); drips = await runDueDrips(200); } catch { /* non-blocking */ }
   const result = await runScheduledChecks({ date, force, weekly, review });
-  return NextResponse.json({ ok: true, speedTestReminded, autoClockedOut, comms, ...result });
+  return NextResponse.json({ ok: true, speedTestReminded, autoClockedOut, comms, drips, ...result });
 }

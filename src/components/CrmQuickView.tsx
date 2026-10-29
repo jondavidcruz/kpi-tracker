@@ -25,6 +25,7 @@ import NoteComposer from "@/components/NoteComposer";
 import TimelineFilter from "@/components/TimelineFilter";
 import DetailsAutofill from "@/components/DetailsAutofill";
 import DocUploadForm from "@/components/DocUploadForm";
+import DripControl from "@/components/DripControl";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoOffersPanel from "@/components/DispoOffersPanel";
 import { readDispoBuyers } from "@/lib/dispo-buyers";
@@ -271,6 +272,7 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                         </div>
                       </div>
                     )}
+                    <DripControl oppId={d.id} contactId={d.contact.id} drip={(d.formData as Record<string, unknown> | undefined)?.__drip as { seq?: string; step?: number; nextAt?: string } | null} onChanged={() => refetch(d.id)} />
                     <PipelineStage d={d} pipelineStages={pipelineStages} stages={stages} setSaved={setSaved} setData={setData} />
 
                     <div>

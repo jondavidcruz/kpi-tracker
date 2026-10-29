@@ -2675,3 +2675,29 @@ export async function applyDetailsAutofillAction(formData: FormData): Promise<{ 
   revalidatePath(`/crm/${oppId}`);
   return { ok: true, msg: `✓ Filled ${applied} field${applied > 1 ? "s" : ""}.` };
 }
+
+// 📨 Drip sequences (Jon 2026-10-29) — enroll/stop a lead in an automated follow-up sequence.
+export async function enrollDripAction(formData: FormData): Promise<{ ok: boolean; msg?: string }> {
+  const me = await crmUser();
+  if (!me) return { ok: false, msg: "signed out" };
+  const oppId = String(formData.get("oppId") ?? "");
+  const seq = String(formData.get("seq") ?? "seller_land");
+  if (!oppId) return { ok: false };
+  const { enrollDrip } = await import("@/lib/drip");
+  const ok = await enrollDrip(oppId, seq, me.name);
+  if (ok) await logCrmEvent({ contactId: String(formData.get("contactId") ?? ""), oppId, kind: "system", body: `📨 Enrolled in follow-up sequence "${seq}" by ${me.name}`, actor: me.name }).catch(() => {});
+  revalidatePath(`/crm/${oppId}`);
+  return { ok };
+}
+
+export async function stopDripAction(formData: FormData): Promise<{ ok: boolean }> {
+  const me = await crmUser();
+  if (!me) return { ok: false };
+  const oppId = String(formData.get("oppId") ?? "");
+  if (!oppId) return { ok: false };
+  const { stopDrip } = await import("@/lib/drip");
+  await stopDrip(oppId, `stopped by ${me.name}`);
+  await logCrmEvent({ contactId: String(formData.get("contactId") ?? ""), oppId, kind: "system", body: `📨 Follow-up sequence stopped by ${me.name}`, actor: me.name }).catch(() => {});
+  revalidatePath(`/crm/${oppId}`);
+  return { ok: true };
+}
