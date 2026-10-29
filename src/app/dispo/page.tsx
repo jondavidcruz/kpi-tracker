@@ -522,6 +522,9 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     }).filter((c) => !needle || `${c.contactName} ${c.address ?? ""} ${c.title ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(needle));
     for (const c of netCards) netCounts[c.stage] = (netCounts[c.stage] ?? 0) + 1;
   }
+  // 🏠🏢 Developer mix (Jon 2026-10-28) — how many of our developers are mom & pop (work first) vs big.
+  const momPopCount = tab === "developers" ? netCards.filter((c) => c.builderSize === "mompop").length : 0;
+  const bigBuilderCount = tab === "developers" ? netCards.filter((c) => c.builderSize === "big").length : 0;
 
   const TABS: { key: Tab; label: string; n: number }[] = [
     { key: "today", label: "☀️ Today", n: command ? command.summary.needOffers + command.summary.overdue : -1 },
@@ -891,9 +894,22 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
             <CsvMapImport action={importDispoNetworkCsv} returnTo={`/dispo?tab=${tab}`} />
           </details>
 
-          {/* ⬇️ Export the unvetted developers for a DirectREI mass-call (Jon 2026-10-27). C-suite only. */}
+          {/* 🏠🏢 Developer mix — who we have, and the mom & pop (work-first) targets (Jon 2026-10-28). */}
+          {tab === "developers" && (momPopCount + bigBuilderCount) > 0 && (
+            <Card className="flex flex-wrap items-center gap-2 border-l-4 border-emerald-400 p-3 text-[12px]">
+              <span className="font-bold text-slate-700">Developer mix:</span>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 font-bold text-emerald-700 ring-1 ring-emerald-200">🏠 {momPopCount} Mom &amp; Pop — work first</span>
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-bold text-slate-500 ring-1 ring-slate-200">🏢 {bigBuilderCount} Big Builder</span>
+              <span className="text-slate-400">Mom &amp; pop give the fastest feedback — click a card&apos;s badge to correct a tag.</span>
+            </Card>
+          )}
+
+          {/* ⬇️ Exports for a DirectREI mass-call (Jon 2026-10-27/28). C-suite only. */}
           {tab === "developers" && canAccessCSuite(me) && (
-            <a href="/api/export/unvetted-devs" className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-900" title="Download the unvetted developers as a CSV to bulk-upload into DirectREI for Marie to mass-call (C-suite only)">⬇️ Export unvetted developers (CSV) <span className="font-normal text-slate-300">— for DirectREI</span></a>
+            <div className="flex flex-wrap gap-2">
+              <a href="/api/export/mompop-devs?reachable=1" className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-800" title="Download the MOM & POP developers (with phone/email) as a CSV to blast via DirectREI (C-suite only)">⬇️ Export Mom &amp; Pop developers (CSV) <span className="font-normal text-emerald-200">— target first</span></a>
+              <a href="/api/export/unvetted-devs" className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-900" title="Download the unvetted developers as a CSV to bulk-upload into DirectREI for Marie to mass-call (C-suite only)">⬇️ Export unvetted developers (CSV) <span className="font-normal text-slate-300">— for DirectREI</span></a>
+            </div>
           )}
 
           {/* search + view toggle */}
