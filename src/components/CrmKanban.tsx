@@ -49,7 +49,7 @@ type ColorRange = { max: number | null; color: string };
 const DEFAULT_RANGES: ColorRange[] = [
   { max: 10, color: "#22c55e" }, { max: 20, color: "#eab308" }, { max: 30, color: "#ef4444" }, { max: null, color: "#06b6d4" },
 ];
-type SortKey = "untouched" | "fresh" | "created" | "value" | "name";
+type SortKey = "untouched" | "fresh" | "created" | "value" | "name" | "mompop";
 export type CrmColumn = { key: string; label: string; cls: string };
 const LANE_TINTS = ["bg-sky-50/70 ring-sky-100", "bg-yellow-50/70 ring-yellow-100", "bg-violet-50/70 ring-violet-100", "bg-amber-50/70 ring-amber-100", "bg-blue-50/70 ring-blue-100", "bg-emerald-50/70 ring-emerald-100", "bg-rose-50/70 ring-rose-100", "bg-indigo-50/70 ring-indigo-100", "bg-teal-50/70 ring-teal-100", "bg-slate-100/70 ring-slate-200/60"];
 
@@ -119,6 +119,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     else if (sortKey === "created") a.sort((x, y) => (y.createdAt ?? "").localeCompare(x.createdAt ?? ""));
     // "untouched" = never-touched first, then oldest touch → most-recently-touched last.
     else if (sortKey === "untouched") a.sort((x, y) => (x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0));
+    // 🏠 "mompop" = mom & pop builders first (work first), then untouched within each group.
+    else if (sortKey === "mompop") a.sort((x, y) => ((x.builderSize === "mompop" ? 0 : 1) - (y.builderSize === "mompop" ? 0 : 1)) || ((x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0)));
     return a; // "fresh" = server order (updated desc)
   };
   const toggleSel = (id: string) => { setStageScope(null); setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
@@ -233,6 +235,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
             <option value="created">🆕 Newest created</option>
             <option value="value">💵 Highest value</option>
             <option value="name">🔤 Name A–Z</option>
+            {cards.some((c) => c.builderSize) && <option value="mompop">🏠 Mom &amp; Pop first</option>}
           </select>
           <button onClick={() => { setSelecting((v) => !v); setSelected(new Set()); setStageScope(null); }} className={`rounded-lg px-2.5 py-1 font-bold ${selecting ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>☑ Select</button>
           {/* 🔑 What the card colors mean (Jon 2026-10-27: define task vs appt vs follow-up). */}
