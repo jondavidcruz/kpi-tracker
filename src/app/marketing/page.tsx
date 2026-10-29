@@ -18,6 +18,7 @@ import { readAutoMaps } from "@/lib/geo/automaps";
 import { buildScorecard, coverageByCounty } from "@/lib/buyers/scorecard";
 import type { BuyBox } from "@/lib/buybox/types";
 import VettedBuyersBoard from "@/components/VettedBuyersBoard";
+import CoverageHeat from "@/components/CoverageHeat";
 import type { CardBuyer } from "@/components/BuyerCards";
 import BuyerCoveragePanel from "@/components/BuyerCoveragePanel";
 import { getBuyerCoverage } from "@/lib/buyer-coverage";
@@ -307,6 +308,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       <ArchivedBuyers rows={archivedRows} />
           </div>,
           <div key="markets" className="space-y-6">
+      {/* 🗺 County coverage heat board — moved here from the Buyer cards tab (Jon 2026-10-29). */}
+      <CoverageHeat coverage={boardCoverage} />
+
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">
         <MarketsMap buyers={buyers} markets={marketsForMap} />

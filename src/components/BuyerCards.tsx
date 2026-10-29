@@ -51,7 +51,12 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
     return buyers
       .filter((b) => !tier || b.tier === tier)
       .filter((b) => !selectedCounty || b.counties.includes(selectedCounty))
-      .filter((b) => !needle || [b.name, b.company, ...b.counties, ...b.cities, ...b.chips].join(" ").toLowerCase().includes(needle))
+      // 🔎 Search EVERYTHING (Jon 2026-10-29): name, company, type, areas, price, contact, chips.
+      .filter((b) => !needle || [
+        b.name, b.company, b.type, (b as { priceRange?: string }).priceRange, (b as { buyBoxAreas?: string }).buyBoxAreas,
+        (b as { market?: string }).market, (b as { region?: string }).region, b.phone, b.email, b.bestContact,
+        ...b.counties, ...b.cities, ...b.chips,
+      ].filter(Boolean).join(" ").toLowerCase().includes(needle))
       .sort((a, b) => a.tier.localeCompare(b.tier) || b.score - a.score || a.name.localeCompare(b.name));
   }, [buyers, q, tier, selectedCounty]);
 
@@ -60,7 +65,7 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 name, company, county, chip…" className="w-64 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 Search anything — name, company, county, city, price, area, phone, email, chips…" className="w-full min-w-[260px] flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-slate-300" />
         <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-200">
           {(["", "A", "B", "C"] as const).map((t) => (
             <button key={t || "all"} onClick={() => setTier(t)} className={`px-2.5 py-1.5 text-xs font-bold ${tier === t ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
