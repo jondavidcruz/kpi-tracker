@@ -473,6 +473,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     });
     const needle = q.toLowerCase();
     const { devVetScore } = await import("@/lib/dev-vetting");
+    const { classifyBuilderSize } = await import("@/lib/builder-size"); // 🏠🏢 mom-and-pop vs big
     const vetKind = tab === "developers" ? "developer" : "buyer_agent";
     // ⚡ Responsiveness — a dev is "super responsive" (→ A-tier VIP) when they've replied
     // or we've connected in the last 45 days. One query over all their contacts.
@@ -498,12 +499,25 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
       const v = devVetScore(o.formData, vetKind, o.contactId ? respSet.has(o.contactId) : false);
       const badges = [`${v.tier === "A" ? "🅰" : v.tier === "B" ? "🅱" : "🅲"} ${v.filled}/${v.total} box${v.responsive ? " ⚡" : ""}`];
       if (v.missing.length && v.filled < v.total) badges.push(`need: ${v.missing.slice(0, 3).join(", ")}`);
+      // 🏠🏢 Mom-and-pop (work first) vs big builder — same classifier as the cascade.
+      const fdo = (o.formData ?? {}) as Record<string, unknown>;
+      const bbStruct = (fdo.__buyBoxStruct ?? null) as { geo?: { nationwide?: boolean; states?: string[] }; status?: { volume_note?: string } } | null;
+      const devForm = (fdo.dev_buybox ?? fdo.agent_profile ?? {}) as Record<string, string>;
+      const builderSize = tab === "developers" ? classifyBuilderSize({
+        name: o.contact?.name || o.title,
+        override: (fdo.__builderSize as string | undefined) ?? null,
+        nationwide: bbStruct?.geo?.nationwide === true,
+        statesCount: bbStruct?.geo?.states?.length ?? 0,
+        volumeText: bbStruct?.status?.volume_note || devForm.volume || "",
+        extraText: buyBox,
+      }) : undefined;
       return {
         id: o.id, title: buyBox, contactName: o.contact?.name || o.title, contactId: o.contactId,
         address: area, phone: o.contact?.phone || undefined, email: o.contact?.email || undefined,
         stage: o.stage || "new", assignedTo: o.assignedTo || "", tags: parseTags(o.tags), badges,
         money: "", valueNum: 0, updatedAt: o.updatedAt.toISOString(), createdAt: o.createdAt.toISOString(),
         leadType: leadTypeBadge(tab === "developers" ? "developer" : "buyer_agent"),
+        builderSize,
       } as CrmCard;
     }).filter((c) => !needle || `${c.contactName} ${c.address ?? ""} ${c.title ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(needle));
     for (const c of netCards) netCounts[c.stage] = (netCounts[c.stage] ?? 0) + 1;

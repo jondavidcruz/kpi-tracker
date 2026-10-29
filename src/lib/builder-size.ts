@@ -31,9 +31,12 @@ export function classifyBuilderSize(opts: {
   if (SMALL_NAMES.test(opts.name ?? "")) return "mompop"; // custom/remodel in the NAME → small
   if (BIG_NAMES.test(hay)) return "big";
   if (opts.nationwide) return "big";
-  if ((opts.statesCount ?? 0) >= 4) return "big";       // multi-state footprint = production builder
-  if (firstInt(opts.volumeText) >= 30) return "big";     // ~30+ lots/year = big
-  return "mompop";                                        // default: local = work first
+  if ((opts.statesCount ?? 0) >= 4) return "big";        // multi-state/national footprint = big
+  // NOTE: volume is NOT a discriminator (Jonathan Duong 2026-10-28: mom-and-pops are LOCAL
+  // and agile and still buy 10–100 properties in 60–90 days). Only a truly massive single-
+  // entity volume hints "big"; otherwise local = mom & pop = work first.
+  if (firstInt(opts.volumeText) >= 500) return "big";
+  return "mompop";
 }
 
 export function builderSizeMeta(size: BuilderSize): { label: string; emoji: string; cls: string; title: string } {
