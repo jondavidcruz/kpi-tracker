@@ -86,6 +86,14 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // saw nothing on the tab she was looking at): the leader tab broadcasts
   // incoming calls to every sibling tab; any tab can answer/decline remotely.
   const [remoteIncoming, setRemoteIncoming] = useState<{ number: string } | null>(null);
+  // 🔕 Per-WINDOW call mute (Jon 2026-10-29): with several windows open, set the ones you
+  // don't want ringing to "muted" so only your chosen window rings. Stored in sessionStorage
+  // = per tab/window (localStorage would mute every tab). Muted windows show no banner, no
+  // ring; the call still rings on the non-muted window.
+  const [callsMuted, setCallsMuted] = useState(false);
+  const callsMutedRef = useRef(false);
+  useEffect(() => { try { setCallsMuted(sessionStorage.getItem("fo_calls_muted") === "1"); } catch { /* ok */ } }, []);
+  useEffect(() => { callsMutedRef.current = callsMuted; try { sessionStorage.setItem("fo_calls_muted", callsMuted ? "1" : "0"); } catch { /* ok */ } }, [callsMuted]);
   const [standby, setStandby] = useState(false);
   const bcRef = useRef<BroadcastChannel | null>(null);
   const [lineOk, setLineOk] = useState(false); // 🟢 socket registered = inbound will ring here
@@ -343,6 +351,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     const dur = startRef.current ? Math.round((Date.now() - startRef.current) / 1000) : 0;
     startRef.current = 0;
+    // 🚫 Just ended an inbound call → silence a Telnyx re-ring of the same caller for a
+    // short window, so ending it doesn't ring again a couple seconds later (Jon 2026-10-29).
+    if (ctx?.dir === "in" && ctx?.phone) { const k = leadKey(ctx.phone); declinedRef.current.set(k, Date.now()); setTimeout(() => declinedRef.current.delete(k), DECLINE_SILENCE_MS + 1000); }
     setState("idle"); setMuted(false); setSecs(0); setOnCall(null); setDtmfTrail(""); recStartedRef.current = false;
     if (ctx?.oppId || ctx?.contactId || ctx?.phone) setLastCall({ ...ctx, secs: dur }); // keypad dials get the strip too (Jon 2026-10-09)
     if (ctx?.phone || ctx?.contactId) {
@@ -462,14 +473,15 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             }, 2_000);
             setTimeout(() => clearInterval(claimPoll), 35_000);
             const number = n.call.options?.remoteCallerNumber ?? "unknown";
-            setIncoming({ number });
-            setOpen(true);
+            // 🔕 This window is muted → don't ring/show it here, but still tell the other
+            // windows so your chosen (non-muted) window rings (Jon 2026-10-29).
+            if (!callsMutedRef.current) { setIncoming({ number }); setOpen(true); }
             try { bcRef.current?.postMessage({ t: "incoming", number }); } catch { /* same-tab only */ }
             // 🏷 caller-ID: swap the raw number for the CRM name on every tab
             fetch(`/api/crm/callerid?num=${encodeURIComponent(number)}`, { cache: "no-store" }).then(async (r) => {
               const j = (await r.json().catch(() => ({}))) as { name?: string; deptLabel?: string };
               if (j.name || j.deptLabel) {
-                setIncoming((cur) => (cur && cur.number === number ? { ...cur, name: j.name ?? cur.name, deptLabel: j.deptLabel } : cur));
+                if (!callsMutedRef.current) setIncoming((cur) => (cur && cur.number === number ? { ...cur, name: j.name ?? cur.name, deptLabel: j.deptLabel } : cur));
                 try { bcRef.current?.postMessage({ t: "incoming", number, name: j.name, deptLabel: j.deptLabel }); } catch { /* fine */ }
               }
             }).catch(() => {});
@@ -548,7 +560,7 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       bcRef.current = bc;
       bc.onmessage = (ev: MessageEvent<{ t?: string; number?: string }>) => {
         const m = ev.data ?? {};
-        if (m.t === "incoming" && !leaderRef.current) { const mm = m as { name?: string; deptLabel?: string }; setRemoteIncoming({ number: [mm.name || m.number || "unknown", mm.deptLabel].filter(Boolean).join(" · ") }); setOpen(true); }
+        if (m.t === "incoming" && !leaderRef.current && !callsMutedRef.current) { const mm = m as { name?: string; deptLabel?: string }; setRemoteIncoming({ number: [mm.name || m.number || "unknown", mm.deptLabel].filter(Boolean).join(" · ") }); setOpen(true); }
         if (m.t === "incoming-clear") { setRemoteIncoming((cur) => { if (cur) checkWhoAnswered(); return null; }); }
         if (m.t === "answer" && leaderRef.current) answerIncomingRef.current?.();
         if (m.t === "decline" && leaderRef.current) declineIncomingRef.current?.();
@@ -733,8 +745,17 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
                 {(data?.numbers ?? []).map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{n}{g ? ` — ${g}` : ""}</option>; })}
               </select>
             </span>
-            <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-slate-500">✕</button>
+            <span className="flex items-center gap-1.5">
+              <button onClick={() => setCallsMuted((v) => !v)} title={callsMuted ? "This window is MUTED for calls — incoming calls ring in your other window. Click to make this window ring." : "Mute calls on THIS window so only your other window rings (handy with multiple screens open)."} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${callsMuted ? "bg-slate-200 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}>{callsMuted ? "🔕 Muted" : "🔔 Rings here"}</button>
+              <button onClick={() => setOpen(false)} className="text-slate-300 hover:text-slate-500">✕</button>
+            </span>
           </span>
+
+          {callsMuted && (
+            <span className="block border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-[11px] font-semibold text-slate-500">
+              🔕 Calls are <b>muted on this window</b> — they&apos;ll ring in whichever window is set to <b>🔔 Rings here</b>. (Per-window setting.)
+            </span>
+          )}
 
           {clockOff && (
             <span className="block border-b border-amber-200 bg-amber-50 px-3.5 py-2 text-[11px] font-semibold text-amber-800">
