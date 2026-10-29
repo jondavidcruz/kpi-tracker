@@ -77,8 +77,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     followers: followersList,
     reps: (await db.user.findMany({ where: { active: true }, select: { name: true }, orderBy: { name: "asc" } })).map((u) => u.name),
     pipelines: pipelineNames,
-    // 🛠 custom Home/Land Details fields (appended to the base form in the quick-view)
+    // 🛠 custom Home/Land Details fields (appended) + 🏷 built-in field relabel/hide overrides
     customFields: await (await import("@/lib/crm-forms-store")).loadCustomFormFields(),
+    fieldOverrides: await (await import("@/lib/crm-forms-store")).loadFieldOverrides(),
     driveFiles,
     siblingOpps: siblingOpps.map((o) => ({ id: o.id, title: o.title, stage: o.stage, pipeline: o.pipeline || "War Room" })),
     id: opp.id, title: opp.title, stage: opp.stage, pipeline: opp.pipeline || "War Room", assignedTo: opp.assignedTo,

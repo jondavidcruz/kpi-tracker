@@ -187,6 +187,30 @@ export function applyCustomFields(forms: CrmForm[], custom?: CustomFieldMap | nu
   });
 }
 
+// 🏷 Field OVERRIDES (Jon 2026-10-29: "let me change the wording / hide a field I don't use").
+// Per built-in field: a new label and/or hidden flag. Stored as {formKey: {fieldKey: {...}}}
+// in Resource "__crm_field_overrides__" (no migration). Applied AFTER the base fields so a
+// rename/hide never breaks saved answers (the field KEY — where data lives — never changes).
+export type FieldOverride = { label?: string; hidden?: boolean };
+export type FieldOverrideMap = Record<string, Record<string, FieldOverride>>;
+
+export function applyFieldOverrides(forms: CrmForm[], overrides?: FieldOverrideMap | null): CrmForm[] {
+  if (!overrides) return forms;
+  return forms.map((f) => {
+    const ov = overrides[f.key];
+    if (!ov) return f;
+    const fields = f.fields
+      .filter((fld) => !ov[fld.key]?.hidden)
+      .map((fld) => { const o = ov[fld.key]; return o?.label ? { ...fld, label: o.label } : fld; });
+    return { ...f, fields };
+  });
+}
+
+/** Build a lead's forms with BOTH custom fields appended and built-in overrides applied. */
+export function buildForms(pipeline: string | null | undefined, custom?: CustomFieldMap | null, overrides?: FieldOverrideMap | null): CrmForm[] {
+  return applyFieldOverrides(applyCustomFields(formsForPipeline(pipeline), custom), overrides);
+}
+
 /** Normalize a raw custom-field record from the store into a valid FormField (or null). */
 export function normalizeCustomField(raw: unknown): FormField | null {
   const r = (raw ?? {}) as Record<string, unknown>;

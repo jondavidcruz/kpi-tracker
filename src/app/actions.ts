@@ -4944,6 +4944,28 @@ export async function deleteCustomFieldAction(formData: FormData) {
   redirect("/admin/form-builder?deleted=1");
 }
 
+// 🏷 Rename or hide a BUILT-IN discovery field (Jon 2026-10-29: "let me change the wording / hide
+// one I don't use"). Stores an override keyed by formKey+fieldKey; the field KEY never changes so
+// saved answers are untouched. Empty label + unhidden removes the override.
+export async function setFieldOverrideAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me) && !isManager(me)) return;
+  const formKey = String(formData.get("formKey") ?? "");
+  const fieldKey = String(formData.get("fieldKey") ?? "");
+  if (!formKey || !fieldKey) return;
+  const label = String(formData.get("label") ?? "").trim().slice(0, 80);
+  const hidden = String(formData.get("hidden") ?? "") === "1";
+  const { loadFieldOverrides, saveFieldOverrides } = await import("@/lib/crm-forms-store");
+  const map = await loadFieldOverrides();
+  const fm = { ...(map[formKey] ?? {}) };
+  if (!label && !hidden) delete fm[fieldKey];
+  else fm[fieldKey] = { ...(label ? { label } : {}), ...(hidden ? { hidden: true } : {}) };
+  if (Object.keys(fm).length) map[formKey] = fm; else delete map[formKey];
+  await saveFieldOverrides(map);
+  revalidatePath("/admin/form-builder");
+  redirect("/admin/form-builder?saved=1");
+}
+
 // 🏠🏢 Correct a buyer's mom-and-pop / big-builder tag (Jon 2026-10-28). Stored on the
 // buyer's formData.__builderSize; the cascade classifier treats it as the override.
 export async function setBuilderSizeAction(formData: FormData): Promise<{ ok: boolean }> {

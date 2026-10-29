@@ -3,8 +3,8 @@
 // form everywhere (quick-view + full lead page) and saved like any other answer.
 import { getCurrentUser, isOwner, isManager } from "@/lib/auth";
 import { CRM_FORMS, type FormField } from "@/lib/crm-forms";
-import { loadCustomFieldsRaw } from "@/lib/crm-forms-store";
-import { addCustomFieldAction, deleteCustomFieldAction } from "@/app/actions";
+import { loadCustomFieldsRaw, loadFieldOverrides } from "@/lib/crm-forms-store";
+import { addCustomFieldAction, deleteCustomFieldAction, setFieldOverrideAction } from "@/app/actions";
 import { Card } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ const EDITABLE = [
   { key: "land", name: "Land Details", emoji: "🏞" },
 ];
 
-export default async function FormBuilderPage({ searchParams }: { searchParams: Promise<{ added?: string; deleted?: string; err?: string }> }) {
+export default async function FormBuilderPage({ searchParams }: { searchParams: Promise<{ added?: string; deleted?: string; err?: string; saved?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   if (!isOwner(me) && !isManager(me)) {
@@ -27,14 +27,16 @@ export default async function FormBuilderPage({ searchParams }: { searchParams: 
     );
   }
   const custom = await loadCustomFieldsRaw();
+  const overrides = await loadFieldOverrides();
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <div>
         <h1 className="text-xl font-bold text-slate-800">🛠 Home / Land Details form builder</h1>
-        <p className="mt-1 text-sm text-slate-500">Add your own fields (text, long text, or a dropdown) with an emoji. They appear at the bottom of the matching form on every lead, and save like any other answer.</p>
+        <p className="mt-1 text-sm text-slate-500">Rename or hide the built-in fields, and add your own (text, long text, or a dropdown). Changes appear on every lead&apos;s form — in the quick view and the full page — and saved answers are never touched (only the label/visibility changes).</p>
       </div>
       {sp.added && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ Field added.</div>}
+      {sp.saved && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ Saved — the field&apos;s wording / visibility is updated everywhere.</div>}
       {sp.deleted && <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 ring-1 ring-amber-200">✓ Field removed (existing answers stay in the data).</div>}
       {sp.err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-200">⚠️ Couldn&apos;t add that — a dropdown needs at least one option.</div>}
 
@@ -44,6 +46,29 @@ export default async function FormBuilderPage({ searchParams }: { searchParams: 
         return (
           <Card key={f.key} className="p-4">
             <div className="mb-2 text-sm font-bold text-slate-800">{f.emoji} {f.name}</div>
+
+            {/* 🏷 Built-in fields — rename or hide (Jon 2026-10-29). The field's data key never
+                changes, so renaming/hiding never loses a saved answer. */}
+            <div className="mb-3">
+              <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Built-in fields — rename or hide</div>
+              <div className="space-y-1">
+                {base.map((bf) => {
+                  const ov = overrides[f.key]?.[bf.key];
+                  return (
+                    <form key={bf.key} action={setFieldOverrideAction} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-[12px] ring-1 ring-slate-100">
+                      <input type="hidden" name="formKey" value={f.key} />
+                      <input type="hidden" name="fieldKey" value={bf.key} />
+                      <input name="label" defaultValue={ov?.label ?? ""} placeholder={bf.label} title={`Default: ${bf.label}`} className={`min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1 ${ov?.hidden ? "line-through opacity-50" : ""}`} />
+                      <label className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-slate-500">
+                        <input type="checkbox" name="hidden" value="1" defaultChecked={!!ov?.hidden} className="h-3.5 w-3.5 accent-slate-600" /> hide
+                      </label>
+                      <button className="shrink-0 rounded-md bg-white px-2 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">Save</button>
+                    </form>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-[10px] text-slate-400">Leave the box blank to keep the default name. Tick <b>hide</b> to drop a field you don&apos;t use (its data is preserved).</p>
+            </div>
 
             {mine.length > 0 && (
               <div className="mb-3">

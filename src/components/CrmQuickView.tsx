@@ -24,7 +24,7 @@ import DealHeatChip from "@/components/DealHeatChip";
 import { readListingHistory } from "@/lib/listing-history";
 import ListingHistoryPanel from "@/components/ListingHistoryPanel";
 import { formatAddress } from "@/lib/address";
-import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
+import { formsForPipeline, buildForms } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
 import LienBuilder from "@/components/LienBuilder";
@@ -45,6 +45,7 @@ type Payload = {
   nextFollowUp: string; value: number | null; askPrice: number | null;
   formData: Record<string, Record<string, string | string[]>>;
   customFields?: import("@/lib/crm-forms").CustomFieldMap;
+  fieldOverrides?: import("@/lib/crm-forms").FieldOverrideMap;
   driveFiles?: Array<{ id: string; name: string; link: string; mimeType: string }>;
   siblingOpps?: Array<{ id: string; title: string; stage: string; pipeline: string }>;
   me: { name: string; fromLabel: string; signature: string; sigImageUrl?: string; canSms: boolean; canEmail: boolean; canCall: boolean };
@@ -402,7 +403,7 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                   </AutoSaveForm>
                 )}
 
-                {applyCustomFields(formsForPipeline(d.pipeline), d.customFields).map((f) => tab === `form:${f.key}` && (
+                {buildForms(d.pipeline, d.customFields, d.fieldOverrides).map((f) => tab === `form:${f.key}` && (
                   <div key={f.key} className="space-y-3">
                     {f.key === "financial" && <UnderwriteBlock d={d} />}
                     {/* ✨ pull details straight out of the notes (Home/Land only) */}
