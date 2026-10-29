@@ -81,6 +81,25 @@ function applyTabOrder<T extends { key: string }>(tabs: T[], order: string[]): T
   return [...tabs].sort((a, b) => pos(a.key) - pos(b.key));
 }
 
+// 🎨 Per-section colors (Jon 2026-10-29: "make it visual — Home brown, Land green…" so the
+// team knows what section they're on at a glance). `active` colors the nav tab when selected,
+// `dot` is the little color marker on every tab, `tint` softly tints that section's content.
+const SECTION_META: Record<string, { tint: string; active: string; dot: string }> = {
+  "form:property": { tint: "bg-amber-50/60", active: "bg-amber-700 text-white", dot: "bg-amber-700" },   // 🏡 Home = brown
+  "form:land": { tint: "bg-green-50/70", active: "bg-green-700 text-white", dot: "bg-green-600" },        // 🏞 Land = green
+  "form:financial": { tint: "bg-yellow-50/70", active: "bg-yellow-600 text-white", dot: "bg-yellow-500" },// 💰 Financials = gold
+  "form:closing": { tint: "bg-violet-50/70", active: "bg-violet-700 text-white", dot: "bg-violet-600" },  // 📝 Closing = purple
+  buyers: { tint: "bg-orange-50/70", active: "bg-orange-600 text-white", dot: "bg-orange-500" },          // 🤝 Buyers = orange
+  files: { tint: "bg-sky-50/70", active: "bg-sky-700 text-white", dot: "bg-sky-600" },                    // 📎 Files = sky
+  contact: { tint: "bg-rose-50/60", active: "bg-rose-600 text-white", dot: "bg-rose-500" },               // 👤 Contact = rose
+  tasks: { tint: "bg-emerald-50/60", active: "bg-emerald-600 text-white", dot: "bg-emerald-500" },        // ✅ Tasks = emerald
+  appts: { tint: "bg-pink-50/60", active: "bg-pink-600 text-white", dot: "bg-pink-500" },                 // 📅 Appts = pink
+  sms: { tint: "bg-blue-50/60", active: "bg-blue-600 text-white", dot: "bg-blue-500" },                   // 💬 SMS = blue
+  email: { tint: "bg-red-50/50", active: "bg-red-700 text-white", dot: "bg-red-600" },                    // ✉️ Email = red
+  notes: { tint: "bg-amber-50/50", active: "bg-amber-500 text-white", dot: "bg-amber-400" },              // 📝 Notes = yellow
+};
+const sectionMeta = (k: string) => SECTION_META[k] ?? { tint: "", active: "bg-brand-navy text-white", dot: "bg-slate-400" };
+
 const inputCls = "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm";
 const labelCls = "mb-0.5 block text-[11px] font-bold text-slate-500";
 
@@ -241,14 +260,15 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => { e.preventDefault(); reorderTabs(keys, t.key); }}
                       onDragEnd={() => { dragTabRef.current = null; setDragTab(null); }}
-                      className={`block w-full cursor-grab rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold active:cursor-grabbing ${navMin ? "text-center" : ""} ${dragTab === t.key ? "opacity-40" : ""} ${tab === t.key ? "bg-brand-navy text-white" : "text-slate-600 hover:bg-slate-100"}`}>
-                      {t.emoji}{navMin ? "" : ` ${t.label}`}
+                      className={`flex w-full items-center gap-1.5 cursor-grab rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold active:cursor-grabbing ${navMin ? "justify-center" : ""} ${dragTab === t.key ? "opacity-40" : ""} ${tab === t.key ? sectionMeta(t.key).active : "text-slate-600 hover:bg-slate-100"}`}>
+                      {!navMin && <span className={`h-2 w-2 shrink-0 rounded-full ${tab === t.key ? "bg-white/80" : sectionMeta(t.key).dot}`} />}
+                      <span>{t.emoji}{navMin ? "" : ` ${t.label}`}</span>
                     </button>
                   ));
                 })()}
               </nav>
 
-              <div className="min-w-0 flex-1 overflow-y-auto p-5">
+              <div className={`min-w-0 flex-1 overflow-y-auto p-5 transition-colors ${sectionMeta(tab).tint}`}>
                 {stripAgentNotesBlock(d.contact.pinnedNote) && <div className="mb-3 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {stripAgentNotesBlock(d.contact.pinnedNote)}</div>}
 
                 {tab === "opp" && (
