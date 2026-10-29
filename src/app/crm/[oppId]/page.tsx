@@ -22,6 +22,8 @@ import ParcelsPanel from "@/components/ParcelsPanel";
 import PanelGuard from "@/components/PanelGuard";
 import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
 import { sectionColor } from "@/lib/section-colors";
+import { readDealHeat } from "@/lib/deal-heat";
+import DealHeatChip from "@/components/DealHeatChip";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
@@ -183,7 +185,11 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
         <div className="flex flex-wrap items-center gap-3">
           <Link href={backHref} className="text-sm font-bold text-slate-400 hover:text-slate-600">←</Link>
           <div>
-            <div className="text-lg font-extrabold tracking-tight text-slate-900">{c.name}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-extrabold tracking-tight text-slate-900">{c.name}</span>
+              {/* 🔥 spread rating — same control as the board card (Jon 2026-10-29) */}
+              <DealHeatChip oppId={opp.id} heat={readDealHeat(opp.formData)} />
+            </div>
             <div className="text-xs text-slate-500">{formatAddress(opp.title)}</div>
           </div>
           <form action={setOppStageAction} className="flex items-center gap-1.5">

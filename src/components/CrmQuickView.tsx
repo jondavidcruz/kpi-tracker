@@ -19,6 +19,8 @@ import DispoGatePanel from "@/components/DispoGatePanel";
 import { isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { readGateChecks } from "@/lib/dispo-gates";
 import { readMarketingDone } from "@/lib/dispo-marketing";
+import { readDealHeat } from "@/lib/deal-heat";
+import DealHeatChip from "@/components/DealHeatChip";
 import { formatAddress } from "@/lib/address";
 import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
@@ -187,9 +189,11 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                 {(formatAddress(d.title) || d.contact.address) && (
                   <div className="truncate text-[12.5px] font-semibold text-slate-600" title={formatAddress(d.title) || d.contact.address}>📍 {formatAddress(d.title) || d.contact.address}</div>
                 )}
-                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                   <span className="font-semibold text-slate-400">Pipeline:</span>
                   <PipelineMover d={d} pipelineStages={pipelineStages} setSaved={setSaved} />
+                  {/* 🔥 spread rating — same control as the board card (Jon 2026-10-29) */}
+                  <DealHeatChip oppId={d.id} heat={readDealHeat(d.formData)} />
                 </div>
               </div>
               {saved && <span className="text-xs font-bold text-emerald-600">{saved}</span>}
