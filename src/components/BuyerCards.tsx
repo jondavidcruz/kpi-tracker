@@ -5,11 +5,13 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import type { Scorecard, Tier } from "@/lib/buyers/scorecard";
+import { builderSizeMeta } from "@/lib/builder-size";
 
 export type CardBuyer = Scorecard & {
   company?: string; type?: string; phone?: string; email?: string; igHandle?: string; bestContact?: string;
   mapUrl?: string; // Sharyn's hand-made area map (always wins)
   autoMapUrl?: string; // 🤖 generated from the buy box — blue counties, red city pins
+  builderSize?: "mompop" | "big"; // 🏠🏢 developers only — mom & pop (work first) vs big builder
 };
 
 const TIER_CLS: Record<Tier, string> = {
@@ -41,6 +43,7 @@ export function TierBadge({ tier, title }: { tier: Tier; title?: string }) {
 export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { buyers: CardBuyer[]; selectedCounty?: string; onCountyClear?: () => void }) {
   const [q, setQ] = useState("");
   const [tier, setTier] = useState<"" | Tier>("");
+  const [size, setSize] = useState<"" | "mompop" | "big">(""); // 🏠🏢 builder-size filter
   const [open, setOpen] = useState<string | null>(null);
   // Per-viewer convenience only (localStorage); defaults to cards on the server.
   const view = useSyncExternalStore(subscribeView, readView, () => "cards" as const);
@@ -50,6 +53,7 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
     const needle = q.trim().toLowerCase();
     return buyers
       .filter((b) => !tier || b.tier === tier)
+      .filter((b) => !size || b.builderSize === size)
       .filter((b) => !selectedCounty || b.counties.includes(selectedCounty))
       // 🔎 Search EVERYTHING (Jon 2026-10-29): name, company, type, areas, price, contact, chips.
       .filter((b) => !needle || [
@@ -58,9 +62,10 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
         ...b.counties, ...b.cities, ...b.chips,
       ].filter(Boolean).join(" ").toLowerCase().includes(needle))
       .sort((a, b) => a.tier.localeCompare(b.tier) || b.score - a.score || a.name.localeCompare(b.name));
-  }, [buyers, q, tier, selectedCounty]);
+  }, [buyers, q, tier, size, selectedCounty]);
 
   const counts = { A: buyers.filter((b) => b.tier === "A").length, B: buyers.filter((b) => b.tier === "B").length, C: buyers.filter((b) => b.tier === "C").length };
+  const sizeCounts = { mompop: buyers.filter((b) => b.builderSize === "mompop").length, big: buyers.filter((b) => b.builderSize === "big").length };
 
   return (
     <div>
@@ -73,6 +78,14 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
             </button>
           ))}
         </div>
+        {/* 🏠🏢 builder-size filter (Jon 2026-10-29) — same tag as the cascade + developer kanban */}
+        {(sizeCounts.mompop > 0 || sizeCounts.big > 0) && (
+          <div className="flex overflow-hidden rounded-lg ring-1 ring-emerald-200" title="Filter by builder size — mom & pop give the fastest feedback; big builders take more volume.">
+            <button onClick={() => setSize("")} className={`px-2.5 py-1.5 text-xs font-bold ${size === "" ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>All sizes</button>
+            {sizeCounts.mompop > 0 && <button onClick={() => setSize("mompop")} className={`px-2.5 py-1.5 text-xs font-bold ${size === "mompop" ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>🏠 Mom &amp; Pop · {sizeCounts.mompop}</button>}
+            {sizeCounts.big > 0 && <button onClick={() => setSize("big")} className={`px-2.5 py-1.5 text-xs font-bold ${size === "big" ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>🏢 Big · {sizeCounts.big}</button>}
+          </div>
+        )}
         {selectedCounty && (
           <button onClick={onCountyClear} className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200">📍 {selectedCounty} ✕</button>
         )}
@@ -96,7 +109,8 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <TierBadge tier={b.tier} title={b.tierWhy} />
-                      <div className="truncate text-sm font-bold text-slate-800">{b.name}</div>
+                      <div className="min-w-0 truncate text-sm font-bold text-slate-800">{b.name}</div>
+                      {b.builderSize && (() => { const m = builderSizeMeta(b.builderSize); return <span title={m.title} className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls}`}>{m.emoji} {m.label}</span>; })()}
                     </div>
                     {b.company && b.company !== b.name && <div className="truncate text-[11px] text-slate-500">{b.company}</div>}
                     <div className="mt-1 flex flex-wrap gap-1">
@@ -148,6 +162,7 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
             <div key={b.id} className={`flex flex-wrap items-center gap-2 px-3 py-1.5 text-xs ${b.paused ? "opacity-70" : ""}`}>
               <TierBadge tier={b.tier} title={b.tierWhy} />
               <span className="w-44 truncate font-semibold text-slate-800">{b.name}</span>
+              {b.builderSize && (() => { const m = builderSizeMeta(b.builderSize); return <span title={m.title} className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls}`}>{m.emoji}</span>; })()}
               <div className="grid w-20 grid-cols-10 gap-0.5">{b.checks.map((c) => <div key={c.key} className={`h-1.5 rounded-sm ${c.ok ? "bg-emerald-500" : "bg-slate-200"}`} />)}</div>
               <span className="w-8 text-right font-bold tabular-nums text-slate-700">{b.score}</span>
               <span className="flex-1 truncate text-slate-600">{b.chips.join("  ·  ")}</span>

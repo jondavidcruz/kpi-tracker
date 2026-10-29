@@ -3,6 +3,7 @@
 // Scorecard shape the Vetted Buyers page already renders — so that page can read the
 // kanban (the single source of truth) without rewriting its UI. Server-safe helper.
 import { buildScorecard } from "./scorecard";
+import { classifyBuilderSize } from "@/lib/builder-size";
 import type { CardBuyer } from "@/components/BuyerCards";
 import type { BuyerLand } from "@/lib/buyer-land";
 
@@ -48,5 +49,12 @@ export function crmOppToCardBuyer(o: CrmBuyerOpp, touches: CrmTouch[], today: st
     lastContacted: touches[0]?.at,
     blacklisted: false,
   }, today);
-  return { ...sc, company: s(ag.brokerage) || undefined, type: isAgent ? "agent" : "developer", phone: o.contact?.phone || undefined, email: o.contact?.email || undefined, bestContact: s(ag.bestContact) || undefined };
+  // 🏠🏢 only developers get a builder-size tag (agents aren't builders) — manual override wins.
+  const builderSize = isAgent ? undefined : classifyBuilderSize({
+    name: o.contact?.name || s(ag.brokerage),
+    override: s(fd.__builderSize) || null,
+    volumeText: s(dev.volume),
+    extraText: `${areas} ${s(dev.landTypes)}`,
+  });
+  return { ...sc, company: s(ag.brokerage) || undefined, type: isAgent ? "agent" : "developer", phone: o.contact?.phone || undefined, email: o.contact?.email || undefined, bestContact: s(ag.bestContact) || undefined, builderSize };
 }
