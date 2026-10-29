@@ -6,6 +6,7 @@
 // pipeline change can't fire the form's debounced save.
 import { useState, useTransition } from "react";
 import { setOppPipelineAction } from "@/app/crm/actions";
+import { sortPipesAqThenDs } from "@/lib/crm-shared";
 
 type Stage = { key: string; label: string };
 
@@ -38,7 +39,7 @@ export default function OppPipelineMover({ id, pipeline, pipelineNames, pipeline
           setPendingPipe(p);
           setPendingStage((pipelineStages[p] ?? [])[0]?.key ?? "");
         }}>
-        {pipelineNames.map((pn) => <option key={pn} value={pn}>{pn}</option>)}
+        {sortPipesAqThenDs(pipelineNames).map((pn) => <option key={pn} value={pn}>{pn}</option>)}
       </select>
       {pendingPipe && pendingPipe !== pipeline && (
         <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5 ring-1 ring-amber-200">

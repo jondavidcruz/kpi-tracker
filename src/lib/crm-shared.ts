@@ -85,6 +85,14 @@ export function parseTags(s: string): string[] {
   return s.split(",").map((t) => t.trim()).filter(Boolean);
 }
 
+// 🔀 Order pipeline options: War Room first, then all AQ (acquisitions) together, then all DS
+// (dispositions) together, then the rest (DNC, etc.). Stable within each group, so the pipelines
+// keep their own order (Jon 2026-10-29: "all AQ together and all DS together"). "AQjr" counts as AQ.
+export function sortPipesAqThenDs(names: string[]): string[] {
+  const rank = (n: string) => /^war\s*room$/i.test(n) ? -1 : /^aq/i.test(n) ? 0 : /^ds/i.test(n) ? 1 : 2;
+  return names.map((n, i) => [n, i] as const).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([n]) => n);
+}
+
 /**
  * ☎ One phone normalizer for EVERY place a contact gets created by hand
  * (new-lead form, bell quick-text, intake webhooks). Returns +1XXXXXXXXXX or "".

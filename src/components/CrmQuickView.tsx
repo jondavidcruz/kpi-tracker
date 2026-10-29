@@ -9,7 +9,7 @@ import {
   addCrmTaskAction, toggleCrmTaskAction, reassignTaskAction, addCrmApptAction, deleteCrmApptAction,
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
 } from "@/app/crm/actions";
-import { KIND_EMOJI, rowIcon, stripAgentNotesBlock, recStreamSrc } from "@/lib/crm-shared";
+import { KIND_EMOJI, rowIcon, stripAgentNotesBlock, recStreamSrc, sortPipesAqThenDs } from "@/lib/crm-shared";
 import AutoSaveForm from "@/components/AutoSaveForm";
 import PhoneField from "@/components/PhoneField";
 import CrmFormFields from "@/components/CrmFormFields";
@@ -68,10 +68,8 @@ const tabsFor = (pipeline: string | null | undefined) => [
   { key: "notes", label: "Notes & activity", emoji: "📝" },
 ];
 
-// 🔀 Order pipelines AQ first, then DS, then everything else (Jon 2026-10-28: the list
-// was mixed). Stable within each group. "AQjr:" counts as acquisitions.
-const pipeRank = (n: string) => (/^aq/i.test(n) ? 0 : /^ds/i.test(n) ? 1 : 2);
-const sortPipes = (names: string[]) => names.map((n, i) => [n, i] as const).sort((a, b) => pipeRank(a[0]) - pipeRank(b[0]) || a[1] - b[1]).map(([n]) => n);
+// 🔀 Pipeline ordering (War Room → AQ → DS → rest) lives in crm-shared (sortPipesAqThenDs).
+const sortPipes = sortPipesAqThenDs;
 
 // 🔀 Apply the viewer's saved tab order (Jon 2026-10-28: "let me reorder the quick-view
 // tabs"). Stored keys come first in their saved order; any tab not in the saved order
