@@ -24,6 +24,8 @@ import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
 import { sectionColor } from "@/lib/section-colors";
 import { readDealHeat } from "@/lib/deal-heat";
 import DealHeatChip from "@/components/DealHeatChip";
+import { readListingHistory } from "@/lib/listing-history";
+import ListingHistoryPanel from "@/components/ListingHistoryPanel";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
@@ -463,6 +465,14 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                 );
               });
             })()}
+            </details>
+          </Card>
+
+          {/* 📈 Listing / price history (Jon 2026-10-29) — Zillow-style table to judge novation */}
+          <Card className={`border-l-4 border-teal-400 p-4 ${sectionColor("listing").tint}`} widget="listing">
+            <details id="listing" className="scroll-mt-4">
+              <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-teal-700">📈 Listing history <span className="normal-case text-slate-300">(what it listed / sold for — click to open)</span></summary>
+              <div className="mt-2"><ListingHistoryPanel oppId={opp.id} rows={readListingHistory(opp.formData)} address={formatAddress(opp.title) || c.address} /></div>
             </details>
           </Card>
 

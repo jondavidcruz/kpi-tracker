@@ -21,6 +21,8 @@ import { readGateChecks } from "@/lib/dispo-gates";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { readDealHeat } from "@/lib/deal-heat";
 import DealHeatChip from "@/components/DealHeatChip";
+import { readListingHistory } from "@/lib/listing-history";
+import ListingHistoryPanel from "@/components/ListingHistoryPanel";
 import { formatAddress } from "@/lib/address";
 import { formsForPipeline, applyCustomFields } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
@@ -64,6 +66,7 @@ const tabsFor = (pipeline: string | null | undefined) => [
   { key: "opp", label: "Opportunity details", emoji: "📁" },
   { key: "contact", label: "Contact info", emoji: "👤" },
   ...formsForPipeline(pipeline).map((f) => ({ key: `form:${f.key}`, label: f.name, emoji: f.emoji })),
+  { key: "listing", label: "Listing history", emoji: "📈" },
   { key: "buyers", label: "Buyers & Offers", emoji: "🤝" },
   { key: "files", label: "Files & docs", emoji: "📎" },
   { key: "tasks", label: "Tasks", emoji: "✅" },
@@ -94,6 +97,7 @@ const SECTION_META: Record<string, { tint: string; active: string; dot: string }
   "form:land": { tint: "bg-green-50/70", active: "bg-green-700 text-white", dot: "bg-green-600" },        // 🏞 Land = green
   "form:financial": { tint: "bg-yellow-50/70", active: "bg-yellow-600 text-white", dot: "bg-yellow-500" },// 💰 Financials = gold
   "form:closing": { tint: "bg-violet-50/70", active: "bg-violet-700 text-white", dot: "bg-violet-600" },  // 📝 Closing = purple
+  listing: { tint: "bg-teal-50/70", active: "bg-teal-700 text-white", dot: "bg-teal-600" },               // 📈 Listing history = teal
   buyers: { tint: "bg-orange-50/70", active: "bg-orange-600 text-white", dot: "bg-orange-500" },          // 🤝 Buyers = orange
   files: { tint: "bg-sky-50/70", active: "bg-sky-700 text-white", dot: "bg-sky-600" },                    // 📎 Files = sky
   contact: { tint: "bg-rose-50/60", active: "bg-rose-600 text-white", dot: "bg-rose-500" },               // 👤 Contact = rose
@@ -410,6 +414,10 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
 
                 {/* 🤝 Buyers on the deal + offers received — the SAME trackers as the full
                     contact view, read from formData so they stay in sync (Jon 2026-10-28). */}
+                {tab === "listing" && (
+                  <ListingHistoryPanel oppId={d.id} rows={readListingHistory(d.formData)} address={formatAddress(d.title) || d.contact.address} onSaved={() => refetch(d.id)} />
+                )}
+
                 {tab === "buyers" && (
                   <div className="space-y-3">
                     <DispoOffersPanel oppId={d.id} offers={readDispoOffers(d.formData)} buyerNames={readDispoBuyers(d.formData).map((b) => b.name)} askPrice={d.askPrice} />

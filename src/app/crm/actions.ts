@@ -2548,6 +2548,29 @@ export async function saveLandParcelsAction(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+/** 📈 Save the listing / price history (Jon 2026-10-29): Zillow-style rows (date · event ·
+ *  price · source) so the team can judge novation viability from what it last listed/sold for.
+ *  Stored on formData.__listingHistory; no migration. */
+export async function saveListingHistoryAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  if (!oppId) return;
+  let rows: { date?: string; event?: string; price?: string; source?: string }[] = [];
+  try { const j = JSON.parse(String(formData.get("rows") ?? "[]")); if (Array.isArray(j)) rows = j; } catch { rows = []; }
+  const cleaned = rows
+    .map((r) => ({ date: String(r.date ?? "").trim(), event: String(r.event ?? "").trim(), price: String(r.price ?? "").trim(), source: String(r.source ?? "").trim() }))
+    .filter((r) => r.date || r.event || r.price)
+    .slice(0, 40);
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { contactId: true, formData: true } });
+  if (!o) return;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  fd.__listingHistory = cleaned;
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: fd as never } });
+  if (o.contactId) { const { logEditCoalesced } = await import("@/lib/edit-log"); await logEditCoalesced({ contactId: o.contactId, oppId, body: `📈 Listing history — ${cleaned.length} row${cleaned.length === 1 ? "" : "s"}`, actor: me.name, editKey: "listing-history" }); }
+  revalidatePath(`/crm/${oppId}`);
+}
+
 /** 🔥 Rate a deal's potential spread (Jon 2026-10-29): manual "how big a win is this"
  *  flag — big ($50k+) / medium / small / thin — eyeballed from the comps. Lets Jon
  *  prioritize fat-spread deals over thin ones. Stored on formData.__spread; no migration. */

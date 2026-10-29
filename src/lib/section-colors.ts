@@ -15,6 +15,7 @@ const MAP: Record<string, SectionColor> = {
   sms: { tint: "bg-blue-50/60", active: "bg-blue-600 text-white", dot: "bg-blue-500", border: "border-blue-400", text: "text-blue-800" },              // 💬 SMS = blue
   email: { tint: "bg-red-50/50", active: "bg-red-700 text-white", dot: "bg-red-600", border: "border-red-400", text: "text-red-800" },                 // ✉️ Email = red
   notes: { tint: "bg-amber-50/50", active: "bg-amber-500 text-white", dot: "bg-amber-400", border: "border-amber-300", text: "text-amber-700" },       // 📝 Notes = yellow
+  listing: { tint: "bg-teal-50/70", active: "bg-teal-700 text-white", dot: "bg-teal-600", border: "border-teal-400", text: "text-teal-800" },         // 📈 Listing history = teal
   dev_buybox: { tint: "bg-green-50/70", active: "bg-green-700 text-white", dot: "bg-green-600", border: "border-green-500", text: "text-green-800" },
   agent_profile: { tint: "bg-orange-50/70", active: "bg-orange-600 text-white", dot: "bg-orange-500", border: "border-orange-400", text: "text-orange-800" },
 };
