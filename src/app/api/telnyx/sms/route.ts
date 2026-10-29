@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
         select: { id: true, assignedTo: true, tags: true, name: true },
       });
     }
-    let wasDnced = false, declined = false;
+    let wasDnced = false, declined = false, realtor = false, qualified = false;
     const text = String(p.text ?? "").slice(0, 900);
     const mediaUrls = (p.media ?? []).map((m) => m.url).filter(Boolean) as string[];
     const bodyTxt = [text, ...mediaUrls].filter(Boolean).join("\n") || "(empty message)";
@@ -54,9 +54,13 @@ export async function POST(req: NextRequest) {
     // Not-Interested stage (NOT a full DNC); anything else → a reply task.
     try {
       const { DNC_REGEX, dncContact } = await import("@/lib/crm-dnc");
+      const { replyIntentKeywords } = await import("@/lib/master-workflow");
       const DECLINE_REGEX = /\b(not\s*(interested|selling)|no\s*thank|already\s*sold|we\s*sold|don'?t\s*(want|wish|need)\s*to\s*sell|\bpass\b)\b|^\s*(no|nope)\b[.! ]*$/i;
+      const kw = replyIntentKeywords(text); // 🤖 Master Workflow: realtor / qualified keywords
       if (DNC_REGEX.test(text)) { wasDnced = true; await dncContact(contact.id, `inbound text matched the STOP/hostile filter: "${text.slice(0, 80)}"`); }
       else if (DECLINE_REGEX.test(text)) { declined = true; }
+      else if (kw === "working_with_realtor") { realtor = true; }
+      else if (kw === "qualified") { qualified = true; }
       else if (text.length >= 12) {
         // 🤖 AI screen — one call, three buckets.
         try {
@@ -69,23 +73,41 @@ export async function POST(req: NextRequest) {
           else if (/decline/i.test(verdict)) { declined = true; }
         } catch { /* screen is best-effort; the rep task still fires */ }
       }
-      // 📴 Civil decline → move the opp to a Not-Interested (or dead/nurture) stage + tag.
-      if (declined && opp) {
-        const { readPipelines } = await import("@/lib/crm");
-        const pls = await readPipelines();
-        const pl = pls.find((x) => x.name === (opp.pipeline || "War Room")) ?? pls[0];
-        const match = (rx: RegExp) => pl?.stages.find((s) => rx.test(`${s.key} ${s.label}`));
-        const target = match(/not.?interest|no.?interest/i) ?? match(/\bdead\b|lost/i) ?? match(/nurture/i);
-        const tags = /not-interested/i.test(opp.tags || "") ? (opp.tags || "") : [opp.tags, "not-interested"].filter(Boolean).join(",");
-        await db.crmOpportunity.update({ where: { id: opp.id }, data: { ...(target && target.key !== opp.stage ? { stage: target.key } : {}), tags } }).catch(() => {});
-        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `📴 Seller replied not interested${target ? ` → moved to "${target.label}"` : ""}: "${text.slice(0, 60)}"`, actor: "inbound-sms" }).catch(() => {});
-      }
+      // 🤖 MASTER WORKFLOW (Jonathan Duong 2026-10-28): auto-tag + auto-SCHEDULE the
+      // next follow-up so snoozed leads resurface instead of being lost, and the VA only
+      // works qualified ones. Not-interested → circle back in 30d; realtor → 50d.
+      const { intentTag, followUpDaysFor, followUpDate } = await import("@/lib/master-workflow");
+      const applyIntent = async (intent: "not_interested" | "working_with_realtor" | "qualified", moveStage: boolean) => {
+        if (!opp) return;
+        const days = followUpDaysFor(intent);
+        const tag = intentTag(intent);
+        const tags = tag && !new RegExp(tag, "i").test(opp.tags || "") ? [opp.tags, tag].filter(Boolean).join(",") : (opp.tags || "");
+        let stageData: Record<string, unknown> = {};
+        if (moveStage) {
+          const { readPipelines } = await import("@/lib/crm");
+          const pls = await readPipelines();
+          const pl = pls.find((x) => x.name === (opp.pipeline || "War Room")) ?? pls[0];
+          const match = (rx: RegExp) => pl?.stages.find((s) => rx.test(`${s.key} ${s.label}`));
+          const target = intent === "working_with_realtor"
+            ? (match(/nurtur/i) ?? match(/follow.?up/i))
+            : (match(/not.?interest|no.?interest/i) ?? match(/\bdead\b|lost/i) ?? match(/nurture/i));
+          if (target && target.key !== opp.stage) stageData = { stage: target.key };
+        }
+        await db.crmOpportunity.update({ where: { id: opp.id }, data: { ...stageData, tags, ...(days > 0 ? { nextFollowUp: followUpDate(days) } : {}) } }).catch(() => {});
+        const label = intent === "not_interested" ? "not interested" : intent === "working_with_realtor" ? "working with a realtor" : "qualified — interested";
+        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🤖 Auto-tagged “${intent === "qualified" ? "qualified ✅" : label}”${days > 0 ? ` · follow-up set ${followUpDate(days)} (${days}d)` : " · surfaced to the team now"}: "${text.slice(0, 60)}"`, actor: "master-workflow" }).catch(() => {});
+      };
+      if (declined && opp) await applyIntent("not_interested", true);
+      else if (realtor && opp) await applyIntent("working_with_realtor", true);
+      else if (qualified && opp) await applyIntent("qualified", false);
     } catch { /* guard never breaks intake */ }
     // 📣 nudge the owner only if they're actually engaged (dup-guarded per day)
     try {
-      if (!wasDnced && !declined && contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags)) {
+      // Only QUALIFIED/neutral replies reach the VA — not-interested & realtor are auto-snoozed
+      // (Master Workflow: "only qualified leads reach the VA's inbox" — Jonathan 2026-10-28).
+      if (!wasDnced && !declined && !realtor && contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags)) {
         const today = new Date().toISOString().slice(0, 10);
-        const title = `💬 ${contact.name.split(" ")[0]} texted back — reply (${fromNum})`;
+        const title = `${qualified ? "✅ QUALIFIED" : "💬"} ${contact.name.split(" ")[0]} texted back — reply (${fromNum})`;
         const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } });
         if (!dup) await db.crmTask.create({ data: { contactId: contact.id, oppId: opp?.id ?? "", title, due: today, assignedTo: contact.assignedTo, createdBy: "inbound-sms" } });
       }
@@ -93,9 +115,12 @@ export async function POST(req: NextRequest) {
     // 📲 push to the installed iPhone/desktop app: assigned rep, else everyone
     try {
       if (wasDnced) return NextResponse.json({ ok: true, dnc: true });
-      const { sendPushTo } = await import("@/lib/push");
-      const who = contact.assignedTo ? [contact.assignedTo.split(" ")[0]] : ("all" as const);
-      sendPushTo(who, { title: `💬 ${contact.name}`, body: text.slice(0, 120) || "📷 picture message", url: `/crm/conversations?c=${contact.id}`, tag: `sms-${contact.id}` }).catch(() => {});
+      // auto-snoozed (not-interested / realtor) → no push; qualified/neutral → push the rep.
+      if (!declined && !realtor) {
+        const { sendPushTo } = await import("@/lib/push");
+        const who = contact.assignedTo ? [contact.assignedTo.split(" ")[0]] : ("all" as const);
+        sendPushTo(who, { title: `${qualified ? "✅ " : "💬 "}${contact.name}`, body: text.slice(0, 120) || "📷 picture message", url: `/crm/conversations?c=${contact.id}`, tag: `sms-${contact.id}` }).catch(() => {});
+      }
     } catch { /* push is best-effort */ }
     return NextResponse.json({ ok: true });
   }
