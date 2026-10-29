@@ -179,6 +179,11 @@ export default function CrmQuickView({ stages, pipelineStages }: { stages: Array
             <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-3">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-lg font-extrabold tracking-tight text-slate-900">Edit “{d.contact.name}”</div>
+                {/* 📍 Property address always under the name so you know what deal you're on,
+                    on every tab (Jon 2026-10-29: "I want it always at the top"). */}
+                {(formatAddress(d.title) || d.contact.address) && (
+                  <div className="truncate text-[12.5px] font-semibold text-slate-600" title={formatAddress(d.title) || d.contact.address}>📍 {formatAddress(d.title) || d.contact.address}</div>
+                )}
                 <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
                   <span className="font-semibold text-slate-400">Pipeline:</span>
                   <PipelineMover d={d} pipelineStages={pipelineStages} setSaved={setSaved} />

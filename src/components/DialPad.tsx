@@ -35,6 +35,49 @@ const usedFor = (to: string): string[] => { try { return readRot()[leadKey(to)]?
 const recordFrom = (to: string, fromN: string) => { if (!fromN) return; try { const r = readRot(); const k = leadKey(to); const prev = r[k]?.nums ?? []; r[k] = { nums: [fromN, ...prev.filter((n) => n !== fromN)].slice(0, 8), at: Date.now() }; localStorage.setItem(ROT_KEY, JSON.stringify(r)); } catch { /* ignore */ } };
 const clearRot = (to: string) => { try { const r = readRot(); delete r[leadKey(to)]; localStorage.setItem(ROT_KEY, JSON.stringify(r)); } catch { /* ignore */ } };
 
+// 🔔 Outbound ringback tones (Jon 2026-10-29: "make it less annoying — show me softer ones").
+// Each uses a gentle attack/release instead of a hard on/off, so it's easy on the ears.
+type RingTone = "soft" | "warm" | "pulse" | "classic" | "silent";
+const RING_TONES: { key: RingTone; emoji: string; label: string; desc: string }[] = [
+  { key: "soft", emoji: "🌙", label: "Soft", desc: "Gentle single tone — easy on the ears" },
+  { key: "warm", emoji: "🎵", label: "Warm", desc: "Lower, rounder ring" },
+  { key: "pulse", emoji: "💧", label: "Pulse", desc: "Slow breathing swell" },
+  { key: "classic", emoji: "🔔", label: "Classic", desc: "Traditional phone ring" },
+  { key: "silent", emoji: "🔕", label: "Silent", desc: "No ringing while it connects" },
+];
+const RING_KEY = "fo_ringback";
+const readRingTone = (): RingTone => { try { const v = localStorage.getItem(RING_KEY); return RING_TONES.some((t) => t.key === v) ? (v as RingTone) : "soft"; } catch { return "soft"; } };
+/** Start the chosen ringback on ctx+gain. Returns a timer to clear on stop (always non-null). */
+function startRingback(ctx: AudioContext, gain: GainNode, tone: RingTone): ReturnType<typeof setInterval> {
+  if (tone === "silent") return setInterval(() => {}, 999999);
+  const cfg = ({
+    classic: { freqs: [440, 480], vol: 0.075, on: 2, period: 6000, type: "sine" as OscillatorType },
+    soft: { freqs: [440], vol: 0.04, on: 1.3, period: 4200, type: "sine" as OscillatorType },
+    warm: { freqs: [330, 392], vol: 0.045, on: 1.6, period: 4800, type: "triangle" as OscillatorType },
+    pulse: { freqs: [432], vol: 0.038, on: 1.9, period: 3600, type: "sine" as OscillatorType },
+  } as const)[tone];
+  for (const f of cfg.freqs) { const o = ctx.createOscillator(); o.type = cfg.type; o.frequency.value = f; o.connect(gain); o.start(); }
+  const pulse = () => {
+    const t = ctx.currentTime;
+    gain.gain.cancelScheduledValues(t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(cfg.vol, t + 0.2);           // soft fade-in
+    gain.gain.setValueAtTime(cfg.vol, t + cfg.on - 0.3);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + cfg.on);    // soft fade-out
+  };
+  pulse();
+  return setInterval(pulse, cfg.period);
+}
+/** Play ~3.5s of a tone for the picker preview. */
+function previewRingback(tone: RingTone) {
+  try {
+    const ctx = new AudioContext();
+    const gain = ctx.createGain(); gain.gain.value = 0.0001; gain.connect(ctx.destination);
+    const timer = startRingback(ctx, gain, tone);
+    setTimeout(() => { clearInterval(timer); try { ctx.close(); } catch { /* done */ } }, 3600);
+  } catch { /* no audio */ }
+}
+
 export default function DialPad({ floating = false }: { floating?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"keypad" | "recents" | "contacts" | "queue">("keypad");
@@ -92,6 +135,11 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   // ring; the call still rings on the non-muted window.
   const [callsMuted, setCallsMuted] = useState(false);
   const callsMutedRef = useRef(false);
+  // 🔔 outbound ringback tone (per device)
+  const [ringTone, setRingTone] = useState<RingTone>("soft");
+  const ringToneRef = useRef<RingTone>("soft");
+  useEffect(() => { const t = readRingTone(); setRingTone(t); ringToneRef.current = t; }, []);
+  const pickRingTone = (t: RingTone) => { setRingTone(t); ringToneRef.current = t; try { localStorage.setItem(RING_KEY, t); } catch { /* ok */ } };
   useEffect(() => { try { setCallsMuted(sessionStorage.getItem("fo_calls_muted") === "1"); } catch { /* ok */ } }, []);
   useEffect(() => { callsMutedRef.current = callsMuted; try { sessionStorage.setItem("fo_calls_muted", callsMuted ? "1" : "0"); } catch { /* ok */ } }, [callsMuted]);
   const [standby, setStandby] = useState(false);
@@ -218,20 +266,8 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
           chime();
           timer = setInterval(chime, 2600);
         } else {
-          // 🔔 outbound ringback — classic US dual-tone 440+480, 2s on / 4s off
-          for (const f of [440, 480]) {
-            const o = ctx.createOscillator();
-            o.frequency.value = f;
-            o.connect(gain);
-            o.start();
-          }
-          const pulse = () => {
-            const t = ctx.currentTime;
-            gain.gain.setValueAtTime(0.08, t);
-            gain.gain.setValueAtTime(0, t + 2);
-          };
-          pulse();
-          timer = setInterval(pulse, 6000);
+          // 🔔 outbound ringback — the rep's chosen tone (softer by default now; Jon 2026-10-29).
+          timer = startRingback(ctx, gain, ringToneRef.current);
         }
         ringCtx.current = { ctx, gain, timer };
       } catch { /* no audio context — silent ring */ }
@@ -756,6 +792,15 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
               🔕 Calls are <b>muted on this window</b> — they&apos;ll ring in whichever window is set to <b>🔔 Rings here</b>. (Per-window setting.)
             </span>
           )}
+
+          {/* 🔔 Ringtone — pick the one to use for the outbound ring (Jon 2026-10-29). */}
+          <span className="flex items-center gap-2 border-b border-slate-100 px-3.5 py-2 text-[11px] font-bold text-slate-500">
+            🔔 Ringtone
+            <select value={ringTone} onChange={(e) => { const t = e.target.value as RingTone; pickRingTone(t); if (t !== "silent") previewRingback(t); }} className="rounded-md border border-slate-200 px-1.5 py-1 text-[12px] font-semibold text-slate-700">
+              {RING_TONES.map((t) => <option key={t.key} value={t.key}>{t.emoji} {t.label}</option>)}
+            </select>
+            {ringTone !== "silent" && <button type="button" onClick={() => previewRingback(ringTone)} title="Hear it" className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600 hover:bg-slate-200">▶ Hear</button>}
+          </span>
 
           {clockOff && (
             <span className="block border-b border-amber-200 bg-amber-50 px-3.5 py-2 text-[11px] font-semibold text-amber-800">
