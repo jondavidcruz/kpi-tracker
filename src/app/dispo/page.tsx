@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
 import { readPipelines, parseTags } from "@/lib/crm";
 import { isWaterfront } from "@/lib/waterfront";
+import { leadKind } from "@/lib/lead-kind";
 import { commsFor } from "@/lib/crm-comms";
 import { formatAddress } from "@/lib/address";
 import { Card, SectionTitle } from "@/components/ui";
@@ -235,6 +236,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     lastTouch: lastTouchByDeal.get(o.id)?.toISOString() ?? "", stageMoved: stageAtByDeal.has(o.id),
     followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
     waterfront: isWaterfront(o.formData),
+    leadKind: leadKind(o.formData),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
     leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
