@@ -1951,32 +1951,15 @@ export async function GET(request: Request) {
   // leads"). DRY RUN by default; ?commit=1 emails the DirectREI-formatted CSV + Drive backup + adds
   // to the campaign via API only when DIRECTREI_WRITE=1 (so it can't auto-fire outreach unarmed).
   if (url.searchParams.get("devdrop") === "1") {
-    const { collectUnvettedDevelopers, buildDevCsv, commitDevsPushed } = await import("@/lib/directrei-dev-push");
+    const { collectUnvettedDevelopers, commitDevsPushed } = await import("@/lib/directrei-dev-push");
     const { buyerKey } = await import("@/lib/buyer-sheet");
     const { total, fresh, skippedDup, skippedNoContact } = await collectUnvettedDevelopers();
     const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     if (!fresh.length) return NextResponse.json({ ok: true, mode: "none", message: "no new unvetted developers to push", scanned: total, skippedDup, skippedNoContact });
-    const csv = buildDevCsv(fresh);
-    const filename = `unvetted-developers-${date}.csv`;
     const commit = url.searchParams.get("commit") === "1";
-    let link = "";
-    try {
-      const { gdriveConfigured, ensureSubfolder, uploadToFolder, rootFolderId } = await import("@/lib/gdrive");
-      if (gdriveConfigured() && rootFolderId()) {
-        const folderId = await ensureSubfolder(rootFolderId(), "DirectREI Unvetted Buyers");
-        link = (await uploadToFolder(folderId, filename, new TextEncoder().encode(csv), "text/csv", true)).link;
-      }
-    } catch { /* drive best-effort */ }
     let api: unknown = null;
     if (commit) {
-      // 1) CSV email for import (human launches) — the safe default
-      try {
-        const { sendEmailWithAttachment } = await import("@/lib/notify");
-        const recipient = url.searchParams.get("to") || "info@freedom-offers.com";
-        const html = `<div style="font-family:-apple-system,Arial,sans-serif;color:#1f2937"><h2 style="color:#0b1f3a">🏗 ${fresh.length} researched developers → DirectREI “unvetted buyers”</h2><p>Tonight's newly-researched developers from the Unvetted Developers kanban, formatted to the DirectREI import template (tagged <b>developer, unvetted buyer</b>). Import into the <b>unvetted buyers</b> campaign for email / call / SMS. CSV attached.${link ? ` Drive: <a href="${link}">open</a>.` : ""}</p><p style="font-size:12px;color:#94a3b8">These are mass-marketing buyer prospects, not War Room leads. Scrub DNC before dialing.</p></div>`;
-        await sendEmailWithAttachment([recipient], `🏗 ${fresh.length} developers → DirectREI unvetted buyers — ${date}`, html, { filename, content: Buffer.from(csv).toString("base64") });
-      } catch { /* email best-effort */ }
-      // 2) Direct API add to the campaign — ONLY when writes are armed (DIRECTREI_WRITE=1)
+      // API-direct add to the campaign — ONLY when writes are armed (DIRECTREI_WRITE=1). No CSV.
       try {
         const { directReiBlastConfigured, directReiAddToCampaignByName } = await import("@/lib/directrei");
         if (directReiBlastConfigured()) {
@@ -1984,18 +1967,16 @@ export async function GET(request: Request) {
             name: /unvetted buyer/i, createIfMissing: true, channels: ["email", "sms", "cold_call"],
             contacts: fresh.map((r) => ({ name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || r.company || "Developer", phone: r.phone, email: r.email, external_id: buyerKey(r) })),
           });
-        }
+          if ((api as { added?: number }).added) await commitDevsPushed(fresh);
+        } else { api = { error: "DIRECTREI_WRITE not armed — nothing pushed" }; }
       } catch (e) { api = { error: String(e) }; }
-      // 3) Ops note to the team Chat (not the KPI room)
       try {
         const { sendTeamChat } = await import("@/lib/notify");
         const added = (api as { added?: number } | null)?.added;
-        await sendTeamChat(`🏗 *${fresh.length} researched developers → DirectREI unvetted buyers — ${date}*\nDirectREI-formatted CSV ready${link ? ` (<${link}|Drive>)` : ""}.${added ? ` Added ${added} to the campaign via API.` : " Import it into the unvetted buyers campaign."}`);
+        if (added) await sendTeamChat(`🏗 *${added} researched developers → DirectREI unvetted buyers — ${date}* (API-direct).`);
       } catch { /* chat best-effort */ }
-      // 4) dedupe — don't re-push these tomorrow
-      await commitDevsPushed(fresh);
     }
-    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pushCount: fresh.length, scanned: total, skippedDup, skippedNoContact, driveLink: link, api });
+    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pushCount: fresh.length, scanned: total, skippedDup, skippedNoContact, api });
   }
 
   // 🧹 Weekly DirectREI cleanup (Jon 2026-10-29) — stay under the 5,000 cap. Removes opted-out /
@@ -2005,19 +1986,10 @@ export async function GET(request: Request) {
   if (url.searchParams.get("dreiclean") === "1") {
     const { directReiConfigured } = await import("@/lib/directrei");
     if (!directReiConfigured()) return NextResponse.json({ ok: false, error: "DIRECTREI_API_KEY not set" });
-    const { scanDirectReiForCleanup, cleanupBackupCsv } = await import("@/lib/directrei-cleanup");
+    const { scanDirectReiForCleanup } = await import("@/lib/directrei-cleanup");
     const scan = await scanDirectReiForCleanup();
     if ("error" in scan) return NextResponse.json({ ok: false, error: scan.error });
     const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-    const csv = cleanupBackupCsv(scan.toDelete);
-    let link = "";
-    try {
-      const { gdriveConfigured, ensureSubfolder, uploadToFolder, rootFolderId } = await import("@/lib/gdrive");
-      if (gdriveConfigured() && rootFolderId()) {
-        const folderId = await ensureSubfolder(rootFolderId(), "DirectREI Cleanup");
-        link = (await uploadToFolder(folderId, `directrei-cleanup-${date}.csv`, new TextEncoder().encode(csv), "text/csv", true)).link;
-      }
-    } catch { /* drive best-effort */ }
     const commit = url.searchParams.get("commit") === "1";
     const maxDel = Math.max(0, Math.min(120, Number(url.searchParams.get("max") ?? "80") || 80));
     let deleted = 0; const deleteErrors: string[] = [];
@@ -2027,20 +1999,18 @@ export async function GET(request: Request) {
         const r = await directReiDeleteContact(c.id);
         if (r.ok) deleted++; else if (deleteErrors.length < 5) deleteErrors.push(r.error || `status ${r.status}`);
       }
+      // audit row (no CSV — Jon 2026-10-29)
+      await db.resource.create({ data: { title: "drei-cleanup-run", category: "__drei_cleanup_log__", url: "", description: JSON.stringify({ at: new Date().toISOString(), deleted, candidates: scan.toDelete.length, byReason: scan.byReason, review: scan.review.length }) } }).catch(() => {});
       try {
-        const { sendEmailWithAttachment, sendTeamChat } = await import("@/lib/notify");
-        const recipient = url.searchParams.get("to") || "info@freedom-offers.com";
-        const reasonLines = Object.entries(scan.byReason).filter(([, n]) => n > 0).map(([k, n]) => `${k.replace(/_/g, " ")}: ${n}`).join(", ");
-        const html = `<div style="font-family:-apple-system,Arial,sans-serif;color:#1f2937"><h2 style="color:#0b1f3a">🧹 DirectREI cleanup — ${date}</h2><p>Scanned <b>${scan.scanned.toLocaleString()}</b> contacts. Removed <b>${deleted.toLocaleString()}</b>${scan.toDelete.length > deleted ? ` of ${scan.toDelete.length.toLocaleString()} candidates (rest next run)` : ""}. Reasons: ${reasonLines || "—"}. Backup CSV attached${link ? ` (<a href="${link}">Drive</a>)` : ""}.</p><p><b>${scan.review.length}</b> contacts matched a delete reason but are <b>qualified / interested / replied</b> — <b>held for manual review</b>, NOT deleted.</p></div>`;
-        await sendEmailWithAttachment([recipient], `🧹 DirectREI cleanup — removed ${deleted} — ${date}`, html, { filename: `directrei-cleanup-${date}.csv`, content: Buffer.from(csv).toString("base64") });
-        await sendTeamChat(`🧹 *DirectREI cleanup — ${date}*\nRemoved ${deleted.toLocaleString()} dead contacts (opted-out / bad / not-interested / bounced / guessed email).${scan.review.length ? ` ${scan.review.length} qualified/replied held for manual review.` : ""}${link ? ` Backup: <${link}|Drive>` : ""}`);
+        const { sendTeamChat } = await import("@/lib/notify");
+        await sendTeamChat(`🧹 *DirectREI cleanup — ${date}*\nRemoved ${deleted.toLocaleString()} dead contacts (opted-out / bad / not-interested / bounced / guessed email).${scan.review.length ? ` ${scan.review.length} qualified/replied held for manual review.` : ""}`);
       } catch { /* notify best-effort */ }
     }
     return NextResponse.json({
       ok: true, mode: commit ? "COMMITTED" : "DRY RUN (nothing deleted)",
       scanned: scan.scanned, toDeleteCount: scan.toDelete.length, byReason: scan.byReason,
       reviewCount: scan.review.length, review: scan.review.slice(0, 20),
-      statusHistogram: scan.statusHistogram, deleted, remaining: Math.max(0, scan.toDelete.length - deleted), deleteErrors, driveLink: link,
+      statusHistogram: scan.statusHistogram, deleted, remaining: Math.max(0, scan.toDelete.length - deleted), deleteErrors,
       note: commit ? undefined : "Dry run — add &commit=1 to delete (needs DIRECTREI_WRITE=1). Review the statusHistogram to confirm the rules match your real statuses.",
     });
   }

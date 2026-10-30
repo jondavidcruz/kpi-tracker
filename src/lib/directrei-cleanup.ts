@@ -6,6 +6,15 @@ import "server-only";
 // separate, gated step (see directReiDeleteContact). DirectREI = mass marketing, not real leads.
 import { directReiContacts } from "@/lib/directrei";
 
+/** Total contacts in the DirectREI account (for the 5,000-cap guardrail gauge). */
+export async function directReiContactCount(): Promise<number | null> {
+  const res = await directReiContacts({ page: "0", limit: "1" });
+  if (!res.ok) return null;
+  const b = res.body as { total_count?: number; total?: number; count?: number };
+  const n = b?.total_count ?? b?.total ?? b?.count;
+  return typeof n === "number" ? n : null;
+}
+
 export type CleanReason = "opted_out" | "bad_contact" | "not_interested" | "email_bounced" | "email_guess";
 export const REASON_LABEL: Record<CleanReason, string> = {
   opted_out: "Opted out (SMS/email)",

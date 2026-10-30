@@ -342,6 +342,9 @@ export default async function AdminPage({
             <Link href="/admin/workflow" className="inline-flex items-center gap-2 rounded-lg bg-teal-100 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-200">
               ⚙️ Master workflow rules
             </Link>
+            <Link href="/admin/directrei" className="inline-flex items-center gap-2 rounded-lg bg-green-100 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-200">
+              📣 DirectREI control
+            </Link>
             {!kpis.some((k) => k.key.startsWith("land_")) && (
               <form action={installLandKpis}>
                 <button className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-200">🌱 Install land KPI pack</button>

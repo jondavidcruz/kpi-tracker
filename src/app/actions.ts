@@ -4966,6 +4966,59 @@ export async function setFieldOverrideAction(formData: FormData) {
   redirect("/admin/form-builder?saved=1");
 }
 
+// 🧹🏗 DirectREI owner tools (Jon 2026-10-29) — run from /admin/directrei so no CRON_SECRET is
+// ever needed (Vercel hides env values). All OWNER-ONLY. Results cached in Resource for the page.
+const DREI_SCAN_CAT = "__drei_cleanup_scan__";
+
+export async function directReiScanAction() {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const { scanDirectReiForCleanup, directReiContactCount } = await import("@/lib/directrei-cleanup");
+  const [scan, count] = await Promise.all([scanDirectReiForCleanup(), directReiContactCount()]);
+  const payload = JSON.stringify({ at: new Date().toISOString(), count, scan });
+  const row = await db.resource.findFirst({ where: { category: DREI_SCAN_CAT } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
+  else await db.resource.create({ data: { title: "drei-cleanup-scan", category: DREI_SCAN_CAT, url: "", description: payload } });
+  revalidatePath("/admin/directrei");
+}
+
+export async function directReiRunCleanupAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const max = Math.max(0, Math.min(120, Number(formData.get("max") ?? 80) || 80));
+  const { scanDirectReiForCleanup } = await import("@/lib/directrei-cleanup");
+  const { directReiDeleteContact, directReiBlastConfigured } = await import("@/lib/directrei");
+  const scan = await scanDirectReiForCleanup();
+  if ("error" in scan) { redirect("/admin/directrei?err=" + encodeURIComponent(scan.error)); return; }
+  let deleted = 0; const errors: string[] = [];
+  if (directReiBlastConfigured()) {
+    for (const c of scan.toDelete.slice(0, max)) {
+      const r = await directReiDeleteContact(c.id);
+      if (r.ok) deleted++; else if (errors.length < 3) errors.push(r.error || `status ${r.status}`);
+    }
+  }
+  // audit row (not a CSV — Jon 2026-10-29: "we don't need to save to a csv")
+  await db.resource.create({ data: { title: "drei-cleanup-run", category: "__drei_cleanup_log__", url: "", description: JSON.stringify({ at: new Date().toISOString(), deleted, candidates: scan.toDelete.length, byReason: scan.byReason, review: scan.review.length, errors }) } }).catch(() => {});
+  redirect(`/admin/directrei?cleaned=${deleted}${directReiBlastConfigured() ? "" : "&notarmed=1"}`);
+}
+
+export async function directReiPushDevsAction() {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const { collectUnvettedDevelopers, commitDevsPushed } = await import("@/lib/directrei-dev-push");
+  const { directReiAddToCampaignByName, directReiBlastConfigured } = await import("@/lib/directrei");
+  const { buyerKey } = await import("@/lib/buyer-sheet");
+  const { fresh } = await collectUnvettedDevelopers();
+  if (!fresh.length) { redirect("/admin/directrei?pushed=0"); return; }
+  if (!directReiBlastConfigured()) { redirect("/admin/directrei?pushed=0&notarmed=1"); return; }
+  const res = await directReiAddToCampaignByName({
+    name: /unvetted buyer/i, createIfMissing: true, channels: ["email", "sms", "cold_call"],
+    contacts: fresh.map((r) => ({ name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || r.company || "Developer", phone: r.phone, email: r.email, external_id: buyerKey(r) })),
+  });
+  if (res.added) await commitDevsPushed(fresh);
+  redirect(`/admin/directrei?pushed=${res.added ?? 0}${res.error ? "&err=" + encodeURIComponent(res.error) : ""}`);
+}
+
 // ⚙️ Save the Master Workflow config (Jon 2026-10-29): the inbound-reply auto-tag keywords +
 // follow-up timings. OWNER-ONLY (core automation — see owner-only-foundation memory).
 export async function saveWorkflowAction(formData: FormData) {
