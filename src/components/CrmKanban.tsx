@@ -354,8 +354,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
               onDragOver={(e) => { if (dragId) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.key); } }}
               onDragLeave={() => setOverCol((o) => (o === col.key ? null : o))}
               onDrop={(e) => { e.preventDefault(); drop(col.key); setOverCol(null); }}
-              style={{ minWidth: CARD_W[cardW], flexBasis: CARD_W[cardW] }}
-              className={`flex-1 rounded-2xl p-2.5 ring-1 transition ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : tint}`}
+              style={{ width: CARD_W[cardW] }}
+              className={`shrink-0 rounded-2xl p-2.5 ring-1 transition ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : tint}`}
             >
               <div className="mb-0.5 flex items-center justify-between px-1">
                 <span className="flex items-center gap-1">
