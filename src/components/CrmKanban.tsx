@@ -380,7 +380,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                   ${Math.round(sums[col.key]).toLocaleString()} · wtd ${Math.round((sums[col.key] ?? 0) * (STAGE_PROB[col.key] ?? 0)).toLocaleString()}
                 </div>
               )}
-              <div className="max-h-[calc(100vh-290px)] overflow-y-auto overscroll-contain pr-0.5 space-y-1.5">
+              {/* No inner column scroll (Jon 2026-10-30: "don't make us scroll on the card") — the
+                  column grows to fit every card full-size; the page scrolls vertically instead. */}
+              <div className="space-y-1.5 pr-0.5">
                 {shownCards.map((c) => (
                   <div
                     key={c.id}
