@@ -314,7 +314,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       </div>
       {/* 📐 Full-bleed horizontal scroll (Jon 2026-10-29): break out of the page padding to use the
           whole width, fixed-size cards, always-visible scrollbar so the stages clearly scroll L/R. */}
-      <div className="-mx-4 flex gap-2.5 overflow-x-scroll px-4 pb-3 md:-mx-8 md:px-8 [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:hover:bg-slate-400">
+      <div className="-mx-4 flex snap-x snap-proximity gap-2.5 overflow-x-scroll px-4 pb-3 md:-mx-8 md:px-8 [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:hover:bg-slate-400">
         {columns.map((col, colIdx) => {
           const colCards = sortCards(cards.filter((c) => c.stage === col.key || (colIdx === 0 && !columns.some((cc) => cc.key === c.stage))));
           const shownCards = expandedCols.has(col.key) ? colCards : colCards.slice(0, COL_CAP);
@@ -347,7 +347,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
               onDragLeave={() => setOverCol((o) => (o === col.key ? null : o))}
               onDrop={(e) => { e.preventDefault(); drop(col.key); setOverCol(null); }}
               style={{ width: CARD_WIDTH }}
-              className={`shrink-0 rounded-2xl p-2.5 ring-1 transition ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : tint}`}
+              className={`shrink-0 snap-start scroll-ml-4 rounded-2xl p-2.5 ring-1 transition md:scroll-ml-8 ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : tint}`}
             >
               <div className="mb-0.5 flex items-center justify-between px-1">
                 <span className="flex items-center gap-1">
