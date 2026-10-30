@@ -2,7 +2,7 @@
 // push from here, so no CRON_SECRET is ever needed (Vercel hides env values). API-direct, no CSV.
 import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { directReiConfigured, directReiBlastConfigured } from "@/lib/directrei";
+import { directReiConfigured, directReiBlastConfigured, directReiCampaignPerf } from "@/lib/directrei";
 import { REASON_LABEL, PLAN_CAPS, CONTACT_CAP, type CleanReason } from "@/lib/directrei-cleanup";
 import { directReiScanAction, directReiRunCleanupAction, directReiPushDevsAction } from "@/app/actions";
 import { Card } from "@/components/ui";
@@ -19,6 +19,7 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
   }
   const configured = directReiConfigured();
   const armed = directReiBlastConfigured();
+  const perf = configured ? await directReiCampaignPerf().catch(() => ({ error: "unavailable" as const })) : null;
   const row = await db.resource.findFirst({ where: { category: "__drei_cleanup_scan__" } }).catch(() => null);
   let scan: { at?: string; count?: number | null; scan?: { scanned: number; toDelete: unknown[]; review: Array<{ name: string; phone: string; email: string; status: string; why: string }>; byReason: Record<CleanReason, number>; statusHistogram: Record<string, number>; sampleKeys?: string[]; sample?: Array<Record<string, unknown>> } } | null = null;
   try { scan = row?.description ? JSON.parse(row.description) : null; } catch { scan = null; }
@@ -53,6 +54,43 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
           </div>
           <p className="mt-1 text-[10px] text-slate-400">Heads up: AI sequence messages (25/mo) and e-sign (3/mo) are tight — the unvetted-buyers campaign shouldn&apos;t lean on AI sequences. Monthly counters reset the 1st.</p>
         </div>
+      </Card>
+
+      {/* 📊 Campaign performance */}
+      <Card className="p-4">
+        <div className="mb-1 text-sm font-bold text-slate-800">📊 Campaign performance</div>
+        {perf && "error" in perf ? (
+          <p className="text-[12px] text-slate-400">Couldn&apos;t load campaigns ({perf.error}).</p>
+        ) : perf && perf.rows.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead><tr className="text-left text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                <th className="py-1 pr-2">Campaign</th><th className="px-2">Contacts</th><th className="px-2">Sent</th><th className="px-2">Delivered</th><th className="px-2">Opened</th><th className="px-2">Replied</th><th className="px-2">Opt-outs</th><th className="px-2">Bounced</th>
+              </tr></thead>
+              <tbody>
+                {perf.rows.map((c) => {
+                  const cell = (v?: number) => (v == null ? <span className="text-slate-300">—</span> : v.toLocaleString());
+                  const rate = (num?: number, den?: number) => (num != null && den ? ` (${Math.round((num / den) * 100)}%)` : "");
+                  return (
+                    <tr key={c.id || c.name} className="border-t border-slate-100">
+                      <td className="py-1.5 pr-2"><span className="font-semibold text-slate-700">{c.name}</span>{c.paused && <span className="ml-1 rounded bg-slate-100 px-1 text-[9px] font-bold text-slate-500">paused</span>} <span className="text-[10px] text-slate-400">{c.channel}</span></td>
+                      <td className="px-2 tabular-nums">{cell(c.contacts)}</td>
+                      <td className="px-2 tabular-nums">{cell(c.sent)}</td>
+                      <td className="px-2 tabular-nums">{cell(c.delivered)}</td>
+                      <td className="px-2 tabular-nums">{cell(c.opened)}{rate(c.opened, c.delivered ?? c.sent)}</td>
+                      <td className="px-2 tabular-nums text-emerald-700">{cell(c.replied)}{rate(c.replied, c.delivered ?? c.sent)}</td>
+                      <td className="px-2 tabular-nums text-amber-700">{cell(c.optedOut)}</td>
+                      <td className="px-2 tabular-nums text-red-700">{cell(c.bounced)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="mt-1 text-[10px] text-slate-400">Live from DirectREI. Blank cells = that stat isn&apos;t in the API response; tell me which numbers you want and I&apos;ll map the exact fields.</p>
+          </div>
+        ) : (
+          <p className="text-[12px] text-slate-400">No campaigns yet.</p>
+        )}
       </Card>
 
       {/* 🧹 Cleanup */}

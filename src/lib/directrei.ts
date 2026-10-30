@@ -34,6 +34,33 @@ export async function directReiWhoami() { return drei("/me"); }
 
 export async function directReiContacts(params?: Record<string, string>) { return drei("/contacts", params); }
 export async function directReiCampaigns() { return drei("/campaigns"); }
+
+export type CampaignPerf = {
+  id: string; name: string; channel: string; paused: boolean;
+  contacts?: number; sent?: number; delivered?: number; opened?: number; replied?: number; optedOut?: number; bounced?: number;
+};
+/** Campaign performance for the dashboard — reads /campaigns and maps whatever stat fields the API
+ *  returns (field names vary, so we try several). Numbers are "—" on the page when absent. */
+export async function directReiCampaignPerf(): Promise<{ rows: CampaignPerf[] } | { error: string }> {
+  const res = await directReiCampaigns();
+  if (!res.ok) return { error: `campaigns ${res.status}: ${JSON.stringify(res.body).slice(0, 140)}` };
+  const raw = ((res.body as { rows?: Array<Record<string, unknown>> })?.rows) ?? [];
+  const n = (o: Record<string, unknown>, ...keys: string[]): number | undefined => {
+    for (const k of keys) { const v = o[k]; if (typeof v === "number") return v; if (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))) return Number(v); }
+    return undefined;
+  };
+  const rows: CampaignPerf[] = raw.map((c) => ({
+    id: String(c.id ?? ""), name: String(c.name ?? "—"), channel: String(c.channel ?? c.channels ?? ""), paused: c.paused === true,
+    contacts: n(c, "contacts_count", "contact_count", "contacts", "total_contacts", "recipients"),
+    sent: n(c, "sent", "sent_count", "messages_sent"),
+    delivered: n(c, "delivered", "delivered_count"),
+    opened: n(c, "opened", "opened_count", "opens"),
+    replied: n(c, "replied", "replies", "replied_count", "reply_count"),
+    optedOut: n(c, "opted_out", "opted_out_count", "opt_outs", "unsubscribed"),
+    bounced: n(c, "bounced", "bounced_count", "bounces"),
+  }));
+  return { rows };
+}
 export async function directReiDeals(params?: Record<string, string>) { return drei("/deals", params); }
 export async function directReiProperty(id: string) { return drei(`/properties/${encodeURIComponent(id)}`); }
 
