@@ -2122,7 +2122,10 @@ export async function GET(request: Request) {
     let created = 0, dup = 0, skipped = 0; const byState: Record<string, number> = {};
     for (const d of rows) {
       const name = S(d.company) || S(d.name);
-      if (!name) { skipped++; continue; }
+      const phoneIn = S(d.phone) || S(d.phone1);
+      const emailIn = S(d.email) || S(d.email1);
+      // ✅ Only accept FULLY-USABLE developers — must have a name AND a phone AND an email (Jon 2026-10-30).
+      if (!name || !phoneIn || !emailIn) { skipped++; continue; }
       const states = Array.isArray(d.states) ? (d.states as string[]) : [];
       const market = S(d.market) || states.join(", ");
       const res = await upsertNetworkLead({

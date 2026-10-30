@@ -99,8 +99,11 @@ export async function GET() {
     // 📍 One combined "City / ST" market column (Jon 2026-10-30).
     const market = city && state ? `${city} / ${state}` : (city || state || areas);
 
-    return [companyName, firstName, lastName, personName, e1, e2, e3, p1, p2, p3, market].map(esc).join(",");
-  });
+    return { ok: !!(p1 && e1), cols: [companyName, firstName, lastName, personName, e1, e2, e3, p1, p2, p3, market] };
+  })
+    // ✅ Only fully-usable leads — must have BOTH a phone AND an email (Jon 2026-10-30).
+    .filter((r) => r.ok)
+    .map((r) => r.cols.map(esc).join(","));
 
   const csv = [header.map(esc).join(","), ...lines].join("\n");
   return new NextResponse(csv, {
