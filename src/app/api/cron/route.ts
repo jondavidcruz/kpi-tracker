@@ -2108,6 +2108,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", candidates: cands.length, fromClosedDeals: deals.length, fromDealParties: parties.length, fromDirectRei: dreiPulled, created, dup, skipped });
   }
 
+  // 🏗 Ingest RESEARCHED mom&pop DEVELOPERS → the Unvetted Developers kanban (DS: Developers),
+  // the single source for the DirectREI export + push (Jon 2026-10-30). POST JSON {developers:[...]}
+  // with company + up to 3 phones/emails so the DirectREI export has them. Deduped by phone/email.
+  if (url.searchParams.get("adddevs") === "1") {
+    const { upsertNetworkLead } = await import("@/lib/dispo-network-write");
+    let body: { developers?: unknown; buyers?: unknown } = {};
+    try { body = await request.json(); } catch { /* none */ }
+    const list = Array.isArray(body.developers) ? body.developers : Array.isArray(body.buyers) ? body.buyers : [];
+    const rows = list as Array<Record<string, unknown>>;
+    if (!rows.length) return NextResponse.json({ ok: false, error: "no developers in body" });
+    const S = (v: unknown) => String(v ?? "").trim();
+    let created = 0, dup = 0, skipped = 0; const byState: Record<string, number> = {};
+    for (const d of rows) {
+      const name = S(d.company) || S(d.name);
+      if (!name) { skipped++; continue; }
+      const states = Array.isArray(d.states) ? (d.states as string[]) : [];
+      const market = S(d.market) || states.join(", ");
+      const res = await upsertNetworkLead({
+        name, kind: "developer",
+        company: S(d.company), market,
+        phone: S(d.phone) || S(d.phone1), phone2: S(d.phone2), phone3: S(d.phone3),
+        email: S(d.email) || S(d.email1), email2: S(d.email2), email3: S(d.email3),
+        buyBox: S(d.buys) || S(d.buyBox), notes: S(d.note) || S(d.notes),
+        source: S(d.source) || "Free research — mom&pop developer",
+      }).catch(() => null);
+      if (res?.created) { created++; const st = (market.match(/\b[A-Z]{2}\b/) || [])[0] || "?"; byState[st] = (byState[st] ?? 0) + 1; }
+      else if (res && !res.created) dup++; else skipped++;
+    }
+    return NextResponse.json({ ok: true, received: rows.length, created, dup, skipped, byState });
+  }
+
   // 🏛️ Ingest RESEARCHED buyers (institutional / national / funds) → Vetted Buyers
   // (?addbuyers=1, POST JSON {buyers:[...]}). Free web research, no credits. Deduped.
   if (url.searchParams.get("addbuyers") === "1") {
