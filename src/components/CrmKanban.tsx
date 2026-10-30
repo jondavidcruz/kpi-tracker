@@ -69,7 +69,7 @@ const FIELDS = [
 ] as const;
 type FieldKey = (typeof FIELDS)[number][0];
 
-export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [], pipelineGroups = {}, pipelineStages = {}, currentPipeline = "", who = "all", dialerBase = "", addressFirst = false }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[]; pipelineGroups?: Record<string, "acquisitions" | "dispositions">; pipelineStages?: Record<string, { key: string; label: string }[]>; currentPipeline?: string; who?: string; dialerBase?: string; addressFirst?: boolean }) {
+export default function CrmKanban({ columns, cards: initial, counts = {}, sums = {}, listHref = "/crm?view=list", canSms = false, canCall = false, reps = [], pipelineNames = [], pipelineGroups = {}, pipelineStages = {}, currentPipeline = "", who = "all", dialerBase = "", addressFirst = false, showHeat = true }: { columns: CrmColumn[]; cards: CrmCard[]; counts?: Record<string, number>; sums?: Record<string, number>; listHref?: string; canSms?: boolean; canCall?: boolean; reps?: string[]; pipelineNames?: string[]; pipelineGroups?: Record<string, "acquisitions" | "dispositions">; pipelineStages?: Record<string, { key: string; label: string }[]>; currentPipeline?: string; who?: string; dialerBase?: string; addressFirst?: boolean; showHeat?: boolean }) {
   const [cards, setCards] = useState(initial);
   // THE 27-vs-112 bug (Jon 2026-10-08): this component stays mounted when you
   // switch pipeline tabs, so the drag-and-drop card state kept showing the
@@ -405,9 +405,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                           lead-owner line. */}
                       <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{addressFirst ? "⭐ " : ""}{titleCase(c.contactName)}</a>
                       <div className="flex shrink-0 items-center gap-1">
-                        {/* 🔥 Spread rating (Jon 2026-10-29): click to cycle how big the potential
-                            spread is — big ($50k+) → med → small → thin → unrated. Sort by 🔥. */}
-                        {(() => { const h = heatOf(c); const m = h ? HEAT_META[h] : null; return (
+                        {/* 🔥 Spread rating — SELLER deals only (Jon 2026-10-30: "these are buyers, no
+                            deal heat on developers/agents"). Hidden on the buyer-network boards. */}
+                        {showHeat && (() => { const h = heatOf(c); const m = h ? HEAT_META[h] : null; return (
                           <button type="button" onClick={(e) => bumpHeat(c, e)} title={m ? `Spread: ${m.label} — click to change` : "Rate this deal's potential spread (based on the comps) — click to set 🔥🔥🔥 big → 🔥🔥 med → 🔥 small → 🧊 thin"} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m ? m.cls : "bg-white text-slate-300 ring-slate-200 hover:text-amber-500 hover:ring-amber-300"}`}>{m ? `${m.emoji} ${m.short}` : "🔥 rate"}</button>
                         ); })()}
                         {c.gate && <span title={`SOP gate — ${c.gate.label}: ${c.gate.cleared ? "cleared, clear to advance" : "held, advance locked"}`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.gate.cleared ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-red-100 text-red-700 ring-red-200"}`}>{c.gate.cleared ? "✓ gate" : "🔒 gate"}</span>}

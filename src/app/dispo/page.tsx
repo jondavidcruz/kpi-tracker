@@ -1011,7 +1011,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
           ) : (
             <Card className="p-3">
               <CrmQuickView stages={netColumns.map((s) => ({ key: s.key, label: s.label }))} pipelineStages={{ [networkPipeline]: netColumns.map((s) => ({ key: s.key, label: s.label })), ...moveStages }} />
-              <CrmKanban columns={netColumns} cards={netCards} counts={netCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(networkPipeline)}` : ""} currentPipeline={networkPipeline} pipelineNames={[networkPipeline]} pipelineStages={{ [networkPipeline]: netColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/dispo?tab=${tab}&view=list`} who="all" />
+              <CrmKanban columns={netColumns} cards={netCards} counts={netCounts} canSms={comms.sms} canCall={comms.call} dialerBase={comms.call ? `/crm/dialer?pl=${encodeURIComponent(networkPipeline)}` : ""} currentPipeline={networkPipeline} pipelineNames={[networkPipeline]} pipelineStages={{ [networkPipeline]: netColumns.map((s) => ({ key: s.key, label: s.label })) }} listHref={`/dispo?tab=${tab}&view=list`} who="all" showHeat={false} />
             </Card>
           )}
         </>
