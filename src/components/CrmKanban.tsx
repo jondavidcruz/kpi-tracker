@@ -119,7 +119,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   const [stageScope, setStageScope] = useState<{ stage: string; count: number } | null>(null);
   // 📐 One normal, fully-readable card width (Jon 2026-10-29: "remove the width options — just make
   // the cards a normal fully readable size"). Columns are fixed-width and the pipeline scrolls.
-  const CARD_WIDTH = 272;
+  const CARD_WIDTH = 320;
   useLayoutEffect(() => {
     try {
       if (localStorage.getItem("fo_crm_privacy") === "1") setPrivacy(true);
@@ -314,7 +314,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
       </div>
       {/* 📐 Full-bleed horizontal scroll (Jon 2026-10-29): break out of the page padding to use the
           whole width, fixed-size cards, always-visible scrollbar so the stages clearly scroll L/R. */}
-      <div className="-mx-4 flex snap-x snap-proximity gap-2.5 overflow-x-scroll px-4 pb-3 md:-mx-8 md:px-8 [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:hover:bg-slate-400">
+      <div className="-mx-4 flex snap-x snap-mandatory scroll-pl-4 gap-2.5 overflow-x-scroll px-4 pb-3 md:-mx-8 md:scroll-pl-8 md:px-8 [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:hover:bg-slate-400">
         {columns.map((col, colIdx) => {
           const colCards = sortCards(cards.filter((c) => c.stage === col.key || (colIdx === 0 && !columns.some((cc) => cc.key === c.stage))));
           const shownCards = expandedCols.has(col.key) ? colCards : colCards.slice(0, COL_CAP);
