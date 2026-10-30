@@ -271,6 +271,14 @@
     {
       "path": "/api/cron?buyernightly=1",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron?devdrop=1&commit=1",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron?dreiclean=1&commit=1",
+      "schedule": "0 9 * * 1"
     }
   ]
 }

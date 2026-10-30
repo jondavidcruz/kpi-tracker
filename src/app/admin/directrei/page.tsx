@@ -20,7 +20,7 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
   const configured = directReiConfigured();
   const armed = directReiBlastConfigured();
   const row = await db.resource.findFirst({ where: { category: "__drei_cleanup_scan__" } }).catch(() => null);
-  let scan: { at?: string; count?: number | null; scan?: { scanned: number; toDelete: unknown[]; review: Array<{ name: string; phone: string; email: string; status: string; why: string }>; byReason: Record<CleanReason, number>; statusHistogram: Record<string, number> } } | null = null;
+  let scan: { at?: string; count?: number | null; scan?: { scanned: number; toDelete: unknown[]; review: Array<{ name: string; phone: string; email: string; status: string; why: string }>; byReason: Record<CleanReason, number>; statusHistogram: Record<string, number>; sampleKeys?: string[]; sample?: Array<Record<string, unknown>> } } | null = null;
   try { scan = row?.description ? JSON.parse(row.description) : null; } catch { scan = null; }
   const s = scan?.scan;
   const count = scan?.count ?? null;
@@ -71,6 +71,14 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
               <summary className="cursor-pointer font-bold text-slate-500">Status values seen ({Object.keys(s.statusHistogram).length})</summary>
               <div className="mt-1 flex flex-wrap gap-1">{Object.entries(s.statusHistogram).sort((a, b) => b[1] - a[1]).map(([st, n]) => <span key={st} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{st}: {n}</span>)}</div>
             </details>
+            {/* 🔬 Raw API sample — if the counts look wrong, copy this to Claude to fix the field mapping. */}
+            {s.sample && s.sample.length > 0 && (
+              <details className="text-[12px]">
+                <summary className="cursor-pointer font-bold text-indigo-600">🔬 Raw API sample — copy this to Claude if counts look wrong</summary>
+                <div className="mt-1 text-[11px] text-slate-500">Fields the API returns: <span className="font-mono">{(s.sampleKeys ?? []).join(", ")}</span></div>
+                <pre className="mt-1 max-h-72 overflow-auto rounded-lg bg-slate-900 p-2 text-[10px] leading-relaxed text-slate-100">{JSON.stringify(s.sample, null, 2)}</pre>
+              </details>
+            )}
             {s.review.length > 0 && (
               <details className="text-[12px]">
                 <summary className="cursor-pointer font-bold text-amber-700">⏸ {s.review.length} held for manual review (qualified / interested / replied)</summary>

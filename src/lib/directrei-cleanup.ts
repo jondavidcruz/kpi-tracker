@@ -63,25 +63,49 @@ export type CleanupScan = {
   byReason: Record<CleanReason, number>;
   protectedMatches: number;   // matched a delete reason but is protected → sent to review instead
   statusHistogram: Record<string, number>; // real status values seen (so we can tune the rules)
+  sampleKeys: string[];       // every field name the API returned (so we map the right fields)
+  sample: Array<Record<string, unknown>>; // a few redacted raw contacts — to tune the rules on real data
 };
 
-/** Page the whole DirectREI contact list and classify. Read-only. */
+const redactSample = (c: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(c)) {
+    if (/phone/i.test(k) && typeof v === "string") out[k] = v ? `…${v.replace(/\D/g, "").slice(-4)}` : v;
+    else if (/email/i.test(k) && typeof v === "string" && v.includes("@")) out[k] = v.replace(/^[^@]+/, "…");
+    else if (typeof v === "object" && v) out[k] = Array.isArray(v) ? v.slice(0, 5) : "{…}";
+    else out[k] = v;
+  }
+  return out;
+};
+
+/** Page the whole DirectREI contact list and classify. Read-only. Dedupes by id (so a broken
+ *  page param can't inflate the count) and caps pages by the real total. */
 export async function scanDirectReiForCleanup(maxPages = 40, limit = 200): Promise<CleanupScan | { error: string }> {
   const toDelete: CleanupScan["toDelete"] = [];
   const review: CleanupScan["review"] = [];
   const byReason: Record<CleanReason, number> = { opted_out: 0, bad_contact: 0, not_interested: 0, email_bounced: 0, email_guess: 0 };
   const statusHistogram: Record<string, number> = {};
-  let scanned = 0, protectedMatches = 0;
+  const keys = new Set<string>();
+  const sample: Array<Record<string, unknown>> = [];
+  const seenIds = new Set<string>();
+  let scanned = 0, protectedMatches = 0, total = Infinity;
   for (let page = 0; page < maxPages; page++) {
-    const res = await directReiContacts({ page: String(page), limit: String(limit) });
+    const res = await directReiContacts({ page: String(page), limit: String(limit), offset: String(page * limit) });
     if (!res.ok) { if (page === 0) return { error: `contacts ${res.status}: ${JSON.stringify(res.body).slice(0, 160)}` }; break; }
-    const body = res.body as { rows?: DreiContact[]; has_more?: boolean };
+    const body = res.body as { rows?: DreiContact[]; has_more?: boolean; total_count?: number };
+    if (typeof body?.total_count === "number") total = body.total_count;
     const rows = body?.rows ?? [];
+    if (!rows.length) break;
+    let newThisPage = 0;
     for (const c of rows) {
+      const id = String(c.id ?? c.contact_id ?? "");
+      if (id && seenIds.has(id)) continue; // broken paging returning the same rows → skip dupes
+      if (id) seenIds.add(id);
+      newThisPage++;
       scanned++;
+      if (sample.length < 4) { for (const k of Object.keys(c)) keys.add(k); sample.push(redactSample(c as Record<string, unknown>)); }
       const status = (c.status || "—").trim();
       statusHistogram[status] = (statusHistogram[status] ?? 0) + 1;
-      const id = String(c.id ?? c.contact_id ?? "");
       const reasons = cleanReasons(c);
       if (!reasons.length) continue;
       const base = { id, name: c.name || "—", phone: c.phone || "", email: c.email || "" };
@@ -89,9 +113,11 @@ export async function scanDirectReiForCleanup(maxPages = 40, limit = 200): Promi
       for (const r of reasons) byReason[r]++;
       if (id) toDelete.push({ ...base, reasons });
     }
-    if (!body?.has_more || rows.length === 0) break;
+    if (newThisPage === 0) break;                 // paging returned only dupes → stop
+    if (rows.length < limit || scanned >= total) break;
+    if (!body?.has_more && total === Infinity) break;
   }
-  return { scanned, toDelete, review, byReason, protectedMatches, statusHistogram };
+  return { scanned, toDelete, review, byReason, protectedMatches, statusHistogram, sampleKeys: [...keys], sample };
 }
 
 /** DirectREI import-template CSV of the delete batch — the backup before anything is removed. */
