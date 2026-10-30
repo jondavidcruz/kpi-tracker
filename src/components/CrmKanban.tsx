@@ -117,22 +117,17 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   // when the rep clicks a stage's "select all N", we target the WHOLE stage
   // server-side (every lead, not just the loaded ~60). null = id-based select.
   const [stageScope, setStageScope] = useState<{ stage: string; count: number } | null>(null);
-  // 📐 Card width (Jon 2026-10-29: "cards too narrow"). With many stages you can't have wide cards
-  // AND no horizontal scroll, so let the viewer pick. Saved per device; flex still stretches cards
-  // wider than this when the stages fit, so a narrower setting is what avoids scrolling.
-  const CARD_W = { compact: 220, comfortable: 280, wide: 340 } as const;
-  type CardW = keyof typeof CARD_W;
-  const [cardW, setCardW] = useState<CardW>("comfortable");
+  // 📐 One normal, fully-readable card width (Jon 2026-10-29: "remove the width options — just make
+  // the cards a normal fully readable size"). Columns are fixed-width and the pipeline scrolls.
+  const CARD_WIDTH = 272;
   useLayoutEffect(() => {
     try {
       if (localStorage.getItem("fo_crm_privacy") === "1") setPrivacy(true);
       const sk = localStorage.getItem("fo_crm_sort"); if (sk) setSortKey(sk as SortKey);
-      const cw = localStorage.getItem("fo_crm_cardw"); if (cw === "compact" || cw === "comfortable" || cw === "wide") setCardW(cw);
       const cc = localStorage.getItem("fo_crm_color");
       if (cc) { const j = JSON.parse(cc); setColorOn(!!j.on); if (Array.isArray(j.ranges)) setRanges(j.ranges); }
     } catch { /* defaults */ }
   }, []);
-  const saveCardW = (v: CardW) => { setCardW(v); try { localStorage.setItem("fo_crm_cardw", v); } catch { /* ok */ } };
   const savePrivacy = (v: boolean) => { setPrivacy(v); try { localStorage.setItem("fo_crm_privacy", v ? "1" : "0"); } catch { /* ok */ } };
   const saveSort = (v: SortKey) => { setSortKey(v); try { localStorage.setItem("fo_crm_sort", v); } catch { /* ok */ } };
   const saveColor = (on: boolean, r: ColorRange[]) => { setColorOn(on); setRanges(r); try { localStorage.setItem("fo_crm_color", JSON.stringify({ on, ranges: r })); } catch { /* ok */ } };
@@ -273,11 +268,6 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
         {pending && <span className="font-bold text-amber-600">saving…</span>}
         <span className="ml-auto flex items-center gap-1.5">
           <button onClick={() => savePrivacy(!privacy)} title={privacy ? "Show phone + address" : "Privacy: blur phone + address (screen-share safe)"} className={`rounded-lg px-2.5 py-1 font-bold ${privacy ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{privacy ? "🙈" : "👁"}</button>
-          <select value={cardW} onChange={(e) => saveCardW(e.target.value as CardW)} title="Card width — wider cards are easier to read but a busy pipeline may scroll left/right" className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-bold text-slate-600">
-            <option value="compact">📏 Compact cards</option>
-            <option value="comfortable">📏 Comfortable cards</option>
-            <option value="wide">📏 Wide cards</option>
-          </select>
           <select value={sortKey} onChange={(e) => saveSort(e.target.value as SortKey)} title="Sort cards inside each stage" className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-bold text-slate-600">
             <option value="untouched">✋ Untouched first</option>
             <option value="fresh">↕ Last activity</option>
@@ -322,7 +312,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
           )}
         </span>
       </div>
-      <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-2">
+      {/* 📐 Full-bleed horizontal scroll (Jon 2026-10-29): break out of the page padding to use the
+          whole width, fixed-size cards, always-visible scrollbar so the stages clearly scroll L/R. */}
+      <div className="-mx-4 flex gap-2.5 overflow-x-scroll px-4 pb-3 md:-mx-8 md:px-8 [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:hover:bg-slate-400">
         {columns.map((col, colIdx) => {
           const colCards = sortCards(cards.filter((c) => c.stage === col.key || (colIdx === 0 && !columns.some((cc) => cc.key === c.stage))));
           const shownCards = expandedCols.has(col.key) ? colCards : colCards.slice(0, COL_CAP);
@@ -354,7 +346,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
               onDragOver={(e) => { if (dragId) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.key); } }}
               onDragLeave={() => setOverCol((o) => (o === col.key ? null : o))}
               onDrop={(e) => { e.preventDefault(); drop(col.key); setOverCol(null); }}
-              style={{ width: CARD_W[cardW] }}
+              style={{ width: CARD_WIDTH }}
               className={`shrink-0 rounded-2xl p-2.5 ring-1 transition ${overCol === col.key && dragId ? "ring-2 ring-indigo-400 bg-indigo-50/60" : tint}`}
             >
               <div className="mb-0.5 flex items-center justify-between px-1">
