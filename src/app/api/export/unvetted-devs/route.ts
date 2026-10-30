@@ -60,7 +60,7 @@ export async function GET() {
     return "";
   };
 
-  const header = ["Company Name", "First Name", "Last Name", "Full Name", "Email 1", "Email 2", "Email 3", "Phone 1", "Phone 2", "Phone 3", "City", "Market"];
+  const header = ["Company Name", "First Name", "Last Name", "Full Name", "Email 1", "Email 2", "Email 3", "Phone 1", "Phone 2", "Phone 3", "Market"];
   const lines = opps.map((o) => {
     const fd = (o.formData ?? {}) as Record<string, unknown>;
     const imp = (fd.__import ?? {}) as { market?: string; city?: string; buyBox?: string };
@@ -71,10 +71,9 @@ export async function GET() {
     const brokerage = (src.company || form.brokerage || "").trim();
     const decision = (form.decisionMaker || "").trim();
     const isCo = COMPANYISH.test(rawName);
-    // 🏢 The dev kanban names each lead after the company/LLC (that's what's on the cards) — so the
-    // Company column always carries that name (a separate brokerage field wins) (Jon 2026-10-30).
-    const companyName = brokerage || rawName;
-    const personName = decision || (isCo ? "" : rawName); // a company-named lead → person is the decision-maker
+    // 🏢 Company Name ONLY when it's an actual LLC/company — not a person's name (Jon 2026-10-30).
+    const companyName = brokerage || (isCo ? rawName : "");
+    const personName = decision || (isCo ? "" : rawName); // company-named lead → person is the decision-maker
     const parts = personName.split(/\s+/).filter(Boolean);
     const firstName = parts[0] ?? "";
     const lastName = parts.slice(1).join(" ");
@@ -83,10 +82,12 @@ export async function GET() {
     const [p1, p2, p3] = collect([o.contact?.phone, o.contact?.altPhone], fd, "phone");
 
     const areas = (imp.market || src.market || form.buyCounties || src.buyBoxAreas || "").trim();
-    const market = (areas.match(US_STATE)?.[0]) || areas;
+    const state = (areas.match(US_STATE)?.[0]) || "";
     const city = (imp.city || "").trim() || cityFrom(o.contact?.address ?? "", o.contact?.pinnedNote ?? "", imp.buyBox ?? "", areas);
+    // 📍 One combined "City / ST" market column (Jon 2026-10-30).
+    const market = city && state ? `${city} / ${state}` : (city || state || areas);
 
-    return [companyName, firstName, lastName, personName, e1, e2, e3, p1, p2, p3, city, market].map(esc).join(",");
+    return [companyName, firstName, lastName, personName, e1, e2, e3, p1, p2, p3, market].map(esc).join(",");
   });
 
   const csv = [header.map(esc).join(","), ...lines].join("\n");
