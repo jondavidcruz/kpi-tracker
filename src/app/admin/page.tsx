@@ -479,6 +479,7 @@ export default async function AdminPage({
       {owner && (
         <section id="integrations" className="scroll-mt-20">
           <SectionTitle title="🔑 Integrations" subtitle="Green = the key is set in Vercel and this feature is live. To add one: get the key at the link, paste it in Vercel → kpi-tracker → Settings → Environment Variables, then redeploy (push any commit)." accent="bg-emerald-400" />
+          <Link href="/admin/directrei" className="mb-3 inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-green-700">📣 Open DirectREI control →</Link>
           <Card className="p-4">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {[
