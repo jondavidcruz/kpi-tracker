@@ -11,7 +11,7 @@ export type NetworkLeadIn = {
   market?: string; buyBox?: string; notes?: string; source?: string; actor?: string;
   // 🧩 enrichment (Jon 2026-10-30): company + up to a 2nd/3rd phone & email so the DirectREI
   // export has Company / Email 1-3 / Phone 1-3 filled.
-  company?: string; phone2?: string; phone3?: string; email2?: string; email3?: string;
+  company?: string; phone2?: string; phone3?: string; email2?: string; email3?: string; city?: string;
 };
 
 export async function upsertNetworkLead(o: NetworkLeadIn): Promise<{ created: boolean; oppId: string; name: string; phone: string; email: string } | null> {
@@ -59,7 +59,7 @@ export async function upsertNetworkLead(o: NetworkLeadIn): Promise<{ created: bo
   const opp = await db.crmOpportunity.create({ data: {
     contactId: contact.id, title: name, pipeline, stage: "new", assignedTo: actor,
     formData: {
-      __import: { type: toAgent ? "Buyer Agent" : "Developer", market: o.market ?? "", buyBox: o.buyBox ?? "", source: o.source ?? "Nightly research" },
+      __import: { type: toAgent ? "Buyer Agent" : "Developer", market: o.market ?? "", city: (o.city ?? "").trim(), buyBox: o.buyBox ?? "", source: o.source ?? "Nightly research" },
       ...(o.company ? { dev_buybox: { brokerage: o.company } } : {}),
       // 3rd phone/email live here — the DirectREI export scans formData for phone*/email* fields.
       ...((o.phone3 ?? o.email3) ? { __extra: { phone3: (o.phone3 ?? "").trim(), email3: (o.email3 ?? "").trim() } } : {}),

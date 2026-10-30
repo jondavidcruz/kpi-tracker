@@ -2127,7 +2127,7 @@ export async function GET(request: Request) {
       const market = S(d.market) || states.join(", ");
       const res = await upsertNetworkLead({
         name, kind: "developer",
-        company: S(d.company), market,
+        company: S(d.company), market, city: S(d.city),
         phone: S(d.phone) || S(d.phone1), phone2: S(d.phone2), phone3: S(d.phone3),
         email: S(d.email) || S(d.email1), email2: S(d.email2), email3: S(d.email3),
         buyBox: S(d.buys) || S(d.buyBox), notes: S(d.note) || S(d.notes),
