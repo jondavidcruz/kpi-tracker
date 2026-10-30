@@ -66,6 +66,30 @@ export function directReiBlastConfigured(): boolean {
   return Boolean(process.env.DIRECTREI_API_KEY) && process.env.DIRECTREI_WRITE === "1";
 }
 
+async function dreiDelete(path: string): Promise<DreiResult> {
+  try {
+    const res = await fetch(BASE + path, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${process.env.DIRECTREI_API_KEY}`, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(20000),
+    });
+    const text = await res.text();
+    let body: unknown; try { body = JSON.parse(text); } catch { body = text.slice(0, 400); }
+    return { ok: res.ok, status: res.status, body };
+  } catch (e) { return { ok: false, status: 0, body: String(e) }; }
+}
+
+/** 🧹 Delete one contact — gated behind DIRECTREI_WRITE=1 so a weekly cleanup can't fire unarmed.
+ *  Returns {ok} or an error. If DirectREI's API has no delete endpoint, this surfaces the 404 and
+ *  the caller falls back to the exported CSV (bulk-delete in the DirectREI UI). */
+export async function directReiDeleteContact(id: string): Promise<{ ok: boolean; status: number; error?: string }> {
+  if (!directReiBlastConfigured()) return { ok: false, status: 0, error: "DirectREI write API not enabled (set DIRECTREI_WRITE=1)" };
+  if (!id) return { ok: false, status: 0, error: "no id" };
+  const r = await dreiDelete(`/contacts/${encodeURIComponent(id)}`);
+  return { ok: r.ok, status: r.status, ...(r.ok ? {} : { error: `delete ${r.status}: ${JSON.stringify(r.body).slice(0, 120)}` }) };
+}
+
 export type BlastContact = { name: string; phone?: string; email?: string; external_id: string };
 export type BlastChannel = "sms" | "email" | "cold_call";
 
@@ -109,9 +133,12 @@ export async function directReiLaunchBlast(o: {
 }): Promise<{ campaignId?: string; queued?: number; added?: number; error?: string }> {
   if (!directReiBlastConfigured()) return { error: "DirectREI write API not enabled (set DIRECTREI_WRITE=1 once the endpoints are live)" };
   if (!o.contacts.length) return { error: "no buyer contacts to blast" };
+  // 🕶 Strip the owner's name + company from the copy before it ever sends (Jon 2026-10-29).
+  const { scrubMessage } = await import("@/lib/scrub-identity");
+  const message = scrubMessage(o.message);
   // 1) create (draft — we launch explicitly in step 3 so a contact-add failure
   //    can't leave a half-empty campaign already sending)
-  const create = await dreiPost(`/campaigns`, { name: o.name.slice(0, 120), channels: o.channels, source: "war-room", message: o.message, launch: false });
+  const create = await dreiPost(`/campaigns`, { name: o.name.slice(0, 120), channels: o.channels, source: "war-room", message, launch: false });
   if (!create.ok) return { error: `create ${create.status}: ${JSON.stringify(create.body).slice(0, 140)}` };
   const campaignId = (create.body as { id?: string }).id;
   if (!campaignId) return { error: "create returned no campaign id" };

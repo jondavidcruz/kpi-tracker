@@ -1998,6 +1998,53 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pushCount: fresh.length, scanned: total, skippedDup, skippedNoContact, driveLink: link, api });
   }
 
+  // 🧹 Weekly DirectREI cleanup (Jon 2026-10-29) — stay under the 5,000 cap. Removes opted-out /
+  // bad-contact / not-interested / bounced / guessed-email contacts. Qualified/interested/replied
+  // are PROTECTED (never deleted) and sent to a manual-review list. DRY RUN by default; ?commit=1
+  // backs up + deletes (deletes only when DIRECTREI_WRITE=1). ?max caps deletes/run (rate + 60s cap).
+  if (url.searchParams.get("dreiclean") === "1") {
+    const { directReiConfigured } = await import("@/lib/directrei");
+    if (!directReiConfigured()) return NextResponse.json({ ok: false, error: "DIRECTREI_API_KEY not set" });
+    const { scanDirectReiForCleanup, cleanupBackupCsv } = await import("@/lib/directrei-cleanup");
+    const scan = await scanDirectReiForCleanup();
+    if ("error" in scan) return NextResponse.json({ ok: false, error: scan.error });
+    const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const csv = cleanupBackupCsv(scan.toDelete);
+    let link = "";
+    try {
+      const { gdriveConfigured, ensureSubfolder, uploadToFolder, rootFolderId } = await import("@/lib/gdrive");
+      if (gdriveConfigured() && rootFolderId()) {
+        const folderId = await ensureSubfolder(rootFolderId(), "DirectREI Cleanup");
+        link = (await uploadToFolder(folderId, `directrei-cleanup-${date}.csv`, new TextEncoder().encode(csv), "text/csv", true)).link;
+      }
+    } catch { /* drive best-effort */ }
+    const commit = url.searchParams.get("commit") === "1";
+    const maxDel = Math.max(0, Math.min(120, Number(url.searchParams.get("max") ?? "80") || 80));
+    let deleted = 0; const deleteErrors: string[] = [];
+    if (commit && scan.toDelete.length) {
+      const { directReiDeleteContact } = await import("@/lib/directrei");
+      for (const c of scan.toDelete.slice(0, maxDel)) {
+        const r = await directReiDeleteContact(c.id);
+        if (r.ok) deleted++; else if (deleteErrors.length < 5) deleteErrors.push(r.error || `status ${r.status}`);
+      }
+      try {
+        const { sendEmailWithAttachment, sendTeamChat } = await import("@/lib/notify");
+        const recipient = url.searchParams.get("to") || "info@freedom-offers.com";
+        const reasonLines = Object.entries(scan.byReason).filter(([, n]) => n > 0).map(([k, n]) => `${k.replace(/_/g, " ")}: ${n}`).join(", ");
+        const html = `<div style="font-family:-apple-system,Arial,sans-serif;color:#1f2937"><h2 style="color:#0b1f3a">🧹 DirectREI cleanup — ${date}</h2><p>Scanned <b>${scan.scanned.toLocaleString()}</b> contacts. Removed <b>${deleted.toLocaleString()}</b>${scan.toDelete.length > deleted ? ` of ${scan.toDelete.length.toLocaleString()} candidates (rest next run)` : ""}. Reasons: ${reasonLines || "—"}. Backup CSV attached${link ? ` (<a href="${link}">Drive</a>)` : ""}.</p><p><b>${scan.review.length}</b> contacts matched a delete reason but are <b>qualified / interested / replied</b> — <b>held for manual review</b>, NOT deleted.</p></div>`;
+        await sendEmailWithAttachment([recipient], `🧹 DirectREI cleanup — removed ${deleted} — ${date}`, html, { filename: `directrei-cleanup-${date}.csv`, content: Buffer.from(csv).toString("base64") });
+        await sendTeamChat(`🧹 *DirectREI cleanup — ${date}*\nRemoved ${deleted.toLocaleString()} dead contacts (opted-out / bad / not-interested / bounced / guessed email).${scan.review.length ? ` ${scan.review.length} qualified/replied held for manual review.` : ""}${link ? ` Backup: <${link}|Drive>` : ""}`);
+      } catch { /* notify best-effort */ }
+    }
+    return NextResponse.json({
+      ok: true, mode: commit ? "COMMITTED" : "DRY RUN (nothing deleted)",
+      scanned: scan.scanned, toDeleteCount: scan.toDelete.length, byReason: scan.byReason,
+      reviewCount: scan.review.length, review: scan.review.slice(0, 20),
+      statusHistogram: scan.statusHistogram, deleted, remaining: Math.max(0, scan.toDelete.length - deleted), deleteErrors, driveLink: link,
+      note: commit ? undefined : "Dry run — add &commit=1 to delete (needs DIRECTREI_WRITE=1). Review the statusHistogram to confirm the rules match your real statuses.",
+    });
+  }
+
   // 🌙 Nightly FREE buyer growth — NO agent, NO tool approvals (Jon 2026-10-18:
   // "the dispo optimizer task isn't working"). The scheduled Claude task hangs on
   // a one-time permission prompt; this app cron does the reliable part by itself:
