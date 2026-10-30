@@ -23,6 +23,7 @@ import { readDealHeat } from "@/lib/deal-heat";
 import DealHeatChip from "@/components/DealHeatChip";
 import { readListingHistory } from "@/lib/listing-history";
 import ListingHistoryPanel from "@/components/ListingHistoryPanel";
+import LeadTypePicker from "@/components/LeadTypePicker";
 import { formatAddress } from "@/lib/address";
 import { formsForPipeline, buildForms } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
@@ -377,6 +378,9 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
 
                 {tab === "contact" && (
                   <AutoSaveForm action={submit(saveCrmContactAction, { id: d.contact.id, oppId: d.id, ctags: d.contact.tags })} className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-100">
+                      <LeadTypePicker oppId={d.id} pipeline={d.pipeline} pipelines={d.pipelines} />
+                    </div>
                     <div className="col-span-2">
                       <label className={labelCls}>Name</label>
                       <input name="name" defaultValue={d.contact.name} className={inputCls} />

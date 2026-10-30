@@ -26,6 +26,7 @@ import { readDealHeat } from "@/lib/deal-heat";
 import DealHeatChip from "@/components/DealHeatChip";
 import { readListingHistory } from "@/lib/listing-history";
 import ListingHistoryPanel from "@/components/ListingHistoryPanel";
+import LeadTypePicker from "@/components/LeadTypePicker";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
@@ -265,6 +266,9 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
           <Card className="p-4" widget="contact">
             <details open id="contact" className="scroll-mt-4">
               <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">👤 Contact — all phones &amp; emails (edit)</summary>
+              <div className="mt-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-100">
+                <LeadTypePicker oppId={opp.id} pipeline={opp.pipeline || "War Room"} pipelines={pipelines.map((pp) => pp.name)} />
+              </div>
               <AutoSaveForm action={saveCrmContactAction} className="mt-2 space-y-2">
                 <input type="hidden" name="id" value={c.id} />
                 <input type="hidden" name="oppId" value={opp.id} />
