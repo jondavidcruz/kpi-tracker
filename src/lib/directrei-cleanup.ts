@@ -6,6 +6,18 @@ import "server-only";
 // separate, gated step (see directReiDeleteContact). DirectREI = mass marketing, not real leads.
 import { directReiContacts } from "@/lib/directrei";
 
+// DirectREI Starter plan caps (Jon 2026-10-29, from the Billing page). The CONTACT_CAP is the hard
+// one the push/cleanup manage; the monthly caps are shown as reference on /admin/directrei.
+export const CONTACT_CAP = 5000;
+export const PLAN_CAPS: Array<{ label: string; cap: number; per: string }> = [
+  { label: "CRM contacts", cap: 5000, per: "total" },
+  { label: "AI-researched contacts", cap: 100, per: "mo" },
+  { label: "AI auto-replies (email+SMS)", cap: 250, per: "mo" },
+  { label: "AI sequence messages", cap: 25, per: "mo" },
+  { label: "AI research searches", cap: 100, per: "mo" },
+  { label: "E-sign documents", cap: 3, per: "mo" },
+];
+
 /** Total contacts in the DirectREI account (for the 5,000-cap guardrail gauge). */
 export async function directReiContactCount(): Promise<number | null> {
   const res = await directReiContacts({ page: "0", limit: "1" });

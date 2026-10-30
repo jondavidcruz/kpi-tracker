@@ -5007,16 +5007,22 @@ export async function directReiPushDevsAction() {
   if (!isOwner(me)) return;
   const { collectUnvettedDevelopers, commitDevsPushed } = await import("@/lib/directrei-dev-push");
   const { directReiAddToCampaignByName, directReiBlastConfigured } = await import("@/lib/directrei");
+  const { directReiContactCount, CONTACT_CAP } = await import("@/lib/directrei-cleanup");
   const { buyerKey } = await import("@/lib/buyer-sheet");
   const { fresh } = await collectUnvettedDevelopers();
   if (!fresh.length) { redirect("/admin/directrei?pushed=0"); return; }
   if (!directReiBlastConfigured()) { redirect("/admin/directrei?pushed=0&notarmed=1"); return; }
+  // 🛡 Stay under the CRM-contact cap: only push what fits (run cleanup to free more).
+  const count = await directReiContactCount();
+  const headroom = count == null ? fresh.length : Math.max(0, CONTACT_CAP - count);
+  if (headroom <= 0) { redirect("/admin/directrei?pushed=0&atcap=1"); return; }
+  const batch = fresh.slice(0, headroom);
   const res = await directReiAddToCampaignByName({
     name: /unvetted buyer/i, createIfMissing: true, channels: ["email", "sms", "cold_call"],
-    contacts: fresh.map((r) => ({ name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || r.company || "Developer", phone: r.phone, email: r.email, external_id: buyerKey(r) })),
+    contacts: batch.map((r) => ({ name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || r.company || "Developer", phone: r.phone, email: r.email, external_id: buyerKey(r) })),
   });
-  if (res.added) await commitDevsPushed(fresh);
-  redirect(`/admin/directrei?pushed=${res.added ?? 0}${res.error ? "&err=" + encodeURIComponent(res.error) : ""}`);
+  if (res.added) await commitDevsPushed(batch);
+  redirect(`/admin/directrei?pushed=${res.added ?? 0}${batch.length < fresh.length ? `&capped=${fresh.length - batch.length}` : ""}${res.error ? "&err=" + encodeURIComponent(res.error) : ""}`);
 }
 
 // ⚙️ Save the Master Workflow config (Jon 2026-10-29): the inbound-reply auto-tag keywords +

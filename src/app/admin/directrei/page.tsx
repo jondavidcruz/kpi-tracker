@@ -3,15 +3,15 @@
 import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { directReiConfigured, directReiBlastConfigured } from "@/lib/directrei";
-import { REASON_LABEL, type CleanReason } from "@/lib/directrei-cleanup";
+import { REASON_LABEL, PLAN_CAPS, CONTACT_CAP, type CleanReason } from "@/lib/directrei-cleanup";
 import { directReiScanAction, directReiRunCleanupAction, directReiPushDevsAction } from "@/app/actions";
 import { Card } from "@/components/ui";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
-const CAP = 5000;
+const CAP = CONTACT_CAP;
 
-export default async function DirectReiPage({ searchParams }: { searchParams: Promise<{ cleaned?: string; pushed?: string; notarmed?: string; err?: string }> }) {
+export default async function DirectReiPage({ searchParams }: { searchParams: Promise<{ cleaned?: string; pushed?: string; notarmed?: string; err?: string; atcap?: string; capped?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   if (!isOwner(me)) {
@@ -36,7 +36,8 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
       </div>
       {!configured && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-200">⚠️ DIRECTREI_API_KEY isn&apos;t set — reads/writes are off.</div>}
       {sp.cleaned && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ Removed {sp.cleaned} contacts.{sp.notarmed ? " (Delete is NOT armed — set DIRECTREI_WRITE=1; nothing was deleted.)" : ""}</div>}
-      {sp.pushed && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ Pushed {sp.pushed} developers to the unvetted buyers campaign.{sp.notarmed ? " (Writes NOT armed — set DIRECTREI_WRITE=1.)" : ""}</div>}
+      {sp.pushed && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ Pushed {sp.pushed} developers to the unvetted buyers campaign.{sp.notarmed ? " (Writes NOT armed — set DIRECTREI_WRITE=1.)" : ""}{sp.capped ? ` ${sp.capped} held back — at the ${CAP.toLocaleString()} contact cap; run a cleanup to free room.` : ""}</div>}
+      {sp.atcap && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-200">⚠️ At the {CAP.toLocaleString()} contact cap — nothing pushed. Run a cleanup first to free room.</div>}
       {sp.err && <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">⚠️ {decodeURIComponent(sp.err)}</div>}
 
       {/* 🛡 Capacity guardrail */}
@@ -44,6 +45,14 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
         <div className="flex items-center justify-between"><span className="text-sm font-bold text-slate-800">🛡 Account capacity</span>{!armed && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">writes off (DIRECTREI_WRITE=1 to arm)</span>}</div>
         <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-slate-100"><div className={`h-full ${gaugeColor}`} style={{ width: `${pct ?? 0}%` }} /></div>
         <div className="mt-1 text-[12px] text-slate-500">{count != null ? <><b className={pct != null && pct >= 95 ? "text-red-600" : "text-slate-700"}>{count.toLocaleString()}</b> / {CAP.toLocaleString()} contacts{pct != null && pct >= 90 ? " — near the cap, run a cleanup" : ""}</> : "Run a scan to read the count."}</div>
+        {/* 📋 Starter-plan caps (reference) — the other limits to respect */}
+        <div className="mt-3 border-t border-slate-100 pt-2">
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Starter plan — other caps to respect</div>
+          <div className="flex flex-wrap gap-1.5">
+            {PLAN_CAPS.filter((c) => c.per === "mo").map((c) => <span key={c.label} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{c.label}: {c.cap}/mo</span>)}
+          </div>
+          <p className="mt-1 text-[10px] text-slate-400">Heads up: AI sequence messages (25/mo) and e-sign (3/mo) are tight — the unvetted-buyers campaign shouldn&apos;t lean on AI sequences. Monthly counters reset the 1st.</p>
+        </div>
       </Card>
 
       {/* 🧹 Cleanup */}
