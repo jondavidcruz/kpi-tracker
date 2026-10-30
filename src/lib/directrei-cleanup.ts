@@ -27,13 +27,14 @@ export async function directReiContactCount(): Promise<number | null> {
   return typeof n === "number" ? n : null;
 }
 
-export type CleanReason = "opted_out" | "bad_contact" | "not_interested" | "email_bounced" | "email_guess";
+export type CleanReason = "opted_out" | "bad_contact" | "not_interested" | "email_bounced" | "email_guess" | "duplicate";
 export const REASON_LABEL: Record<CleanReason, string> = {
   opted_out: "Opted out (SMS/email)",
   bad_contact: "Bad contact info",
   not_interested: "Not interested",
   email_bounced: "Email bounced",
   email_guess: "Email is a guess",
+  duplicate: "Duplicate (same phone/email)",
 };
 
 type DreiContact = {
@@ -93,14 +94,15 @@ const redactSample = (c: Record<string, unknown>): Record<string, unknown> => {
 /** Page the whole DirectREI contact list and classify. Read-only. Dedupes by id (so a broken
  *  page param can't inflate the count) and caps pages by the real total. */
 export async function scanDirectReiForCleanup(maxPages = 40, limit = 200): Promise<CleanupScan | { error: string }> {
-  const toDelete: CleanupScan["toDelete"] = [];
-  const review: CleanupScan["review"] = [];
-  const byReason: Record<CleanReason, number> = { opted_out: 0, bad_contact: 0, not_interested: 0, email_bounced: 0, email_guess: 0 };
   const statusHistogram: Record<string, number> = {};
   const keys = new Set<string>();
   const sample: Array<Record<string, unknown>> = [];
   const seenIds = new Set<string>();
-  let scanned = 0, protectedMatches = 0, total = Infinity;
+  // Collect every unique contact first, then classify + dedupe (a second pass so duplicates across
+  // pages are caught).
+  type Item = { id: string; name: string; phone: string; email: string; status: string; prot: boolean; reasons: CleanReason[] };
+  const all: Item[] = [];
+  let total = Infinity;
   for (let page = 0; page < maxPages; page++) {
     const res = await directReiContacts({ page: String(page), limit: String(limit), offset: String(page * limit) });
     if (!res.ok) { if (page === 0) return { error: `contacts ${res.status}: ${JSON.stringify(res.body).slice(0, 160)}` }; break; }
@@ -114,23 +116,48 @@ export async function scanDirectReiForCleanup(maxPages = 40, limit = 200): Promi
       if (id && seenIds.has(id)) continue; // broken paging returning the same rows → skip dupes
       if (id) seenIds.add(id);
       newThisPage++;
-      scanned++;
       if (sample.length < 4) { for (const k of Object.keys(c)) keys.add(k); sample.push(redactSample(c as Record<string, unknown>)); }
       const status = (c.status || "—").trim();
       statusHistogram[status] = (statusHistogram[status] ?? 0) + 1;
-      const reasons = cleanReasons(c);
-      if (!reasons.length) continue;
-      const base = { id, name: c.name || "—", phone: c.phone || "", email: c.email || "" };
-      if (isProtected(c)) { protectedMatches++; review.push({ ...base, status, why: reasons.map((r) => REASON_LABEL[r]).join(", ") }); continue; }
-      for (const r of reasons) byReason[r]++;
-      if (id) toDelete.push({ ...base, reasons });
+      all.push({ id, name: c.name || "—", phone: c.phone || "", email: c.email || "", status, prot: isProtected(c), reasons: cleanReasons(c) });
     }
     if (newThisPage === 0) break;                 // paging returned only dupes → stop
-    if (rows.length < limit || scanned >= total) break;
-    if (!body?.has_more && total === Infinity) break;
+    if (rows.length < limit || total === Infinity && !body?.has_more) break;
+    if (scanned_done(all.length, total)) break;
   }
-  return { scanned, toDelete, review, byReason, protectedMatches, statusHistogram, sampleKeys: [...keys], sample };
+
+  // 🧬 DEDUPE: group by normalized phone (last 10 digits) and by lowercased email. Within a group,
+  // keep ONE (a protected one if any, else the first) and flag the rest "duplicate". Protected
+  // contacts are never flagged for deletion.
+  const flagDup = (keyer: (i: Item) => string) => {
+    const groups = new Map<string, Item[]>();
+    for (const it of all) { const k = keyer(it); if (!k) continue; const arr = groups.get(k); if (arr) arr.push(it); else groups.set(k, [it]); }
+    for (const g of groups.values()) {
+      if (g.length < 2) continue;
+      const keeperIdx = Math.max(0, g.findIndex((x) => x.prot)); // keep a protected one if present, else the first
+      g.forEach((it, i) => { if (i !== keeperIdx && !it.prot && !it.reasons.includes("duplicate")) it.reasons.push("duplicate"); });
+    }
+  };
+  flagDup((i) => i.phone.replace(/\D/g, "").slice(-10));
+  flagDup((i) => (i.email || "").trim().toLowerCase());
+
+  // Finalize
+  const toDelete: CleanupScan["toDelete"] = [];
+  const review: CleanupScan["review"] = [];
+  const byReason: Record<CleanReason, number> = { opted_out: 0, bad_contact: 0, not_interested: 0, email_bounced: 0, email_guess: 0, duplicate: 0 };
+  let protectedMatches = 0;
+  for (const it of all) {
+    if (!it.reasons.length) continue;
+    const base = { id: it.id, name: it.name, phone: it.phone, email: it.email };
+    if (it.prot) { protectedMatches++; review.push({ ...base, status: it.status, why: it.reasons.map((r) => REASON_LABEL[r]).join(", ") }); continue; }
+    for (const r of it.reasons) byReason[r]++;
+    if (it.id) toDelete.push({ ...base, reasons: it.reasons });
+  }
+  return { scanned: all.length, toDelete, review, byReason, protectedMatches, statusHistogram, sampleKeys: [...keys], sample };
 }
+
+// stop paging once we've collected the whole account
+function scanned_done(collected: number, total: number): boolean { return total !== Infinity && collected >= total; }
 
 /** DirectREI import-template CSV of the delete batch — the backup before anything is removed. */
 export function cleanupBackupCsv(rows: CleanupScan["toDelete"]): string {

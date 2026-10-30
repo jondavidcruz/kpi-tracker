@@ -58,7 +58,7 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
       {/* 🧹 Cleanup */}
       <Card className="p-4">
         <div className="mb-1 text-sm font-bold text-slate-800">🧹 Weekly cleanup</div>
-        <p className="text-[12px] text-slate-500">Removes <b>opted-out · bad contact info · not interested · email bounced · email-is-a-guess</b>. Anything <b>qualified / interested / replied</b> is never deleted — it&apos;s held for manual review.</p>
+        <p className="text-[12px] text-slate-500">Removes <b>opted-out · bad contact info · not interested · email bounced · email-is-a-guess · duplicates (same phone/email)</b>. Anything <b>qualified / interested / replied</b> is never deleted — it&apos;s held for manual review.</p>
         <form action={directReiScanAction} className="mt-2 inline-block"><button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700">🔍 Scan now (dry run)</button></form>
         {s && (
           <div className="mt-3 space-y-2">
