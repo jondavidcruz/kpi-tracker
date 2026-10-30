@@ -13,14 +13,26 @@ const COMPANYISH = /(llc|l\.l\.c|inc\b|corp|\bco\b|homes?|builder|building|const
 const US_STATE = /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/;
 
 /** Pull up to 3 unique non-empty values from the given seeds + any phone/email-like fields in formData. */
+// Normalize a US phone to one consistent format: (XXX) XXX-XXXX (falls back to the raw string).
+function fmtPhone(s: string): string {
+  const d = String(s ?? "").replace(/\D/g, "");
+  const t = d.length === 11 && d[0] === "1" ? d.slice(1) : d;
+  return t.length === 10 ? `(${t.slice(0, 3)}) ${t.slice(3, 6)}-${t.slice(6)}` : String(s ?? "").trim();
+}
+
 function collect(seeds: Array<unknown>, fd: Record<string, unknown>, kind: "phone" | "email"): [string, string, string] {
   const out: string[] = [];
   const add = (v: unknown) => {
-    const s = String(v ?? "").trim();
-    if (!s) return;
-    const norm = kind === "phone" ? s.replace(/\D/g, "") : s.toLowerCase();
-    if (!norm) return;
-    if (!out.some((x) => (kind === "phone" ? x.replace(/\D/g, "") : x.toLowerCase()) === norm)) out.push(s);
+    // One field can hold several values joined by | , ; / or newlines — split them out so they
+    // land in separate 1/2/3 columns (Jon 2026-10-30), but keep a single-spaced phone intact.
+    for (const partRaw of String(v ?? "").split(/[|;,/\n]+|\s{2,}/)) {
+      const s = partRaw.trim();
+      if (!s) continue;
+      const formatted = kind === "phone" ? fmtPhone(s) : s;
+      const norm = kind === "phone" ? s.replace(/\D/g, "") : s.toLowerCase();
+      if (!norm || (kind === "phone" && norm.length < 7) || (kind === "email" && !s.includes("@"))) continue;
+      if (!out.some((x) => (kind === "phone" ? x.replace(/\D/g, "") : x.toLowerCase()) === norm)) out.push(formatted);
+    }
   };
   for (const s of seeds) add(s);
   // scan formData (incl. nested one level) for extra phone*/email* string fields
