@@ -12,6 +12,7 @@ const ROOMS: { key: string; label: string; job: string }[] = [
   { key: "team", label: "Freedom Offers Team", job: "Wins + signed/closed deals — the whole company" },
   { key: "contracts", label: "Contracts Sign Chat", job: "A deal gets signed — the bell rings here" },
   { key: "acquisitions", label: "Acquisitions", job: "Offers in motion (made / captured / negotiating)" },
+  { key: "dispositions", label: "Dispositions", job: "Buyer/developer sourcing + 'to research' lists for the dispo team" },
   { key: "kpi", label: "KPI", job: "One compact end-of-day KPI snapshot" },
   { key: "leadership", label: "Leadership", job: "Friday leadership-call notes (C-suite + Marie)" },
   { key: "phonehealth", label: "Phone Health", job: "Number rotation + text deliverability" },

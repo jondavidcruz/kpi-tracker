@@ -1973,7 +1973,7 @@ export async function GET(request: Request) {
       try {
         const { sendTeamChat } = await import("@/lib/notify");
         const added = (api as { added?: number } | null)?.added;
-        if (added) await sendTeamChat(`🏗 *${added} researched developers → DirectREI unvetted buyers — ${date}* (API-direct).`);
+        if (added) { const { postToSpace } = await import("@/lib/chat-spaces"); await postToSpace("directrei", `🏗 *${added} researched developers → DirectREI unvetted buyers — ${date}* (API-direct).`); }
       } catch { /* chat best-effort */ }
     }
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pushCount: fresh.length, scanned: total, skippedDup, skippedNoContact, api });
@@ -2002,8 +2002,8 @@ export async function GET(request: Request) {
       // audit row (no CSV — Jon 2026-10-29)
       await db.resource.create({ data: { title: "drei-cleanup-run", category: "__drei_cleanup_log__", url: "", description: JSON.stringify({ at: new Date().toISOString(), deleted, candidates: scan.toDelete.length, byReason: scan.byReason, review: scan.review.length }) } }).catch(() => {});
       try {
-        const { sendTeamChat } = await import("@/lib/notify");
-        await sendTeamChat(`🧹 *DirectREI cleanup — ${date}*\nRemoved ${deleted.toLocaleString()} dead contacts (opted-out / bad / not-interested / bounced / guessed email).${scan.review.length ? ` ${scan.review.length} qualified/replied held for manual review.` : ""}`);
+        const { postToSpace } = await import("@/lib/chat-spaces");
+        await postToSpace("directrei", `🧹 *DirectREI cleanup — ${date}*\nRemoved ${deleted.toLocaleString()} dead contacts (opted-out / bad / not-interested / bounced / guessed email).${scan.review.length ? ` ${scan.review.length} qualified/replied held for manual review.` : ""}`);
       } catch { /* notify best-effort */ }
     }
     return NextResponse.json({
@@ -2054,10 +2054,11 @@ export async function GET(request: Request) {
     }
     let posted = false;
     if (createdLeads.length > 0) {
-      const { sendGoogleChat } = await import("@/lib/notify");
+      // 📣 Dispositions room ONLY — developer sourcing is a dispo task, not a KPI alert (Jon 2026-10-31).
+      const { postToSpace } = await import("@/lib/chat-spaces");
       const lines = createdLeads.slice(0, 40).map((l) => `• ${l.name}${l.phone ? ` · ${l.phone}` : ""}${l.email ? ` · ${l.email}` : ""}`).join("\n");
       const more = createdLeads.length > 40 ? `\n…and ${createdLeads.length - 40} more` : "";
-      posted = await sendGoogleChat(`🏗 *${createdLeads.length} new developers to research — ${todayPT}*\nAdded to the Unvetted Developers kanban (/dispo → Developers). Call each, capture their buy box, then move them to ✅ Vetted. Scrub DNC first.\n${lines}${more}`);
+      posted = await postToSpace("dispositions", `🏗 *${createdLeads.length} new developers to research — ${todayPT}*\nAdded to the Unvetted Developers kanban (/dispo → Developers). Call each, capture their buy box, then move them to ✅ Vetted. Scrub DNC first.\n${lines}${more}`);
     }
     return NextResponse.json({ ok: true, candidates: cands.length, createdTonight: createdLeads.length, chatPosted: posted });
   }
