@@ -471,18 +471,16 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                 );
               });
             })()}
+            {/* 📈 Listing / price history — a discovery SECTION alongside Home/Land/Financials
+                (Jon 2026-10-31: "put it under discovery, not on the contact card"). Seller leads only. */}
+            {!isNetworkLead && (() => { const sc = sectionColor("listing"); return (
+              <details id="listing" className={`mb-1.5 rounded-xl ring-1 ${sc.tint || "bg-slate-50"} border-l-4 ${sc.border}`}>
+                <summary className={`cursor-pointer px-3 py-2 text-xs font-bold ${sc.text}`}>📈 Listing history <span className="font-normal normal-case text-slate-400">— what it listed / sold for</span></summary>
+                <div className="px-3 pb-3"><ListingHistoryPanel oppId={opp.id} rows={readListingHistory(opp.formData)} address={formatAddress(opp.title) || c.address} /></div>
+              </details>
+            ); })()}
             </details>
           </Card>
-
-          {/* 📈 Listing / price history (Jon 2026-10-29) — SELLER leads only (not developers/agents) */}
-          {!isNetworkLead && (
-          <Card className={`border-l-4 border-teal-400 p-4 ${sectionColor("listing").tint}`} widget="listing">
-            <details id="listing" className="scroll-mt-4">
-              <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-teal-700">📈 Listing history <span className="normal-case text-slate-300">(what it listed / sold for — click to open)</span></summary>
-              <div className="mt-2"><ListingHistoryPanel oppId={opp.id} rows={readListingHistory(opp.formData)} address={formatAddress(opp.title) || c.address} /></div>
-            </details>
-          </Card>
-          )}
 
           {/* 🤝 parties in the deal — moved to the LEFT under Opportunity (Jon 2026-10-26) */}
           <Card className="p-4" widget="parties">
