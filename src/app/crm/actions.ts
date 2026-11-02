@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { geoForPhone } from "@/lib/npa-geo";
-import { logCrmEvent, CRM_STAGES, readPipelines } from "@/lib/crm";
+import { logCrmEvent, CRM_STAGES, readPipelines, pipelineLockFor } from "@/lib/crm";
 
 async function crmUser() {
   const me = await getCurrentUser();
@@ -100,12 +100,19 @@ export async function createCrmLeadAction(formData: FormData) {
   const repFirst = contact.assignedTo.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   const repPipe = repFirst ? pls.find((p) => p.name.toLowerCase().includes(repFirst)) : undefined;
   const michellePipe = pls.find((p) => /michelle/i.test(p.name));
-  // Optional pipeline override (Jon 2026-10-27): the dispo "New lead" form passes the current
-  // dispo pipeline so the deal lands THERE, not the acquisitions default.
+  // Optional pipeline override (Jon 2026-10-27): the "New lead" form passes the current pipeline
+  // so the deal lands THERE.
   const forcedPipe = (() => { const n = String(formData.get("pipeline") ?? "").trim(); return n ? pls.find((p) => p.name === n) : undefined; })();
-  const landPipe = forcedPipe ?? repPipe ?? michellePipe;
-  const owner = forcedPipe ? contact.assignedTo : (repPipe ? contact.assignedTo : (michellePipe ? "Michelle Lagudas" : contact.assignedTo));
-  if (!repPipe && michellePipe && owner !== contact.assignedTo) {
+  // 🔧 The lead MUST land in a pipeline its OWNER can open, or a pipeline-locked rep gets
+  // "this lead isn't in your pipeline" right after creating it (Jon 2026-11-02). If the owner is
+  // locked to specific pipeline(s), land it in the first of those; otherwise the old defaults.
+  const ownerLock = await pipelineLockFor({ name: contact.assignedTo });
+  const ownerLockedPipe = ownerLock?.length ? pls.find((p) => ownerLock.includes(p.name)) : undefined;
+  const landPipe = forcedPipe ?? ownerLockedPipe ?? repPipe ?? michellePipe ?? pls.find((p) => p.name === "War Room") ?? pls[0];
+  // Keep the assigned rep as owner (never silently steal the lead to Michelle); only default to
+  // Michelle when the lead is genuinely unassigned.
+  const owner = contact.assignedTo.trim() || (michellePipe ? "Michelle Lagudas" : me.name);
+  if (!contact.assignedTo.trim() && michellePipe) {
     await db.crmContact.update({ where: { id: contact.id }, data: { assignedTo: owner } }).catch(() => {});
   }
   // 🔁 Don't spawn a duplicate CARD for a contact who already has an OPEN card for
