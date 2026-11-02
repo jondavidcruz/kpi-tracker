@@ -31,6 +31,23 @@ export const ACQ_TIPS: string[] = [
   "Sell certainty, not just price. Proof of funds, a real EMD, a title company they can call — the seller who's been burned by a flaky buyer takes less from someone who'll actually close.",
   "One extra question before the offer: 'Is there anything about the property I should know — easements, disputes, wetlands?' Sellers disclose more before a number is on the table.",
   "Record your best call each week and clip 60 seconds for the team. The fastest training in the building is hearing a real seller say yes.",
+  // ── Sales & negotiation (Jon 2026-11-02: acquisitions should lean heavy here) ──
+  "Lead with questions, not your pitch. The rep who asks seven good questions before quoting a number closes more than the rep who talks for seven minutes.",
+  "Mirror the last three words. Seller: 'I need to think about it.' You: 'Think about it?' — they keep talking and hand you the real objection for free.",
+  "Label the emotion before you solve it. 'Sounds like this land has been a headache for a while' lowers the guard faster than any number can.",
+  "Never negotiate against yourself. You made an offer, they went quiet — do NOT drop the price to fill the silence. Ask 'what's holding you back?' and wait.",
+  "Anchor high on what they GET, low on what they give up. 'You walk with cash in ~30 days, zero fees, no repairs' — stack the value before the number lands.",
+  "Trade, don't concede. If you move on price, get something back: faster close, they clear the title, they cover back taxes. Every give needs a get.",
+  "Take-away close: 'This might not be the right fit — the market may be better for you.' Scarcity flips the motivated seller from maybe to yes.",
+  "Find the real why in the first 2 minutes. Taxes? Estate? Moving? Tired of it? The motivation is the whole negotiation — price is just the last step.",
+  "Tie the price to a reason they can repeat to their spouse. 'It needs access and perc — that's why it's $X' survives the kitchen-table conversation; a naked number doesn't.",
+  "Isolate the objection before you answer it. 'If the price worked, is there anything else stopping us?' — never spend a concession on a smokescreen.",
+  "Slow is smooth, smooth is fast. Match their pace, lower your tone on the number, and let a confident pause do the closing.",
+  "Ask for the close directly: 'If I can get you $X and close by the 30th, do we have a deal?' Most reps never actually ask — they hint. Ask.",
+  "Pre-frame the lowball. 'My number is going to be lower than Zillow and here's exactly why' — said BEFORE the price, it's expertise; said after, it's an apology.",
+  "Feel-felt-found on every objection. 'I understand how you feel, other sellers felt the same, what they found was…' — rehearsed, not robotic.",
+  "The fortune is in the follow-up. The 5th–8th touch closes more land than the first call ever will — set the next contact before you hang up, every time.",
+  "Sell certainty over price. Proof of funds, real EMD, a title company they can call — a burned seller takes less from the buyer who will actually close.",
 ];
 
 // Weekly team-building activity — closes the Monday all-call (Jon 2026-09-21:
@@ -96,4 +113,24 @@ export const DISPO_TIPS: string[] = [
   "Match energy to timeline: a builder buying 30 lots a year is a relationship; a rec buyer wants THE parcel. Sell the pipeline to one, the dream to the other.",
   "Keep a 'passed but close' shelf. When the seller finally drops $10k, the three buyers who passed at the old number get the first call — same day.",
   "Voice beats email for the first touch on any deal over $50k. Builders skim inboxes; they answer 'I've got a lot two streets from your last build.'",
+  // ── Rapport & relationships with buyers (Jon 2026-11-02: dispo leads here) ──
+  "Treat your buyer list like a book of clients, not a blast list. Know their kids' names, their last three projects, and what keeps them up at night — relationships close deals lists can't.",
+  "Open every buyer call with THEM, not the deal. 'How did the Wimberley lots turn out?' earns you the next five minutes and the next five deals.",
+  "Become the buyer's deal-finder, not a seller. 'I'll bring you lots that fit your box before anyone else' flips you from vendor to partner.",
+  "Send the deal that ISN'T a fit sometimes — 'not yours, but thought of you.' The buyer who trusts you aren't just dumping inventory answers every call.",
+  "Call your top 5 buyers with no deal at all, once a month. The relationship you build on a slow week is the one that pays full fee on a hot one.",
+  "Remember why they passed last time and bring it up: 'You wanted better access — this one's got paved frontage.' Buyers feel heard and move faster.",
+  // ── Negotiating the fee UP (sell our contracts for more) ──
+  "Never lead with your lowest. Price the assignment with room — a builder who talks you down $3k still closes; one who smells desperation walks.",
+  "Sell the comps, not the contract price. Show the finished-home values and recent lot sales first; your number looks like a bargain against THEIR math.",
+  "Create a little competition. 'I've got two builders looking at this' (when true) is the cleanest way to hold your fee without dropping a dollar.",
+  "Hold the fee by solving the risk, not cutting the price. Offer a clean title, a survey, a longer inspection — give value instead of giving margin.",
+  "When a buyer counters low, go quiet and ask 'what makes it worth that to you?' Their answer tells you whether to hold firm or restructure.",
+  "Anchor the assignment to their profit, not your cost. 'You net ~$40k on the build — the $12k fee is the cheapest lot you'll buy this year.'",
+  // ── Speed to closing ──
+  "Pre-build the closing packet the day you go under contract: title ordered, access confirmed, survey in hand. The deal that's 'ready to close' commands a higher fee.",
+  "Set the closing date in the first buyer call, not the last. 'Can you fund by the 20th?' qualifies the real buyer and starts the clock immediately.",
+  "Push title the day you assign, then follow it every 48 hours. Deals don't die from bad buyers — they die from slow title nobody chased.",
+  "Collect a non-refundable EMD fast. A buyer with real money in escrow closes; a verbal yes with no deposit is a maybe wearing a suit.",
+  "Name the next step at the end of every closing call: 'I'll have the assignment to you by 4, sign it tonight, we fund Friday.' Momentum is the product.",
 ];

@@ -23,7 +23,7 @@ function RoleBlock({ rt, heading }: { rt: MeetingDeck["lastWeek"]["roleTables"][
               <td className="px-2 py-1 font-semibold text-slate-700">{r.rep}</td>
               {r.cells.map((c, ci) => (
                 <td key={ci} className="px-1.5 py-1 text-center">
-                  <span className={`font-bold tabular-nums ${c.met === false ? "text-red-600" : c.met === true ? "text-emerald-700" : "text-slate-800"}`}>{c.v}</span>
+                  <span className={`font-bold tabular-nums ${c.met == null ? "text-slate-800" : "text-emerald-700"}`}>{c.v}</span>
                   {c.behind && (
                     <span className="ml-1 rounded-full bg-red-100 px-1 font-bold text-red-700" style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>▼{c.behind}</span>
                   )}
@@ -53,7 +53,7 @@ function pushKpiSlides(s: Slide[], d: MeetingDeck) {
           {mo && <RoleBlock rt={mo} heading={`🗓 This month · ${d.monthly.label}`} />}
         </div>
         <div className="mt-[1.5%] text-slate-400" style={{ fontSize: "clamp(7px,0.95cqw,12px)" }}>
-          Pace = daily goal × workdays in the period. <span className="font-semibold text-red-600">Red ▼ = how far behind goal pace</span> · <span className="font-semibold text-emerald-700">green = at or ahead of pace</span>.
+          Pace = daily goal × workdays in the period. <span className="font-semibold text-emerald-700">Green = the number produced</span> · <span className="font-semibold text-red-600">red ▼ = how far behind goal pace</span> (no ▼ = on or ahead).
         </div>
       </Light>
     ) });
@@ -198,11 +198,17 @@ function buildSlides(d: MeetingDeck): Slide[] {
   // 5. KPIs — one merged weekly+monthly page per position (Acquisitions, Dispositions)
   pushKpiSlides(s, d);
 
-  // 7. Pipeline — paginated so ALL deals show (a fixed slide only fits ~6 rows).
-  const PIPE_PAGE = 6;
-  const pipePages = Math.max(1, Math.ceil(d.pipeline.length / PIPE_PAGE));
+  // 7. Pipeline — paginated so ALL deals show. The FIRST page also carries the 3 summary
+  // tiles, so it fits fewer rows than the table-only continuation pages; without this the
+  // last row on page 1 was getting clipped (Jon 2026-11-02).
+  const PIPE_FIRST = 4;
+  const PIPE_CONT = 7;
+  const pages: (typeof d.pipeline)[] = [];
+  if (d.pipeline.length === 0) pages.push([]);
+  else { pages.push(d.pipeline.slice(0, PIPE_FIRST)); for (let i = PIPE_FIRST; i < d.pipeline.length; i += PIPE_CONT) pages.push(d.pipeline.slice(i, i + PIPE_CONT)); }
+  const pipePages = pages.length;
   for (let pi = 0; pi < pipePages; pi++) {
-    const rows = d.pipeline.slice(pi * PIPE_PAGE, pi * PIPE_PAGE + PIPE_PAGE);
+    const rows = pages[pi];
     const first = pi === 0;
     s.push({ key: first ? "pipeline" : `pipeline-${pi + 1}`, name: first ? "Active Pipeline" : "Active Pipeline (cont.)", node: (
       <Light title={first ? "Active Deal Pipeline" : `Active Deal Pipeline (cont. ${pi + 1}/${pipePages})`}>
@@ -231,14 +237,14 @@ function buildSlides(d: MeetingDeck): Slide[] {
                 const ageCls = p.level === "stale" ? "bg-red-100 text-red-700" : p.level === "reduce" ? "bg-orange-100 text-orange-700" : p.level === "watch" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700";
                 return (
                   <tr key={i} className="border-t border-slate-100 align-top">
-                    <td className="px-2.5 py-1 font-semibold text-slate-800">{p.address}</td>
+                    <td className="px-2.5 py-1 font-semibold text-slate-800"><span className="line-clamp-2">{p.address}</span></td>
                     <td className="px-1.5 py-1"><span className="rounded-full bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800" style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>{p.status.replace(/_/g, " ")}</span></td>
                     <td className="px-1.5 py-1 text-slate-600">{p.rep}</td>
                     <td className="px-1.5 py-1 text-center">{p.days == null ? <span className="text-slate-400">—</span> : <span className={`rounded-full px-1.5 py-0.5 font-bold ${ageCls}`} style={{ fontSize: "clamp(6px,0.85cqw,11px)" }}>{p.days}d</span>}</td>
                     <td className="px-1.5 py-1 text-right tabular-nums text-slate-600">{p.contractPrice != null ? money(p.contractPrice) : "—"}</td>
                     <td className="px-1.5 py-1 text-right font-semibold tabular-nums text-sky-700">{p.askingPrice != null ? money(p.askingPrice) : "—"}</td>
                     <td className="px-1.5 py-1 text-right font-bold tabular-nums text-emerald-700">{p.profit != null ? money(p.profit) : "—"}</td>
-                    <td className="px-1.5 py-1 text-slate-500">{p.nextSteps || "—"}</td>
+                    <td className="px-1.5 py-1 text-slate-500"><span className="line-clamp-3">{p.nextSteps || "—"}</span></td>
                   </tr>
                 );
               })}

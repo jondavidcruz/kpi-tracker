@@ -38,6 +38,26 @@ const TEAM_VERSES: { text: string; ref: string }[] = [
   { text: "Do you see a man skillful in his work? He will stand before kings.", ref: "Proverbs 22:29" },
   { text: "…always abounding in the work of the Lord, knowing that in the Lord your labor is not in vain.", ref: "1 Corinthians 15:58" },
   { text: "I can do all things through Christ who strengthens me.", ref: "Philippians 4:13" },
+  { text: "The plans of the diligent lead surely to abundance.", ref: "Proverbs 21:5" },
+  { text: "Whatever your hand finds to do, do it with your might.", ref: "Ecclesiastes 9:10" },
+  { text: "She considers a field and buys it; with the fruit of her hands she plants a vineyard.", ref: "Proverbs 31:16" },
+  { text: "In all toil there is profit, but mere talk tends only to poverty.", ref: "Proverbs 14:23" },
+  { text: "A person's steps are established by the Lord when he delights in his way.", ref: "Psalm 37:23" },
+  { text: "Trust in the Lord with all your heart, and do not lean on your own understanding.", ref: "Proverbs 3:5" },
+  { text: "And whatever you do, in word or deed, do everything in the name of the Lord Jesus.", ref: "Colossians 3:17" },
+  { text: "The hand of the diligent will rule, while the slothful will be put to forced labor.", ref: "Proverbs 12:24" },
+  { text: "Let your eyes look directly forward, and your gaze be straight before you.", ref: "Proverbs 4:25" },
+  { text: "He who gathers little by little will increase it.", ref: "Proverbs 13:11" },
+  { text: "Where there is no guidance, a people falls, but in an abundance of counselors there is safety.", ref: "Proverbs 11:14" },
+  { text: "Let all that you do be done in love.", ref: "1 Corinthians 16:14" },
+  { text: "Commit your way to the Lord; trust in him, and he will act.", ref: "Psalm 37:5" },
+  { text: "The Lord will fulfill his purpose for me.", ref: "Psalm 138:8" },
+  { text: "Do nothing from selfish ambition… count others more significant than yourselves.", ref: "Philippians 2:3" },
+  { text: "A good name is to be chosen rather than great riches.", ref: "Proverbs 22:1" },
+  { text: "By wisdom a house is built, and by understanding it is established.", ref: "Proverbs 24:3" },
+  { text: "Let us consider how to stir up one another to love and good works.", ref: "Hebrews 10:24" },
+  { text: "The righteous are bold as a lion.", ref: "Proverbs 28:1" },
+  { text: "Whoever is faithful in a very little is also faithful in much.", ref: "Luke 16:10" },
 ];
 
 export interface CustomSlide { kind: string; title: string; body: string; imageUrl: string }
@@ -159,6 +179,16 @@ function bullets(s: string): string[] {
 }
 function hashWeek(s: string): number {
   let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h;
+}
+// 📅 A MONOTONIC weekly counter (weeks since 2024-01-01) from a YYYY-MM-DD week-start.
+// Using this instead of a hash guarantees consecutive weeks get consecutive indices, so a
+// rotating pick (verse, training tip, team activity) is NEVER the same as last week and cycles
+// through the whole pool before any repeat (Jon 2026-11-02: "always new, never the same").
+function weekOrdinal(weekStart: string): number {
+  const d = new Date(`${String(weekStart).slice(0, 10)}T00:00:00Z`).getTime();
+  if (!Number.isFinite(d)) return 0;
+  const base = Date.UTC(2024, 0, 1);
+  return Math.max(0, Math.floor((d - base) / (7 * 86_400_000)));
 }
 
 function glanceFrom(
@@ -399,7 +429,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   // both). A backlog tip targeted at the weakest KPI overrides its role's pick.
   const tips = await db.trainingTip.findMany({ where: { active: true } });
   const roleOfKey = new Map(perRepKpis.map((k) => [k.key, k.roleKey]));
-  const seed = hashWeek(wk.start);
+  const seed = weekOrdinal(wk.start); // monotonic → never the same tip as last week
   const buildPool = (role: string, builtIn: string[]) => [
     ...tips.filter((t) => t.kpiKey && roleOfKey.get(t.kpiKey) === role).map((t) => t.text),
     ...tips.filter((t) => !t.kpiKey).map((t) => t.text),
@@ -408,8 +438,8 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const acqPool = buildPool("acquisitions", ACQ_TIPS);
   const dispoPool = buildPool("dispositions", DISPO_TIPS);
   const acqText = acqPool[seed % acqPool.length];
-  let dispoText = dispoPool[(seed * 7 + 3) % dispoPool.length];
-  if (dispoText === acqText && dispoPool.length > 1) dispoText = dispoPool[(seed * 7 + 4) % dispoPool.length];
+  let dispoText = dispoPool[seed % dispoPool.length];
+  if (dispoText === acqText && dispoPool.length > 1) dispoText = dispoPool[(seed + 1) % dispoPool.length];
   const trainingTips: MeetingDeck["trainingTips"] = [
     { role: "Acquisitions", emoji: "🎯", text: acqText },
     { role: "Dispositions", emoji: "🤝", text: dispoText },
@@ -425,7 +455,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   }
 
   // Weekly team-building closer — its own seed so it never syncs with the tips.
-  const activity = TEAM_ACTIVITIES[hashWeek(wk.start + "act") % TEAM_ACTIVITIES.length];
+  const activity = TEAM_ACTIVITIES[weekOrdinal(wk.start) % TEAM_ACTIVITIES.length];
 
   const thisWeek = currentWeekRange(today);
   return {
@@ -434,7 +464,7 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
     titleSlideUrl: settings.titleSlideUrl ?? "",
     teamSlideUrl: settings.teamSlideUrl ?? "",
     customSlides: customSlideRows.map((s) => ({ kind: s.kind, title: s.title, body: s.body, imageUrl: s.imageUrl })),
-    verse: TEAM_VERSES[hashWeek(thisWeek.start) % TEAM_VERSES.length],
+    verse: TEAM_VERSES[weekOrdinal(thisWeek.start) % TEAM_VERSES.length],
     generatedOn: friendlyDate(today),
     team: reps.map((r) => ({ name: r.name, role: positionLabel(r.position) })),
     announcements: bullets(settings.mtgAnnouncements ?? ""),
