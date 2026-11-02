@@ -223,6 +223,6 @@ async function GlobalPhone({ me }: { me: NonNullable<Awaited<ReturnType<typeof g
     const comms = await commsFor(me);
     if (!comms.call) return null;
     const { default: DialPad } = await import("./DialPad");
-    return <DialPad floating />;
+    return <DialPad floating owner={isOwner(me)} />;
   } catch { return null; }
 }

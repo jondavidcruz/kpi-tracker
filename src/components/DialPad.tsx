@@ -81,13 +81,16 @@ function playConnectBeep() {
   } catch { /* no audio — the UI still flips to green */ }
 }
 
-// 🎚 Device-local dialer prefs (localStorage): outbound ring sound + ring-out seconds.
+// 🎚 Dialer ring sound (owner-only pref, device-local): pulse vs silent-while-waiting.
 type RingMode = "pulse" | "silent";
 const RING_MODE_KEY = "fo_ring_mode";
-const RING_OUT_KEY = "fo_ring_out"; // seconds; 30 = full/carrier default (no early hang-up)
-const RING_OUT_OPTS = [15, 20, 25, 30] as const;
+// ⏱ Auto-hang an UNANSWERED outbound call after this many seconds — automatic for everyone,
+// no picker (Jon 2026-11-02). 20s ≈ ~3 rings: catches almost everyone who'll answer and lands
+// just before mobile voicemail (~25-30s), without the long 30s dead time. Safely above the 8s
+// abandoned-call floor. Tweak this one number if answer rates look low.
+const AUTO_RING_OUT = 20;
 
-export default function DialPad({ floating = false }: { floating?: boolean } = {}) {
+export default function DialPad({ floating = false, owner = false }: { floating?: boolean; owner?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"keypad" | "recents" | "contacts" | "queue">("keypad");
   const [num, setNum] = useState("");
@@ -96,18 +99,16 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
   const [search, setSearch] = useState("");
   const [state, setState] = useState<CallState>("idle");
   const [msg, setMsg] = useState("");
-  // 🎚 Dialer sound/ring-out prefs (device-local). Default = pulse ring, 30s (unchanged).
+  // 🎚 Ring sound pref — OWNER ONLY (Jon 2026-11-02: "for the girls I don't want them to not
+  // hear that they're calling"). The team always rings (pulse); only the owner can go silent.
   const [ringMode, setRingMode] = useState<RingMode>("pulse");
-  const [ringOut, setRingOut] = useState<number>(30);
   const ringModeRef = useRef<RingMode>("pulse");
   const noAnswerRef = useRef(false); // set when ring-out auto-hangs an unanswered call
-  useEffect(() => { ringModeRef.current = ringMode; }, [ringMode]);
+  useEffect(() => { ringModeRef.current = owner ? ringMode : "pulse"; }, [ringMode, owner]);
   useEffect(() => {
-    try {
-      const m = localStorage.getItem(RING_MODE_KEY); if (m === "silent" || m === "pulse") setRingMode(m);
-      const o = Number(localStorage.getItem(RING_OUT_KEY)); if (RING_OUT_OPTS.includes(o as (typeof RING_OUT_OPTS)[number])) setRingOut(o);
-    } catch { /* fine */ }
-  }, []);
+    if (!owner) return;
+    try { const m = localStorage.getItem(RING_MODE_KEY); if (m === "silent" || m === "pulse") setRingMode(m); } catch { /* fine */ }
+  }, [owner]);
   const [secs, setSecs] = useState(0);
   const [muted, setMuted] = useState(false);
   const [autoNext, setAutoNext] = useState(false);
@@ -757,11 +758,10 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
     setTimeout(() => { if (stateRef.current !== "idle") finish(onCall); }, 800);
     if (!callRef.current && (stateRef.current === "connecting" || stateRef.current === "error")) finish(onCall);
   };
-  // ⏱ Ring-out: auto-hang an UNANSWERED outbound call after the device's chosen seconds, so
-  // you get a fast "No answer" instead of a full 30s of ringing (Jon 2026-11-02). Options never
-  // drop below 15s — safely clear of the 8s abandoned-call floor. 30 = full (no early hang-up).
+  // ⏱ Ring-out: auto-hang an UNANSWERED outbound call at AUTO_RING_OUT seconds so you get a fast
+  // "No answer" instead of a full 30s of ringing (Jon 2026-11-02). Automatic for everyone.
   useEffect(() => {
-    if (state !== "ringing" || ringOut >= 30) return;
+    if (state !== "ringing") return;
     if (onCallRef.current?.dir === "in") return; // outbound only
     const t = setTimeout(() => {
       if (stateRef.current !== "ringing") return;
@@ -769,9 +769,9 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
       try { callRef.current?.hangup(); } catch { /* already gone */ }
       callRef.current = null;
       setTimeout(() => { if (stateRef.current !== "idle") finish(onCallRef.current); }, 600);
-    }, ringOut * 1000);
+    }, AUTO_RING_OUT * 1000);
     return () => clearTimeout(t);
-  }, [state, ringOut]);
+  }, [state]);
 
   const toggleMute = () => { if (!callRef.current) return; if (muted) callRef.current.unmuteAudio(); else callRef.current.muteAudio(); setMuted(!muted); };
   // Mid-call, keypad presses must be TOUCH-TONES (phone trees, extensions,
@@ -824,33 +824,22 @@ export default function DialPad({ floating = false }: { floating?: boolean } = {
             </span>
           </span>
 
-          {/* 🎚 Call-sound prefs for THIS device: Silent ring (+ answer beep) and a shorter
-              ring-out so you're not listening to 30s of ringing all day (Jon 2026-11-02). */}
-          <span className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3.5 py-1.5 text-[11px]">
-            <span className="flex items-center gap-1 font-semibold text-slate-500">
-              🔔 Ring
+          {/* 🎚 Ring sound — OWNER ONLY (Jon 2026-11-02). The team always rings; only the owner
+              can switch to Silent (no ringing while waiting; a beep still fires on answer). */}
+          {owner && (
+            <span className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50/60 px-3.5 py-1.5 text-[11px] font-semibold text-slate-500">
+              🔔 Ring sound
               <select
                 value={ringMode}
                 onChange={(e) => { const v = e.target.value as RingMode; setRingMode(v); try { localStorage.setItem(RING_MODE_KEY, v); } catch { /* fine */ } }}
-                title="Silent = no ringing while you wait; you'll hear a short beep the moment they answer."
+                title="Silent = no ringing while you wait; you'll hear a short beep the moment they answer. Only you see this option."
                 className="rounded-md border border-slate-200 bg-white px-1 py-0.5 text-[11px] font-bold text-slate-700"
               >
-                <option value="pulse">Pulse</option>
-                <option value="silent">🔇 Silent + beep</option>
+                <option value="pulse">Pulse (hear it ring)</option>
+                <option value="silent">🔇 Silent + answer beep</option>
               </select>
             </span>
-            <span className="flex items-center gap-1 font-semibold text-slate-500">
-              ⏱ Ring-out
-              <select
-                value={ringOut}
-                onChange={(e) => { const v = Number(e.target.value); setRingOut(v); try { localStorage.setItem(RING_OUT_KEY, String(v)); } catch { /* fine */ } }}
-                title="Auto-hang an unanswered call after this many seconds, so you get a fast 'No answer' instead of endless ringing."
-                className="rounded-md border border-slate-200 bg-white px-1 py-0.5 text-[11px] font-bold text-slate-700"
-              >
-                {RING_OUT_OPTS.map((s) => <option key={s} value={s}>{s === 30 ? "Full (30s)" : `${s}s`}</option>)}
-              </select>
-            </span>
-          </span>
+          )}
 
           {callsMuted && (
             <span className="block border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-[11px] font-semibold text-slate-500">
