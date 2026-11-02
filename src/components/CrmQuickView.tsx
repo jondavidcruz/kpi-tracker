@@ -24,6 +24,7 @@ import DealHeatChip from "@/components/DealHeatChip";
 import { readListingHistory } from "@/lib/listing-history";
 import ListingHistoryPanel from "@/components/ListingHistoryPanel";
 import LeadTypePicker from "@/components/LeadTypePicker";
+import LeadSourceSelect from "@/components/LeadSourceSelect";
 import { formatAddress } from "@/lib/address";
 import { formsForPipeline, buildForms } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
@@ -372,6 +373,10 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                     <div>
                       <label className={labelCls}>Tags (comma-separated)</label>
                       <input name="tags" defaultValue={d.tags} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>📍 Lead source</label>
+                      <LeadSourceSelect defaultValue={((d.formData as { __leadSource?: string } | null)?.__leadSource) ?? ""} selectClassName={inputCls} />
                     </div>
                   </AutoSaveForm>
                 )}

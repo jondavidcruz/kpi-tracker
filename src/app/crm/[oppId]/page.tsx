@@ -27,6 +27,7 @@ import DealHeatChip from "@/components/DealHeatChip";
 import { readListingHistory } from "@/lib/listing-history";
 import ListingHistoryPanel from "@/components/ListingHistoryPanel";
 import LeadTypePicker from "@/components/LeadTypePicker";
+import LeadSourceSelect from "@/components/LeadSourceSelect";
 import { Card } from "@/components/ui";
 import CallButton from "@/components/CallButton";
 import { isHtmlNote, sanitizeNoteHtml, htmlNoteToText } from "@/lib/note-html";
@@ -425,10 +426,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               {/* 📍 Lead source (acquisitions) — where this seller lead came from (Jon 2026-10-26). Stored in formData. */}
               {!isDispoNetworkPipeline(opp.pipeline) && (
                 <label><span className={lbl}>📍 Lead source</span>
-                  <input name="leadSource" list="lead-source-opts" defaultValue={((opp.formData as { __leadSource?: string } | null)?.__leadSource) ?? ""} placeholder="PPC, Direct Mail, Cold Call, Referral…" className={inputCls} />
-                  <datalist id="lead-source-opts">
-                    <option value="PPC / Google Ads" /><option value="SEO / Website" /><option value="Direct Mail" /><option value="Cold Call" /><option value="SMS / Text" /><option value="Facebook / Social" /><option value="Referral" /><option value="Driving for Dollars" /><option value="Zillow / MLS" /><option value="Wholesaler" /><option value="Auction" /><option value="Other" />
-                  </datalist>
+                  <LeadSourceSelect defaultValue={((opp.formData as { __leadSource?: string } | null)?.__leadSource) ?? ""} selectClassName={inputCls} />
                 </label>
               )}
             </AutoSaveForm>
