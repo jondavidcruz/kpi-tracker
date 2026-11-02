@@ -52,7 +52,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .slice(0, 8)
     .map((u) => ({ tab: u.tab, mao: u.mao, fee: u.fee, confidence: u.confidence, by: u.by, at: u.at }));
 
-  const clean = (b: string) => stripHtml(b).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400);
+  const clean = (b: string) => stripHtml(b).replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 2000);
   const smsHistory = [...smsEvents].reverse().map((e) => ({ body: clean(e.body), inbound: stripHtml(e.body).startsWith("⬅"), at: e.at.toISOString() }));
   const emailHistory = [...emailEvents].reverse().map((e) => ({ body: clean(e.body), inbound: stripHtml(e.body).startsWith("⬅"), at: e.at.toISOString(), actor: e.actor }));
   // Move list: hide the buyer-NETWORK pipelines (DS: Unvetted Developers / Buyer
