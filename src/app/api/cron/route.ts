@@ -4564,6 +4564,10 @@ export async function GET(request: Request) {
   let stoplightReminded: string[] = [];
   if (la.dow === 5 && la.hour >= 12) stoplightReminded = await sendStoplightReminder().catch(() => []);
 
+  // 💸 Daily off-hours Telnyx balance point (forced) so the spend tracker has a baseline even
+  // on days with no calling (Jon 2026-11-02). /admin/telnyx reads the burn rate off the curve.
+  try { const { snapshotTelnyxBalance } = await import("@/lib/telnyx-billing"); await snapshotTelnyxBalance(true); } catch { /* non-blocking */ }
+
   // Close any time card left open past its scheduled shift (forgot to clock out).
   const autoClockedOut = await autoCloseAbandonedSessions();
   // 🛡️ Comms Guardian — verify calling/texting/email (in + out) and email Jon on any

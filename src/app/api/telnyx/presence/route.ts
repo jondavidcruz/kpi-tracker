@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { firstOf } from "@/lib/crm-comms";
+import { snapshotTelnyxBalance } from "@/lib/telnyx-billing";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,10 @@ export async function POST(req: Request) {
   // inbound ring-all can skip busy agents and ring only who's free.
   let busy: boolean | undefined;
   try { const b = (await req.json()) as { busy?: boolean }; busy = b?.busy; } catch { /* no body = plain heartbeat */ }
+  // 💸 Sample the Telnyx balance off the back of the dialer heartbeat — self-throttled to
+  // ~every 18 min, so during calling hours we catch each $100 auto-recharge for the spend
+  // tracker (/admin/telnyx) without extra cron slots (Jon 2026-11-02).
+  await snapshotTelnyxBalance().catch(() => {});
   try {
     const row = await db.resource.findFirst({ where: { category: "__telnyx_webrtc__" } });
     if (!row?.description) return NextResponse.json({ ok: false });
