@@ -735,6 +735,24 @@ export async function saveMeetingSettings(formData: FormData) {
   redirect("/meeting?saved=Deck+content#edit");
 }
 
+/** 🏆/🗣 Owner-only: manual Person-of-the-Week pick + closing talking-point slide (Jon 2026-11-02).
+ *  Stored in Resource (no schema migration). potwWeek binds the pick to the current recognition
+ *  week so it auto-expires; a blank name reverts to the auto pick. */
+export async function saveMeetingOverrides(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const { writeMeetingOverrides } = await import("@/lib/meeting-overrides");
+  await writeMeetingOverrides({
+    potwName: String(formData.get("potwName") ?? "").trim().slice(0, 80),
+    potwNote: String(formData.get("potwNote") ?? "").trim().slice(0, 160),
+    potwWeek: String(formData.get("potwWeek") ?? "").trim().slice(0, 10),
+    closingTitle: String(formData.get("closingTitle") ?? "").trim().slice(0, 80),
+    closingBody: String(formData.get("closingBody") ?? "").trim().slice(0, 800),
+  });
+  revalidatePath("/meeting");
+  redirect("/meeting?saved=Deck+overrides#edit");
+}
+
 // ===== Monday deck editor (owner-editable slides) =====
 
 /** Save the uploaded Title + Team slide images (blank = revert to built-in). Managers only. */

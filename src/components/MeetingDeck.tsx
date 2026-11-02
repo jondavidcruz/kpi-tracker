@@ -319,12 +319,20 @@ function buildSlides(d: MeetingDeck): Slide[] {
     </div>
   )});
 
-  // Closing — the all-call ends here, so this is always the final slide.
-  s.push({ name: "That's the all-call", node: (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy text-center text-white">
-      <div className="font-extrabold" style={{ fontSize: "clamp(22px,4cqw,56px)" }}>That&apos;s the all-call 🙌</div>
-      <div className="mt-2 text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>Let&apos;s have a great week.</div>
-    </div>
+  // Closing — a final slide. When the owner has set a talking point (e.g. to speak to when
+  // Enrico isn't on the call), that replaces the default all-call send-off (Jon 2026-11-02).
+  s.push({ name: d.closing?.body ? "Talking point" : "That's the all-call", node: (
+    d.closing?.body ? (
+      <div className="flex h-full w-full flex-col justify-center bg-brand-navy px-[9%] text-white">
+        <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>{d.closing.title ? d.closing.title.toUpperCase() : "ONE MORE THING"}</div>
+        <div className="mt-[3%] max-w-[90%] whitespace-pre-line font-bold leading-snug" style={{ fontSize: "clamp(16px,2.8cqw,40px)" }}>{d.closing.body}</div>
+      </div>
+    ) : (
+      <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy text-center text-white">
+        <div className="font-extrabold" style={{ fontSize: "clamp(22px,4cqw,56px)" }}>That&apos;s the all-call 🙌</div>
+        <div className="mt-2 text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>Let&apos;s have a great week.</div>
+      </div>
+    )
   )});
 
   return s;

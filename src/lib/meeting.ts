@@ -14,6 +14,7 @@ import { analyzeDeal } from "./deals";
 import { quarterOf, quarterLabel } from "./eos";
 import { EXPENSE_CATEGORIES, LEAD_KPI_KEYS } from "./expenses";
 import { ACQ_TIPS, DISPO_TIPS, TEAM_ACTIVITIES } from "./training-tips";
+import { readMeetingOverrides } from "./meeting-overrides";
 import { getBoard, deckWeek, type StoplightBoard } from "./stoplight";
 
 export interface Glance { key: string; name: string; value: string }
@@ -85,6 +86,9 @@ export interface MeetingDeck {
     reward: string; stretchReward: string; pct: number;
   };
   recognition: Recognition[];
+  recognitionWeek: string;      // the week POTW covers (for the owner override form)
+  recognitionAuto: string;      // the auto-computed standout's name (shown in the override UI)
+  closing: { title: string; body: string }; // owner talking-point for the final slide (blank = default)
   // One tip per department each week, rotating through the built-in library +
   // the owner's backlog (see lib/training-tips.ts). `focus` set when the tip
   // was targeted at last week's weakest KPI.
@@ -411,6 +415,15 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
       .join(" · ");
     recognition.push({ role: "Person of the Week", rep: top.rep, kpi: `${top.dept} · ${parts}`, value: `${top.total}` });
   }
+  // 🏆 Owner override (Jon 2026-11-02): a manual Person-of-the-Week pick for THIS recognition
+  // week wins over the auto pick (and fills the slide when nothing auto-qualified). Week-bound
+  // so last week's pick never carries over. Also carries the owner's closing talking point.
+  const recognitionAuto = recognition[0]?.rep ?? "";
+  const ov = await readMeetingOverrides();
+  if (ov.potwName.trim() && ov.potwWeek === wk.start) {
+    recognition.length = 0;
+    recognition.push({ role: "Person of the Week", rep: ov.potwName.trim(), kpi: ov.potwNote.trim(), value: "" });
+  }
 
   // ---- Weakest KPI → training tip ----
   let weakest: { key: string; name: string; attain: number } | null = null;
@@ -505,6 +518,9 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
       pct: revenueGoal > 0 ? Math.min(1, closedRevenueYTD / revenueGoal) : 0,
     },
     recognition,
+    recognitionWeek: wk.start,
+    recognitionAuto,
+    closing: { title: ov.closingTitle.trim(), body: ov.closingBody.trim() },
     trainingTips,
     activity,
     stoplight,

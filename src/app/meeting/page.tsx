@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording, addMeetingHighlight, deleteMeetingHighlight, saveDeckImages, addDeckSlide, updateDeckSlide, editDeckSlide, deleteDeckSlide } from "@/app/actions";
+import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording, addMeetingHighlight, deleteMeetingHighlight, saveDeckImages, addDeckSlide, updateDeckSlide, editDeckSlide, deleteDeckSlide, saveMeetingOverrides } from "@/app/actions";
 import ImageUpload from "@/components/ImageUpload";
-import { getCurrentUser, isManager } from "@/lib/auth";
-import { getSettings, getKpis } from "@/lib/data";
+import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
+import { getSettings, getKpis, getActiveReps } from "@/lib/data";
+import { readMeetingOverrides } from "@/lib/meeting-overrides";
 import { db } from "@/lib/db";
 import { getMeetingDeck, buildMeetingSummary } from "@/lib/meeting";
 import { todayStr } from "@/lib/date";
@@ -40,6 +41,9 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
   const greenKpis = kpis.filter((k) => k.scope === "per_rep" && k.category === "green");
   const today = todayStr(settings.orgTimezone);
   const deck = await getMeetingDeck(today);
+  const owner = isOwner(me);
+  const [reps, overrides] = owner ? await Promise.all([getActiveReps(), readMeetingOverrides()]) : [[], null];
+  const potwForThisWeek = overrides && overrides.potwWeek === deck.recognitionWeek ? overrides.potwName : "";
   const summary = await buildMeetingSummary(today, deck);
   const summarySections: { title: string; items: string[] }[] = [
     { title: "🏆 Wins & highlights", items: summary.wins },
@@ -258,6 +262,39 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
             </div>
           </form>
         </Card>
+
+        {owner && (
+          <Card className="mt-4 p-6">
+            <h3 className="mb-1 text-sm font-bold text-slate-700">🏆 Person of the Week + 🗣 closing talking point <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Owner only</span></h3>
+            <p className="mb-3 text-xs text-slate-500">Pick the Person of the Week by hand (overrides the auto pick, and fills the slide when nothing auto-qualifies). Set a closing talking point to replace the final &ldquo;all-call&rdquo; slide — handy when you&apos;re running the call solo.</p>
+            <form action={saveMeetingOverrides} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <input type="hidden" name="potwWeek" value={deck.recognitionWeek} />
+              <div>
+                <label className={labelCls}>🏆 Person of the Week — week of {deck.weekLabel}</label>
+                <select name="potwName" defaultValue={potwForThisWeek} className={inputCls}>
+                  <option value="">— Auto-pick{deck.recognitionAuto ? ` (now: ${deck.recognitionAuto})` : " (none qualified)"} —</option>
+                  {reps.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Line under their name (optional)</label>
+                <input name="potwNote" defaultValue={potwForThisWeek ? (overrides?.potwNote ?? "") : ""} placeholder="e.g. Closed the Birch St deal · 3 contracts signed" className={inputCls} />
+              </div>
+              <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-3">
+                <label className={labelCls}>🗣 Closing talking-point title (optional)</label>
+                <input name="closingTitle" defaultValue={overrides?.closingTitle ?? ""} placeholder="One more thing" className={inputCls} />
+              </div>
+              <label className="sm:col-span-2">
+                <span className={labelCls}>Closing talking point (leave blank to keep the default &ldquo;That&apos;s the all-call&rdquo;)</span>
+                <textarea name="closingBody" defaultValue={overrides?.closingBody ?? ""} rows={4} placeholder={"What you want to speak to at the end of the call…"} className={inputCls} />
+              </label>
+              <div className="sm:col-span-2">
+                <button className="rounded-lg bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-700">Save</button>
+                <span className="ml-3 text-[11px] text-slate-400">The Person-of-the-Week pick applies to this week only and won&apos;t carry over.</span>
+              </div>
+            </form>
+          </Card>
+        )}
 
         <Card className="mt-4 p-6">
           <h3 className="mb-1 text-sm font-bold text-slate-700">Training-tip backlog</h3>
