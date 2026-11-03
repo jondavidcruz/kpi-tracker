@@ -153,22 +153,31 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     return a; // "fresh" = server order (updated desc)
   };
   const toggleSel = (id: string) => { setStageScope(null); setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
-  // "select all N" on a stage header → whole-stage scope + visually tick loaded cards
+  // "select all N" on a stage header → whole-stage scope + tick every card in the column.
+  // ⚠️ Use the SAME distribution the column render uses: the first column also catches cards
+  // whose stored stage matches no column key (e.g. imported devs default to "new" while the
+  // first column key is "new_research"). Without this the strict `stage === key` filter found 0
+  // and "whole stage · 0 leads" / "Apply to 0" showed up (Jon 2026-11-03).
   const selectWholeStage = (stageKey: string) => {
     setSelecting(true);
-    const ids = cards.filter((c) => c.stage === stageKey).map((c) => c.id);
+    const colIdx = columns.findIndex((c) => c.key === stageKey);
+    const ids = cards.filter((c) => c.stage === stageKey || (colIdx === 0 && !columns.some((cc) => cc.key === c.stage))).map((c) => c.id);
     setSelected(new Set(ids));
-    setStageScope({ stage: stageKey, count: counts[stageKey] ?? ids.length });
+    setStageScope({ stage: stageKey, count: Math.max(counts[stageKey] ?? 0, ids.length) });
   };
   const runBulk = () => {
     if (bulk.op !== "delete" && !bulk.val.trim()) return;
-    // whole-stage scope → server applies to EVERY lead in the stage
+    // Whole-stage scope → the server applies to EVERY lead in the stage by (pipeline, stage), so it
+    // scales past the id-based 500 cap. For the FIRST column we also pass the full list of column
+    // keys so the server catches cards whose stored stage matches no column (e.g. imported devs on
+    // "new" while the column key is "new_research") — same orphan rule the board renders by.
     if (stageScope) {
       if (bulk.op === "delete" && !confirm(`Archive ALL ${stageScope.count} lead(s) in this stage? They can be restored.`)) return;
       const fd = new FormData();
       fd.set("pipeline", currentPipeline); fd.set("stage", stageScope.stage); fd.set("who", who);
       fd.set("op", bulk.op); fd.set("val", bulk.val.trim());
       if (bulk.op === "pipeline" && bulk.val2) fd.set("targetStage", bulk.val2);
+      if (columns[0]?.key === stageScope.stage) { fd.set("stageIsFirst", "1"); fd.set("knownStages", columns.map((c) => c.key).join(",")); }
       start(async () => { await bulkOppStageAction(fd); window.location.reload(); });
       return;
     }
@@ -380,9 +389,10 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                   ${Math.round(sums[col.key]).toLocaleString()} · wtd ${Math.round((sums[col.key] ?? 0) * (STAGE_PROB[col.key] ?? 0)).toLocaleString()}
                 </div>
               )}
-              {/* No inner column scroll (Jon 2026-10-30: "don't make us scroll on the card") — the
-                  column grows to fit every card full-size; the page scrolls vertically instead. */}
-              <div className="space-y-1.5 pr-0.5">
+              {/* 📜 Each stage is its own vertical SCROLL BOX (Jon 2026-11-03: acquisitions stages
+                  with 100s of leads were growing the whole page — make them scroll inside the
+                  column like the other pipelines). Cards stay full-size; you scroll THROUGH them. */}
+              <div className="space-y-1.5 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent" style={{ maxHeight: "calc(100vh - 230px)" }}>
                 {shownCards.map((c) => (
                   <div
                     key={c.id}
