@@ -14,7 +14,9 @@ const DEV_CFG_CAT = "__drei_dev_cfg__";   // owner config: which campaign + the 
 // 🎯 Where developers go + how big a slice of the 5,000-contact cap they may take (Jon 2026-11-03:
 // "feed one campaign so it keeps growing; keep a healthy blend of developers AND sellers").
 export type DevCfg = { campaign: string; devCap: number };
-const DEV_CFG_DEFAULT: DevCfg = { campaign: "Unvetted Buyers", devCap: 2500 };
+// Jon's live DirectREI group campaign (fans out to its Email / SMS / Dialer sub-campaigns on
+// upload) — all weekend-researched developers go here (Jon 2026-11-03).
+const DEV_CFG_DEFAULT: DevCfg = { campaign: "UNVETTED BUILDERS: Deal Blast & Buy Box", devCap: 2500 };
 export async function readDevCfg(): Promise<DevCfg> {
   const row = await db.resource.findFirst({ where: { category: DEV_CFG_CAT } }).catch(() => null);
   try { const j = row?.description ? JSON.parse(row.description) : {}; return { campaign: (j.campaign || DEV_CFG_DEFAULT.campaign).toString().slice(0, 120), devCap: Number.isFinite(j.devCap) ? Math.max(0, Math.min(5000, Math.round(j.devCap))) : DEV_CFG_DEFAULT.devCap }; } catch { return { ...DEV_CFG_DEFAULT }; }
@@ -225,7 +227,10 @@ export async function runDevPushAndClear(opts: { limit?: number; recipient?: str
   if (directReiBlastConfigured()) {
     try {
       for (let i = 0; i < contacts.length; i += 1000) {
-        const r = await directReiAddToCampaignByName({ name: cfg.campaign, createIfMissing: true, channels: ["email", "sms", "cold_call"], contacts: contacts.slice(i, i + 1000) });
+        // createIfMissing:false → always target Jon's EXISTING group campaign; never spawn a
+        // duplicate (a new plain campaign wouldn't fan out to Email/SMS/Dialer). If the name ever
+        // stops matching, the push surfaces a clear "no campaign matching" error instead.
+        const r = await directReiAddToCampaignByName({ name: cfg.campaign, createIfMissing: false, channels: ["email", "sms", "cold_call"], contacts: contacts.slice(i, i + 1000) });
         if ("added" in r && r.added) added += r.added; else if (r.error) errors.push(r.error);
       }
     } catch (e) { errors.push(String(e)); }
