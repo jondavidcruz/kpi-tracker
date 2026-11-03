@@ -5113,3 +5113,32 @@ export async function submitStoplight(formData: FormData) {
   revalidatePath("/issues");
   redirect("/stoplight?saved=1");
 }
+
+// 📊 Platform Usage Watch (Jon 2026-11-03) — record a weekly reading of the real Supabase +
+// Vercel + Claude Code usage so we never get blindsided by a quota shutdown again. Owner-only.
+export async function recordPlatformUsageAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const n = (k: string): number | undefined => {
+    const raw = String(formData.get(k) ?? "").trim();
+    if (!raw) return undefined;
+    const v = parseFloat(raw.replace(/[^0-9.]/g, ""));
+    return Number.isFinite(v) ? v : undefined;
+  };
+  const { recordUsageReading } = await import("@/lib/usage-watch");
+  await recordUsageReading({
+    at: new Date().toISOString(),
+    cycleEnd: String(formData.get("cycleEnd") ?? "").trim() || undefined,
+    egressGB: n("egressGB") ?? 0,
+    storageGB: n("storageGB") ?? 0,
+    dbSizeGB: n("dbSizeGB"),
+    logGB: n("logGB"),
+    vercelBandwidthGB: n("vercelBandwidthGB"),
+    claudeCodePlan: String(formData.get("claudeCodePlan") ?? "").trim() || undefined,
+    claudeCodePeakPct: n("claudeCodePeakPct"),
+    note: String(formData.get("note") ?? "").trim() || undefined,
+    by: me?.name ?? "",
+  });
+  revalidatePath("/comms-health");
+  redirect("/comms-health?usagesaved=1#usage");
+}
