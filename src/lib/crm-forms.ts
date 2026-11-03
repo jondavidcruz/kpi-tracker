@@ -100,6 +100,7 @@ export const CRM_FORMS: CrmForm[] = [
     ],
   },
   // 📝 Closing & Escrow (Jon 2026-10-28) — the escrow/title tracker + closing checklist,
+  // (land financial variant defined below — swapped in for land leads)
   // mirroring the "Closing Details" the team keeps in GHL. Shows on every seller/deal lead
   // (quick-view + full page) and saves to formData.closing like any other form, so it's
   // synced everywhere. Checklist is a multi-check so progress is visible at a glance.
@@ -120,6 +121,32 @@ export const CRM_FORMS: CrmForm[] = [
       { key: "problems", label: "⚠️ Title or closing problems?", type: "textarea", sensitive: true },
     ],
   },
+];
+
+// 💰🏞 LAND Financials & Offer (Jon 2026-11-03). Land deals skip the whole underwriting
+// calculator — the real play is faster: read the SOLD comps (range / high / low /
+// waterfront vs not) + what's LISTED right now, offer CASH well below the solds, and if
+// that's a no, pivot to NOVATION and list near what competitors are listed at. Same form
+// KEY ("financial") so no data is lost or duplicated — only the fields shown change for a
+// land lead, and shared keys (liens, ourOffer, sellerResponse, sellerNumber, confidence)
+// carry any existing answers straight over.
+export const LAND_FINANCIAL_FIELDS: FormField[] = [
+  { key: "liens", label: "Liens / back taxes? $", type: "text", hint: "Seller usually pays these off at closing" },
+  // ── Comps: what SOLD and what's LISTED (the only research we do on land) ──
+  { key: "compLow", label: "① Lowest comparable SOLD $", type: "text", hint: "The cheapest similar lot that sold nearby", sensitive: true },
+  { key: "compHigh", label: "① Highest comparable SOLD $", type: "text", hint: "The top similar lot that sold nearby", sensitive: true },
+  { key: "compWater", label: "Waterfront sold range $", type: "text", hint: "If waterfront matters here — what waterfront lots sold for", sensitive: true },
+  { key: "compDry", label: "Non-waterfront sold range $", type: "text", hint: "What non-waterfront lots sold for", sensitive: true },
+  { key: "listedNow", label: "② On the market NOW — competitor list prices $", type: "textarea", hint: "What comparable lots are LISTED for right now — this sets the novation list price", sensitive: true },
+  { key: "compNotes", label: "Comps link / source notes", type: "textarea", hint: "Zillow/Redfin SOLD → Lots/Land search, or paste the comps you pulled", sensitive: true },
+  // ── Step 1: CASH offer, well below the solds ──
+  { key: "ourOffer", label: "🅐 CASH offer $ (well below the solds)", type: "text", hint: "Lead low — cash, we cover closing, no commissions", sensitive: true },
+  { key: "sellerResponse", label: "Seller response to cash", type: "select", options: ["— not offered yet", "✅ Accepted", "🔁 Countered", "❌ Rejected", "🤔 Thinking about it"], sensitive: true },
+  // ── Step 2: NOVATION fallback — list near what competitors list for ──
+  { key: "novationList", label: "🅑 NOVATION list price $ (≈ competitor listings)", type: "text", hint: "If cash is a no — list near the 'on the market now' prices above", sensitive: true },
+  { key: "novationResponse", label: "Seller response to novation", type: "select", options: ["— not offered yet", "✅ On board", "🤔 Thinking about it", "❌ No"], sensitive: true },
+  { key: "sellerNumber", label: "Seller's number — counter / will take $", type: "text", sensitive: true },
+  { key: "confidence", label: "Deal confidence", type: "select", options: ["🔥 Hot — ready now", "Warm — needs the right number", "Cold — long nurture"], sensitive: true },
 ];
 
 // 🏗/🧑‍💼 Dispo buyer-NETWORK forms (Jon 2026-10-20). Developers + buyer agents are
@@ -162,7 +189,7 @@ export const DISPO_AGENT_FORMS: CrmForm[] = [DISPO_AGENT_FORM];
 // (= lead type), so buyer agents + developers get buyer questions and sellers get
 // seller questions, never seller-default-for-everyone (Jon 2026-10-20). Used by
 // both the full lead page and the quick-view so they always match.
-export function formsForPipeline(pipeline: string | null | undefined): CrmForm[] {
+export function formsForPipeline(pipeline: string | null | undefined, kind?: "land" | "home" | ""): CrmForm[] {
   // Buyer-network leads (developers / agents) use their own forms — matched by
   // pattern so a rename/emoji can't misfire (Jon 2026-10-24).
   if (isDevNetworkName(pipeline)) return DISPO_DEV_FORMS;
@@ -170,7 +197,21 @@ export function formsForPipeline(pipeline: string | null | undefined): CrmForm[]
   // Every other (seller / deal) lead ALWAYS shows both Home AND Land Details —
   // never hide one (Jon 2026-10-24: "leave it there all the time so the land
   // details don't disappear when a lead moves to dispo").
+  // 🏞 Land leads get the faster comps→cash→novation Financials & Offer (Jon 2026-11-03);
+  // the form KEY stays "financial" so the tab + saved data are unchanged — only the
+  // fields swap. A lead is "land" when its filled details say so (kind) OR it's in a land
+  // pipeline and the home details don't clearly dominate — so a fresh land lead shows the
+  // land layout right away. Home leads keep the standard mortgage/underwriting financial.
+  if (isLandFinancial(pipeline, kind)) return CRM_FORMS.map((f) => f.key === "financial" ? { ...f, fields: LAND_FINANCIAL_FIELDS } : f);
   return CRM_FORMS;
+}
+
+/** Does this lead use the LAND Financials & Offer (comps→cash→novation) instead of the
+ *  home mortgage/underwriting one? True when the filled details say land, OR it's a land
+ *  pipeline and the home details don't clearly dominate. One source of truth so the form
+ *  fields and the on-screen offer block always agree (Jon 2026-11-03). */
+export function isLandFinancial(pipeline: string | null | undefined, kind?: "land" | "home" | ""): boolean {
+  return kind === "land" || (kind !== "home" && /\bland\b/i.test(pipeline ?? ""));
 }
 
 // 🛠 Custom fields Jon adds on /admin/form-builder (Jon 2026-10-27: "edit home/land
@@ -207,8 +248,8 @@ export function applyFieldOverrides(forms: CrmForm[], overrides?: FieldOverrideM
 }
 
 /** Build a lead's forms with BOTH custom fields appended and built-in overrides applied. */
-export function buildForms(pipeline: string | null | undefined, custom?: CustomFieldMap | null, overrides?: FieldOverrideMap | null): CrmForm[] {
-  return applyFieldOverrides(applyCustomFields(formsForPipeline(pipeline), custom), overrides);
+export function buildForms(pipeline: string | null | undefined, custom?: CustomFieldMap | null, overrides?: FieldOverrideMap | null, kind?: "land" | "home" | ""): CrmForm[] {
+  return applyFieldOverrides(applyCustomFields(formsForPipeline(pipeline, kind), custom), overrides);
 }
 
 /** Normalize a raw custom-field record from the store into a valid FormField (or null). */

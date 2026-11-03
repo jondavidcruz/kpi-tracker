@@ -21,6 +21,7 @@ import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels, recS
 import ParcelsPanel from "@/components/ParcelsPanel";
 import PanelGuard from "@/components/PanelGuard";
 import { buildForms } from "@/lib/crm-forms";
+import { leadKind } from "@/lib/lead-kind";
 import { sectionColor } from "@/lib/section-colors";
 import { readDealHeat } from "@/lib/deal-heat";
 import DealHeatChip from "@/components/DealHeatChip";
@@ -449,7 +450,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
               // Forms follow the pipeline (= lead type): sellers get seller discovery,
               // developers/buyer agents get their buy-box/agent form (Jon 2026-10-20).
-              return buildForms(opp.pipeline, customFields, fieldOverrides).map((form) => {
+              return buildForms(opp.pipeline, customFields, fieldOverrides, leadKind(fd)).map((form) => {
                 const answers = fd[form.key] ?? {};
                 const count = Object.keys(answers).length;
                 // 🎨 Same section colors as the Quick Notes view (Jon 2026-10-29).

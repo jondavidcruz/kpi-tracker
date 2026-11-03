@@ -20,13 +20,14 @@ import { isDispoDealPipeline, isDevNetworkName, isAgentNetworkName } from "@/lib
 import { readGateChecks } from "@/lib/dispo-gates";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { readDealHeat } from "@/lib/deal-heat";
+import { leadKind } from "@/lib/lead-kind";
 import DealHeatChip from "@/components/DealHeatChip";
 import { readListingHistory } from "@/lib/listing-history";
 import ListingHistoryPanel from "@/components/ListingHistoryPanel";
 import LeadTypePicker from "@/components/LeadTypePicker";
 import LeadSourceSelect from "@/components/LeadSourceSelect";
 import { formatAddress } from "@/lib/address";
-import { formsForPipeline, buildForms } from "@/lib/crm-forms";
+import { formsForPipeline, buildForms, isLandFinancial } from "@/lib/crm-forms";
 import SmsComposer from "@/components/SmsComposer";
 import GmailComposer from "@/components/GmailComposer";
 import LienBuilder from "@/components/LienBuilder";
@@ -414,9 +415,12 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                   </AutoSaveForm>
                 )}
 
-                {buildForms(d.pipeline, d.customFields, d.fieldOverrides).map((f) => tab === `form:${f.key}` && (
+                {buildForms(d.pipeline, d.customFields, d.fieldOverrides, leadKind(d.formData)).map((f) => tab === `form:${f.key}` && (
                   <div key={f.key} className="space-y-3">
-                    {f.key === "financial" && <UnderwriteBlock d={d} />}
+                    {/* 🏞 Land: skip the underwriting block, show the fast cash→novation play.
+                        🏡 Home/unknown: the standard underwriting summary (Jon 2026-11-03).
+                        Uses the SAME land decision as the form fields so they always agree. */}
+                    {f.key === "financial" && (isLandFinancial(d.pipeline, leadKind(d.formData)) ? <LandOfferBlock d={d} /> : <UnderwriteBlock d={d} />)}
                     {/* ✨ pull details straight out of the notes (Home/Land only) */}
                     {(f.key === "property" || f.key === "land") && <DetailsAutofill oppId={d.id} formKey={f.key} onApplied={() => refetch(d.id)} />}
                     {/* controlled fields — never blank out the rep's dropdown choices (Jon 2026-10-26) */}
@@ -647,6 +651,41 @@ const UW_TABS: Record<string, string> = {
   listing: "🏷 Listing", flip: "🔨 Flip", cash_land: "🏞 Land (Cash)",
   developer: "🚧 Developer", note_land: "📜 Land Note",
 };
+// 🏞 Land offer play (Jon 2026-11-03): no underwriting calculator — just the fast
+// two-step. Reads the comps + offers the rep typed on the Land financial form and shows
+// the cash spread at a glance + the novation fallback. Pure display over formData.
+function LandOfferBlock({ d }: { d: Payload }) {
+  const fin = (d.formData?.financial ?? {}) as Record<string, string | string[]>;
+  const num = (s: unknown) => parseFloat(String(s ?? "").replace(/[^0-9.]/g, "")) || 0;
+  const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  const low = num(fin.compLow), high = num(fin.compHigh);
+  const cash = num(fin.ourOffer), listedRaw = String(fin.listedNow ?? "");
+  const cashResp = String(fin.sellerResponse ?? "");
+  const cashNo = cashResp.includes("Rejected") || cashResp.includes("Countered");
+  const belowPct = low && cash ? Math.round((1 - cash / low) * 100) : 0;
+  return (
+    <div className="space-y-2 rounded-xl bg-lime-50 p-3 text-[12px] ring-1 ring-lime-200">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-extrabold text-lime-900">🏞 Land offer play — no calculator needed</span>
+        {(low || high) ? <span className="ml-auto rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-lime-800 ring-1 ring-lime-200">Sold {low ? money(low) : "?"}–{high ? money(high) : "?"}</span> : null}
+      </div>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        <div className="rounded-lg bg-white/70 p-2 ring-1 ring-lime-100">
+          <div className="font-bold text-lime-800">🅐 Cash first</div>
+          <div className="text-slate-600">Offer <b>well below</b> the lowest sold comp.</div>
+          {cash ? <div className="mt-0.5 text-slate-700">Our cash: <b>{money(cash)}</b>{belowPct > 0 && <span className="text-emerald-700"> · {belowPct}% below the low sold</span>}</div> : <div className="mt-0.5 text-slate-400">Enter the cash offer below.</div>}
+        </div>
+        <div className={`rounded-lg p-2 ring-1 ${cashNo ? "bg-white ring-amber-200" : "bg-white/50 ring-lime-100"}`}>
+          <div className="font-bold text-lime-800">🅑 Novation if cash is a no</div>
+          <div className="text-slate-600">List near what competitors are <b>listed</b> at now.</div>
+          {cashNo ? <div className="mt-0.5 font-semibold text-amber-700">Cash was a no — set the novation list price below.</div> : <div className="mt-0.5 text-slate-400">{listedRaw ? "Listings noted ✓" : "Add the on-market listings below."}</div>}
+        </div>
+      </div>
+      <div className="text-[10px] text-lime-700/80">Cash, we cover closing, no commissions. Full underwriting is still on <a href={`/underwriting?address=${encodeURIComponent(d.contact.address || d.title)}&opp=${encodeURIComponent(d.id)}`} target="_blank" className="font-semibold underline">the calculator ↗</a> if you ever want it.</div>
+    </div>
+  );
+}
+
 function UnderwriteBlock({ d }: { d: Payload }) {
   const uw = d.underwrites ?? [];
   const fin = (d.formData?.financial ?? {}) as Record<string, string | string[]>;
