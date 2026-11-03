@@ -9,6 +9,33 @@ import { resolveNetworkPipelines } from "@/lib/dispo-network";
 import { buyerKey, type BuyerRow } from "@/lib/buyer-sheet";
 
 const PUSHED_CAT = "__drei_dev_pushed__"; // dedupe store (keys of devs already pushed)
+const DEV_CFG_CAT = "__drei_dev_cfg__";   // owner config: which campaign + the dev/seller blend
+
+// 🎯 Where developers go + how big a slice of the 5,000-contact cap they may take (Jon 2026-11-03:
+// "feed one campaign so it keeps growing; keep a healthy blend of developers AND sellers").
+export type DevCfg = { campaign: string; devCap: number };
+const DEV_CFG_DEFAULT: DevCfg = { campaign: "Unvetted Buyers", devCap: 2500 };
+export async function readDevCfg(): Promise<DevCfg> {
+  const row = await db.resource.findFirst({ where: { category: DEV_CFG_CAT } }).catch(() => null);
+  try { const j = row?.description ? JSON.parse(row.description) : {}; return { campaign: (j.campaign || DEV_CFG_DEFAULT.campaign).toString().slice(0, 120), devCap: Number.isFinite(j.devCap) ? Math.max(0, Math.min(5000, Math.round(j.devCap))) : DEV_CFG_DEFAULT.devCap }; } catch { return { ...DEV_CFG_DEFAULT }; }
+}
+export async function writeDevCfg(patch: Partial<DevCfg>): Promise<void> {
+  const cur = await readDevCfg();
+  const next: DevCfg = { campaign: (patch.campaign ?? cur.campaign).toString().trim().slice(0, 120) || DEV_CFG_DEFAULT.campaign, devCap: patch.devCap != null ? Math.max(0, Math.min(5000, Math.round(patch.devCap))) : cur.devCap };
+  const row = await db.resource.findFirst({ where: { category: DEV_CFG_CAT } }).catch(() => null);
+  const description = JSON.stringify(next);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { category: DEV_CFG_CAT, title: "drei-dev-cfg", url: "", description } });
+}
+/** Current DirectREI counts for the blend gauge: total contacts + how many are in the dev campaign. */
+export async function devBlendCounts(campaign: string): Promise<{ total: number | null; dev: number | null }> {
+  const { directReiContactCount } = await import("@/lib/directrei-cleanup");
+  const { directReiCampaignPerf } = await import("@/lib/directrei");
+  const total = await directReiContactCount().catch(() => null);
+  let dev: number | null = null;
+  try { const perf = await directReiCampaignPerf(); if ("rows" in perf) dev = perf.rows.find((r) => r.name.toLowerCase() === campaign.toLowerCase())?.contacts ?? null; } catch { /* best-effort */ }
+  return { total, dev };
+}
 // Only UNVETTED devs go to mass marketing — not the ones already vetted or ruled out.
 const SKIP_STAGES = new Set(["vetted", "not_fit"]);
 
@@ -152,6 +179,7 @@ export async function commitDevsPushed(rows: BuyerRow[]): Promise<void> {
 export type DevPushRun = {
   scanned: number; pushCount: number; delivered: "api" | "csv" | "none"; archived: number;
   added?: number; errors?: string[]; skippedDup: number; skippedNoContact: number;
+  campaign?: string; heldForCap?: number; capNote?: string; total?: number | null; devInCampaign?: number | null;
 };
 
 /** The full nightly job used by BOTH the cron (?devdrop=1&commit=1) and the owner "push & clear
@@ -164,7 +192,26 @@ export async function runDevPushAndClear(opts: { limit?: number; recipient?: str
   const base: DevPushRun = { scanned: total, pushCount: fresh.length, delivered: "none", archived: 0, skippedDup, skippedNoContact };
   if (!fresh.length) return base;
   const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  const contacts = fresh.map((r) => ({
+  const cfg = await readDevCfg();
+  const { CONTACT_CAP } = await import("@/lib/directrei-cleanup");
+  // 🧮 Blend + 5,000 cap: hold developers to cfg.devCap so sellers always keep room, and never
+  // exceed the account-wide CONTACT_CAP. Push only what fits; the rest stay in the kanban for the
+  // next run (after the weekly cleanup frees space). Counts are read-only (work without WRITE).
+  const { total: totalNow, dev: devNow } = await devBlendCounts(cfg.campaign);
+  const roomTotal = totalNow == null ? Infinity : Math.max(0, CONTACT_CAP - totalNow);
+  const roomDev = devNow == null ? Infinity : Math.max(0, cfg.devCap - devNow);
+  const room = Math.min(roomTotal, roomDev);
+  const allowed = room === Infinity ? fresh.length : Math.max(0, Math.min(fresh.length, room));
+  const heldForCap = fresh.length - allowed;
+  const capNote = heldForCap > 0 ? (roomDev <= roomTotal ? `developer cap ${cfg.devCap.toLocaleString()} reached` : `${CONTACT_CAP.toLocaleString()} total-contact cap reached`) : "";
+  const toPush = fresh.slice(0, allowed);
+  const info = { campaign: cfg.campaign, heldForCap, capNote, total: totalNow, devInCampaign: devNow };
+  if (!toPush.length) {
+    // Nothing fits right now — leave them in the kanban and tell the team why.
+    try { const { postToSpace } = await import("@/lib/chat-spaces"); await postToSpace("directrei", `⏸ *Developer push paused — ${date}*\n${fresh.length.toLocaleString()} ready but DirectREI is full (${capNote || "at cap"}). Run a cleanup to free room; they'll go on the next pass.`); } catch { /* best-effort */ }
+    return { ...base, ...info, errors: [capNote || "at cap"] };
+  }
+  const contacts = toPush.map((r) => ({
     name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || r.company || "Developer",
     first_name: r.firstName, last_name: r.lastName, company: r.company,
     phone: r.phone, phone2: r.phone2, phone3: r.phone3,
@@ -178,32 +225,33 @@ export async function runDevPushAndClear(opts: { limit?: number; recipient?: str
   if (directReiBlastConfigured()) {
     try {
       for (let i = 0; i < contacts.length; i += 1000) {
-        const r = await directReiAddToCampaignByName({ name: /unvetted buyer/i, createIfMissing: true, channels: ["email", "sms", "cold_call"], contacts: contacts.slice(i, i + 1000) });
+        const r = await directReiAddToCampaignByName({ name: cfg.campaign, createIfMissing: true, channels: ["email", "sms", "cold_call"], contacts: contacts.slice(i, i + 1000) });
         if ("added" in r && r.added) added += r.added; else if (r.error) errors.push(r.error);
       }
     } catch (e) { errors.push(String(e)); }
     if (added > 0) delivered = "api";
   } else {
     try {
-      const csv = buildDevCsv(fresh);
+      const csv = buildDevCsv(toPush);
       const recipient = (opts.recipient || "info@freedom-offers.com").split(",")[0].trim();
       const { sendEmailWithAttachment } = await import("@/lib/notify");
-      const html = `<p><b>${fresh.length.toLocaleString()}</b> unvetted developers — DirectREI import CSV attached (import into the <b>Unvetted Buyers</b> campaign).</p><p style="color:#64748b;font-size:12px">Arm <code>DIRECTREI_WRITE=1</code> to push these straight in via the API and skip this step.</p>`;
-      await sendEmailWithAttachment([recipient], `🏗 ${fresh.length} unvetted developers → DirectREI — ${date}`, html, { filename: `Unvetted_Developers_DREI_${date}.csv`, content: Buffer.from(csv).toString("base64") });
+      const html = `<p><b>${toPush.length.toLocaleString()}</b> unvetted developers — DirectREI import CSV attached (import into the <b>${cfg.campaign}</b> campaign).</p><p style="color:#64748b;font-size:12px">${heldForCap > 0 ? `${heldForCap.toLocaleString()} held back (${capNote}). ` : ""}Arm <code>DIRECTREI_WRITE=1</code> to push these straight in via the API and skip this step.</p>`;
+      await sendEmailWithAttachment([recipient], `🏗 ${toPush.length} unvetted developers → DirectREI — ${date}`, html, { filename: `Unvetted_Developers_DREI_${date}.csv`, content: Buffer.from(csv).toString("base64") });
       try { const { gdriveConfigured, uploadToDrivePrivate } = await import("@/lib/gdrive"); if (gdriveConfigured()) await uploadToDrivePrivate(`Unvetted Developers DREI - ${date}.csv`, Buffer.from(csv), "text/csv"); } catch { /* best-effort */ }
       delivered = "csv"; errors.push("DIRECTREI_WRITE not armed — emailed the import CSV instead");
     } catch (e) { errors.push(`csv delivery failed: ${String(e)}`); }
   }
   let archived = 0;
   if (delivered !== "none") {
-    await commitDevsPushed(fresh);
-    try { const res = await db.crmOpportunity.updateMany({ where: { id: { in: fresh.map((r) => r.oppId) } }, data: { archivedAt: new Date() } }); archived = res.count; } catch { /* best-effort */ }
+    await commitDevsPushed(toPush);
+    try { const res = await db.crmOpportunity.updateMany({ where: { id: { in: toPush.map((r) => r.oppId) } }, data: { archivedAt: new Date() } }); archived = res.count; } catch { /* best-effort */ }
     try {
       const { postToSpace } = await import("@/lib/chat-spaces");
-      const n = delivered === "api" ? added : fresh.length;
-      const how = delivered === "api" ? "pushed API-direct into DirectREI (Unvetted Buyers)" : "emailed as a DirectREI import CSV";
-      await postToSpace("directrei", `🏗 *${n.toLocaleString()} researched developers → DirectREI — ${date}*\n${how}, and cleared from the War Room (${archived.toLocaleString()} archived).`);
+      const n = delivered === "api" ? added : toPush.length;
+      const how = delivered === "api" ? `pushed API-direct into DirectREI (${cfg.campaign})` : `emailed as a DirectREI import CSV (→ ${cfg.campaign})`;
+      const held = heldForCap > 0 ? `\n${heldForCap.toLocaleString()} held back — ${capNote}; they go on the next pass after a cleanup.` : "";
+      await postToSpace("directrei", `🏗 *${n.toLocaleString()} researched developers → DirectREI — ${date}*\n${how}, and cleared from the War Room (${archived.toLocaleString()} archived).${held}`);
     } catch { /* best-effort */ }
   }
-  return { ...base, delivered, archived, added: delivered === "api" ? added : undefined, errors: errors.slice(0, 3) };
+  return { ...base, ...info, delivered, archived, added: delivered === "api" ? added : undefined, errors: errors.slice(0, 3) };
 }

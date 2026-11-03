@@ -1217,14 +1217,21 @@ export async function bulkOppStageAction(formData: FormData) {
   const op = String(formData.get("op") ?? "");
   const val = String(formData.get("val") ?? "").trim();
   if (!stage || (op !== "delete" && !val)) return;
+  // 🧲 First-column orphans: the board puts cards whose stored stage matches NO column key into the
+  // first column. Match them too (stage = key OR stage not in the known keys) so "select all" on the
+  // first stage really moves/archives every card shown there (Jon 2026-11-03).
+  const stageIsFirst = String(formData.get("stageIsFirst") ?? "") === "1";
+  const knownStages = String(formData.get("knownStages") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const stageClause: import("@prisma/client").Prisma.CrmOpportunityWhereInput = stageIsFirst && knownStages.length
+    ? { OR: [{ stage }, { stage: { notIn: knownStages } }] }
+    : { stage };
+  const whoClause: import("@prisma/client").Prisma.CrmOpportunityWhereInput | null = who && who !== "all" && !who.startsWith("role:")
+    ? { OR: [{ assignedTo: { equals: who, mode: "insensitive" } }, { formData: { path: ["__followers"], array_contains: who } }] }
+    : null;
   const where: import("@prisma/client").Prisma.CrmOpportunityWhereInput = {
     archivedAt: null,
     ...(pipeline === "War Room" || pipeline === "" ? { pipeline: { in: ["", "War Room"] } } : { pipeline }),
-    stage,
-    ...(who && who !== "all" && !who.startsWith("role:") ? { OR: [
-      { assignedTo: { equals: who, mode: "insensitive" } },
-      { formData: { path: ["__followers"], array_contains: who } },
-    ] } : {}),
+    AND: [stageClause, ...(whoClause ? [whoClause] : [])],
   };
   if (op === "assign") {
     await db.crmOpportunity.updateMany({ where, data: { assignedTo: val } });

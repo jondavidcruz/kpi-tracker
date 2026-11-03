@@ -4,14 +4,15 @@ import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { directReiConfigured, directReiBlastConfigured, directReiCampaignPerf } from "@/lib/directrei";
 import { REASON_LABEL, PLAN_CAPS, CONTACT_CAP, type CleanReason } from "@/lib/directrei-cleanup";
-import { directReiScanAction, directReiRunCleanupAction, directReiPushDevsAction } from "@/app/actions";
+import { directReiScanAction, directReiRunCleanupAction, directReiPushDevsAction, saveDreiDevCfgAction } from "@/app/actions";
+import { readDevCfg, devBlendCounts } from "@/lib/directrei-dev-push";
 import { Card } from "@/components/ui";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 const CAP = CONTACT_CAP;
 
-export default async function DirectReiPage({ searchParams }: { searchParams: Promise<{ cleaned?: string; pushed?: string; via?: string; archived?: string; notarmed?: string; err?: string; atcap?: string; capped?: string }> }) {
+export default async function DirectReiPage({ searchParams }: { searchParams: Promise<{ cleaned?: string; pushed?: string; via?: string; archived?: string; notarmed?: string; err?: string; atcap?: string; capped?: string; cfgsaved?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   if (!isOwner(me)) {
@@ -27,6 +28,9 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
   const count = scan?.count ?? null;
   const pct = count != null ? Math.min(100, Math.round((count / CAP) * 100)) : null;
   const gaugeColor = pct == null ? "bg-slate-300" : pct >= 95 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-emerald-500";
+  const devCfg = await readDevCfg();
+  const blend = configured ? await devBlendCounts(devCfg.campaign).catch(() => ({ total: null, dev: null })) : { total: null, dev: null };
+  const sellerRoom = Math.max(0, CAP - devCfg.devCap); // the slice reserved for sellers
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
@@ -136,9 +140,40 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
         )}
       </Card>
 
+      {sp.cfgsaved && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ Saved developer campaign + blend.</div>}
+
+      {/* 🎯 Developer campaign + blend */}
+      <Card className="p-4">
+        <div className="mb-1 text-sm font-bold text-slate-800">🎯 Developer campaign + developer / seller blend</div>
+        <p className="text-[12px] text-slate-500">Every developer push feeds this <b>one campaign</b> (created once, then it keeps growing). The <b>developer cap</b> is the most developer contacts we keep — it reserves the rest of the {CAP.toLocaleString()} for sellers, so the account stays a healthy mix. When the cap is hit, extra developers wait in the kanban until the weekly cleanup frees room.</p>
+        <form action={saveDreiDevCfgAction} className="mt-2 flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Campaign (always feeds this)</span>
+            <input name="campaign" defaultValue={devCfg.campaign} className="w-60 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Developer cap (of {CAP.toLocaleString()})</span>
+            <input name="devCap" type="number" min={0} max={CAP} defaultValue={devCfg.devCap} className="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
+          </label>
+          <button className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:opacity-90">Save</button>
+        </form>
+        {/* blend gauge */}
+        <div className="mt-3 space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+            <span>Developers {blend.dev != null ? <b className="text-slate-700">{blend.dev.toLocaleString()}</b> : "—"} / cap {devCfg.devCap.toLocaleString()}</span>
+            <span>Total {blend.total != null ? <b className="text-slate-700">{blend.total.toLocaleString()}</b> : "—"} / {CAP.toLocaleString()} · ~{sellerRoom.toLocaleString()} reserved for sellers</span>
+          </div>
+          <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+            <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, Math.round(((blend.dev ?? 0) / CAP) * 100))}%` }} title="developers" />
+            <div className="h-full bg-amber-400" style={{ width: `${Math.min(100 - Math.min(100, Math.round(((blend.dev ?? 0) / CAP) * 100)), Math.round((Math.max(0, (blend.total ?? 0) - (blend.dev ?? 0)) / CAP) * 100))}%` }} title="everyone else (sellers)" />
+          </div>
+          <div className="flex gap-3 text-[10px] text-slate-400"><span>🟪 developers</span><span>🟨 sellers / other</span></div>
+        </div>
+      </Card>
+
       {/* 🏗 Developer push */}
       <Card className="p-4">
-        <div className="mb-1 text-sm font-bold text-slate-800">🏗 Push researched developers → unvetted buyers + clear the kanban</div>
+        <div className="mb-1 text-sm font-bold text-slate-800">🏗 Push researched developers → {devCfg.campaign} + clear the kanban</div>
         <p className="text-[12px] text-slate-500">Takes every new unvetted developer from the <b>DS: Developers</b> kanban, formats it to your DirectREI template, and {armed ? <>pushes it <b>API-direct</b> into the DirectREI <b>Unvetted Buyers</b> campaign</> : <>emails it as a ready-to-import DirectREI CSV</>} — then <b>archives them out of the War Room</b> so it stops clogging. Deduped; owner name + company scrubbed. Runs automatically every weekday morning too.</p>
         <form action={directReiPushDevsAction} className="mt-2 inline-block"><button className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:opacity-90">🚀 {armed ? "Push" : "Export"} &amp; clear developers now</button></form>
         {!armed && <span className="ml-2 text-[11px] text-slate-400">arm <code>DIRECTREI_WRITE=1</code> to push straight into DirectREI (no CSV)</span>}

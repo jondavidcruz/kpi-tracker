@@ -5021,6 +5021,19 @@ export async function directReiRunCleanupAction(formData: FormData) {
   redirect(`/admin/directrei?cleaned=${deleted}${directReiBlastConfigured() ? "" : "&notarmed=1"}`);
 }
 
+/** 🎯 Owner-only: set the DirectREI developer campaign + the dev/seller blend cap (Jon 2026-11-03). */
+export async function saveDreiDevCfgAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const { writeDevCfg } = await import("@/lib/directrei-dev-push");
+  const capRaw = String(formData.get("devCap") ?? "").replace(/[^\d]/g, "");
+  await writeDevCfg({
+    campaign: String(formData.get("campaign") ?? "").trim().slice(0, 120) || undefined,
+    ...(capRaw ? { devCap: Number(capRaw) } : {}),
+  });
+  redirect("/admin/directrei?cfgsaved=1");
+}
+
 export async function directReiPushDevsAction() {
   const me = await getCurrentUser();
   if (!isOwner(me)) return;

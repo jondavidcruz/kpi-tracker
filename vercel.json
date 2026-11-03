@@ -274,7 +274,7 @@
     },
     {
       "path": "/api/cron?devdrop=1&commit=1",
-      "schedule": "0 15 * * 1-5"
+      "schedule": "0 17 * * 6"
     },
     {
       "path": "/api/cron?dreiclean=1&commit=1",
