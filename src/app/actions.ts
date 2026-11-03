@@ -4627,7 +4627,11 @@ export async function createAssessmentInvite(formData: FormData) {
     data: { token: randomUUID().replace(/-/g, "").slice(0, 20), name, email, userId, createdBy: me?.name ?? "" },
   });
   revalidatePath("/onboarding");
-  redirect("/onboarding#assessments");
+  // Return to where it was launched from — the pre-hire card on Team Roster sends
+  // redirectTo so Jon isn't bounced off the roster page (Jon 2026-11-03).
+  const back = String(formData.get("redirectTo") ?? "").trim();
+  if (back) { revalidatePath(back.split("#")[0]); }
+  redirect(back || "/onboarding#assessments");
 }
 
 /** Delete an assessment invite/result. Owner only. */

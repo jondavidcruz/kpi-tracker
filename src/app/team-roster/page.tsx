@@ -14,6 +14,9 @@ import { getSettings } from "@/lib/data";
 import { positionLabel } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
 import AccountabilityChart from "@/components/AccountabilityChart";
+import CopyLink from "@/components/CopyLink";
+import { createAssessmentInvite, deleteAssessment } from "@/app/actions";
+import { PROFILES } from "@/lib/assessment";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +66,7 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
     getAiChampions(),
     db.seat.findMany({ orderBy: { sortOrder: "asc" } }),
     db.teamDoc.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, userId: true, label: true, filename: true, size: true, createdAt: true } }),
-    db.assessment.findMany({ select: { userId: true, name: true, email: true, workStylesResult: true, wordSurveyResult: true } }).catch(() => [] as { userId: string | null; name: string; email: string; workStylesResult: string; wordSurveyResult: string }[]),
+    db.assessment.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, token: true, userId: true, name: true, email: true, workStylesResult: true, wordSurveyResult: true, profileKey: true, completedAt: true } }).catch(() => [] as { id: string; token: string; userId: string | null; name: string; email: string; workStylesResult: string; wordSurveyResult: string; profileKey: string; completedAt: Date | null }[]),
     getOnboardingStore(),
   ]);
   const active = users.filter((u) => u.active);
@@ -95,6 +98,17 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
       return { u, milestones, done, total: milestones.length, pct: Math.round((done / milestones.length) * 100) };
     });
 
+  // 🧭 Pre-hire candidates (Jon 2026-11-03): send the DISC assessment BEFORE hiring.
+  // A candidate = an assessment invite not tied to any current team member (no userId
+  // and name/email doesn't match an active user). Once they're hired (added as a member),
+  // their name/email matches a user and they drop off this list automatically.
+  const activeKeys = new Set<string>();
+  for (const u of active) { if (u.email) activeKeys.add(u.email.toLowerCase()); activeKeys.add(u.name.trim().toLowerCase()); }
+  const preHire = assessments.filter((a) =>
+    !a.userId &&
+    !(a.email && activeKeys.has(a.email.toLowerCase())) &&
+    !activeKeys.has(a.name.trim().toLowerCase()));
+
   // commission plans (real structures from the signed agreements — C-suite view)
   const commPlans = await readCommissionPlans();
 
@@ -109,10 +123,58 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
         <p className="-mt-1 text-xs font-semibold text-violet-700">👁️ Private — only you (Jon) can open this. Sections marked with 🔒 in the sidebar are owner-only.</p>
       </div>
 
+      {/* 🧭 STEP 1 — Pre-hire DISC assessment (Jon 2026-11-03): "send this before I
+          hire them." Reuses the existing in-house assessment tool (createAssessmentInvite
+          + the public no-login /assess link). Full profiles stay owner-only on Onboarding;
+          this card is the fast entry point + at-a-glance candidate status. */}
+      <Card id="prehire" className="border-l-4 border-violet-500 p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-extrabold text-violet-700">STEP 1 · BEFORE YOU HIRE</span>
+          <span className="text-sm font-extrabold text-slate-800">🧭 Send a candidate the DISC assessment</span>
+        </div>
+        <div className="mb-2 text-[11px] text-slate-500">Our in-house Predictive Index. They take two short tests on a <b>private link — no account, zero War Room access</b>. You get their personality profile + best-fit seat (owner-only) to judge the fit <b>before</b> you add them below. Nothing is shared with the candidate or the team.</div>
+        <form action={createAssessmentInvite} className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="redirectTo" value="/team-roster#prehire" />
+          {(() => { const fld = "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"; return <>
+          <label className="flex flex-col"><span className={labelCls}>Candidate name</span><input name="name" required placeholder="Jane Doe" className={`${fld} w-44`} /></label>
+          <label className="flex flex-col"><span className={labelCls}>Email (optional)</span><input name="email" type="email" placeholder="jane@gmail.com" className={`${fld} w-56`} /></label></>; })()}
+          <button className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-700">Create assessment link</button>
+        </form>
+        {preHire.length > 0 && (
+          <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Candidates ({preHire.length})</div>
+            {preHire.map((a) => {
+              const done = !!a.completedAt || !!a.workStylesResult || !!a.wordSurveyResult;
+              const prof = a.profileKey ? PROFILES[a.profileKey] : null;
+              return (
+                <div key={a.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                  <span className="font-semibold text-slate-800">{a.name}</span>
+                  {done ? (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">✅ Completed{prof ? ` · ${prof.emoji} ${prof.name}` : ""}</span>
+                  ) : (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">⏳ Sent · waiting</span>
+                  )}
+                  {prof && <span className="text-[11px] text-slate-500">Best seat: {prof.seat}</span>}
+                  <div className="ml-auto flex items-center gap-2">
+                    <CopyLink path={`/assess/${a.token}`} label="Copy link" />
+                    {done && <Link href="/onboarding#assessments" className="text-[11px] font-semibold text-violet-600 hover:underline">View full profile →</Link>}
+                    <form action={deleteAssessment}><input type="hidden" name="id" value={a.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">remove</button></form>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {preHire.length === 0 && <p className="mt-2 text-[11px] text-slate-400">No candidates out right now. Create a link above and send it to anyone you're considering.</p>}
+      </Card>
+
       {/* ➕ One-step add (Jon 2026-10-15): create the account (LOCKED onboarding mode)
           + roster card in one go — no more bouncing to Admin → Team + Onboarding. */}
       <Card className="border-l-4 border-emerald-500 p-4">
-        <div className="mb-1 text-sm font-extrabold text-slate-800">➕ Add a team member</div>
+        <div className="mb-1 flex items-center gap-2">
+          <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-700">STEP 2 · HIRED</span>
+          <span className="text-sm font-extrabold text-slate-800">➕ Add a team member</span>
+        </div>
         <div className="mb-2 text-[11px] text-slate-500">Creates their War Room account <b>locked to newbie basics</b> (onboarding) + their roster card below, in one step. They sign in with a magic link to their email — no password to set.</div>
         <form action={addTeamMemberAction} className="flex flex-wrap items-end gap-2">
           {(() => { const fld = "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"; return <>
