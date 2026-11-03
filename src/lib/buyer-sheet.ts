@@ -11,9 +11,9 @@ const FEED_CAT = "__cash_buyers_feed__";       // latest sheet meta + rows for t
 
 export type BuyerRow = {
   firstName?: string; lastName?: string; company?: string;
-  phone?: string; phone2?: string; email?: string;
+  phone?: string; phone2?: string; phone3?: string; email?: string; email2?: string; email3?: string;
   mailingStreet?: string; mailingCity?: string; mailingState?: string; mailingZip?: string;
-  propertyAddress?: string; state?: string; lastSaleDate?: string; notes?: string;
+  propertyAddress?: string; state?: string; city?: string; market?: string; lastSaleDate?: string; notes?: string;
 };
 
 const OUR_MARKETS = new Set(["TX", "FL", "CA", "TN", "OK"]);

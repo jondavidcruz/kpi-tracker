@@ -1953,32 +1953,18 @@ export async function GET(request: Request) {
   // leads"). DRY RUN by default; ?commit=1 emails the DirectREI-formatted CSV + Drive backup + adds
   // to the campaign via API only when DIRECTREI_WRITE=1 (so it can't auto-fire outreach unarmed).
   if (url.searchParams.get("devdrop") === "1") {
-    const { collectUnvettedDevelopers, commitDevsPushed } = await import("@/lib/directrei-dev-push");
-    const { buyerKey } = await import("@/lib/buyer-sheet");
-    const { total, fresh, skippedDup, skippedNoContact } = await collectUnvettedDevelopers();
-    const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-    if (!fresh.length) return NextResponse.json({ ok: true, mode: "none", message: "no new unvetted developers to push", scanned: total, skippedDup, skippedNoContact });
+    const limit = Math.max(1, Math.min(2000, Number(url.searchParams.get("limit") ?? "2000") || 2000));
     const commit = url.searchParams.get("commit") === "1";
-    let api: unknown = null;
-    if (commit) {
-      // API-direct add to the campaign — ONLY when writes are armed (DIRECTREI_WRITE=1). No CSV.
-      try {
-        const { directReiBlastConfigured, directReiAddToCampaignByName } = await import("@/lib/directrei");
-        if (directReiBlastConfigured()) {
-          api = await directReiAddToCampaignByName({
-            name: /unvetted buyer/i, createIfMissing: true, channels: ["email", "sms", "cold_call"],
-            contacts: fresh.map((r) => ({ name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || r.company || "Developer", phone: r.phone, email: r.email, external_id: buyerKey(r) })),
-          });
-          if ((api as { added?: number }).added) await commitDevsPushed(fresh);
-        } else { api = { error: "DIRECTREI_WRITE not armed — nothing pushed" }; }
-      } catch (e) { api = { error: String(e) }; }
-      try {
-        const { sendTeamChat } = await import("@/lib/notify");
-        const added = (api as { added?: number } | null)?.added;
-        if (added) { const { postToSpace } = await import("@/lib/chat-spaces"); await postToSpace("directrei", `🏗 *${added} researched developers → DirectREI unvetted buyers — ${date}* (API-direct).`); }
-      } catch { /* chat best-effort */ }
+    if (!commit) {
+      // DRY RUN — just report how many would go, no push / archive.
+      const { collectUnvettedDevelopers } = await import("@/lib/directrei-dev-push");
+      const { total, fresh, skippedDup, skippedNoContact } = await collectUnvettedDevelopers(limit);
+      return NextResponse.json({ ok: true, mode: "DRY RUN", pushCount: fresh.length, scanned: total, skippedDup, skippedNoContact });
     }
-    return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", pushCount: fresh.length, scanned: total, skippedDup, skippedNoContact, api });
+    const { runDevPushAndClear } = await import("@/lib/directrei-dev-push");
+    const devSettings = await getSettings().catch(() => null);
+    const r = await runDevPushAndClear({ limit, recipient: devSettings?.alertEmailRecipients });
+    return NextResponse.json({ ok: true, mode: "COMMITTED", ...r });
   }
 
   // 🧹 Weekly DirectREI cleanup (Jon 2026-10-29) — stay under the 5,000 cap. Removes opted-out /

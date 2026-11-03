@@ -117,7 +117,13 @@ export async function directReiDeleteContact(id: string): Promise<{ ok: boolean;
   return { ok: r.ok, status: r.status, ...(r.ok ? {} : { error: `delete ${r.status}: ${JSON.stringify(r.body).slice(0, 120)}` }) };
 }
 
-export type BlastContact = { name: string; phone?: string; email?: string; external_id: string };
+export type BlastContact = {
+  name: string; phone?: string; email?: string; external_id: string;
+  // Optional richer fields for the developer push (DirectREI uses what it recognizes):
+  first_name?: string; last_name?: string; company?: string;
+  phone2?: string; phone3?: string; email2?: string; email3?: string;
+  market?: string; status?: string; notes?: string; contact_type?: string;
+};
 export type BlastChannel = "sms" | "email" | "cold_call";
 
 /** Add contacts to an EXISTING campaign matched by name (e.g. "unvetted buyers") — for the

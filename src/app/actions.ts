@@ -5024,24 +5024,14 @@ export async function directReiRunCleanupAction(formData: FormData) {
 export async function directReiPushDevsAction() {
   const me = await getCurrentUser();
   if (!isOwner(me)) return;
-  const { collectUnvettedDevelopers, commitDevsPushed } = await import("@/lib/directrei-dev-push");
-  const { directReiAddToCampaignByName, directReiBlastConfigured } = await import("@/lib/directrei");
-  const { directReiContactCount, CONTACT_CAP } = await import("@/lib/directrei-cleanup");
-  const { buyerKey } = await import("@/lib/buyer-sheet");
-  const { fresh } = await collectUnvettedDevelopers();
-  if (!fresh.length) { redirect("/admin/directrei?pushed=0"); return; }
-  if (!directReiBlastConfigured()) { redirect("/admin/directrei?pushed=0&notarmed=1"); return; }
-  // 🛡 Stay under the CRM-contact cap: only push what fits (run cleanup to free more).
-  const count = await directReiContactCount();
-  const headroom = count == null ? fresh.length : Math.max(0, CONTACT_CAP - count);
-  if (headroom <= 0) { redirect("/admin/directrei?pushed=0&atcap=1"); return; }
-  const batch = fresh.slice(0, headroom);
-  const res = await directReiAddToCampaignByName({
-    name: /unvetted buyer/i, createIfMissing: true, channels: ["email", "sms", "cold_call"],
-    contacts: batch.map((r) => ({ name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || r.company || "Developer", phone: r.phone, email: r.email, external_id: buyerKey(r) })),
-  });
-  if (res.added) await commitDevsPushed(batch);
-  redirect(`/admin/directrei?pushed=${res.added ?? 0}${batch.length < fresh.length ? `&capped=${fresh.length - batch.length}` : ""}${res.error ? "&err=" + encodeURIComponent(res.error) : ""}`);
+  // One-click: push the unvetted-developer backlog into DirectREI (API-direct when armed, else
+  // emails the import CSV) AND archive them out of the War Room so the kanban clears (Jon 2026-11-03).
+  const { runDevPushAndClear } = await import("@/lib/directrei-dev-push");
+  const { getSettings } = await import("@/lib/data");
+  const s = await getSettings().catch(() => null);
+  const r = await runDevPushAndClear({ recipient: s?.alertEmailRecipients });
+  const n = r.delivered === "api" ? (r.added ?? 0) : r.delivered === "csv" ? r.pushCount : 0;
+  redirect(`/admin/directrei?pushed=${n}&via=${r.delivered}&archived=${r.archived}${r.errors?.[0] ? "&err=" + encodeURIComponent(r.errors[0]) : ""}`);
 }
 
 // ⚙️ Save the Master Workflow config (Jon 2026-10-29): the inbound-reply auto-tag keywords +

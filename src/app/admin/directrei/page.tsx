@@ -11,7 +11,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 const CAP = CONTACT_CAP;
 
-export default async function DirectReiPage({ searchParams }: { searchParams: Promise<{ cleaned?: string; pushed?: string; notarmed?: string; err?: string; atcap?: string; capped?: string }> }) {
+export default async function DirectReiPage({ searchParams }: { searchParams: Promise<{ cleaned?: string; pushed?: string; via?: string; archived?: string; notarmed?: string; err?: string; atcap?: string; capped?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   if (!isOwner(me)) {
@@ -37,7 +37,7 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
       </div>
       {!configured && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-200">⚠️ DIRECTREI_API_KEY isn&apos;t set — reads/writes are off.</div>}
       {sp.cleaned && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ Removed {sp.cleaned} contacts.{sp.notarmed ? " (Delete is NOT armed — set DIRECTREI_WRITE=1; nothing was deleted.)" : ""}</div>}
-      {sp.pushed && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ Pushed {sp.pushed} developers to the unvetted buyers campaign.{sp.notarmed ? " (Writes NOT armed — set DIRECTREI_WRITE=1.)" : ""}{sp.capped ? ` ${sp.capped} held back — at the ${CAP.toLocaleString()} contact cap; run a cleanup to free room.` : ""}</div>}
+      {sp.pushed != null && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ {sp.via === "csv" ? <>Emailed {sp.pushed} developers as a DirectREI import CSV</> : sp.via === "none" ? <>No new developers to push</> : <>Pushed {sp.pushed} developers into the DirectREI Unvetted Buyers campaign</>}{sp.archived && Number(sp.archived) > 0 ? ` · ${Number(sp.archived).toLocaleString()} cleared from the War Room.` : "."}{sp.capped ? ` ${sp.capped} held back — at the ${CAP.toLocaleString()} contact cap; run a cleanup to free room.` : ""}</div>}
       {sp.atcap && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-200">⚠️ At the {CAP.toLocaleString()} contact cap — nothing pushed. Run a cleanup first to free room.</div>}
       {sp.err && <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">⚠️ {decodeURIComponent(sp.err)}</div>}
 
@@ -138,10 +138,10 @@ export default async function DirectReiPage({ searchParams }: { searchParams: Pr
 
       {/* 🏗 Developer push */}
       <Card className="p-4">
-        <div className="mb-1 text-sm font-bold text-slate-800">🏗 Push researched developers → unvetted buyers</div>
-        <p className="text-[12px] text-slate-500">Adds the new unvetted developers from the <b>DS: Developers</b> kanban into the DirectREI <b>unvetted buyers</b> campaign (email / call / SMS), formatted to your template, deduped. Owner name + company are scrubbed from any copy.</p>
-        <form action={directReiPushDevsAction} className="mt-2 inline-block"><button disabled={!armed} className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50">🚀 Push developers now</button></form>
-        {!armed && <span className="ml-2 text-[11px] text-slate-400">set DIRECTREI_WRITE=1 to enable</span>}
+        <div className="mb-1 text-sm font-bold text-slate-800">🏗 Push researched developers → unvetted buyers + clear the kanban</div>
+        <p className="text-[12px] text-slate-500">Takes every new unvetted developer from the <b>DS: Developers</b> kanban, formats it to your DirectREI template, and {armed ? <>pushes it <b>API-direct</b> into the DirectREI <b>Unvetted Buyers</b> campaign</> : <>emails it as a ready-to-import DirectREI CSV</>} — then <b>archives them out of the War Room</b> so it stops clogging. Deduped; owner name + company scrubbed. Runs automatically every weekday morning too.</p>
+        <form action={directReiPushDevsAction} className="mt-2 inline-block"><button className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:opacity-90">🚀 {armed ? "Push" : "Export"} &amp; clear developers now</button></form>
+        {!armed && <span className="ml-2 text-[11px] text-slate-400">arm <code>DIRECTREI_WRITE=1</code> to push straight into DirectREI (no CSV)</span>}
       </Card>
     </div>
   );
