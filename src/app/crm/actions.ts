@@ -2232,13 +2232,17 @@ export async function updateDispoBuyerAction(formData: FormData) {
   if (!oppId || !entryId || !["stage", "price", "nextFollowUp", "notes", "phone", "email", "addNote"].includes(field)) return;
   let entryName = "";
   let entryBuyerId = "";
+  let entryPrice = "";
+  let entryTerms = "";
   // 📝 "addNote" APPENDS a dated line to the buyer's running notes (newest first) so the card
   // reads like a timeline (Jon 2026-10-27), instead of overwriting the single notes field.
   const { getSettings } = await import("@/lib/data");
   const stamp = new Intl.DateTimeFormat("en-CA", { timeZone: (await getSettings()).orgTimezone }).format(new Date());
   const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => {
     if (r.id !== entryId) return r;
-    entryName = String(r.name ?? ""); entryBuyerId = String(r.buyerId ?? "");
+    entryName = String(r.name ?? ""); entryBuyerId = String(r.buyerId ?? ""); entryPrice = String(r.price ?? "");
+    // latest note line often holds the offer detail ("$75k cash, quick close") → carry it as terms
+    entryTerms = String(r.notes ?? "").split("\n")[0]?.replace(/^\d{4}-\d{2}-\d{2}:\s*/, "").trim() ?? "";
     if (field === "addNote") { if (!value) return r; const line = `${stamp}: ${value}`; return { ...r, notes: r.notes ? `${line}\n${r.notes}` : line }; }
     return { ...r, [field]: value || undefined };
   }));
@@ -2257,6 +2261,23 @@ export async function updateDispoBuyerAction(formData: FormData) {
       const dealAddr = dealLabel?.contact?.address || dealLabel?.title || "a deal";
       if (lead?.contactId) await logCrmEvent({ contactId: lead.contactId, oppId: entryBuyerId, kind: "note", body: `📝 From deal “${dealAddr}”: ${value.slice(0, 500)}`, actor: me.name });
     }
+  }
+  // 💰 AUTO-LOG THE OFFER (Jon 2026-11-03): moving a buyer to "Price / offer in" means they came
+  // back with an offer — mirror it into OFFERS RECEIVED up top so every offer is captured without
+  // anyone re-typing it. Deduped per buyer via an `auto` flag (manual +offer entries are untouched,
+  // and re-moving the same buyer updates their one auto entry instead of piling up).
+  if (field === "stage" && value === "offer_in") {
+    await mutateDispoOffers(oppId, (list) => {
+      const match = (r: Record<string, unknown>) => r.auto === true && (entryBuyerId ? r.buyerId === entryBuyerId : r.buyer === entryName);
+      const existing = list.find(match);
+      if (existing) { if (entryPrice) existing.price = entryPrice; if (entryTerms) existing.terms = entryTerms; existing.at = PT_TODAY(); existing.by = me.name; return list; }
+      return [...list, {
+        id: `of_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        buyer: entryName || "Buyer", price: entryPrice || "", buyerId: entryBuyerId || undefined,
+        terms: entryTerms || undefined, status: "received", at: PT_TODAY(), by: me.name, auto: true,
+      }];
+    });
+    if (o?.contactId) await logCrmEvent({ contactId: o.contactId, oppId, kind: "system", body: `💰 Offer auto-captured — ${entryName || "buyer"} moved to Price/Offer In${entryPrice ? ` @ ${entryPrice}` : ""}`, actor: me.name }).catch(() => {});
   }
   revalidatePath(`/crm/${oppId}`);
   if (field === "notes" && entryBuyerId) revalidatePath(`/crm/${entryBuyerId}`);
