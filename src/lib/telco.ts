@@ -191,9 +191,11 @@ export async function telnyxHealth(): Promise<LineHealth> {
   }
 }
 
-/** Both providers in parallel. */
+/** Live line health. Telnyx only — we moved off Twilio (Jon 2026-11-03: "we're not even
+ *  on Twilio anymore, we're on Telnyx"). twilioHealth() is kept for legacy spend-history
+ *  tooling but is no longer shown on Comm Health. */
 export async function allLineHealth(): Promise<LineHealth[]> {
-  return Promise.all([twilioHealth(), telnyxHealth()]);
+  return Promise.all([telnyxHealth()]);
 }
 
 export interface LiveAlarm { provider: string; level: string; code?: string; text: string; at: string }

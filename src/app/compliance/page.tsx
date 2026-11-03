@@ -24,7 +24,7 @@ export default async function CompliancePage() {
   const [states, health, me] = await Promise.all([deriveOperatingStates(), allLineHealth(), getCurrentUser()]);
   const owner = isOwner(me);
   const env = telcoEnvStatus();
-  const anyKeyMissing = !env.twilioSid || !env.twilioToken || !env.telnyx;
+  const anyKeyMissing = !env.telnyx;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -46,18 +46,16 @@ export default async function CompliancePage() {
         <span><strong>Consent Vault</strong> — every opt-in from our web forms with the exact wording, timestamp, IP and device. If anyone ever claims "I never said you could text me," the proof lives here. →</span>
       </a>
 
-      {/* ── Live line health (Twilio + Telnyx) ── */}
+      {/* ── Live line health (Telnyx — off Twilio as of 2026-11-03) ── */}
       <section>
         <div className="flex items-center justify-between">
-          <SectionTitle title="📡 Live line health" subtitle="Twilio + Telnyx, checked live via API" accent="bg-emerald-400" />
+          <SectionTitle title="📡 Live line health" subtitle="Telnyx, checked live via API" accent="bg-emerald-400" />
           <Link href="/compliance" className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">↻ Refresh</Link>
         </div>
         {owner && anyKeyMissing && (
           <div className="mb-3 rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800/50">
             <div className="font-semibold text-slate-700 dark:text-slate-200">🔑 Keys the live server can see right now:</div>
             <ul className="mt-1.5 space-y-0.5 text-slate-600 dark:text-slate-300">
-              <li>{env.twilioSid ? "✅" : "❌"} <code>TWILIO_ACCOUNT_SID</code></li>
-              <li>{env.twilioToken ? "✅" : "❌"} <code>TWILIO_AUTH_TOKEN</code></li>
               <li>{env.telnyx ? "✅" : "❌"} <code>TELNYX_API_KEY</code></li>
             </ul>
             <p className="mt-2 text-xs text-slate-500">
@@ -107,7 +105,7 @@ export default async function CompliancePage() {
           })}
         </div>
         <p className="mt-2 text-xs text-slate-400">
-          Number-level answer-rate & spam-flag tracking lives on <Link href="/phone-health" className="underline">Phone Health</Link> — along with the visual <Link href="/phone-health" className="underline">List Pull → Skip Trace → SMS SOP</Link> to run before any texting campaign. Live status here reads Twilio/Telnyx directly via API.
+          Number-level answer-rate & spam-flag tracking lives on <Link href="/phone-health" className="underline">Phone Health</Link> — along with the visual <Link href="/phone-health" className="underline">List Pull → Skip Trace → SMS SOP</Link> to run before any texting campaign. Live status here reads Telnyx directly via API.
         </p>
         <div className="mt-3"><TelcoAlarms /></div>
       </section>
