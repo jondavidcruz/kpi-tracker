@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
   Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap, Landmark,
-  Smartphone, Play, Banknote, TrafficCone,
+  Smartphone, Play, Banknote, TrafficCone, Moon, Sun,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -86,6 +86,16 @@ export default function Sidebar({
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => { try { if (localStorage.getItem("fo_sidebar_collapsed") === "1") setCollapsed(true); } catch { /* ok */ } }, []);
   const toggleCollapsed = () => setCollapsed((v) => { const n = !v; try { localStorage.setItem("fo_sidebar_collapsed", n ? "1" : "0"); } catch { /* ok */ } return n; });
+  // 🌙 Dark-mode toggle (Jon 2026-11-03: "put a more accessible button up top, moon/sun").
+  // Mirrors the existing theme logic (localStorage 'theme' + .dark class applied pre-paint in layout).
+  const [dark, setDark] = useState(false);
+  useEffect(() => { setDark(document.documentElement.classList.contains("dark")); }, []);
+  const toggleTheme = () => {
+    const next = !document.documentElement.classList.contains("dark");
+    document.documentElement.classList.toggle("dark", next);
+    try { localStorage.setItem("theme", next ? "dark" : "light"); } catch { /* ok */ }
+    setDark(next);
+  };
   // 📂 Per-department collapse (Jon 2026-10-24: "give the option to minimize the
   // departments"). Persist which group labels are collapsed, per viewer.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -264,6 +274,17 @@ export default function Sidebar({
           {/* collapse the rail (desktop only) — made obvious (Jon 2026-10-13) */}
           <button onClick={toggleCollapsed} title="Minimize the menu" aria-label="Minimize the menu" className="hidden shrink-0 items-center gap-1 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] font-bold text-white ring-1 ring-white/20 hover:bg-brand-gold hover:text-brand-navy md:flex">« Hide</button>
         </div>
+        {/* 🌙 Dark-mode toggle — accessible spot right under « Hide (Jon 2026-11-03) */}
+        <button
+          onClick={toggleTheme}
+          title={dark ? "Switch to light mode" : "Switch to dark mode"}
+          aria-label="Toggle dark mode"
+          aria-pressed={dark}
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] font-bold text-white ring-1 ring-white/20 transition hover:bg-brand-gold hover:text-brand-navy"
+        >
+          {dark ? <Sun size={14} /> : <Moon size={14} />}
+          {dark ? "Light mode" : "Dark mode"}
+        </button>
         {/* 🏷 always-visible company reference (Jon 2026-10-09): what to tell sellers */}
         <div className="mt-1.5 space-y-0.5 text-[11px] font-semibold text-white/90">
           <div>🌐 freedom-offers.com</div>
