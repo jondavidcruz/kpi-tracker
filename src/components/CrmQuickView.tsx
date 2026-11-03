@@ -602,8 +602,10 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                         const isNote = e.kind === "note";
                         const isSms = e.kind === "sms"; // 🔵 blue iMessage-style card
                         const isEmail = e.kind === "email"; // 🔴 red Gmail-style card
+                        const isTask = e.kind === "task"; // ✅ green — matches the card + legend (Jon 2026-11-03)
+                        const isAppt = e.kind === "appt"; // 📅 red
                         return (
-                          <div key={e.id ?? i} data-tlrow data-kind={e.kind} className={`group/qn rounded-lg px-3 py-2 text-xs ring-1 ${isNote ? "border-l-4 border-amber-400 bg-amber-50 text-slate-800 ring-amber-200" : isSms ? "border-l-4 border-sky-400 bg-sky-50 text-slate-800 ring-sky-200" : isEmail ? "border-l-4 border-red-400 bg-red-50 text-slate-800 ring-red-200" : "bg-white text-slate-700 ring-slate-100"}`}>
+                          <div key={e.id ?? i} data-tlrow data-kind={e.kind} className={`group/qn rounded-lg px-3 py-2 text-xs ring-1 ${isNote ? "border-l-4 border-amber-400 bg-amber-50 text-slate-800 ring-amber-200" : isSms ? "border-l-4 border-sky-400 bg-sky-50 text-slate-800 ring-sky-200" : isEmail ? "border-l-4 border-red-400 bg-red-50 text-slate-800 ring-red-200" : isTask ? "border-l-4 border-emerald-400 bg-emerald-50 text-slate-800 ring-emerald-200" : isAppt ? "border-l-4 border-rose-400 bg-rose-50 text-slate-800 ring-rose-200" : "bg-white text-slate-700 ring-slate-100"}`}>
                             <span className="mr-1">{isNote ? "🟡" : rowIcon(e.kind, e.body)}</span>
                             {isNote && isHtmlNote(e.body)
                               ? <div className="mt-1 text-[13px] leading-relaxed [&_a]:text-indigo-600 [&_a]:underline [&_b]:font-bold [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-bold [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(e.body) }} />
@@ -617,7 +619,7 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                                 {e.transcript && <details className="text-[11px]"><summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">📄 Transcript</summary><div className="mt-1 max-h-48 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 p-2 text-slate-600 ring-1 ring-slate-100">{e.transcript}</div></details>}
                               </div>
                             )}
-                            <span className="ml-1 text-[9px] text-slate-400">{e.actor} · {new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                            <span className="ml-1 text-[9px] text-slate-400">{e.actor} · {new Date(e.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
                             {mine && <button onClick={() => { setEditNoteId(e.id!); }} title="Edit this note" className="ml-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-indigo-600">✎ edit</button>}
                             {mine && <button onClick={() => { if (confirm("Delete this note?")) { const fd = new FormData(); fd.set("id", e.id!); fd.set("oppId", d.id); submit(deleteCrmNoteAction)(fd); } }} title="Delete this note" className="ml-1 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover/qn:opacity-100 hover:text-red-600">🗑</button>}
                           </div>

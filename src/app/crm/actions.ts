@@ -504,12 +504,14 @@ export async function addCrmTaskAction(formData: FormData) {
   const contactId = String(formData.get("contactId") ?? "");
   const title = String(formData.get("title") ?? "").trim().slice(0, 200);
   if (!title) return;
+  const due = String(formData.get("due") ?? "").trim();
+  const assignedTo = String(formData.get("assignedTo") ?? "").trim() || me.name;
   const created = await db.crmTask.create({ data: {
-    oppId, contactId, title,
-    due: String(formData.get("due") ?? "").trim(),
-    assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name,
-    createdBy: me.name,
+    oppId, contactId, title, due, assignedTo, createdBy: me.name,
   } });
+  // 📝 Log it on the timeline so a scheduled task shows up (green) alongside calls/notes/appts
+  // with the exact time it was made (Jon 2026-11-03).
+  if (contactId) await logCrmEvent({ contactId, oppId, kind: "task", body: `Task: ${title}${due ? ` — due ${due}` : ""}${assignedTo && assignedTo !== me.name ? ` · for ${assignedTo.split(" ")[0]}` : ""}`, actor: me.name }).catch(() => {});
   const note = String(formData.get("note") ?? "").trim();
   if (note) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(created.id, note); }
   const dueTime = String(formData.get("dueTime") ?? "").trim(); // "HH:MM" — drives reminders

@@ -612,9 +612,13 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             const isSms = e.kind === "sms";
             // 🔴 Email reads like Gmail — red card — like SMS is blue and notes are yellow (Jon 2026-10-27).
             const isEmail = e.kind === "email";
+            // ✅ Task = green · 📅 Appointment = red — matched to the card buttons + legend so scheduled
+            // tasks/appts stand out in their own colors in the timeline (Jon 2026-11-03).
+            const isTask = e.kind === "task";
+            const isAppt = e.kind === "appt";
             return (
             <div key={e.id} data-tlrow data-kind={e.kind} data-note={e.kind === "note" ? "1" : "0"}>
-            <Card className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""} ${isManualNote ? "!border-amber-200 !bg-amber-50/70" : ""} ${isSms ? "!border-sky-200 !bg-sky-50/70" : ""} ${isEmail ? "!border-red-200 !bg-red-50/70" : ""}`}>
+            <Card className={`flex gap-2.5 p-3 ${e.kind === "system" ? "opacity-70" : ""} ${isManualNote ? "!border-amber-200 !bg-amber-50/70" : ""} ${isSms ? "!border-sky-200 !bg-sky-50/70" : ""} ${isEmail ? "!border-red-200 !bg-red-50/70" : ""} ${isTask ? "!border-emerald-200 !bg-emerald-50/70" : ""} ${isAppt ? "!border-rose-200 !bg-rose-50/70" : ""}`}>
               <span className="text-base">{isManualNote ? "🟡" : rowIcon(e.kind, e.body)}</span>
               <div className="min-w-0 flex-1">
                 {e.kind === "note"
