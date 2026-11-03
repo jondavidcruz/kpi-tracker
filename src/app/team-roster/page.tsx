@@ -39,7 +39,7 @@ function ageFrom(birthday: string, today: string): string {
   return String(age);
 }
 
-export default async function TeamRosterPage({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string; added?: string; welcomed?: string; welcomeerr?: string; adderr?: string }> }) {
+export default async function TeamRosterPage({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string; added?: string; welcomed?: string; welcomeerr?: string; adderr?: string; hire?: string; hireEmail?: string }> }) {
   const me = await getCurrentUser();
   if (!canAccessCSuite(me)) {
     return (
@@ -158,6 +158,7 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
                   <div className="ml-auto flex items-center gap-2">
                     <CopyLink path={`/assess/${a.token}`} label="Copy link" />
                     {done && <Link href="/onboarding#assessments" className="text-[11px] font-semibold text-violet-600 hover:underline">View full profile →</Link>}
+                    {done && <Link href={`/team-roster?hire=${encodeURIComponent(a.name)}${a.email ? `&hireEmail=${encodeURIComponent(a.email)}` : ""}#addmember`} className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700">✅ Hire →</Link>}
                     <form action={deleteAssessment}><input type="hidden" name="id" value={a.id} /><button className="text-[11px] text-slate-300 hover:text-red-600">remove</button></form>
                   </div>
                 </div>
@@ -170,16 +171,17 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
 
       {/* ➕ One-step add (Jon 2026-10-15): create the account (LOCKED onboarding mode)
           + roster card in one go — no more bouncing to Admin → Team + Onboarding. */}
-      <Card className="border-l-4 border-emerald-500 p-4">
+      <Card id="addmember" className={`border-l-4 p-4 ${sp.hire ? "border-emerald-500 ring-2 ring-emerald-300" : "border-emerald-500"}`}>
         <div className="mb-1 flex items-center gap-2">
           <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-700">STEP 2 · HIRED</span>
           <span className="text-sm font-extrabold text-slate-800">➕ Add a team member</span>
         </div>
+        {sp.hire && <div className="mb-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Pre-filled from candidate <b>{sp.hire}</b> — set their department + role and create the account.</div>}
         <div className="mb-2 text-[11px] text-slate-500">Creates their War Room account <b>locked to newbie basics</b> (onboarding) + their roster card below, in one step. They sign in with a magic link to their email — no password to set.</div>
         <form action={addTeamMemberAction} className="flex flex-wrap items-end gap-2">
           {(() => { const fld = "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"; return <>
-          <label className="flex flex-col"><span className={labelCls}>Full name</span><input name="name" required placeholder="Kyle Brown" className={`${fld} w-44`} /></label>
-          <label className="flex flex-col"><span className={labelCls}>Email (personal Gmail)</span><input name="email" type="email" required placeholder="kyle@gmail.com" className={`${fld} w-56`} /></label>
+          <label className="flex flex-col"><span className={labelCls}>Full name</span><input name="name" required defaultValue={sp.hire ?? ""} placeholder="Kyle Brown" className={`${fld} w-44`} /></label>
+          <label className="flex flex-col"><span className={labelCls}>Email (personal Gmail)</span><input name="email" type="email" required defaultValue={sp.hireEmail ?? ""} placeholder="kyle@gmail.com" className={`${fld} w-56`} /></label>
           <label className="flex flex-col"><span className={labelCls}>Department</span>
             <select name="position" className={`${fld} w-40`} defaultValue="acquisitions">
               <option value="acquisitions">Acquisitions</option>
