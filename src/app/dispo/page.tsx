@@ -568,7 +568,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-5">
-      <LiveRefresh seconds={20} />
+      <LiveRefresh seconds={90} />
       <SectionTitle
         title="🎯 Dispositions CRM"
         subtitle="Dispo's buyer side — same board the team uses on the Seller CRM. Developers + buyer agents are their own pipelines (not mixed with sellers); the Deals tab tracks buyer follow-ups per deal."

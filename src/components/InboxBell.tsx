@@ -112,7 +112,7 @@ export default function InboxBell() {
       const j = (await r.json()) as { numbers?: string[] };
       if (j.numbers?.length) setNumbers(j.numbers);
     }).catch(() => {});
-    const t = setInterval(poll, 10_000);
+    const t = setInterval(poll, 30_000);
     // 🔁 self-updating tabs (Jon 2026-10-12: Sharyn's hidden phone window ran
     // yesterday's code and ignored her answer click): every 5 min compare the
     // deployed sha — when it changes, hidden tabs reload themselves (never

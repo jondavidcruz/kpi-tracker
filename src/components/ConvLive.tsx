@@ -38,8 +38,8 @@ export default function ConvLive({ cid, lastAt }: { cid: string; lastAt: string 
         if (j.count !== base.current) { base.current = j.count; refresh(); }
       } catch { /* next tick */ }
     };
-    const t1 = setInterval(thread, 8_000);
-    const t2 = setInterval(inbox, 20_000);
+    const t1 = setInterval(thread, 15_000);
+    const t2 = setInterval(inbox, 30_000);
     const onVis = () => { if (document.visibilityState === "visible") { thread(); inbox(); } };
     document.addEventListener("visibilitychange", onVis);
     return () => { stop = true; clearInterval(t1); clearInterval(t2); document.removeEventListener("visibilitychange", onVis); };

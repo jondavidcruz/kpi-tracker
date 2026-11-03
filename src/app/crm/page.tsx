@@ -324,7 +324,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
   return (
     <div className="space-y-5">
-      <LiveRefresh seconds={20} />
+      <LiveRefresh seconds={90} />
       <SectionTitle
         title="🧲 Seller CRM — Acquisitions"
         subtitle="Every seller lead, GHL-style: pipeline, notes, tasks, appointments — calls & texts log themselves."

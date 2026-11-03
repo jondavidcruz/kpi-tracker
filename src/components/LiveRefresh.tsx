@@ -7,7 +7,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-export default function LiveRefresh({ seconds = 20 }: { seconds?: number }) {
+export default function LiveRefresh({ seconds = 90 }: { seconds?: number }) {
   const router = useRouter();
   const busy = useRef(false);
   useEffect(() => {
