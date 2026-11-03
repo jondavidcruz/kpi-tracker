@@ -204,8 +204,10 @@ export default function DialPad({ floating = false, owner = false }: { floating?
   const [endConfirm, setEndConfirm] = useState(false);
   // 🕐 Device-clock skew vs the server (Jon 2026-10-24): a wrong computer clock
   // made Michelle's calls get falsely blocked by the quiet-hours guard. We measure
-  // the offset once and (a) correct the guard with it, (b) warn her to fix the clock.
-  const [clockSkew, setClockSkew] = useState(0); // serverNow - clientNow, ms
+  // the offset and correct the guard with it. (The visible "fix your clock" banner
+  // was removed 2026-11-03 — it stuck around after Michelle fixed her clock; the
+  // correction below already keeps calls from being wrongly blocked.)
+  const [, setClockSkew] = useState(0); // serverNow - clientNow, ms — kept to trigger re-render on measure
   const clockSkewRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef(0);
@@ -338,8 +340,6 @@ export default function DialPad({ floating = false, owner = false }: { floating?
     document.addEventListener("visibilitychange", onFocus);
     return () => { clearInterval(id); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const clockOff = Math.abs(clockSkew) > 5 * 60_000; // >5 min = materially wrong
-  const clockOffLabel = () => { const m = Math.round(Math.abs(clockSkew) / 60000); const h = Math.floor(m / 60); const mm = m % 60; return `${h ? `${h}h ` : ""}${mm}m ${clockSkew > 0 ? "behind" : "ahead"}`; };
 
   // opportunity-card 📞 buttons land here
   useEffect(() => {
@@ -844,12 +844,6 @@ export default function DialPad({ floating = false, owner = false }: { floating?
           {callsMuted && (
             <span className="block border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-[11px] font-semibold text-slate-500">
               🔕 Calls are <b>muted on this window</b> — they&apos;ll ring in whichever window is set to <b>🔔 Rings here</b>. (Per-window setting.)
-            </span>
-          )}
-
-          {clockOff && (
-            <span className="block border-b border-amber-200 bg-amber-50 px-3.5 py-2 text-[11px] font-semibold text-amber-800">
-              ⚠️ Your computer&apos;s clock is <b>{clockOffLabel()}</b> the real time. Calls use the corrected time so they won&apos;t be wrongly blocked — but please fix it: open your computer&apos;s Date &amp; Time settings and turn on <b>“Set time automatically.”</b>
             </span>
           )}
 
