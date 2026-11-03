@@ -289,10 +289,13 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
           </select>
           <button onClick={() => { setSelecting((v) => !v); setSelected(new Set()); setStageScope(null); }} className={`rounded-lg px-2.5 py-1 font-bold ${selecting ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>☑ Select</button>
           {/* 🔑 What the card colors mean (Jon 2026-10-27: define task vs appt vs follow-up). */}
-          <span className="flex flex-wrap items-center gap-2 text-[9px] font-semibold text-slate-400" title="A card is tinted by what's due: 📅 Appointment = a scheduled meeting · ✅ Task = a to-do you assigned · 📞 Follow-up = a date to reach back out">
-            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" /> 📅 appt today</span>
-            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" /> ✅ task today</span>
-            <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-blue-500" /> 📞 follow-up due</span>
+          <span className="flex flex-wrap items-center gap-2 text-[9px] font-semibold text-slate-400">
+            <span className="flex cursor-help items-center gap-1" title="📅 Appointment — a scheduled meeting or call with the lead at a set DATE AND TIME (e.g. a listing walk-through Tue 2:00pm). The card turns RED on the day it's due.">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" /> 📅 appt today</span>
+            <span className="flex cursor-help items-center gap-1" title="✅ Task — a to-do you assign yourself or a teammate on this lead (e.g. 'send comps', 'pull title'). It's work to DO, not a meeting. The card turns GREEN when a task is due today.">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" /> ✅ task today</span>
+            <span className="flex cursor-help items-center gap-1" title="🔔 Follow-up — a date to REACH BACK OUT to the lead, with no set time (e.g. 'check back in 3 days'). The card turns BLUE when the follow-up is due or overdue.">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-blue-500" /> 🔔 follow-up due</span>
           </span>
         </span>
         <span className="relative">
@@ -491,20 +494,25 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     {/* GHL-style quick actions — popovers, zero page hops */}
                     <div className="relative mt-1.5 flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       {canCall && c.phone && (
+                        // 📞 Call — BRIGHT green so it's the most visible action (Jon 2026-11-03).
                         <button
                           type="button"
                           title={`Call ${c.contactName} from the browser (Telnyx)`}
                           onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: c.phone, name: c.contactName, oppId: c.id, contactId: c.contactId } }))}
-                          className="grid h-7 w-7 place-items-center rounded-md bg-emerald-50 text-[12px] ring-1 ring-emerald-200 hover:bg-emerald-100"
+                          className="grid h-7 w-7 place-items-center rounded-md bg-emerald-500 text-[12px] text-white shadow-sm ring-1 ring-emerald-600 hover:bg-emerald-600"
                         >📞</button>
                       )}
                       {canSms && c.phone && (
-                        <button type="button" title={c.smsUnread ? `${c.smsUnread} unread text${c.smsUnread > 1 ? "s" : ""} — open the thread` : "Text via our Telnyx number"} onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "sms" } }))} className="relative grid h-7 w-7 place-items-center rounded-md bg-sky-50 text-[12px] ring-1 ring-sky-200 hover:bg-sky-100">💬
+                        // 💬 Text — solid iMessage blue so it reads clearly (Jon 2026-11-03).
+                        <button type="button" title={c.smsUnread ? `${c.smsUnread} unread text${c.smsUnread > 1 ? "s" : ""} — open the thread` : "Text via our Telnyx number"} onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "sms" } }))} className="relative grid h-7 w-7 place-items-center rounded-md bg-[#007AFF] text-[12px] text-white shadow-sm ring-1 ring-[#007AFF] hover:bg-[#0069d9]">💬
                           {!!c.smsUnread && <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-0.5 text-[8px] font-extrabold text-white">{c.smsUnread}</span>}
                         </button>
                       )}
-                      <button type="button" title="Add a task" onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "tasks" } }))} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">✅</button>
-                      <button type="button" title="Book an appointment" onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "appts" } }))} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">📅</button>
+                      {/* task = GREEN · appointment = RED · follow-up = BLUE — matched to the legend so
+                          people associate the color with the action (Jon 2026-11-03). */}
+                      <button type="button" title="✅ Task — a to-do on this lead (e.g. send comps). Not a meeting." onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "tasks" } }))} className="grid h-7 w-7 place-items-center rounded-md bg-emerald-100 text-[12px] text-emerald-700 ring-1 ring-emerald-300 hover:bg-emerald-200">✅</button>
+                      <button type="button" title="📅 Appointment — a scheduled meeting/call at a set date & time." onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "appts" } }))} className="grid h-7 w-7 place-items-center rounded-md bg-red-100 text-[12px] text-red-700 ring-1 ring-red-300 hover:bg-red-200">📅</button>
+                      <button type="button" title="🔔 Follow-up — set a date to reach back out to this lead (turns the card blue when due)." onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "opp" } }))} className="grid h-7 w-7 place-items-center rounded-md bg-blue-100 text-[12px] text-blue-700 ring-1 ring-blue-300 hover:bg-blue-200">🔔</button>
                       <button type="button" title="Add a tag" onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "opp" } }))} className="grid h-7 w-7 place-items-center rounded-md bg-slate-50 text-[12px] ring-1 ring-slate-200 hover:bg-slate-100">🏷</button>
                       
                       {c.email && <button type="button" title={`Email ${c.contactName} (${c.email})`} onClick={() => window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id, tab: "email" } }))} className="grid h-7 w-7 place-items-center rounded-md bg-amber-50 text-[12px] ring-1 ring-amber-200 hover:bg-amber-100">✉️</button>}
