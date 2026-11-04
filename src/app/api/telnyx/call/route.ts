@@ -395,8 +395,8 @@ export async function POST(req: NextRequest) {
       // Re-check right before writing: a CONCURRENT recording.saved for the same call may have
       // finished and logged while this one was uploading (Jon 2026-10-27). If so, drop this copy.
       if (await recDupe()) { await recCrumb({ ev: "rec.outcome", result: "deduped-late", secs }); return NextResponse.json({ ok: true, deduped: "late" }); }
-      const { foldRecordingIntoDispo } = await import("@/lib/call-merge");
-      if (!(await foldRecordingIntoDispo(contact.id, recBody, recMeta).catch(() => false)))
+      const { foldRecordingIntoCall } = await import("@/lib/call-merge");
+      if (!(await foldRecordingIntoCall(contact.id, recBody, recMeta).catch(() => false)))
         await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "call", body: recBody, meta: recMeta, actor: rep || "recorder" });
       await recCrumb({ ev: "rec.outcome", result: "filed", hasLink: !!link, secs });
 

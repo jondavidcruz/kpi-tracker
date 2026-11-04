@@ -1322,9 +1322,9 @@ export async function dialerOutcomeAction(formData: FormData) {
     const nf = new Date(Date.now() + NEXT_DAYS[outcome] * 86400000).toISOString().slice(0, 10);
     await db.crmOpportunity.update({ where: { id: oppId }, data: { nextFollowUp: nf, ...(outcome === "not_interested" ? { stage: "nurture" } : {}) } });
     // 🧹 Fold into the call's recording entry if it's already there (one clean timeline row).
-    const { foldDispoIntoRecording } = await import("@/lib/call-merge");
+    const { foldDispoIntoCall } = await import("@/lib/call-merge");
     const summary = `📞 ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`;
-    if (!(await foldDispoIntoRecording(contactId, summary)))
+    if (!(await foldDispoIntoCall(contactId, summary)))
       await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer: ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`, actor: me.name });
   }
   // 🎙 Disposition decides whether a recording stays filed (Jon 2026-10-26): record it so a
@@ -1527,9 +1527,9 @@ export async function dialerOutcomeQuickAction(formData: FormData): Promise<void
   }
   // 🧹 Fold into the call's recording entry if it's already there (one clean timeline row).
   {
-    const { foldDispoIntoRecording } = await import("@/lib/call-merge");
+    const { foldDispoIntoCall } = await import("@/lib/call-merge");
     const summary = `📞 ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`;
-    if (!(await foldDispoIntoRecording(contactId, summary)))
+    if (!(await foldDispoIntoCall(contactId, summary)))
       await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer disposition: ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`, actor: me.name });
   }
   // 🎙 Disposition decides whether the recording stays filed (Jon 2026-10-26).
