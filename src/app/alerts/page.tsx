@@ -5,6 +5,7 @@ import { friendlyDate, todayStr, monthOf } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
 import { buildCoaching } from "@/lib/gap";
 import { findPipCandidates } from "@/lib/pip";
+import { findWatchItems } from "@/lib/watch";
 import { getSettings, getActiveReps } from "@/lib/data";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { reasonLabel } from "@/lib/alert-resolution";
@@ -14,7 +15,8 @@ import AlertInbox, { type AlertView } from "@/components/AlertInbox";
 export const dynamic = "force-dynamic";
 
 const TABS = [
-  { key: "open", label: "Open" },
+  { key: "watch", label: "⚠️ Watch" },
+  { key: "open", label: "All open" },
   { key: "accountability", label: "⚖️ Accountability" },
   { key: "resolved", label: "Resolved" },
   { key: "trends", label: "📊 Trends" },
@@ -37,7 +39,7 @@ export default async function AlertsPage({
     );
   }
   const sp = await searchParams;
-  const status = sp.status ?? "open";
+  const status = sp.status ?? "watch";
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
 
@@ -49,7 +51,7 @@ export default async function AlertsPage({
 
   return (
     <div className="space-y-5">
-      <SectionTitle title="Alerts" subtitle="Off-target KPIs — resolve each with a reason and a fix" accent="bg-red-400" />
+      <SectionTitle title="KPI Watch" subtitle="The few KPIs with a SUSTAINED problem — streaks and chronic misses, not every daily blip. Scan this weekly." accent="bg-red-400" />
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (
@@ -66,7 +68,9 @@ export default async function AlertsPage({
         ))}
       </div>
 
-      {status === "trends" ? (
+      {status === "watch" ? (
+        <WatchView today={today} />
+      ) : status === "trends" ? (
         <TrendsView today={today} />
       ) : status === "accountability" ? (
         <AccountabilityView today={today} />
@@ -346,6 +350,37 @@ async function TrendsView({ today }: { today: string }) {
           </tbody>
         </table>
       </Card>
+    </div>
+  );
+}
+
+// ⚠️ The Watch list — only SUSTAINED problems (streaks / chronic misses), worst-first.
+// This is the default landing so managers see the real issues, not a daily miss feed.
+async function WatchView({ today }: { today: string }) {
+  const items = await findWatchItems(today);
+  if (items.length === 0) {
+    return <Card className="p-10 text-center text-slate-400">No sustained KPI problems right now. 🎉<div className="mt-1 text-xs">A KPI lands here only after a 3+ day miss streak or missing goal most of the last ~2 weeks — single off-days don&apos;t.</div></Card>;
+  }
+  return (
+    <div className="space-y-2.5">
+      <p className="text-xs text-slate-500">{items.length} rep-KPI{items.length === 1 ? "" : "s"} need attention. Each one is a pattern (streak or chronic miss), not a one-off — worth a coaching conversation, not a daily ping.</p>
+      {items.map((w) => (
+        <Card key={`${w.userId}-${w.kpiKey}`} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 p-3.5">
+          <div className="min-w-[9rem]">
+            <div className="text-sm font-bold text-slate-800">{w.userName}</div>
+            <div className="text-[12px] text-slate-500">{w.emoji} {w.kpiName}</div>
+          </div>
+          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${w.streak >= 4 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>{w.reason}</span>
+          <div className="text-[12px] text-slate-500">
+            last <span className="font-semibold tabular-nums text-slate-700">{w.lastValue ?? "—"}</span> vs goal <span className="font-semibold tabular-nums text-slate-700">{w.goal}</span>
+            {w.avgShort > 0 ? <> · avg <span className="font-semibold tabular-nums text-red-600">-{Math.round(w.avgShort)}</span> short</> : null}
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            {w.pip && <Link href="/pip" className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700">Open a plan →</Link>}
+            <Link href={`/review/${w.userId}`} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">View record →</Link>
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }
