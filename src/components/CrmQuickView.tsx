@@ -662,45 +662,70 @@ const UW_TABS: Record<string, string> = {
 // 🏞 Land offer play (Jon 2026-11-03): no underwriting calculator — just the fast
 // two-step. Reads the comps + offers the rep typed on the Land financial form and shows
 // the cash spread at a glance + the novation fallback. Pure display over formData.
-// 💵 Novation closing haircut (Jon 2026-11-04): on a novation WE list it, so an agent
-// commission + escrow come off the top — budget 10%. Cash, the end buyer pays everything.
-const NOVATION_HAIRCUT = 0.10;
+// 💵 Land calculator constants (Jon 2026-11-04). Cash offer suggestion = 40% below the LOW
+// sold comp. Novation: we list it, so agent + escrow take 10% off the top; we back the seller
+// offer out of the net by keeping a set spread (default $15k, editable per deal).
+const CASH_BELOW_LOW = 0.40;        // suggested cash offer = (1 - 0.40) × low
+const NOVATION_HAIRCUT = 0.10;      // agent + escrow off the list price
+const DEFAULT_NOV_SPREAD = 15000;   // our profit target on a novation
 
 function LandOfferBlock({ d }: { d: Payload }) {
   const fin = (d.formData?.financial ?? {}) as Record<string, string | string[]>;
   const num = (s: unknown) => parseLooseMoney(typeof s === "string" ? s : "") ?? 0;
   const money = (n: number) => fmtDollars(n);
   const low = num(fin.compLow), high = num(fin.compHigh);
-  const cash = num(fin.ourOffer), listedRaw = String(fin.listedNow ?? "");
+  const waterfront = String(fin.waterfront ?? "").includes("Waterfront");
+  const cash = num(fin.ourOffer);
   const listingLink = String(fin.listingLink ?? "").trim();
   const cashResp = String(fin.sellerResponse ?? "");
   const cashNo = cashResp.includes("Rejected") || cashResp.includes("Countered");
-  const belowPct = low && cash ? Math.round((1 - cash / low) * 100) : 0;
-  const novation = num(fin.novationList);
-  const novationNet = novation ? Math.round(novation * (1 - NOVATION_HAIRCUT)) : 0; // after agent + escrow
+
+  // 🅐 CASH — suggest 40% below the low sold; assigning near the low is our spread.
+  const cashSuggest = low ? Math.round(low * (1 - CASH_BELOW_LOW)) : 0;
+  const cashUsed = cash || cashSuggest;
+  const cashSpread = low && cashUsed ? low - cashUsed : 0; // room if we assign near the low sold
+
+  // 🅑 NOVATION — list near competitors, −10% off top, keep a set spread; back out the seller offer.
+  const list = num(fin.novationList) || num(fin.listedNow);
+  const net = list ? Math.round(list * (1 - NOVATION_HAIRCUT)) : 0;
+  const spread = num(fin.novSpread) || DEFAULT_NOV_SPREAD;
+  const novOffer = net ? Math.max(0, net - spread) : 0;   // what we offer the seller
+  const novProfit = net ? Math.min(spread, net) : 0;      // what we keep
+
   const linkHref = /^https?:\/\//i.test(listingLink) ? listingLink : listingLink ? `https://${listingLink}` : "";
   return (
     <div className="space-y-2 rounded-xl bg-lime-50 p-3 text-[12px] ring-1 ring-lime-200">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-extrabold text-lime-900">🏞 Land offer play — no calculator needed</span>
+        <span className="text-xs font-extrabold text-lime-900">🏞 Land calculator</span>
+        {waterfront && <span className="rounded-md bg-cyan-100 px-1.5 py-0.5 text-[10px] font-bold text-cyan-700 ring-1 ring-cyan-200">🌊 Waterfront</span>}
         {(low || high) ? <span className="ml-auto rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-lime-800 ring-1 ring-lime-200">Sold {low ? money(low) : "?"} → {high ? money(high) : "?"}</span> : null}
       </div>
       <div className="grid gap-1.5 sm:grid-cols-2">
+        {/* CASH */}
         <div className="rounded-lg bg-white/70 p-2 ring-1 ring-lime-100">
-          <div className="font-bold text-lime-800">🅐 Cash first — buyer pays all closing</div>
-          <div className="text-slate-600">Offer <b>well below</b> the lowest sold comp.</div>
-          {cash ? <div className="mt-0.5 text-slate-700">Our cash: <b>{money(cash)}</b>{belowPct > 0 && <span className="text-emerald-700"> · {belowPct}% below the low sold</span>}</div> : <div className="mt-0.5 text-slate-400">Enter the cash offer below.</div>}
+          <div className="font-bold text-lime-800">🅐 Cash — buyer pays all closing</div>
+          {low ? (
+            <>
+              <div className="mt-0.5 text-slate-700">Suggested offer: <b className="text-emerald-700">{money(cashSuggest)}</b> <span className="text-slate-400">(40% below the {money(low)} low)</span></div>
+              {cash > 0 && cash !== cashSuggest && <div className="text-slate-600">Your offer: <b>{money(cash)}</b></div>}
+              <div className="mt-0.5 text-slate-600">Assign near the low → spread ≈ <b className="text-emerald-700">{money(cashSpread)}</b></div>
+            </>
+          ) : <div className="mt-0.5 text-slate-400">Enter the sold range to size the cash offer.</div>}
         </div>
+        {/* NOVATION */}
         <div className={`rounded-lg p-2 ring-1 ${cashNo ? "bg-white ring-amber-200" : "bg-white/50 ring-lime-100"}`}>
-          <div className="font-bold text-lime-800">🅑 Novation — take 10% off the top</div>
-          <div className="text-slate-600">We list it, so agent + escrow come out. List near competitors&apos; prices.</div>
-          {novation ? (
-            <div className="mt-0.5 text-slate-700">List <b>{money(novation)}</b> → net ≈ <b className="text-emerald-700">{money(novationNet)}</b> <span className="text-slate-400">(after −10%)</span></div>
-          ) : cashNo ? <div className="mt-0.5 font-semibold text-amber-700">Cash was a no — set the novation list price below.</div> : <div className="mt-0.5 text-slate-400">{listedRaw ? "Listings noted ✓" : "Add the on-market listings below."}</div>}
+          <div className="font-bold text-lime-800">🅑 Novation — we list it, −10% off top</div>
+          {list ? (
+            <>
+              <div className="mt-0.5 text-slate-600">List <b>{money(list)}</b> → net <b>{money(net)}</b> <span className="text-slate-400">(−10%)</span></div>
+              <div className="text-slate-700">Offer the seller: <b className="text-emerald-700">{money(novOffer)}</b> <span className="text-slate-400">(keep {money(spread)})</span></div>
+              <div className="text-slate-600">Our profit: <b className="text-emerald-700">{money(novProfit)}</b></div>
+            </>
+          ) : cashNo ? <div className="mt-0.5 font-semibold text-amber-700">Cash was a no — set the novation list price below.</div> : <div className="mt-0.5 text-slate-400">Enter the list price to back out the seller offer.</div>}
         </div>
       </div>
       {linkHref && <div className="text-[11px]"><a href={linkHref} target="_blank" rel="noopener noreferrer" className="font-semibold text-lime-800 underline">🔗 Competitor listing(s) ↗</a></div>}
-      <div className="text-[10px] text-lime-700/80">Cash = buyer covers closing, no commissions. Novation = we net ~90% after agent + escrow. Full underwriting is on <a href={`/underwriting?address=${encodeURIComponent(d.contact.address || d.title)}&opp=${encodeURIComponent(d.id)}`} target="_blank" className="font-semibold underline">the calculator ↗</a> if you ever want it.</div>
+      <div className="text-[10px] text-lime-700/80">Numbers update as you fill the fields below. Cash = buyer covers closing, no commissions. Novation = we net ~90% after agent + escrow and keep the spread you set.</div>
     </div>
   );
 }

@@ -137,17 +137,17 @@ export const LAND_FINANCIAL_FIELDS: FormField[] = [
   { key: "liens", label: "Liens / back taxes? $", type: "money", hint: "Seller usually pays these off at closing" },
   // ── Comps: what SOLD and what's LISTED (the only research we do on land) ──
   // ① ONE sold range, always $low – $high (Jon 2026-11-04). Keeps the old compLow/compHigh keys.
-  { key: "compSold", label: "① Comparable SOLD range (low → high) $", type: "moneyrange", keyLow: "compLow", keyHigh: "compHigh", hint: "The cheapest and the top similar lots that SOLD nearby", sensitive: true },
-  { key: "compWaterRange", label: "Waterfront sold range $", type: "moneyrange", keyLow: "compWaterLow", keyHigh: "compWaterHigh", hint: "What waterfront lots sold for — low to high", sensitive: true },
-  { key: "compDryRange", label: "Non-waterfront sold range $", type: "moneyrange", keyLow: "compDryLow", keyHigh: "compDryHigh", hint: "What non-waterfront lots sold for — low to high", sensitive: true },
-  { key: "listedNow", label: "② On the market NOW — competitor list prices $", type: "text", hint: "Roughly what comparable lots are LISTED for now — this sets the novation list price", sensitive: true },
+  { key: "compSold", label: "① Comparable SOLD range (low → high) $", type: "moneyrange", keyLow: "compLow", keyHigh: "compHigh", hint: "The cheapest and the top similar lots that SOLD nearby — comp against the SAME kind (waterfront vs not)", sensitive: true },
+  { key: "waterfront", label: "Is this lot waterfront?", type: "select", options: ["Not waterfront", "🌊 Waterfront"], sensitive: true },
+  { key: "listedNow", label: "② On the market NOW — competitor list prices $", type: "money", hint: "Roughly what comparable lots are LISTED for now — this sets the novation list price", sensitive: true },
   { key: "listingLink", label: "Listing link", type: "text", hint: "Paste the Zillow/Redfin/LandWatch listing(s) you're pricing against", sensitive: true },
   { key: "compNotes", label: "Comps source notes", type: "textarea", hint: "Zillow/Redfin SOLD → Lots/Land search, or paste the comps you pulled", sensitive: true },
-  // ── Step 1: CASH offer, well below the solds ──
-  { key: "ourOffer", label: "🅐 CASH offer $ (well below the solds)", type: "money", hint: "Lead low — cash, we cover closing, no commissions", sensitive: true },
+  // ── Step 1: CASH offer, well below the solds (auto-suggested at 40% below the LOW sold) ──
+  { key: "ourOffer", label: "🅐 CASH offer $ (we suggest 40% below the low sold)", type: "money", hint: "Lead low — cash, we cover closing, no commissions", sensitive: true },
   { key: "sellerResponse", label: "Seller response to cash", type: "select", options: ["— not offered yet", "✅ Accepted", "🔁 Countered", "❌ Rejected", "🤔 Thinking about it"], sensitive: true },
-  // ── Step 2: NOVATION fallback — list near what competitors list for (−10% off the top) ──
+  // ── Step 2: NOVATION fallback — list near competitors (−10% off the top), keep a set spread ──
   { key: "novationList", label: "🅑 NOVATION list price $ (≈ competitor listings)", type: "money", hint: "If cash is a no — list near the 'on the market now' prices. We auto-take 10% off for agent + escrow.", sensitive: true },
+  { key: "novSpread", label: "Spread we want to keep (novation) $", type: "money", hint: "Our profit target. Blank = $15,000. The calculator backs into the seller offer from this.", sensitive: true },
   { key: "novationResponse", label: "Seller response to novation", type: "select", options: ["— not offered yet", "✅ On board", "🤔 Thinking about it", "❌ No"], sensitive: true },
   { key: "sellerNumber", label: "Seller's number — counter / will take $", type: "money", sensitive: true },
   { key: "confidence", label: "Deal confidence", type: "select", options: ["🔥 Hot — ready now", "Warm — needs the right number", "Cold — long nurture"], sensitive: true },
