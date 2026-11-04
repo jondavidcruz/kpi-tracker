@@ -124,7 +124,6 @@ export default function Sidebar({
     ] },
     { label: "Acquisitions", items: [
       { href: "/crm", label: "Seller CRM", Icon: Phone },
-      { href: "/crm/next", label: "Next Up", Icon: Zap },
       { href: "/crm/conversations", label: "Conversations", Icon: MessagesSquare },
       { href: "/crm/tasks?dept=acquisitions", label: "Tasks", Icon: ListChecks, badge: dueTasks },
       { href: "/crm/contacts?dept=acq", label: "Contacts", Icon: Contact },
@@ -162,7 +161,6 @@ export default function Sidebar({
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/report", label: "KPI Reports", Icon: FileText },
       { href: "/kpi-audit", label: "KPI Verification", Icon: ShieldCheck, csuiteOnly: true },
-      { href: "/kpi-sources", label: "KPI Sources", Icon: ScrollText },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/lead-roi", label: "Lead ROI", Icon: TrendingUp },
       { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
@@ -190,6 +188,8 @@ export default function Sidebar({
       { href: "/team-360", label: "Team 360", Icon: Sparkles },
     ] },
     { label: "System Settings", items: [
+      { href: "/admin#kpis", label: "KPIs & Goals", Icon: Target, csuiteOnly: true },
+      { href: "/kpi-sources", label: "KPI Sources", Icon: ScrollText, managerOnly: true },
       { href: "/crm/automations", label: "Automations", Icon: Zap, csuiteOnly: true },
       { href: "/crm/pipelines", label: "Pipelines", Icon: Workflow, csuiteOnly: true },
       { href: "/crm/access", label: "Comms Access", Icon: KeyRound, csuiteOnly: true },

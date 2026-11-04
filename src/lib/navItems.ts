@@ -18,7 +18,6 @@ export const NAV_GROUPS: NavGroup[] = [
   ] },
   { group: "Acquisitions", items: [
     { href: "/crm", label: "Seller CRM", gate: "all" },
-    { href: "/crm/next", label: "Next Up", gate: "all" },
     { href: "/crm/conversations", label: "Conversations", gate: "all" },
     { href: "/crm/tasks?dept=acquisitions", label: "Tasks", gate: "all" },
     { href: "/crm/contacts?dept=acq", label: "Contacts", gate: "all" },
@@ -53,7 +52,6 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/entry", label: "Enter KPIs", gate: "all" },
     { href: "/report", label: "KPI Reports", gate: "all" },
     { href: "/kpi-audit", label: "KPI Verification", gate: "csuite" },
-    { href: "/kpi-sources", label: "KPI Sources", gate: "all" },
     { href: "/analytics", label: "Analytics", gate: "manager" },
     { href: "/lead-roi", label: "Lead ROI", gate: "all" },
     { href: "/internet", label: "Internet Speed", gate: "manager" },
@@ -81,6 +79,8 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/team-360", label: "Team 360", gate: "all" },
   ] },
   { group: "System Settings", items: [
+    { href: "/admin#kpis", label: "KPIs & Goals", gate: "csuite" },
+    { href: "/kpi-sources", label: "KPI Sources", gate: "manager" },
     { href: "/crm/automations", label: "Automations", gate: "csuite" },
     { href: "/crm/pipelines", label: "Pipelines", gate: "csuite" },
     { href: "/crm/access", label: "Comms Access", gate: "csuite" },

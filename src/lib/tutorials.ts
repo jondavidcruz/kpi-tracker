@@ -28,7 +28,7 @@ export const TUTORIAL_CHECKLIST: Record<string, string[]> = {
     "Underwriting a land deal (the calculator, MAO, exits)",
     "Making the offer + sending the PandaDoc",
     "Moving a lead through the pipeline + picking the stage",
-    "Follow-up cadence + using Next Up / Tasks",
+    "Follow-up cadence + working the dialer due queue / Tasks",
     "Logging your KPIs (Enter KPIs)",
   ],
   Dispositions: [

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
 import { POSITIONS } from "@/lib/roles";
 
@@ -43,6 +43,9 @@ const LEGEND = [
 export default async function KpiSourcesPage() {
   const me = await getCurrentUser();
   if (!me) return <Card className="mx-auto max-w-md p-8 text-center">Please sign in.</Card>;
+  // 🔒 Leadership-only (Jon 2026-11-03): KPI Sources is now a config/reference surface in
+  // System Settings, not a rep-facing page — gate it so hiding the nav link is a real lock.
+  if (!isManager(me)) return <Card className="mx-auto max-w-md p-8 text-center text-slate-400">KPI Sources is for managers and leadership.</Card>;
   const kpis = await db.kpi.findMany({ where: { active: true, scope: "per_rep" }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
 
   return (

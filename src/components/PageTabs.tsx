@@ -11,10 +11,23 @@ export default function PageTabs({ id, tabs, children }: { id: string; tabs: Tab
   const storageKey = `pageTabs:${id}`;
 
   useEffect(() => {
+    // Deep-link wins over the remembered tab: #<key> or ?tab=<key> (e.g. /admin#kpis
+    // opens the KPIs tab from the System Settings → "KPIs & Goals" shortcut, Jon 2026-11-03).
+    const fromUrl = () => {
+      const hash = window.location.hash.replace(/^#/, "");
+      const qp = new URLSearchParams(window.location.search).get("tab") ?? "";
+      const key = tabs.some((t) => t.key === hash) ? hash : tabs.some((t) => t.key === qp) ? qp : "";
+      return key;
+    };
+    const urlKey = fromUrl();
+    if (urlKey) { setActive(urlKey); return; }
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved && tabs.some((t) => t.key === saved)) setActive(saved);
     } catch { /* default tab */ }
+    const onHash = () => { const k = fromUrl(); if (k) pick(k); };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
