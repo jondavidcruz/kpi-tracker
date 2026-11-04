@@ -36,7 +36,6 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/entry": "enter kpis log numbers bulk lead import",
   "/deals": "pipeline dispositions",
   "/dispo": "dispositions crm kanban follow-ups follow up buyer agents developers board sell land then sign",
-  "/dispo?tab=today": "dispo command center today board run your day offers due follow-ups hot buyers replies stale",
   "/whats-new": "whats new what's new feature updates how to use training rollout release notes",
   "/sop/dispo": "dispo sop standard operating procedure pre-contract run sheet gates checklist packet cascade marie sharyn",
   "/sop/list-recycle": "list recycle sop marketing pull dial recycle dealmachine direct rei exhausted lists when to pull new list market research sift import",
@@ -133,7 +132,6 @@ export default function Sidebar({
       { href: "/sop/acquisitions", label: "Acquisitions SOP", Icon: BookOpen, external: true },
     ] },
     { label: "Dispositions", items: [
-      { href: "/dispo?tab=today", label: "Dispo Command Center", Icon: LayoutDashboard, marketingOrManager: true },
       { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOrManager: true },
       { href: "/crm/conversations?dept=dispo", label: "Dispo Conversations", Icon: MessagesSquare, marketingOrManager: true },
       { href: "/crm/tasks?dept=dispositions", label: "Dispo Tasks", Icon: ListChecks, marketingOrManager: true },
