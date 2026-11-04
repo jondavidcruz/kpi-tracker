@@ -5148,3 +5148,21 @@ export async function recordPlatformUsageAction(formData: FormData) {
   revalidatePath("/comms-health");
   redirect("/comms-health?usagesaved=1#usage");
 }
+
+// 🎉 Federal-holiday day-off toggles for the time card (Jon 2026-11-04). Managers mark each
+// holiday as a team day off or a working day; stored as a date→bool override in Resource.
+export async function setHolidayOffAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const date = String(formData.get("date") ?? "").trim();
+  const off = String(formData.get("off") ?? "") === "1";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const row = await db.resource.findFirst({ where: { category: "__holidays__" } });
+  let map: Record<string, boolean> = {};
+  try { map = row?.description ? JSON.parse(row.description) : {}; } catch { map = {}; }
+  map[date] = off;
+  const payload = JSON.stringify(map);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
+  else await db.resource.create({ data: { title: "holidays", category: "__holidays__", url: "", description: payload } });
+  revalidatePath("/schedule");
+}

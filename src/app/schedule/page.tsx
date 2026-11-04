@@ -8,6 +8,8 @@ import { workCapAt, shiftEndLabel } from "@/lib/shift";
 import { deleteOutageAction, requestTimeOff, setTimeOffStatus, deleteTimeOff, addAvailability, deleteAvailability, reportOutage, deleteOutage, startOutage, endOutage, startBreakFor, endBreakFor, endShiftFor, logCompletedBreak, punch } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
+import HolidaysPanel from "@/components/HolidaysPanel";
+import { upcomingHolidays } from "@/lib/holidays";
 import TimeClock from "@/components/TimeClock";
 import BreakHistory, { type OutageView } from "@/components/BreakHistory";
 import ShiftBar, { ShiftBarLegend } from "@/components/ShiftBar";
@@ -38,6 +40,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const month = monthOf(today);
   const mb = monthBounds(today);
   const manager = isManager(me);
+
+  // 🎉 Upcoming federal holidays + Jon's per-holiday off/work overrides (no migration).
+  const holidayRow = await db.resource.findFirst({ where: { category: "__holidays__" } }).catch(() => null);
+  let holidayOverrides: Record<string, boolean> = {};
+  try { holidayOverrides = holidayRow?.description ? JSON.parse(holidayRow.description) : {}; } catch { holidayOverrides = {}; }
+  const holidayRows = upcomingHolidays(today, holidayOverrides, 6);
 
   // Part-time / irregular members (Ethan) get a focused personal screen: set the
   // days they can work + request time off. No team board.
@@ -169,6 +177,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             </div>
           ))}
         </Card>
+
+        {holidayRows.length > 0 && (
+          <Card className="p-3">
+            <div className="mb-2 text-sm font-bold text-slate-700">🎉 Upcoming holidays</div>
+            <HolidaysPanel holidays={holidayRows} canEdit={manager} />
+          </Card>
+        )}
       </div>
     );
   }
@@ -313,6 +328,18 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <PresenceBoard initial={people} />
         </Card>
       </section>
+
+      {/* 🎉 Federal holidays — see what's coming; managers mark each off or working */}
+      {holidayRows.length > 0 && (
+        <section>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h3 className="text-sm font-bold text-slate-700">🎉 Holidays <span className="ml-1 font-normal text-slate-400">— {manager ? "mark each a team day off or a working day" : "team days off"}</span></h3>
+          </div>
+          <Card className="p-3">
+            <HolidaysPanel holidays={holidayRows} canEdit={manager} />
+          </Card>
+        </section>
+      )}
 
       {/* OWNER: broadcast your own status (you're not on the pay clock) */}
       {isOwner(me) && (
