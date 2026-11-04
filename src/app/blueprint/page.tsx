@@ -77,7 +77,7 @@ const SECTIONS: Section[] = [
       { path: "/c-suite", name: "C-Suite", what: "Financials, payroll, roadmap — hard-locked to 4 named people, no toggle grants it.", data: "C-suite lock in auth.ts" },
       { path: "/admin", name: "Admin", what: "Users, per-person nav access (hide any section), KPI installer, goal recalibration.", data: "User.navHidden + RESTRICTED_NAV" },
       { path: "/ai-updates", name: "AI Updates", what: "The app improves itself: AI proposes upgrades nightly, owner approves, agents build.", data: "Suggestion queue + scheduled agents" },
-      { path: "/blueprint", name: "Blueprint", what: "This page — the product spec for the future SaaS.", data: "static" },
+      { path: "/blueprint", name: "War Room Guide", what: "This page — your map to every part of the War Room: what each area is for and how a deal flows through it.", data: "static" },
       { path: "— Cortana", name: "Cortana Assistant", what: "AI bot on every page: analyzes the open screen, doubles as the tutorial, audit-logged.", data: "Anthropic API" },
     ],
   },
@@ -85,12 +85,17 @@ const SECTIONS: Section[] = [
 
 export default async function BlueprintPage() {
   const me = await getCurrentUser();
-  if (!me || !isCSuitePerson(me)) return <Card className="p-10 text-center text-slate-400">🔒 Owner's suite only.</Card>;
+  if (!me) return <Card className="p-10 text-center text-slate-400">Please sign in.</Card>;
+  const leader = isCSuitePerson(me);
   return (
     <div className="space-y-6">
-      <SectionTitle title="🗺 War Room Blueprint" subtitle="Every room, what it does, and the data behind it — this doubles as the product spec for the day we sell this as software." accent="bg-brand-gold" />
+      <SectionTitle title="📖 War Room Guide" subtitle="The whole War Room drawn as a building — what every area is for and how a deal travels from first call to profit. New here? Start by clicking any room." accent="bg-brand-gold" />
       <Card className="p-4 text-sm leading-relaxed text-slate-600">
-        <b className="text-slate-800">Productization thesis:</b> one login replaces GHL (CRM+phones) + spreadsheet scorecards + Direct REI drips + separate schedulers. The sellable unit is a <b>vertical operating system for land/wholesale teams</b>: KPIs with WHY, a seller CRM with built-in telephony, 24-hour dispo workflow, and a team OS — pre-wired to Telnyx, Resend, Google, PandaDoc. Multi-tenant work needed later: org table + per-org env + billing. Everything below already runs in production for Freedom Offers.
+        {leader ? (
+          <><b className="text-slate-800">Where this is going:</b> one login replaces GHL (CRM + phones), spreadsheet scorecards, Direct REI drips, and separate schedulers — a single operating system for a land/wholesale team: KPIs with the WHY, a seller CRM with built-in calling/texting, the 24-hour dispo workflow, and the team OS, all pre-wired to Telnyx, Resend, Google and PandaDoc. Everything below already runs in production for Freedom Offers.</>
+        ) : (
+          <><b className="text-slate-800">👋 Welcome.</b> This is your map to the whole War Room. Each wing below is an area of the business; each room is a page you can open. Click any room to read what it does and walk straight in — or tap <b>“follow a deal”</b> to watch one deal move from the first call all the way to closing. When something on the app is unclear, come back here.</>
+        )}
       </Card>
       <BlueprintMap sections={SECTIONS} />
     </div>

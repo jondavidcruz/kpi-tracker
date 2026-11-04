@@ -192,10 +192,10 @@ export default function Sidebar({
       { href: "/expenses", label: "Profit & Loss Report", Icon: Receipt, csuiteOnly: true },
       { href: "/timecard", label: "Payroll", Icon: Wallet, csuiteOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, csuiteOnly: true },
-      { href: "/blueprint", label: "Blueprint", Icon: Compass, csuiteOnly: true },
       { href: "/land-master", label: "Land Master Plan", Icon: Map, csuiteOnly: true },
     ] },
     { label: "Requests & Support", items: [
+      { href: "/blueprint", label: "War Room Guide", Icon: Compass },
       { href: "/account", label: "My Account & Signature", Icon: Settings },
       { href: "/tickets", label: "Requests", Icon: Ticket, badge: newTickets },
       { href: "/software", label: "Software & Logins", Icon: KeyRound },

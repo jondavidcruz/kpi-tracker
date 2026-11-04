@@ -297,11 +297,6 @@ const HELP: Record<string, Topic> = {
     intro: "Request a change to the War Room.",
     steps: ["Describe what you want changed or added — it's tracked like a ticket."],
   },
-  "/roadmap": {
-    title: "Roadmap",
-    intro: "What's shipped and what's coming.",
-    steps: ["See delivered features and what's planned next."],
-  },
   "/process": {
     title: "Process Map",
     intro: "The visual deal pipeline, A→Z.",

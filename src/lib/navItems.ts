@@ -88,10 +88,10 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/expenses", label: "Profit & Loss Report", gate: "csuite" },
     { href: "/timecard", label: "Payroll", gate: "csuite" },
     { href: "/team-roster", label: "Team Roster", gate: "csuite" },
-    { href: "/blueprint", label: "Blueprint", gate: "csuite" },
     { href: "/land-master", label: "Land Master Plan", gate: "csuite" },
   ] },
   { group: "Requests & Support", items: [
+    { href: "/blueprint", label: "War Room Guide", gate: "all" },
     { href: "/account", label: "My Account & Signature", gate: "all" },
     { href: "/tickets", label: "Requests", gate: "all" },
     { href: "/software", label: "Software & Logins", gate: "all" },
@@ -110,7 +110,7 @@ export const NEW_REP_ALLOWED = new Set<string>([
   "/entry", "/report",                                                 // Performance
   "/ai-training", "/call-scoring", "/scripts", "/glossary", "/tutorials", // Coaching
   "/rocks", "/vto", "/team-360", "/stoplight",                         // EOS
-  "/tickets", "/ai-champion",                                          // Requests & Support (no Software & Logins by default — Jon 2026-08-26)
+  "/blueprint", "/tickets", "/ai-champion",                                       // Requests & Support (no Software & Logins by default — Jon 2026-08-26)
 ]);
 
 /** navHidden JSON for a freshly created rep — everything not in the template. */
