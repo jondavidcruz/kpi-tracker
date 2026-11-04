@@ -150,7 +150,9 @@ export default function DialPad({ floating = false, owner = false }: { floating?
   // 📣 cross-tab ring (Jon 2026-10-12: Sharyn heard her OTHER tab ringing but
   // saw nothing on the tab she was looking at): the leader tab broadcasts
   // incoming calls to every sibling tab; any tab can answer/decline remotely.
-  const [remoteIncoming, setRemoteIncoming] = useState<{ number: string } | null>(null);
+  // 📲 Inbound ringing in another tab. `name` is the caller (or a status line); `number` and
+  // `deptLabel` show stacked under it so nothing gets cut off (Jon 2026-11-04).
+  const [remoteIncoming, setRemoteIncoming] = useState<{ name: string; number?: string; deptLabel?: string } | null>(null);
   // 🔕 Per-WINDOW call mute (Jon 2026-10-29): with several windows open, set the ones you
   // don't want ringing to "muted" so only your chosen window rings. Stored in sessionStorage
   // = per tab/window (localStorage would mute every tab). Muted windows show no banner, no
@@ -618,7 +620,7 @@ export default function DialPad({ floating = false, owner = false }: { floating?
       bcRef.current = bc;
       bc.onmessage = (ev: MessageEvent<{ t?: string; number?: string }>) => {
         const m = ev.data ?? {};
-        if (m.t === "incoming" && !leaderRef.current && !callsMutedRef.current) { const mm = m as { name?: string; deptLabel?: string }; setRemoteIncoming({ number: [mm.name || m.number || "unknown", mm.deptLabel].filter(Boolean).join(" · ") }); setOpen(true); }
+        if (m.t === "incoming" && !leaderRef.current && !callsMutedRef.current) { const mm = m as { name?: string; deptLabel?: string }; setRemoteIncoming({ name: mm.name || m.number || "unknown", number: mm.name ? m.number : undefined, deptLabel: mm.deptLabel }); setOpen(true); }
         if (m.t === "incoming-clear") { setRemoteIncoming((cur) => { if (cur) checkWhoAnswered(); return null; }); }
         if (m.t === "answer" && leaderRef.current) answerIncomingRef.current?.();
         if (m.t === "decline" && leaderRef.current) declineIncomingRef.current?.();
@@ -656,7 +658,7 @@ export default function DialPad({ floating = false, owner = false }: { floating?
       const age = d.at ? Date.now() - Date.parse(d.at) : 99_000;
       if (age > 32_000) return;
       if (incomingCallRef.current) return; // this tab is ringing natively already
-      setRemoteIncoming((cur) => cur ?? { number: d.name || d.from || "unknown" });
+      setRemoteIncoming((cur) => cur ?? { name: d.name || d.from || "unknown", number: d.name ? d.from : undefined });
       setOpen(true);
       setTimeout(() => setRemoteIncoming(null), Math.max(3_000, 32_000 - age));
     };
@@ -694,13 +696,13 @@ export default function DialPad({ floating = false, owner = false }: { floating?
     try { bcRef.current?.postMessage({ t: "answer" }); } catch { /* no channel */ }
     // 🎤 secure the mic NOW (user gesture) so the auto-answer can't fail on it
     try { await navigator.mediaDevices.getUserMedia({ audio: true }); setMicOk(true); }
-    catch { setMicOk(false); setRemoteIncoming({ number: "🎤 mic blocked — padlock icon → Microphone → Allow, then answer again" }); setTimeout(() => setRemoteIncoming(null), 8000); return; }
+    catch { setMicOk(false); setRemoteIncoming({ name: "🎤 mic blocked — padlock icon → Microphone → Allow, then answer again" }); setTimeout(() => setRemoteIncoming(null), 8000); return; }
     // take the phone line over INTO THIS TAB and have the server re-ring us here
     claimUntilRef.current = Date.now() + 25_000;
     try { if (!leaderRef.current) await holdLock(true); } catch { /* proceed */ }
     ensureClient().catch(() => {});
     fetch("/api/crm/callerid", { method: "POST" }).catch(() => {});
-    setRemoteIncoming({ number: `✅ answering — connecting the call to THIS window…` });
+    setRemoteIncoming({ name: `✅ answering — connecting the call to THIS window…` });
     setTimeout(() => setRemoteIncoming(null), 6000);
   };
   const remoteDecline = () => { try { bcRef.current?.postMessage({ t: "decline" }); } catch { /* no channel */ } setRemoteIncoming(null); };
@@ -859,18 +861,23 @@ export default function DialPad({ floating = false, owner = false }: { floating?
               <button onClick={declineIncoming} className="grid h-10 w-10 place-items-center rounded-full bg-red-600 text-lg text-white shadow hover:bg-red-700" title="Decline">⏹</button>
             </span>
           )}
-          {!incoming && remoteIncoming && (
-            <span className="flex items-center gap-2 bg-emerald-600 px-3.5 py-2.5">
-              <span className="min-w-0 flex-1">
-                <span className="block text-[10px] font-bold uppercase tracking-wide text-emerald-100">📲 Incoming call{remoteIncoming.number.startsWith("✅") ? "" : " (ringing in your other tab)"}</span>
-                <span className="block truncate text-sm font-extrabold text-white">{remoteIncoming.number}</span>
+          {!incoming && remoteIncoming && (() => {
+            const isStatus = /^(✅|🎤)/.test(remoteIncoming.name);
+            return (
+              <span className="flex items-center gap-2 bg-emerald-600 px-3.5 py-2.5">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-bold uppercase tracking-wide text-emerald-100">📲 Incoming call{isStatus ? "" : " — ringing in your other tab"}</span>
+                  <span className="block truncate text-sm font-extrabold text-white">{remoteIncoming.name}</span>
+                  {!isStatus && remoteIncoming.number && <span className="block truncate text-[11px] font-semibold text-emerald-100">📞 {remoteIncoming.number}</span>}
+                  {!isStatus && remoteIncoming.deptLabel && <span className="mt-0.5 inline-block rounded bg-white/25 px-1.5 py-0.5 text-[10px] font-bold text-white">{remoteIncoming.deptLabel}</span>}
+                </span>
+                {!isStatus && <>
+                  <button onClick={remoteAnswer} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-lg text-emerald-700 shadow hover:bg-emerald-50" title="Answer (connects in your other tab)">📞</button>
+                  <button onClick={remoteDecline} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-600 text-lg text-white shadow hover:bg-red-700" title="Decline">⏹</button>
+                </>}
               </span>
-              {!remoteIncoming.number.startsWith("✅") && <>
-                <button onClick={remoteAnswer} className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg text-emerald-700 shadow hover:bg-emerald-50" title="Answer (connects in your other tab)">📞</button>
-                <button onClick={remoteDecline} className="grid h-10 w-10 place-items-center rounded-full bg-red-600 text-lg text-white shadow hover:bg-red-700" title="Decline">⏹</button>
-              </>}
-            </span>
-          )}
+            );
+          })()}
           {/* live call bar */}
           {state !== "idle" && (
             <span className="relative mb-4 flex items-center gap-2 bg-emerald-50 px-3.5 py-2 ring-1 ring-emerald-200">
