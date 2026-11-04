@@ -416,6 +416,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                           deals (addressFirst) the seller gets a ⭐ so it's distinct from the 👤
                           lead-owner line. */}
                       <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="min-w-0 flex-1 text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{addressFirst ? "⭐ " : ""}{titleCase(c.contactName)}</a>
+                      {/* 🕐 Lead's local time, always by the name (Jon 2026-11-04) — work the ones who
+                          are ahead of us first. Auto DST-correct (comes from the phone's area code). */}
+                      {c.tzLabel && <span title="The lead's local time right now — call East-coast/ahead leads first." className="shrink-0 whitespace-nowrap text-[10px] font-semibold text-slate-400">🕐 {c.tzLabel}</span>}
                     </div>
                     {/* 🏷 ALL badges on their own wrapping row UNDER the name (Jon 2026-11-04:
                         "give the seller name the main focus"). Nothing sits top-right anymore, so
@@ -433,7 +436,6 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       {!!c.parcels && c.parcels > 1 && <span title={`${c.parcels} parcels on this deal`} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 ring-1 ring-amber-200">📦 {c.parcels}</span>}
                       {c.offers && c.offers.live > 0 && <span title={`${c.offers.live} of ${c.offers.goal} offers received`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.offers.live >= c.offers.goal ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>💰 {c.offers.live}/{c.offers.goal}</span>}
                       {c.staleStage && <span title={`This deal's saved stage ("${c.staleStage}") no longer exists in this pipeline after a rename — use "Re-sort deals" to file it correctly.`} className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700 ring-1 ring-orange-200">⚠️ was: {c.staleStage}</span>}
-                      {c.tzLabel && <span title="The lead's local time. Work East Coast leads first — they're ahead of us — then move west. Use the 🌅 sort." className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 ring-1 ring-slate-200">🕐 {c.tzLabel}</span>}
                       {c.builderSize && (() => { const m = builderSizeMeta(c.builderSize); return (
                         <button type="button" title={m.title} onClick={(e) => { e.stopPropagation(); flipBuilderSize(c.id, c.builderSize === "big" ? "mompop" : "big"); }} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls} hover:opacity-80`}>{m.emoji} {m.label}</button>
                       ); })()}
