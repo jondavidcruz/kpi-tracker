@@ -4,6 +4,8 @@ import { Card, SectionTitle } from "@/components/ui";
 import { checkAndRecordComms } from "@/lib/comms-health";
 import { recordPlatformUsageAction } from "@/app/actions";
 import { readUsageLog, metricsFor, usageStatus, WARN_PCT, ACT_PCT, CLAUDE_DOWNGRADE_PCT } from "@/lib/usage-watch";
+import { snapshotTelnyxBalance, getTelnyxBalance, readSnaps, analyzeTelnyxSpend } from "@/lib/telnyx-billing";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,16 @@ export default async function CommsHealthPage({ searchParams }: { searchParams: 
   const usageLatest = usageLog[0] ?? null;
   const usageMetrics = metricsFor(usageLatest);
   const usage = owner ? await usageStatus() : null;
+  // 📡 Live Telnyx spend gauge (owner-only) — balance, this-month spend, burn rate &
+  // auto-recharge cadence, straight from the Telnyx API. No more going into Telnyx to check.
+  const telnyxBal = owner ? (await snapshotTelnyxBalance()) ?? (await getTelnyxBalance()) : null;
+  const telnyxSnaps = owner ? await readSnaps() : [];
+  const telnyxSpend = owner ? analyzeTelnyxSpend(telnyxSnaps) : null;
+  let telnyxMtd: { mtd?: number; projected?: number; sms?: { cost: number; count: number }; voice?: { cost: number; count: number }; shortCalls?: { pct: number }; at?: string } | null = null;
+  if (owner) {
+    const r = await db.resource.findFirst({ where: { category: "__telnyx_spend__" } }).catch(() => null);
+    try { telnyxMtd = r?.description ? JSON.parse(r.description) : null; } catch { telnyxMtd = null; }
+  }
   const channels: { channel: "voice" | "sms" | "email"; title: string; emoji: string }[] = [
     { channel: "voice", title: "Calling", emoji: "📞" },
     { channel: "sms", title: "Texting", emoji: "💬" },
@@ -146,6 +158,44 @@ export default async function CommsHealthPage({ searchParams }: { searchParams: 
               </div>
             </div>
           )}
+        </Card>
+        );
+      })()}
+
+      {owner && (() => {
+        const bal = telnyxBal?.balance ?? null;
+        const balTone = bal == null ? "ring-1 ring-slate-200" : bal < 20 ? "border-red-500 ring-2 ring-red-200" : bal < 50 ? "border-amber-500 ring-1 ring-amber-200" : "border-emerald-500 ring-1 ring-emerald-100";
+        const sc = telnyxMtd?.shortCalls?.pct ?? 0;
+        return (
+        <Card className={`border-l-4 p-5 ${balTone}`}>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-extrabold text-slate-900">📡 Telnyx — live spend</span>
+            <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">OWNER ONLY</span>
+            <a href="/admin/telnyx" className="ml-auto text-[11px] font-semibold text-indigo-600 hover:underline">Full detail →</a>
+          </div>
+          {bal == null ? (
+            <div className="rounded-lg bg-slate-50 p-3 text-[12px] text-slate-500">Telnyx balance unavailable (API key not reachable right now).</div>
+          ) : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">💳 Account balance</div>
+              <div className={`text-3xl font-extrabold ${bal < 20 ? "text-red-600" : bal < 50 ? "text-amber-600" : "text-emerald-600"}`}>${bal.toFixed(2)}</div>
+              <div className="text-[11px] text-slate-500">auto-recharges to $100 at $0{telnyxSpend?.cadenceDays ? ` · ~every ${telnyxSpend.cadenceDays} days` : ""}</div>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🔥 Burn rate</div>
+              <div className="text-2xl font-extrabold text-slate-900">${(telnyxSpend?.perMonth ?? 0).toFixed(0)}<span className="text-sm font-semibold text-slate-400">/mo</span></div>
+              <div className="text-[11px] text-slate-500">${(telnyxSpend?.perDay ?? 0).toFixed(2)}/day{telnyxSpend?.rechargeCount ? ` · ${telnyxSpend.rechargeCount} recharge${telnyxSpend.rechargeCount === 1 ? "" : "s"} tracked` : ""}</div>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">📆 This month so far</div>
+              <div className="text-2xl font-extrabold text-slate-900">${(telnyxMtd?.mtd ?? 0).toFixed(2)}</div>
+              <div className="text-[11px] text-slate-500">💬 {telnyxMtd?.sms?.count ?? 0} texts · 📞 {telnyxMtd?.voice?.count ?? 0} calls{telnyxMtd?.projected ? ` · proj $${telnyxMtd.projected.toFixed(0)}` : ""}</div>
+            </div>
+          </div>
+          )}
+          {sc > 15 && <div className="mt-2 rounded-lg bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-700 ring-1 ring-red-200">💸 {sc}% of calls are ≤6s — over Telnyx&apos;s 15% short-call surcharge line. Tighten dialer ring-out / lists.</div>}
+          <div className="mt-2 text-[10px] text-slate-400">Live from the Telnyx API · balance sampled on load (throttled). Burn rate is read off the balance curve over time.</div>
         </Card>
         );
       })()}
