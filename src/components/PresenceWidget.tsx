@@ -45,7 +45,7 @@ export default function PresenceWidget() {
       } catch { /* keep last good state */ }
     };
     load();
-    const id = setInterval(load, 60000);
+    const id = setInterval(load, 120000); // 120s + paused when hidden (Jon 2026-11-04 cost cut)
     document.addEventListener("visibilitychange", load);
     return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", load); };
   }, []);

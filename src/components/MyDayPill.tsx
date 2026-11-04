@@ -10,9 +10,9 @@ export default function MyDayPill() {
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
     try { if (localStorage.getItem("fo_daypill_hide") === "1") setHidden(true); } catch { /* show */ }
-    const load = () => fetch("/api/crm/mystats", { cache: "no-store" }).then(async (r) => { if (r.ok) setS((await r.json()) as Stats); }).catch(() => {});
+    const load = () => { if (document.hidden) return; fetch("/api/crm/mystats", { cache: "no-store" }).then(async (r) => { if (r.ok) setS((await r.json()) as Stats); }).catch(() => {}); };
     load();
-    const t = setInterval(load, 180_000);
+    const t = setInterval(load, 180_000); // paused while the tab is hidden (Jon 2026-11-04 cost cut)
     return () => clearInterval(t);
   }, []);
   const toggle = () => { setHidden((h) => { try { localStorage.setItem("fo_daypill_hide", h ? "0" : "1"); } catch { /* fine */ } return !h; }); };

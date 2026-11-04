@@ -112,7 +112,15 @@ export default function InboxBell() {
       const j = (await r.json()) as { numbers?: string[] };
       if (j.numbers?.length) setNumbers(j.numbers);
     }).catch(() => {});
-    const t = setInterval(poll, 30_000);
+    // Adaptive cadence (Jon 2026-11-04): poll every 45s while the tab is in front,
+    // but every 2 min when it's backgrounded/minimized — hidden tabs polling every 30s
+    // around the clock were a top driver of Vercel function invocations. The live
+    // call-ring still reaches a background tab within ~2 min.
+    let t: ReturnType<typeof setTimeout>;
+    const schedule = () => { t = setTimeout(async () => { await poll(); schedule(); }, document.hidden ? 120_000 : 45_000); };
+    schedule();
+    const onVis = () => { if (!document.hidden) poll(); };
+    document.addEventListener("visibilitychange", onVis);
     // 🔁 self-updating tabs (Jon 2026-10-12: Sharyn's hidden phone window ran
     // yesterday's code and ignored her answer click): every 5 min compare the
     // deployed sha — when it changes, hidden tabs reload themselves (never
@@ -136,7 +144,7 @@ export default function InboxBell() {
     };
     ver();
     const tv = setInterval(ver, 5 * 60_000);
-    return () => { clearInterval(t); clearInterval(tv); };
+    return () => { clearTimeout(t); clearInterval(tv); document.removeEventListener("visibilitychange", onVis); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 💬 live thread: while a conversation is open, pull fresh messages every

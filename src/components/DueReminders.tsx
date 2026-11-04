@@ -40,10 +40,11 @@ export default function DueReminders() {
   useEffect(() => {
     let alive = true;
     const load = async () => {
+      if (document.hidden) return; // paused while backgrounded (Jon 2026-11-04 cost cut)
       try { const r = await fetch("/api/crm/reminders", { cache: "no-store" }); if (r.ok && alive) setData(await r.json()); } catch { /* retry next tick */ }
     };
     load();
-    const poll = setInterval(load, 90_000);
+    const poll = setInterval(load, 180_000);
     const clock = setInterval(() => setTick((t) => t + 1), 20_000);
     const onFocus = () => load();
     window.addEventListener("focus", onFocus);
