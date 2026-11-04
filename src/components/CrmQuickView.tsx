@@ -303,6 +303,9 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
 
                 {tab === "opp" && (
                   <AutoSaveForm action={submit(saveOppMetaAction, { id: d.id })} className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-100">
+                      <LeadTypePicker oppId={d.id} pipeline={d.pipeline} pipelines={d.pipelines} leadKind={resolveLeadKind(d.formData, d.pipeline)} onChanged={() => refetch(d.id)} />
+                    </div>
                     <div className="col-span-2">
                       <label className={labelCls}>🏠 Property address <span className="font-normal normal-case text-slate-400">— the deal / property (this lead is named after the seller: {d.contact.name})</span></label>
                       <input name="title" defaultValue={formatAddress(d.title)} placeholder="123 Main St, City, ST ZIP" className={inputCls} />
@@ -392,9 +395,6 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
 
                 {tab === "contact" && (
                   <AutoSaveForm action={submit(saveCrmContactAction, { id: d.contact.id, oppId: d.id, ctags: d.contact.tags })} className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-100">
-                      <LeadTypePicker oppId={d.id} pipeline={d.pipeline} pipelines={d.pipelines} leadKind={resolveLeadKind(d.formData, d.pipeline)} />
-                    </div>
                     <div className="col-span-2">
                       <label className={labelCls}>Name</label>
                       <input name="name" defaultValue={d.contact.name} className={inputCls} />
