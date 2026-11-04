@@ -9,12 +9,14 @@ import dynamic from "next/dynamic";
 // + the audit log are left intact, so re-adding <CortanaBot /> here is the only step to restore it.
 const PresenceWidget = dynamic(() => import("./PresenceWidget"), { ssr: false });
 const HeartbeatPing = dynamic(() => import("./HeartbeatPing"), { ssr: false });
+const UsageBeacon = dynamic(() => import("./UsageBeacon"), { ssr: false });
 
 export default function ClientWidgets({ showPresence }: { showPresence: boolean }) {
   return (
     <>
       {showPresence && <PresenceWidget />}
       <HeartbeatPing />
+      <UsageBeacon />
     </>
   );
 }

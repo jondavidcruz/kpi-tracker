@@ -637,6 +637,7 @@ export default async function AdminPage({
                 { href: "/admin/crm-audit", emoji: "🔎", name: "CRM Audit", desc: "Audit CRM activity — dials, texts, emails, stage moves" },
                 { href: "/admin/directrei", emoji: "🧹", name: "DirectREI Control", desc: "DirectREI mass-marketing admin + nightly pushes" },
                 { href: "/admin/workflow", emoji: "⚙️", name: "Master Workflow", desc: "Edit the master SMS / follow-up workflow" },
+                { href: "/admin/usage", emoji: "📊", name: "Page Usage", desc: "Which pages the team opens — find what's unused" },
               ].map((t) => (
                 <Link key={t.href} href={t.href} className="flex items-start gap-3 rounded-xl bg-white p-3.5 ring-1 ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300">
                   <span className="text-xl leading-none">{t.emoji}</span>
