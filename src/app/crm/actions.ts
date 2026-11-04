@@ -4,7 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { geoForPhone } from "@/lib/npa-geo";
 import { logCrmEvent, CRM_STAGES, readPipelines, pipelineLockFor } from "@/lib/crm";
 
@@ -1432,6 +1432,22 @@ export async function saveKpiOrderAction(formData: FormData) {
   revalidatePath("/entry");
   revalidatePath("/report");
   revalidatePath("/admin");
+}
+
+/** Owner only: rename a KPI's display name (Jon 2026-11-03). Keeps the stable `key`
+ *  (where data lives) untouched, so entries/goals/history are never affected — same
+ *  safe pattern as renaming a pipeline stage. Foundation edit → owner-gated. */
+export async function renameKpiAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const id = String(formData.get("kpiId") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim().slice(0, 60);
+  if (!id || !name) return;
+  await db.kpi.update({ where: { id }, data: { name } }).catch(() => {});
+  revalidatePath("/entry");
+  revalidatePath("/report");
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
 }
 
 /** Save one discovery form's answers onto the opportunity. */

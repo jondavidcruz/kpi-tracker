@@ -536,7 +536,7 @@ export default async function AdminPage({
               label: labelOf[rk] ?? rk,
               kpis: kpis.filter((k) => k.active && k.scope === "per_rep" && !k.computed && k.roleKey === rk).sort((a, b) => a.sortOrder - b.sortOrder).map((k) => ({ id: k.id, key: k.key, name: k.name, emoji: k.emoji })),
             }));
-          })()} />
+          })()} canRename={isOwner(me)} />
         </section>
       )}
 
