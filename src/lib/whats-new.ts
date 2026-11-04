@@ -24,6 +24,39 @@ export type WhatsNewEntry = {
 // Newest first. Keep each how-to to a few plain steps the team can follow cold.
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: "cards-cleaner-leadkind", date: "2026-11-04", emoji: "🧹", title: "Cleaner lead cards + mark Land vs House",
+    blurb: "Card badges now stay on the card (no more running off the edge), land sellers show ONE badge, and you can set Land/House by hand when auto-detect is wrong.",
+    audience: ["all"], where: { label: "Seller CRM", href: "/crm" },
+    steps: [
+      "The little status badges now wrap onto the card instead of sliding off to the right — everything's visible.",
+      "A land seller shows a single 🏞 Land badge (no more 'Seller' + 'Land' doubled up). Freshly-worked and brand-new leads drop their extra chips to cut clutter.",
+      "Auto-detect calling a land lead a house? Click the 🏞/🏡 chip on the card's quick-view (or full page) to set it by hand — it sticks.",
+      "Deal value always shows $ now: type '13k', '$13,000' or '13000' and it saves as $13,000.",
+    ],
+  },
+  {
+    id: "stage-followups", date: "2026-11-04", emoji: "📨", title: "Follow-ups that arm themselves by stage",
+    blurb: "Move a seller into Contract Sent, Negotiating, Offer Ready, 10 Days of Hell or Ghosted and the matching follow-up sequence arms itself — you just review and send.",
+    audience: ["acq", "dispo", "leadership"], where: { label: "Seller CRM", href: "/crm" },
+    steps: [
+      "When you move a seller to a stage that has a sequence, the right follow-up cadence arms automatically.",
+      "Each step drops a ready-to-send task with the drafted text/email — you review and fire it with one click. Nothing sends on its own.",
+      "If the seller replies, the sequence stops automatically so you never double-message.",
+      "Start, stop, or switch sequences any time from the lead's quick-view (the 📨 sequence box). '· auto' means a stage armed it.",
+    ],
+  },
+  {
+    id: "war-room-guide", date: "2026-11-04", emoji: "📖", title: "New: the War Room Guide",
+    blurb: "The whole app drawn as a building — click any room to see what it does. Great for getting oriented or training someone new.",
+    audience: ["all"], where: { label: "War Room Guide", href: "/blueprint" },
+    steps: [
+      "Open Requests & Support → War Room Guide.",
+      "Each wing is an area of the business; each room is a page. Click any room to read what it does and walk straight in.",
+      "Tap 'follow a deal' to watch one deal travel from the first call all the way to closing.",
+      "New teammate? Point them here first — it's the fastest way to learn where everything lives.",
+    ],
+  },
+  {
     id: "kpi-watch", date: "2026-11-03", emoji: "⚠️", title: "KPI issues: the Watch list (not daily noise)",
     blurb: "Alerts now opens on a short 'Watch' list of the few KPIs with a SUSTAINED problem — streaks and chronic misses — instead of every daily blip.",
     audience: ["leadership"], where: { label: "KPI Watch", href: "/alerts" },
