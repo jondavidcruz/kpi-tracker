@@ -9,6 +9,31 @@ export const dynamic = "force-dynamic";
 
 const PT_TODAY = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 const shiftDay = (ymd: string, days: number) => { const d = new Date(ymd + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
+const startOfWeek = (ymd: string) => { const d = new Date(ymd + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); }; // Monday
+const startOfMonth = (ymd: string) => ymd.slice(0, 8) + "01";
+const endOfMonth = (ymd: string) => { const d = new Date(ymd.slice(0, 8) + "01T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(0); return d.toISOString().slice(0, 10); };
+
+const RANGES = [
+  { key: "today", label: "Today" },
+  { key: "week", label: "This week" },
+  { key: "lastweek", label: "Last week" },
+  { key: "month", label: "This month" },
+  { key: "lastmonth", label: "Last month" },
+  { key: "custom", label: "Custom" },
+] as const;
+
+/** Resolve a range preset (or custom from/to) → inclusive [from,to] in PT. */
+function resolveRange(range: string, from?: string, to?: string): { from: string; to: string; label: string } {
+  const today = PT_TODAY();
+  switch (range) {
+    case "week": return { from: startOfWeek(today), to: today, label: "This week" };
+    case "lastweek": { const lw = shiftDay(startOfWeek(today), -7); return { from: lw, to: shiftDay(lw, 6), label: "Last week" }; }
+    case "month": return { from: startOfMonth(today), to: today, label: "This month" };
+    case "lastmonth": { const lm = shiftDay(startOfMonth(today), -1); return { from: startOfMonth(lm), to: endOfMonth(lm), label: "Last month" }; }
+    case "custom": { const f = from || today, t = to || today; return f <= t ? { from: f, to: t, label: "Custom" } : { from: t, to: f, label: "Custom" }; }
+    default: return { from: today, to: today, label: "Today" };
+  }
+}
 
 function statusChip(p: KpiProof) {
   switch (p.status) {
@@ -20,15 +45,15 @@ function statusChip(p: KpiProof) {
   }
 }
 
-export default async function KpiAuditPage({ searchParams }: { searchParams: Promise<{ rep?: string; date?: string }> }) {
+export default async function KpiAuditPage({ searchParams }: { searchParams: Promise<{ rep?: string; date?: string; range?: string; from?: string; to?: string }> }) {
   const me = await getCurrentUser();
   if (!me) return null;
   if (!canAccessCSuite(me)) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
         <div className="mb-2 text-3xl">🔒</div>
-        <h1 className="text-xl font-bold">Leadership only</h1>
-        <p className="mt-1 text-sm text-slate-500">KPI verification is C-suite only.</p>
+        <h1 className="text-xl font-bold">C-suite only</h1>
+        <p className="mt-1 text-sm text-slate-500">KPI verification is limited to C-suite members.</p>
         <Link href="/dashboard" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Back</Link>
       </Card>
     );
@@ -37,18 +62,20 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
   const users = (await getAllUsers()).filter((u) => u.active);
   // Reps worth auditing: anyone whose primary/secondary role is dispositions (these KPIs live there).
   const dispo = users.filter((u) => u.position === "dispositions" || secondaryPositionOf(u) === "dispositions");
-  const date = sp.date || PT_TODAY();
   const rep = sp.rep || dispo[0]?.id || "";
   const repUser = users.find((u) => u.id === rep) ?? null;
-  const proofs = rep ? await kpiProofsFor(rep, date) : [];
+  // Range: a preset (today/week/lastweek/month/lastmonth) or custom from/to. A legacy ?date= still works.
+  const rangeKey = sp.range || (sp.date ? "custom" : "today");
+  const range = resolveRange(rangeKey, sp.from ?? sp.date, sp.to ?? sp.date);
+  const proofs = rep ? await kpiProofsFor(rep, range.from, range.to) : [];
   const flagged = proofs.filter((p) => p.status === "over_reported").length;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <SectionTitle title="🧾 KPI Verification — trust but verify" subtitle="Every output number recomputed straight from the records behind it. Click a KPI to see the receipts — which cards, who, and when. Leadership only." accent={flagged ? "bg-red-500" : "bg-emerald-500"} />
+      <SectionTitle title="🧾 KPI Verification — trust but verify" subtitle="Every output number recomputed straight from the records behind it. Pick a day, week, or month and open any KPI to see the receipts — which cards, who, and when. C-suite only." accent={flagged ? "bg-red-500" : "bg-emerald-500"} />
 
       {/* Controls */}
-      <Card className="p-4">
+      <Card className="p-4 space-y-3">
         <form method="GET" className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col text-xs"><span className="mb-0.5 font-semibold text-slate-500">Team member</span>
             <select name="rep" defaultValue={rep} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm">
@@ -57,20 +84,29 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
               {users.filter((u) => !dispo.some((d) => d.id === u.id)).map((u) => <option key={u.id} value={u.id}>{u.name} ({u.position})</option>)}
             </select>
           </label>
-          <label className="flex flex-col text-xs"><span className="mb-0.5 font-semibold text-slate-500">Date (PT)</span>
-            <input type="date" name="date" defaultValue={date} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" />
+          <label className="flex flex-col text-xs"><span className="mb-0.5 font-semibold text-slate-500">Range</span>
+            <select name="range" defaultValue={rangeKey} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm">
+              {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col text-xs"><span className="mb-0.5 font-semibold text-slate-500">From (custom)</span>
+            <input type="date" name="from" defaultValue={range.from} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" />
+          </label>
+          <label className="flex flex-col text-xs"><span className="mb-0.5 font-semibold text-slate-500">To (custom)</span>
+            <input type="date" name="to" defaultValue={range.to} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" />
           </label>
           <button className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800">Check</button>
-          <div className="ml-auto flex items-center gap-1 text-[11px]">
-            <Link href={`/kpi-audit?rep=${rep}&date=${shiftDay(date, -1)}`} className="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-600 hover:bg-slate-200">← prev day</Link>
-            <Link href={`/kpi-audit?rep=${rep}&date=${PT_TODAY()}`} className="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-600 hover:bg-slate-200">today</Link>
-            <Link href={`/kpi-audit?rep=${rep}&date=${shiftDay(date, 1)}`} className="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-600 hover:bg-slate-200">next day →</Link>
-          </div>
         </form>
+        <div className="flex flex-wrap items-center gap-1 text-[11px]">
+          <span className="mr-1 font-semibold text-slate-400">Quick:</span>
+          {RANGES.filter((r) => r.key !== "custom").map((r) => (
+            <Link key={r.key} href={`/kpi-audit?rep=${rep}&range=${r.key}`} className={`rounded-lg px-2 py-1 font-bold ${rangeKey === r.key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{r.label}</Link>
+          ))}
+        </div>
       </Card>
 
       {repUser && (
-        <div className="text-sm font-semibold text-slate-600">{repUser.name} · <span className="text-slate-400">{date} (PT)</span>{flagged > 0 && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">{flagged} over-reported</span>}</div>
+        <div className="text-sm font-semibold text-slate-600">{repUser.name} · <span className="text-slate-400">{range.label}{range.from === range.to ? ` · ${range.from}` : ` · ${range.from} → ${range.to}`} (PT)</span>{flagged > 0 && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">{flagged} over-reported</span>}</div>
       )}
 
       {/* KPI proofs */}
@@ -99,11 +135,11 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
                 </ul>
               </details>
             ) : (
-              <p className="mt-1 text-[12px] text-slate-400">No records found for this day{p.recorded ? ` — but ${p.recorded} is on the scorecard. Where did it come from?` : "."}</p>
+              <p className="mt-1 text-[12px] text-slate-400">No records found for this period{p.recorded ? ` — but ${p.recorded} is on the scorecard. Where did it come from?` : "."}</p>
             )}
           </Card>
         ))}
-        {proofs.length === 0 && <Card className="p-6 text-center text-sm text-slate-400">Pick a team member and date to verify their numbers against the records.</Card>}
+        {proofs.length === 0 && <Card className="p-6 text-center text-sm text-slate-400">Pick a team member and range to verify their numbers against the records.</Card>}
       </div>
 
       <Card className="border-l-4 border-slate-300 p-4 text-[12px] text-slate-600">
