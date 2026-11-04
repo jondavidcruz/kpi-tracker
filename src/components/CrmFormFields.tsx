@@ -16,7 +16,18 @@ const labelCls = "mb-0.5 block text-[11px] font-bold text-slate-500";
 export default function CrmFormFields({ form, oppId, contactId, initial, onSaved }: {
   form: CrmForm; oppId: string; contactId: string; initial: Record<string, string | string[]>; onSaved?: () => void;
 }) {
-  const [vals, setVals] = useState<Record<string, string | string[]>>(initial ?? {});
+  // Normalize money fields on mount so old abbreviated data (e.g. "15k") shows as the full
+  // "$15,000" right away (Jon 2026-11-04: cash must always be the full value). Display-only —
+  // the real save still happens on edit.
+  const [vals, setVals] = useState<Record<string, string | string[]>>(() => {
+    const v: Record<string, string | string[]> = { ...(initial ?? {}) };
+    const fix = (k: string) => { if (typeof v[k] === "string" && v[k]) { const n = parseLooseMoney(v[k] as string); if (n != null) v[k] = fmtDollars(n); } };
+    for (const f of form.fields) {
+      if (f.type === "money") fix(f.key);
+      else if (f.type === "moneyrange") { fix(f.keyLow); fix(f.keyHigh); }
+    }
+    return v;
+  });
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [, start] = useTransition();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

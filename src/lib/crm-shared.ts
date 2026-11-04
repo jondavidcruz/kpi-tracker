@@ -89,7 +89,13 @@ export function parseTags(s: string): string[] {
 // (dispositions) together, then the rest (DNC, etc.). Stable within each group, so the pipelines
 // keep their own order (Jon 2026-10-29: "all AQ together and all DS together"). "AQjr" counts as AQ.
 export function sortPipesAqThenDs(names: string[]): string[] {
-  const rank = (n: string) => /^war\s*room$/i.test(n) ? -1 : /^aq/i.test(n) ? 0 : /^ds/i.test(n) ? 1 : 2;
+  // War Room → all AQ → all DS → everything else. Ignore any leading emoji/symbol/space
+  // (names like "💰 AQ: Michelle" / "💻 DS: …") — otherwise ^aq/^ds never matched and the
+  // list stayed in its mixed stored order (Jon 2026-11-04).
+  const rank = (n: string) => {
+    const s = n.replace(/^[^A-Za-z]+/, "").trim();
+    return /^war\s*room/i.test(s) ? -1 : /^aq/i.test(s) ? 0 : /^ds/i.test(s) ? 1 : 2;
+  };
   return names.map((n, i) => [n, i] as const).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([n]) => n);
 }
 
