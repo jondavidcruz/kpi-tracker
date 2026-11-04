@@ -45,6 +45,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/call-scoring": "call recording transcript coaching score",
   "/email-health": "email health bounce rate deliverability opens clicks resend direct rei campaigns domain reputation",
   "/comms-health": "comms guardian uptime calling texting email inbound outbound telnyx resend line down monitor always working 24/7 phones sms voice health check",
+  "/kpi-audit": "kpi verification audit trust but verify receipts proof vetted developers accurate accountability who when evidence check numbers",
   "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers list pull skip trace sms sop directrei regrid skipmatrix scrub dnc litigator suppression texting campaign",
   "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
   "/ai-training": "ai training claude chatgpt gemini perplexity prompt prompting models haiku sonnet opus fable effort artificial intelligence learn",
@@ -160,6 +161,7 @@ export default function Sidebar({
     { label: "Performance", items: [
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/report", label: "KPI Reports", Icon: FileText },
+      { href: "/kpi-audit", label: "KPI Verification", Icon: ShieldCheck, csuiteOnly: true },
       { href: "/kpi-sources", label: "KPI Sources", Icon: ScrollText },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/lead-roi", label: "Lead ROI", Icon: TrendingUp },
