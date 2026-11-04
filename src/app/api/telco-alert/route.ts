@@ -6,16 +6,15 @@ import { postChatWebhook } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
-// Public webhook — Twilio (Debugger) and Telnyx (notifications) POST alarms here.
-// Point Twilio: Console → Monitor → Debugger → Webhook → https://<app>/api/telco-alert?provider=twilio
+// Public webhook — Telnyx (notifications) POST alarms here.
 // Point Telnyx: any messaging/number webhook → https://<app>/api/telco-alert?provider=telnyx
 // Stores the alarm in the war room and posts it to the phone-health Chat.
 export async function POST(request: Request) {
   const url = new URL(request.url);
-  const provider = url.searchParams.get("provider") ?? "twilio";
+  const provider = url.searchParams.get("provider") ?? "telnyx";
   const now = new Date().toISOString();
 
-  // Accept JSON or form-encoded (Twilio Debugger posts form fields).
+  // Accept JSON or form-encoded.
   let body: Record<string, unknown> = {};
   try {
     const ct = request.headers.get("content-type") ?? "";

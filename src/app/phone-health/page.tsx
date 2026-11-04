@@ -37,7 +37,7 @@ const BEST_PRACTICES: { title: string; items: string[] }[] = [
     "Always present a consistent, real, call-back-able number; the agent's intro should match the caller-ID name shown",
     "Register and keep a consistent CNAM; consider a call-branding service to show who's calling",
     "Don't repeatedly dial unassigned / disconnected numbers — that mirrors bad-actor behavior",
-    "Make only verifiable, signed calls (SHAKEN/STIR · Twilio Trust Hub) so carriers can trust the origin",
+    "Make only verifiable, signed calls (SHAKEN/STIR · Telnyx Verified Calls) so carriers can trust the origin",
     "Limit campaigns to ~90 days after last engagement — people report as spam long before the legal 1-year window",
   ] },
   { title: "✅ Consent & compliance", items: [
@@ -59,12 +59,12 @@ const PHONE_SETUP_CAT = "__phone_setup__"; // reserved Resource category for the
 
 // The foundational setup — root-cause fixes. `top3` = the free "start here" trio.
 const SETUP_TASKS: { key: string; title: string; detail: string; cost: string; top3?: boolean; link?: { href: string; label: string } }[] = [
-  { key: "free_registry", title: "Free Caller Registry", detail: "One free form feeds all three carrier engines (Hiya, TNS, First Orion). Register every Twilio & Telnyx number. Re-register whenever you add one.", cost: "Free · today", top3: true, link: { href: "https://www.freecallerregistry.com", label: "freecallerregistry.com" } },
-  { key: "trust_hub", title: "Twilio Trust Hub — Business Profile + SHAKEN/STIR", detail: "You own the Twilio account, so this is unblocked. Top-tier attestation tells the analytics engines you're a legitimate caller. Vetting takes days — start now, it costs nothing.", cost: "Free · start today", top3: true, link: { href: "https://console.twilio.com/us1/account/trust-hub", label: "Twilio Console → Trust Hub" } },
+  { key: "free_registry", title: "Free Caller Registry", detail: "One free form feeds all three carrier engines (Hiya, TNS, First Orion). Register every Telnyx number. Re-register whenever you add one.", cost: "Free · today", top3: true, link: { href: "https://www.freecallerregistry.com", label: "freecallerregistry.com" } },
+  { key: "trust_hub", title: "Telnyx Verified Calls / Business Identity + SHAKEN/STIR", detail: "Register your business identity with Telnyx so calls carry top-tier attestation — it tells the carrier analytics engines you're a legitimate caller. Takes a few days to vet; start now, it costs nothing.", cost: "Free · start today", top3: true, link: { href: "https://portal.telnyx.com", label: "Telnyx Portal → Verified Calls" } },
   { key: "pacing", title: "Fix dialer pacing", detail: "Highest actual impact, and free: ≤100 dials per number/day · 8am–9pm seller-local · 30-second rings · 2-week warm-up on new numbers · stable caller ID. Monitoring without this is just watching yourself create flags.", cost: "Free · highest impact", top3: true },
-  { key: "monitoring", title: "Reputation monitoring service ($100–200/mo)", detail: "Twilio Voice Integrity, Telnyx Number Reputation, or a third party (Caller ID Reputation / DialRight / Number Verifier). Third-party works across BOTH Twilio & Telnyx at once — survives the migration decision. Replaces daily manual checking outright. Add in week two to prove the free fixes worked.", cost: "~$100–200/mo", link: { href: "https://calleridreputation.com", label: "calleridreputation.com" } },
+  { key: "monitoring", title: "Reputation monitoring service ($100–200/mo)", detail: "Telnyx Number Reputation, or a third party (Caller ID Reputation / DialRight / Number Verifier) that monitors all your numbers at once. This is the ONLY way to actually see your AT&T / Verizon / T-Mobile spam scores — no API exposes them. Replaces daily manual checking outright. Add in week two to prove the free fixes worked.", cost: "~$100–200/mo", link: { href: "https://calleridreputation.com", label: "calleridreputation.com" } },
   { key: "scrub", title: "Scrub your lists", detail: "Disconnected numbers, wrong numbers, and DNC hits all drag your score down. The cheapest reputation protection there is.", cost: "Cost of data" },
-  { key: "tendlc", title: "10DLC approval + text-first", detail: "A text before the call makes the call expected — that beats fixing any label. Both Twilio & Telnyx require 10DLC or business texts get blocked. Highest-leverage item still to unblock.", cost: "~$10/mo + one-time" },
+  { key: "tendlc", title: "10DLC approval + text-first", detail: "A text before the call makes the call expected — that beats fixing any label. Telnyx requires 10DLC or business texts get blocked. Highest-leverage item still to unblock.", cost: "~$10/mo + one-time" },
   { key: "three_phone", title: "Three-phone test (monthly / quarterly)", detail: "The only thing that shows literally what a seller sees. Grab AT&T + Verizon + T-Mobile phones and call from each number. Once monitoring is live you only spot-test the DIDs the dashboard already flagged — ~5, not 40.", cost: "Free · ongoing" },
 ];
 const SETUP_STATUS: Record<string, { label: string; cls: string }> = {
@@ -110,7 +110,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   const portingList = await readPorting();
   const telnyxNums = liveNums; // the board below shows only numbers you can actually use right now
 
-  // 🩺 Telnyx health score (0-100, Twilio-insights style): deducts for the
+  // 🩺 Telnyx health score (0-100, carrier-insights style): deducts for the
   // things Telnyx actually bills/flags us on.
   const issues: Array<{ pts: number; label: string }> = [];
   const scPct = spend?.shortCalls?.pct ?? 0;
@@ -129,10 +129,6 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   const healthLabel = healthScore >= 75 ? "Good" : healthScore >= 50 ? "Watch" : "At risk";
   const topIssue = [...issues].sort((a, b) => b.pts - a.pts)[0] ?? null;
 
-  // Twilio audit snapshot (written by /api/cron?twilioaudit=1)
-  const twRow = await db.resource.findFirst({ where: { category: "__twilio_audit__" } }).catch(() => null);
-  let twAudit: { at: string; totalNumbers: number; estMonthlyRent: number; deadNumbers: number; numbers: Array<{ number: string; name: string; calls: number; msgs: number; last: string }> } | null = null;
-  try { twAudit = twRow?.description ? JSON.parse(twRow.description) : null; } catch { twAudit = null; }
 
   // Numbers live in the Resource table under a reserved category — degrade gracefully
   // if the store is briefly unreachable rather than crashing the playbook.
@@ -141,7 +137,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   try {
     const rows = await db.resource.findMany({ where: { category: PHONE_LINE_CAT }, orderBy: { sortOrder: "asc" } });
     lines = rows.map((r) => {
-      let meta: Meta = { provider: "twilio", label: "", registered: false, lastTested: "", att: "unknown", verizon: "unknown", tmobile: "unknown", answerRate: null, notes: "" };
+      let meta: Meta = { provider: "telnyx", label: "", registered: false, lastTested: "", att: "unknown", verizon: "unknown", tmobile: "unknown", answerRate: null, notes: "" };
       try { meta = { ...meta, ...JSON.parse(r.description || "{}") }; } catch {}
       return { id: r.id, number: r.title, meta };
     });
@@ -162,9 +158,9 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
 
   return (
     <div className="space-y-6">
-      <SectionTitle title="📞 Phone Health — Answer-Rate Playbook" subtitle="Keep every Twilio & Telnyx number out of “Spam Likely” so sellers actually pick up. Register, dial clean, monitor, dispute." accent="bg-brand-gold" />
+      <SectionTitle title="📞 Phone Health — Answer-Rate Playbook" subtitle="Keep every Telnyx number out of “Spam Likely” so sellers actually pick up. Register, dial clean, monitor, dispute." accent="bg-brand-gold" />
 
-      {/* Live alarms from Twilio/Telnyx (same feed as Compliance) */}
+      {/* Live alarms from Telnyx (same feed as Compliance) */}
       <TelcoAlarms />
 
       {/* ⏳ Porting status — numbers mid-port still ring in GHL and can't call/text
@@ -172,7 +168,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
       {(portingNums.length > 0 || unknownToApi.length > 0) && (
         <Card className="border-l-4 border-amber-400 bg-amber-50/60 p-4">
           <div className="text-sm font-extrabold text-amber-900">⏳ {portingNums.length + unknownToApi.length} number{portingNums.length + unknownToApi.length === 1 ? "" : "s"} still porting — not live in the War Room yet</div>
-          <p className="mt-0.5 text-[12px] text-amber-800">These are moving from GHL/Twilio to Telnyx. Until each port finishes they still <b>ring in GHL</b>, and the War Room will <b>not</b> call or text from them (that would drop). The dialer only uses the {liveNums.length} live line{liveNums.length === 1 ? "" : "s"} below. The moment a number goes active on Telnyx it starts getting used automatically — no action needed.</p>
+          <p className="mt-0.5 text-[12px] text-amber-800">These are moving from GHL to Telnyx. Until each port finishes they still <b>ring in GHL</b>, and the War Room will <b>not</b> call or text from them (that would drop). The dialer only uses the {liveNums.length} live line{liveNums.length === 1 ? "" : "s"} below. The moment a number goes active on Telnyx it starts getting used automatically — no action needed.</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {portingNums.map((n) => (
               <span key={n.number} className="rounded-full bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-amber-800 ring-1 ring-amber-200" title={`status: ${n.status}`}>{n.number} · ⏳ {n.status}</span>
@@ -189,7 +185,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
           (Jon 2026-10-08: "what is our bounce rate??") */}
       <Deliverability />
 
-      {/* 🩺 Telnyx health score — Twilio-insights style gauge, straight from the APIs */}
+      {/* 🩺 Telnyx health score — carrier-insights style gauge, straight from the APIs */}
       <Card className="flex flex-wrap items-center gap-6 p-5">
         <div className="relative h-24 w-44">
           <svg viewBox="0 0 100 55" className="h-full w-full">
@@ -222,7 +218,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
       <Card className="p-4">
         <div className="mb-2 flex flex-wrap items-baseline gap-3">
           <span className="text-sm font-extrabold text-slate-800">📊 Line health board</span>
-          <span className="text-xs text-slate-500">live from the Telnyx API · Twilio refreshed daily{twAudit ? ` (last ${new Date(twAudit.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })})` : ""}</span>
+          <span className="text-xs text-slate-500">live from the Telnyx API</span>
           <span className="ml-auto text-[10px] text-slate-400">🟢 healthy · 🟡 watch · 🔴 flagged</span>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -240,22 +236,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
               </div>
             );
           })}
-          {(twAudit?.numbers ?? []).map((n) => {
-            const dead = n.calls + n.msgs === 0;
-            return (
-              <div key={n.number} className={`rounded-xl p-3 ring-1 ${dead ? "bg-red-50 ring-red-200" : "bg-emerald-50/50 ring-emerald-100"}`}>
-                <div className="flex items-center gap-2">
-                  <span className="text-base">{dead ? "🔴" : "🟢"}</span>
-                  <span className="font-mono text-sm font-bold text-slate-800">{n.number}</span>
-                  <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[9px] font-extrabold text-rose-600 ring-1 ring-rose-100">TWILIO</span>
-                </div>
-                <div className="mt-1 truncate text-[11px] text-slate-600">{n.name || "—"}</div>
-                <div className="mt-0.5 text-[10px] text-slate-500">{n.calls}📞 {n.msgs}💬 last 30d · {n.last ? `last ${n.last}` : "no activity"}</div>
-              </div>
-            );
-          })}
         </div>
-        {twAudit && <div className="mt-2 text-[11px] text-slate-500">Twilio: {twAudit.totalNumbers} numbers · ${twAudit.estMonthlyRent}/mo rent · consolidation = port actives to Telnyx (~half the usage rates, keeps the numbers — porting needs Jon&apos;s authorization).</div>}
       </Card>
 
       {/* Lead-gen SOP: list pull → skip trace → scrub → SMS (from Jon's SOP PDF) */}
@@ -336,9 +317,9 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
           <a href="https://www.freecallerregistry.com" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700">freecallerregistry.com →</a>
           <ul className="mt-2 space-y-1 text-[12px] text-slate-600">
             <li>• Use your real <b>legal business name</b> (that’s what shows on caller ID).</li>
-            <li>• Enter <b>every</b> Twilio & Telnyx number you dial or text from.</li>
+            <li>• Enter <b>every</b> Telnyx number you dial or text from.</li>
             <li>• Takes ~2 business days to confirm. <b>Re-register whenever you add a number.</b></li>
-            <li>• Texting? Both Twilio & Telnyx require <b>10DLC registration</b> or business texts get blocked.</li>
+            <li>• Texting? Telnyx requires <b>10DLC registration</b> or business texts get blocked.</li>
           </ul>
         </Card>
 

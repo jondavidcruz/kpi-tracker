@@ -1,5 +1,4 @@
 import { readTelcoAlerts, type TelcoAlert } from "@/lib/telco-alerts";
-import { twilioDebuggerAlarms, type LiveAlarm } from "@/lib/telco";
 import { humanizeAlarm } from "@/lib/telco-errors";
 
 function ago(iso: string): string {
@@ -10,13 +9,13 @@ function ago(iso: string): string {
   return `${Math.round(s / 86400)}d`;
 }
 
-/** Recent alarms received from / pulled from Twilio + Telnyx. Shown on both the
- *  Compliance and Phone Health pages so line problems are visible in either place. */
+/** Recent line alarms received via Telnyx + provider webhooks (at /api/telco-alert).
+ *  Shown on both the Compliance and Phone Health pages so line problems are visible. */
 export default async function TelcoAlarms() {
-  const [stored, twilioLive] = await Promise.all([readTelcoAlerts(), twilioDebuggerAlarms(12)]);
-  // Merge webhook-received + live-pulled, dedupe on text+code, newest first.
+  const stored = await readTelcoAlerts();
+  // Dedupe on text+code, newest first.
   const seen = new Set<string>();
-  const all: (TelcoAlert | LiveAlarm)[] = [...twilioLive, ...stored]
+  const all: TelcoAlert[] = [...stored]
     .filter((a) => { const k = `${a.code ?? ""}|${a.text}`; if (seen.has(k)) return false; seen.add(k); return true; })
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
     .slice(0, 15);
@@ -25,10 +24,10 @@ export default async function TelcoAlarms() {
     <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center justify-between">
         <strong className="text-slate-900 dark:text-slate-100">🚨 Recent line alarms</strong>
-        <span className="text-[11px] text-slate-400">Twilio Debugger (live) + provider webhooks</span>
+        <span className="text-[11px] text-slate-400">Telnyx + provider webhooks</span>
       </div>
       {all.length === 0 ? (
-        <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">✓ No alarms. (Point Twilio Debugger + Telnyx webhooks at <code className="text-xs">/api/telco-alert</code> to capture real-time alerts.)</p>
+        <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">✓ No alarms. (Point Telnyx webhooks at <code className="text-xs">/api/telco-alert</code> to capture real-time alerts.)</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {all.map((a, i) => {
@@ -54,7 +53,7 @@ export default async function TelcoAlarms() {
 
 export const DELIVERABILITY_TIPS: { area: string; tips: string[] }[] = [
   {
-    area: "Higher call connect rate (Twilio · acquisitions)",
+    area: "Higher call connect rate (Telnyx · acquisitions)",
     tips: [
       "Register CNAM / caller ID so your name shows, and enroll numbers in the Free Caller Registry to fight 'Spam Likely'.",
       "Keep STIR/SHAKEN attestation at A — verify your numbers are fully attested with the carrier.",

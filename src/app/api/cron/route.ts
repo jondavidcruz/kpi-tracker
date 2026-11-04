@@ -156,10 +156,8 @@ export async function GET(request: Request) {
     (out as Record<string, unknown>).envNamesMatchingREI = Object.keys(process.env).filter((k) => /REI|RENTCAST|REGRID|TWILIO|TELNYX|DEALMACHINE|MAPS|GEMINI|ANTHROPIC/i.test(k)).sort();
     // Phone providers (feed /phone-health + /compliance): live round-trips.
     try {
-      const { telcoEnvStatus, twilioHealth, telnyxHealth } = await import("@/lib/telco");
+      const { telcoEnvStatus, telnyxHealth } = await import("@/lib/telco");
       const env = telcoEnvStatus();
-      out.TWILIO = { set: env.twilioSid && env.twilioToken };
-      if (out.TWILIO.set) { const h = await twilioHealth(); out.TWILIO.works = h.connected; out.TWILIO.detail = h.connected ? `${h.numbers ?? 0} numbers · ${h.issues.length ? h.issues.length + " issues" : "healthy"}` : (h.reason ?? "").slice(0, 140); }
       out.TELNYX = { set: env.telnyx };
       if (out.TELNYX.set) { const h = await telnyxHealth(); out.TELNYX.works = h.connected; out.TELNYX.detail = h.connected ? `${h.numbers ?? 0} numbers · ${h.issues.length ? h.issues.length + " issues" : "healthy"}` : (h.reason ?? "").slice(0, 140); }
     } catch (e) { (out as Record<string, unknown>).telcoError = String(e).slice(0, 120); }
@@ -614,51 +612,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, results });
   }
 
-  // ☎️ Twilio audit (?twilioaudit=1): every number on the account with its
-  // 30-day call/text activity — the "which numbers are dead rent" report for
-  // the Telnyx-consolidation decision. Read-only; stores __twilio_audit__.
-  if (url.searchParams.get("twilioaudit") === "1") {
-    const sid = process.env.TWILIO_ACCOUNT_SID, tok = process.env.TWILIO_AUTH_TOKEN;
-    if (!sid || !tok) return NextResponse.json({ ok: false, error: "no Twilio creds" });
-    const auth = "Basic " + Buffer.from(`${sid}:${tok}`).toString("base64");
-    const tw = async (path: string) => fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}${path}`, { headers: { Authorization: auth }, cache: "no-store" }).then((r) => r.json()).catch(() => ({}));
-    const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
-    const nums = (await tw("/IncomingPhoneNumbers.json?PageSize=400")) as { incoming_phone_numbers?: Array<{ phone_number?: string; friendly_name?: string }> };
-    const owned = (nums.incoming_phone_numbers ?? []).map((n) => n.phone_number ?? "").filter(Boolean);
-    const act: Record<string, { calls: number; msgs: number; last: string }> = {};
-    for (const n of owned) act[n] = { calls: 0, msgs: 0, last: "" };
-    const bump = (n: string | undefined, kind: "calls" | "msgs", when: string) => {
-      if (!n || !act[n]) return;
-      act[n][kind]++;
-      const d = new Date(when).toISOString().slice(0, 10);
-      if (d > act[n].last) act[n].last = d;
-    };
-    for (let page = 0; page < 3; page++) {
-      const j = (await tw(`/Calls.json?PageSize=1000&Page=${page}&StartTime%3E=${since}`)) as { calls?: Array<{ from?: string; to?: string; start_time?: string }> };
-      for (const c of j.calls ?? []) { bump(c.from, "calls", c.start_time ?? ""); bump(c.to, "calls", c.start_time ?? ""); }
-      if ((j.calls ?? []).length < 1000) break;
-    }
-    for (let page = 0; page < 3; page++) {
-      const j = (await tw(`/Messages.json?PageSize=1000&Page=${page}&DateSent%3E=${since}`)) as { messages?: Array<{ from?: string; to?: string; date_sent?: string }> };
-      for (const m of j.messages ?? []) { bump(m.from, "msgs", m.date_sent ?? ""); bump(m.to, "msgs", m.date_sent ?? ""); }
-      if ((j.messages ?? []).length < 1000) break;
-    }
-    const report = owned.map((n) => ({ number: n, name: (nums.incoming_phone_numbers ?? []).find((x) => x.phone_number === n)?.friendly_name ?? "", ...act[n] }))
-      .sort((a, b) => (a.calls + a.msgs) - (b.calls + b.msgs));
-    const dead = report.filter((r) => r.calls + r.msgs === 0);
-    const summary = {
-      at: new Date().toISOString(), windowDays: 30, totalNumbers: owned.length,
-      estMonthlyRent: Number((owned.length * 1.15).toFixed(2)),
-      deadNumbers: dead.length, deadMonthlyWaste: Number((dead.length * 1.15).toFixed(2)),
-      numbers: report,
-    };
-    const row = await db.resource.findFirst({ where: { category: "__twilio_audit__" } });
-    const description = JSON.stringify(summary);
-    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
-    else await db.resource.create({ data: { title: "twilio-audit", category: "__twilio_audit__", url: "", description } });
-    return NextResponse.json({ ok: true, ...summary });
-  }
-
   // 📡 Telnyx spend (?telnyxspend=1, daily cron): month-to-date cost from
   // detail records (voice + messaging, covers War Room AND Direct REI lines),
   // current balance, and a straight-line monthly projection → Resource
@@ -684,31 +637,11 @@ export async function GET(request: Request) {
       }
       return { total, count, short };
     };
-    // Twilio side (same card): this-month usage + balance, Basic auth
-    const twSid = process.env.TWILIO_ACCOUNT_SID, twTok = process.env.TWILIO_AUTH_TOKEN;
-    const twAuth = twSid && twTok ? "Basic " + Buffer.from(`${twSid}:${twTok}`).toString("base64") : "";
-    const tw = async (path: string) => twAuth
-      ? fetch(`https://api.twilio.com/2010-04-01/Accounts/${twSid}${path}`, { headers: { Authorization: twAuth }, cache: "no-store" }).then((r) => r.json()).catch(() => null)
-      : null;
-    const [msg, voice, balRes, twUsage, twBal] = await Promise.all([
+    const [msg, voice, balRes] = await Promise.all([
       sumKind("messaging"), sumKind("voice"),
       fetch("https://api.telnyx.com/v2/balance", { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" }).then((r) => r.json()).catch(() => ({})),
-      tw("/Usage/Records/ThisMonth.json?PageSize=400"),
-      tw("/Balance.json"),
     ]);
     const bal = (balRes as { data?: { balance?: string; currency?: string } }).data;
-    let twilioMtd: number | null = null; let twilioSms = 0; let twilioVoice = 0;
-    const twRecs = (twUsage as { usage_records?: Array<{ category?: string; price?: string | number }> } | null)?.usage_records;
-    if (twRecs) {
-      twilioMtd = 0;
-      for (const r of twRecs) {
-        const p = Number(r.price ?? 0) || 0;
-        twilioMtd += p;
-        if (/sms|messag/i.test(r.category ?? "")) twilioSms += p;
-        if (/call|voice|minute/i.test(r.category ?? "")) twilioVoice += p;
-      }
-    }
-    const twilioBalance = twBal && (twBal as { balance?: string }).balance != null ? Number((twBal as { balance?: string }).balance) : null;
     const day = new Date().getUTCDate();
     const daysInMonth = new Date(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 0).getDate();
     const mtd = msg.total + voice.total;
@@ -722,26 +655,15 @@ export async function GET(request: Request) {
       mtd: Number(mtd.toFixed(2)),
       projected: Number(((mtd / Math.max(1, day)) * daysInMonth).toFixed(2)),
       balance: bal?.balance != null ? Number(bal.balance) : null,
-      twilio: twilioMtd != null ? {
-        mtd: Number(twilioMtd.toFixed(2)), sms: Number(twilioSms.toFixed(2)), voice: Number(twilioVoice.toFixed(2)),
-        projected: Number(((twilioMtd / Math.max(1, day)) * daysInMonth).toFixed(2)),
-        balance: twilioBalance,
-      } : null,
     };
     const row = await db.resource.findFirst({ where: { category: "__telnyx_spend__" } });
     const description = JSON.stringify(snapshot);
     if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
     else await db.resource.create({ data: { title: "telnyx-spend", category: "__telnyx_spend__", url: "", description } });
-    // 💳 Low-balance alerts (Jon 2026-10-14). Twilio auto-renew is OFF, so warn
-    // BEFORE it hits zero or calls/texts stop. Telnyx auto-renews, so its ping is
-    // just a heads-up as it runs down. Runs once/day with the spend snapshot, so
-    // a low balance re-pings daily until it's topped up — exactly the reminder Jon
-    // asked for. Posts to the phone-health Google Chat space.
+    // 💳 Low-balance alert (Jon 2026-10-14). Telnyx auto-renews, so this ping is a
+    // heads-up as it runs down. Runs once/day with the spend snapshot, so a low
+    // balance re-pings daily until it's topped up. Posts to the phone-health space.
     const balAlerts: string[] = [];
-    if (twilioBalance != null) {
-      if (twilioBalance < 10) balAlerts.push(`🔴 *Twilio $${twilioBalance.toFixed(2)}* — auto-renew is OFF. Reload now or calls & texts will stop.`);
-      else if (twilioBalance < 30) balAlerts.push(`🟠 Twilio getting low: *$${twilioBalance.toFixed(2)}* (auto-renew OFF — top it up soon).`);
-    }
     if (snapshot.balance != null) {
       if (snapshot.balance < 20) balAlerts.push(`🔴 Telnyx low: *$${snapshot.balance.toFixed(2)}* — auto-renew should refill it; confirm it fired.`);
       else if (snapshot.balance < 50) balAlerts.push(`🟡 Telnyx getting low: *$${snapshot.balance.toFixed(2)}* (auto-renew on — just a heads-up).`);
@@ -3957,12 +3879,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, sent, deals: deals.length, followUps: fuCount });
   }
 
-  // Twilio number hunt — which (sub)account actually owns the phone numbers.
-  if (url.searchParams.get("twiliohunt") === "1") {
-    const { twilioNumberHunt } = await import("@/lib/telco");
-    return NextResponse.json({ ok: true, hunt: await twilioNumberHunt() });
-  }
-
   // Scrub a name from the Hall of Fame (WeeklyAward stores plain names, so
   // erased people lingered there). ?hof=1&name=Austin
   if (url.searchParams.get("hof") === "1") {
@@ -4231,22 +4147,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: res.ok, erased: res.name, error: res.error });
   }
 
-  // Daily compliance line check — hits Twilio + Telnyx live via API and posts any
+  // Daily compliance line check — hits Telnyx live via API and posts any
   // issues (numbers not active, account not active, unreachable API) to the
   // phone-health Chat space so we catch line problems before the team feels them.
   if (url.searchParams.get("compliance") === "1") {
-    const { allLineHealth, twilioDebuggerAlarms } = await import("@/lib/telco");
+    const { allLineHealth } = await import("@/lib/telco");
     const cfg = await db.resource.findFirst({ where: { category: "__phone_config__" } });
     const webhook = cfg?.url ?? "";
-    const [health, alarms] = await Promise.all([allLineHealth(), twilioDebuggerAlarms(10)]);
+    const health = await allLineHealth();
     const lines: string[] = [];
     for (const h of health) {
       if (h.connected && h.issues.length) lines.push(`*${h.provider}*: ${h.issues.join("; ")}`);
     }
-    // Surface any live Twilio Debugger errors from the last check too (plain English).
-    const { humanizeAlarm } = await import("@/lib/telco-errors");
-    const errAlarms = alarms.filter((a) => a.level === "error").slice(0, 6);
-    for (const a of errAlarms) { const h = humanizeAlarm(a.code, a.text); lines.push(`*${a.provider}*${a.code ? ` [${a.code}]` : ""}: ${h.meaning}${h.action ? ` — ${h.action}` : ""}`); }
     // Jon 2026-10-08: post ONLY when the issue set CHANGES — the same chronic
     // issues repeating every weekday was pure noise.
     const sig = lines.join("|");
@@ -4260,7 +4172,7 @@ export async function GET(request: Request) {
       const text = `🛡️ *Line check — change detected:*\n${lines.join("\n")}\n\nReview in the War Room → Compliance.`;
       posted = (await postToSpace("phonehealth", text)) || (webhook ? await postChatWebhook(webhook, text) : false);
     }
-    return NextResponse.json({ ok: true, job: "compliance", checked: health.map((h) => ({ p: h.provider, connected: h.connected, issues: h.issues.length })), alarms: errAlarms.length, posted, changed });
+    return NextResponse.json({ ok: true, job: "compliance", checked: health.map((h) => ({ p: h.provider, connected: h.connected, issues: h.issues.length })), posted, changed });
   }
 
   // Payday — checked daily; only sends on actual semi-monthly paydays (the 15th

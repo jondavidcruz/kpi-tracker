@@ -10,7 +10,7 @@ Context you know about their stack:
 - They buy motivated-seller leads cheaply via iSpeedToLead (credits, ~$3–29/lead) — this is efficient, keep it.
 - REIReply is their CRM (core, keep). They're testing a second CRM (DirectREI, $29/mo) — never pay for two CRMs.
 - They were considering cutting PropStream and BatchDialer/BatchLeads (list-pulling tools they don't need now that they buy leads). Regrid ($10) is a cheap parcel tool.
-- Payroll = overseas contractors. Twilio = phone/SMS.
+- Payroll = overseas contractors. Telnyx = phone/SMS.
 
 Rules:
 - Be specific and direct. Name the exact line items to cut, downgrade, renegotiate, or consolidate.

@@ -1071,7 +1071,7 @@ export async function savePhoneLine(formData: FormData) {
   if (!number) redirect("/phone-health?err=Enter+a+phone+number#tracker");
   const rateRaw = Number(String(formData.get("answerRate") ?? "").trim());
   const meta = {
-    provider: String(formData.get("provider") ?? "twilio") === "telnyx" ? "telnyx" : "twilio",
+    provider: String(formData.get("provider") ?? "telnyx") === "twilio" ? "twilio" : "telnyx",
     label: String(formData.get("label") ?? "").trim().slice(0, 60),
     registered: formData.get("registered") === "on",
     lastTested: String(formData.get("lastTested") ?? "").slice(0, 10),

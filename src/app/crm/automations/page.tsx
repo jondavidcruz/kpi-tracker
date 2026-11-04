@@ -132,6 +132,6 @@ const BUILT_INS: Array<{ group: string; items: Array<{ when: string; then: strin
   ] },
   { group: "🔄 Background feeds (daily crons)", items: [
     { when: "5× per day", then: "REI Reply sync (dials/texts/emails/moves → KPI auto-entry) + Direct REI reply counts → Marketing-responses KPIs" },
-    { when: "Every day", then: "Telnyx + Twilio spend snapshots · full DB backup to Drive · 3am perf watchdog (speed + data-growth alarms → 🛠 task)" },
+    { when: "Every day", then: "Telnyx spend snapshots · full DB backup to Drive · 3am perf watchdog (speed + data-growth alarms → 🛠 task)" },
   ] },
 ];

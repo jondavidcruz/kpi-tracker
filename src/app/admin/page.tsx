@@ -70,7 +70,6 @@ export default async function AdminPage({
       ["ANTHROPIC_API_KEY", async () => (await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: { "x-api-key": process.env.ANTHROPIC_API_KEY ?? "", "anthropic-version": "2023-06-01" }, signal: t() })).ok],
       ["GEMINI_API_KEY", async () => (await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1&key=${process.env.GEMINI_API_KEY}`, { signal: t() })).ok],
       ["TELNYX_API_KEY", async () => (await fetch("https://api.telnyx.com/v2/balance", { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, signal: t() })).ok],
-      ["TWILIO_ACCOUNT_SID", async () => (await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}.json`, { headers: { Authorization: "Basic " + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64") }, signal: t() })).ok],
       ["PANDADOC_API_KEY", async () => (await fetch("https://api.pandadoc.com/public/v1/templates?count=1", { headers: { Authorization: `API-Key ${process.env.PANDADOC_API_KEY}` }, signal: t() })).ok],
       ["RESEND_API_KEY", async () => (await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }, signal: t() })).ok],
       ["GOOGLE_SERVICE_ACCOUNT_JSON", async () => {
@@ -497,8 +496,7 @@ export default async function AdminPage({
                 { env: "RENTCAST_API_KEY", name: "RentCast comps", powers: "LIVE: 🔎 pull value & comps on the calculator (Sharyn+Marie, hard-capped 50/mo)", get: "rentcast.io → API" },
                 { env: "REIAI_API_KEY", name: "REI AI comps", powers: "NEXT: comps into the calculator — waiting on their API docs (paste the support email)", get: "REI AI → support" },
                 { env: "DEALMACHINE_API_KEY", name: "DealMachine", powers: "NEXT: property autofill (sqft · year · lot · est. value · owner equity) + mail sequences for the Mailers KPI", get: "DealMachine → Automation → API Docs" },
-                { env: "TWILIO_ACCOUNT_SID", name: "Twilio (GHL ops lines)", powers: "LIVE: phone health + A2P checks on your 8 acq/dispo numbers", get: "twilio.com console" },
-                { env: "TELNYX_API_KEY", name: "Telnyx (Direct REI lines)", powers: "LIVE: phone health on the 15 outbound marketing numbers", get: "telnyx.com portal" },
+                { env: "TELNYX_API_KEY", name: "Telnyx (all lines)", powers: "LIVE: phone health + A2P/10DLC checks on every calling & SMS number", get: "telnyx.com portal" },
                 { env: "PANDADOC_API_KEY", name: "PandaDoc", powers: "auto-drafted contracts + signed-PDF pull into Drive deal folders", get: "pandadoc.com → Settings → API" },
                 { env: "RESEND_API_KEY", name: "Resend (email)", powers: "welcome emails · P&L requests · alert emails · open/click tracking", get: "resend.com" },
                 { env: "CHAT_WEBHOOKS_JSON", name: "Google Chat rooms (8)", powers: "contracts-signed · team wins · acquisitions · KPI EOD · phone health · Direct REI · receipts · leadership", get: "already connected" },
