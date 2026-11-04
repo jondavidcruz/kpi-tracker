@@ -8,6 +8,7 @@
 import { useRef, useState, useTransition } from "react";
 import { saveCrmFormAction } from "@/app/crm/actions";
 import type { CrmForm } from "@/lib/crm-forms";
+import { parseLooseMoney, fmtDollars } from "@/lib/money";
 
 const inputCls = "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm";
 const labelCls = "mb-0.5 block text-[11px] font-bold text-slate-500";
@@ -74,6 +75,34 @@ export default function CrmFormFields({ form, oppId, contactId, initial, onSaved
             <textarea value={typeof cur === "string" ? cur : ""} onChange={(e) => change(fld.key, e.target.value)} rows={2} placeholder={fld.hint ?? ""} className={inputCls} />
           </div>
         );
+        // 💵 Always-$-formatted amount: type 13k / $13,000 / 13000, reformats to $13,000 on blur.
+        if (fld.type === "money") return (
+          <div key={fld.key}>
+            <label className={labelCls}>{fld.label}</label>
+            <input value={typeof cur === "string" ? cur : ""} inputMode="decimal" placeholder="$0"
+              onChange={(e) => change(fld.key, e.target.value)}
+              onBlur={(e) => { const n = parseLooseMoney(e.target.value); if (n != null) change(fld.key, fmtDollars(n)); }}
+              className={inputCls} />
+            {fld.hint && <p className="mt-0.5 text-[10px] text-slate-400">{fld.hint}</p>}
+          </div>
+        );
+        // 💵– One range field, low → high, both $-formatted on blur. Stores two keys.
+        if (fld.type === "moneyrange") {
+          const lo = typeof vals[fld.keyLow] === "string" ? (vals[fld.keyLow] as string) : "";
+          const hi = typeof vals[fld.keyHigh] === "string" ? (vals[fld.keyHigh] as string) : "";
+          const fmt = (k: string) => (e: React.FocusEvent<HTMLInputElement>) => { const n = parseLooseMoney(e.target.value); if (n != null) change(k, fmtDollars(n)); };
+          return (
+            <div key={fld.key}>
+              <label className={labelCls}>{fld.label}</label>
+              <div className="flex items-center gap-2">
+                <input value={lo} inputMode="decimal" placeholder="$ low" onChange={(e) => change(fld.keyLow, e.target.value)} onBlur={fmt(fld.keyLow)} className={inputCls} />
+                <span className="shrink-0 font-bold text-slate-400">→</span>
+                <input value={hi} inputMode="decimal" placeholder="$ high" onChange={(e) => change(fld.keyHigh, e.target.value)} onBlur={fmt(fld.keyHigh)} className={inputCls} />
+              </div>
+              {fld.hint && <p className="mt-0.5 text-[10px] text-slate-400">{fld.hint}</p>}
+            </div>
+          );
+        }
         return (
           <div key={fld.key}>
             <label className={labelCls}>{fld.label}</label>
