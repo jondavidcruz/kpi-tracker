@@ -416,16 +416,16 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                           deals (addressFirst) the seller gets a ⭐ so it's distinct from the 👤
                           lead-owner line. */}
                       <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="min-w-0 flex-1 text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{addressFirst ? "⭐ " : ""}{titleCase(c.contactName)}</a>
-                      {/* 🔥 Spread rating stays pinned by the name — the one at-a-glance signal.
-                          SELLER deals only (Jon 2026-10-30: no heat on developers/agents). */}
-                      {showHeat && (() => { const h = heatOf(c); const m = h ? HEAT_META[h] : null; return (
-                        <button type="button" onClick={(e) => bumpHeat(c, e)} title={m ? `Spread: ${m.label} — click to change` : "Rate this deal's potential spread (based on the comps) — click to set 🔥🔥🔥 big → 🔥🔥 med → 🔥 small → 🧊 thin"} className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m ? m.cls : "bg-white text-slate-300 ring-slate-200 hover:text-amber-500 hover:ring-amber-300"}`}>{m ? `${m.emoji} ${m.short}` : "🔥 rate"}</button>
-                      ); })()}
                     </div>
-                    {/* 🏷 Meta badges on their OWN wrapping row so nothing runs off the card
-                        (Jon 2026-11-04). The lead badge (c.leadType) is now a single unified
-                        chip — land sellers no longer show both "Seller" and "Land". */}
+                    {/* 🏷 ALL badges on their own wrapping row UNDER the name (Jon 2026-11-04:
+                        "give the seller name the main focus"). Nothing sits top-right anymore, so
+                        nothing runs off the card and every card looks uniform. The lead badge
+                        (c.leadType) is a single unified chip — land sellers show just one. */}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {/* 🔥 Spread rating — seller deals only (no heat on developers/agents). */}
+                      {showHeat && (() => { const h = heatOf(c); const m = h ? HEAT_META[h] : null; return (
+                        <button type="button" onClick={(e) => bumpHeat(c, e)} title={m ? `Spread: ${m.label} — click to change` : "Rate this deal's potential spread (based on the comps) — click to set 🔥🔥🔥 big → 🔥🔥 med → 🔥 small → 🧊 thin"} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m ? m.cls : "bg-white text-slate-300 ring-slate-200 hover:text-amber-500 hover:ring-amber-300"}`}>{m ? `${m.emoji} ${m.short}` : "🔥 rate"}</button>
+                      ); })()}
                       {c.leadType && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.leadType.cls}`}>{c.leadType.label}</span>}
                       {c.acres != null && <span title={`${c.acres} acres`} className="rounded-full bg-lime-100 px-1.5 py-0.5 text-[9px] font-bold text-lime-800 ring-1 ring-lime-200">⛰️ {c.acres % 1 === 0 ? c.acres : c.acres.toFixed(2)} ac</span>}
                       {c.waterfront && <span title="Waterfront land — market these first (wealthy buyers keep building through rate hikes)" className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[9px] font-bold text-cyan-700 ring-1 ring-cyan-200">🌊 Waterfront</span>}
