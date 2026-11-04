@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, Tv, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap, Landmark,
-  Smartphone, Play, Banknote, TrafficCone, Moon, Sun,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap, Landmark,
+  Play, Banknote, TrafficCone, Moon, Sun,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -116,7 +116,6 @@ export default function Sidebar({
       { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
       { href: "/process", label: "Process Map", Icon: Workflow },
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
-      { href: "/iphone", label: "iPhone App", Icon: Smartphone },
       { href: "/rewards", label: "Rewards", Icon: Gift },
       { href: "/certificates", label: "Certificates", Icon: GraduationCap, managerOnly: true },
       { href: "/culture", label: "Culture", Icon: PartyPopper },
@@ -253,10 +252,9 @@ export default function Sidebar({
     (!allowedPaths || allowedPaths.some((p) => it.href === p || it.href.startsWith(p + "/")));
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
-  // Flat, searchable index of every page the user can actually see (+ the wall display).
+  // Flat, searchable index of every page the user can actually see.
   const allItems: (Item & { group: string })[] = [
     ...orderedGroups.flatMap((g) => g.items.filter(visible).map((it) => ({ ...it, group: g.label }))),
-    { href: "/tv", label: "Wall display", Icon: Tv, group: "Display" },
   ];
   const q = query.trim().toLowerCase();
   const results = q
@@ -411,13 +409,6 @@ export default function Sidebar({
           );
         })}
 
-        <div>
-          <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-navy-300">Display</div>
-          <Link href="/tv" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-brand-navy-100 hover:bg-white/5 hover:text-white">
-            <Tv size={18} strokeWidth={1.75} className="text-brand-navy-300" />
-            Wall display
-          </Link>
-        </div>
         </>
         )}
 
