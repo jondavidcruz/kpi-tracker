@@ -25,6 +25,7 @@ import { leadKind } from "@/lib/lead-kind";
 import { sectionColor } from "@/lib/section-colors";
 import { readDealHeat } from "@/lib/deal-heat";
 import DealHeatChip from "@/components/DealHeatChip";
+import LeadKindChip from "@/components/LeadKindChip";
 import { readListingHistory } from "@/lib/listing-history";
 import ListingHistoryPanel from "@/components/ListingHistoryPanel";
 import LeadTypePicker from "@/components/LeadTypePicker";
@@ -196,6 +197,10 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               <span className="text-lg font-extrabold tracking-tight text-slate-900">{c.name}</span>
               {/* 🔥 spread rating — same control as the board card (Jon 2026-10-29) */}
               <DealHeatChip oppId={opp.id} heat={readDealHeat(opp.formData)} />
+              {/* 🏞🏡 Land/House — auto-detected, reps can override (Jon 2026-11-04) */}
+              {!isDevNetworkName(opp.pipeline) && !isAgentNetworkName(opp.pipeline) && (
+                <LeadKindChip oppId={opp.id} override={(((opp.formData as Record<string, unknown>)?.__leadKind as "land" | "home" | undefined) ?? "")} detected={leadKind(opp.formData)} />
+              )}
             </div>
             <div className="text-xs text-slate-500">{formatAddress(opp.title)}</div>
           </div>

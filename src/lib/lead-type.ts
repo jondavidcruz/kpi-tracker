@@ -23,3 +23,17 @@ export function sellerKind(formData: unknown, pipeline?: string): LeadKind {
   if (hasLand || /\bland\b/i.test(pipeline ?? "")) return "seller_land";
   return "seller_property";
 }
+
+// 🏷 ONE lead badge, no doubles (Jon 2026-11-04): a land seller used to show BOTH
+// "⛰️ Seller" and a separate "🏞 Land" chip. We now collapse role + land/home into a
+// single compact badge. `role` is seller / agent / developer; `kind` is the resolved
+// land|home (manual override honored upstream via resolveLeadKind). For a developer or
+// agent the kind is irrelevant. For a seller, land/home carries the "Seller" meaning —
+// every card on a seller board is a seller, so the word is redundant with the icon.
+export function unifiedLeadBadge(role: LeadKind, kind: "land" | "home" | ""): LeadBadge {
+  if (role === "buyer_agent") return { label: "🧑‍💼 Agent", cls: "bg-sky-100 text-sky-700 ring-sky-200" };
+  if (role === "developer") return { label: "🏗 Developer", cls: "bg-violet-100 text-violet-700 ring-violet-200" };
+  if (kind === "land" || role === "seller_land") return { label: "🏞 Land", cls: "bg-lime-100 text-lime-700 ring-lime-200" };
+  if (kind === "home" || role === "seller_property") return { label: "🏡 House", cls: "bg-orange-100 text-orange-700 ring-orange-200" };
+  return { label: "🧑 Seller", cls: "bg-slate-100 text-slate-600 ring-slate-200" };
+}

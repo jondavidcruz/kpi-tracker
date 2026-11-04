@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/data";
 import { readPipelines, parseTags } from "@/lib/crm";
 import { isWaterfront } from "@/lib/waterfront";
 import { readDealHeat } from "@/lib/deal-heat";
-import { leadKind } from "@/lib/lead-kind";
+import { resolveLeadKind } from "@/lib/lead-kind";
 import { localTimeForPhone } from "@/lib/npa-tz";
 import { commsFor } from "@/lib/crm-comms";
 import { formatAddress } from "@/lib/address";
@@ -20,7 +20,7 @@ import CrmQuickView from "@/components/CrmQuickView";
 import CsvMapImport from "@/components/CsvMapImport";
 import { importDispoNetworkCsv, quickAddDispoNetworkAction } from "@/app/actions";
 import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispoCascadeAction, resortOrphanStagesAction, syncClosedDealsAction, createCrmLeadAction } from "@/app/crm/actions";
-import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
+import { leadTypeBadge, sellerKind, unifiedLeadBadge } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
 import DispoCommandCenter from "@/components/DispoCommandCenter";
@@ -253,10 +253,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     lastTouch: lastTouchForDeal(o.id, o.contactId)?.toISOString() ?? "", stageMoved: stageAtByDeal.has(o.id),
     followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
     waterfront: isWaterfront(o.formData),
-    leadKind: leadKind(o.formData),
+    leadKind: resolveLeadKind(o.formData, o.pipeline),
     ...(() => { const t = localTimeForPhone(o.contact?.phone || ""); return t ? { tzLabel: `${t.time} ${t.abbr}`, tzRank: t.rank } : {}; })(),
     nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
-    leadType: leadTypeBadge(sellerKind(o.formData, o.pipeline)),
+    leadType: unifiedLeadBadge(sellerKind(o.formData, o.pipeline), resolveLeadKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
     acres: parseAcres(o.formData) ?? undefined,
     heat: readDealHeat(o.formData),

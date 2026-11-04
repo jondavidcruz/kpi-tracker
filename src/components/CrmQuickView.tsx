@@ -21,6 +21,8 @@ import { readGateChecks } from "@/lib/dispo-gates";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { readDealHeat } from "@/lib/deal-heat";
 import { leadKind } from "@/lib/lead-kind";
+import LeadKindChip from "@/components/LeadKindChip";
+import MoneyInput from "@/components/MoneyInput";
 import DealHeatChip from "@/components/DealHeatChip";
 import { readListingHistory } from "@/lib/listing-history";
 import ListingHistoryPanel from "@/components/ListingHistoryPanel";
@@ -204,6 +206,11 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                   <PipelineMover d={d} pipelineStages={pipelineStages} setSaved={setSaved} />
                   {/* 🔥 spread rating — same control as the board card (Jon 2026-10-29) */}
                   <DealHeatChip oppId={d.id} heat={readDealHeat(d.formData)} />
+                  {/* 🏞🏡 Land/House — auto-detected, but reps can set it by hand (Jon 2026-11-04).
+                      Sellers only; agent/developer network cards aren't land-or-house. */}
+                  {!isDevNetworkName(d.pipeline) && !isAgentNetworkName(d.pipeline) && (
+                    <LeadKindChip oppId={d.id} override={(((d.formData as Record<string, unknown>)?.__leadKind as "land" | "home" | undefined) ?? "")} detected={leadKind(d.formData)} />
+                  )}
                 </div>
               </div>
               {saved && <span className="text-xs font-bold text-emerald-600">{saved}</span>}
@@ -365,7 +372,7 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                     </div>
                     <div>
                       <label className={labelCls}>Deal value $</label>
-                      <input name="value" defaultValue={d.value ?? ""} className={inputCls} />
+                      <MoneyInput name="value" defaultValue={d.value} className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Next follow-up</label>

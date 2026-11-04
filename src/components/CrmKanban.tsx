@@ -7,7 +7,6 @@ import { setOppStageAction, addCrmTaskAction, addCrmApptAction, addOppTagAction,
 import { setBuilderSizeAction } from "@/app/actions";
 import { builderSizeMeta } from "@/lib/builder-size";
 import { HEAT_META, cycleHeat, heatRank, type DealHeat } from "@/lib/deal-heat";
-import { leadKindMeta } from "@/lib/lead-kind";
 import { STAGE_PROB, titleCase } from "@/lib/crm-shared";
 import { formatAddress } from "@/lib/address";
 import { stageHelp } from "@/lib/stage-help";
@@ -410,32 +409,34 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     style={c.apptDueToday ? { border: "2px solid #ef4444" } : c.taskDueToday ? { border: "2px solid #22c55e" } : c.followUpDue ? { border: "2px solid #3b82f6" } : ageColor(c) ? { border: `2px solid ${ageColor(c)}` } : undefined}
                     className={`cursor-pointer rounded-xl p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${c.apptDueToday ? "bg-red-50/60" : c.taskDueToday ? "bg-emerald-50/50" : c.followUpDue ? "bg-blue-50/50" : "bg-white"} ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : ""}`}
                   >
-                    <div className="flex items-start justify-between gap-1">
+                    <div className="flex items-start gap-1">
                       {selecting && <input type="checkbox" readOnly checked={selected.has(c.id)} className="mr-1 mt-0.5 h-4 w-4 shrink-0 accent-indigo-600" />}
                       {/* name → FULL card page; anywhere else on the card → quick view.
                           Seller name first, then the 📍 address below (Jon 2026-10-26). On dispo
                           deals (addressFirst) the seller gets a ⭐ so it's distinct from the 👤
                           lead-owner line. */}
-                      <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{addressFirst ? "⭐ " : ""}{titleCase(c.contactName)}</a>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {/* 🔥 Spread rating — SELLER deals only (Jon 2026-10-30: "these are buyers, no
-                            deal heat on developers/agents"). Hidden on the buyer-network boards. */}
-                        {showHeat && (() => { const h = heatOf(c); const m = h ? HEAT_META[h] : null; return (
-                          <button type="button" onClick={(e) => bumpHeat(c, e)} title={m ? `Spread: ${m.label} — click to change` : "Rate this deal's potential spread (based on the comps) — click to set 🔥🔥🔥 big → 🔥🔥 med → 🔥 small → 🧊 thin"} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m ? m.cls : "bg-white text-slate-300 ring-slate-200 hover:text-amber-500 hover:ring-amber-300"}`}>{m ? `${m.emoji} ${m.short}` : "🔥 rate"}</button>
-                        ); })()}
-                        {c.gate && <span title={`SOP gate — ${c.gate.label}: ${c.gate.cleared ? "cleared, clear to advance" : "held, advance locked"}`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.gate.cleared ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-red-100 text-red-700 ring-red-200"}`}>{c.gate.cleared ? "✓ gate" : "🔒 gate"}</span>}
-                        {!!c.parcels && c.parcels > 1 && <span title={`${c.parcels} parcels on this deal`} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 ring-1 ring-amber-200">📦 {c.parcels}</span>}
-                        {c.acres != null && <span title={`${c.acres} acres`} className="rounded-full bg-lime-100 px-1.5 py-0.5 text-[9px] font-bold text-lime-800 ring-1 ring-lime-200">⛰️ {c.acres % 1 === 0 ? c.acres : c.acres.toFixed(2)} ac</span>}
-                        {c.offers && c.offers.live > 0 && <span title={`${c.offers.live} of ${c.offers.goal} offers received`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.offers.live >= c.offers.goal ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>💰 {c.offers.live}/{c.offers.goal}</span>}
-                        {c.staleStage && <span title={`This deal's saved stage ("${c.staleStage}") no longer exists in this pipeline after a rename — use "Re-sort deals" to file it correctly.`} className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700 ring-1 ring-orange-200">⚠️ was: {c.staleStage}</span>}
-                        {c.leadType && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.leadType.cls}`}>{c.leadType.label}</span>}
-                        {c.waterfront && <span title="Waterfront land — market these first (wealthy buyers keep building through rate hikes)" className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[9px] font-bold text-cyan-700 ring-1 ring-cyan-200">🌊 Waterfront</span>}
-                        {c.leadKind && (() => { const m = leadKindMeta(c.leadKind); return m ? <span title={`Detected as a ${m.label} lead (more ${m.label}-specific details filled)`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls}`}>{m.emoji} {m.label}</span> : null; })()}
-                        {c.tzLabel && <span title="The lead's local time. Work East Coast leads first — they're ahead of us — then move west. Use the 🌅 sort." className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 ring-1 ring-slate-200">🕐 {c.tzLabel}</span>}
-                        {c.builderSize && (() => { const m = builderSizeMeta(c.builderSize); return (
-                          <button type="button" title={m.title} onClick={(e) => { e.stopPropagation(); flipBuilderSize(c.id, c.builderSize === "big" ? "mompop" : "big"); }} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls} hover:opacity-80`}>{m.emoji} {m.label}</button>
-                        ); })()}
-                      </div>
+                      <a href={`/crm/${c.id}`} onClick={(e) => e.stopPropagation()} title="Open the full lead page" className="min-w-0 flex-1 text-[14px] font-bold leading-snug text-slate-800 hover:text-indigo-600 hover:underline">{addressFirst ? "⭐ " : ""}{titleCase(c.contactName)}</a>
+                      {/* 🔥 Spread rating stays pinned by the name — the one at-a-glance signal.
+                          SELLER deals only (Jon 2026-10-30: no heat on developers/agents). */}
+                      {showHeat && (() => { const h = heatOf(c); const m = h ? HEAT_META[h] : null; return (
+                        <button type="button" onClick={(e) => bumpHeat(c, e)} title={m ? `Spread: ${m.label} — click to change` : "Rate this deal's potential spread (based on the comps) — click to set 🔥🔥🔥 big → 🔥🔥 med → 🔥 small → 🧊 thin"} className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m ? m.cls : "bg-white text-slate-300 ring-slate-200 hover:text-amber-500 hover:ring-amber-300"}`}>{m ? `${m.emoji} ${m.short}` : "🔥 rate"}</button>
+                      ); })()}
+                    </div>
+                    {/* 🏷 Meta badges on their OWN wrapping row so nothing runs off the card
+                        (Jon 2026-11-04). The lead badge (c.leadType) is now a single unified
+                        chip — land sellers no longer show both "Seller" and "Land". */}
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {c.leadType && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.leadType.cls}`}>{c.leadType.label}</span>}
+                      {c.acres != null && <span title={`${c.acres} acres`} className="rounded-full bg-lime-100 px-1.5 py-0.5 text-[9px] font-bold text-lime-800 ring-1 ring-lime-200">⛰️ {c.acres % 1 === 0 ? c.acres : c.acres.toFixed(2)} ac</span>}
+                      {c.waterfront && <span title="Waterfront land — market these first (wealthy buyers keep building through rate hikes)" className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[9px] font-bold text-cyan-700 ring-1 ring-cyan-200">🌊 Waterfront</span>}
+                      {c.gate && <span title={`SOP gate — ${c.gate.label}: ${c.gate.cleared ? "cleared, clear to advance" : "held, advance locked"}`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.gate.cleared ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-red-100 text-red-700 ring-red-200"}`}>{c.gate.cleared ? "✓ gate" : "🔒 gate"}</span>}
+                      {!!c.parcels && c.parcels > 1 && <span title={`${c.parcels} parcels on this deal`} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 ring-1 ring-amber-200">📦 {c.parcels}</span>}
+                      {c.offers && c.offers.live > 0 && <span title={`${c.offers.live} of ${c.offers.goal} offers received`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.offers.live >= c.offers.goal ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>💰 {c.offers.live}/{c.offers.goal}</span>}
+                      {c.staleStage && <span title={`This deal's saved stage ("${c.staleStage}") no longer exists in this pipeline after a rename — use "Re-sort deals" to file it correctly.`} className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700 ring-1 ring-orange-200">⚠️ was: {c.staleStage}</span>}
+                      {c.tzLabel && <span title="The lead's local time. Work East Coast leads first — they're ahead of us — then move west. Use the 🌅 sort." className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 ring-1 ring-slate-200">🕐 {c.tzLabel}</span>}
+                      {c.builderSize && (() => { const m = builderSizeMeta(c.builderSize); return (
+                        <button type="button" title={m.title} onClick={(e) => { e.stopPropagation(); flipBuilderSize(c.id, c.builderSize === "big" ? "mompop" : "big"); }} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls} hover:opacity-80`}>{m.emoji} {m.label}</button>
+                      ); })()}
                     </div>
                     {/* property line — opp title only when it's NOT just the name (Jon
                         2026-10-13: name was showing twice, incl. near-dups like
@@ -466,27 +467,28 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     {c.phone && <div className={`text-[13px] font-bold text-emerald-600 ${privacy ? "select-none blur-[3px]" : ""}`}>📞 {c.phone}</div>}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {show.money && c.money && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{c.money}</span>}
-                      {/* 🕒 how long this lead has been sitting in the system — keep
-                          leads moving (Jon 2026-10-13): green <7d, amber <30d, red 30d+ */}
+                      {/* 🕒 Age — only once it starts to matter (Jon 2026-11-04 declutter: a
+                          lead entered today/yesterday doesn't need a chip). Amber 7-29d, red 30d+. */}
                       {c.createdAt && (() => {
                         const d = Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86400_000);
+                        if (d <= 1) return null;
                         const cls = d >= 30 ? "bg-red-50 text-red-700" : d >= 7 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700";
-                        const txt = d <= 0 ? "today" : `${d}d in system`;
-                        return <span title={`In the system ${d} day${d === 1 ? "" : "s"} — keep it moving`} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${cls}`}>🕒 {txt}</span>;
+                        return <span title={`In the system ${d} days — keep it moving`} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${cls}`}>🕒 {d}d in system</span>;
                       })()}
-                      {/* ✋ Last-touched (Jon 2026-10-27: "when's the last time anyone actually did
-                          something on this lead") — the real activity signal, from notes/calls/texts/
-                          emails/tasks, NOT updatedAt. ⚠️ never = nobody has worked it since import. */}
+                      {/* ✋ Last-touched — show ONLY when it needs attention (Jon 2026-11-04): never
+                          touched, or 3+ days stale. A freshly-worked lead shows no chip. */}
                       {(() => {
                         if (!c.lastTouch) return <span title="No note, call, text, email or task has ever been logged on this lead" className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-700">⚠️ never touched</span>;
                         const d = Math.floor((Date.now() - new Date(c.lastTouch).getTime()) / 86400_000);
-                        const cls = d >= 7 ? "bg-red-50 text-red-700" : d >= 3 ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600";
-                        return <span title={`Last worked ${d} day${d === 1 ? "" : "s"} ago (note / call / text / email / task)`} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${cls}`}>✋ {d <= 0 ? "touched today" : `touched ${d}d ago`}</span>;
+                        if (d < 3) return null;
+                        const cls = d >= 7 ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700";
+                        return <span title={`Last worked ${d} days ago (note / call / text / email / task)`} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${cls}`}>✋ touched {d}d ago</span>;
                       })()}
                       {show.badges && c.badges.map((b, i) => (
                         <span key={i} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${b.startsWith("⏳") || b.startsWith("🔴") ? "bg-red-50 text-red-700" : b.startsWith("⏰") ? "bg-amber-50 text-amber-700" : "bg-slate-50 text-slate-600"}`}>{b}</span>
                       ))}
-                      {show.tags && c.tags.slice(0, 3).map((t) => (
+                      {/* Tags, minus import-source noise every GHL lead carries (Jon 2026-11-04). */}
+                      {show.tags && c.tags.filter((t) => !/^(ghl-?import|imported?|import)$/i.test(t.trim())).slice(0, 3).map((t) => (
                         <span key={t} className="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600">#{t}</span>
                       ))}
                     </div>
@@ -548,12 +550,11 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         </span>
                       )}
                     </div>
-                    {/* 📅 bottom-right stacked footer (Jon 2026-10-20): in sequence —
-                        entered date, then next task due (green), then next appointment
-                        due (red). All right-aligned so the left side stays clear. */}
-                    {(c.createdAt || c.nextTask || c.nextAppt) && (
+                    {/* 📅 bottom-right due dates (Jon 2026-10-20): next task (green), then next
+                        appointment (red). The "Entered" date was dropped — the 🕒 age chip above
+                        already says how old the lead is (Jon 2026-11-04 declutter). */}
+                    {(c.nextTask || c.nextAppt) && (
                       <div className="mt-1.5 flex flex-col items-end gap-1">
-                        {c.createdAt && <div className="text-[9px] font-medium text-slate-400">📅 Entered {new Date(c.createdAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</div>}
                         {c.nextTask && <span title="Next task due" className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-100">✅ Task {new Date(`${c.nextTask}T00:00:00`).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}
                         {c.nextAppt && <span title="Next appointment" className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700 ring-1 ring-red-100">📅 Appt {new Date(c.nextAppt).toLocaleDateString([], { month: "short", day: "numeric" })} · {new Date(c.nextAppt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
                       </div>

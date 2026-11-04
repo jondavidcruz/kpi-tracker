@@ -2,7 +2,7 @@ import Link from "next/link";
 import LiveRefresh from "@/components/LiveRefresh";
 import { formatAddress } from "@/lib/address";
 import { isWaterfront } from "@/lib/waterfront";
-import { leadKind } from "@/lib/lead-kind";
+import { resolveLeadKind } from "@/lib/lead-kind";
 import { localTimeForPhone } from "@/lib/npa-tz";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
@@ -17,7 +17,7 @@ import SelectAllBox from "@/components/SelectAllBox";
 import CrmFilterBar from "@/components/CrmFilterBar";
 import CrmQuickView from "@/components/CrmQuickView";
 import DueTodayReminder from "@/components/DueTodayReminder";
-import { leadTypeBadge, sellerKind } from "@/lib/lead-type";
+import { sellerKind, unifiedLeadBadge } from "@/lib/lead-type";
 import { isAgentNetworkName, isDevNetworkName, isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { parcelCount } from "@/lib/crm-shared";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline } from "@/lib/dispo-gates";
@@ -299,12 +299,12 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       apn: fd.property?.apn ?? "", apptDueToday: apptToday.length > 0, taskDueToday: due.length > 0,
       followUpDue: !!(o.nextFollowUp && o.nextFollowUp <= today),
       waterfront: isWaterfront(o.formData),
-      leadKind: leadKind(o.formData),
+      leadKind: resolveLeadKind(o.formData, o.pipeline),
       ...(() => { const t = localTimeForPhone(o.contact.phone || ""); return t ? { tzLabel: `${t.time} ${t.abbr}`, tzRank: t.rank } : {}; })(),
       // next upcoming (after today) task + appointment dates for the card chips
       nextTask: (tasksByOpp.get(o.id) ?? []).map((t) => (t.due || "").slice(0, 10)).filter((d) => d >= today).sort()[0] ?? "",
       nextAppt: nextApptByOpp.get(o.id)?.toISOString() ?? "",
-      leadType: isAgentNetworkName(o.pipeline) ? leadTypeBadge("buyer_agent") : isDevNetworkName(o.pipeline) ? leadTypeBadge("developer") : leadTypeBadge(sellerKind(o.formData, o.pipeline)),
+      leadType: unifiedLeadBadge(isAgentNetworkName(o.pipeline) ? "buyer_agent" : isDevNetworkName(o.pipeline) ? "developer" : sellerKind(o.formData, o.pipeline), resolveLeadKind(o.formData, o.pipeline)),
       parcels: parcelCount(o.formData, o.contact.address, fd.property?.apn),
       acres: parseAcres(o.formData) ?? undefined,
       heat: readDealHeat(o.formData),

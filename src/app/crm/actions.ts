@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { geoForPhone } from "@/lib/npa-geo";
 import { logCrmEvent, CRM_STAGES, readPipelines, pipelineLockFor } from "@/lib/crm";
+import { parseLooseMoney } from "@/lib/money";
 
 async function crmUser() {
   const me = await getCurrentUser();
@@ -433,7 +434,7 @@ export async function saveOppMetaAction(formData: FormData) {
   if (!me) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  const num = (k: string) => { const s = String(formData.get(k) ?? "").replace(/[$,\s]/g, ""); return s === "" ? null : Number(s) || null; };
+  const num = (k: string) => parseLooseMoney(String(formData.get(k) ?? "")); // "13k" / "$13,000" → 13000
   const plRaw = formData.get("pipeline");
   const { formatAddress } = await import("@/lib/address");
   // Only write fields that are actually PRESENT in the form, so autosave (which may
@@ -2415,6 +2416,26 @@ export async function setDispoUnderContractAction(formData: FormData) {
   const fd = (o.formData ?? {}) as Record<string, unknown>;
   await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __dispoUnderContract: value || undefined } as never } });
   revalidatePath(`/crm/${oppId}`);
+}
+
+/** 🏞🏡 Manually set a lead as Land or House — overrides the auto field-count detection
+ *  (Jon 2026-11-04: "this is land, not a house" even when only the address is filled).
+ *  kind="auto" clears the override and lets the system detect again. Stored at
+ *  formData.__leadKind; resolved by resolveLeadKind. */
+export async function setLeadKindAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const kind = String(formData.get("kind") ?? "");
+  if (!oppId) return;
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
+  if (!o) return;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  const next = kind === "land" || kind === "home" ? kind : undefined; // "auto" → clear
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __leadKind: next } as never } });
+  revalidatePath(`/crm/${oppId}`);
+  revalidatePath("/crm");
+  revalidatePath("/dispo");
 }
 
 /** Remove a logged offer from this deal. */
