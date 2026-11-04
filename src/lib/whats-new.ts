@@ -24,6 +24,48 @@ export type WhatsNewEntry = {
 // Newest first. Keep each how-to to a few plain steps the team can follow cold.
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: "kpi-watch", date: "2026-11-03", emoji: "⚠️", title: "KPI issues: the Watch list (not daily noise)",
+    blurb: "Alerts now opens on a short 'Watch' list of the few KPIs with a SUSTAINED problem — streaks and chronic misses — instead of every daily blip.",
+    audience: ["leadership"], where: { label: "KPI Watch", href: "/alerts" },
+    steps: [
+      "Open Alerts → it lands on '⚠️ Watch' — only rep-KPIs on a 3+ day miss streak or below goal most of the last ~2 weeks.",
+      "Worst-first. Each shows the reason, last value vs goal, and average shortfall.",
+      "Anything at the PIP threshold (4+ streak) has an 'Open a plan' button.",
+      "Scan it weekly, not daily. The raw per-day list is still there under 'All open'.",
+    ],
+  },
+  {
+    id: "offers-net-margin", date: "2026-11-03", emoji: "💰", title: "Offers: see what we actually NET",
+    blurb: "Each offer now has a buyer type (direct / agent / JV) and a per-deal 'under contract at' — so you see net, profit and margin, and 'best' ranks by net not gross.",
+    audience: ["dispo", "leadership"], where: { label: "Open a deal", href: "/dispo?tab=today" },
+    steps: [
+      "On a deal's 💰 Offers panel, set '📑 Under contract at' = what we have it under contract for (our cost).",
+      "On each offer pick the buyer type: 🏗 Direct (full offer), 🧑‍💼 Agent (−10% commission off the top), 🤝 JV (split the spread — set our %).",
+      "Each row shows net to us + profit (+/−) + % margin. The ⭐ best offer is the one that nets us the most, not the biggest sticker price.",
+    ],
+  },
+  {
+    id: "sms-owner-unread", date: "2026-11-03", emoji: "🔵", title: "Texts belong to the lead's owner",
+    blurb: "A text's unread flag now follows the lead owner — someone else opening it no longer clears it for you. Plus a 'mark unread' button.",
+    audience: ["all"], where: { label: "Conversations", href: "/crm/conversations" },
+    steps: [
+      "Open a thread — it only clears the unread dot if YOU own the lead (or it's unassigned).",
+      "The header shows whose it is: 👤 Yours / 👤 <owner>'s / ⚠️ Unassigned.",
+      "Opened one that's really someone else's? Hit '🔵 Unread' to send it back to their inbox.",
+      "To hand off responsibility, change the owner in the lead's rail — the texts follow the new owner.",
+    ],
+  },
+  {
+    id: "speed-on-availability", date: "2026-11-03", emoji: "📡", title: "Internet speed on the availability board",
+    blurb: "Each person's latest internet speed now shows on 'Who's available right now' — station status and connection in one place.",
+    audience: ["all"], where: { label: "Schedule", href: "/schedule" },
+    steps: [
+      "Open Schedule → 'Who's available right now'. Each person shows a 📡 Mbps badge (green 50+, amber 25-49, red under 25).",
+      "Grey '📡 no test' = they haven't run today's speed test yet — run it on Enter KPIs.",
+      "Managers: '📡 Speed history →' by the board opens the full day-by-day detail.",
+    ],
+  },
+  {
     id: "deal-next-step", date: "2026-10-23", emoji: "⏭", title: "Next-step guidance on every deal",
     blurb: "Each deal now tells you the ONE move that pushes it toward sold — no more guessing what to do next.",
     audience: ["dispo"], where: { label: "Open a deal", href: "/dispo?tab=today" },
