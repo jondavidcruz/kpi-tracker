@@ -2254,12 +2254,13 @@ export async function updateDispoBuyerAction(formData: FormData) {
   // reads like a timeline (Jon 2026-10-27), instead of overwriting the single notes field.
   const { getSettings } = await import("@/lib/data");
   const stamp = new Intl.DateTimeFormat("en-CA", { timeZone: (await getSettings()).orgTimezone }).format(new Date());
+  const by = me.name.split(" ")[0]; // 📝 who put the note in (Jon 2026-11-03: show the author)
   const o = await mutateDispoBuyers(oppId, (list) => list.map((r) => {
     if (r.id !== entryId) return r;
     entryName = String(r.name ?? ""); entryBuyerId = String(r.buyerId ?? ""); entryPrice = String(r.price ?? "");
     // latest note line often holds the offer detail ("$75k cash, quick close") → carry it as terms
-    entryTerms = String(r.notes ?? "").split("\n")[0]?.replace(/^\d{4}-\d{2}-\d{2}:\s*/, "").trim() ?? "";
-    if (field === "addNote") { if (!value) return r; const line = `${stamp}: ${value}`; return { ...r, notes: r.notes ? `${line}\n${r.notes}` : line }; }
+    entryTerms = String(r.notes ?? "").split("\n")[0]?.replace(/^\d{4}-\d{2}-\d{2}(?: · [^:]+)?:\s*/, "").trim() ?? "";
+    if (field === "addNote") { if (!value) return r; const line = `${stamp} · ${by}: ${value}`; return { ...r, notes: r.notes ? `${line}\n${r.notes}` : line }; }
     return { ...r, [field]: value || undefined };
   }));
   // a saved note = working that agent → log it to the TIMELINE as a tracked highlight

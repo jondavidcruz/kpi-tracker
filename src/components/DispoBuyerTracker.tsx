@@ -74,9 +74,20 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "",
             <button type="button" onClick={() => setOfferFor(null)} className="text-[10px] font-semibold text-slate-400">cancel</button>
           </form>
         )}
-        {/* 📜 Notes read like the rest of our timeline — a scrollable, newest-first history that
-            grows as you add notes (Jon 2026-10-27), instead of one overwritable box. */}
-        {b.notes && <div className="mt-1 max-h-24 overflow-y-auto whitespace-pre-line rounded border border-slate-100 bg-slate-50 px-1.5 py-1 text-[10px] leading-relaxed text-slate-600">{b.notes}</div>}
+        {/* 📜 Notes read like the rest of our timeline — a scrollable, newest-first history. Each
+            line is a dated, authored yellow note matching the lead timeline (Jon 2026-11-03). */}
+        {b.notes && (
+          <div className="mt-1 max-h-28 space-y-1 overflow-y-auto">
+            {b.notes.split("\n").filter((l) => l.trim()).map((line, i) => {
+              const m = line.match(/^(\d{4}-\d{2}-\d{2}(?: · [^:]+)?):\s*([\s\S]*)$/);
+              return (
+                <div key={i} className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-1 text-[10px] leading-relaxed text-slate-700">
+                  {m ? <><span className="font-bold text-amber-800">{m[1]}</span> · {m[2]}</> : line}
+                </div>
+              );
+            })}
+          </div>
+        )}
         <form action={updateDispoBuyerAction} className="mt-1">
           <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={b.id} /><input type="hidden" name="field" value="addNote" />
           <input name="value" placeholder="📝 add a note…" autoComplete="off"
