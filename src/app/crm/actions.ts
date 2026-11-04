@@ -231,6 +231,10 @@ export async function setOppStageAction(formData: FormData) {
   // ⚙️ fire matching automations (never blocks the move)
   const full = await db.crmOpportunity.findUnique({ where: { id }, select: { id: true, contactId: true, pipeline: true, stage: true, assignedTo: true, title: true, value: true, askPrice: true } });
   if (full) { const { runStageAutomations } = await import("@/lib/crm-automations"); runStageAutomations(full).catch(() => {}); }
+  // 📨 Stage-aware follow-up (Jon 2026-11-04): arm the matching seller sequence when the
+  // deal lands on a stage that has one (contract sent / negotiating / offer ready / 10 days
+  // of hell / ghosted). Assisted tasks, reply-stops, never blocks; seller pipelines only.
+  { const { autoArmStageDrip } = await import("@/lib/drip"); autoArmStageDrip(id, stage, me.name, opp.pipeline).catch(() => {}); }
   // 📝 GHL-parity (Jon 2026-10-07): hitting an offer/contract stage auto-drafts
   // the PandaDoc contract so the rep just reviews and sends. Never blocks.
   if (full && /offer|contract/i.test(stage) && !/rejected|sent|comp/i.test(stage)) {

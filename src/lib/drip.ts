@@ -25,9 +25,77 @@ export const DRIP_SEQUENCES: DripSeq[] = [
   },
 ];
 
+// 🎯 Stage-aware sequences (Jon 2026-11-04): when a seller deal lands on one of these
+// stages, the matching sequence auto-arms so follow-up never falls through the cracks.
+// Seller-facing, neutral copy (rep's first name only — no company name, honoring the
+// outbound-anonymity rule). Same SAFE assisted-task behavior; a reply stops it.
+DRIP_SEQUENCES.push(
+  {
+    key: "contract_sent", name: "Contract sent — chase the signature (3 touches / ~5 days)",
+    steps: [
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, just sent over the agreement for {address} — did it come through okay? Happy to walk you through any of it." },
+      { channel: "email", delayDays: 2, emailSubject: "Your agreement for {address}", emailBody: "Hi {first},\n\nChecking in on the agreement for {address}. No pressure at all — I just want to make sure it reached you and answer any questions before you sign. Reply here anytime and I'll help you through it.\n\n— {rep}" },
+      { channel: "sms", delayDays: 5, sms: "{first}, any questions on the agreement for {address}? Once it's signed we can keep things moving. I'm here if you need anything." },
+    ],
+  },
+  {
+    key: "offer_negotiate", name: "Offer made / negotiating — keep it warm (3 touches / ~6 days)",
+    steps: [
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, following up on the offer for {address}. Is the number close for you, or is there something we can adjust to make it work?" },
+      { channel: "email", delayDays: 3, emailSubject: "Can we make {address} work?", emailBody: "Hi {first},\n\nI'd like to find a number that works for both of us on {address}. If the offer isn't quite there, tell me what you had in mind and I'll see what I can do — happy to hop on a quick call too.\n\n— {rep}" },
+      { channel: "sms", delayDays: 6, sms: "{first}, still happy to work with you on {address}. Just let me know what number gets us there and I'll do my best." },
+    ],
+  },
+  {
+    key: "offer_ready", name: "Offer ready — get it in front of them (2 touches / ~2 days)",
+    steps: [
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, good news — I've got a cash offer ready for {address}. When's a good time to walk you through it?" },
+      { channel: "sms", delayDays: 2, sms: "{first}, still have that offer ready for {address} whenever you are — just reply and I'll send the details over." },
+    ],
+  },
+  {
+    key: "ten_days_hell", name: "10 days of hell — intensive close (5 touches / 10 days)",
+    steps: [
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — I really want to get {address} across the finish line for you. What's the one thing holding you back right now?" },
+      { channel: "sms", delayDays: 2, sms: "{first}, checking back on {address}. If timing's the issue we can close on whatever date works for you — just say the word." },
+      { channel: "email", delayDays: 4, emailSubject: "Let's get {address} done", emailBody: "Hi {first},\n\nI don't want {address} to slip away over something small. Whatever's in the way — price, timing, paperwork — tell me and let's solve it together. I can move fast on my end.\n\n— {rep}" },
+      { channel: "sms", delayDays: 7, sms: "{first}, still ready to make {address} happen for you. A quick call might clear everything up — when are you free?" },
+      { channel: "email", delayDays: 10, emailSubject: "Last push on {address}", emailBody: "Hi {first},\n\nI'll ease off after this — but I genuinely believe we can get {address} done in a way that works for you. If you're open to it, reply and we'll finish strong.\n\n— {rep}" },
+    ],
+  },
+  {
+    key: "ghosted", name: "Ghosted — long re-engagement (3 touches / ~60 days)",
+    steps: [
+      { channel: "sms", delayDays: 7, sms: "Hi {first}, haven't heard back on {address} — no worries at all. Still here whenever you're ready to talk numbers." },
+      { channel: "email", delayDays: 30, emailSubject: "Still here for {address}", emailBody: "Hi {first},\n\nJust circling back on {address}. If the timing's better now, I'd still love to get you a fair cash offer — no fees, no agents, close on your schedule. Reply anytime.\n\n— {rep}" },
+      { channel: "sms", delayDays: 60, sms: "{first}, last check-in on {address}. If anything changes, I can move fast on a cash offer. Thanks either way!" },
+    ],
+  },
+);
+
 export function getDripSeq(key: string): DripSeq | undefined { return DRIP_SEQUENCES.find((s) => s.key === key); }
 
-export type DripState = { seq: string; step: number; nextAt: string; startedBy: string; startedAt: string };
+/** The sequences the team can start by hand (for the picker). */
+export function dripSeqOptions(): Array<{ key: string; name: string }> { return DRIP_SEQUENCES.map((s) => ({ key: s.key, name: s.name })); }
+
+// 🧭 Map a pipeline stage (its key/slug) → the sequence to auto-arm. Matched on the
+// normalized stage text so it works across pipelines with slightly different stage names.
+export function seqForStage(stageKey: string): string | null {
+  const s = stageKey.toLowerCase().replace(/[_-]+/g, " ");
+  if (/contract\s*sent|sent\s*contract|agreement\s*sent|out\s*for\s*sign/.test(s)) return "contract_sent";
+  if (/offer\s*ready|ready\s*to\s*present|present\s*offer|offer\s*to\s*present/.test(s)) return "offer_ready";
+  if (/negotiat|counter|offer\s*made|making\s*offer/.test(s)) return "offer_negotiate";
+  if (/10\s*day|ten\s*day|days?\s*of\s*hell|\bhell\b/.test(s)) return "ten_days_hell";
+  if (/ghost|cold|unrespons|no\s*response/.test(s)) return "ghosted";
+  return null;
+}
+
+/** Terminal stages where any auto-armed follow-up should stop. */
+export function isTerminalStage(stageKey: string): boolean {
+  return /\b(won|signed|assigned|closed|dead|lost|rejected|not\s*interested|disqualified)\b/i.test(stageKey.replace(/[_-]+/g, " "));
+}
+
+export type DripState = { seq: string; step: number; nextAt: string; startedBy: string; startedAt: string; stageArmed?: boolean };
 export function readDrip(formData: unknown): DripState | null {
   const d = (formData as Record<string, unknown> | null)?.__drip as DripState | undefined;
   return d && typeof d.seq === "string" && getDripSeq(d.seq) ? d : null;
@@ -41,15 +109,39 @@ function ymdAddDays(days: number, tz = "America/Los_Angeles"): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(Date.now() + days * 86400000));
 }
 
-/** Enroll a lead (sets the first step due today). Manual — the team chooses who. */
-export async function enrollDrip(oppId: string, seqKey: string, by: string): Promise<boolean> {
+/** Enroll a lead (sets the first step due today). Manual — the team chooses who.
+ *  `stageArmed` marks a sequence that a stage change started automatically (so a later
+ *  stage change can replace it, but a manually-started one is never clobbered). */
+export async function enrollDrip(oppId: string, seqKey: string, by: string, stageArmed = false): Promise<boolean> {
   const seq = getDripSeq(seqKey);
   const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
   if (!seq || !opp) return false;
   const fd = (opp.formData ?? {}) as Record<string, unknown>;
-  const state: DripState = { seq: seqKey, step: 0, nextAt: ymdAddDays(seq.steps[0]?.delayDays ?? 0), startedBy: by, startedAt: new Date().toISOString() };
+  const state: DripState = { seq: seqKey, step: 0, nextAt: ymdAddDays(seq.steps[0]?.delayDays ?? 0), startedBy: by, startedAt: new Date().toISOString(), ...(stageArmed ? { stageArmed: true } : {}) };
   await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __drip: state } as never } });
   return true;
+}
+
+/** 🎯 Auto-arm the stage-matched sequence when a SELLER deal changes stage (Jon 2026-11-04).
+ *  Never clobbers a manually-started drip; replaces a prior stage-armed one; stops at a
+ *  terminal stage. Safe (assisted tasks), reply-stops, never blocks the move. */
+export async function autoArmStageDrip(oppId: string, stageKey: string, by: string, pipeline?: string | null): Promise<void> {
+  // Seller pipelines only — don't follow-up-drip buyers / developers / agents.
+  if (pipeline && /developer|agent|buyer|dispo/i.test(pipeline)) return;
+  const opp = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
+  if (!opp) return;
+  const cur = readDrip(opp.formData) as (DripState & { stageArmed?: boolean }) | null;
+  const seqKey = seqForStage(stageKey);
+  if (!seqKey) {
+    if (cur?.stageArmed && isTerminalStage(stageKey)) await stopDrip(oppId, `stage ${stageKey}`);
+    return;
+  }
+  if (cur && !cur.stageArmed) return;                 // manual drip running — leave it
+  if (cur && cur.stageArmed && cur.seq === seqKey) return; // already on this sequence
+  await enrollDrip(oppId, seqKey, by, true);
+  const { logCrmEvent } = await import("@/lib/crm");
+  const seq = getDripSeq(seqKey);
+  await logCrmEvent({ contactId: (await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { contactId: true } }))?.contactId ?? "", oppId, kind: "system", body: `📨 Follow-up sequence armed — ${seq?.name ?? seqKey} (stage: ${stageKey})`, actor: "drip" }).catch(() => {});
 }
 
 export async function stopDrip(oppId: string, reason = "stopped"): Promise<void> {
