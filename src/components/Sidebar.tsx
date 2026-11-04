@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
-import StatusDot from "./StatusDot";
 import WorldClock from "./WorldClock";
 
 type Item = { href: string; label: string; Icon: typeof Bell; managerOnly?: boolean; adminOnly?: boolean; marketingOnly?: boolean; marketingOrManager?: boolean; timecardOnly?: boolean; csuiteOnly?: boolean; trainingOnly?: boolean; badge?: number; external?: boolean };
@@ -51,7 +50,6 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/lead-roi": "lead roi cost per lead acquisition cpl cpa marketing spend funnel conversion ppl direct mail sms cold call return on investment break even",
   "/software": "logins passwords tools vendors",
   "/tickets": "requests help support",
-  "/leaks": "war room health issues",
   "/rocks": "eos quarterly goals",
   "/vto": "vision traction organizer eos",
 };
@@ -192,10 +190,8 @@ export default function Sidebar({
       { href: "/crm/access", label: "Comms Access", Icon: KeyRound, csuiteOnly: true },
     ] },
     { label: "C-Suite", items: [
-      { href: "/leaks", label: "War Room Health", Icon: Activity, csuiteOnly: true },
       { href: "/expenses", label: "Profit & Loss Report", Icon: Receipt, csuiteOnly: true },
       { href: "/timecard", label: "Payroll", Icon: Wallet, csuiteOnly: true },
-      { href: "/roadmap", label: "Roadmap", Icon: Map, csuiteOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, csuiteOnly: true },
       { href: "/blueprint", label: "Blueprint", Icon: Compass, csuiteOnly: true },
       { href: "/land-master", label: "Land Master Plan", Icon: Map, csuiteOnly: true },
@@ -286,7 +282,6 @@ export default function Sidebar({
           <div className="font-mono tracking-wider">☎️ 1-877-652-8991</div>
         </div>
         <WorldClock />
-        {owner && <div className="mt-2"><StatusDot /></div>}
         {(officeMeetLink || mondayMeetLink || leadershipMeetLink) && (
           // 🎛 compact meeting tiles (Jon 2026-10-09): three small squares —
           // Office · Monday · Leadership — visible, not space-hogging
