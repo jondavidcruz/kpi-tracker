@@ -529,7 +529,10 @@ export default async function AdminPage({
         <section id="kpi-order" className="scroll-mt-20">
           <SectionTitle title="📊 KPI order" subtitle="Drag any KPI — Enter KPIs, reports and scorecards all follow this order instantly." accent="bg-emerald-400" />
           <KpiOrderBoard groups={(() => {
-            const roles = [...new Set(kpis.filter((k) => k.active && k.scope === "per_rep" && !k.computed).map((k) => k.roleKey))].filter(Boolean);
+            // Order board only shows the active scorecards (Jon 2026-11-03): Cold Call / LM
+            // and the single Internet-speed KPI don't need reordering here.
+            const HIDE_ROLES = new Set(["cc_lm", "internet"]);
+            const roles = [...new Set(kpis.filter((k) => k.active && k.scope === "per_rep" && !k.computed).map((k) => k.roleKey))].filter((rk) => rk && !HIDE_ROLES.has(rk));
             const labelOf: Record<string, string> = { acquisitions: "🎯 Acquisitions", dispositions: "📞 Dispositions", cc_lm: "☎️ Cold Call / LM", internet: "🌐 Internet", listings: "🏷 Listings" };
             return roles.map((rk) => ({
               role: rk,
