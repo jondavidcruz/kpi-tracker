@@ -2387,6 +2387,21 @@ export async function updateDispoOfferAction(formData: FormData) {
   revalidatePath(`/crm/${oppId}`);
 }
 
+/** 🔵 Flag a conversation back to UNREAD so it returns to the responsible owner's inbox
+ *  (Jon 2026-11-03: someone else read a text meant for another rep, no way to un-read it). */
+export async function markThreadUnreadAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const contactId = String(formData.get("contactId") ?? "");
+  if (!contactId) return;
+  const { setConvRead } = await import("@/lib/conv-read");
+  await setConvRead([contactId], false);
+  // Close the thread so re-opening it doesn't immediately re-mark it read (the owner wanted
+  // it back in their unread queue, Jon 2026-11-03).
+  revalidatePath("/crm/conversations");
+  redirect("/crm/conversations");
+}
+
 /** Set what we have THIS deal under contract at (our cost) — drives each offer's net math. */
 export async function setDispoUnderContractAction(formData: FormData) {
   const me = await crmUser();

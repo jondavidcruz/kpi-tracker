@@ -46,20 +46,23 @@ export async function GET(req: NextRequest) {
   // ?thread=<contactId> → everything the bell's quick-text phone needs
   const cid = new URL(req.url).searchParams.get("thread");
   if (cid) {
-    const contact = await db.crmContact.findUnique({ where: { id: cid }, select: { id: true, name: true, phone: true } });
+    const contact = await db.crmContact.findUnique({ where: { id: cid }, select: { id: true, name: true, phone: true, assignedTo: true } });
     if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
     const [opp, sms] = await Promise.all([
       db.crmOpportunity.findFirst({ where: { contactId: cid, archivedAt: null }, select: { id: true } }),
       db.crmEvent.findMany({ where: { contactId: cid, kind: "sms" }, orderBy: { at: "desc" }, take: 12 }),
     ]);
-    await setConvRead([cid], true);
+    // Only the RESPONSIBLE person (the lead owner, or anyone when it's unassigned) clears the
+    // unread flag by opening — a non-owner peeking must not clear it for the owner (Jon 2026-11-03).
+    const iOwn = !contact.assignedTo || contact.assignedTo.toLowerCase() === me!.name.toLowerCase();
+    if (iOwn) await setConvRead([cid], true);
     const history = [...sms].reverse().map((e) => {
       const m = e.meta as { line?: string } | null;
       return { body: e.body.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 400), inbound: e.body.startsWith("⬅"), at: e.at.toISOString(), line: m?.line ?? "" };
     });
     // 📌 the line this lead already knows — newest message that recorded one
     const suggestFrom = [...history].reverse().find((h) => h.line)?.line ?? "";
-    return NextResponse.json({ id: contact.id, name: contact.name, phone: contact.phone, oppId: opp?.id ?? "", history, suggestFrom, me: me!.name });
+    return NextResponse.json({ id: contact.id, name: contact.name, phone: contact.phone, oppId: opp?.id ?? "", history, suggestFrom, me: me!.name, owner: contact.assignedTo || "", youOwn: iOwn });
   }
   const { unread, all } = await smsThreads(me!.name, isManager(me!));
   // ☎️ active ring (Jon 2026-10-12: Sharyn's line rang in a browser she wasn't
@@ -85,12 +88,20 @@ export async function POST(req: NextRequest) {
   if (!allowed) return NextResponse.json({ ok: false });
   const body = (await req.json().catch(() => ({}))) as { op?: string; id?: string };
   if (body.op === "readall") {
-    const { unread } = await smsThreads(me!.name, isManager(me!));
+    // Clear only what YOU'RE responsible for (your owned + unassigned) — never someone
+    // else's unread, even for a manager who can see the whole inbox (Jon 2026-11-03).
+    const { unread } = await smsThreads(me!.name, false);
     await setConvRead(unread.map((t) => t.id), true);
     return NextResponse.json({ ok: true, cleared: unread.length });
   }
   if (body.op === "read" && body.id) {
     await setConvRead([body.id], true);
+    return NextResponse.json({ ok: true });
+  }
+  // 🔵 Mark a thread back to UNREAD — so it returns to the responsible owner's inbox
+  // (Jon 2026-11-03: "Sharyn read a text meant for someone else, no way to un-read it").
+  if (body.op === "unread" && body.id) {
+    await setConvRead([body.id], false);
     return NextResponse.json({ ok: true });
   }
   // {op:"ensure", phone, name?} → text ANY number from the bell's iPhone:

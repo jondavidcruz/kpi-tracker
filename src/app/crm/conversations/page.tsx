@@ -10,7 +10,7 @@ import ConvComposerTabs from "@/components/ConvComposerTabs";
 import ConvContactRail from "@/components/ConvContactRail";
 import ScrollAnchor from "@/components/ScrollAnchor";
 import ConvLive from "@/components/ConvLive";
-import { startConversationAction, bulkConvAction } from "@/app/crm/actions";
+import { startConversationAction, bulkConvAction, markThreadUnreadAction } from "@/app/crm/actions";
 import { readConvMap, setConvRead } from "@/lib/conv-read";
 
 export const dynamic = "force-dynamic";
@@ -104,8 +104,10 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   // selected thread
   const cId = sp.c || threads[0]?.id || "";
   const contact = cId ? await db.crmContact.findUnique({ where: { id: cId } }) : null;
-  // opening a thread marks it read (clears the red dot everywhere)
-  if (cId) setConvRead([cId], true).catch(() => {});
+  // Opening marks it read — but ONLY for the person responsible (the lead owner, or anyone
+  // when it's unassigned). A non-owner peeking must not clear the owner's unread (Jon 2026-11-03).
+  const iOwnOpen = !!contact && (!contact.assignedTo || contact.assignedTo.toLowerCase() === me!.name.toLowerCase());
+  if (cId && iOwnOpen) setConvRead([cId], true).catch(() => {});
   const visible = contact && (canSeeAll || !contact.assignedTo || contact.assignedTo === me!.name);
   // 🧾 Jon 2026-10-13: the thread is now a FULL AUDIT — every event (texts,
   // emails, calls, notes, stage moves, pipeline moves, system) since the lead
@@ -227,8 +229,17 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     <div className="flex flex-wrap items-baseline gap-x-3">
                       {contact.phone && <span className="font-mono text-[13px] font-bold tracking-wide text-slate-700">{contact.phone.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3")}</span>}
                       {contact.email && <span className="truncate text-[11px] text-slate-500">{contact.email}</span>}
+                      {/* 👤 Whose responsibility this thread is — the lead owner (Jon 2026-11-03). */}
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${!contact.assignedTo ? "bg-amber-100 text-amber-800" : iOwnOpen ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                        {!contact.assignedTo ? "⚠️ Unassigned" : iOwnOpen ? "👤 Yours" : `👤 ${firstOf(contact.assignedTo)}'s`}
+                      </span>
                     </div>
                   </div>
+                  {/* 🔵 Send it back to the owner's unread (for when it was opened by someone else). */}
+                  <form action={markThreadUnreadAction}>
+                    <input type="hidden" name="contactId" value={contact.id} />
+                    <button className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-sky-100 hover:text-sky-700" title="Flag this thread back to unread for whoever owns the lead">🔵 Unread</button>
+                  </form>
                   {comms.call && contact.phone && <CallButton phone={contact.phone} name={contact.name} oppId={opp?.id} contactId={contact.id} />}
                   {opp && <Link href={`/crm/${opp.id}`} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Open lead ↗</Link>}
                 </div>
