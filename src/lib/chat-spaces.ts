@@ -9,7 +9,8 @@
 //   acquisitions → offers in motion (made / captured / negotiating)
 //   dispositions → buyer/developer sourcing + "to research" lists for the dispo team
 //   directrei    → Direct REI AI updates + qualified-lead reporting
-export type ChatSpace = "contracts" | "kpi" | "phonehealth" | "receipts" | "leadership" | "team" | "acquisitions" | "dispositions" | "directrei";
+//   warroom      → end-of-day "War Room updates" — what shipped in the app that day
+export type ChatSpace = "contracts" | "kpi" | "phonehealth" | "receipts" | "leadership" | "team" | "acquisitions" | "dispositions" | "directrei" | "warroom";
 
 // 🔑 Resolve a room's webhook URL. A DB override (Resource "__chat_webhooks__", a
 // JSON map) wins over the CHAT_WEBHOOKS_JSON env var — so Jon can add/replace a

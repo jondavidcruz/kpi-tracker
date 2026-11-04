@@ -2744,17 +2744,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, id: row.id, status: row.status });
   }
   if (url.searchParams.get("daychangelog") === "1") {
-    const row = await db.resource.findFirst({ where: { category: "__daily_updates__" } });
-    let list: string[] = [];
-    try { list = row?.description ? JSON.parse(row.description) : []; } catch { list = []; }
-    if (!list.length) return NextResponse.json({ ok: true, posted: false, reason: "no updates today" });
     const d = new Date(Date.now() - 7 * 3600_000).toISOString().slice(0, 10);
-    const { postChatWebhook } = await import("@/lib/notify");
-    const posted = process.env.WARROOM_CHAT_WEBHOOK
-      ? await postChatWebhook(process.env.WARROOM_CHAT_WEBHOOK, `🛠 *War Room updates — ${d}*\n${list.map((l) => `• ${l}`).join("\n")}\n\n— shipped today, live now. Hard-refresh if something looks unchanged.`)
-      : false;
-    if (posted && row) await db.resource.update({ where: { id: row.id }, data: { description: "[]" } });
-    return NextResponse.json({ ok: true, posted, count: list.length });
+    const row = await db.resource.findFirst({ where: { category: "__daily_updates__" } });
+    let manual: string[] = [];
+    try { manual = row?.description ? JSON.parse(row.description) : []; } catch { manual = []; }
+    // 📰 The real record of what shipped is the What's New feed — pull today's entries
+    // automatically so "all the updates" actually post, plus any hand-queued lines
+    // (Jon 2026-11-04: EOD War Room post wasn't firing / was empty). Dedupe by text.
+    const { WHATS_NEW } = await import("@/lib/whats-new");
+    const shipped = WHATS_NEW.filter((e) => e.date === d).map((e) => `${e.emoji} ${e.title}`);
+    const list = [...new Set([...shipped, ...manual])];
+    if (!list.length) return NextResponse.json({ ok: true, posted: false, reason: "no updates today" });
+    const text = `🛠 *War Room updates — ${d}*\n${list.map((l) => `• ${l}`).join("\n")}\n\n— shipped today, live now. Hard-refresh if something looks unchanged.`;
+    // Prefer the managed "warroom" space (webhook set in /admin → Chat webhooks, no
+    // redeploy); fall back to the WARROOM_CHAT_WEBHOOK env var if that's how it's wired.
+    const { postToSpace } = await import("@/lib/chat-spaces");
+    let posted = await postToSpace("warroom", text);
+    if (!posted && process.env.WARROOM_CHAT_WEBHOOK) {
+      const { postChatWebhook } = await import("@/lib/notify");
+      posted = await postChatWebhook(process.env.WARROOM_CHAT_WEBHOOK, text);
+    }
+    // Clear only the MANUAL queue once posted (What's New is date-driven, never cleared).
+    if (posted && row && manual.length) await db.resource.update({ where: { id: row.id }, data: { description: "[]" } });
+    return NextResponse.json({ ok: true, posted, count: list.length, shipped: shipped.length, manual: manual.length });
   }
 
   // 🖼 EOD scoreboard JSON (?eodjson=1&d=YYYY-MM-DD) — feeds the KPI-room

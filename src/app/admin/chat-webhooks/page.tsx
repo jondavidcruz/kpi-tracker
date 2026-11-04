@@ -9,6 +9,7 @@ import { Card } from "@/components/ui";
 export const dynamic = "force-dynamic";
 
 const ROOMS: { key: string; label: string; job: string }[] = [
+  { key: "warroom", label: "War Room Updates", job: "End-of-day list of what shipped in the app that day" },
   { key: "team", label: "Freedom Offers Team", job: "Wins + signed/closed deals — the whole company" },
   { key: "contracts", label: "Contracts Sign Chat", job: "A deal gets signed — the bell rings here" },
   { key: "acquisitions", label: "Acquisitions", job: "Offers in motion (made / captured / negotiating)" },
