@@ -10,9 +10,27 @@ import { addDispoBuyerAction, updateDispoBuyerAction, logDispoBuyerTouchAction, 
 import { DISPO_BUYER_STAGES, DISPO_BUYER_KINDS, stageMeta, type DispoBuyer } from "@/lib/dispo-buyers";
 import AttachBuyerPanel from "@/components/AttachBuyerPanel";
 
+type HistEvent = { id: string; kind: string; inbound: boolean; text: string; actor: string; at: string };
+const HIST_ICON: Record<string, string> = { call: "📞", voicemail: "📼", sms: "💬", email: "✉️", note: "📝" };
+function fmtHistAt(iso: string): string {
+  try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" }); } catch { return ""; }
+}
+
 export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "", canCall = false, canSms = false, board = false }: { oppId: string; buyers: DispoBuyer[]; today: string; dealArea?: string; canCall?: boolean; canSms?: boolean; board?: boolean }) {
   const [adding, setAdding] = useState(false);
   const [offerFor, setOfferFor] = useState<string | null>(null); // entryId whose quick-offer form is open
+  // 📜 lazy per-buyer comms history, keyed by the buyer's contactId
+  const [hist, setHist] = useState<Record<string, { open: boolean; loading: boolean; events: HistEvent[] }>>({});
+  const toggleHist = async (contactId: string) => {
+    const cur = hist[contactId];
+    if (cur) { setHist((h) => ({ ...h, [contactId]: { ...cur, open: !cur.open } })); return; }
+    setHist((h) => ({ ...h, [contactId]: { open: true, loading: true, events: [] } }));
+    try {
+      const r = await fetch(`/api/crm/buyer-history?contactId=${encodeURIComponent(contactId)}`, { cache: "no-store" });
+      const j = (await r.json()) as { events?: HistEvent[] };
+      setHist((h) => ({ ...h, [contactId]: { open: true, loading: false, events: j.events ?? [] } }));
+    } catch { setHist((h) => ({ ...h, [contactId]: { open: true, loading: false, events: [] } })); }
+  };
   const counts = DISPO_BUYER_STAGES.map((s) => ({ ...s, n: buyers.filter((b) => b.stage === s.key).length }));
   const dueCount = buyers.filter((b) => b.nextFollowUp && b.nextFollowUp <= today && b.stage !== "passed" && b.stage !== "offer_in").length;
 
@@ -95,6 +113,28 @@ export default function DispoBuyerTracker({ oppId, buyers, today, dealArea = "",
             onBlur={(e) => { if (e.currentTarget.value.trim()) e.currentTarget.form?.requestSubmit(); }}
             className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-700 placeholder:text-slate-300" />
         </form>
+        {/* 📜 Full call/text/email history with this buyer — lazy-loaded on expand so it costs
+            nothing until you open it (Jon 2026-11-03). */}
+        {b.contactId && (
+          <div className="mt-1">
+            <button type="button" onClick={() => toggleHist(b.contactId!)} className="text-[10px] font-semibold text-slate-400 hover:text-slate-600">
+              {hist[b.contactId]?.open ? "▾ Hide history" : "📜 History"}
+            </button>
+            {hist[b.contactId]?.open && (
+              <div className="mt-1 max-h-32 space-y-0.5 overflow-y-auto rounded-md bg-slate-50 p-1 ring-1 ring-slate-100">
+                {hist[b.contactId]?.loading && <div className="px-1 py-0.5 text-[10px] text-slate-400">loading…</div>}
+                {!hist[b.contactId]?.loading && (hist[b.contactId]?.events.length ?? 0) === 0 && <div className="px-1 py-0.5 text-[10px] text-slate-400">No calls, texts or emails logged yet.</div>}
+                {hist[b.contactId]?.events.map((e) => (
+                  <div key={e.id} className="flex items-baseline gap-1 px-1 text-[10px] leading-snug">
+                    <span title={e.kind}>{HIST_ICON[e.kind] ?? "•"}</span>
+                    <span className="min-w-0 flex-1 truncate text-slate-600">{e.inbound ? "⬅ " : ""}{e.text}</span>
+                    <span className="shrink-0 text-[9px] text-slate-400">{fmtHistAt(e.at)}{e.actor ? ` · ${e.actor}` : ""}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {b.lastContact && <div className="mt-0.5 text-[9px] text-slate-400">last touch {b.lastContact}</div>}
       </div>
     );
