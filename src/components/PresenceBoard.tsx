@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 
 type State = "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "bathroom" | "offline" | "outage" | "dropped";
-type Person = { id: string; name: string; state: State; outageKind?: string | null; outageMin?: number | null; sinceMs: number | null; workedMin: number };
+type Person = { id: string; name: string; state: State; outageKind?: string | null; outageMin?: number | null; sinceMs: number | null; workedMin: number; mbps?: number | null; mbpsAt?: string | null };
+
+// 📡 Each rep's latest internet speed today (folded in from the old Internet Speed page,
+// Jon 2026-11-03 — "show their computer station all in one place"). Goal 50+ Mbps.
+function speedBadge(mbps?: number | null) {
+  if (mbps == null) return { txt: "no test", cls: "bg-slate-100 text-slate-400" };
+  const cls = mbps >= 50 ? "bg-emerald-100 text-emerald-700" : mbps >= 25 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-700";
+  return { txt: `${mbps} Mbps`, cls };
+}
 
 const DOT: Record<State, string> = {
   online: "bg-emerald-500",
@@ -91,7 +99,10 @@ export default function PresenceBoard({ initial }: { initial: Person[] }) {
           <div key={p.id} className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 ring-1 ${RING[p.state]}`}>
             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${DOT[p.state]} ${p.state !== "offline" ? "animate-pulse" : ""}`} />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-slate-800">{p.name}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-sm font-semibold text-slate-800">{p.name}</span>
+                <span title={p.mbps == null ? "No speed test logged today" : `Latest internet speed today${p.mbpsAt ? ` · ${clockSince(Date.parse(p.mbpsAt))}` : ""}`} className={`ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${speedBadge(p.mbps).cls}`}>📡 {speedBadge(p.mbps).txt}</span>
+              </div>
               <div className={`truncate text-[11px] ${p.state === "outage" || p.state === "dropped" ? "font-semibold text-red-600" : "text-slate-500"}`}>
                 {p.state === "outage" ? outageLabel(p.outageKind) : LABEL[p.state]}
                 {p.state === "outage" && p.outageMin ? ` · ${hm(p.outageMin)} out` : ""}

@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/data";
 import { todayStr } from "@/lib/date";
 import { stateFromPunches, workedMinutes, groupByUser } from "@/lib/presence";
 import { workCapAt } from "@/lib/shift";
+import { SPEED_CHECKS_CATEGORY, latestSpeedFromRows } from "@/lib/speed-checks";
 import { sendTimecardChat } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
@@ -22,11 +23,13 @@ export async function GET() {
 
   const settings = await getSettings();
   const date = todayStr(settings.orgTimezone);
-  const [users, punches, outages] = await Promise.all([
+  const [users, punches, outages, speedRows] = await Promise.all([
     db.user.findMany({ where: { active: true, irregularSchedule: false }, orderBy: { name: "asc" }, select: { id: true, name: true, lastSeenAt: true, dropAlertedAt: true, breakNudgedAt: true } }),
     db.punch.findMany({ where: { date }, orderBy: { at: "asc" }, select: { userId: true, kind: true, at: true } }),
     db.outage.findMany({ where: { date }, select: { userId: true, kind: true, startMin: true, endMin: true, ongoing: true } }),
+    db.resource.findMany({ where: { category: SPEED_CHECKS_CATEGORY, title: { endsWith: `|${date}` } }, select: { title: true, description: true } }),
   ]);
+  const speedByUser = latestSpeedFromRows(speedRows);
   const byUser = groupByUser(punches);
   const outByUser = new Map(outages.filter((o) => o.ongoing).map((o) => [o.userId, o])); // live outage → "outage" state
   const now = new Date();
@@ -54,7 +57,8 @@ export async function GET() {
       else if (working && u.lastSeenAt && now.getTime() - new Date(u.lastSeenAt).getTime() > STALE) st = "dropped";
       const outageMin = out ? Math.max(0, nowMin - out.startMin) : null;
       const worked = Math.max(0, workedMinutes(ps, now, workCapAt(date, settings.orgTimezone, u.name)) - (outageMinByUser.get(u.id) ?? 0));
-      return { id: u.id, name: u.name, state: st, outageKind: out?.kind ?? null, outageMin, sinceMs: since ? since.getTime() : null, workedMin: worked };
+      const sp = speedByUser.get(u.id);
+      return { id: u.id, name: u.name, state: st, outageKind: out?.kind ?? null, outageMin, sinceMs: since ? since.getTime() : null, workedMin: worked, mbps: sp?.mbps ?? null, mbpsAt: sp?.t ?? null };
     });
 
   // Disconnect alerts: a rep who dropped mid-shift with NO logged power/internet outage

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap,
   Play, Banknote, TrafficCone, Moon, Sun,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
@@ -158,7 +158,6 @@ export default function Sidebar({
       { href: "/kpi-audit", label: "KPI Verification", Icon: ShieldCheck, csuiteOnly: true },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/lead-roi", label: "Lead ROI", Icon: TrendingUp },
-      { href: "/internet", label: "Internet Speed", Icon: Gauge, managerOnly: true },
     ] },
     { label: "Coaching", items: [
       { href: "/whats-new", label: "What's New", Icon: Sparkles },

@@ -11,6 +11,7 @@ import PresenceBoard from "@/components/PresenceBoard";
 import TimeClock from "@/components/TimeClock";
 import BreakHistory, { type OutageView } from "@/components/BreakHistory";
 import ShiftBar, { ShiftBarLegend } from "@/components/ShiftBar";
+import { SPEED_CHECKS_CATEGORY, latestSpeedFromRows } from "@/lib/speed-checks";
 
 export const dynamic = "force-dynamic";
 
@@ -182,13 +183,15 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   // round-trip instead of five sequential awaits (faster initial render on the
   // heaviest page; each query is independent so behavior is identical).
   const tenDaysAgo = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
-  const [partAvail, partUsersRaw, myOutages, liveOutages, allOutagesToday] = await Promise.all([
+  const [partAvail, partUsersRaw, myOutages, liveOutages, allOutagesToday, speedRows] = await Promise.all([
     manager ? db.availability.findMany({ where: { date: { gte: today } }, orderBy: { date: "asc" } }) : Promise.resolve([]),
     manager ? db.user.findMany({ where: { active: true }, select: { id: true, name: true } }) : Promise.resolve([]),
     isOwner(me) ? Promise.resolve([]) : db.outage.findMany({ where: { userId: me.id, date: { gte: tenDaysAgo } }, orderBy: [{ date: "desc" }, { startMin: "asc" }] }),
     db.outage.findMany({ where: { date: today, ongoing: true } }),
     db.outage.findMany({ where: { date: today }, orderBy: { startMin: "asc" } }),
+    db.resource.findMany({ where: { category: SPEED_CHECKS_CATEGORY, title: { endsWith: `|${today}` } }, select: { title: true, description: true } }),
   ]);
+  const speedByUser = latestSpeedFromRows(speedRows);
   const partNames = new Map(partUsersRaw.map((u) => [u.id, u.name]));
   const outHHMM = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
   const liveByUser = new Map<string, (typeof liveOutages)[number]>();
@@ -245,7 +248,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       if (o) st = "outage";
       else if (dropSince != null) st = "dropped";
       const worked = Math.max(0, workedMinutes(ps, now, workCapAt(today, settings.orgTimezone, u.name)) - outageMinFor(u.id) - droppedMinFor(u.id, dropSince));
-      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "bathroom" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: worked };
+      const sp = speedByUser.get(u.id);
+      return { id: u.id, name: u.name, state: st as "online" | "break" | "lunch" | "meeting" | "appointment" | "errand" | "training" | "bathroom" | "offline" | "outage" | "dropped", outageKind: o?.kind ?? null, sinceMs: since ? since.getTime() : null, workedMin: worked, mbps: sp?.mbps ?? null, mbpsAt: sp?.t ?? null };
     });
 
   // Who's exempt from time-clock INPUTS (time card, breaks, outage reporting):
@@ -301,7 +305,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
       {/* LIVE AVAILABILITY */}
       <section>
-        <h3 className="mb-2 text-sm font-bold text-slate-700">Who&apos;s available right now</h3>
+        <div className="mb-2 flex items-baseline justify-between">
+          <h3 className="text-sm font-bold text-slate-700">Who&apos;s available right now <span className="ml-1 font-normal text-slate-400">— station status + 📡 internet speed</span></h3>
+          {manager && <Link href="/internet" className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">📡 Speed history →</Link>}
+        </div>
         <Card className="p-4">
           <PresenceBoard initial={people} />
         </Card>

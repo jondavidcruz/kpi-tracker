@@ -24,6 +24,20 @@ export function parseSpeedChecks(raw: string | null | undefined): SpeedCheck[] {
   }
 }
 
+/** Latest speed test per user from pre-fetched Resource rows (title "<userId>|<date>").
+ *  Pure (no db import) so this stays safe to pull into client bundles via speed-checks. */
+export function latestSpeedFromRows(rows: Array<{ title: string; description: string | null }>): Map<string, SpeedCheck> {
+  const out = new Map<string, SpeedCheck>();
+  for (const r of rows) {
+    const userId = r.title.split("|")[0];
+    const checks = parseSpeedChecks(r.description);
+    if (!checks.length) continue;
+    const latest = checks.reduce((a, b) => (new Date(b.t).getTime() >= new Date(a.t).getTime() ? b : a));
+    out.set(userId, latest);
+  }
+  return out;
+}
+
 /** "8:02 AM" — the check's completion time in the org timezone. */
 export function fmtCheckTime(iso: string, tz: string): string {
   try {
