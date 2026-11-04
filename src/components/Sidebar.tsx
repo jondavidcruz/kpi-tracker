@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap, Landmark,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, Gauge, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap,
   Play, Banknote, TrafficCone, Moon, Sun,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
@@ -185,13 +185,11 @@ export default function Sidebar({
       { href: "/team-360", label: "Team 360", Icon: Sparkles },
     ] },
     { label: "System Settings", items: [
-      { href: "/admin#kpis", label: "KPIs & Goals", Icon: Target, csuiteOnly: true },
+      { href: "/admin", label: "Settings Hub", Icon: Settings, csuiteOnly: true },
       { href: "/kpi-sources", label: "KPI Sources", Icon: ScrollText, managerOnly: true },
-      { href: "/crm/automations", label: "Automations", Icon: Zap, csuiteOnly: true },
       { href: "/crm/pipelines", label: "Pipelines", Icon: Workflow, csuiteOnly: true },
+      { href: "/crm/automations", label: "Automations", Icon: Zap, csuiteOnly: true },
       { href: "/crm/access", label: "Comms Access", Icon: KeyRound, csuiteOnly: true },
-      { href: "/settings/business", label: "Business Profile", Icon: Landmark, csuiteOnly: true },
-      { href: "/settings/chat", label: "Chat & Notifications", Icon: Bell, csuiteOnly: true },
     ] },
     { label: "C-Suite", items: [
       { href: "/leaks", label: "War Room Health", Icon: Activity, csuiteOnly: true },
@@ -208,7 +206,6 @@ export default function Sidebar({
       { href: "/software", label: "Software & Logins", Icon: KeyRound },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
-      { href: "/admin", label: "Admin", Icon: Settings, csuiteOnly: true },
     ] },
   ];
 

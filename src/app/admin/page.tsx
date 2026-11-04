@@ -13,6 +13,8 @@ import { Card, SectionTitle } from "@/components/ui";
 import PageTabs from "@/components/PageTabs";
 import NavOrderBoard from "@/components/NavOrderBoard";
 import KpiOrderBoard from "@/components/KpiOrderBoard";
+import BusinessProfilePanel from "@/components/settings/BusinessProfilePanel";
+import ChatSettingsPanel from "@/components/settings/ChatSettingsPanel";
 import { getCurrentUser, isManager, isAdmin, isOwner, canAccessCSuite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -156,7 +158,10 @@ export default async function AdminPage({
           { key: "team", label: "👥 Team" },
           { key: "pay", label: "💵 Pay & Reviews" },
           { key: "kpis", label: "🎯 KPIs & Alerts" },
+          { key: "business", label: "🏢 Business" },
+          { key: "chat", label: "🔔 Chat" },
           { key: "system", label: "⚙️ System" },
+          { key: "tools", label: "🛠 Tools" },
           ...(owner ? [{ key: "preview", label: "🕵️ Member Preview" }] : []),
         ]}
       >
@@ -476,6 +481,14 @@ export default async function AdminPage({
       </section>
 
           </div>,
+          <div key="business" className="space-y-6">
+            {/* 🏢 Company legal identity — folded in from /settings/business (Jon 2026-11-03). */}
+            <BusinessProfilePanel />
+          </div>,
+          <div key="chat" className="space-y-6">
+            {/* 🔔 Google Chat rooms + phone-health webhook — folded in from /settings/chat. */}
+            <ChatSettingsPanel />
+          </div>,
           <div key="system" className="space-y-8">
       {/* ════ INTEGRATIONS (owner) — which API keys are live; where to get each ════ */}
       {owner && (
@@ -610,6 +623,31 @@ export default async function AdminPage({
           </Card>
         </section>
       )}          </div>,
+          <div key="tools" className="space-y-4">
+            {/* 🛠 Admin Tools index (Jon 2026-11-03) — the /admin/* sub-tools were URL-only;
+                surface them here so they're discoverable from the Settings hub. */}
+            <SectionTitle title="🛠 Admin Tools" subtitle="The deeper owner/admin utilities — each opens its own page." accent="bg-slate-500" />
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {[
+                { href: "/admin/telnyx", emoji: "💸", name: "Telnyx Spend", desc: "Balance, burn rate & $100 recharge cadence" },
+                { href: "/admin/chat-webhooks", emoji: "💬", name: "Chat Webhooks", desc: "Wire each Google Chat room's incoming webhook" },
+                { href: "/admin/form-builder", emoji: "🧱", name: "Form Builder", desc: "Build & edit the lead-intake forms" },
+                { href: "/admin/recalibrate", emoji: "🎯", name: "Recalibrate Goals", desc: "Reset per-rep daily goals to the real 28-day median" },
+                { href: "/admin/calibration", emoji: "⚖️", name: "Offer Calibration", desc: "Every exported offer scored against what actually closed" },
+                { href: "/admin/crm-audit", emoji: "🔎", name: "CRM Audit", desc: "Audit CRM activity — dials, texts, emails, stage moves" },
+                { href: "/admin/directrei", emoji: "🧹", name: "DirectREI Control", desc: "DirectREI mass-marketing admin + nightly pushes" },
+                { href: "/admin/workflow", emoji: "⚙️", name: "Master Workflow", desc: "Edit the master SMS / follow-up workflow" },
+              ].map((t) => (
+                <Link key={t.href} href={t.href} className="flex items-start gap-3 rounded-xl bg-white p-3.5 ring-1 ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300">
+                  <span className="text-xl leading-none">{t.emoji}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-slate-800">{t.name} <span className="text-slate-300">→</span></span>
+                    <span className="block text-[12px] text-slate-500">{t.desc}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>,
           ...(owner ? [(
             <div key="preview" className="space-y-4">
               <Card className="p-6 text-center">

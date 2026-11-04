@@ -1057,7 +1057,9 @@ export async function saveBizProfileAction(formData: FormData) {
   if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
   else await db.resource.create({ data: { title: "business-profile", category: "__biz_profile__", url: "", description } });
   revalidatePath("/settings/business");
-  redirect("/settings/business?saved=1");
+  revalidatePath("/admin");
+  // Settings now live in the Admin hub (Jon 2026-11-03) — land back on the Business tab.
+  redirect("/admin?saved=Business+profile#business");
 }
 
 // ── Phone health tracker ─────────────────────────────────────────────────────
