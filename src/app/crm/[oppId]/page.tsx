@@ -547,7 +547,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
                     const body = stripHtml(e.body);
                     const inbound = body.startsWith("⬅");
                     const clean = body.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "");
-                    const when = e.at.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+                    const when = e.at.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }) + " PT";
                     if (e.kind === "call" || e.kind === "voicemail") {
                       const recLink = (e.meta as { link?: string } | null)?.link;
                       const isRec = recLink && clean.startsWith("🎙");
