@@ -4902,13 +4902,17 @@ export async function quickAddDispoNetworkAction(formData: FormData) {
 export async function saveChatWebhooksAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isOwner(me)) return;
-  const spaces = ["contracts", "kpi", "phonehealth", "receipts", "leadership", "team", "acquisitions", "directrei"];
   const row = await db.resource.findFirst({ where: { category: "__chat_webhooks__" } });
   let cur: Record<string, string> = {};
   try { cur = row?.description ? JSON.parse(row.description) : {}; } catch { cur = {}; }
   const next = { ...cur };
-  for (const s of spaces) {
-    const v = String(formData.get(`wh_${s}`) ?? "").trim();
+  // Read EVERY wh_<space> field the form submitted (Jon 2026-11-04: dispositions + warroom
+  // were missing from a hardcoded list, so they silently never saved). Dynamic = can't drift.
+  for (const [field, raw] of formData.entries()) {
+    if (!field.startsWith("wh_")) continue;
+    const s = field.slice(3);
+    if (!s) continue;
+    const v = String(raw ?? "").trim();
     if (v === "__clear__") delete next[s];
     else if (v && /^https:\/\/chat\.googleapis\.com\/v1\/spaces\//.test(v)) next[s] = v;
   }

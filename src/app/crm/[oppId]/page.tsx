@@ -21,7 +21,7 @@ import { stripHtml, stripAgentNotesBlock, readParcels, splitCrammedParcels, recS
 import ParcelsPanel from "@/components/ParcelsPanel";
 import PanelGuard from "@/components/PanelGuard";
 import { buildForms } from "@/lib/crm-forms";
-import { leadKind } from "@/lib/lead-kind";
+import { leadKind, resolveLeadKind } from "@/lib/lead-kind";
 import { sectionColor } from "@/lib/section-colors";
 import { readDealHeat } from "@/lib/deal-heat";
 import DealHeatChip from "@/components/DealHeatChip";
@@ -274,7 +274,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             <details open id="contact" className="scroll-mt-4">
               <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-400">👤 Contact — all phones &amp; emails (edit)</summary>
               <div className="mt-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-100">
-                <LeadTypePicker oppId={opp.id} pipeline={opp.pipeline || "War Room"} pipelines={pipelines.map((pp) => pp.name)} />
+                <LeadTypePicker oppId={opp.id} pipeline={opp.pipeline || "War Room"} pipelines={pipelines.map((pp) => pp.name)} leadKind={resolveLeadKind(opp.formData, opp.pipeline)} />
               </div>
               <AutoSaveForm action={saveCrmContactAction} className="mt-2 space-y-2">
                 <input type="hidden" name="id" value={c.id} />
@@ -455,7 +455,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
               const fd = (opp.formData ?? {}) as Record<string, Record<string, string | string[]>>;
               // Forms follow the pipeline (= lead type): sellers get seller discovery,
               // developers/buyer agents get their buy-box/agent form (Jon 2026-10-20).
-              return buildForms(opp.pipeline, customFields, fieldOverrides, leadKind(fd)).map((form) => {
+              return buildForms(opp.pipeline, customFields, fieldOverrides, resolveLeadKind(fd, opp.pipeline)).map((form) => {
                 const answers = fd[form.key] ?? {};
                 const count = Object.keys(answers).length;
                 // 🎨 Same section colors as the Quick Notes view (Jon 2026-10-29).

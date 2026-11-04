@@ -20,7 +20,7 @@ import { isDispoDealPipeline, isDevNetworkName, isAgentNetworkName } from "@/lib
 import { readGateChecks } from "@/lib/dispo-gates";
 import { readMarketingDone } from "@/lib/dispo-marketing";
 import { readDealHeat } from "@/lib/deal-heat";
-import { leadKind } from "@/lib/lead-kind";
+import { leadKind, resolveLeadKind } from "@/lib/lead-kind";
 import LeadKindChip from "@/components/LeadKindChip";
 import MoneyInput from "@/components/MoneyInput";
 import DealHeatChip from "@/components/DealHeatChip";
@@ -392,7 +392,7 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                 {tab === "contact" && (
                   <AutoSaveForm action={submit(saveCrmContactAction, { id: d.contact.id, oppId: d.id, ctags: d.contact.tags })} className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-100">
-                      <LeadTypePicker oppId={d.id} pipeline={d.pipeline} pipelines={d.pipelines} />
+                      <LeadTypePicker oppId={d.id} pipeline={d.pipeline} pipelines={d.pipelines} leadKind={resolveLeadKind(d.formData, d.pipeline)} />
                     </div>
                     <div className="col-span-2">
                       <label className={labelCls}>Name</label>
@@ -422,12 +422,12 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                   </AutoSaveForm>
                 )}
 
-                {buildForms(d.pipeline, d.customFields, d.fieldOverrides, leadKind(d.formData)).map((f) => tab === `form:${f.key}` && (
+                {buildForms(d.pipeline, d.customFields, d.fieldOverrides, resolveLeadKind(d.formData, d.pipeline)).map((f) => tab === `form:${f.key}` && (
                   <div key={f.key} className="space-y-3">
                     {/* 🏞 Land: skip the underwriting block, show the fast cash→novation play.
                         🏡 Home/unknown: the standard underwriting summary (Jon 2026-11-03).
                         Uses the SAME land decision as the form fields so they always agree. */}
-                    {f.key === "financial" && (isLandFinancial(d.pipeline, leadKind(d.formData)) ? <LandOfferBlock d={d} /> : <UnderwriteBlock d={d} />)}
+                    {f.key === "financial" && (isLandFinancial(d.pipeline, resolveLeadKind(d.formData, d.pipeline)) ? <LandOfferBlock d={d} /> : <UnderwriteBlock d={d} />)}
                     {/* ✨ pull details straight out of the notes (Home/Land only) */}
                     {(f.key === "property" || f.key === "land") && <DetailsAutofill oppId={d.id} formKey={f.key} onApplied={() => refetch(d.id)} />}
                     {/* controlled fields — never blank out the rep's dropdown choices (Jon 2026-10-26) */}
