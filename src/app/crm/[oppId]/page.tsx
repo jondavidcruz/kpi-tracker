@@ -6,7 +6,7 @@ import { getNetworkMatchesForDeal, getDealsForNetworkLead } from "@/lib/buyer-ma
 import { attachNetworkBuyerToDeal } from "@/app/crm/actions";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoOffersPanel from "@/components/DispoOffersPanel";
-import { readDispoOffers, offerStats, OFFER_GOAL } from "@/lib/dispo-offers";
+import { readDispoOffers, offerStats, readUnderContract, OFFER_GOAL } from "@/lib/dispo-offers";
 import { readAssignmentDraft } from "@/lib/assignment-contract";
 import { nextDispoAction } from "@/lib/dispo-next-action";
 import DispoMarketingChecklist from "@/components/DispoMarketingChecklist";
@@ -841,7 +841,7 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             const si = stages.findIndex((s) => s.key === opp.stage);
             const mi = stages.findIndex((s) => /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.label) || /sent to (buyer|agent)|on market|marketing|cascade|\bjvp\b/i.test(s.key));
             const pastCascade = si >= 0 && mi >= 0 && si >= mi;
-            return <div data-widget="offers"><PanelGuard label="offers"><DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} askPrice={opp.askPrice ?? null} /></PanelGuard></div>;
+            return <div data-widget="offers"><PanelGuard label="offers"><DispoOffersPanel oppId={opp.id} offers={readDispoOffers(opp.formData)} buyerNames={readDispoBuyers(opp.formData).map((b) => b.name)} pastCascade={pastCascade} askPrice={opp.askPrice ?? null} underContract={readUnderContract(opp.formData)} /></PanelGuard></div>;
           })()}
 
           {/* 📄 Assignment-contract auto-draft + 📧 Sequences panels removed from the

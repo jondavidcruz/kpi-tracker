@@ -6,12 +6,13 @@
 // deal with <3 offers shows a red "keep working" flag.
 import { useState } from "react";
 import Link from "next/link";
-import { addDispoOfferAction, updateDispoOfferAction, removeDispoOfferAction, handBestOfferToSellerAction } from "@/app/crm/actions";
-import { OFFER_GOAL, OFFER_STATUSES, offerStatusMeta, offerStats, parseMoney, fmtMoney, type DispoOffer } from "@/lib/dispo-offers";
+import { addDispoOfferAction, updateDispoOfferAction, removeDispoOfferAction, handBestOfferToSellerAction, setDispoUnderContractAction } from "@/app/crm/actions";
+import { OFFER_GOAL, OFFER_STATUSES, OFFER_TYPES, offerStatusMeta, offerTypeMeta, offerStats, offerNet, parseMoney, fmtMoney, type DispoOffer } from "@/lib/dispo-offers";
 
-export default function DispoOffersPanel({ oppId, offers, buyerNames = [], pastCascade = false, askPrice = null }: { oppId: string; offers: DispoOffer[]; buyerNames?: string[]; pastCascade?: boolean; askPrice?: number | null }) {
+export default function DispoOffersPanel({ oppId, offers, buyerNames = [], pastCascade = false, askPrice = null, underContract = null }: { oppId: string; offers: DispoOffer[]; buyerNames?: string[]; pastCascade?: boolean; askPrice?: number | null; underContract?: number | null }) {
   const [adding, setAdding] = useState(false);
-  const st = offerStats(offers);
+  const [addType, setAddType] = useState<string>("direct");
+  const st = offerStats(offers, underContract);
   const behind = pastCascade && !st.met;
   // 🤝 Best-offer → seller handoff (Jon 2026-10-24): offer the seller BELOW the best
   // buyer offer so we keep a spread. Default target spread ~20% of the best offer;
@@ -36,8 +37,16 @@ export default function DispoOffersPanel({ oppId, offers, buyerNames = [], pastC
             <span key={i} className={`h-2 w-4 rounded-full ${i < st.live ? "bg-emerald-500" : "bg-slate-200"}`} />
           ))}
         </div>
-        {st.best != null && <span className="ml-auto text-[10px] font-bold text-emerald-700" title={`Best live offer — ${st.bestBuyer}`}>⭐ best {fmtMoney(st.best)}</span>}
+        {st.best != null && <span className="ml-auto text-[10px] font-bold text-emerald-700" title={`Best live offer — ${st.bestBuyer}${st.bestNet != null ? ` · nets ${fmtMoney(st.bestNet)}` : ""}`}>⭐ best {fmtMoney(st.best)}{st.bestNet != null ? ` → net ${fmtMoney(st.bestNet)}` : ""}</span>}
       </div>
+
+      {/* 📑 What WE have the deal under contract at — drives each offer's net/profit. */}
+      <form action={setDispoUnderContractAction} className="mb-2 flex items-center gap-1.5 rounded-lg bg-slate-50 px-2 py-1.5 ring-1 ring-slate-100">
+        <input type="hidden" name="oppId" value={oppId} />
+        <span className="text-[11px] font-bold text-slate-500">📑 Under contract at</span>
+        <input name="value" defaultValue={underContract != null ? String(underContract) : ""} placeholder="our cost $" inputMode="numeric" onBlur={(e) => { const v = parseMoney(e.currentTarget.value); if ((v ?? null) !== underContract) e.currentTarget.form?.requestSubmit(); }} className="w-24 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-bold text-slate-800" />
+        <span className="text-[10px] text-slate-400">{underContract == null ? "set this to see net + profit on each offer" : "net/profit below are after this cost"}</span>
+      </form>
 
       {behind && (
         <div className="mb-2 rounded-lg bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-200">
@@ -71,57 +80,73 @@ export default function DispoOffersPanel({ oppId, offers, buyerNames = [], pastC
         </div>
       )}
 
-      {/* header row */}
-      {offers.length > 0 && (
-        <div className="mb-1 grid grid-cols-[1fr_auto_auto_auto_auto] gap-1 px-1 text-[8.5px] font-bold uppercase tracking-wide text-slate-300">
-          <span>Buyer</span><span>Price</span><span>Terms</span><span>Days</span><span>Status</span>
-        </div>
-      )}
-
-      <div className="space-y-1">
-        {offers.length === 0 && <p className="py-1 text-[11px] text-slate-400">No offers logged yet. As buyers/agents come back with a number, log it here — price, terms, days to close — and work toward {OFFER_GOAL}.</p>}
+      <div className="space-y-1.5">
+        {offers.length === 0 && <p className="py-1 text-[11px] text-slate-400">No offers logged yet. As buyers/agents come back with a number, log it here — price, buyer type, terms — and work toward {OFFER_GOAL}.</p>}
         {[...offers]
-          .sort((a, b) => (parseMoney(b.price) ?? -1) - (parseMoney(a.price) ?? -1))
+          .sort((a, b) => {
+            const na = offerNet(a, underContract).profit, nb = offerNet(b, underContract).profit;
+            if (na != null && nb != null) return nb - na; // rank by what we NET
+            return (parseMoney(b.price) ?? -1) - (parseMoney(a.price) ?? -1);
+          })
           .map((o) => {
             const sm = offerStatusMeta(o.status);
-            const isTopLive = sm.live && st.best != null && parseMoney(o.price) === st.best;
+            const tm = offerTypeMeta(o.offerType);
+            const isTopLive = sm.live && st.bestId === o.id;
+            const net = offerNet(o, underContract);
             return (
               <div key={o.id} className={`rounded-lg px-2 py-1.5 ring-1 ${isTopLive ? "bg-emerald-50 ring-emerald-200" : "bg-slate-50 ring-slate-100"}`}>
-                <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-1">
-                  {/* buyer */}
+                {/* line 1: buyer · price · type · status · remove */}
+                <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-1">
                   <div className="min-w-0">
                     {o.buyerId
-                      ? <Link href={`/crm/${o.buyerId}`} className="block truncate text-[12px] font-bold text-sky-700 hover:underline">{o.buyer}</Link>
-                      : <span className="block truncate text-[12px] font-bold text-slate-800">{o.buyer}</span>}
+                      ? <Link href={`/crm/${o.buyerId}`} className="block truncate text-[12px] font-bold text-sky-700 hover:underline">{isTopLive ? "⭐ " : ""}{o.buyer}</Link>
+                      : <span className="block truncate text-[12px] font-bold text-slate-800">{isTopLive ? "⭐ " : ""}{o.buyer}</span>}
                     {o.at && <span className="text-[9px] text-slate-400">{o.at}{o.by ? ` · ${o.by}` : ""}</span>}
                   </div>
-                  {/* price */}
                   <form action={updateDispoOfferAction} className="contents">
                     <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={o.id} /><input type="hidden" name="field" value="price" />
                     <input name="value" defaultValue={o.price} placeholder="$" onBlur={(e) => { if (e.currentTarget.value !== o.price) e.currentTarget.form?.requestSubmit(); }} className="w-20 rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] font-bold text-emerald-700" />
                   </form>
-                  {/* terms */}
                   <form action={updateDispoOfferAction} className="contents">
-                    <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={o.id} /><input type="hidden" name="field" value="terms" />
-                    <input name="value" defaultValue={o.terms ?? ""} placeholder="terms" onBlur={(e) => { if (e.currentTarget.value !== (o.terms ?? "")) e.currentTarget.form?.requestSubmit(); }} className="w-20 rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px]" />
+                    <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={o.id} /><input type="hidden" name="field" value="offerType" />
+                    <select name="value" defaultValue={o.offerType ?? "direct"} onChange={(e) => e.currentTarget.form?.requestSubmit()} title={tm.blurb} className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] font-semibold text-slate-600">
+                      {OFFER_TYPES.map((t) => <option key={t.key} value={t.key}>{t.emoji} {t.label}</option>)}
+                    </select>
                   </form>
-                  {/* days to close */}
-                  <form action={updateDispoOfferAction} className="contents">
-                    <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={o.id} /><input type="hidden" name="field" value="daysToClose" />
-                    <input name="value" defaultValue={o.daysToClose ?? ""} placeholder="days" inputMode="numeric" onBlur={(e) => { if (e.currentTarget.value !== (o.daysToClose ?? "")) e.currentTarget.form?.requestSubmit(); }} className="w-12 rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px]" title="Days to close" />
-                  </form>
-                  {/* status */}
                   <form action={updateDispoOfferAction} className="contents">
                     <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={o.id} /><input type="hidden" name="field" value="status" />
                     <select name="value" defaultValue={o.status} onChange={(e) => e.currentTarget.form?.requestSubmit()} className={`rounded px-1 py-0.5 text-[10px] font-bold ${sm.cls}`}>
                       {OFFER_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                     </select>
                   </form>
-                  {/* remove */}
                   <form action={removeDispoOfferAction}>
                     <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={o.id} />
                     <button className="rounded px-1 text-[11px] text-slate-300 hover:bg-rose-50 hover:text-rose-600" title="Remove this offer">✕</button>
                   </form>
+                </div>
+                {/* line 2: terms · days · (jv split) · net / profit / margin */}
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-500">
+                  <form action={updateDispoOfferAction} className="contents">
+                    <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={o.id} /><input type="hidden" name="field" value="terms" />
+                    <input name="value" defaultValue={o.terms ?? ""} placeholder="terms" onBlur={(e) => { if (e.currentTarget.value !== (o.terms ?? "")) e.currentTarget.form?.requestSubmit(); }} className="w-24 rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px]" />
+                  </form>
+                  <form action={updateDispoOfferAction} className="contents">
+                    <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={o.id} /><input type="hidden" name="field" value="daysToClose" />
+                    <input name="value" defaultValue={o.daysToClose ?? ""} placeholder="days" inputMode="numeric" onBlur={(e) => { if (e.currentTarget.value !== (o.daysToClose ?? "")) e.currentTarget.form?.requestSubmit(); }} className="w-12 rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px]" title="Days to close" />
+                  </form>
+                  {o.offerType === "jv" && (
+                    <form action={updateDispoOfferAction} className="flex items-center gap-0.5">
+                      <input type="hidden" name="oppId" value={oppId} /><input type="hidden" name="entryId" value={o.id} /><input type="hidden" name="field" value="splitPct" />
+                      <input name="value" defaultValue={o.splitPct != null ? String(o.splitPct) : "50"} inputMode="numeric" onBlur={(e) => e.currentTarget.form?.requestSubmit()} className="w-9 rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px]" title="Our share of the spread" />
+                      <span>% our split</span>
+                    </form>
+                  )}
+                  <span className="ml-auto flex items-center gap-2">
+                    {net.proceeds != null && <span>net <b className="tabular-nums text-slate-700">{fmtMoney(net.proceeds)}</b></span>}
+                    {net.profit != null
+                      ? <span className={`rounded-full px-1.5 py-0.5 font-bold ${net.profit >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>{net.profit >= 0 ? "+" : ""}{fmtMoney(net.profit)}{net.marginPct != null ? ` · ${Math.round(net.marginPct)}%` : ""}</span>
+                      : <span className="text-slate-300" title="Set 'Under contract at' above to see profit">— profit</span>}
+                  </span>
                 </div>
               </div>
             );
@@ -137,9 +162,13 @@ export default function DispoOffersPanel({ oppId, offers, buyerNames = [], pastC
             <input name="price" placeholder="💵 Price *" className="w-24 rounded border border-slate-300 px-1.5 py-1 text-[11px] font-semibold" />
           </div>
           <div className="flex gap-1">
-            <input name="terms" placeholder="Terms (cash / assignment / novation…)" className="min-w-0 flex-1 rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
-            <input name="daysToClose" placeholder="Days" inputMode="numeric" className="w-16 rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
+            <select name="offerType" value={addType} onChange={(e) => setAddType(e.target.value)} className="rounded border border-slate-300 px-1.5 py-1 text-[11px] font-semibold text-slate-600">
+              {OFFER_TYPES.map((t) => <option key={t.key} value={t.key}>{t.emoji} {t.label}</option>)}
+            </select>
+            {addType === "jv" && <input name="splitPct" placeholder="% split" defaultValue="50" inputMode="numeric" className="w-16 rounded border border-slate-300 px-1.5 py-1 text-[11px]" title="Our share of the spread" />}
+            <input name="daysToClose" placeholder="Days" inputMode="numeric" className="w-14 rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
           </div>
+          <input name="terms" placeholder="Terms (cash / assignment / novation…)" className="w-full rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
           <div className="flex gap-1">
             <button className="flex-1 rounded bg-brand-navy px-2 py-1 text-[11px] font-bold text-white hover:bg-brand-navy-700">Log offer</button>
             <button type="button" onClick={() => setAdding(false)} className="rounded bg-slate-200 px-2 py-1 text-[11px] font-bold text-slate-600">Cancel</button>

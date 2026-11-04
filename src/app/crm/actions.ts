@@ -2356,12 +2356,16 @@ export async function addDispoOfferAction(formData: FormData) {
   const buyer = String(formData.get("buyer") ?? "").trim();
   const price = String(formData.get("price") ?? "").trim();
   if (!oppId || !buyer) return;
+  const otype = String(formData.get("offerType") ?? "").trim();
+  const split = String(formData.get("splitPct") ?? "").trim();
   const entry: Record<string, unknown> = {
     id: `of_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     buyer, price,
     buyerId: String(formData.get("buyerId") ?? "").trim() || undefined,
     terms: String(formData.get("terms") ?? "").trim() || undefined,
     daysToClose: String(formData.get("daysToClose") ?? "").trim() || undefined,
+    offerType: ["agent", "direct", "jv"].includes(otype) ? otype : "direct",
+    splitPct: split && Number.isFinite(Number(split)) ? Number(split) : undefined,
     status: "received", at: PT_TODAY(), by: me.name,
   };
   const o = await mutateDispoOffers(oppId, (list) => [...list, entry]);
@@ -2377,8 +2381,23 @@ export async function updateDispoOfferAction(formData: FormData) {
   const entryId = String(formData.get("entryId") ?? "");
   const field = String(formData.get("field") ?? "");
   const value = String(formData.get("value") ?? "").trim();
-  if (!oppId || !entryId || !["price", "terms", "daysToClose", "status", "notes", "buyer"].includes(field)) return;
-  await mutateDispoOffers(oppId, (list) => list.map((r) => (r.id === entryId ? { ...r, [field]: value || undefined } : r)));
+  if (!oppId || !entryId || !["price", "terms", "daysToClose", "status", "notes", "buyer", "offerType", "splitPct"].includes(field)) return;
+  const coerced = field === "splitPct" ? (value && Number.isFinite(Number(value)) ? Number(value) : undefined) : (value || undefined);
+  await mutateDispoOffers(oppId, (list) => list.map((r) => (r.id === entryId ? { ...r, [field]: coerced } : r)));
+  revalidatePath(`/crm/${oppId}`);
+}
+
+/** Set what we have THIS deal under contract at (our cost) — drives each offer's net math. */
+export async function setDispoUnderContractAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const oppId = String(formData.get("oppId") ?? "");
+  const value = String(formData.get("value") ?? "").trim();
+  if (!oppId) return;
+  const o = await db.crmOpportunity.findUnique({ where: { id: oppId }, select: { formData: true } });
+  if (!o) return;
+  const fd = (o.formData ?? {}) as Record<string, unknown>;
+  await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __dispoUnderContract: value || undefined } as never } });
   revalidatePath(`/crm/${oppId}`);
 }
 

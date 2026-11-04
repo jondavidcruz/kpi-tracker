@@ -39,7 +39,7 @@ import DripControl from "@/components/DripControl";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
 import DispoOffersPanel from "@/components/DispoOffersPanel";
 import { readDispoBuyers } from "@/lib/dispo-buyers";
-import { readDispoOffers } from "@/lib/dispo-offers";
+import { readDispoOffers, readUnderContract } from "@/lib/dispo-offers";
 import { uploadLeadFile } from "@/lib/upload-lead-file";
 import { sanitizeNoteHtml, isHtmlNote } from "@/lib/note-html";
 
@@ -436,7 +436,7 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
 
                 {tab === "buyers" && (
                   <div className="space-y-3">
-                    <DispoOffersPanel oppId={d.id} offers={readDispoOffers(d.formData)} buyerNames={readDispoBuyers(d.formData).map((b) => b.name)} askPrice={d.askPrice} />
+                    <DispoOffersPanel oppId={d.id} offers={readDispoOffers(d.formData)} buyerNames={readDispoBuyers(d.formData).map((b) => b.name)} askPrice={d.askPrice} underContract={readUnderContract(d.formData)} />
                     <DispoBuyerTracker oppId={d.id} buyers={readDispoBuyers(d.formData)} today={new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })} canCall={d.me.canCall} canSms={d.me.canSms} board />
                   </div>
                 )}
