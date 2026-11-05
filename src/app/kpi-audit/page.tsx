@@ -60,10 +60,15 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
     );
   }
   const sp = await searchParams;
-  const users = (await getAllUsers()).filter((u) => u.active);
-  // Reps worth auditing: anyone whose primary/secondary role is dispositions (these KPIs live there).
+  const MONEY_ROLES = new Set(["dispositions", "acquisitions", "cc_lm"]);
+  const hasMoneyRole = (u: Parameters<typeof secondaryPositionOf>[0] & { position?: string }) =>
+    MONEY_ROLES.has(u?.position ?? "") || MONEY_ROLES.has(secondaryPositionOf(u) ?? "");
+  // Reps worth auditing: anyone with a money-KPI role (dispo / acquisitions / cc_lm), excluding
+  // C-suite/owner (Jon, Viktoriia, Enrico) — they aren't audited here.
+  const users = (await getAllUsers()).filter((u) => u.active && hasMoneyRole(u) && !canAccessCSuite(u));
+  // Dispo first (their KPIs are the furthest along), then the rest.
   const dispo = users.filter((u) => u.position === "dispositions" || secondaryPositionOf(u) === "dispositions");
-  const rep = sp.rep || dispo[0]?.id || "";
+  const rep = sp.rep || dispo[0]?.id || users[0]?.id || "";
   const repUser = users.find((u) => u.id === rep) ?? null;
   // Range: a preset (today/week/lastweek/month/lastmonth) or custom from/to. A legacy ?date= still works.
   const rangeKey = sp.range || (sp.date ? "custom" : "today");

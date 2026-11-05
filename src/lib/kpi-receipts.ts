@@ -24,12 +24,17 @@ export type KpiProof = {
   receipts: Receipt[];
 };
 
-// Preferred display order for the Money Movers (matches the scorecard). Unknown green KPIs fall
-// to the end. Keys are stable slugs from the KPI catalog.
-const ORDER = ["dev_conversations", "new_buyers", "buyers_vetted", "buy_boxes_captured", "deals_sold", "buyer_offers_received", "contracts_assigned"];
+// 💰 The per-rep MONEY KPIs we audit, BY ROLE (Jon 2026-11-04: "I just need the money KPIs" —
+// not the company-wide financials like Gross Revenue / Spend, and acquisitions gets ITS OWN set).
+// Keys are stable slugs from the KPI catalog; the array order is the display order on the page.
+const MONEY_KPIS: Record<string, string[]> = {
+  dispositions: ["dev_conversations", "new_buyers", "buyers_vetted", "buy_boxes_captured", "deals_sold", "buyer_offers_received", "contracts_assigned"],
+  acquisitions: ["appts_taken", "offers_made", "acq_contracts_sent", "acq_signed_assignment", "acq_signed_novation", "acq_signed_creative"],
+  cc_lm: ["appts_set", "passoffs", "leads_generated"],
+};
 
-// Which green KPIs we know how to derive receipts for (everything else → "✍️ manual", shown but
-// never flagged). Keep this in sync with the derive() switch below.
+// Which keys we know how to derive receipts for (everything else → "✍️ manual", shown but never
+// flagged). Only the dispo output KPIs have a records trail today; acquisitions stay manual for now.
 const DERIVABLE = new Set(["dev_conversations", "new_buyers", "buyers_vetted", "buy_boxes_captured", "deals_sold", "buyer_offers_received"]);
 
 /** Recompute the rep's 💰 Money-Mover KPI counts FROM RECORDS over a date range [from,to]
@@ -41,12 +46,18 @@ export async function kpiProofsFor(userId: string, from: string, to: string = fr
   const { getSettings } = await import("./data");
   const { resolveNetworkPipelines } = await import("./dispo-network");
 
-  // The Money Movers for THIS rep = every green KPI on their scorecard (their role + team-wide).
-  const roles = new Set([user.position, secondaryPositionOf(user)].filter(Boolean) as string[]);
-  const greenKpis = (await db.kpi.findMany({
-    where: { category: "green" },
+  // The money KPIs for THIS rep = their role's allow-list (+ a secondary role for hybrids like
+  // Sharyn). Company-wide financials (Gross Revenue, Spend, etc.) are deliberately excluded.
+  const roles = [user.position, secondaryPositionOf(user)].filter(Boolean) as string[];
+  const wantKeys: string[] = [];
+  for (const r of roles) for (const k of MONEY_KPIS[r] ?? []) if (!wantKeys.includes(k)) wantKeys.push(k);
+  if (!wantKeys.length) return [];
+  const kpiRows = await db.kpi.findMany({
+    where: { key: { in: wantKeys } },
     select: { id: true, key: true, name: true, emoji: true, scope: true, roleKey: true },
-  })).filter((k) => k.scope === "team" || !k.roleKey || roles.has(k.roleKey));
+  });
+  // Keep the allow-list order (= scorecard order), dropping any key not in the catalog.
+  const greenKpis = wantKeys.map((k) => kpiRows.find((r) => r.key === k)).filter(Boolean) as typeof kpiRows;
   if (!greenKpis.length) return [];
 
   const tz = (await getSettings()).orgTimezone || "America/Los_Angeles";
@@ -171,9 +182,5 @@ export async function kpiProofsFor(userId: string, from: string, to: string = fr
     return { key: k.key, name: k.name, emoji: k.emoji, systemCount, recorded, enteredBy, derivable, status, receipts };
   });
 
-  proofs.sort((a, b) => {
-    const ia = ORDER.indexOf(a.key), ib = ORDER.indexOf(b.key);
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-  });
   return proofs;
 }
