@@ -74,14 +74,25 @@ export async function pullDreiQualifiedLeads(): Promise<{ scanned: number; quali
     return null;
   };
   const g = (c: Record<string, unknown>, ...keys: string[]) => { for (const k of keys) { const v = c[k]; if (v != null && String(v).trim()) return String(v); } return ""; };
-  // ONLY status "qualified" (Jon 2026-11-05: "replied" pulled in buyers + not-interested
-  // people). Qualified = Direct REI's AI judged they stated a price / are interested — the best
-  // signal available (the reply text itself isn't in the list API). Plain /contacts is paginated
-  // to 50 of 2000+, so query the status explicitly. ADDRESS is joined from /deals below.
-  const res = await directReiContacts({ status: "qualified", limit: "500" });
-  const rows = res.ok ? (firstArray(res.body) ?? []) : [];
+  // The real trigger is "has a DEAL" (Jon 2026-11-05: creating a deal in Direct REI is his own
+  // signal that a seller is genuinely interested — far cleaner than Direct REI's auto-qualify).
+  // So pull responders (qualified + replied) and keep only those WITH a deal. Query each status
+  // explicitly because plain /contacts is paginated to 50 of 2000+. ADDRESS joins from /deals.
+  const rows: Array<Record<string, unknown>> = [];
+  const seenId = new Set<string>();
+  let lastStatus = 0;
+  for (const st of ["qualified", "replied"]) {
+    const r = await directReiContacts({ status: st, limit: "500" });
+    lastStatus = r.status;
+    if (!r.ok) continue;
+    for (const row of (firstArray(r.body) ?? [])) {
+      const id = g(row, "id", "contact_id");
+      if (id && seenId.has(id)) continue; if (id) seenId.add(id);
+      rows.push(row);
+    }
+  }
   if (rows.length === 0) {
-    return { scanned: 0, qualified: 0, created: 0, error: `no qualified sellers (HTTP ${res.status}).` };
+    return { scanned: 0, qualified: 0, created: 0, error: `no responding sellers (HTTP ${lastStatus}).` };
   }
   const dealsRes = await directReiDeals({ limit: "500" }).catch(() => null);
   const dealRows = dealsRes?.ok ? (firstArray(dealsRes.body) ?? []) : [];
@@ -93,14 +104,11 @@ export async function pullDreiQualifiedLeads(): Promise<{ scanned: number; quali
     // 🚫 sellers only — Direct REI tags buyers/builders role:"buyer"; keep role:"seller"/"owner".
     const role = `${g(c, "role")} ${g(c, "contact_type")}`.toLowerCase();
     if (/buyer|developer|builder|investor|agent|wholesaler/.test(role)) continue;
-    // belt-and-suspenders: only rows actually marked qualified.
-    const st = g(c, "status").toLowerCase();
-    if (st && !/qualif/.test(st)) continue;
     qualified++;
     const id = g(c, "id", "contact_id");
     const deal = id ? dealBySeller.get(id) : undefined;
-    // 🎯 Require a DEAL — Direct REI only creates a deal once a seller is genuinely interested, so
-    // this filters out the "qualified" noise (not-interested repliers) Jon flagged (2026-11-05).
+    // 🎯 Require a DEAL — the seller must have a deal in Direct REI (Jon curates by creating one).
+    // This is the clean signal that filters out the not-interested noise (Jon 2026-11-05).
     if (!deal) continue;
     const notes = g(c, "ai_summary", "ai_reply", "summary", "notes", "note", "last_message", "last_reply", "reply", "ai_notes", "action_note");
     const dealAddr = deal ? g(deal, "name", "property_address", "address", "property") : "";
