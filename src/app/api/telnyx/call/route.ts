@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     }).catch(() => null);
   // ring sessions: inbound call id → outstanding browser legs (ring-all state)
   const SESS = "__ring_sessions__";
-  type Sess = Record<string, { legs: string[]; answered: boolean; at: string; winner?: string; vm?: boolean; from?: string; callerName?: string }>;
+  type Sess = Record<string, { legs: string[]; answered: boolean; at: string; winner?: string; vm?: boolean; from?: string; callerName?: string; ourNum?: string }>;
   const readSess = async (): Promise<{ rowId: string | null; map: Sess }> => {
     const row = await db.resource.findFirst({ where: { category: SESS } });
     let map: Sess = {};
@@ -147,8 +147,12 @@ export async function POST(req: NextRequest) {
       {
         const { rowId, map } = await readSess();
         if (map[inId]) return NextResponse.json({ ok: true, dup: true });
-        map[inId] = { legs: [], answered: false, at: new Date().toISOString() };
+        map[inId] = { legs: [], answered: false, at: new Date().toISOString(), ourNum: pay0.to };
         await writeSess(rowId, map);
+        // 📊 count this inbound call against the number it came in on (best-effort,
+        // deduped by call id; never blocks ring handling). Powers /phone-health's
+        // auto per-number answer rate. (Jon 2026-11-05)
+        import("@/lib/number-stats").then((m) => m.recordInboundCall(pay0.to ?? "", inId)).catch(() => {});
       }
       const clientState = Buffer.from(JSON.stringify({ ring: inId })).toString("base64");
       // dial every browser in PARALLEL — sequential dials were what pushed the
@@ -201,6 +205,9 @@ export async function POST(req: NextRequest) {
       sess.answered = true;
       sess.winner = p.call_control_id;
       await writeSess(rowId, map);
+      // 📊 this inbound call was answered → credit the number it came in on
+      // (best-effort, deduped by the inbound call id). (Jon 2026-11-05)
+      import("@/lib/number-stats").then((m) => m.recordInboundAnswered(sess.ourNum ?? "", st.ring ?? "")).catch(() => {});
       await txCall(st.ring, "answer");
       for (const leg of sess.legs) if (leg !== p.call_control_id) await txCall(leg, "hangup");
       // 🏷 WHO answered (Jon 2026-10-12): the winning leg's SIP user maps to an

@@ -152,6 +152,12 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   const setupDone = SETUP_TASKS.filter((t) => setupStatus[t.key] === "done").length;
 
 
+  // 📊 Auto per-number INBOUND answer rate (live, no manual entry). Best-effort —
+  // degrades to "—" if the store is empty/unreachable. Outbound metering is separate
+  // (client dialer, on a branch). (Jon 2026-11-05)
+  const { readNumberStore, inboundFor } = await import("@/lib/number-stats");
+  const numStore = await readNumberStore().catch(() => null);
+
   const flaggedCount = lines.filter((l) => health(l.meta).label.startsWith("⚠️")).length;
   const unregistered = lines.filter((l) => !l.meta.registered).length;
   const healthy = lines.filter((l) => health(l.meta).label.startsWith("✓")).length;
@@ -224,6 +230,9 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {telnyxNums.map((n) => {
             const watch = !n.msgProfile || n.status !== "active";
+            // live inbound answer rate (last 30 days) — auto, from real call events
+            const ib = numStore ? inboundFor(numStore, n.number, 30) : null;
+            const lowAns = ib && ib.calls >= 10 && ib.rate != null && ib.rate < 40;
             return (
               <div key={n.number} className={`rounded-xl p-3 ring-1 ${watch ? "bg-amber-50 ring-amber-200" : "bg-emerald-50/50 ring-emerald-100"}`}>
                 <div className="flex items-center gap-2">
@@ -233,10 +242,24 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
                 </div>
                 <div className="mt-1 text-[11px] text-slate-600">{n.connection}</div>
                 <div className="mt-0.5 text-[10px] text-slate-500">{n.status === "active" ? "✓ active" : `⚠️ ${n.status}`} · {n.msgProfile ? "✓ SMS profile" : "⚠️ no SMS profile (texts blocked)"}</div>
+                {/* 📞 Auto inbound answer rate — a free spam-flag proxy. Needs a few calls
+                    before it's meaningful; blank until then. */}
+                <div className="mt-1.5 flex items-center gap-1.5 border-t border-black/5 pt-1.5 text-[10px]">
+                  <span className="font-semibold text-slate-400">Inbound answered</span>
+                  {ib && ib.calls > 0 ? (
+                    <span className={`font-extrabold ${lowAns ? "text-red-600" : ib.rate != null && ib.rate >= 60 ? "text-emerald-600" : "text-slate-700"}`}>
+                      {ib.rate}%<span className="ml-0.5 font-medium text-slate-400">· {ib.answered}/{ib.calls} · 30d</span>
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">— no inbound calls yet</span>
+                  )}
+                  {lowAns && <span title="Low pickup can mean the number is getting flagged">🚩</span>}
+                </div>
               </div>
             );
           })}
         </div>
+        <p className="mt-2 text-[10px] text-slate-400">Inbound answer rate is computed live from real call events (no manual entry). A number with lots of inbound calls but a low answered % is often being labeled “Spam Likely.” Outbound dial metering + the ≤100/day pacing cap are coming separately. <span className="text-amber-500">New — still gathering data.</span></p>
       </Card>
 
       {/* Lead-gen SOP: list pull → skip trace → scrub → SMS (from Jon's SOP PDF) */}
