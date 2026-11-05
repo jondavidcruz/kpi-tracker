@@ -15,12 +15,12 @@ export const DRIP_SEQUENCES: DripSeq[] = [
   {
     key: "seller_land", name: "Seller land follow-up (6 touches / ~30 days)",
     steps: [
-      { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} with Freedom Offers — just following up on your land at {address}. Still open to a cash offer? Happy to send one over." },
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — just following up on your land at {address}. Still open to a cash offer? Happy to send one over." },
       { channel: "email", delayDays: 3, emailSubject: "Your land at {address}", emailBody: "Hi {first},\n\nFollowing up on {address}. We buy land as-is for cash and can close on your timeline — no fees, no agents. Want me to put together a no-obligation offer?\n\nJust reply here or text me anytime." },
       { channel: "sms", delayDays: 7, sms: "{first}, still interested in selling {address}? We can usually close in a couple weeks, cash. Reply YES and I'll get you a number." },
       { channel: "email", delayDays: 14, emailSubject: "Still thinking about {address}?", emailBody: "Hi {first},\n\nNo rush — just checking back on {address}. If the timing's better now, I'd love to get you a cash offer. We handle all the paperwork and closing costs.\n\nReply anytime and we'll take it from there." },
-      { channel: "sms", delayDays: 22, sms: "Hi {first}, last check-in on {address} from Freedom Offers — if you'd ever want a quick cash offer, just text me back. No pressure." },
-      { channel: "email", delayDays: 30, emailSubject: "Door's always open — {address}", emailBody: "Hi {first},\n\nI'll stop reaching out for now, but if anything changes with {address}, we're always here and can move fast with a cash offer. Thanks for your time!\n\n— {rep}, Freedom Offers" },
+      { channel: "sms", delayDays: 22, sms: "Hi {first}, last check-in on {address} — if you'd ever want a quick cash offer, just text me back. No pressure." },
+      { channel: "email", delayDays: 30, emailSubject: "Door's always open — {address}", emailBody: "Hi {first},\n\nI'll stop reaching out for now, but if anything changes with {address}, we're always here and can move fast with a cash offer. Thanks for your time!\n\n— {rep}" },
     ],
   },
 ];
@@ -175,7 +175,7 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
     if (!state || !seq) continue;
     const step = seq.steps[state.step];
     if (!step) { await stopDrip(o.id, "completed"); finished++; continue; }
-    const tok = { first: (o.contact?.name || "there").split(" ")[0], address: o.contact?.address || o.title || "your property", rep: (o.assignedTo || "Freedom Offers").split(" ")[0] };
+    const tok = { first: (o.contact?.name || "there").split(" ")[0], address: o.contact?.address || o.title || "your property", rep: o.assignedTo ? o.assignedTo.split(" ")[0] : "your buyer" };
     const fd = (o.formData ?? {}) as Record<string, unknown>;
 
     // advance first (idempotent — a retry won't double-fire the same step)
@@ -204,7 +204,10 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
       const title = channel === "sms"
         ? `📨 Follow-up text ${state.step + 1} → ${tok.first}: ${body.slice(0, 80)}`
         : `📨 Follow-up email ${state.step + 1} → ${tok.first}: ${subject}`;
-      const existing = await db.crmTask.findFirst({ where: { oppId: o.id, title, doneAt: null } }).catch(() => null);
+      // Dedup per CONTACT (not per opp) and regardless of done status within 14 days, so a
+      // contact with multiple leads — or a re-run after the task was completed — doesn't pile
+      // up identical follow-up tasks (Jon 2026-11-05: "why is this showing three times").
+      const existing = await db.crmTask.findFirst({ where: { contactId: o.contactId, title, createdAt: { gte: new Date(Date.now() - 14 * 86_400_000) } } }).catch(() => null);
       if (!existing) {
         const task = await db.crmTask.create({ data: { oppId: o.id, contactId: o.contactId, title, due: today, assignedTo: o.assignedTo, createdBy: "drip" } }).catch(() => null);
         if (task) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(task.id, channel === "email" ? `Subject: ${subject}\n\n${body}` : body).catch(() => {}); }

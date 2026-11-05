@@ -41,7 +41,7 @@ export async function writeSnippets(list: Snippet[]): Promise<void> {
   await writeJson(SNIP_CAT, "crm-snippets", list.slice(0, 50));
 }
 export function fillTemplate(t: string, vars: { name?: string; rep?: string }): string {
-  return t.replaceAll("{name}", (vars.name ?? "").split(" ")[0] || "there").replaceAll("{rep}", (vars.rep ?? "").split(" ")[0] || "Freedom Offers");
+  return t.replaceAll("{name}", (vars.name ?? "").split(" ")[0] || "there").replaceAll("{rep}", (vars.rep ?? "").split(" ")[0] || "your buyer");
 }
 
 // ── Sequences ───────────────────────────────────────────────────────────────

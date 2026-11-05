@@ -712,8 +712,10 @@ export async function sendCrmEmailAction(formData: FormData): Promise<{ ok: bool
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
   const to = String(formData.get("to") ?? "").trim();
-  const subject = String(formData.get("subject") ?? "").trim().slice(0, 150);
-  const body = String(formData.get("body") ?? "").trim().slice(0, 4000);
+  // 🕶 Never send the company/owner name to sellers (Jon 2026-11-05) — scrub subject + body.
+  const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+  const subject = scrubOwnerIdentity(String(formData.get("subject") ?? "").trim().slice(0, 150));
+  const body = scrubOwnerIdentity(String(formData.get("body") ?? "").trim().slice(0, 4000));
   if (!to || !subject || !body) return { ok: false, msg: "Add a recipient, subject, and message before sending." };
   if (contactId && await isDnd(contactId, "email")) {
     await logCrmEvent({ contactId, oppId, kind: "email", body: `🔕 EMAIL NOT SENT — this contact is DND for email.`, actor: me.name });
@@ -775,7 +777,9 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
     if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
     return;
   }
-  const text = String(formData.get("text") ?? "").trim().slice(0, 900);
+  // 🕶 Never send the company/owner name to sellers (Jon 2026-11-05) — scrub every outbound SMS.
+  const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+  const text = scrubOwnerIdentity(String(formData.get("text") ?? "").trim().slice(0, 900));
   const hasPhoto = (() => { const f = formData.get("photo"); return f instanceof File && f.size > 0; })();
   let from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
   // rep picked a From number — honor it only if it's one of OUR lines
