@@ -2246,6 +2246,12 @@ export async function GET(request: Request) {
     const inbound = await db.crmEvent.findMany({ where: { kind: "sms", body: { startsWith: "⬅" } }, orderBy: { at: "desc" }, take: 2000, select: { contactId: true, body: true } });
     const hit = new Map<string, string>();
     for (const e of inbound) if (!hit.has(e.contactId) && DNC_REGEX.test(e.body)) hit.set(e.contactId, e.body.slice(0, 80));
+    // Also scan rep-written NOTES for an explicit DNC/STOP instruction (Jon 2026-11-05: "check
+    // Nick & Kyle's notes — if it says DNC or stop, move it"). Tighter pattern than the inbound
+    // reply regex so "don't stop following up" style notes don't false-trigger.
+    const NOTE_DNC = /\bdnc\b|\bdo not (call|text|contact|reach)\b|\bstop (calling|texting|contacting|all)\b|\bopt(ed)? ?out\b|\bremove (from|me)\b/i;
+    const notes = await db.crmEvent.findMany({ where: { kind: "note" }, orderBy: { at: "desc" }, take: 3000, select: { contactId: true, body: true } });
+    for (const e of notes) if (!hit.has(e.contactId) && NOTE_DNC.test(e.body)) hit.set(e.contactId, `note: ${e.body.slice(0, 60)}`);
     let moved = 0, reparked = 0;
     for (const [cid, why] of hit) {
       const c = await db.crmContact.findUnique({ where: { id: cid }, select: { tags: true } });
