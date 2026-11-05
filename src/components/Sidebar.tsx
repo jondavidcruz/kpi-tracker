@@ -156,6 +156,7 @@ export default function Sidebar({
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },
       { href: "/report", label: "KPI Reports", Icon: FileText },
       { href: "/kpi-audit", label: "KPI Verification", Icon: ShieldCheck, csuiteOnly: true },
+      { href: "/kpi-flags", label: "KPI Flags", Icon: ShieldAlert, managerOnly: true },
       { href: "/analytics", label: "Analytics", Icon: BarChart3, managerOnly: true },
       { href: "/lead-roi", label: "Lead ROI", Icon: TrendingUp },
     ] },

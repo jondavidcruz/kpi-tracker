@@ -5151,6 +5151,26 @@ export async function recordPlatformUsageAction(formData: FormData) {
 
 // 🎉 Federal-holiday day-off toggles for the time card (Jon 2026-11-04). Managers mark each
 // holiday as a team day off or a working day; stored as a date→bool override in Resource.
+/** ⚠️ Log a manager's coaching action on a KPI flag (Jon 2026-11-04). Managers/leadership only.
+ *  Stored in Resource __kpi_flag_actions__ keyed by the flag's `${userId}|${kpiId}`. This is what
+ *  the accountability layer checks — a flag with no recent action escalates to the owner. */
+export async function logKpiFlagAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const key = String(formData.get("key") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim().slice(0, 500);
+  if (!key || !note) return;
+  const { FLAG_ACTIONS_CAT } = await import("@/lib/kpi-flags");
+  const row = await db.resource.findFirst({ where: { category: FLAG_ACTIONS_CAT } });
+  let map: Record<string, { by: string; at: string; note: string }> = {};
+  try { map = row?.description ? JSON.parse(row.description) : {}; } catch { map = {}; }
+  map[key] = { by: me!.name, at: new Date().toISOString(), note };
+  const payload = JSON.stringify(map);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
+  else await db.resource.create({ data: { title: "kpi-flag-actions", category: FLAG_ACTIONS_CAT, url: "", description: payload } });
+  revalidatePath("/kpi-flags");
+}
+
 export async function setHolidayOffAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isManager(me)) return;
