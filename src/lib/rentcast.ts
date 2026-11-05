@@ -90,6 +90,15 @@ export async function rentcastPropertyRecord(address: string, by: string): Promi
   };
 }
 
+/** Authoritative property TYPE for an address, straight from RentCast's public-record
+ *  `/properties` endpoint (one cap-counted call). Returns the raw string, e.g. "Land",
+ *  "Single Family", "Condo" — "" if unknown. Used to auto-classify House vs Land. */
+export async function rentcastPropertyType(address: string, by: string): Promise<string> {
+  type Row = { propertyType?: string };
+  const rows = await rentcastGet<Row[]>("/properties", { address }, by);
+  return (rows?.[0]?.propertyType ?? "").trim();
+}
+
 export async function rentcastValue(address: string, by: string, propertyType?: string): Promise<RcEstimate> {
   type Resp = {
     price?: number; priceRangeLow?: number; priceRangeHigh?: number;

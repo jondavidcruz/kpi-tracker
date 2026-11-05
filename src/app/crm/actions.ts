@@ -1266,8 +1266,8 @@ export async function bulkOppAction(formData: FormData) {
   const ids = formData.getAll("ids").map(String).filter(Boolean).slice(0, 500);
   const op = String(formData.get("op") ?? "");
   const val = String(formData.get("val") ?? "").trim();
-  // delete needs no value; everything else does
-  if (!ids.length || (op !== "delete" && !val)) return;
+  // delete + detectkind need no value; everything else does
+  if (!ids.length || (op !== "delete" && op !== "detectkind" && !val)) return;
   if (op === "assign") {
     await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { assignedTo: val } });
   } else if (op === "stage" && ((await readPipelines()).some((p) => p.stages.some((st) => st.key === val)) || CRM_STAGES.some((s) => s.key === val))) {
@@ -1306,6 +1306,23 @@ export async function bulkOppAction(formData: FormData) {
       const fd = (o?.formData ?? {}) as Record<string, unknown>;
       await db.crmOpportunity.update({ where: { id }, data: { formData: { ...fd, __leadKind: val } as never } }).catch(() => {});
     }
+  } else if (op === "detectkind") {
+    // 🔎 Auto-detect House vs Land. FREE signals (APN / notes-text / pipeline) cost nothing; the
+    // genuinely ambiguous ones fall back to an authoritative RentCast lookup, capped per run so one
+    // click can't eat the whole 50/mo allowance. Already-set (manual) kinds are left alone.
+    const { detectLeadKind } = await import("@/lib/lead-kind-detect");
+    const RC_PER_RUN = 20; let rcUsed = 0;
+    for (const id of ids) {
+      const o = await db.crmOpportunity.findUnique({ where: { id }, select: { title: true, pipeline: true, formData: true, contact: { select: { address: true } } } });
+      if (!o) continue;
+      const fd = (o.formData ?? {}) as Record<string, unknown>;
+      if (fd.__leadKind === "land" || fd.__leadKind === "home") continue; // keep manual/already-set
+      const apn = ((fd.property as { apn?: string } | undefined)?.apn) ?? "";
+      const addr = o.title || o.contact?.address || "";
+      const res = await detectLeadKind({ apn, address: addr, pipeline: o.pipeline }, { useRentcast: rcUsed < RC_PER_RUN, by: me?.name ?? "bulk-detect" });
+      if (res.source.startsWith("rentcast")) rcUsed++;
+      if (res.kind) await db.crmOpportunity.update({ where: { id }, data: { formData: { ...fd, __leadKind: res.kind, __kindSource: res.source } as never } }).catch(() => {});
+    }
   } else if (op === "delete") {
     await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { archivedAt: new Date() } });
   } else return;
@@ -1324,7 +1341,7 @@ export async function bulkOppStageAction(formData: FormData) {
   const who = String(formData.get("who") ?? "").trim();
   const op = String(formData.get("op") ?? "");
   const val = String(formData.get("val") ?? "").trim();
-  if (!stage || (op !== "delete" && !val)) return;
+  if (!stage || (op !== "delete" && op !== "detectkind" && !val)) return;
   // 🧲 First-column orphans: the board puts cards whose stored stage matches NO column key into the
   // first column. Match them too (stage = key OR stage not in the known keys) so "select all" on the
   // first stage really moves/archives every card shown there (Jon 2026-11-03).
@@ -1354,6 +1371,19 @@ export async function bulkOppStageAction(formData: FormData) {
     await db.crmOpportunity.updateMany({ where, data: { pipeline: val, stage, archivedAt: null, ...(own ? { assignedTo: own } : {}) } });
   } else if (op === "delete") {
     await db.crmOpportunity.updateMany({ where, data: { archivedAt: new Date() } });
+  } else if (op === "detectkind") {
+    const { detectLeadKind } = await import("@/lib/lead-kind-detect");
+    const rows = await db.crmOpportunity.findMany({ where, select: { id: true, title: true, pipeline: true, formData: true, contact: { select: { address: true } } }, take: 3000 });
+    const RC_PER_RUN = 20; let rcUsed = 0;
+    for (const o of rows) {
+      const fd = (o.formData ?? {}) as Record<string, unknown>;
+      if (fd.__leadKind === "land" || fd.__leadKind === "home") continue;
+      const apn = ((fd.property as { apn?: string } | undefined)?.apn) ?? "";
+      const addr = o.title || o.contact?.address || "";
+      const res = await detectLeadKind({ apn, address: addr, pipeline: o.pipeline }, { useRentcast: rcUsed < RC_PER_RUN, by: me?.name ?? "bulk-detect" });
+      if (res.source.startsWith("rentcast")) rcUsed++;
+      if (res.kind) await db.crmOpportunity.update({ where: { id: o.id }, data: { formData: { ...fd, __leadKind: res.kind, __kindSource: res.source } as never } }).catch(() => {});
+    }
   } else if (op === "tag" || op === "untag" || op === "follower" || op === "kind") {
     if (op === "kind" && val !== "land" && val !== "home") return;
     const rows = await db.crmOpportunity.findMany({ where, select: { id: true, tags: true, formData: true }, take: 3000 });

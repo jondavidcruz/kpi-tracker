@@ -175,8 +175,13 @@ export async function upsertDreiHotLead(d: DreiLead, opts?: { skipTask?: boolean
     // Land in the NEW stage (Jon 2026-11-05: "put it under New, not Follow Up"), falling back
     // to the pipeline's first stage if there's no stage literally called "New".
     const newStage = pipe?.stages.find((s) => /\bnew\b/i.test(`${s.key} ${s.label}`))?.key ?? pipe?.stages[0]?.key ?? "new";
+    // 🏕 Free land/house signal from the notes+address (no API) so land leads don't all import as
+    // houses (Jon 2026-11-05). RentCast tiebreaker stays on-demand via the board's Auto-detect.
+    const { freeKindSignal } = await import("@/lib/lead-kind-detect");
+    const k = freeKindSignal({ notes: d.notes, address: addr, pipeline: pipe?.name });
     opp = await db.crmOpportunity.create({ data: {
       contactId: contact.id, title, stage: newStage, pipeline: pipe?.name ?? "", assignedTo: MICHELLE, tags: "hot",
+      ...(k.kind ? { formData: { __leadKind: k.kind, __kindSource: k.source } } : {}),
     } });
   }
   // Skip re-noting only if we already filed a rich note, or there's nothing new to add.
