@@ -60,7 +60,17 @@ export default function WorldClock() {
 
   const toggle = () => setOpen((v) => { const n = !v; try { localStorage.setItem(LS_KEY, n ? "1" : "0"); } catch { /* ignore */ } return n; });
 
-  const time = (tz: string) => (now == null ? "—" : new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(now));
+  // Split "10:51 AM" → { hm: "10:51", ap: "AM" } so AM/PM renders as a small, uniform
+  // suffix on every zone — otherwise the two-digit-hour zones (ET/PH) wrap the AM onto a
+  // second line and look like they have a huge AM/PM (Jon 2026-11-05).
+  const timeParts = (tz: string): { hm: string; ap: string } => {
+    if (now == null) return { hm: "—", ap: "" };
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).formatToParts(now);
+    const hh = p.find((x) => x.type === "hour")?.value ?? "";
+    const mm = p.find((x) => x.type === "minute")?.value ?? "";
+    const ap = p.find((x) => x.type === "dayPeriod")?.value ?? "";
+    return { hm: `${hh}:${mm}`, ap };
+  };
   const dayStr = (tz: string) => (now == null ? "" : new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" }).format(now));
   const offStr = (tz: string) => {
     if (now == null) return "";
@@ -86,7 +96,9 @@ export default function WorldClock() {
                 <div className="truncate text-[8.5px] font-medium leading-tight text-brand-navy-300">{z.zone} · {offStr(z.tz)}</div>
               </div>
               <div className="shrink-0 text-right">
-                <div className="text-[12px] font-extrabold tabular-nums leading-tight text-white">{time(z.tz)}</div>
+                <div className="whitespace-nowrap text-[12px] font-extrabold tabular-nums leading-tight text-white">
+                  {timeParts(z.tz).hm}<span className="ml-0.5 text-[8px] font-bold text-brand-navy-300">{timeParts(z.tz).ap}</span>
+                </div>
                 <div className="text-[8px] font-medium leading-tight text-brand-navy-300">{dayStr(z.tz)}</div>
               </div>
             </div>
@@ -103,7 +115,9 @@ export default function WorldClock() {
         {ZONES.map((z) => (
           <div key={z.abbr} className="text-center leading-tight">
             <div className="text-[8.5px] font-bold uppercase tracking-wide text-brand-navy-300">{z.flag ?? z.abbr}</div>
-            <div className="text-[11px] font-extrabold tabular-nums text-white">{time(z.tz)}</div>
+            <div className="whitespace-nowrap text-[11px] font-extrabold tabular-nums text-white">
+              {timeParts(z.tz).hm}<span className="ml-0.5 text-[7px] font-bold text-brand-navy-300">{timeParts(z.tz).ap}</span>
+            </div>
             <div className="truncate text-[7.5px] font-semibold text-brand-navy-300">{z.short}</div>
           </div>
         ))}
