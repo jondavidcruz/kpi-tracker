@@ -6,7 +6,7 @@ import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dreiLeadsOn } from "@/lib/directrei-leads";
 import { Card, SectionTitle } from "@/components/ui";
-import { toggleDreiLeadsAction, pullDreiNowAction } from "./actions";
+import { toggleDreiLeadsAction, pullDreiNowAction, diagnoseDreiAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,10 @@ export default async function DirectReiLeadsPage({ searchParams }: { searchParam
   const logRow = await db.resource.findFirst({ where: { category: "__drei_webhook_log__" } }).catch(() => null);
   let log: Array<{ at?: string; event?: string; status?: string; name?: string; phone?: string }> = [];
   try { log = logRow?.description ? JSON.parse(logRow.description) : []; } catch { log = []; }
+
+  const probeRow = await db.resource.findFirst({ where: { category: "__drei_probe__" } }).catch(() => null);
+  let probe: { at?: string; probe?: Array<{ endpoint: string; ok: boolean; status: number; keys: string; count: number | null; snippet: string }> } = {};
+  try { probe = probeRow?.description ? JSON.parse(probeRow.description) : {}; } catch { probe = {}; }
 
   return (
     <div className="space-y-6">
@@ -72,6 +76,40 @@ export default async function DirectReiLeadsPage({ searchParams }: { searchParam
           <code className="whitespace-nowrap text-[12px] text-emerald-300">{webhookUrl}</code>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">The <code className="rounded bg-slate-100 px-1">?k=</code> value is your private key — don&apos;t share the URL publicly. Keys are never shown to non-owners.</p>
+      </Card>
+
+      {/* 🔬 API diagnostic — find which endpoint holds the sellers + its shape */}
+      <Card className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-extrabold text-slate-800">🔬 Diagnose the Direct REI API</div>
+            <div className="mt-0.5 text-xs text-slate-500">The pull found 0 sellers — click to probe Direct REI&apos;s endpoints and show exactly which one returns the list and how it&apos;s shaped.</div>
+          </div>
+          <form action={diagnoseDreiAction}>
+            <button disabled={!keySet} className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-40">🔬 Test API now</button>
+          </form>
+        </div>
+        {probe.probe && probe.probe.length > 0 && (
+          <div className="mt-3 overflow-x-auto">
+            <div className="mb-1 text-[11px] text-slate-400">Last probe {probe.at ? new Date(probe.at).toLocaleString() : ""} — screenshot this and send it to me if the pull still finds nothing.</div>
+            <table className="w-full text-[12px]">
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-400"><tr>
+                <th className="px-2 py-1 text-left font-bold">Endpoint</th><th className="px-2 py-1 text-left font-bold">HTTP</th><th className="px-2 py-1 text-left font-bold">Rows</th><th className="px-2 py-1 text-left font-bold">Top keys</th><th className="px-2 py-1 text-left font-bold">Raw (first 300)</th>
+              </tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {probe.probe.map((p, i) => (
+                  <tr key={i} className={p.count && p.count > 0 ? "bg-emerald-50" : ""}>
+                    <td className="whitespace-nowrap px-2 py-1 font-mono font-bold text-slate-700">{p.endpoint}</td>
+                    <td className={`px-2 py-1 font-bold ${p.ok ? "text-emerald-600" : "text-red-600"}`}>{p.status}</td>
+                    <td className="px-2 py-1 font-bold text-slate-700">{p.count ?? "—"}</td>
+                    <td className="px-2 py-1 font-mono text-slate-500">{p.keys}</td>
+                    <td className="px-2 py-1 font-mono text-[10px] text-slate-400"><span className="line-clamp-2 break-all">{p.snippet}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       {/* Live delivery log */}

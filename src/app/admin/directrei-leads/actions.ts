@@ -1,8 +1,23 @@
 "use server";
 import { getCurrentUser, isOwner } from "@/lib/auth";
 import { setDreiLeads, pullDreiQualifiedLeads } from "@/lib/directrei-leads";
+import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+
+/** 🔬 Probe the Direct REI API endpoints and stash the result so the page can show us which
+ *  endpoint holds the seller list + its exact shape (the pull returned 0). */
+export async function diagnoseDreiAction(): Promise<void> {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const { directReiProbe } = await import("@/lib/directrei");
+  const probe = await directReiProbe();
+  const row = await db.resource.findFirst({ where: { category: "__drei_probe__" } }).catch(() => null);
+  const description = JSON.stringify({ at: new Date().toISOString(), probe });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+  else await db.resource.create({ data: { title: "drei-probe", category: "__drei_probe__", url: "", description } });
+  redirect("/admin/directrei-leads?diag=1");
+}
 
 export async function toggleDreiLeadsAction(formData: FormData): Promise<void> {
   const me = await getCurrentUser();

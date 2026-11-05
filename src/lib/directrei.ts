@@ -33,7 +33,27 @@ async function drei(path: string, params?: Record<string, string>): Promise<Drei
 export async function directReiWhoami() { return drei("/me"); }
 
 export async function directReiContacts(params?: Record<string, string>) { return drei("/contacts", params); }
+export async function directReiSellers(params?: Record<string, string>) { return drei("/sellers", params); }
 export async function directReiCampaigns() { return drei("/campaigns"); }
+
+/** 🔬 Probe the endpoints that might hold the seller list so we can see which one works + its
+ *  shape (Jon's auto-leads pull returned 0 — we need the real response structure). */
+export async function directReiProbe(): Promise<Array<{ endpoint: string; ok: boolean; status: number; keys: string; count: number | null; snippet: string }>> {
+  const paths = ["/me", "/contacts", "/sellers", "/deals", "/contacts?status=qualified", "/sellers?status=qualified"];
+  const out: Array<{ endpoint: string; ok: boolean; status: number; keys: string; count: number | null; snippet: string }> = [];
+  for (const p of paths) {
+    const [path, qs] = p.split("?");
+    const params = qs ? Object.fromEntries(new URLSearchParams(qs)) : undefined;
+    const r = await drei(path, params);
+    const b = r.body as unknown;
+    const keys = b && typeof b === "object" && !Array.isArray(b) ? Object.keys(b as object).slice(0, 10).join(",") : Array.isArray(b) ? "(array)" : typeof b;
+    const findArr = (o: unknown, d = 0): unknown[] | null => Array.isArray(o) ? o : (o && typeof o === "object" && d < 2 ? (["data", "contacts", "results", "items", "sellers", "rows", "records"].map((k) => findArr((o as Record<string, unknown>)[k], d + 1)).find(Boolean) ?? null) : null);
+    const arr = findArr(b);
+    let snippet = ""; try { snippet = JSON.stringify(b).slice(0, 300); } catch { snippet = String(b).slice(0, 300); }
+    out.push({ endpoint: p, ok: r.ok, status: r.status, keys, count: arr ? arr.length : null, snippet });
+  }
+  return out;
+}
 
 export type CampaignPerf = {
   id: string; name: string; channel: string; paused: boolean;
