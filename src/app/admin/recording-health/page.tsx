@@ -7,10 +7,11 @@
 import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
+import { transcribeRecordingAction, dedupeDispositionsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-type RecMeta = { link?: string; transcript?: string; secs?: number; txErr?: string } | null;
+type RecMeta = { link?: string; driveId?: string; transcript?: string; secs?: number; txErr?: string; rep?: string } | null;
 
 function ago(d: Date): string {
   const h = (Date.now() - d.getTime()) / 3_600_000;
@@ -38,8 +39,14 @@ export default async function RecordingHealthPage() {
   const recs = await db.crmEvent.findMany({
     where: { kind: "call", body: { startsWith: "🎙" } },
     orderBy: { at: "desc" }, take: 30,
-    select: { at: true, actor: true, body: true, meta: true, contactId: true },
+    select: { id: true, at: true, actor: true, body: true, meta: true, contactId: true },
   }).catch(() => []);
+  // Resolve each recording's contact (name / phone / address) so you know WHICH call it was.
+  const recContactIds = [...new Set(recs.map((r) => r.contactId).filter(Boolean))];
+  const recContacts = recContactIds.length
+    ? await db.crmContact.findMany({ where: { id: { in: recContactIds } }, select: { id: true, name: true, phone: true, address: true } }).catch(() => [])
+    : [];
+  const contactById = new Map(recContacts.map((c) => [c.id, c]));
 
   // Last 15 raw Telnyx call events (from the webhook breadcrumb store)
   const evRow = await db.resource.findFirst({ where: { category: "__telnyx_events__" } }).catch(() => null);
@@ -60,13 +67,11 @@ export default async function RecordingHealthPage() {
     </span>
   );
 
-  // Plain-language verdict
+  // Plain-language verdict — recordings are what matters now (transcripts are on-demand).
   let verdict: { tone: "ok" | "warn" | "bad"; text: string };
-  if (!recs.length) verdict = { tone: "bad", text: "No call recordings have ever filed. Recording isn't starting, or Telnyx isn't sending recording.saved — check that calls are being answered and recorded." };
-  else if (!lastRec || lastRec.at.getTime() < Date.now() - 2 * 86_400_000) verdict = { tone: "bad", text: `Recordings STOPPED — the last one filed ${lastRec ? ago(lastRec.at) : "never"}. The pipeline was working before, so recording-start or the Telnyx webhook broke.` };
-  else if (!geminiOn) verdict = { tone: "bad", text: "Recordings are filing, but the GEMINI_API_KEY is missing in Vercel — that's why there are NO transcripts. Add/renew the key and redeploy." };
-  else if (last7.length > 0 && last7Transcribed === 0) verdict = { tone: "bad", text: `Recordings are filing but transcripts STOPPED — ${last7.length} recordings in the last 7 days, none transcribed. The Gemini key is set, so it's likely a model/quota error (the handler calls gemini-flash-latest with no fallback).` };
-  else verdict = { tone: "ok", text: `Healthy — last recording ${ago(lastRec.at)}, last transcript ${lastTranscribed ? ago(lastTranscribed.at) : "never"}.` };
+  if (!recs.length) verdict = { tone: "bad", text: "No call recordings have ever saved. Recording isn't starting, or Telnyx isn't sending recording.saved — check that calls are being answered and recorded." };
+  else if (!lastRec || lastRec.at.getTime() < Date.now() - 2 * 86_400_000) verdict = { tone: "bad", text: `Recordings STOPPED saving — the last one was ${lastRec ? ago(lastRec.at) : "never"}. Recording-start or the Telnyx webhook may have broken.` };
+  else verdict = { tone: "ok", text: `Recordings are saving fine — last one ${ago(lastRec.at)}, ${last7.length} in the last 7 days. Transcripts are on-demand (📝 button below); ${last7Transcribed} of the last 7 days' recordings transcribed.` };
 
   return (
     <div className="space-y-6">
@@ -89,26 +94,55 @@ export default async function RecordingHealthPage() {
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">Last 30 recordings ({withLink} filed to Drive · {withTranscript} transcribed)</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Last 30 recordings ({withLink} saved to Drive · {withTranscript} transcribed)</h2>
+          <form action={dedupeDispositionsAction}>
+            <button className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200" title="Remove duplicate disposition/call rows (keeps one of each) from the last 7 days">🧹 Clean duplicate rows</button>
+          </form>
+        </div>
+        <p className="mb-2 text-[11px] text-slate-400">Auto-transcription is off — every call is <b>saved</b> (press play on the lead), and you transcribe on demand with the 📝 button only when you need the text.</p>
         <Card className="overflow-hidden p-0">
           {recs.length === 0 ? (
             <div className="p-6 text-center text-sm text-slate-400">No 🎙 recordings found at all.</div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400"><tr>
-                <th className="px-4 py-2 text-left font-bold">When</th><th className="px-3 py-2 text-left font-bold">Rep</th>
-                <th className="px-3 py-2 text-center font-bold">Drive</th><th className="px-3 py-2 text-center font-bold">Transcript</th><th className="px-3 py-2 text-right font-bold">Length</th>
+                <th className="px-4 py-2 text-left font-bold">When</th>
+                <th className="px-3 py-2 text-left font-bold">Contact</th>
+                <th className="px-3 py-2 text-left font-bold">Rep</th>
+                <th className="px-3 py-2 text-right font-bold">Length</th>
+                <th className="px-3 py-2 text-center font-bold">Saved</th>
+                <th className="px-3 py-2 text-left font-bold">Transcript</th>
               </tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {recs.map((r, i) => {
+                {recs.map((r) => {
                   const m = r.meta as RecMeta;
+                  const c = contactById.get(r.contactId);
                   return (
-                    <tr key={i}>
-                      <td className="px-4 py-2 text-slate-600">{ago(r.at)}</td>
-                      <td className="px-3 py-2 text-slate-600">{r.actor || "—"}</td>
-                      <td className="px-3 py-2 text-center">{m?.link ? "✅" : "—"}</td>
-                      <td className="px-3 py-2 text-center">{m?.transcript ? "✅" : <span className="text-red-500" title={m?.txErr || "no transcript"}>✗{m?.txErr ? <span className="ml-1 text-[10px] font-normal text-red-400">{m.txErr.slice(0, 40)}</span> : ""}</span>}</td>
+                    <tr key={r.id}>
+                      <td className="whitespace-nowrap px-4 py-2 text-slate-600">{ago(r.at)}</td>
+                      <td className="px-3 py-2">
+                        <div className="font-semibold text-slate-800">{c?.name || "Unknown contact"}</div>
+                        <div className="text-[11px] text-slate-400">{c?.phone || "—"}{c?.address ? ` · ${c.address}` : ""}</div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">{m?.rep || (r.actor && r.actor !== "recorder" ? r.actor : "—")}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-500">{m?.secs ? `${Math.floor(m.secs / 60)}m ${m.secs % 60}s` : "—"}</td>
+                      <td className="px-3 py-2 text-center">{m?.link ? "✅" : "—"}</td>
+                      <td className="px-3 py-2">
+                        {m?.transcript ? (
+                          <span className="text-emerald-600">✅ done</span>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            {m?.driveId ? (
+                              <form action={transcribeRecordingAction}>
+                                <input type="hidden" name="id" value={r.id} />
+                                <button className="rounded-md bg-brand-navy px-2 py-0.5 text-[11px] font-bold text-white hover:bg-brand-navy-700">📝 Transcribe</button>
+                              </form>
+                            ) : <span className="text-slate-300 text-[11px]">no audio</span>}
+                            {m?.txErr && <span className="text-[10px] text-red-400" title={m.txErr}>{m.txErr.slice(0, 32)}</span>}
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}

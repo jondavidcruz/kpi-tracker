@@ -374,26 +374,19 @@ export async function POST(req: NextRequest) {
           link = up.link; driveId = up.id;
         }
       }
-      // 📝 Transcribe + SUMMARIZE in one Gemini call (Jon 2026-10-13: "AI get the
-      // MAIN details, not the whole transcript in the notes"). The note shows a
-      // short key-points summary; the full transcript rides along in meta.
-      // 📝 Resilient transcribe+summarize (Jon 2026-11-05): lite model first for quota
-      // headroom, fallback to flash, tolerant parse, and capture the failure reason so
-      // /admin/recording-health shows WHY transcripts drop instead of a silent blank.
-      let transcript = "";
-      let txErr = "";
-      try {
-        const { transcribeCall } = await import("@/lib/transcribe");
-        const tx = await transcribeCall(bytes, "audio/mp3");
-        transcript = tx.transcript;
-        txErr = tx.error;
-        if (tx.summary) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📞 Call summary (AI) — ${secs ? `${Math.floor(secs / 60)}m ${secs % 60}s` : ""}\n${tx.summary}`.slice(0, 2000), actor: "recorder" });
-      } catch (e) { txErr = String(e).slice(0, 80); /* recording itself is already filed below */ }
+      // 🎙 RECORDINGS-ONLY (Jon 2026-11-05): auto-transcription is OFF. It was failing on
+      // large files (>9MB inline cap) and Gemini 503s, and the note pre-fill it powered
+      // wasn't reliable. Every call still SAVES to Drive below; transcribe ON DEMAND from
+      // /admin/recording-health (the 🎙 Transcribe button) when a transcript is actually
+      // needed. Keeps spend/complexity down and guarantees the recording is always kept.
+      // (Typed as string so the now-inert transcript-dependent blocks below still compile;
+      // they never run while this is empty — AI note pre-fill + auto-scoring are off too.)
+      const transcript: string = "";
       // 🧹 One clean timeline row (Jon 2026-10-26): no raw Drive URL in the body (the audio
       // player + transcript already link it), and if the rep already logged a disposition for
       // this call, fold the recording INTO that entry instead of adding a second "Call" row.
       const recBody = `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? "" : " (Drive upload unavailable — Telnyx copy expires)"}`;
-      const recMeta = { link, driveId: driveId || undefined, secs, ccId, transcript: transcript.slice(0, 12000), rep: rep || undefined, txErr: txErr || undefined };
+      const recMeta = { link, driveId: driveId || undefined, secs, ccId, rep: rep || undefined };
       // Re-check right before writing: a CONCURRENT recording.saved for the same call may have
       // finished and logged while this one was uploading (Jon 2026-10-27). If so, drop this copy.
       if (await recDupe()) { await recCrumb({ ev: "rec.outcome", result: "deduped-late", secs }); return NextResponse.json({ ok: true, deduped: "late" }); }
