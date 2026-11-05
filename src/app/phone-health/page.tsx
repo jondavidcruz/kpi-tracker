@@ -155,7 +155,7 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
   // 📊 Auto per-number INBOUND answer rate (live, no manual entry). Best-effort —
   // degrades to "—" if the store is empty/unreachable. Outbound metering is separate
   // (client dialer, on a branch). (Jon 2026-11-05)
-  const { readNumberStore, inboundFor } = await import("@/lib/number-stats");
+  const { readNumberStore, inboundFor, outboundFor } = await import("@/lib/number-stats");
   const numStore = await readNumberStore().catch(() => null);
 
   const flaggedCount = lines.filter((l) => health(l.meta).label.startsWith("⚠️")).length;
@@ -233,6 +233,12 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
             // live inbound answer rate (last 30 days) — auto, from real call events
             const ib = numStore ? inboundFor(numStore, n.number, 30) : null;
             const lowAns = ib && ib.calls >= 10 && ib.rate != null && ib.rate < 40;
+            // live outbound connect rate (30d) + dials today vs the ≤100/day pacing cap
+            const ob = numStore ? outboundFor(numStore, n.number, 30) : null;
+            const DIAL_CAP = 100;
+            const pacePct = ob ? Math.min(100, Math.round((ob.today / DIAL_CAP) * 100)) : 0;
+            const overPace = ob && ob.today > DIAL_CAP;
+            const lowConnect = ob && ob.calls >= 20 && ob.rate != null && ob.rate < 15;
             return (
               <div key={n.number} className={`rounded-xl p-3 ring-1 ${watch ? "bg-amber-50 ring-amber-200" : "bg-emerald-50/50 ring-emerald-100"}`}>
                 <div className="flex items-center gap-2">
@@ -255,11 +261,32 @@ export default async function PhoneHealthPage({ searchParams }: { searchParams: 
                   )}
                   {lowAns && <span title="Low pickup can mean the number is getting flagged">🚩</span>}
                 </div>
+                {/* 📤 Outbound connect rate + daily pacing vs the ≤100/day cap */}
+                <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                  <span className="font-semibold text-slate-400">Outbound connected</span>
+                  {ob && ob.calls > 0 ? (
+                    <span className={`font-extrabold ${lowConnect ? "text-red-600" : ob.rate != null && ob.rate >= 35 ? "text-emerald-600" : "text-slate-700"}`}>
+                      {ob.rate}%<span className="ml-0.5 font-medium text-slate-400">· {ob.answered}/{ob.calls} · 30d</span>
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">— no outbound dials yet</span>
+                  )}
+                  {lowConnect && <span title="Low connect rate at volume is a classic spam-flag signal">🚩</span>}
+                </div>
+                <div className="mt-1">
+                  <div className="flex items-center justify-between text-[9px] font-semibold text-slate-400">
+                    <span>Dials today (cap {DIAL_CAP})</span>
+                    <span className={overPace ? "text-red-600" : ob && ob.today >= 85 ? "text-amber-600" : "text-slate-500"}>{ob?.today ?? 0}/{DIAL_CAP}{overPace ? " · OVER" : ""}</span>
+                  </div>
+                  <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className={`h-full rounded-full ${overPace ? "bg-red-500" : pacePct >= 85 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${Math.max(pacePct, overPace ? 100 : 0)}%` }} />
+                  </div>
+                </div>
               </div>
             );
           })}
         </div>
-        <p className="mt-2 text-[10px] text-slate-400">Inbound answer rate is computed live from real call events (no manual entry). A number with lots of inbound calls but a low answered % is often being labeled “Spam Likely.” Outbound dial metering + the ≤100/day pacing cap are coming separately. <span className="text-amber-500">New — still gathering data.</span></p>
+        <p className="mt-2 text-[10px] text-slate-400">All three metrics are computed live from real call events (no manual entry). High inbound/outbound volume with a low answered/connected % is the classic “Spam Likely” signature; the pacing bar keeps each number under the ≤100 dials/day cap. Outbound “connected” = the call had talk time (includes voicemail). <span className="text-amber-500">New — still gathering data.</span></p>
       </Card>
 
       {/* Lead-gen SOP: list pull → skip trace → scrub → SMS (from Jon's SOP PDF) */}

@@ -22,10 +22,11 @@ type DayBucket = { calls: number; answered: number };
 export type NumberStore = {
   seenCall: string[]; // callIds already counted toward `calls`
   seenAns: string[]; // callIds already counted toward `answered`
-  days: Record<string, Record<string, DayBucket>>; // number(10-digit) -> "YYYY-MM-DD"(PT) -> bucket
+  days: Record<string, Record<string, DayBucket>>; // INBOUND: number(10-digit) -> "YYYY-MM-DD"(PT) -> bucket
+  daysOut: Record<string, Record<string, DayBucket>>; // OUTBOUND: same shape. `answered` = call had duration (connected)
 };
 
-const EMPTY: NumberStore = { seenCall: [], seenAns: [], days: {} };
+const EMPTY: NumberStore = { seenCall: [], seenAns: [], days: {}, daysOut: {} };
 
 function digits10(n: string): string {
   return (n || "").replace(/\D/g, "").slice(-10);
@@ -47,15 +48,18 @@ async function load(): Promise<{ id: string | null; store: NumberStore }> {
   if (!Array.isArray(store.seenCall)) store.seenCall = [];
   if (!Array.isArray(store.seenAns)) store.seenAns = [];
   if (!store.days || typeof store.days !== "object") store.days = {};
+  if (!store.daysOut || typeof store.daysOut !== "object") store.daysOut = {};
   return { id: row?.id ?? null, store };
 }
 
 async function save(id: string | null, store: NumberStore): Promise<void> {
   // self-cap history so the store can't grow unbounded
-  for (const num of Object.keys(store.days)) {
-    const dates = Object.keys(store.days[num]).sort();
-    while (dates.length > DAYS_CAP) { const d = dates.shift(); if (d) delete store.days[num][d]; }
-    if (Object.keys(store.days[num]).length === 0) delete store.days[num];
+  for (const map of [store.days, store.daysOut]) {
+    for (const num of Object.keys(map)) {
+      const dates = Object.keys(map[num]).sort();
+      while (dates.length > DAYS_CAP) { const d = dates.shift(); if (d) delete map[num][d]; }
+      if (Object.keys(map[num]).length === 0) delete map[num];
+    }
   }
   const description = JSON.stringify(store);
   if (id) await db.resource.update({ where: { id }, data: { description } });
@@ -64,6 +68,10 @@ async function save(id: string | null, store: NumberStore): Promise<void> {
 
 function bucket(store: NumberStore, num10: string, date: string): DayBucket {
   const byNum = (store.days[num10] ??= {});
+  return (byNum[date] ??= { calls: 0, answered: 0 });
+}
+function bucketOut(store: NumberStore, num10: string, date: string): DayBucket {
+  const byNum = (store.daysOut[num10] ??= {});
   return (byNum[date] ??= { calls: 0, answered: 0 });
 }
 
@@ -91,6 +99,22 @@ export async function recordInboundAnswered(ourNumber: string, callId: string): 
   await save(id, store);
 }
 
+/**
+ * Record one OUTBOUND call placed FROM our number `ourNumber`. Called once per
+ * completed browser call (answer or not), so no dedupe needed. `connected` = the call
+ * had talk time (a proxy for "picked up" — includes voicemail; refine with dispositions
+ * later). Powers outbound connect-rate + the ≤100/day pacing cap. Best-effort.
+ */
+export async function recordOutboundCall(ourNumber: string, connected: boolean): Promise<void> {
+  const num10 = digits10(ourNumber);
+  if (num10.length !== 10) return;
+  const { id, store } = await load();
+  const b = bucketOut(store, num10, ptDate());
+  b.calls++;
+  if (connected) b.answered++;
+  await save(id, store);
+}
+
 export type InboundRollup = { calls: number; answered: number; rate: number | null; today: number };
 
 /** Read the whole store once (for a page that rolls up many numbers). */
@@ -99,16 +123,23 @@ export async function readNumberStore(): Promise<NumberStore> {
   return store;
 }
 
-/** Roll up inbound stats for one number over the last `days` PT days. */
-export function inboundFor(store: NumberStore, number: string, days: number): InboundRollup {
-  const num10 = digits10(number);
+function rollup(byDate: Record<string, DayBucket>, days: number): InboundRollup {
   const window = lastNDates(days);
   const todayStr = ptDate();
   let calls = 0, answered = 0, today = 0;
-  const byDate = store.days[num10] ?? {};
   for (const [date, b] of Object.entries(byDate)) {
     if (window.has(date)) { calls += b.calls; answered += b.answered; }
     if (date === todayStr) today = b.calls;
   }
   return { calls, answered, rate: calls > 0 ? Math.round((answered / calls) * 100) : null, today };
+}
+
+/** Roll up INBOUND stats for one number over the last `days` PT days. */
+export function inboundFor(store: NumberStore, number: string, days: number): InboundRollup {
+  return rollup(store.days[digits10(number)] ?? {}, days);
+}
+
+/** Roll up OUTBOUND stats for one number over the last `days` PT days. `today` = dials today (for pacing). */
+export function outboundFor(store: NumberStore, number: string, days: number): InboundRollup {
+  return rollup(store.daysOut[digits10(number)] ?? {}, days);
 }

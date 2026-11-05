@@ -1604,6 +1604,9 @@ export async function logBrowserCallAction(formData: FormData) {
     body: `Browser call${from ? ` from ${from}${geoForPhone(from) ? ` (${geoForPhone(from)})` : ""}` : ""} → ${to}${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : " · no answer"}`,
     meta: { secs, via: "telnyx-webrtc", from }, actor: me.name,
   });
+  // 📊 meter this outbound dial against the number it went out on → /phone-health
+  // outbound connect-rate + ≤100/day pacing. connected = had talk time. Best-effort.
+  if (from) import("@/lib/number-stats").then((m) => m.recordOutboundCall(from, secs > 0)).catch(() => {});
   revalidatePath(`/crm/${oppId}`);
   revalidatePath("/crm/conversations");
 }
