@@ -657,6 +657,11 @@ export default function DialPad({ floating = false, owner = false }: { floating?
       const d = (ev as CustomEvent<{ from?: string; name?: string; at?: string }>).detail ?? {};
       const age = d.at ? Date.now() - Date.parse(d.at) : 99_000;
       if (age > 32_000) return;
+      // 🔕 This window is muted (not "Rings here") → don't pop the incoming UI here.
+      // The poll-carried ring was the one path that ignored the mute setting, so the
+      // popup showed on every screen regardless (Jon 2026-11-05). Matches the native
+      // ring (line ~536) and BroadcastChannel (line ~623) gating.
+      if (callsMutedRef.current) return;
       if (incomingCallRef.current) return; // this tab is ringing natively already
       setRemoteIncoming((cur) => cur ?? { name: d.name || d.from || "unknown", number: d.name ? d.from : undefined });
       setOpen(true);
