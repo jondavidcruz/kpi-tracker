@@ -13,6 +13,7 @@ import { readPipelines, parseTags, pipelineLockFor } from "@/lib/crm";
 import { Card, SectionTitle } from "@/components/ui";
 import CrmKanban, { type CrmCard } from "@/components/CrmKanban";
 import PipelineSelect from "@/components/PipelineSelect";
+import CrmViewSelect from "@/components/CrmViewSelect";
 import SelectAllBox from "@/components/SelectAllBox";
 import CrmFilterBar from "@/components/CrmFilterBar";
 import CrmQuickView from "@/components/CrmQuickView";
@@ -329,25 +330,17 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         title="🧲 Seller CRM — Acquisitions"
         subtitle="Every seller lead, GHL-style: pipeline, notes, tasks, appointments — calls & texts log themselves."
         accent="bg-brand-gold"
-        right={
-          <div className="flex items-center gap-2">
-            
-            <Link href="/crm/conversations" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">💬 Conversations</Link>
-            {manager && <Link href="/crm/velocity" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">📊 Velocity</Link>}
-            <Link href={`/crm?view=kanban${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "kanban" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>🗂 Board</Link>
-            <Link href={`/crm?view=list${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "list" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📋 List</Link>
-            <Link href={`/crm?view=cal${whoQ}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === "cal" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>📅 Week</Link>
-          </div>
-        }
       />
 
-      {/* 🔀 Pipeline dropdown — exactly like GHL's */}
+      {/* 🔀 Pipeline + view selectors — exactly like GHL's (view switcher moved here from the
+          invisible top-right, Jon 2026-11-05) */}
       <div className="flex flex-wrap items-center gap-2">
         <PipelineSelect
           pipelines={visiblePipelines.filter((pp) => pp.name !== "War Room" || (plCounts["War Room"] ?? 0) > 0).map((pp) => ({ name: pp.name, count: plCounts[pp.name] ?? 0 }))}
           current={plName}
           baseQs={`view=${view}${whoQ}`}
         />
+        <CrmViewSelect view={view} whoQ={whoQ} manager={manager} />
         <span className="text-[11px] text-slate-400">{(plCounts[plName] ?? 0).toLocaleString()} opportunities in this pipeline</span>
       </div>
 
