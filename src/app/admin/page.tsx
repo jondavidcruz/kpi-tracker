@@ -93,16 +93,6 @@ export default async function AdminPage({
       try { pings[env2] = (await fn()) ? "ok" : "fail"; } catch { pings[env2] = "fail"; }
     }));
   }
-  const aiLog = owner ? await db.assistantLog.findMany({ orderBy: { createdAt: "desc" }, take: 40 }) : [];
-  // 🤖 Is Cortana actually used? Usage summary so Jon can decide keep/remove (2026-10-26).
-  const d7 = new Date(Date.now() - 7 * 86400000), d30 = new Date(Date.now() - 30 * 86400000);
-  const aiStats = owner ? {
-    total: await db.assistantLog.count().catch(() => 0),
-    last7: await db.assistantLog.count({ where: { createdAt: { gte: d7 } } }).catch(() => 0),
-    last30: await db.assistantLog.count({ where: { createdAt: { gte: d30 } } }).catch(() => 0),
-    users30: (await db.assistantLog.findMany({ where: { createdAt: { gte: d30 } }, select: { name: true }, distinct: ["name"] }).catch(() => [])).map((r) => r.name).filter(Boolean),
-    lastUsed: aiLog[0]?.createdAt ?? null,
-  } : null;
   const navOrderRow = owner ? await db.resource.findFirst({ where: { category: NAV_ORDER_CAT } }).catch(() => null) : null;
   const navOrder = parseNavOrder(navOrderRow?.description);
   const movedNavGroups = applyMoves(NAV_GROUPS.map((g) => ({ label: g.group, items: [...g.items] })), navOrder?.moves, (i) => i.href);
@@ -541,46 +531,6 @@ export default async function AdminPage({
             </ul>
           </Card>
 
-          {/* AI assistant audit log — insider-threat visibility */}
-          <Card className="mt-4 p-5">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">🤖 Cortana audit log — recent questions</p>
-            {/* 📊 Usage summary — is it actually being used, or should it go? (Jon 2026-10-26) */}
-            {aiStats && (
-              <div className="mb-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
-                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
-                  <span><b className="text-slate-800">{aiStats.last7}</b> <span className="text-slate-400">last 7 days</span></span>
-                  <span><b className="text-slate-800">{aiStats.last30}</b> <span className="text-slate-400">last 30 days</span></span>
-                  <span><b className="text-slate-800">{aiStats.total}</b> <span className="text-slate-400">all-time</span></span>
-                  <span><b className="text-slate-800">{aiStats.users30.length}</b> <span className="text-slate-400">people (30d)</span></span>
-                  <span className="text-slate-400">last used: <b className="text-slate-600">{aiStats.lastUsed ? new Date(aiStats.lastUsed).toLocaleDateString() : "never"}</b></span>
-                </div>
-                {aiStats.users30.length > 0 && <div className="mt-1 text-[11px] text-slate-400">Who (30d): {aiStats.users30.join(", ")}</div>}
-                <div className="mt-1.5 text-[11px] font-semibold">
-                  {aiStats.last30 === 0
-                    ? <span className="text-red-600">⚠️ Not used in the last 30 days — a candidate to remove.</span>
-                    : aiStats.last30 < 10
-                    ? <span className="text-amber-600">🟡 Light use ({aiStats.last30}/mo) — worth deciding if it earns its spot.</span>
-                    : <span className="text-emerald-600">🟢 Actively used ({aiStats.last30}/mo) — keep it.</span>}
-                </div>
-              </div>
-            )}
-            <p className="mb-3 text-xs text-slate-500">Every question asked to the AI assistant, newest first. Rows flagged 🚩 looked like an attempt to override the rules or pull restricted data. (The bot only ever receives data that person is allowed to see, so nothing leaks — this is purely for your visibility.)</p>
-            {aiLog.length === 0 ? (
-              <p className="text-xs text-slate-400">No assistant questions logged yet.</p>
-            ) : (
-              <div className="max-h-80 space-y-1 overflow-y-auto">
-                {aiLog.map((q) => (
-                  <div key={q.id} className={`flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-xs ${q.flagged ? "bg-red-50 ring-1 ring-red-200" : "bg-slate-50"}`}>
-                    <span className="shrink-0">{q.flagged ? "🚩" : "•"}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-slate-700"><span className="font-semibold">{q.name || "—"}</span> <span className="text-slate-400">· {q.path || "—"} · {new Date(q.createdAt).toLocaleString()}</span></div>
-                      <div className="truncate text-slate-500">{q.question}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
         </section>
       )}          </div>,
           <div key="tools" className="space-y-4">
