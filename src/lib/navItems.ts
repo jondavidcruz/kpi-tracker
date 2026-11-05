@@ -86,10 +86,10 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/tickets", label: "Requests", gate: "all" },
     { href: "/software", label: "Software & Logins", gate: "all" },
     { href: "/ai-champion", label: "AI Champion", gate: "all" },
-    { href: "/ai-updates", label: "AI updates", gate: "admin" },
   ] },
   { group: "Settings", items: [
     { href: "/account", label: "My Account & Signature", gate: "all" },
+    { href: "/ai-updates", label: "AI updates", gate: "admin" },
     { href: "/admin", label: "Settings Hub", gate: "csuite" },
   ] },
 ];

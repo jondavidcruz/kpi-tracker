@@ -194,10 +194,10 @@ export default function Sidebar({
       { href: "/tickets", label: "Requests", Icon: Ticket, badge: newTickets },
       { href: "/software", label: "Software & Logins", Icon: KeyRound },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
-      { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
     ] },
     { label: "Settings", items: [
       { href: "/account", label: "My Account & Signature", Icon: Signature },
+      { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
       { href: "/admin", label: "Settings Hub", Icon: Settings, csuiteOnly: true },
     ] },
   ];

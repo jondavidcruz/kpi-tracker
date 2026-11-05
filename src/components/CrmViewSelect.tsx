@@ -1,30 +1,28 @@
 "use client";
-// 🔀 CRM view switcher (Jon 2026-11-05: the Board/List/Week/Conversations/Velocity tabs were
-// invisible in the top-right and unused). A single dropdown next to the pipeline selector so
-// people can actually find how to change the board format.
+// 🔀 ONE CRM control (Jon 2026-11-05: "focus, smart views and the board dropdown are the same
+// thing — merge them into one dropdown next to the pipeline, too much stuff on top"). A single
+// dropdown: the top group switches the view FORMAT (Board/List/Week/Conversations/Velocity),
+// the bottom group is the focus/working-list FILTER (Focus today / Due / Hot / …). Replaces the
+// old separate view dropdown + Focus button + Smart-views chip row.
 import { useRouter } from "next/navigation";
 
-export default function CrmViewSelect({ view, whoQ, manager }: { view: string; whoQ: string; manager: boolean }) {
+type Item = { val: string; label: string; href: string };
+export default function CrmViewSelect({ groups, selected }: { groups: { label: string; items: Item[] }[]; selected: string }) {
   const router = useRouter();
-  const current = ["kanban", "list", "cal"].includes(view) ? view : "kanban";
-  const go = (v: string) => {
-    if (v === "conversations") router.push("/crm/conversations");
-    else if (v === "velocity") router.push("/crm/velocity");
-    else router.push(`/crm?view=${v}${whoQ}`);
-  };
+  const byVal = new Map(groups.flatMap((g) => g.items).map((it) => [it.val, it.href]));
   return (
     <label className="flex items-center gap-1.5">
       <span className="text-[11px] font-bold text-slate-400">View</span>
       <select
-        value={current}
-        onChange={(e) => go(e.target.value)}
+        value={selected}
+        onChange={(e) => { const href = byVal.get(e.target.value); if (href) router.push(href); }}
         className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
       >
-        <option value="kanban">🗂 Board</option>
-        <option value="list">📋 List</option>
-        <option value="cal">📅 Week</option>
-        <option value="conversations">💬 Conversations</option>
-        {manager && <option value="velocity">📊 Velocity</option>}
+        {groups.map((g) => (
+          <optgroup key={g.label} label={g.label}>
+            {g.items.map((it) => <option key={it.val} value={it.val}>{it.label}</option>)}
+          </optgroup>
+        ))}
       </select>
     </label>
   );

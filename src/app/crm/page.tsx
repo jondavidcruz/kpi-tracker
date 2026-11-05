@@ -213,6 +213,29 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
     return `/crm?${p.toString()}`;
   };
+  // 🔀 One consolidated View control (Jon 2026-11-05): format + focus/smart-views in a single
+  // dropdown by the pipeline. Clearing a filter = qs() drops the empty param.
+  const curFormat = ["kanban", "list", "cal"].includes(view) ? view : "kanban";
+  const viewGroups = [
+    { label: "View format", items: [
+      { val: "v:kanban", label: "🗂 Board", href: qs({ view: "kanban" }) },
+      { val: "v:list", label: "📋 List", href: qs({ view: "list" }) },
+      { val: "v:cal", label: "📅 Week", href: qs({ view: "cal" }) },
+      { val: "v:conversations", label: "💬 Conversations", href: "/crm/conversations" },
+      ...(manager ? [{ val: "v:velocity", label: "📊 Velocity", href: "/crm/velocity" }] : []),
+    ] },
+    { label: "Focus / working list", items: [
+      { val: "f:all", label: "— Everything (no filter)", href: qs({ focus: "", due: "", na: "", quiet: "", fresh: "", tag: "" }) },
+      { val: "f:focus", label: "🎯 Focus: today's work", href: qs({ focus: "1", due: "", na: "", quiet: "", fresh: "", tag: "" }) },
+      { val: "f:due", label: "📞 Due today", href: qs({ due: "1", focus: "", na: "", quiet: "", fresh: "", tag: "" }) },
+      { val: "f:hot", label: "🔥 Hot", href: qs({ tag: "hot", focus: "", due: "", na: "", quiet: "", fresh: "" }) },
+      { val: "f:na", label: "🚫 No next action", href: qs({ na: "1", focus: "", due: "", quiet: "", fresh: "", tag: "" }) },
+      { val: "f:quiet", label: "🕸 Quiet 3d+", href: qs({ quiet: "1", focus: "", due: "", na: "", fresh: "", tag: "" }) },
+      { val: "f:fresh", label: "✨ New this week", href: qs({ fresh: "1", focus: "", due: "", na: "", quiet: "", tag: "" }) },
+    ] },
+  ];
+  const curFilter = fFocus ? "f:focus" : fDue ? "f:due" : fTag === "hot" ? "f:hot" : fNa ? "f:na" : fQuiet ? "f:quiet" : fFresh ? "f:fresh" : "f:all";
+  const viewSelected = curFilter !== "f:all" ? curFilter : `v:${curFormat}`;
   // dead/nurture live on the board too but collapse visually at the end
   const deadOpps = await db.crmOpportunity.count({ where: { archivedAt: { not: null } } });
   const comms = await commsFor(me!);
@@ -348,7 +371,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           current={plName}
           baseQs={`view=${view}${whoQ}`}
         />
-        <CrmViewSelect view={view} whoQ={whoQ} manager={manager} />
+        <CrmViewSelect groups={viewGroups} selected={viewSelected} />
         <span className="text-[11px] text-slate-400">{(plCounts[plName] ?? 0).toLocaleString()} opportunities in this pipeline</span>
       </div>
 
@@ -372,33 +395,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         </div>
       </Card>
 
-      {/* 🎯 Focus mode — one prominent toggle that collapses the board to only what needs
-          action today: a follow-up due, no next action set, or hot (Jon 2026-11-05). */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Link
-          prefetch={false}
-          href={fFocus ? qs({ focus: "" }) : qs({ focus: "1", due: "", na: "", quiet: "", fresh: "", tag: "" })}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition ${fFocus ? "bg-brand-navy text-white ring-2 ring-brand-navy/30" : "bg-amber-400 text-brand-navy hover:bg-amber-300"}`}
-        >
-          🎯 {fFocus ? "Focus ON — today's work only" : "Focus mode — today's work"}
-        </Link>
-        {fFocus && <span className="text-[11px] text-slate-500">Showing only leads that need action today — follow-ups due, no next step, or 🔥 hot. Click to show the whole board.</span>}
-      </div>
-
-      {/* ⚡ Smart Views — one-click working lists */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] font-bold text-slate-400">⚡ Smart views:</span>
-        {([
-          ["📞 Due today", { due: "1", na: "", quiet: "", fresh: "", tag: "" }],
-          ["🔥 Hot", { tag: "hot", due: "", na: "", quiet: "", fresh: "" }],
-          ["🚫 No next action", { na: "1", due: "", quiet: "", fresh: "", tag: "" }],
-          ["🕸 Quiet 3d+", { quiet: "1", due: "", na: "", fresh: "", tag: "" }],
-          ["✨ New this week", { fresh: "1", due: "", na: "", quiet: "", tag: "" }],
-        ] as const).map(([label, over]) => {
-          const active = (over.due === "1" && fDue) || (over.na === "1" && fNa) || (over.quiet === "1" && fQuiet) || (over.fresh === "1" && fFresh) || (over.tag === "hot" && fTag === "hot");
-          return <Link key={label} prefetch={false} href={active ? qs({ due: "", na: "", quiet: "", fresh: "", tag: "" }) : qs(over as Record<string, string>)} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${active ? "bg-brand-gold text-brand-navy" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>{label}</Link>;
-        })}
-      </div>
+      {/* Focus mode + Smart views now live INSIDE the View dropdown by the pipeline
+          (Jon 2026-11-05 — "too much stuff on top; merge them into one dropdown"). */}
 
       {/* 🏞 Land-feature chips (Jon 2026-10-20) — land-selling pipeline only. */}
       {isLandPipe && (
