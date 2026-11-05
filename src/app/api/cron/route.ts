@@ -10,8 +10,6 @@ import { reportWeek, missingReporters } from "@/lib/stoplight";
 import { APP_URL } from "@/lib/site";
 import { sendEmailWithAttachment, sendTeamChat, sendEmailTo, sendTimecardChat, postChatWebhook } from "@/lib/notify";
 import { upcomingCulture, prettyMMDD, whenLabel, ordinal } from "@/lib/culture";
-import { isSemiMonthlyPayday } from "@/lib/date";
-import { sendPayrollEmail } from "@/lib/payday";
 import { sendCallCoverageChat } from "@/lib/call-coverage";
 import { autoCloseAbandonedSessions } from "@/lib/timeclock";
 import { sendHuddleBrief, sendHuddleNudge } from "@/lib/huddle-brief";
@@ -4193,16 +4191,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, job: "compliance", checked: health.map((h) => ({ p: h.provider, connected: h.connected, issues: h.issues.length })), posted, changed });
   }
 
-  // Payday — checked daily; only sends on actual semi-monthly paydays (the 15th
-  // and the last day of the month). `&force=1` sends regardless for a test.
+  // 🛑 Payday emails DISABLED (Jon 2026-11-05: "we don't need this, stop this automation").
+  // The whole Pay & Reviews settings tab was removed too. The job now no-ops; to re-enable,
+  // restore the send below.
   if (url.searchParams.get("payroll") === "1") {
-    const settings = await getSettings();
-    const today = date ?? todayStr(settings.orgTimezone);
-    if (!force && !isSemiMonthlyPayday(today)) {
-      return NextResponse.json({ ok: true, payday: false });
-    }
-    const sent = await sendPayrollEmail(today);
-    return NextResponse.json({ ok: true, payday: true, sent });
+    return NextResponse.json({ ok: true, disabled: true });
   }
 
   // Month-end P&L reminder — on the 1st, nudge Viktoriia + Enrico to prepare the expenses

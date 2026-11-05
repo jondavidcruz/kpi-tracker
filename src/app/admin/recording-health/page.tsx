@@ -47,6 +47,21 @@ export default async function RecordingHealthPage() {
     ? await db.crmContact.findMany({ where: { id: { in: recContactIds } }, select: { id: true, name: true, phone: true, address: true } }).catch(() => [])
     : [];
   const contactById = new Map(recContacts.map((c) => [c.id, c]));
+  // 👤 Who actually handled each call — when the recording's meta.rep is blank, look at that
+  // contact's other call rows with a HUMAN actor (dialer disposition, browser call, inbound
+  // answer) nearest the recording time (Jon 2026-11-05).
+  const SYS_ACTORS = ["recorder", "inbound", "inbound-sms", "telnyx", "telnyx-dlr", "coach", "auto", "system", ""];
+  const humanCalls = recContactIds.length
+    ? await db.crmEvent.findMany({ where: { contactId: { in: recContactIds }, kind: "call", actor: { notIn: SYS_ACTORS }, at: { gte: new Date(Date.now() - 4 * 86_400_000) } }, select: { contactId: true, actor: true, at: true } }).catch(() => [])
+    : [];
+  const humanByContact = new Map<string, Array<{ actor: string; at: Date }>>();
+  for (const e of humanCalls) { const a = humanByContact.get(e.contactId) ?? []; a.push({ actor: e.actor, at: e.at }); humanByContact.set(e.contactId, a); }
+  const repForRec = (contactId: string, metaRep: string | undefined, at: Date): string => {
+    if (metaRep) return metaRep;
+    const list = humanByContact.get(contactId) ?? [];
+    if (!list.length) return "—";
+    return [...list].sort((a, b) => Math.abs(a.at.getTime() - at.getTime()) - Math.abs(b.at.getTime() - at.getTime()))[0].actor || "—";
+  };
 
   // Last 15 raw Telnyx call events (from the webhook breadcrumb store)
   const evRow = await db.resource.findFirst({ where: { category: "__telnyx_events__" } }).catch(() => null);
@@ -125,7 +140,7 @@ export default async function RecordingHealthPage() {
                         <div className="font-semibold text-slate-800">{c?.name || "Unknown contact"}</div>
                         <div className="text-[11px] text-slate-400">{c?.phone || "—"}{c?.address ? ` · ${c.address}` : ""}</div>
                       </td>
-                      <td className="px-3 py-2 text-slate-600">{m?.rep || (r.actor && r.actor !== "recorder" ? r.actor : "—")}</td>
+                      <td className="px-3 py-2 text-slate-600">{repForRec(r.contactId, m?.rep || (r.actor && r.actor !== "recorder" ? r.actor : ""), r.at)}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-500">{m?.secs ? `${Math.floor(m.secs / 60)}m ${m.secs % 60}s` : "—"}</td>
                       <td className="px-3 py-2 text-center">{m?.link ? "✅" : "—"}</td>
                       <td className="px-3 py-2">
