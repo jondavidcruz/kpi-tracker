@@ -841,6 +841,18 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
     if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
     return;
   }
+  // 🛑 HARD anti-duplicate (Jon 2026-11-05: a UI bug fired ~15 identical texts to ONE seller
+  // and nearly killed the deal). The SAME text to the SAME contact can NEVER send twice within
+  // 2 minutes — the first send wins, every repeat is silently dropped. This is the last-line
+  // safety even if the composer/timer misfires. Matched on the logged outbound body.
+  if (contactId && text) {
+    const sentPrefix = `➡️ Us: ${text}`.slice(0, 190);
+    const recentDup = await db.crmEvent.findFirst({
+      where: { contactId, kind: "sms", at: { gte: new Date(Date.now() - 120_000) }, body: { startsWith: sentPrefix } },
+      select: { id: true },
+    }).catch(() => null);
+    if (recentDup) { if (!skipRefresh) revalidatePath(`/crm/${oppId}`); return; }
+  }
   // 📷 MMS (Jon's worklist 2026-10-12): the composer attaches a pre-compressed
   // photo; it lands in Drive (public direct link) so Telnyx can fetch it.
   let mediaUrl = "";

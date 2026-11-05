@@ -52,8 +52,14 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   // wrong recipient can be caught before the text actually goes out.
   const SEND_DELAY = 15;
   const [countdown, setCountdown] = useState<number | null>(null);
-  const sendTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => () => { if (sendTimer.current) clearInterval(sendTimer.current); }, []);
+  const sendTimer = useRef<ReturnType<typeof setInterval> | null>(null); // visual countdown ONLY
+  const sendTimeout = useRef<ReturnType<typeof setTimeout> | null>(null); // the single real send
+  const firedRef = useRef(false); // guarantees fireSend runs at most once per countdown
+  const clearSendTimers = () => {
+    if (sendTimer.current) { clearInterval(sendTimer.current); sendTimer.current = null; }
+    if (sendTimeout.current) { clearTimeout(sendTimeout.current); sendTimeout.current = null; }
+  };
+  useEffect(() => () => clearSendTimers(), []);
   // 🟢 optimistic just-sent texts — cleared when the server sends a fresh (larger) history.
   const [localMsgs, setLocalMsgs] = useState<HistMsg[]>([]);
   useEffect(() => { setLocalMsgs([]); }, [history.length]);
@@ -75,8 +81,12 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   const len = text.length;
   const segs = len === 0 ? 0 : len <= 160 ? 1 : Math.ceil(len / 153);
 
-  // The real send — fires after the undo window elapses.
+  // The real send — fires EXACTLY ONCE after the undo window elapses.
   const fireSend = () => {
+    if (firedRef.current) return; // 🛑 never send twice for one countdown
+    firedRef.current = true;
+    clearSendTimers();
+    setCountdown(null);
     const fd = new FormData();
     fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", toNum); fd.set("text", text);
     if (from) fd.set("from", from);
@@ -90,24 +100,22 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
       setText(""); setPhoto(null); setSent("✓ Sent"); setTimeout(() => setSent(""), 2500); router.refresh();
     });
   };
-  const undoSend = () => { if (sendTimer.current) clearInterval(sendTimer.current); sendTimer.current = null; setCountdown(null); };
+  const undoSend = () => { clearSendTimers(); firedRef.current = false; setCountdown(null); };
   const send = () => {
     if (!text.trim() && !photo) return;
-    if (countdown !== null) return; // already counting down
+    if (countdown !== null) return; // a countdown is already running — ignore extra clicks
     // FIRST text to this seller ever → one explicit confirmation (Jon
     // 2026-10-07: "if it's a new text we definitely want that final check");
     // quick replies in an existing thread go straight out.
     if (history.length === 0 && !confirming) { setConfirming(true); return; }
     setConfirming(false);
-    // ⏳ Start the 15s undo window instead of sending immediately.
+    // ⏳ Start the 15s undo window. The interval is DISPLAY ONLY (a pure state updater, no
+    // side effects); the actual send is a SINGLE setTimeout guarded by firedRef, so the
+    // composer can never fire more than one text per countdown (Jon 2026-11-05).
+    firedRef.current = false;
     setCountdown(SEND_DELAY);
-    sendTimer.current = setInterval(() => {
-      setCountdown((c) => {
-        if (c === null) return null;
-        if (c <= 1) { if (sendTimer.current) clearInterval(sendTimer.current); sendTimer.current = null; fireSend(); return null; }
-        return c - 1;
-      });
-    }, 1000);
+    sendTimer.current = setInterval(() => setCountdown((c) => (c === null || c <= 1 ? c : c - 1)), 1000);
+    sendTimeout.current = setTimeout(fireSend, SEND_DELAY * 1000);
   };
 
   return (
