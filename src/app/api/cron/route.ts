@@ -2301,9 +2301,9 @@ export async function GET(request: Request) {
   // Gated by DIRECTREI_LEADS=on (same flag as the webhook). Defensive field parsing because
   // the /contacts response shape varies.
   if (url.searchParams.get("dreipull") === "1") {
-    if (process.env.DIRECTREI_LEADS !== "on") return NextResponse.json({ ok: true, disabled: "set DIRECTREI_LEADS=on in Vercel to turn on auto hot-leads" });
+    const { upsertDreiHotLead, dreiLeadsOn } = await import("@/lib/directrei-leads");
+    if (!(await dreiLeadsOn())) return NextResponse.json({ ok: true, disabled: "enable DirectREI auto-leads in Settings (or set DIRECTREI_LEADS=on)" });
     const { directReiContacts } = await import("@/lib/directrei");
-    const { upsertDreiHotLead } = await import("@/lib/directrei-leads");
     const res = await directReiContacts({ limit: "250" });
     const b = res.body as unknown;
     const rows: Array<Record<string, unknown>> = Array.isArray(b) ? b as Array<Record<string, unknown>>

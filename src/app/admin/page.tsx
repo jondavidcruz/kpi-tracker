@@ -551,6 +551,7 @@ export default async function AdminPage({
                 { href: "/admin/usage", emoji: "📊", name: "Page Usage", desc: "Which pages the team opens — find what's unused" },
                 { href: "/admin/data-health", emoji: "🩺", name: "Data Health", desc: "Supabase data growth, store sizes & query speed — the cost/slowdown watch" },
                 { href: "/admin/recording-health", emoji: "🎙", name: "Recording Health", desc: "Are call recordings + transcripts working? Where the pipeline breaks — no secret needed" },
+                { href: "/admin/directrei-leads", emoji: "🔥", name: "Direct REI Auto-Leads", desc: "Turn on instant hot-leads for Michelle from Direct REI + the webhook URL to paste" },
                 { href: "/crm/pipelines", emoji: "🪜", name: "Pipelines", desc: "Add, rename & reorder CRM pipelines and stages" },
                 { href: "/crm/automations", emoji: "⚡", name: "Automations", desc: "Stage-based CRM automations & triggers" },
                 { href: "/crm/access", emoji: "🔑", name: "Comms Access", desc: "Who can call / text / email — per-person comms access" },

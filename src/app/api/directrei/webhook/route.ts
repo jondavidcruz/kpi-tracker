@@ -48,13 +48,16 @@ export async function POST(req: NextRequest) {
   const phone = (d.phone ?? "").replace(/[^+\d]/g, "");
   const last10 = phone.replace(/\D/g, "").slice(-10);
   const email = (d.email ?? "").trim().toLowerCase();
+  const { upsertDreiHotLead, dreiLeadsOn, logDreiWebhook } = await import("@/lib/directrei-leads");
+  // 📨 log every authenticated delivery so we can SEE what Direct REI actually sends.
+  await logDreiWebhook({ event: ev, status: d.status ?? "", name: d.name ?? "", phone: last10, channel: body.channel ?? "" });
 
   // find the contact however we can — phone first, then email
   const existing = last10.length === 10 || email
     ? await db.crmContact.findFirst({ where: { OR: [...(last10.length === 10 ? [{ phone: { contains: last10 } }] : []), ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : [])] } })
     : null;
 
-  if (ev === "contact.opted_out") {
+  if (/opt.?out|unsub|opted_out|dnc|stop/i.test(ev)) {
     if (existing) {
       const { dncContact } = await import("@/lib/crm-dnc");
       await dncContact(existing.id, `Direct REI opt-out (${body.channel ?? "sms"})`).catch(() => {});
@@ -62,18 +65,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, handled: "opted_out" });
   }
 
-  if (ev !== "contact.qualified") return NextResponse.json({ ok: true, ignored: ev }); // 2xx so deliveries never "fail"
-  // 🛑 Direct REI lead creation is OFF unless DIRECTREI_LEADS="on" (Jon 2026-10-24
-  // disabled Direct REI; this webhook was still creating leads in the War Room).
-  if (process.env.DIRECTREI_LEADS !== "on") return NextResponse.json({ ok: true, handled: "directrei-disabled" });
+  // 🔥 Treat as a hot lead when Direct REI qualifies a seller OR a reply/status event shows
+  // interest/a price. Broadened from just "contact.qualified" so we catch however Direct REI
+  // names it (Jon 2026-11-05: webhook should pull replies in INSTANTLY, no daily schedule).
+  const status = String(d.status ?? "").toLowerCase();
+  const bodyAny = body as Record<string, unknown>;
+  const notes = String(bodyAny.notes ?? bodyAny.summary ?? bodyAny.ai_summary ?? bodyAny.message ?? bodyAny.ai_reply ?? "").trim();
+  const qualifies = /qualif/i.test(ev)
+    || (/replied|reply|status|interest|hot|action/i.test(ev) && /qualif|ready|interest|price|hot|action|replied/i.test(status))
+    || /\$[\d,]{3,}|asking|per ?sqft|would take|willing to/i.test(notes);
+  if (!qualifies) return NextResponse.json({ ok: true, ignored: ev, status }); // 2xx so deliveries never "fail"
+
+  // 🛑 Lead creation is OFF unless enabled (env DIRECTREI_LEADS=on OR the in-app toggle).
+  if (!(await dreiLeadsOn())) return NextResponse.json({ ok: true, handled: "directrei-disabled", hint: "enable DirectREI auto-leads in Settings" });
 
   const addr = normalizeAddress([d.mailing_street, d.mailing_city, `${d.mailing_state ?? ""} ${d.mailing_zip ?? ""}`.trim()].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(", "));
-  // Reuse the shared hot-lead creator so the webhook and the daily poll behave identically:
-  // 🔥 hot tag, price/notes copied in, call-NOW task, deduped (Jon 2026-11-05).
-  const bodyAny = body as Record<string, unknown>;
-  const notes = String(bodyAny.notes ?? bodyAny.summary ?? bodyAny.ai_summary ?? bodyAny.message ?? "").trim();
   const price = (notes.match(/\$[\d,]+(?:\.\d+)?/) ?? [])[0] ?? String(bodyAny.price ?? "");
-  const { upsertDreiHotLead } = await import("@/lib/directrei-leads");
   const r = await upsertDreiHotLead({ name: d.name, phone, email, market: d.market, address: addr, status: d.status, notes, price });
   return NextResponse.json({ ok: true, ...(r ?? { skipped: "no phone/email" }) });
 }

@@ -9,6 +9,35 @@ import { normalizeAddress } from "@/lib/address";
 
 export const MICHELLE = "Michelle Lagudas";
 
+// 🔀 Enable gate — env flag OR an in-app toggle (Resource) so Jon can turn real-time DirectREI
+// leads on/off from the app without touching Vercel (Jon 2026-11-05 wants instant webhook leads).
+const LEADS_FLAG = "__drei_leads__";
+export async function dreiLeadsOn(): Promise<boolean> {
+  if (process.env.DIRECTREI_LEADS === "on") return true;
+  const row = await db.resource.findFirst({ where: { category: LEADS_FLAG } }).catch(() => null);
+  return row?.description === "on";
+}
+export async function setDreiLeads(on: boolean): Promise<void> {
+  const row = await db.resource.findFirst({ where: { category: LEADS_FLAG } }).catch(() => null);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: on ? "on" : "off" } });
+  else await db.resource.create({ data: { title: "drei-leads", category: LEADS_FLAG, url: "", description: on ? "on" : "off" } });
+}
+
+// 📨 Breadcrumb of the last 40 authenticated DirectREI webhook deliveries so we can SEE what
+// Direct REI actually sends (event names + status) and confirm it's firing in real time.
+export async function logDreiWebhook(entry: Record<string, unknown>): Promise<void> {
+  const CAT = "__drei_webhook_log__";
+  try {
+    const row = await db.resource.findFirst({ where: { category: CAT } });
+    let list: unknown[] = [];
+    try { list = row?.description ? JSON.parse(row.description) : []; } catch { list = []; }
+    list.unshift({ at: new Date().toISOString(), ...entry });
+    const description = JSON.stringify(list.slice(0, 40));
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "drei-webhook-log", category: CAT, url: "", description } });
+  } catch { /* logging never blocks the webhook */ }
+}
+
 export type DreiLead = {
   name?: string; email?: string; phone?: string; market?: string;
   address?: string; status?: string; notes?: string; price?: string; dreiId?: string;
