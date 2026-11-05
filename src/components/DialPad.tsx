@@ -790,6 +790,18 @@ export default function DialPad({ floating = false, owner = false }: { floating?
     setTimeout(() => { if (stateRef.current !== "idle") finish(onCall); }, 800);
     if (!callRef.current && (stateRef.current === "connecting" || stateRef.current === "error")) finish(onCall);
   };
+  // 📼 Drop the saved voicemail into an answering machine, then it hangs up itself.
+  const dropVoicemail = async () => {
+    const phone = onCallRef.current?.phone;
+    if (!phone) return;
+    setMsg("📼 dropping your voicemail…");
+    try {
+      const r = await fetch("/api/telnyx/vmdrop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: phone }) });
+      if (!r.ok) { const j = (await r.json().catch(() => ({}))) as { error?: string }; setMsg(`📼 VM drop failed: ${j.error ?? r.status}`); return; }
+      try { callRef.current?.muteAudio?.(); } catch { /* best-effort */ }
+      setMsg("📼 voicemail playing — the call hangs up by itself, you're free");
+    } catch { setMsg("📼 VM drop failed — network"); }
+  };
   // ⏱ Ring-out: auto-hang an UNANSWERED outbound call at AUTO_RING_OUT seconds so you get a fast
   // "No answer" instead of a full 30s of ringing (Jon 2026-11-02). Automatic for everyone.
   useEffect(() => {
@@ -916,37 +928,20 @@ export default function DialPad({ floating = false, owner = false }: { floating?
               </span>
             );
           })()}
-          {/* live call bar */}
+          {/* live call bar — caller ID only (Jon 2026-11-05: no buttons here; mute/hangup/VM
+              all live in the bottom control row). Name shown big + full, not truncated. */}
           {state !== "idle" && (
-            <span className="relative mb-4 flex items-center gap-2 bg-emerald-50 px-3.5 py-2 ring-1 ring-emerald-200">
-              <span className="min-w-0 flex-1 text-xs font-bold text-emerald-800">
-                <span className="block truncate">
-                  {state === "active" ? `🟢 ${onCall?.name ?? onCall?.phone} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `📡 ${state} — ${onCall?.name ?? onCall?.phone ?? ""}`}
-                  {dtmfTrail && <span className="ml-1 rounded bg-white px-1 py-0.5 font-mono text-[10px] text-slate-500 ring-1 ring-slate-200">⌨ {dtmfTrail}</span>}
-                </span>
-                {/* 📤 which of OUR numbers this call is going out from (Jon 2026-10-27) */}
-                {onCall?.dir !== "in" && liveFrom && (
-                  <span className="block truncate text-[10px] font-semibold text-emerald-600">📤 from {liveFrom}{geoForPhone(liveFrom) ? ` (${geoForPhone(liveFrom)})` : ""} → {onCall?.phone}</span>
-                )}
+            <span className="relative mb-4 block bg-emerald-50 px-3.5 py-2.5 ring-1 ring-emerald-200">
+              <span className="block text-base font-extrabold leading-tight text-emerald-900">
+                {state === "active" ? `🟢 ${onCall?.name ?? onCall?.phone}` : `📡 ${state} — ${onCall?.name ?? onCall?.phone ?? ""}`}
               </span>
-              {endConfirm && <span className="absolute -bottom-5 left-3 right-3 truncate text-[9px] font-bold text-red-600">🔒 under 8s — abandoned calls get surcharged; the call can be ended at 0:08</span>}
-              {state === "active" && <button onClick={toggleMute} className={`rounded-md px-2 py-1 text-[10px] font-bold ${muted ? "bg-amber-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>}
-              {state === "active" && onCall?.phone && onCall.dir === "out" && (
-                <button
-                  onClick={async () => {
-                    setMsg("📼 dropping your voicemail…");
-                    try {
-                      const r = await fetch("/api/telnyx/vmdrop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: onCall.phone }) });
-                      if (!r.ok) { const j = (await r.json().catch(() => ({}))) as { error?: string }; setMsg(`📼 VM drop failed: ${j.error ?? r.status}`); return; }
-                      try { callRef.current?.muteAudio?.(); } catch { /* best-effort */ }
-                      setMsg("📼 voicemail playing — the call hangs up by itself, you're free");
-                    } catch { setMsg("📼 VM drop failed — network"); }
-                  }}
-                  title="Hit an answering machine? Plays your saved voicemail script into the call and hangs up for you (edit the script on the Dialer tab)"
-                  className="rounded-md bg-violet-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-violet-700"
-                >📼 VM</button>
+              {state === "active" && (
+                <span className="mt-0.5 block text-[12px] font-bold text-emerald-700">{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}{dtmfTrail ? <> · <span className="rounded bg-white px-1 py-0.5 font-mono text-[10px] text-slate-500 ring-1 ring-slate-200">⌨ {dtmfTrail}</span></> : ""}</span>
               )}
-              <button onClick={hangup} title="End the call" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-600 text-base text-white shadow hover:bg-red-700">⏹</button>
+              {onCall?.dir !== "in" && liveFrom && (
+                <span className="block truncate text-[10px] font-semibold text-emerald-600">📤 from {liveFrom}{geoForPhone(liveFrom) ? ` (${geoForPhone(liveFrom)})` : ""} → {onCall?.phone}</span>
+              )}
+              {endConfirm && <span className="mt-1 block text-[9px] font-bold text-red-600">🔒 under 8s — abandoned calls get surcharged; the call can be ended at 0:08</span>}
             </span>
           )}
           {/* 📋 Call disposition (GHL-style, Jon 2026-10-08): shows after EVERY
@@ -1022,9 +1017,13 @@ export default function DialPad({ floating = false, owner = false }: { floating?
                 {state === "active" && muted && (
                   <span className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-2 py-1 text-[11px] font-extrabold text-white">🔇 YOU&apos;RE MUTED — they can&apos;t hear you</span>
                 )}
-                <span className="flex w-full items-center justify-center gap-4 pt-1">
+                <span className="flex w-full items-center justify-center gap-3 pt-1">
                   {state === "active" && (
                     <button onClick={toggleMute} title={muted ? "You're muted — click to unmute" : "Mute your mic so they can't hear you"} className={`grid h-12 w-12 place-items-center rounded-full text-xl shadow ${muted ? "animate-pulse bg-amber-500 text-white ring-2 ring-amber-300" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>
+                  )}
+                  {/* 📼 Voicemail drop — next to mute (Jon 2026-11-05) */}
+                  {state === "active" && onCall?.phone && (
+                    <button onClick={dropVoicemail} title="Hit an answering machine? Plays your saved voicemail script into the call and hangs up for you (edit the script on the Dialer tab)" className="grid h-12 w-12 place-items-center rounded-full bg-violet-600 text-base font-bold text-white shadow hover:bg-violet-700">📼</button>
                   )}
                   {state === "idle" ? (
                     <button onClick={() => call({ phone: num })} className="grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-xl text-white hover:bg-emerald-600">📞</button>

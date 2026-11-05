@@ -93,9 +93,15 @@ export async function pullDreiQualifiedLeads(): Promise<{ scanned: number; quali
     // 🚫 sellers only — Direct REI tags buyers/builders role:"buyer"; keep role:"seller"/"owner".
     const role = `${g(c, "role")} ${g(c, "contact_type")}`.toLowerCase();
     if (/buyer|developer|builder|investor|agent|wholesaler/.test(role)) continue;
+    // belt-and-suspenders: only rows actually marked qualified.
+    const st = g(c, "status").toLowerCase();
+    if (st && !/qualif/.test(st)) continue;
     qualified++;
     const id = g(c, "id", "contact_id");
     const deal = id ? dealBySeller.get(id) : undefined;
+    // 🎯 Require a DEAL — Direct REI only creates a deal once a seller is genuinely interested, so
+    // this filters out the "qualified" noise (not-interested repliers) Jon flagged (2026-11-05).
+    if (!deal) continue;
     const notes = g(c, "ai_summary", "ai_reply", "summary", "notes", "note", "last_message", "last_reply", "reply", "ai_notes", "action_note");
     const dealAddr = deal ? g(deal, "name", "property_address", "address", "property") : "";
     const dealPrice = deal ? g(deal, "offer_price", "contract_price", "arv", "emv") : "";
