@@ -48,6 +48,12 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   };
   const [sent, setSent] = useState("");
   const [confirming, setConfirming] = useState(false);
+  // ⏳ Undo-send window (Jon 2026-11-05): a 15s hold with an Undo button so a typo or
+  // wrong recipient can be caught before the text actually goes out.
+  const SEND_DELAY = 15;
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const sendTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => () => { if (sendTimer.current) clearInterval(sendTimer.current); }, []);
   // 🟢 optimistic just-sent texts — cleared when the server sends a fresh (larger) history.
   const [localMsgs, setLocalMsgs] = useState<HistMsg[]>([]);
   useEffect(() => { setLocalMsgs([]); }, [history.length]);
@@ -69,13 +75,8 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   const len = text.length;
   const segs = len === 0 ? 0 : len <= 160 ? 1 : Math.ceil(len / 153);
 
-  const send = () => {
-    if (!text.trim() && !photo) return;
-    // FIRST text to this seller ever → one explicit confirmation (Jon
-    // 2026-10-07: "if it's a new text we definitely want that final check");
-    // quick replies in an existing thread go straight out.
-    if (history.length === 0 && !confirming) { setConfirming(true); return; }
-    setConfirming(false);
+  // The real send — fires after the undo window elapses.
+  const fireSend = () => {
     const fd = new FormData();
     fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", toNum); fd.set("text", text);
     if (from) fd.set("from", from);
@@ -88,6 +89,25 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
       setLocalMsgs((p) => [...p, { body: sentText, inbound: false, at: new Date().toISOString() }]);
       setText(""); setPhoto(null); setSent("✓ Sent"); setTimeout(() => setSent(""), 2500); router.refresh();
     });
+  };
+  const undoSend = () => { if (sendTimer.current) clearInterval(sendTimer.current); sendTimer.current = null; setCountdown(null); };
+  const send = () => {
+    if (!text.trim() && !photo) return;
+    if (countdown !== null) return; // already counting down
+    // FIRST text to this seller ever → one explicit confirmation (Jon
+    // 2026-10-07: "if it's a new text we definitely want that final check");
+    // quick replies in an existing thread go straight out.
+    if (history.length === 0 && !confirming) { setConfirming(true); return; }
+    setConfirming(false);
+    // ⏳ Start the 15s undo window instead of sending immediately.
+    setCountdown(SEND_DELAY);
+    sendTimer.current = setInterval(() => {
+      setCountdown((c) => {
+        if (c === null) return null;
+        if (c <= 1) { if (sendTimer.current) clearInterval(sendTimer.current); sendTimer.current = null; fireSend(); return null; }
+        return c - 1;
+      });
+    }, 1000);
   };
 
   return (
@@ -128,7 +148,12 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
           )}
           <span className={`text-[10px] font-bold ${segs > 1 ? "text-amber-600" : "text-slate-400"}`}>{len} chars · {segs || "—"} text{segs === 1 ? "" : "s"}{segs > 1 ? " (they'll see it stitched together)" : ""}</span>
           {sent && <span className="text-[11px] font-bold text-emerald-600">{sent}</span>}
-          {confirming ? (
+          {countdown !== null ? (
+            <span className="ml-auto flex items-center gap-2">
+              <span className="text-[11px] font-bold text-amber-700">Sending in {countdown}s…</span>
+              <button onClick={undoSend} className="rounded-lg bg-amber-500 px-3.5 py-1.5 text-xs font-extrabold text-white shadow-sm hover:bg-amber-600">↩ Undo</button>
+            </span>
+          ) : confirming ? (
             <span className="ml-auto flex items-center gap-1.5">
               <span className="text-[11px] font-bold text-amber-700">First text to {first} — send it?</span>
               <button onClick={send} disabled={pending} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">✓ Yes, send text</button>

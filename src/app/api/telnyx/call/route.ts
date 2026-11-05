@@ -377,28 +377,23 @@ export async function POST(req: NextRequest) {
       // 📝 Transcribe + SUMMARIZE in one Gemini call (Jon 2026-10-13: "AI get the
       // MAIN details, not the whole transcript in the notes"). The note shows a
       // short key-points summary; the full transcript rides along in meta.
+      // 📝 Resilient transcribe+summarize (Jon 2026-11-05): lite model first for quota
+      // headroom, fallback to flash, tolerant parse, and capture the failure reason so
+      // /admin/recording-health shows WHY transcripts drop instead of a silent blank.
       let transcript = "";
-      if (process.env.GEMINI_API_KEY && bytes.length < 9 * 1024 * 1024) {
-        try {
-          const b64 = Buffer.from(bytes).toString("base64");
-          const tr = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-            method: "POST", headers: { "content-type": "application/json" },
-            body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: "audio/mp3", data: b64 } }, { text: "This is a recorded real-estate acquisitions phone call. Reply in EXACTLY this format:\nSUMMARY:\n- (3 to 6 short bullets covering: seller's motivation to sell, asking price / any numbers discussed, timeline, property condition or issues, objections, and the agreed next step)\n\nTRANSCRIPT:\n(full transcript, labeling speakers 'Rep:' and 'Seller:')" }] }], generationConfig: { maxOutputTokens: 4000 } }),
-            signal: AbortSignal.timeout(40000),
-          });
-          const tj = (await tr.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-          const out = tj.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("").trim() ?? "";
-          const m = out.split(/\n\s*TRANSCRIPT:\s*\n/i);
-          const summary = (m[0] || "").replace(/^\s*SUMMARY:\s*\n?/i, "").trim();
-          transcript = (m[1] || (m.length === 1 ? out : "")).trim();
-          if (summary) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📞 Call summary (AI) — ${secs ? `${Math.floor(secs / 60)}m ${secs % 60}s` : ""}\n${summary}`.slice(0, 2000), actor: "recorder" });
-        } catch { /* recording itself is already filed below */ }
-      }
+      let txErr = "";
+      try {
+        const { transcribeCall } = await import("@/lib/transcribe");
+        const tx = await transcribeCall(bytes, "audio/mp3");
+        transcript = tx.transcript;
+        txErr = tx.error;
+        if (tx.summary) await logCrmEvent({ contactId: contact.id, oppId: opp?.id ?? "", kind: "note", body: `📞 Call summary (AI) — ${secs ? `${Math.floor(secs / 60)}m ${secs % 60}s` : ""}\n${tx.summary}`.slice(0, 2000), actor: "recorder" });
+      } catch (e) { txErr = String(e).slice(0, 80); /* recording itself is already filed below */ }
       // 🧹 One clean timeline row (Jon 2026-10-26): no raw Drive URL in the body (the audio
       // player + transcript already link it), and if the rep already logged a disposition for
       // this call, fold the recording INTO that entry instead of adding a second "Call" row.
       const recBody = `🎙 Call recording${secs ? ` · ${Math.floor(secs / 60)}m ${secs % 60}s` : ""}${link ? "" : " (Drive upload unavailable — Telnyx copy expires)"}`;
-      const recMeta = { link, driveId: driveId || undefined, secs, ccId, transcript: transcript.slice(0, 12000), rep: rep || undefined };
+      const recMeta = { link, driveId: driveId || undefined, secs, ccId, transcript: transcript.slice(0, 12000), rep: rep || undefined, txErr: txErr || undefined };
       // Re-check right before writing: a CONCURRENT recording.saved for the same call may have
       // finished and logged while this one was uploading (Jon 2026-10-27). If so, drop this copy.
       if (await recDupe()) { await recCrumb({ ev: "rec.outcome", result: "deduped-late", secs }); return NextResponse.json({ ok: true, deduped: "late" }); }

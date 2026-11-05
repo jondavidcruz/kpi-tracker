@@ -41,6 +41,8 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/sop/acquisitions": "acquisitions sop acq sales rep sop standard operating procedure process call script underwriting mao cash novation offer contract 5 minute speed to lead",
   "/reduction": "price reduction seller negotiate script calculator dom offers",
   "/call-scoring": "call recording transcript coaching score",
+  "/admin/recording-health": "recording transcript call audio pipeline gemini health broken not working stopped drive",
+  "/admin/data-health": "data health supabase growth store size query speed cost egress slowdown",
   "/email-health": "email health bounce rate deliverability opens clicks resend direct rei campaigns domain reputation",
   "/comms-health": "comms guardian uptime calling texting email inbound outbound telnyx resend line down monitor always working 24/7 phones sms voice health check",
   "/kpi-audit": "kpi verification audit trust but verify receipts proof vetted developers accurate accountability who when evidence check numbers",
@@ -242,8 +244,15 @@ export default function Sidebar({
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   // Flat, searchable index of every page the user can actually see.
+  // Owner-only /admin/* sub-tools aren't nav items, so add them here so search finds them
+  // (Jon 2026-11-05: "I searched 'recording' and the settings page didn't show").
+  const extraSearchable: (Item & { group: string })[] = ([
+    { href: "/admin/recording-health", label: "Recording Health", Icon: Headphones, csuiteOnly: true, group: "Settings" },
+    { href: "/admin/data-health", label: "Data Health", Icon: Activity, csuiteOnly: true, group: "Settings" },
+  ] as (Item & { group: string })[]).filter(visible);
   const allItems: (Item & { group: string })[] = [
     ...orderedGroups.flatMap((g) => g.items.filter(visible).map((it) => ({ ...it, group: g.label }))),
+    ...extraSearchable,
   ];
   const q = query.trim().toLowerCase();
   const results = q

@@ -10,7 +10,7 @@ import { Card, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-type RecMeta = { link?: string; transcript?: string; secs?: number } | null;
+type RecMeta = { link?: string; transcript?: string; secs?: number; txErr?: string } | null;
 
 function ago(d: Date): string {
   const h = (Date.now() - d.getTime()) / 3_600_000;
@@ -107,7 +107,7 @@ export default async function RecordingHealthPage() {
                       <td className="px-4 py-2 text-slate-600">{ago(r.at)}</td>
                       <td className="px-3 py-2 text-slate-600">{r.actor || "—"}</td>
                       <td className="px-3 py-2 text-center">{m?.link ? "✅" : "—"}</td>
-                      <td className="px-3 py-2 text-center">{m?.transcript ? "✅" : <span className="text-red-500">✗</span>}</td>
+                      <td className="px-3 py-2 text-center">{m?.transcript ? "✅" : <span className="text-red-500" title={m?.txErr || "no transcript"}>✗{m?.txErr ? <span className="ml-1 text-[10px] font-normal text-red-400">{m.txErr.slice(0, 40)}</span> : ""}</span>}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-500">{m?.secs ? `${Math.floor(m.secs / 60)}m ${m.secs % 60}s` : "—"}</td>
                     </tr>
                   );
