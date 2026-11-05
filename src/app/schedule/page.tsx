@@ -329,18 +329,6 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         </Card>
       </section>
 
-      {/* 🎉 Federal holidays — see what's coming; managers mark each off or working */}
-      {holidayRows.length > 0 && (
-        <section>
-          <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="text-sm font-bold text-slate-700">🎉 Holidays <span className="ml-1 font-normal text-slate-400">— {manager ? "mark each a team day off or a working day" : "team days off"}</span></h3>
-          </div>
-          <Card className="p-3">
-            <HolidaysPanel holidays={holidayRows} canEdit={manager} />
-          </Card>
-        </section>
-      )}
-
       {/* OWNER: broadcast your own status (you're not on the pay clock) */}
       {isOwner(me) && (
         <section>
@@ -584,6 +572,15 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <h3 className="mb-1 text-sm font-bold text-slate-700">Request time off</h3>
           <p className="mb-3 text-xs text-slate-500">All time off is <strong>unpaid</strong>. {manager ? "Yours is approved automatically." : "Marie or Jon will approve it."}</p>
           <form action={requestTimeOff} className="space-y-2">
+            {manager && partUsersRaw.length > 0 && (
+              <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Who is this for?</span>
+                <select name="forUserId" className={inputCls} defaultValue={me.id}>
+                  {[...partUsersRaw].sort((a, b) => a.name.localeCompare(b.name)).map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}{u.id === me.id ? " (me)" : ""}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-500">Type</span>
               <select name="type" className={inputCls} defaultValue="vacation">
                 <option value="vacation">Vacation</option>
@@ -706,6 +703,18 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
               );
             })}
           </div>
+        </section>
+      )}
+
+      {/* 🎉 Federal holidays — lowest priority, pinned to the very bottom (Jon 2026-11-05) */}
+      {holidayRows.length > 0 && (
+        <section>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h3 className="text-sm font-bold text-slate-700">🎉 Holidays <span className="ml-1 font-normal text-slate-400">— {manager ? "mark each a team day off or a working day" : "team days off"}</span></h3>
+          </div>
+          <Card className="p-3">
+            <HolidaysPanel holidays={holidayRows} canEdit={manager} />
+          </Card>
         </section>
       )}
 

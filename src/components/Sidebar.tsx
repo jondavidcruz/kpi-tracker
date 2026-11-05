@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
   Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact,
-  Play, Banknote, TrafficCone, Moon, Sun,
+  Play, Banknote, TrafficCone, Moon, Sun, Signature,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import Logo from "./Logo";
@@ -190,11 +190,13 @@ export default function Sidebar({
     ] },
     { label: "Requests & Support", items: [
       { href: "/blueprint", label: "War Room Guide", Icon: Compass },
-      { href: "/account", label: "My Account & Signature", Icon: Settings },
       { href: "/tickets", label: "Requests", Icon: Ticket, badge: newTickets },
       { href: "/software", label: "Software & Logins", Icon: KeyRound },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
+    ] },
+    { label: "Settings", items: [
+      { href: "/account", label: "My Account & Signature", Icon: Signature },
       { href: "/admin", label: "Settings Hub", Icon: Settings, csuiteOnly: true },
     ] },
   ];

@@ -84,11 +84,13 @@ export const NAV_GROUPS: NavGroup[] = [
   ] },
   { group: "Requests & Support", items: [
     { href: "/blueprint", label: "War Room Guide", gate: "all" },
-    { href: "/account", label: "My Account & Signature", gate: "all" },
     { href: "/tickets", label: "Requests", gate: "all" },
     { href: "/software", label: "Software & Logins", gate: "all" },
     { href: "/ai-champion", label: "AI Champion", gate: "all" },
     { href: "/ai-updates", label: "AI updates", gate: "admin" },
+  ] },
+  { group: "Settings", items: [
+    { href: "/account", label: "My Account & Signature", gate: "all" },
     { href: "/admin", label: "Settings Hub", gate: "csuite" },
   ] },
 ];

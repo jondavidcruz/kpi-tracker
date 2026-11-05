@@ -3538,11 +3538,23 @@ export async function requestTimeOff(formData: FormData) {
   const note = String(formData.get("note") ?? "").trim().slice(0, 300);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < startDate) endDate = startDate;
-  // Managers' own requests are auto-approved; everyone else starts as requested.
+  // 👥 Managers can file time off ON BEHALF OF a teammate (Jon 2026-11-05: "Michelle's
+  // off today for a prenup — put it here so it reflects on her time card"). A manager
+  // picks the person; everyone else can only file their own.
+  let targetId = me.id;
+  let targetName = me.name;
+  if (isManager(me)) {
+    const forUserId = String(formData.get("forUserId") ?? "").trim();
+    if (forUserId && forUserId !== me.id) {
+      const u = await db.user.findUnique({ where: { id: forUserId }, select: { id: true, name: true } });
+      if (u) { targetId = u.id; targetName = u.name; }
+    }
+  }
+  // Managers' entries (their own or on behalf) are auto-approved; self-serve starts as requested.
   const status = isManager(me) ? "approved" : "requested";
-  const row = await db.timeOff.create({ data: { userId: me.id, type, startDate, endDate, note, status } });
+  const row = await db.timeOff.create({ data: { userId: targetId, type, startDate, endDate, note, status } });
   if (status === "approved") {
-    const eventId = await createTimeOffEvent({ name: me.name, type, startDate, endDate, note }).catch(() => null);
+    const eventId = await createTimeOffEvent({ name: targetName, type, startDate, endDate, note }).catch(() => null);
     if (eventId) await db.timeOff.update({ where: { id: row.id }, data: { gcalEventId: eventId } });
   }
   revalidatePath("/schedule");
