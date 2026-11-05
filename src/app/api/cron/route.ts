@@ -1359,6 +1359,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, moved, total: open.length });
   }
 
+  // 🧹 One-shot: clear the backlog of auto-generated "Systemic KPI miss" + "Copy-paste flag"
+  // leadership tasks (Jon 2026-11-04 — these are retired in favor of the /kpi-audit flags view).
+  // Marks them done (never destroyed) so the leadership queue empties in one shot.
+  if (url.searchParams.get("clearflagtasks") === "1") {
+    const r = await db.crmTask.updateMany({
+      where: { doneAt: null, createdBy: "flag-watch", OR: [{ title: { startsWith: "📉 Systemic KPI miss" } }, { title: { startsWith: "🔁 Copy-paste flag reasons" } }] },
+      data: { doneAt: new Date(), doneBy: "flag-cleanup" },
+    });
+    return NextResponse.json({ ok: true, cleared: r.count });
+  }
+
   // 🔒 Lock acquisitions reps to "just sales" (?lockacq=1) — hide dispositions,
   // developer sourcing, the dispo land play, and the business structure from
   // acquisitions/cc_lm reps (Jon 2026-10-16). Adds to their navHidden; doesn't
@@ -2611,14 +2622,9 @@ export async function GET(request: Request) {
       take: 60,
     });
     let filled = 0;
-    const jonTasks: string[] = [];
-    // Systemic KPI/leadership items go to the SHARED "🏛 Leadership" queue (Jon,
-    // Enrico, Viktoriia, Marie all see them) — not just Jon (Jon 2026-10-15).
-    const { LEADERSHIP_ASSIGNEE } = await import("@/lib/auth");
-    const mkJonTask = async (title: string) => {
-      const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } });
-      if (!dup) { await db.crmTask.create({ data: { oppId: "", contactId: "", title, due: todayStr2, assignedTo: LEADERSHIP_ASSIGNEE, createdBy: "flag-watch" } }); jonTasks.push(title); }
-    };
+    // Systemic KPI misses + copy-paste flags no longer become leadership TASKS (Jon 2026-11-04) —
+    // they're surfaced as de-duped FLAGS on /kpi-audit instead. This job now only fills the AI
+    // context on each open alert (the human-story prompt), never spawns tasks.
     for (const a of open) {
       if (!a.user) continue;
       const bits: string[] = [];
@@ -2634,12 +2640,13 @@ export async function GET(request: Request) {
       if (standup?.focus === "developer") bits.push("developer-outreach day — dialer KPIs weren't the focus");
       if (/internet|speed/i.test(a.kpi.name) && a.actual > 0) bits.push(`measured ${a.actual} vs ${a.expected} Mbps — connection, not effort`);
       if (a.actual === 0 && punches.length > 0) bits.push("worked but logged 0 — possibly forgot to enter it");
-      // 📉 systemic pattern: same rep+KPI missed 4+ of the last 7 days
+      // 📉 systemic pattern: same rep+KPI missed 4+ of the last 7 days. We NOTE it in the AI
+      // context, but we NO LONGER spawn a leadership TASK for it (Jon 2026-11-04: the daily
+      // "Systemic KPI miss" tasks were pure noise — a new one every day as the count ticked up,
+      // instantly overdue, never auto-closing). Systemic misses now live as a de-duped FLAG on
+      // the KPI Verification page (/kpi-audit → Flags), diagnosed + addressed in one place.
       const repeats = await db.alert.count({ where: { userId: a.user.id, kpiId: a.kpi.id, date: { gte: week } } });
-      if (repeats >= 4) {
-        bits.push(`missed ${repeats} of the last 7 days — looks SYSTEMIC, not effort`);
-        await mkJonTask(`📉 Systemic KPI miss: ${a.user.name.split(" ")[0]}'s ${a.kpi.name} missed ${repeats}/7 days — likely goal too high, not enough leads, or a tracking gap. Decide at the leadership call (recalibrate: /admin/recalibrate)`);
-      }
+      if (repeats >= 4) bits.push(`missed ${repeats} of the last 7 days — looks SYSTEMIC, not effort`);
       const ctx = `🤖 AI context (not an answer): ${bits.length ? bits.join(" · ") : "time card + focus look normal — needs the human story"}`;
       await db.alert.update({ where: { id: a.id }, data: { repReason: ctx.slice(0, 480) } });
       filled++;
@@ -2653,9 +2660,8 @@ export async function GET(request: Request) {
       const k = `${a.user?.name ?? "?"}|${human}`;
       byRepText.set(k, (byRepText.get(k) ?? 0) + 1);
     }
-    for (const [k, n] of byRepText) {
-      if (n >= 3) await mkJonTask(`🔁 Copy-paste flag reasons: ${k.split("|")[0]} used the same answer ${n}× this week ("${k.split("|")[1].slice(0, 60)}…") — either it's a real recurring problem to fix, or the check-in is being rubber-stamped. Leadership-call item.`);
-    }
+    // 🔁 copy-paste detection still computed, but surfaced as a FLAG on /kpi-audit, not a task.
+    void byRepText;
     // 📋 Marie's EOD task whenever today's flags lack human answers
     const unansweredToday = open.filter((a) => a.date >= new Date(Date.now() - 86400_000).toISOString().slice(0, 10)).length;
     if (unansweredToday > 0) {
@@ -2666,7 +2672,7 @@ export async function GET(request: Request) {
         if (!dup) await db.crmTask.create({ data: { oppId: "", contactId: "", title, due: todayStr2, assignedTo: marie.name, createdBy: "flag-watch" } });
       }
     }
-    return NextResponse.json({ ok: true, filled, jonTasks });
+    return NextResponse.json({ ok: true, filled });
   }
 
   // 📣 Daily 6pm KPI scoreboard post (?kpipost=1 — Jon 2026-10-08: "send it

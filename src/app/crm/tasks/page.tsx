@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, isLeadership, LEADERSHIP_ASSIGNEE } from "@/lib/auth";
 import { Card, SectionTitle } from "@/components/ui";
-import { addCrmTaskAction, toggleCrmTaskAction, setTaskPriorityAction, linkTaskAction, readTaskPriorities, saveTaskNoteAction, reassignTaskAction, deleteTaskAction } from "../actions";
+import { addCrmTaskAction, toggleCrmTaskAction, setTaskPriorityAction, linkTaskAction, readTaskPriorities, saveTaskNoteAction, reassignTaskAction, deleteTaskAction, bulkDeleteTasksAction } from "../actions";
 import { readTaskNotes } from "@/lib/task-notes";
 
 export const dynamic = "force-dynamic";
@@ -148,6 +148,18 @@ export default async function CrmTasksPage({ searchParams }: { searchParams: Pro
           <button className="rounded-xl bg-brand-navy px-4 py-2 text-xs font-bold text-white">Add task</button>
         </form>
       </Card>
+
+      {/* 🗑 Select-all mass delete (Jon 2026-11-04): clears every OPEN task currently shown
+          (respects the view / person / department filters above). Reversible — they move to
+          Completed with a deleted stamp. Managers/leadership only. */}
+      {canPickWho && v !== "done" && tasks.some((t) => !t.doneAt) && (
+        <form action={bulkDeleteTasksAction} className="flex items-center justify-end">
+          <input type="hidden" name="ids" value={tasks.filter((t) => !t.doneAt).map((t) => t.id).join(",")} />
+          <button className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200 hover:bg-red-50 hover:text-red-600" title="Marks every open task shown here as deleted (moves to Completed — never destroyed). Narrow with the filters above first.">
+            🗑 Select all &amp; delete shown ({tasks.filter((t) => !t.doneAt).length})
+          </button>
+        </form>
+      )}
 
       <Card className="overflow-hidden p-0">
         {tasks.length === 0 && <div className="p-8 text-center text-sm text-slate-400">Nothing here — clean slate. 🎉</div>}

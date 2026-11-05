@@ -921,6 +921,22 @@ export async function deleteTaskAction(formData: FormData) {
   revalidatePath("/crm");
 }
 
+/** 🗑 Bulk delete — select-all mass-delete of the currently-shown tasks (Jon 2026-11-04).
+ *  Marks each open task done with a deleted stamp (never destroyed). Only touches tasks the
+ *  caller is allowed to delete (managers = any; otherwise only their own). */
+export async function bulkDeleteTasksAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const ids = String(formData.get("ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 500);
+  if (!ids.length) return;
+  const mgr = isManager(me);
+  const rows = await db.crmTask.findMany({ where: { id: { in: ids }, doneAt: null }, select: { id: true, assignedTo: true } });
+  const deletable = rows.filter((t) => mgr || t.assignedTo.toLowerCase() === me.name.toLowerCase()).map((t) => t.id);
+  if (deletable.length) await db.crmTask.updateMany({ where: { id: { in: deletable } }, data: { doneAt: new Date(), doneBy: `🗑 deleted by ${me.name}` } });
+  revalidatePath("/crm/tasks");
+  revalidatePath("/crm");
+}
+
 /** 👤 Reassign a task to someone else (managers, or the current assignee). */
 export async function reassignTaskAction(formData: FormData) {
   const me = await crmUser();
