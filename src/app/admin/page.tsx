@@ -549,6 +549,7 @@ export default async function AdminPage({
                 { href: "/admin/workflow", emoji: "⚙️", name: "Master Workflow", desc: "Edit the master SMS / follow-up workflow" },
                 { href: "/admin/usage", emoji: "📊", name: "Page Usage", desc: "Which pages the team opens — find what's unused" },
                 { href: "/admin/data-health", emoji: "🩺", name: "Data Health", desc: "Supabase data growth, store sizes & query speed — the cost/slowdown watch" },
+                { href: "/admin/recording-health", emoji: "🎙", name: "Recording Health", desc: "Are call recordings + transcripts working? Where the pipeline breaks — no secret needed" },
                 { href: "/crm/pipelines", emoji: "🪜", name: "Pipelines", desc: "Add, rename & reorder CRM pipelines and stages" },
                 { href: "/crm/automations", emoji: "⚡", name: "Automations", desc: "Stage-based CRM automations & triggers" },
                 { href: "/crm/access", emoji: "🔑", name: "Comms Access", desc: "Who can call / text / email — per-person comms access" },

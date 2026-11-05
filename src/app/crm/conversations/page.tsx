@@ -57,14 +57,17 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const inDept = (id: string) => (dept === "dispo" ? dispoIds.has(id) : !dispoIds.has(id));
 
   // thread list: latest comms event per contact
+  // Widened window + thread cap (Jon 2026-11-05, Sharyn tickets): the inbox was only
+  // building from the last 600 comms events and then showing 50 threads, so active
+  // older threads vanished unless searched. 1600-event window → up to 200 threads.
   const recent = await db.crmEvent.findMany({
     where: { kind: { in: COMMS } },
-    orderBy: { at: "desc" }, take: 600,
+    orderBy: { at: "desc" }, take: 1600,
     select: { contactId: true, kind: true, body: true, at: true },
   });
   const latestByContact = new Map<string, { kind: string; body: string; at: Date }>();
   for (const e of recent) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
-  const contactIds = [...latestByContact.keys()].filter(inDept).slice(0, 120);
+  const contactIds = [...latestByContact.keys()].filter(inDept).slice(0, 200);
   const mineOnly = canSeeAll && sp.who === "me";
   // 🔴 Unread chip (queued since 2026-10-08): only threads where the seller wrote last
   const unreadOnly = sp.who === "unread";
@@ -78,7 +81,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
       ? { AND: [ownerWhere, { OR: [{ name: { contains: q, mode: "insensitive" } }, ...(qDigits.length >= 3 ? [{ phone: { contains: qDigits } }] : [])] }] }
       : { id: { in: contactIds }, ...ownerWhere },
     select: { id: true, name: true, phone: true, assignedTo: true },
-    take: q ? 80 : 120,
+    take: q ? 80 : 200,
   }).then((rows) => rows.filter((c) => inDept(c.id)));
   // searched contacts may not be in the recent-600 window → fetch their latest comms
   if (q) {
@@ -98,7 +101,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
     })
     .filter((t) => !unreadOnly || t.needsReply)
     .sort((a, b) => (Number(b.needsReply) - Number(a.needsReply)) || (b.last.at.getTime() - a.last.at.getTime()))
-    .slice(0, 50);
+    .slice(0, 200);
   const unreadCount = contacts.filter((c) => { const l = latestByContact.get(c.id); return !!l && stripHtml(l.body).startsWith("⬅") && (!convRead[c.id] || l.at.toISOString() > convRead[c.id]); }).length;
 
   // selected thread
