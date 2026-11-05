@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact, Zap,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact,
   Play, Banknote, TrafficCone, Moon, Sun,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
@@ -181,13 +181,6 @@ export default function Sidebar({
       { href: "/vto", label: "Vision (V/TO)", Icon: Compass },
       { href: "/team-360", label: "Team 360", Icon: Sparkles },
     ] },
-    { label: "System Settings", items: [
-      { href: "/admin", label: "Settings Hub", Icon: Settings, csuiteOnly: true },
-      { href: "/kpi-sources", label: "KPI Sources", Icon: ScrollText, managerOnly: true },
-      { href: "/crm/pipelines", label: "Pipelines", Icon: Workflow, csuiteOnly: true },
-      { href: "/crm/automations", label: "Automations", Icon: Zap, csuiteOnly: true },
-      { href: "/crm/access", label: "Comms Access", Icon: KeyRound, csuiteOnly: true },
-    ] },
     { label: "C-Suite", items: [
       { href: "/expenses", label: "Profit & Loss Report", Icon: Receipt, csuiteOnly: true },
       { href: "/timecard", label: "Payroll", Icon: Wallet, csuiteOnly: true },
@@ -201,6 +194,7 @@ export default function Sidebar({
       { href: "/software", label: "Software & Logins", Icon: KeyRound },
       { href: "/ai-champion", label: "AI Champion", Icon: Bot },
       { href: "/ai-updates", label: "AI updates", Icon: Sparkles, adminOnly: true, badge: newSuggestions },
+      { href: "/admin", label: "Settings Hub", Icon: Settings, csuiteOnly: true },
     ] },
   ];
 
@@ -403,12 +397,6 @@ export default function Sidebar({
         </>
         )}
 
-        {/* Lock key — one lock, one meaning */}
-        {csuite && (
-          <div className="mt-2 flex flex-col gap-1 px-3 pt-2 text-[10px] text-brand-navy-300">
-            <span className="flex items-center gap-1.5"><Lock size={10} className="text-brand-gold-soft/90" /> Hidden from the team — only you, Viktoriia &amp; Enrico</span>
-          </div>
-        )}
       </nav>
 
       <div className="border-t border-white/10 px-3 py-3">

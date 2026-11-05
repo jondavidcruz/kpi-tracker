@@ -75,15 +75,6 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/vto", label: "Vision (V/TO)", gate: "all" },
     { href: "/team-360", label: "Team 360", gate: "all" },
   ] },
-  { group: "System Settings", items: [
-    // The Settings hub (/admin) holds Team · Pay · KPIs & Goals · Business · Chat · System ·
-    // Tools as tabs. These stay as their own pages — big CRM editors + the KPI reference.
-    { href: "/admin", label: "Settings Hub", gate: "csuite" },
-    { href: "/kpi-sources", label: "KPI Sources", gate: "manager" },
-    { href: "/crm/pipelines", label: "Pipelines", gate: "csuite" },
-    { href: "/crm/automations", label: "Automations", gate: "csuite" },
-    { href: "/crm/access", label: "Comms Access", gate: "csuite" },
-  ] },
   { group: "C-Suite", items: [
     { href: "/expenses", label: "Profit & Loss Report", gate: "csuite" },
     { href: "/timecard", label: "Payroll", gate: "csuite" },
@@ -97,6 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/software", label: "Software & Logins", gate: "all" },
     { href: "/ai-champion", label: "AI Champion", gate: "all" },
     { href: "/ai-updates", label: "AI updates", gate: "admin" },
+    { href: "/admin", label: "Settings Hub", gate: "csuite" },
   ] },
 ];
 

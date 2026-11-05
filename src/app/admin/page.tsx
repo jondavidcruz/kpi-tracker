@@ -328,30 +328,9 @@ export default async function AdminPage({
         <SectionTitle title="🎯 KPIs & goals" subtitle="Category drives alert urgency · duration goals are in minutes" accent="bg-emerald-400" />
         {isOwner(me) && (
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Link href="/admin/recalibrate" className="inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-200">
-              🎯 Recalibrate goals from real performance
-            </Link>
-            <Link href="/admin/calibration" className="inline-flex items-center gap-2 rounded-lg bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-200">
-              📐 Underwriting calibration (predicted vs actual)
-            </Link>
-            <Link href="/admin/crm-audit" className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-200">
-              🔎 CRM audit — find the leaks
-            </Link>
-            <Link href="/admin/form-builder" className="inline-flex items-center gap-2 rounded-lg bg-violet-100 px-4 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-200">
-              🛠 Home/Land form builder
-            </Link>
-            <Link href="/admin/chat-webhooks" className="inline-flex items-center gap-2 rounded-lg bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-200">
-              💬 Chat webhooks
-            </Link>
-            <Link href="/admin/workflow" className="inline-flex items-center gap-2 rounded-lg bg-teal-100 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-200">
-              ⚙️ Master workflow rules
-            </Link>
-            <Link href="/admin/directrei" className="inline-flex items-center gap-2 rounded-lg bg-green-100 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-200">
-              📣 DirectREI control
-            </Link>
-            <Link href="/admin/telnyx" className="inline-flex items-center gap-2 rounded-lg bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800 hover:bg-rose-200">
-              💸 Telnyx spend
-            </Link>
+            {/* Admin tools (Recalibrate, Calibration, CRM audit, Form builder, Chat webhooks,
+                Workflow, DirectREI, Telnyx) live ONCE under the 🛠 Tools tab now (Jon 2026-11-04).
+                Only KPI-specific seed actions stay on this tab. */}
             {!kpis.some((k) => k.key.startsWith("land_")) && (
               <form action={installLandKpis}>
                 <button className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-200">🌱 Install land KPI pack</button>
@@ -638,6 +617,10 @@ export default async function AdminPage({
                 { href: "/admin/directrei", emoji: "🧹", name: "DirectREI Control", desc: "DirectREI mass-marketing admin + nightly pushes" },
                 { href: "/admin/workflow", emoji: "⚙️", name: "Master Workflow", desc: "Edit the master SMS / follow-up workflow" },
                 { href: "/admin/usage", emoji: "📊", name: "Page Usage", desc: "Which pages the team opens — find what's unused" },
+                { href: "/crm/pipelines", emoji: "🪜", name: "Pipelines", desc: "Add, rename & reorder CRM pipelines and stages" },
+                { href: "/crm/automations", emoji: "⚡", name: "Automations", desc: "Stage-based CRM automations & triggers" },
+                { href: "/crm/access", emoji: "🔑", name: "Comms Access", desc: "Who can call / text / email — per-person comms access" },
+                { href: "/kpi-sources", emoji: "📜", name: "KPI Sources", desc: "Where each KPI number comes from — auto vs manual" },
               ].map((t) => (
                 <Link key={t.href} href={t.href} className="flex items-start gap-3 rounded-xl bg-white p-3.5 ring-1 ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300">
                   <span className="text-xl leading-none">{t.emoji}</span>
