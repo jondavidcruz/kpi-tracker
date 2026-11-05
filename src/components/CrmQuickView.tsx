@@ -10,6 +10,7 @@ import {
   setOppOwnerAction, toggleFollowerAction, archiveOppAction, editCrmNoteAction, deleteCrmNoteAction,
   addOpportunityAction,
 } from "@/app/crm/actions";
+import { saveUnderwrite } from "@/app/actions";
 import { KIND_EMOJI, rowIcon, stripAgentNotesBlock, recStreamSrc, sortPipesAqThenDs, readParcels, splitCrammedParcels } from "@/lib/crm-shared";
 import ParcelsPanel from "@/components/ParcelsPanel";
 import AutoSaveForm from "@/components/AutoSaveForm";
@@ -693,6 +694,22 @@ function LandOfferBlock({ d }: { d: Payload }) {
   const novProfit = net ? Math.min(spread, net) : 0;      // what we keep
 
   const linkHref = /^https?:\/\//i.test(listingLink) ? listingLink : listingLink ? `https://${listingLink}` : "";
+
+  // 📌 Save/attach this underwrite (Jon 2026-11-04): records it to the calibration loop + pins it
+  // to this deal, same as the full calculator's Export. Saves the ACTIVE exit — novation if cash
+  // was a no and a list price is set, otherwise cash. Confidence ≈ how complete the comps are.
+  const useNov = cashNo && !!list;
+  const uwMao = useNov ? novOffer : cashUsed;
+  const uwFee = useNov ? novProfit : cashSpread;
+  const confidence = Math.min(95, 45 + (low ? 20 : 0) + (high ? 10 : 0) + (list ? 20 : 0) + (String(fin.waterfront ?? "") ? 5 : 0));
+  const canSave = uwMao > 0 && uwFee > 0;
+  const [savedUw, setSavedUw] = useState(false);
+  const [savingUw, startSaveUw] = useTransition();
+  const doSave = () => startSaveUw(async () => {
+    await saveUnderwrite({ tab: useNov ? "novation" : "cash_land", market: String(fin.market ?? ""), address: d.contact.address || d.title, mao: uwMao, fee: uwFee, confidence, seconds: null, oppId: d.id });
+    setSavedUw(true);
+  });
+
   return (
     <div className="space-y-2 rounded-xl bg-lime-50 p-3 text-[12px] ring-1 ring-lime-200">
       <div className="flex flex-wrap items-center gap-2">
@@ -725,6 +742,16 @@ function LandOfferBlock({ d }: { d: Payload }) {
         </div>
       </div>
       {linkHref && <div className="text-[11px]"><a href={linkHref} target="_blank" rel="noopener noreferrer" className="font-semibold text-lime-800 underline">🔗 Competitor listing(s) ↗</a></div>}
+      <div className="flex flex-wrap items-center gap-2 border-t border-lime-200/70 pt-2">
+        {savedUw ? (
+          <span className="rounded-lg bg-emerald-100 px-3 py-1.5 text-[11px] font-bold text-emerald-800">✓ Underwrite saved &amp; attached — it&apos;ll show in Calibration once this deal is signed.</span>
+        ) : (
+          <button type="button" disabled={!canSave || savingUw} onClick={doSave} className={`rounded-lg px-3 py-1.5 text-[11px] font-bold text-white ${canSave && !savingUw ? "bg-lime-700 hover:bg-lime-800" : "cursor-not-allowed bg-slate-300"}`} title={canSave ? "Save this underwrite to the deal + the calibration loop" : "Fill the sold range (and list price for novation) first"}>
+            {savingUw ? "Saving…" : `📌 Save this underwrite (${useNov ? "novation" : "cash"}: offer ${money(uwMao)}, profit ${money(uwFee)})`}
+          </button>
+        )}
+        <span className="text-[10px] text-lime-700/80">Saves the active exit + pins it to this card for predicted-vs-actual tracking.</span>
+      </div>
       <div className="text-[10px] text-lime-700/80">Numbers update as you fill the fields below. Cash = buyer covers closing, no commissions. Novation = we net ~90% after agent + escrow and keep the spread you set.</div>
     </div>
   );
