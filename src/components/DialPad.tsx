@@ -81,6 +81,28 @@ function playConnectBeep() {
   } catch { /* no audio — the UI still flips to green */ }
 }
 
+// 🔇 Mute confirmation cue (Jon 2026-11-05: "play a sound so we know they can't hear us").
+// Plays ONLY to our own speakers (its own throwaway AudioContext → our output), never into
+// the call. Low two-tone descending = muted; higher ascending = live again.
+function playMuteCue(muted: boolean) {
+  try {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AC();
+    const beep = (t0: number, f: number) => {
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(0.25, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+      o.connect(g); g.connect(ctx.destination); o.start(t0); o.stop(t0 + 0.2);
+    };
+    const now = ctx.currentTime;
+    if (muted) { beep(now, 520); beep(now + 0.18, 380); }   // descending = you're off
+    else { beep(now, 520); beep(now + 0.18, 740); }          // ascending = you're back on
+    setTimeout(() => { try { ctx.close(); } catch { /* done */ } }, 700);
+  } catch { /* no audio — the banner still shows */ }
+}
+
 // 🎚 Dialer ring sound (owner-only pref, device-local): pulse vs silent-while-waiting.
 type RingMode = "pulse" | "silent";
 const RING_MODE_KEY = "fo_ring_mode";
@@ -783,7 +805,15 @@ export default function DialPad({ floating = false, owner = false }: { floating?
     return () => clearTimeout(t);
   }, [state]);
 
-  const toggleMute = () => { if (!callRef.current) return; if (muted) callRef.current.unmuteAudio(); else callRef.current.muteAudio(); setMuted(!muted); };
+  const toggleMute = () => {
+    // Works for BOTH directions: outbound calls live in callRef, answered inbound calls in
+    // incomingCallRef (Jon 2026-11-05 — mute was wired for outbound only).
+    const c = (callRef.current ?? incomingCallRef.current) as { muteAudio?: () => void; unmuteAudio?: () => void } | null;
+    if (!c?.muteAudio) return;
+    const next = !muted;
+    if (next) c.muteAudio(); else c.unmuteAudio?.();
+    setMuted(next); playMuteCue(next);
+  };
   // Mid-call, keypad presses must be TOUCH-TONES (phone trees, extensions,
   // "press 1" voicemail menus) — not edits to the dial box.
   const key = (k: string) => {
@@ -988,7 +1018,14 @@ export default function DialPad({ floating = false, owner = false }: { floating?
                     <button key={k} onClick={() => key(k)} className={`mx-auto grid h-12 w-12 place-items-center rounded-full text-lg font-semibold transition-transform duration-75 active:scale-90 ${pressedKey === k ? "scale-90 bg-emerald-500 text-white ring-2 ring-emerald-300" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{k}</button>
                   ))}
                 </span>
+                {/* 🔇 Big mute banner so you KNOW they can't hear you (Jon 2026-11-05) */}
+                {state === "active" && muted && (
+                  <span className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-2 py-1 text-[11px] font-extrabold text-white">🔇 YOU&apos;RE MUTED — they can&apos;t hear you</span>
+                )}
                 <span className="flex w-full items-center justify-center gap-4 pt-1">
+                  {state === "active" && (
+                    <button onClick={toggleMute} title={muted ? "You're muted — click to unmute" : "Mute your mic so they can't hear you"} className={`grid h-12 w-12 place-items-center rounded-full text-xl shadow ${muted ? "animate-pulse bg-amber-500 text-white ring-2 ring-amber-300" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{muted ? "🔇" : "🎙"}</button>
+                  )}
                   {state === "idle" ? (
                     <button onClick={() => call({ phone: num })} className="grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-xl text-white hover:bg-emerald-600">📞</button>
                   ) : (
