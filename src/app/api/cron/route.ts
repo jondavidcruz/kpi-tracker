@@ -2332,6 +2332,46 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, scanned: rows.length, qualified, created });
   }
 
+  // 👻 Ghost sweep (?ghostsweep=1, Jon 2026-11-05): a lead we've called 6+ times over 7+ days
+  // with ZERO reply has almost certainly ghosted us — auto-move it to a Ghosted/Dead stage so
+  // nobody has to remember to. Forward-only; skips anyone who ever replied or is already parked.
+  if (url.searchParams.get("ghostsweep") === "1") {
+    const ATTEMPTS = 6, DAYS = 7, CAP = 200;
+    const since = new Date(Date.now() - 25 * 86_400_000);
+    const calls = await db.crmEvent.findMany({ where: { kind: "call", at: { gte: since } }, select: { contactId: true, body: true, at: true }, orderBy: { at: "asc" }, take: 9000 });
+    const attempts = new Map<string, { n: number; first: Date }>();
+    for (const e of calls) {
+      if (!/^Browser call|^Click-to-call|^Dialer|no answer|voicemail/i.test(e.body)) continue; // real outbound attempts only
+      const a = attempts.get(e.contactId) ?? { n: 0, first: e.at };
+      a.n++; if (e.at < a.first) a.first = e.at; attempts.set(e.contactId, a);
+    }
+    const { readPipelines, logCrmEvent } = await import("@/lib/crm");
+    const pls = await readPipelines();
+    const PARKED = ["nurture", "dead", "signed", "dnc", "ghosted", "hostile", "closed", "won"];
+    let ghosted = 0;
+    for (const [cid, a] of attempts) {
+      if (ghosted >= CAP) break;
+      if (a.n < ATTEMPTS || Date.now() - a.first.getTime() < DAYS * 86_400_000) continue;
+      const replied = await db.crmEvent.findFirst({ where: { contactId: cid, OR: [{ actor: "inbound-sms" }, { body: { startsWith: "⬅" } }] }, select: { id: true } }).catch(() => null);
+      if (replied) continue; // they engaged at some point — not a ghost
+      const opps = await db.crmOpportunity.findMany({ where: { contactId: cid, archivedAt: null, stage: { notIn: PARKED } }, select: { id: true, pipeline: true, stage: true } }).catch(() => []);
+      let did = false;
+      for (const o of opps) {
+        const pl = pls.find((x) => x.name === (o.pipeline || "War Room")) ?? pls[0];
+        const t = pl?.stages.find((s) => /ghost/i.test(`${s.key} ${s.label}`))
+          ?? pl?.stages.find((s) => /\bdead\b|lost|abandon|not.?motiv/i.test(`${s.key} ${s.label}`))
+          ?? pl?.stages.find((s) => /nurtur/i.test(`${s.key} ${s.label}`));
+        if (t && t.key !== o.stage) {
+          await db.crmOpportunity.update({ where: { id: o.id }, data: { stage: t.key } }).catch(() => {});
+          await logCrmEvent({ contactId: cid, oppId: o.id, kind: "system", body: `👻 Auto-ghosted — ${a.n} call attempts over ${Math.round((Date.now() - a.first.getTime()) / 86_400_000)} days, no reply. Moved to ${t.label}.`, actor: "ghost-sweep" }).catch(() => {});
+          did = true;
+        }
+      }
+      if (did) ghosted++;
+    }
+    return NextResponse.json({ ok: true, candidates: attempts.size, ghosted });
+  }
+
   // ☎️ Twilio→Telnyx porting check (?portcheck=1 — Jon 2026-10-14): read-only
   // portability check on the local Twilio numbers (toll-free 877 ports via a
   // separate RespOrg flow). Tells us which can move + any carrier issues.

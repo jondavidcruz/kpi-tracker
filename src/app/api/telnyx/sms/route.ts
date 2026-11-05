@@ -102,6 +102,30 @@ export async function POST(req: NextRequest) {
       if (declined && opp) await applyIntent("not_interested", true);
       else if (realtor && opp) await applyIntent("working_with_realtor", true);
       else if (qualified && opp) await applyIntent("qualified", false);
+      // 💰/📨 Stage automation (Jon 2026-11-05): a reply with a PRICE → move to Comp/Offer so the
+      // team can check the numbers; any other engaged reply → advance a COLD lead to Follow Up.
+      // Forward-only (never pulls a deal back) and skips declined/realtor/DNC replies.
+      if (opp && !declined && !realtor && !wasDnced) {
+        try {
+          const { readPipelines } = await import("@/lib/crm");
+          const pls = await readPipelines();
+          const pl = pls.find((x) => x.name === (opp.pipeline || "War Room")) ?? pls[0];
+          const stages = pl?.stages ?? [];
+          const find = (rx: RegExp) => stages.find((s) => rx.test(`${s.key} ${s.label}`));
+          const idxOf = (k?: string) => stages.findIndex((s) => s.key === k);
+          const priceHit = /\$\s?\d[\d,]{2,}|\b\d{2,3},\d{3}\b|\b\d{2,3}\s?k\b|\basking\b[^.]*\d|\bwant\b[^.]*\$?\d{3,}/i.test(text);
+          const comp = find(/comp.*offer|offer.*comp|\bcomp\b/i) ?? find(/\boffer\b/i);
+          const followUp = find(/follow.?up/i);
+          const curIdx = idxOf(opp.stage);
+          if (priceHit && comp && comp.key !== opp.stage && curIdx >= 0 && curIdx < idxOf(comp.key)) {
+            await db.crmOpportunity.update({ where: { id: opp.id }, data: { stage: comp.key } }).catch(() => {});
+            await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `💰 Auto-moved to ${comp.label} — seller replied with a price: "${text.slice(0, 80)}"`, actor: "master-workflow" }).catch(() => {});
+          } else if (followUp && followUp.key !== opp.stage && curIdx >= 0 && curIdx < idxOf(followUp.key)) {
+            await db.crmOpportunity.update({ where: { id: opp.id }, data: { stage: followUp.key } }).catch(() => {});
+            await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `📨 Auto-moved to ${followUp.label} — seller replied: "${text.slice(0, 80)}"`, actor: "master-workflow" }).catch(() => {});
+          }
+        } catch { /* best-effort — never breaks intake */ }
+      }
       // 📨 Any reply STOPS the drip sequence — they engaged, hand it to a human (Jon 2026-10-29).
       if (opp) { try { const { stopDrip } = await import("@/lib/drip"); await stopDrip(opp.id, "seller replied"); } catch { /* ok */ } }
     } catch { /* guard never breaks intake */ }
