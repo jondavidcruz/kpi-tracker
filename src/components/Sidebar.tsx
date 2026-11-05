@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Building2, SquarePen, FileText, CalendarDays, BarChart3,
-  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, PartyPopper, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact,
+  Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact,
   Play, Banknote, TrafficCone, Moon, Sun, Signature,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
@@ -118,7 +118,6 @@ export default function Sidebar({
       { href: "/schedule", label: "Schedule & Time", Icon: CalendarClock },
       { href: "/rewards", label: "Rewards", Icon: Gift },
       { href: "/certificates", label: "Certificates", Icon: GraduationCap, managerOnly: true },
-      { href: "/culture", label: "Culture", Icon: PartyPopper },
     ] },
     { label: "Acquisitions", items: [
       { href: "/crm", label: "Seller CRM", Icon: Phone },

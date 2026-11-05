@@ -9,6 +9,7 @@ import { deleteOutageAction, requestTimeOff, setTimeOffStatus, deleteTimeOff, ad
 import { Card, SectionTitle } from "@/components/ui";
 import PresenceBoard from "@/components/PresenceBoard";
 import HolidaysPanel from "@/components/HolidaysPanel";
+import CulturePanel from "@/components/CulturePanel";
 import { upcomingHolidays } from "@/lib/holidays";
 import TimeClock from "@/components/TimeClock";
 import BreakHistory, { type OutageView } from "@/components/BreakHistory";
@@ -705,6 +706,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           </div>
         </section>
       )}
+
+      {/* 🎉 Team Culture — folded in from the old /culture page so the team sees birthdays,
+          anniversaries & team building every day on their schedule (Jon 2026-11-05). */}
+      <CulturePanel />
 
       {/* 🎉 Federal holidays — lowest priority, pinned to the very bottom (Jon 2026-11-05) */}
       {holidayRows.length > 0 && (

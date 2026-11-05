@@ -13,7 +13,6 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/schedule", label: "Schedule & Time", gate: "all" },
     { href: "/rewards", label: "Rewards", gate: "all" },
     { href: "/certificates", label: "Certificates", gate: "manager" },
-    { href: "/culture", label: "Culture", gate: "all" },
   ] },
   { group: "Acquisitions", items: [
     { href: "/crm", label: "Seller CRM", gate: "all" },
@@ -101,7 +100,7 @@ export const NAV_GROUPS: NavGroup[] = [
 // hidden. (Manager/marketing/C-Suite gates already exclude new reps by role,
 // and C-Suite/pay data is hard-locked to Jon/Enrico/Viktoriia by name.)
 export const NEW_REP_ALLOWED = new Set<string>([
-  "/process", "/underwriting", "/schedule", "/rewards", "/culture",   // Overview
+  "/process", "/underwriting", "/schedule", "/rewards",   // Overview (Culture folded into /schedule)
   "/entry", "/report",                                                 // Performance
   "/ai-training", "/call-scoring", "/scripts", "/glossary", "/tutorials", // Coaching
   "/rocks", "/vto", "/team-360", "/stoplight",                         // EOS
