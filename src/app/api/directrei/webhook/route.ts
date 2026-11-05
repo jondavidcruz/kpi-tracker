@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { logCrmEvent, readPipelines } from "@/lib/crm";
 import { normalizeAddress } from "@/lib/address";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +13,6 @@ export const maxDuration = 30;
 // with a CALL NOW task; contact.opted_out (sms) → straight to DNC. The old
 // setup posted raw events at a Google Chat webhook, which can only accept
 // {text} — that's why every delivery failed.
-const MICHELLE = "Michelle Lagudas";
 
 function sharedKey() {
   return crypto.createHash("sha256").update(`${process.env.CRON_SECRET ?? ""}drei-webhook`).digest("hex").slice(0, 24);
@@ -70,30 +68,12 @@ export async function POST(req: NextRequest) {
   if (process.env.DIRECTREI_LEADS !== "on") return NextResponse.json({ ok: true, handled: "directrei-disabled" });
 
   const addr = normalizeAddress([d.mailing_street, d.mailing_city, `${d.mailing_state ?? ""} ${d.mailing_zip ?? ""}`.trim()].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(", "));
-  const title = addr || `${d.name ?? "Direct REI seller"}${d.market ? ` — ${d.market}` : ""}`;
-
-  let contact = existing;
-  if (!contact) {
-    contact = await db.crmContact.create({ data: {
-      name: (d.name ?? "").trim() || phone || email || "Direct REI seller",
-      phone: phone ? (phone.startsWith("+") ? phone : `+1${last10}`) : "",
-      email, address: addr,
-      source: `Direct REI${d.market ? ` (${d.market})` : ""}`,
-      assignedTo: MICHELLE,
-    } });
-  }
-
-  // one live opp per contact: reuse it if it exists, otherwise drop a fresh
-  // card at the top of Michelle's pipeline
-  let opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null } });
-  if (!opp) {
-    const pipe = (await readPipelines()).find((p) => p.name.toLowerCase().includes("michelle"));
-    opp = await db.crmOpportunity.create({ data: {
-      contactId: contact.id, title, stage: pipe?.stages[0]?.key ?? "new", pipeline: pipe?.name ?? "", assignedTo: MICHELLE,
-    } });
-  }
-  await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `⭐ Direct REI marked this seller QUALIFIED${body.previous_status ? ` (was: ${body.previous_status})` : ""} — auto-routed to ${MICHELLE}`, actor: "directrei" }).catch(() => {});
-  await db.crmTask.create({ data: { contactId: contact.id, title: `⭐ QUALIFIED by Direct REI — call ${contact.name} NOW`, due: new Date().toISOString().slice(0, 10), assignedTo: MICHELLE, createdBy: "directrei" } }).catch(() => {});
-  await db.crmOpportunity.update({ where: { id: opp.id }, data: { updatedAt: new Date() } }).catch(() => {});
-  return NextResponse.json({ ok: true, contactId: contact.id, oppId: opp.id, created: !existing });
+  // Reuse the shared hot-lead creator so the webhook and the daily poll behave identically:
+  // 🔥 hot tag, price/notes copied in, call-NOW task, deduped (Jon 2026-11-05).
+  const bodyAny = body as Record<string, unknown>;
+  const notes = String(bodyAny.notes ?? bodyAny.summary ?? bodyAny.ai_summary ?? bodyAny.message ?? "").trim();
+  const price = (notes.match(/\$[\d,]+(?:\.\d+)?/) ?? [])[0] ?? String(bodyAny.price ?? "");
+  const { upsertDreiHotLead } = await import("@/lib/directrei-leads");
+  const r = await upsertDreiHotLead({ name: d.name, phone, email, market: d.market, address: addr, status: d.status, notes, price });
+  return NextResponse.json({ ok: true, ...(r ?? { skipped: "no phone/email" }) });
 }
