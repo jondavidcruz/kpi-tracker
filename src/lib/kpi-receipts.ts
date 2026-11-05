@@ -1,15 +1,19 @@
 import { db } from "./db";
 
-// 🧾 KPI RECEIPTS (Jon 2026-11-03, reworked 2026-11-04) — "trust but verify." The audit now
-// mirrors the SCORECARD's 💰 Money Movers group (every category:"green" KPI on the rep's card),
-// so it can never drift out of sync with what the team actually reports. For each Money Mover we
-// recompute the TRUE count straight from the underlying records and return the proof (who / when
-// / which card). KPIs we can't derive from records are shown as "✍️ manual" — their self-reported
-// number is surfaced but NOT falsely flagged as over-reported.
+// 🧾 KPI RECEIPTS (Jon 2026-11-03, reworked 2026-11-04) — "trust but verify." The audit shows the
+// per-rep 💰 MONEY KPIs for each role (not company-wide financials) and recomputes the TRUE count
+// straight from the records behind each, returning the proof (who / when / which card/lead).
 //
-// Jon's rule on conversations (2026-11-04): "Buyer Conversations" must count REAL conversations —
-// who the rep actually TALKED to — not dial attempts. We count only connected calls (dialer
-// "talked" dispositions + filed recordings + answered inbound), deduped per buyer per day.
+// How each KPI is derived:
+//  • DISPOSITIONS — buyer-network cards + calls + DealSend + logged offers.
+//      Buyer Conversations count REAL connects (talked dispositions, filed recordings, answered
+//      inbound) deduped per buyer/day — who the rep actually TALKED to, NOT dial attempts.
+//  • ACQUISITIONS — fed straight from the Kanban (Jon 2026-11-04): every time the rep moves a
+//      seller lead INTO a stage (appointment / offer / contract sent / signed) it's counted and the
+//      lead becomes a receipt — a goalpost you can open to see which lead and what happened to it.
+//      The three "Signed" types collapse into ONE "Contract Signed" (the deal itself says which
+//      type — assignment / novation / creative).
+//  • Anything with no records trail → "✍️ manual": the self-reported number is shown, never flagged.
 
 export type Receipt = { label: string; at: string; oppId?: string; detail?: string };
 export type KpiProof = {
@@ -24,20 +28,9 @@ export type KpiProof = {
   receipts: Receipt[];
 };
 
-// 💰 The per-rep MONEY KPIs we audit, BY ROLE (Jon 2026-11-04: "I just need the money KPIs" —
-// not the company-wide financials like Gross Revenue / Spend, and acquisitions gets ITS OWN set).
-// Keys are stable slugs from the KPI catalog; the array order is the display order on the page.
-const MONEY_KPIS: Record<string, string[]> = {
-  dispositions: ["dev_conversations", "new_buyers", "buyers_vetted", "buy_boxes_captured", "deals_sold", "buyer_offers_received", "contracts_assigned"],
-  acquisitions: ["appts_taken", "offers_made", "acq_contracts_sent", "acq_signed_assignment", "acq_signed_novation", "acq_signed_creative"],
-  cc_lm: ["appts_set", "passoffs", "leads_generated"],
-};
+type Spec = { key: string; name: string; emoji: string; derivable: boolean; recordedKeys: string[]; receipts: Receipt[] };
 
-// Which keys we know how to derive receipts for (everything else → "✍️ manual", shown but never
-// flagged). Only the dispo output KPIs have a records trail today; acquisitions stay manual for now.
-const DERIVABLE = new Set(["dev_conversations", "new_buyers", "buyers_vetted", "buy_boxes_captured", "deals_sold", "buyer_offers_received"]);
-
-/** Recompute the rep's 💰 Money-Mover KPI counts FROM RECORDS over a date range [from,to]
+/** Recompute the rep's 💰 money-KPI counts FROM RECORDS over a date range [from,to]
  *  (inclusive, PT), with the proof behind each. A single day = from===to. */
 export async function kpiProofsFor(userId: string, from: string, to: string = from): Promise<KpiProof[]> {
   const user = await db.user.findUnique({ where: { id: userId }, select: { name: true, position: true } });
@@ -45,20 +38,13 @@ export async function kpiProofsFor(userId: string, from: string, to: string = fr
   const { secondaryPositionOf } = await import("./roles");
   const { getSettings } = await import("./data");
   const { resolveNetworkPipelines } = await import("./dispo-network");
+  const { isDispoPipeline } = await import("./dispo-buyers");
 
-  // The money KPIs for THIS rep = their role's allow-list (+ a secondary role for hybrids like
-  // Sharyn). Company-wide financials (Gross Revenue, Spend, etc.) are deliberately excluded.
   const roles = [user.position, secondaryPositionOf(user)].filter(Boolean) as string[];
-  const wantKeys: string[] = [];
-  for (const r of roles) for (const k of MONEY_KPIS[r] ?? []) if (!wantKeys.includes(k)) wantKeys.push(k);
-  if (!wantKeys.length) return [];
-  const kpiRows = await db.kpi.findMany({
-    where: { key: { in: wantKeys } },
-    select: { id: true, key: true, name: true, emoji: true, scope: true, roleKey: true },
-  });
-  // Keep the allow-list order (= scorecard order), dropping any key not in the catalog.
-  const greenKpis = wantKeys.map((k) => kpiRows.find((r) => r.key === k)).filter(Boolean) as typeof kpiRows;
-  if (!greenKpis.length) return [];
+  const isDispo = roles.includes("dispositions");
+  const isAcq = roles.includes("acquisitions");
+  const isCc = roles.includes("cc_lm");
+  if (!isDispo && !isAcq && !isCc) return [];
 
   const tz = (await getSettings()).orgTimezone || "America/Los_Angeles";
   const dayOf = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
@@ -67,120 +53,152 @@ export async function kpiProofsFor(userId: string, from: string, to: string = fr
   const since = new Date(Date.parse(from + "T00:00:00Z") - 14 * 3600 * 1000);
   const fmtAt = (iso: string | Date) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }) + " PT";
 
-  // Network (buyer/developer) cards — used by several Money Movers.
-  const net = await resolveNetworkPipelines();
-  const netOpps = net.all.length
-    ? await db.crmOpportunity.findMany({ where: { pipeline: { in: net.all } }, select: { id: true, title: true, assignedTo: true, createdAt: true, formData: true } })
-    : [];
-  const titleOf = new Map(netOpps.map((o) => [o.id, o.title]));
-  const netIds = new Set(netOpps.map((o) => o.id));
-
-  // This rep's events on network cards (vetting stage-moves + real conversations).
+  // This rep's stage-moves + calls across the range (used by both dispo + acq derivations).
   const myEvents = await db.crmEvent.findMany({
     where: { actor: user.name, at: { gte: since }, kind: { in: ["stage", "call"] } },
     select: { kind: true, body: true, at: true, contactId: true, oppId: true },
   }).catch(() => [] as { kind: string; body: string; at: Date; contactId: string | null; oppId: string | null }[]);
 
-  // ── 💬 Buyer Conversations = REAL conversations (who the rep actually talked to) ──
-  // A call event is a conversation when it reflects a CONNECT: a "talked" dialer disposition,
-  // a filed recording (🎙 — kept past the voicemail gate), or an answered inbound. Explicitly
-  // NOT: no-answer, voicemail, missed, click-to-call-started, "not filed". Deduped per buyer/day.
-  const isConnect = (b: string) => {
-    const s = b.toLowerCase();
-    if (/no answer|voicemail|missed|not filed|click-to-call started|removed —|left voicemail/.test(s)) return false;
-    return /talked|good convo|🎙|answered a call|· \d+m \d+s/.test(s) || /answered/.test(s);
-  };
-  const convoSeen = new Set<string>();
-  const convoReceipts: Receipt[] = [];
-  for (const e of myEvents) {
-    if (e.kind !== "call") continue;
-    const ymd = dayOf(e.at);
-    if (!inRange(ymd)) continue;
-    if (!isConnect(e.body)) continue;
-    const who = e.contactId || e.oppId || e.body;
-    const dedup = `${who}|${ymd}`;
-    if (convoSeen.has(dedup)) continue;
-    convoSeen.add(dedup);
-    convoReceipts.push({ label: (e.oppId && titleOf.get(e.oppId)) || "(buyer)", at: fmtAt(e.at), oppId: e.oppId || undefined, detail: "talked — real conversation" });
-  }
+  const specs: Spec[] = [];
 
-  // ── ✅ Buyers Vetted = vetting stage-moves (→ vetted/active) on network cards ──
-  const vettedReceipts: Receipt[] = [];
-  for (const e of myEvents) {
-    if (e.kind !== "stage") continue;
-    if (!inRange(dayOf(e.at))) continue;
-    if (!e.oppId || !netIds.has(e.oppId)) continue;
-    if (/→\s*(vetted|active)\b/i.test(e.body)) vettedReceipts.push({ label: titleOf.get(e.oppId) || "(card)", at: fmtAt(e.at), oppId: e.oppId, detail: e.body.replace(/.*→\s*/, "→ ") });
-  }
+  // ─────────────────────────── DISPOSITIONS ───────────────────────────
+  if (isDispo) {
+    const net = await resolveNetworkPipelines();
+    const netOpps = net.all.length
+      ? await db.crmOpportunity.findMany({ where: { pipeline: { in: net.all } }, select: { id: true, title: true, assignedTo: true, createdAt: true, formData: true } })
+      : [];
+    const titleOf = new Map(netOpps.map((o) => [o.id, o.title]));
+    const netIds = new Set(netOpps.map((o) => o.id));
 
-  // ── ➕ New Buyers Added = network cards this rep created in range ──
-  const addedReceipts: Receipt[] = netOpps
-    .filter((o) => o.assignedTo === user.name && o.createdAt >= since && inRange(dayOf(o.createdAt)))
-    .map((o) => ({ label: o.title || "(untitled card)", at: fmtAt(o.createdAt), oppId: o.id, detail: "created" }));
-
-  // ── 📦 Buy-Boxes Captured (MarketContact) in range ──
-  const boxes = await db.marketContact.findMany({ where: { boxById: userId, boxOn: { gte: from, lte: to } }, select: { name: true, company: true, boxOn: true } }).catch(() => [] as { name: string | null; company: string | null; boxOn: string | null }[]);
-  const boxReceipts: Receipt[] = boxes.map((b) => ({ label: b.company || b.name || "(buyer)", at: b.boxOn || from, detail: "buy-box captured" }));
-
-  // ── 📤 Deals Sent to Buyers = DealSend rows this rep sent in range ──
-  const sends = await db.dealSend.findMany({ where: { actor: user.name, sentAt: { gte: since } }, select: { sentAt: true, channel: true, buyer: { select: { name: true, company: true } } } }).catch(() => [] as { sentAt: Date; channel: string; buyer: { name: string | null; company: string | null } | null }[]);
-  const sentReceipts: Receipt[] = sends
-    .filter((s) => inRange(dayOf(s.sentAt)))
-    .map((s) => ({ label: s.buyer?.company || s.buyer?.name || "(buyer)", at: fmtAt(s.sentAt), detail: `sent · ${s.channel}` }));
-
-  // ── 📥 Buyer Offers Received = offers logged by this rep (per-deal __dispoOffers) in range ──
-  const offerReceipts: Receipt[] = [];
-  for (const o of netOpps) {
-    const fd = (o.formData as Record<string, unknown> | null) ?? {};
-    const list = Array.isArray(fd.__dispoOffers) ? (fd.__dispoOffers as Record<string, unknown>[]) : [];
-    for (const off of list) {
-      const by = String(off.by ?? "");
-      const at = String(off.at ?? "");
-      if (by !== user.name) continue;
-      if (!at || !inRange(at)) continue;
-      offerReceipts.push({ label: String(off.buyer || "(buyer)"), at, oppId: o.id, detail: `offer ${String(off.price || "")}`.trim() });
+    // 💬 Buyer Conversations = REAL connects (talked / filed recording / answered), deduped per buyer/day.
+    const isConnect = (b: string) => {
+      const s = b.toLowerCase();
+      if (/no answer|voicemail|missed|not filed|click-to-call started|removed —|left voicemail/.test(s)) return false;
+      return /talked|good convo|🎙|answered a call|· \d+m \d+s/.test(s) || /answered/.test(s);
+    };
+    const convoSeen = new Set<string>();
+    const convoReceipts: Receipt[] = [];
+    for (const e of myEvents) {
+      if (e.kind !== "call" || !inRange(dayOf(e.at)) || !isConnect(e.body)) continue;
+      const dedup = `${e.contactId || e.oppId || e.body}|${dayOf(e.at)}`;
+      if (convoSeen.has(dedup)) continue;
+      convoSeen.add(dedup);
+      convoReceipts.push({ label: (e.oppId && titleOf.get(e.oppId)) || "(buyer)", at: fmtAt(e.at), oppId: e.oppId || undefined, detail: "talked — real conversation" });
     }
+
+    // ✅ Buyers Vetted = vetting stage-moves (→ vetted/active) on network cards.
+    const vettedReceipts: Receipt[] = [];
+    for (const e of myEvents) {
+      if (e.kind !== "stage" || !inRange(dayOf(e.at)) || !e.oppId || !netIds.has(e.oppId)) continue;
+      if (/→\s*(vetted|active)\b/i.test(e.body)) vettedReceipts.push({ label: titleOf.get(e.oppId) || "(card)", at: fmtAt(e.at), oppId: e.oppId, detail: e.body.replace(/.*→\s*/, "→ ") });
+    }
+
+    // ➕ New Buyers Added = network cards this rep created in range.
+    const addedReceipts: Receipt[] = netOpps
+      .filter((o) => o.assignedTo === user.name && o.createdAt >= since && inRange(dayOf(o.createdAt)))
+      .map((o) => ({ label: o.title || "(untitled card)", at: fmtAt(o.createdAt), oppId: o.id, detail: "created" }));
+
+    // 📦 Buy-Boxes Captured (MarketContact) in range.
+    const boxes = await db.marketContact.findMany({ where: { boxById: userId, boxOn: { gte: from, lte: to } }, select: { name: true, company: true, boxOn: true } }).catch(() => [] as { name: string | null; company: string | null; boxOn: string | null }[]);
+    const boxReceipts: Receipt[] = boxes.map((b) => ({ label: b.company || b.name || "(buyer)", at: b.boxOn || from, detail: "buy-box captured" }));
+
+    // 📤 Deals Sent to Buyers = DealSend rows this rep sent in range.
+    const sends = await db.dealSend.findMany({ where: { actor: user.name, sentAt: { gte: since } }, select: { sentAt: true, channel: true, buyer: { select: { name: true, company: true } } } }).catch(() => [] as { sentAt: Date; channel: string; buyer: { name: string | null; company: string | null } | null }[]);
+    const sentReceipts: Receipt[] = sends.filter((s) => inRange(dayOf(s.sentAt))).map((s) => ({ label: s.buyer?.company || s.buyer?.name || "(buyer)", at: fmtAt(s.sentAt), detail: `sent · ${s.channel}` }));
+
+    // 📥 Buyer Offers Received = offers logged by this rep (per-deal __dispoOffers) in range.
+    const offerReceipts: Receipt[] = [];
+    for (const o of netOpps) {
+      const fd = (o.formData as Record<string, unknown> | null) ?? {};
+      const list = Array.isArray(fd.__dispoOffers) ? (fd.__dispoOffers as Record<string, unknown>[]) : [];
+      for (const off of list) {
+        if (String(off.by ?? "") !== user.name) continue;
+        const at = String(off.at ?? "");
+        if (!at || !inRange(at)) continue;
+        offerReceipts.push({ label: String(off.buyer || "(buyer)"), at, oppId: o.id, detail: `offer ${String(off.price || "")}`.trim() });
+      }
+    }
+
+    specs.push(
+      { key: "dev_conversations", name: "Buyer Conversations", emoji: "💬", derivable: true, recordedKeys: ["dev_conversations"], receipts: convoReceipts },
+      { key: "new_buyers", name: "New Buyers Added", emoji: "➕", derivable: true, recordedKeys: ["new_buyers"], receipts: addedReceipts },
+      { key: "buyers_vetted", name: "Buyers Vetted", emoji: "✅", derivable: true, recordedKeys: ["buyers_vetted"], receipts: vettedReceipts },
+      { key: "buy_boxes_captured", name: "Buy-Boxes Captured", emoji: "📦", derivable: true, recordedKeys: ["buy_boxes_captured"], receipts: boxReceipts },
+      { key: "deals_sold", name: "Deals Sent to Buyers", emoji: "📤", derivable: true, recordedKeys: ["deals_sold"], receipts: sentReceipts },
+      { key: "buyer_offers_received", name: "Buyer Offers Received", emoji: "📥", derivable: true, recordedKeys: ["buyer_offers_received"], receipts: offerReceipts },
+      { key: "contracts_assigned", name: "Contracts Assigned", emoji: "🏁", derivable: false, recordedKeys: ["contracts_assigned"], receipts: [] },
+    );
   }
 
-  const RECEIPTS: Record<string, Receipt[]> = {
-    dev_conversations: convoReceipts,
-    buyers_vetted: vettedReceipts,
-    new_buyers: addedReceipts,
-    buy_boxes_captured: boxReceipts,
-    deals_sold: sentReceipts,
-    buyer_offers_received: offerReceipts,
-  };
+  // ─────────────────────────── ACQUISITIONS (fed from the Kanban) ───────────────────────────
+  if (isAcq) {
+    // The seller leads this rep moved = opps behind their stage-events that aren't dispo pipelines.
+    const stageOppIds = [...new Set(myEvents.filter((e) => e.kind === "stage" && e.oppId).map((e) => e.oppId as string))];
+    const stageOpps = stageOppIds.length ? await db.crmOpportunity.findMany({ where: { id: { in: stageOppIds } }, select: { id: true, title: true, pipeline: true } }) : [];
+    const acqTitle = new Map<string, string>();
+    for (const o of stageOpps) if (!isDispoPipeline(o.pipeline)) acqTitle.set(o.id, o.title);
 
-  // Recorded KPI Entry values (what the scorecard shows) — SUMMED across the range — for the
-  // mismatch check. If any day was manually entered, the KPI is treated as manual.
-  const kpiIds = greenKpis.map((k) => k.id);
-  const entries = await db.entry.findMany({ where: { kpiId: { in: kpiIds }, userId, date: { gte: from, lte: to } }, select: { kpiId: true, value: true, enteredBy: true } });
-  const recOf = (kpiId: string) => {
-    const es = entries.filter((x) => x.kpiId === kpiId);
+    // Count a lead ONCE per stage per range (entering the stage = the goalpost). The receipt shows
+    // the exact target stage so the mapping is transparent and tunable.
+    const stageReceipts = (match: RegExp, exclude?: RegExp): Receipt[] => {
+      const seen = new Set<string>();
+      const out: Receipt[] = [];
+      for (const e of myEvents) {
+        if (e.kind !== "stage" || !e.oppId || !acqTitle.has(e.oppId) || !inRange(dayOf(e.at))) continue;
+        if (e.body.startsWith("📂")) continue; // a pipeline move, not a stage move
+        const target = (e.body.split("→").pop() ?? "").trim();
+        if (!match.test(target) || (exclude && exclude.test(target))) continue;
+        if (seen.has(e.oppId)) continue;
+        seen.add(e.oppId);
+        out.push({ label: acqTitle.get(e.oppId) || "(lead)", at: fmtAt(e.at), oppId: e.oppId, detail: `moved → ${target}` });
+      }
+      return out;
+    };
+
+    specs.push(
+      { key: "appts_taken", name: "Appointments Attended", emoji: "🤝", derivable: true, recordedKeys: ["appts_taken"], receipts: stageReceipts(/appointment|appt|attend|\bmet\b/i) },
+      { key: "offers_made", name: "Offers Made", emoji: "💬", derivable: true, recordedKeys: ["offers_made"], receipts: stageReceipts(/offer/i, /reject|decline/i) },
+      { key: "acq_contracts_sent", name: "Contract Sent", emoji: "📤", derivable: true, recordedKeys: ["acq_contracts_sent"], receipts: stageReceipts(/contract.*sent|sent.*contract|contract out/i) },
+      { key: "contract_signed", name: "Contract Signed", emoji: "🖊️", derivable: true, recordedKeys: ["acq_signed_assignment", "acq_signed_novation", "acq_signed_creative"], receipts: stageReceipts(/signed|under contract|executed|\bwon\b/i) },
+    );
+  }
+
+  // ─────────────────────────── CALLER / LEAD MANAGER ───────────────────────────
+  if (isCc) {
+    specs.push(
+      { key: "appts_set", name: "Appointments Set", emoji: "📅", derivable: false, recordedKeys: ["appts_set"], receipts: [] },
+      { key: "passoffs", name: "Passoffs to Acquisitions", emoji: "🔁", derivable: false, recordedKeys: ["passoffs"], receipts: [] },
+      { key: "leads_generated", name: "Leads Generated", emoji: "✅", derivable: false, recordedKeys: ["leads_generated"], receipts: [] },
+    );
+  }
+
+  if (!specs.length) return [];
+
+  // Recorded KPI Entry values (what the scorecard shows) — SUMMED across the range (and across the
+  // collapsed Signed types) — for the mismatch check. Any manually-entered day marks the KPI manual.
+  const allKeys = [...new Set(specs.flatMap((s) => s.recordedKeys))];
+  const kpiCat = await db.kpi.findMany({ where: { key: { in: allKeys } }, select: { id: true, key: true } });
+  const idToKey = new Map(kpiCat.map((k) => [k.id, k.key]));
+  const entries = await db.entry.findMany({ where: { kpiId: { in: kpiCat.map((k) => k.id) }, userId, date: { gte: from, lte: to } }, select: { kpiId: true, value: true, enteredBy: true } });
+  const recForKeys = (keys: string[]) => {
+    const es = entries.filter((e) => keys.includes(idToKey.get(e.kpiId) ?? ""));
     if (!es.length) return null;
     const value = es.reduce((s, e) => s + (e.value ?? 0), 0);
     const manual = es.find((e) => e.enteredBy && !["research", "crm"].includes(e.enteredBy));
     return { value, enteredBy: manual?.enteredBy ?? es[0].enteredBy };
   };
 
-  const proofs: KpiProof[] = greenKpis.map((k) => {
-    const rec = recOf(k.id);
+  return specs.map((sp): KpiProof => {
+    const rec = recForKeys(sp.recordedKeys);
     const recorded = rec?.value ?? null;
     const enteredBy = rec?.enteredBy ?? null;
-    const derivable = DERIVABLE.has(k.key);
-    if (!derivable) {
-      // A green KPI with no system trail (e.g. Contracts Assigned) — show the number, don't flag.
-      return { key: k.key, name: k.name, emoji: k.emoji, systemCount: null, recorded, enteredBy, derivable, status: "manual", receipts: [] };
-    }
-    const receipts = RECEIPTS[k.key] ?? [];
-    const systemCount = receipts.length;
+    if (!sp.derivable) return { key: sp.key, name: sp.name, emoji: sp.emoji, systemCount: null, recorded, enteredBy, derivable: false, status: "manual", receipts: [] };
+    const systemCount = sp.receipts.length;
     let status: KpiProof["status"];
     if (enteredBy === "research" || enteredBy === "crm" || enteredBy === null) status = recorded == null ? "records_only" : "auto";
     else if (recorded != null && recorded > systemCount) status = "over_reported";
     else if (recorded != null && recorded < systemCount) status = "under_credited";
     else status = "match";
-    return { key: k.key, name: k.name, emoji: k.emoji, systemCount, recorded, enteredBy, derivable, status, receipts };
+    return { key: sp.key, name: sp.name, emoji: sp.emoji, systemCount, recorded, enteredBy, derivable: true, status, receipts: sp.receipts };
   });
-
-  return proofs;
 }
