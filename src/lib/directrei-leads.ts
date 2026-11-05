@@ -48,44 +48,43 @@ export type DreiLead = {
  *  changes). Shared by the ?dreipull cron and the owner "Pull now" button. Defensive field
  *  parsing because the /contacts response shape varies. */
 export async function pullDreiQualifiedLeads(): Promise<{ scanned: number; qualified: number; created: number; error?: string }> {
-  const { directReiContacts } = await import("@/lib/directrei");
-  const res = await directReiContacts({ limit: "500" });
-  if (!res.ok) return { scanned: 0, qualified: 0, created: 0, error: `Direct REI API ${res.status}: ${String(JSON.stringify(res.body)).slice(0, 160)}` };
-  const b = res.body as unknown;
-  // Find the array of contacts wherever it lives — try the top level, common envelope keys,
-  // and one level of nesting (e.g. { data: { contacts: [...] } }).
+  const { directReiContacts, directReiSellers } = await import("@/lib/directrei");
   const firstArray = (o: unknown, depth = 0): Array<Record<string, unknown>> | null => {
     if (Array.isArray(o)) return o as Array<Record<string, unknown>>;
     if (o && typeof o === "object" && depth < 2) {
       for (const k of ["data", "contacts", "results", "items", "sellers", "rows", "records"]) {
-        const v = (o as Record<string, unknown>)[k];
-        const found = firstArray(v, depth + 1);
+        const found = firstArray((o as Record<string, unknown>)[k], depth + 1);
         if (found) return found;
       }
     }
     return null;
   };
-  const rows = firstArray(b) ?? [];
+  // Prefer the SELLERS endpoint (sellers only — no buyers/developers); fall back to /contacts.
+  let res = await directReiSellers({ limit: "500" });
+  let rows = res.ok ? (firstArray(res.body) ?? []) : [];
+  if (rows.length === 0) { res = await directReiContacts({ limit: "500" }); rows = res.ok ? (firstArray(res.body) ?? []) : []; }
   if (rows.length === 0) {
-    // Surface the raw shape so we can see exactly how Direct REI returns contacts.
-    let snip = ""; try { snip = JSON.stringify(b).slice(0, 220); } catch { snip = String(b).slice(0, 220); }
-    return { scanned: 0, qualified: 0, created: 0, error: `no contacts found (HTTP ${res.status}). Raw: ${snip}` };
+    let snip = ""; try { snip = JSON.stringify(res.body).slice(0, 220); } catch { snip = String(res.body).slice(0, 220); }
+    return { scanned: 0, qualified: 0, created: 0, error: `no sellers found (HTTP ${res.status}). Raw: ${snip}` };
   }
   const g = (c: Record<string, unknown>, ...keys: string[]) => { for (const k of keys) { const v = c[k]; if (v != null && String(v).trim()) return String(v); } return ""; };
   let created = 0, qualified = 0;
   for (const c of rows) {
+    // 🚫 sellers only — never pull buyers/developers/agents into Michelle's seller pipeline.
+    const role = g(c, "role", "contact_type", "type", "lead_type", "contact_role", "category").toLowerCase();
+    if (/buyer|developer|builder|agent|investor|vendor|wholesaler|cash ?buyer/.test(role)) continue;
     const status = g(c, "status", "stage", "action", "lead_status", "disposition").toLowerCase();
-    const notes = g(c, "ai_summary", "ai_reply", "summary", "action_note", "notes", "last_message", "last_reply", "reply");
+    const notes = g(c, "ai_summary", "ai_reply", "summary", "action_note", "notes", "last_message", "last_reply", "reply", "last_inbound", "conversation", "message", "text", "ai_notes");
     const isHot = /qualif|ready|action.?req|price|offer|interested|replied/i.test(status) || /\$[\d,]+|asking|per ?sqft|would take|willing to/i.test(notes);
     if (!isHot) continue;
     qualified++;
-    const price = (notes.match(/\$[\d,]+(?:\.\d+)?/) ?? [])[0] ?? "";
+    const price = (notes.match(/\$[\d,]+(?:\.\d+)?/) ?? [])[0] ?? g(c, "price", "asking_price", "offer_price", "list_price");
     const r = await upsertDreiHotLead({
-      name: g(c, "name", "full_name", "contact_name", "seller_name"),
-      phone: g(c, "phone", "phone_number", "mobile", "phone1"),
+      name: g(c, "name", "full_name", "contact_name", "seller_name", "owner_name"),
+      phone: g(c, "phone", "phone_number", "mobile", "phone1", "primary_phone"),
       email: g(c, "email", "email_address"),
       market: g(c, "market", "city"),
-      address: g(c, "property_address", "mailing_street", "address", "street"),
+      address: g(c, "property_address", "mailing_street", "address", "street", "property_street", "situs_address", "situs", "prop_address", "full_address", "property"),
       status, notes, price, dreiId: g(c, "id", "contact_id", "uuid"),
     }).catch(() => null);
     if (r?.created) created++;
@@ -106,7 +105,9 @@ export async function upsertDreiHotLead(d: DreiLead): Promise<{ created: boolean
     where: { OR: [...(last10.length === 10 ? [{ phone: { contains: last10 } }] : []), ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : [])] },
   }).catch(() => null);
 
-  const addr = normalizeAddress([d.address, d.market].filter(Boolean).map((s) => String(s).trim()).join(", ")) || (d.address ?? "");
+  // Keep the property ADDRESS separate from the market (CA/TX) — storing the market as the
+  // address is why some cards showed only "CA" (Jon 2026-11-05).
+  const addr = (d.address ?? "").trim() ? (normalizeAddress(d.address!.trim()) || d.address!.trim()) : "";
   const title = addr || `${d.name ?? "Direct REI seller"}${d.market ? ` — ${d.market}` : ""}`;
 
   if (!contact) {
@@ -118,15 +119,20 @@ export async function upsertDreiHotLead(d: DreiLead): Promise<{ created: boolean
       assignedTo: MICHELLE,
       tags: "hot",
     } });
-  } else if (!/\bhot\b/i.test(contact.tags)) {
-    await db.crmContact.update({ where: { id: contact.id }, data: { tags: contact.tags ? `${contact.tags},hot` : "hot" } }).catch(() => {});
+  } else {
+    const patch: Record<string, unknown> = {};
+    if (!/\bhot\b/i.test(contact.tags)) patch.tags = contact.tags ? `${contact.tags},hot` : "hot";
+    if (!(contact.address ?? "").trim() && addr) patch.address = addr; // backfill a missing address on re-pull
+    if (Object.keys(patch).length) await db.crmContact.update({ where: { id: contact.id }, data: patch }).catch(() => {});
   }
 
-  // 🔁 Idempotency — did we already flag this same qualification recently?
+  // 🔁 Idempotency — did we already file a RICH note (with price/text)? If the earlier note was
+  // thin, let a re-pull enrich it with the price + the seller's message.
   const recent = await db.crmEvent.findFirst({
     where: { contactId: contact.id, kind: "system", body: { startsWith: "🔥 Direct REI QUALIFIED" }, at: { gte: new Date(Date.now() - 3 * 86_400_000) } },
-    select: { id: true },
+    select: { id: true, body: true },
   }).catch(() => null);
+  const recentHasDetail = recent ? /[$“]/.test(recent.body) : false;
 
   let opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null } });
   if (!opp) {
@@ -138,12 +144,14 @@ export async function upsertDreiHotLead(d: DreiLead): Promise<{ created: boolean
       contactId: contact.id, title, stage: newStage, pipeline: pipe?.name ?? "", assignedTo: MICHELLE, tags: "hot",
     } });
   }
-  if (recent) return { created: false, oppId: opp.id }; // already handled — don't re-note/re-task
+  // Skip re-noting only if we already filed a rich note, or there's nothing new to add.
+  if (recent && (recentHasDetail || (!d.price && !d.notes))) return { created: false, oppId: opp.id };
 
   const priceLine = d.price ? ` · 💰 ${d.price}` : "";
   const noteLine = d.notes ? `\n“${d.notes.slice(0, 300)}”` : "";
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🔥 Direct REI QUALIFIED — replied, auto-routed to ${MICHELLE}${priceLine}${noteLine}`, actor: "directrei" }).catch(() => {});
-  await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: `🔥 HOT — Direct REI reply${d.price ? ` (${d.price})` : ""} — call ${contact.name} NOW`, due: new Date().toISOString().slice(0, 10), assignedTo: MICHELLE, createdBy: "directrei" } }).catch(() => {});
+  const openTask = await db.crmTask.findFirst({ where: { contactId: contact.id, createdBy: "directrei", doneAt: null }, select: { id: true } }).catch(() => null);
+  if (!openTask) await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: `🔥 HOT — Direct REI reply${d.price ? ` (${d.price})` : ""} — call ${contact.name} NOW`, due: new Date().toISOString().slice(0, 10), assignedTo: MICHELLE, createdBy: "directrei" } }).catch(() => {});
   await db.crmOpportunity.update({ where: { id: opp.id }, data: { updatedAt: new Date() } }).catch(() => {});
   return { created: true, oppId: opp.id };
 }
