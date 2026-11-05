@@ -257,6 +257,15 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
             );
           })}
         </div>
+        {/* 🔀 Change pipeline right here (Jon 2026-11-05: the stage bar only moves stages WITHIN a
+            pipeline; the pipeline changer was buried in the Opportunity card below). */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Move to pipeline</span>
+          <div className="min-w-[220px] max-w-sm">
+            <OppPipelineMover id={opp.id} pipeline={opp.pipeline || "War Room"} pipelineNames={pipelines.map((pp) => pp.name).filter((n) => isDispoNetworkPipeline(opp.pipeline) || !isDispoNetworkPipeline(n))}
+              pipelineStages={Object.fromEntries(pipelines.map((pp) => [pp.name, pp.stages.map((s) => ({ key: s.key, label: s.label }))]))} selectCls={inputCls} />
+          </div>
+        </div>
         {stripAgentNotesBlock(c.pinnedNote) && <div className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">📌 {stripAgentNotesBlock(c.pinnedNote)}</div>}
         {dupContacts.length > 0 && (
           <div className="mt-2 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 ring-1 ring-rose-200">

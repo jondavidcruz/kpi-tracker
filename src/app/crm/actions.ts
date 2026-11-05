@@ -207,8 +207,16 @@ export async function addOpportunityAction(formData: FormData) {
   const { formatAddress } = await import("@/lib/address");
   const title = formatAddress(String(formData.get("title") ?? "")) || (apn ? `APN ${apn}` : "");
   if (!contactId || !title) return;
-  const opp = await db.crmOpportunity.create({ data: { contactId, title, stage: "new", assignedTo: me.name, ...(apn ? { formData: { property: { apn } } } : {}) } });
-  await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `New opportunity: ${title}${apn ? ` · APN ${apn}` : ""}`, actor: me.name });
+  // Land the new card in a REAL pipeline the owner can see — not the bare "War Room" tab, which
+  // is why a recreated lead looked "stuck" with no way to change pipelines (Jon 2026-11-05). Use
+  // the contact owner's pipeline, else Michelle's acquisitions pipeline.
+  const pls = await readPipelines();
+  const cRow = await db.crmContact.findUnique({ where: { id: contactId }, select: { assignedTo: true } }).catch(() => null);
+  const ownerFirst = (cRow?.assignedTo || me.name).trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const landPipe = (ownerFirst ? pls.find((p) => p.name.toLowerCase().includes(ownerFirst)) : undefined)
+    ?? pls.find((p) => /michelle/i.test(p.name)) ?? pls.find((p) => p.name === "War Room") ?? pls[0];
+  const opp = await db.crmOpportunity.create({ data: { contactId, title, stage: landPipe?.stages[0]?.key ?? "new", pipeline: landPipe?.name ?? "", assignedTo: cRow?.assignedTo || me.name, ...(apn ? { formData: { property: { apn } } } : {}) } });
+  await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `New opportunity: ${title}${apn ? ` · APN ${apn}` : ""} · ${landPipe?.name ?? "War Room"}`, actor: me.name });
   revalidatePath("/crm");
   redirect(`/crm/${opp.id}`);
 }
