@@ -6,17 +6,24 @@ import { db } from "@/lib/db";
 export const DNC_PIPELINE = "🚫 DNC List";
 export const DNC_REGEX = /\b(stop|stopall|unsubscribe|opt ?out|remove me|do not (text|call|contact)|don'?t (text|call|contact)|take me off|f+u*c+k+|fuck|bitch|a[s$]{2}hole|screw you|piss off|sue you|lawyer|harassment|harassing)\b/i;
 
-export async function ensureDncPipeline(): Promise<void> {
+/** The DNC pipeline NAME to use — recognizes ANY pipeline the user already has whose name
+ *  contains "DNC" (so a renamed/customized one counts), and only creates the default when
+ *  none exists. Fixes Jon 2026-11-05: a 2nd "DNC List" kept regenerating because the check
+ *  required an exact "🚫 DNC List" match and didn't see his customized one. */
+export async function resolveDncPipeline(): Promise<string> {
   const row = await db.resource.findFirst({ where: { category: "__crm_pipelines__" } });
-  if (!row?.description) return;
+  if (!row?.description) return DNC_PIPELINE;
   try {
     const defs = JSON.parse(row.description) as Array<{ name: string; stages: Array<{ key: string; label: string }> }>;
-    if (!defs.some((d) => d.name === DNC_PIPELINE)) {
-      defs.push({ name: DNC_PIPELINE, stages: [{ key: "dnc", label: "🚫 DNC / STOP" }, { key: "hostile", label: "🤬 Hostile" }] });
-      await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(defs) } });
-    }
-  } catch { /* defs unreadable — skip */ }
+    const existing = defs.find((d) => /dnc/i.test(d.name));
+    if (existing) return existing.name; // already have one (any name) — never duplicate it
+    defs.push({ name: DNC_PIPELINE, stages: [{ key: "dnc", label: "🚫 DNC / STOP" }, { key: "hostile", label: "🤬 Hostile" }] });
+    await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(defs) } });
+    return DNC_PIPELINE;
+  } catch { return DNC_PIPELINE; }
 }
+
+export async function ensureDncPipeline(): Promise<void> { await resolveDncPipeline(); }
 
 /** Handle a STOP/opt-out. For a lead with a LIVE DEAL in progress (a dispo deal pipeline),
  *  this only SUPPRESSES TEXTING (dnd_sms) and leaves the lead in place — Jon 2026-10-27:
@@ -35,9 +42,9 @@ export async function dncContact(contactId: string, why: string): Promise<void> 
     await logCrmEvent({ contactId, oppId: opps[0]?.id ?? "", kind: "system", body: `🔕 No-text set: ${why} — texts suppressed, but this lead has a live deal so it STAYS in its pipeline (still workable by call). Not moved to DNC.`, actor: "dnc-guard" }).catch(() => {});
     return;
   }
-  // Cold / no live deal → full DNC + park in the DNC pipeline (original behavior).
-  await ensureDncPipeline();
+  // Cold / no live deal → full DNC + park in the DNC pipeline (routes to the EXISTING one).
+  const dncName = await resolveDncPipeline();
   if (!/\bdnc\b/i.test(c.tags)) await db.crmContact.update({ where: { id: contactId }, data: { tags: c.tags ? `${c.tags},dnc` : "dnc" } });
-  for (const o of opps) await db.crmOpportunity.update({ where: { id: o.id }, data: { pipeline: DNC_PIPELINE, stage: "dnc" } });
+  for (const o of opps) await db.crmOpportunity.update({ where: { id: o.id }, data: { pipeline: dncName, stage: "dnc" } });
   await logCrmEvent({ contactId, oppId: opps[0]?.id ?? "", kind: "system", body: `🚫 AUTO-DNC: ${why} — tagged dnc + moved to the DNC pipeline. Do not text or call.`, actor: "dnc-guard" }).catch(() => {});
 }

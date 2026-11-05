@@ -2241,7 +2241,8 @@ export async function GET(request: Request) {
   // 🚫 DNC sweep (?dncsweep=1 — one-time + safety net): scans existing inbound
   // texts for STOP/hostile language and DNCs those contacts retroactively.
   if (url.searchParams.get("dncsweep") === "1") {
-    const { DNC_REGEX, dncContact } = await import("@/lib/crm-dnc");
+    const { DNC_REGEX, dncContact, resolveDncPipeline } = await import("@/lib/crm-dnc");
+    const dncName = await resolveDncPipeline(); // route to the EXISTING DNC pipeline, don't recreate
     const inbound = await db.crmEvent.findMany({ where: { kind: "sms", body: { startsWith: "⬅" } }, orderBy: { at: "desc" }, take: 2000, select: { contactId: true, body: true } });
     const hit = new Map<string, string>();
     for (const e of inbound) if (!hit.has(e.contactId) && DNC_REGEX.test(e.body)) hit.set(e.contactId, e.body.slice(0, 80));
@@ -2252,8 +2253,8 @@ export async function GET(request: Request) {
       // not tagged → full DNC. Tagged but opps drifted back to a live pipeline
       // (e.g. a re-sync) → re-park them in the DNC pipeline.
       if (!tagged) { await dncContact(cid, `historical sweep — "${why}"`); moved++; continue; }
-      const drifted = await db.crmOpportunity.findMany({ where: { contactId: cid, archivedAt: null, pipeline: { not: "🚫 DNC List" } }, select: { id: true } });
-      if (drifted.length) { for (const o of drifted) await db.crmOpportunity.update({ where: { id: o.id }, data: { pipeline: "🚫 DNC List", stage: "dnc" } }); reparked++; }
+      const drifted = await db.crmOpportunity.findMany({ where: { contactId: cid, archivedAt: null, pipeline: { not: dncName } }, select: { id: true } });
+      if (drifted.length) { for (const o of drifted) await db.crmOpportunity.update({ where: { id: o.id }, data: { pipeline: dncName, stage: "dnc" } }); reparked++; }
     }
     return NextResponse.json({ ok: true, matched: hit.size, newlyDnced: moved, reparked });
   }
