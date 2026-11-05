@@ -21,6 +21,7 @@ import DueTodayReminder from "@/components/DueTodayReminder";
 import { sellerKind, unifiedLeadBadge } from "@/lib/lead-type";
 import { isAgentNetworkName, isDevNetworkName, isDispoDealPipeline } from "@/lib/dispo-buyers";
 import { parcelCount } from "@/lib/crm-shared";
+import { LEAD_SOURCES } from "@/lib/lead-source";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline } from "@/lib/dispo-gates";
 import { readMarketingDone, marketingComplete } from "@/lib/dispo-marketing";
 import { readDealHeat } from "@/lib/deal-heat";
@@ -426,29 +427,32 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       <Card className="p-4">
         <details>
-          <summary className="cursor-pointer text-sm font-bold text-slate-700">＋ New lead <span className="font-normal text-slate-400">— everything in one go: who, the property address, source, rep and your notes</span></summary>
+          <summary className="cursor-pointer text-sm font-bold text-slate-700">＋ New lead <span className="font-normal text-slate-400">— who, the full property address, APN, source, rep and your notes</span></summary>
           <form action={createCrmLeadAction} className="mt-3 space-y-2">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
               <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Seller name *</span><input name="name" placeholder="Jane Smith" required className={inputCls} /></label>
               <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Phone</span><input name="phone" placeholder="(555) 123-4567" className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">2nd phone</span><input name="altPhone" placeholder="(555) 987-6543" className={inputCls} /></label>
               <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Email</span><input name="email" type="email" placeholder="jane@email.com" className={inputCls} /></label>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
-              <label className="col-span-2 block sm:col-span-3"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Property street address</span><input name="street" placeholder="123 Main St" className={inputCls} /></label>
-              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">City</span><input name="city" placeholder="Dallas" className={inputCls} /></label>
-              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">State</span><input name="state" placeholder="TX" maxLength={20} className={inputCls} /></label>
-              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Zip</span><input name="zip" placeholder="75001" maxLength={10} className={inputCls} /></label>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <label className="block sm:col-span-2"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Property address — paste the FULL address</span><input name="address" placeholder="123 Main St, Dallas, TX 75001" className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">APN / Parcel # <span className="font-normal normal-case text-slate-300">(land)</span></span><input name="apn" placeholder="R-12345-678" className={inputCls} /></label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Where did this lead come from? (source)</span><input name="source" placeholder="PPL / Direct REI / referral / cold call…" className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Mailing address <span className="font-normal normal-case text-slate-300">(if different from property)</span></span><input name="mailing" placeholder="PO Box 55, Austin, TX 78701" className={inputCls} /></label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Lead source</span><select name="source" defaultValue="" className={inputCls}>
+                <option value="">Select a source…</option>
+                {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select></label>
               <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Assigned to</span><select name="assignedTo" defaultValue={me?.name ?? ""} className={inputCls}>
                 {reps.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
               </select></label>
             </div>
             <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Notes — everything from the first call (lands on the timeline instantly)</span><textarea name="notes" rows={3} placeholder={"motivated — behind on taxes\nwants to close in 30 days\nquoted ~$80k on the phone"} className={inputCls} /></label>
             <div className="flex items-center gap-3">
-              <button className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700">Add lead → opens the full card</button>
-              <p className="text-[10px] text-slate-400">Address is auto-scrubbed to &quot;street, City, ST zip&quot;. Welcome text (and email when given) sends automatically; the lead lands in the rep&apos;s own pipeline.</p>
+              <button className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700">Add lead</button>
+              <p className="text-[10px] text-slate-400">Paste the full address — it&apos;s auto-scrubbed to &quot;street, City, ST zip&quot;. Welcome text (and email when given) sends automatically; the lead drops straight onto the board in the rep&apos;s pipeline — no card to close.</p>
             </div>
           </form>
         </details>

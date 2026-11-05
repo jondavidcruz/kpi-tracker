@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LiveSearch from "@/components/LiveSearch";
 import { getCurrentUser, canAccessMarketing, isManager, canAccessCSuite } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/data";
@@ -642,23 +643,27 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
                 const qSuffix = qRaw ? `&q=${encodeURIComponent(qRaw)}` : "";
                 return (
               <Card className="flex flex-wrap items-center gap-2 p-3">
-                <form action="/dispo" method="get" className="flex min-w-[240px] flex-1 flex-wrap items-center gap-2">
-                  <input type="hidden" name="tab" value="deals" />
-                  {dealPl && <input type="hidden" name="dealpl" value={dealPl} />}
-                  {areasView && <input type="hidden" name="view" value="areas" />}
-                  {inventoryView && <input type="hidden" name="view" value="inventory" />}
-                  {closedView && <input type="hidden" name="view" value="closed" />}
-                  <input name="q" defaultValue={qRaw} placeholder="🔎 Search deals — name, address, or “5-10 acres”…" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-                  <span className="flex items-center gap-1 rounded-xl bg-lime-50 px-2 py-1 ring-1 ring-lime-200" title="Filter by parcel size (acres)">
-                    <span className="text-[11px] font-bold text-lime-700">⛰️</span>
-                    <input name="acmin" defaultValue={acMinIn ?? ""} inputMode="decimal" placeholder="min" className="w-12 rounded-md border border-lime-200 bg-white px-1.5 py-1 text-xs" />
-                    <span className="text-[11px] text-lime-700">–</span>
-                    <input name="acmax" defaultValue={acMaxIn ?? ""} inputMode="decimal" placeholder="max" className="w-12 rounded-md border border-lime-200 bg-white px-1.5 py-1 text-xs" />
-                    <span className="text-[10px] font-semibold text-lime-700">ac</span>
-                  </span>
-                  <button className="rounded-lg bg-brand-navy px-3 py-2 text-xs font-bold text-white">Search</button>
+                <div className="flex min-w-[240px] flex-1 flex-wrap items-center gap-2">
+                  {/* 🔎 live, type-to-search (Jon 2026-11-05) — the acre range keeps its own Filter button */}
+                  <LiveSearch initial={qRaw} resetParam="" placeholder="🔎 Search deals — name, address… (searches as you type)" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+                  <form action="/dispo" method="get" className="flex items-center gap-2">
+                    <input type="hidden" name="tab" value="deals" />
+                    {dealPl && <input type="hidden" name="dealpl" value={dealPl} />}
+                    {areasView && <input type="hidden" name="view" value="areas" />}
+                    {inventoryView && <input type="hidden" name="view" value="inventory" />}
+                    {closedView && <input type="hidden" name="view" value="closed" />}
+                    <input type="hidden" name="q" value={qRaw} />
+                    <span className="flex items-center gap-1 rounded-xl bg-lime-50 px-2 py-1 ring-1 ring-lime-200" title="Filter by parcel size (acres)">
+                      <span className="text-[11px] font-bold text-lime-700">⛰️</span>
+                      <input name="acmin" defaultValue={acMinIn ?? ""} inputMode="decimal" placeholder="min" className="w-12 rounded-md border border-lime-200 bg-white px-1.5 py-1 text-xs" />
+                      <span className="text-[11px] text-lime-700">–</span>
+                      <input name="acmax" defaultValue={acMaxIn ?? ""} inputMode="decimal" placeholder="max" className="w-12 rounded-md border border-lime-200 bg-white px-1.5 py-1 text-xs" />
+                      <span className="text-[10px] font-semibold text-lime-700">ac</span>
+                    </span>
+                    <button className="rounded-lg bg-brand-navy px-3 py-2 text-xs font-bold text-white">Filter</button>
+                  </form>
                   {(qRaw || acreFilterOn) && <Link href={`/dispo?tab=deals${viewSuffix}${plSuffix}`} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">clear</Link>}
-                </form>
+                </div>
                 <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
                   <Link href={`/dispo?tab=deals${plSuffix}${qSuffix}${acSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${!areasView && !inventoryView && !closedView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📊 Board</Link>
                   <Link href={`/dispo?tab=deals&view=inventory${plSuffix}${qSuffix}${acSuffix}`} className={`px-3 py-1.5 text-xs font-bold ${inventoryView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📋 Inventory</Link>
@@ -979,13 +984,10 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
 
           {/* search + view toggle */}
           <Card className="flex flex-wrap items-center gap-2 p-3">
-            <form action="/dispo" method="get" className="flex min-w-[240px] flex-1 items-center gap-2">
-              <input type="hidden" name="tab" value={tab} />
-              {listView && <input type="hidden" name="view" value="list" />}
-              <input name="q" defaultValue={q} placeholder={`🔎 Search ${tab === "developers" ? "developers" : "buyer agents"} — name, area, buy-box, phone…`} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-              <button className="rounded-lg bg-brand-navy px-3 py-2 text-xs font-bold text-white">Search</button>
+            <div className="flex min-w-[240px] flex-1 items-center gap-2">
+              <LiveSearch initial={q} resetParam="" placeholder={`🔎 Search ${tab === "developers" ? "developers" : "buyer agents"} — name, area, buy-box, phone… (searches as you type)`} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
               {q && <Link href={qs({ q: "" })} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600">clear</Link>}
-            </form>
+            </div>
             <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
               <Link href={qs({ view: "" })} className={`px-3 py-1.5 text-xs font-bold ${!listView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📊 Board</Link>
               <Link href={qs({ view: "list" })} className={`px-3 py-1.5 text-xs font-bold ${listView ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📇 List</Link>

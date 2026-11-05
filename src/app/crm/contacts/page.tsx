@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LiveSearch from "@/components/LiveSearch";
 import { db } from "@/lib/db";
 import { formatAddress } from "@/lib/address";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
@@ -120,7 +121,10 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   const [total, contacts] = await Promise.all([
     db.crmContact.count({ where }),
     db.crmContact.findMany({ where, orderBy: { updatedAt: "desc" }, skip: (page - 1) * PAGE, take: PAGE,
-      include: { opportunities: { where: { archivedAt: null }, select: { id: true, stage: true, pipeline: true }, take: 1, orderBy: { updatedAt: "desc" } } } }),
+      // Include the latest opp even if ARCHIVED, so a signed/handed-off/archived lead still
+      // shows WHERE it is (pipeline › stage · owner) and stays openable — Jon 2026-11-05 couldn't
+      // open Michael Mohammed from Contacts because his only opp was archived.
+      include: { opportunities: { select: { id: true, stage: true, pipeline: true, assignedTo: true, archivedAt: true }, take: 1, orderBy: [{ archivedAt: { sort: "asc", nulls: "first" } }, { updatedAt: "desc" }] } } }),
   ]);
   const pipelines = manager ? await readPipelines() : [];
   const reps2 = manager ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
@@ -128,6 +132,8 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
   const reps = manager ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const qs = (np: number) => `/crm/contacts?p=${np}${q ? `&q=${encodeURIComponent(q)}` : ""}${who ? `&who=${encodeURIComponent(who)}` : ""}`;
+  // Show a human stage label (CRM native stages have labels; dispo/GHL stage keys get prettified).
+  const prettyStageLabel = (k: string) => CRM_STAGES.find((s) => s.key === k)?.label ?? k.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
 
   return (
     <div className="space-y-4">
@@ -135,12 +141,10 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
         right={<span className="flex items-center gap-2"><Link prefetch={false} href="/crm/contacts?dupes=1" title="Sellers who appear more than once (same phone)" className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">🔁 Duplicates</Link><Link href="/crm" className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">🗂 Pipeline</Link></span>} />
 
       <Card className="space-y-2 p-3">
-        <form className="flex flex-wrap items-center gap-2" action="/crm/contacts" method="get">
-          <input name="q" defaultValue={q} placeholder="🔎 Search contacts…" className="min-w-[220px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          {who && <input type="hidden" name="who" value={who} />}
-          <button className="rounded-xl bg-brand-navy px-4 py-2 text-xs font-bold text-white">Search</button>
+        <div className="flex flex-wrap items-center gap-2">
+          <LiveSearch initial={q} placeholder="🔎 Search contacts — name, phone, email, property, tag… (searches as you type)" />
           {q && <Link href={`/crm/contacts${who ? `?who=${encodeURIComponent(who)}` : ""}`} className="text-xs font-bold text-slate-400 hover:text-slate-600">clear</Link>}
-        </form>
+        </div>
         {manager && (
           <div className="flex flex-wrap gap-1.5">
             <Link prefetch={false} href={`/crm/contacts${q ? `?q=${encodeURIComponent(q)}` : ""}`} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${!who ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600"}`}>Everyone</Link>
@@ -178,7 +182,7 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
             <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wide text-slate-400">
               {manager && <th className="w-8 px-3 py-2.5"></th>}
               <th className="px-4 py-2.5">Contact</th><th className="px-3 py-2.5">Phone</th><th className="px-3 py-2.5">Email</th>
-              <th className="px-3 py-2.5">Owner</th><th className="px-3 py-2.5">Stage</th><th className="px-3 py-2.5">Tags</th><th className="px-3 py-2.5 text-right">Last activity</th><th className="px-3 py-2.5"></th>
+              <th className="px-3 py-2.5">Owner</th><th className="px-3 py-2.5">Pipeline · Stage</th><th className="px-3 py-2.5">Tags</th><th className="px-3 py-2.5 text-right">Last activity</th><th className="px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -188,13 +192,17 @@ export default async function CrmContactsPage({ searchParams }: { searchParams: 
                 <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/60">
                   {manager && <td className="px-3 py-2.5"><input type="checkbox" name="ids" value={c.id} /></td>}
                   <td className="px-4 py-2.5">
-                    {opp ? <Link href={`/crm/${opp.id}`} className="font-bold text-slate-800 hover:text-indigo-600">{c.name}</Link> : <span className="font-bold text-slate-800">{c.name}</span>}
+                    {/* Always openable: the lead card if there's an opp (even archived), else the conversation. */}
+                    {opp
+                      ? <Link href={`/crm/${opp.id}`} className="font-bold text-slate-800 hover:text-indigo-600">{c.name}</Link>
+                      : <Link prefetch={false} href={`/crm/conversations?c=${c.id}`} className="font-bold text-slate-800 hover:text-indigo-600">{c.name}</Link>}
+                    {opp?.archivedAt && <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 align-middle text-[9px] font-bold text-amber-700 ring-1 ring-amber-200" title="This lead was archived / handed off — click the name to open and restore it">🗄 archived</span>}
                     {c.address && <div className="max-w-[200px] truncate text-[11px] text-slate-400">{formatAddress(c.address)}</div>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{c.phone}</td>
                   <td className="max-w-[180px] truncate px-3 py-2.5 text-slate-600">{c.email}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-[12px] font-semibold text-slate-500">{c.assignedTo.split(" ")[0] || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-[11px] font-bold text-slate-500">{opp?.stage ?? "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[12px] font-semibold text-slate-500">{(opp?.assignedTo || c.assignedTo).split(" ")[0] || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[11px] font-bold text-slate-500">{opp ? <span className="text-slate-700">{opp.pipeline || "War Room"}<span className="font-normal text-slate-400"> › {opp.stage ? prettyStageLabel(opp.stage) : "(no stage)"}</span></span> : "—"}</td>
                   <td className="px-3 py-2.5">
                     <span className="flex flex-wrap gap-1">
                       {parseTags(c.tags).slice(0, 3).map((t) => <span key={t} className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600">#{t}</span>)}

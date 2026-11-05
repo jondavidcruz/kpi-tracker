@@ -49,8 +49,11 @@ export async function createCrmLeadAction(formData: FormData) {
   // v2 form (Jon 2026-10-09): explicit street/city/state/zip fields, scrubbed
   // through normalizeAddress as the final check before the card exists.
   const { normalizeAddress } = await import("@/lib/address");
+  // v3 (Jon 2026-11-05): ONE full-address field — the rep pastes "street, City, ST zip" in one
+  // box. Still accept the legacy split street/city/state/zip fields as a fallback.
+  const fullAddr = String(formData.get("address") ?? "").trim();
   const street = String(formData.get("street") ?? "").trim();
-  const addrJoined = [street, String(formData.get("city") ?? "").trim(), `${String(formData.get("state") ?? "").trim()} ${String(formData.get("zip") ?? "").trim()}`.trim()].filter(Boolean).join(", ");
+  const addrJoined = fullAddr || [street, String(formData.get("city") ?? "").trim(), `${String(formData.get("state") ?? "").trim()} ${String(formData.get("zip") ?? "").trim()}`.trim()].filter(Boolean).join(", ");
   const title = normalizeAddress(addrJoined || String(formData.get("title") ?? "").trim()) || "New opportunity";
   const notes = String(formData.get("notes") ?? "").trim();
   if (!name) return;
@@ -63,6 +66,14 @@ export async function createCrmLeadAction(formData: FormData) {
   const rawPhone = toE164US(rawPhoneIn) || rawPhoneIn.replace(/[^+\d]/g, "");
   const p10 = rawPhone.replace(/\D/g, "").slice(-10);
   const emailIn = String(formData.get("email") ?? "").trim();
+  // v3 extras (Jon 2026-11-05): 2nd phone, a SEPARATE mailing address, APN (land), and a lead
+  // source from the canonical dropdown (stored per-opp in formData.__leadSource like the cards).
+  const rawAltIn = String(formData.get("altPhone") ?? "").trim();
+  const altPhone = rawAltIn ? (toE164US(rawAltIn) || rawAltIn.replace(/[^+\d]/g, "")) : "";
+  const mailingRaw = String(formData.get("mailing") ?? "").trim();
+  const mailing = mailingRaw ? (normalizeAddress(mailingRaw) || mailingRaw) : "";
+  const apn = String(formData.get("apn") ?? "").trim();
+  const leadSource = String(formData.get("source") ?? "").trim();
   // 🔁 Dedupe at the door (crm-enhancer 2026-10-18): the nightly audit keeps
   // finding the same seller as two contacts (26 phone-duplicate groups) = two
   // reps calling one person. If a LIVE contact already has this phone (last 10,
@@ -82,17 +93,21 @@ export async function createCrmLeadAction(formData: FormData) {
   const contact = existing
     ? await db.crmContact.update({ where: { id: existing.id }, data: {
         ...(existing.email ? {} : emailIn ? { email: emailIn } : {}),
-        ...(existing.address || title === "New opportunity" ? {} : { address: title }),
-        ...(existing.source ? {} : { source: String(formData.get("source") ?? "").trim() }),
+        ...(existing.altPhone ? {} : altPhone ? { altPhone } : {}),
+        // contact.address holds the MAILING address; the property is the opp title. Backfill a
+        // blank with the mailing if given, else fall back to the property (legacy behavior).
+        ...(existing.address ? {} : mailing ? { address: mailing } : title === "New opportunity" ? {} : { address: title }),
+        ...(existing.source ? {} : leadSource ? { source: leadSource } : {}),
         ...(existing.assignedTo ? {} : { assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name }),
       } })
     : await db.crmContact.create({ data: {
         name,
         phone: rawPhone ? (rawPhone.startsWith("+") ? rawPhone : p10.length === 10 ? `+1${p10}` : rawPhone) : "",
+        altPhone,
         email: emailIn,
-        source: String(formData.get("source") ?? "").trim(),
+        source: leadSource,
         assignedTo: String(formData.get("assignedTo") ?? "").trim() || me.name,
-        address: title === "New opportunity" ? "" : title,
+        address: mailing || (title === "New opportunity" ? "" : title),
       } });
   // land in the ASSIGNED REP'S pipeline; if that rep has no pipeline (e.g. a
   // dispo rep or unassigned) default to MICHELLE's acquisitions pipeline, NEVER
@@ -128,10 +143,26 @@ export async function createCrmLeadAction(formData: FormData) {
         orderBy: { updatedAt: "desc" },
       }).catch(() => null)
     : null;
+  // APN (land) → formData.property.apn (same place the full card + dispo board read it);
+  // lead source → formData.__leadSource (canonical, same as the opportunity cards).
+  const oppFd: Record<string, unknown> = {
+    ...(apn ? { property: { apn } } : {}),
+    ...(leadSource ? { __leadSource: leadSource } : {}),
+  };
   const opp = dupeOpp ?? await db.crmOpportunity.create({ data: {
     contactId: contact.id, title, stage: landPipe?.stages[0]?.key ?? "new", pipeline: landPipe?.name ?? "",
-    assignedTo: owner,
+    assignedTo: owner, ...(Object.keys(oppFd).length ? { formData: oppFd } : {}),
   } });
+  // Matched an existing open card? Still backfill APN / lead source if they were blank.
+  if (dupeOpp && (apn || leadSource)) {
+    const prev = (dupeOpp.formData ?? {}) as Record<string, unknown>;
+    const prevProp = (prev.property ?? {}) as Record<string, unknown>;
+    await db.crmOpportunity.update({ where: { id: dupeOpp.id }, data: { formData: {
+      ...prev,
+      ...(apn && !prevProp.apn ? { property: { ...prevProp, apn } } : {}),
+      ...(leadSource && !prev.__leadSource ? { __leadSource: leadSource } : {}),
+    } } }).catch(() => {});
+  }
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: dupeOpp
     ? `Lead entry matched an existing open card${placeholderTitle ? " (no new address given)" : ` for ${title}`} — no duplicate card made`
     : existing
@@ -163,7 +194,8 @@ export async function createCrmLeadAction(formData: FormData) {
     })().catch(() => {});
   }
   revalidatePath("/crm");
-  redirect(`/crm/${opp.id}`);
+  // Jon 2026-11-05: don't open the full card — just drop the lead on the board (its pipeline).
+  redirect(`/crm?pl=${encodeURIComponent(landPipe?.name ?? "")}`);
 }
 
 /** Add another opportunity to an existing contact (multi-opp per contact). */
@@ -179,6 +211,27 @@ export async function addOpportunityAction(formData: FormData) {
   await logCrmEvent({ contactId, oppId: opp.id, kind: "system", body: `New opportunity: ${title}${apn ? ` · APN ${apn}` : ""}`, actor: me.name });
   revalidatePath("/crm");
   redirect(`/crm/${opp.id}`);
+}
+
+/** 🗄→📂 Restore an archived (or blank/orphaned-stage) lead back onto its pipeline board.
+ *  Un-archives it and drops it in the pipeline's FIRST stage if its stored stage is blank or no
+ *  longer exists — the exact state that made Michael Mohammed invisible (Jon 2026-11-05). */
+export async function restoreOppAction(formData: FormData) {
+  const me = await crmUser();
+  if (!me) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, stage: true, pipeline: true } });
+  if (!opp) return;
+  const pipes = await readPipelines();
+  const pipe = pipes.find((p) => p.name === opp.pipeline) ?? pipes.find((p) => /michelle/i.test(p.name)) ?? pipes.find((p) => p.name === "War Room") ?? pipes[0];
+  const stageValid = !!opp.stage && (pipe?.stages.some((s) => s.key === opp.stage) ?? false);
+  const stage = stageValid ? opp.stage : (pipe?.stages[0]?.key ?? "new");
+  await db.crmOpportunity.update({ where: { id }, data: { archivedAt: null, stage, ...(opp.pipeline ? {} : { pipeline: pipe?.name ?? "" }) } });
+  await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: `📂 Restored to ${pipe?.name ?? "pipeline"}${stageValid ? "" : ` · stage set to “${pipe?.stages.find((s) => s.key === stage)?.label ?? stage}”`} (was ${opp.stage ? "orphaned" : "archived"})`, actor: me.name });
+  revalidatePath("/crm");
+  revalidatePath(`/crm/${id}`);
+  redirect(`/crm/${id}`);
 }
 
 export async function setOppStageAction(formData: FormData) {

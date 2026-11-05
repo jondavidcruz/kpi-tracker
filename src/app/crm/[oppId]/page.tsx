@@ -45,7 +45,7 @@ import DocUploadForm from "@/components/DocUploadForm";
 import CrmLayoutController from "@/components/CrmLayoutController";
 import { readCrmLayout } from "@/lib/crm-layout-store";
 import OppPipelineMover from "@/components/OppPipelineMover";
-import { setOppStageAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, deleteLeadDocAction } from "../actions";
+import { setOppStageAction, saveOppMetaAction, saveCrmContactAction, addCrmTaskAction, toggleCrmTaskAction, addCrmApptAction, deleteCrmApptAction, addOpportunityAction, addCrmPartyAction, deleteCrmPartyAction, toggleDndAction, deleteLeadDocAction, restoreOppAction } from "../actions";
 import { commsFor, readSignatures, firstOf, defaultSignature, hasSignatureImage } from "@/lib/crm-comms";
 import { readSnippets } from "@/lib/crm-templates";
 import SmsComposer from "@/components/SmsComposer";
@@ -188,6 +188,16 @@ async function OpportunityPageInner({ params, searchParams }: { params: Promise<
     <PanelGuard label="contact-full">
     <CrmLayoutController initial={crmLayout} />
     <div className="space-y-4">
+      {/* 🗄 Archived / handed-off lead — one-click restore back onto the board (Jon 2026-11-05). */}
+      {opp.archivedAt && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="text-sm font-semibold text-amber-800">🗄 This lead is archived — it won&apos;t show on the pipeline board until you restore it.</div>
+          <form action={restoreOppAction}>
+            <input type="hidden" name="id" value={opp.id} />
+            <button className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700">📂 Restore to {opp.pipeline || "pipeline"}</button>
+          </form>
+        </div>
+      )}
       {/* ── Header: who, stage, actions ── */}
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
