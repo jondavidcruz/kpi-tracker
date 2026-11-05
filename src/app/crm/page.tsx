@@ -34,7 +34,7 @@ export const dynamic = "force-dynamic";
 
 const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 
-export default async function CrmPage({ searchParams }: { searchParams: Promise<{ view?: string; who?: string; q?: string; stage?: string; tag?: string; due?: string; p?: string; na?: string; quiet?: string; fresh?: string; pl?: string }> }) {
+export default async function CrmPage({ searchParams }: { searchParams: Promise<{ view?: string; who?: string; q?: string; stage?: string; tag?: string; due?: string; p?: string; na?: string; quiet?: string; fresh?: string; pl?: string; focus?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   const allowed = !!me && (isManager(me) || ["acquisitions", "cc_lm", "dispositions"].includes(me.position ?? ""));
@@ -68,6 +68,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const fNa = sp.na === "1";      // no next action set
   const fQuiet = sp.quiet === "1"; // no touch in 3+ days
   const fFresh = sp.fresh === "1"; // created this week
+  const fFocus = sp.focus === "1"; // 🎯 "today's work" — follow-up due OR no next action OR hot (Jon 2026-11-05)
 
   // Scale plan (35k+ leads): the board never loads everything — true counts
   // come from an indexed groupBy, each column renders its freshest 60, and
@@ -132,6 +133,13 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   if (fTag) andClauses.push({ OR: [
     { tags: { contains: fTag, mode: "insensitive" } },
     { contact: { tags: { contains: fTag, mode: "insensitive" } } },
+  ] });
+  // 🎯 Focus = everything that needs action today: a follow-up due, no next action set, or hot.
+  if (fFocus) andClauses.push({ OR: [
+    { nextFollowUp: { not: "", lte: today } },
+    { nextFollowUp: "" },
+    { tags: { contains: "hot", mode: "insensitive" } },
+    { contact: { tags: { contains: "hot", mode: "insensitive" } } },
   ] });
   // 🔎 Deep search (Jon 2026-10-20: Marie needs to find "waterfront" land): besides
   // name/phone/email, also match the property ADDRESS, the lead's NOTES & activity,
@@ -201,7 +209,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     select: { oppId: true, due: true, title: true, assignedTo: true }, take: 2000,
   });
   const qs = (over: Record<string, string>) => {
-    const p = new URLSearchParams({ view, pl: plName, ...(canViewAll ? { who: whoRaw || "all" } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...over });
+    const p = new URLSearchParams({ view, pl: plName, ...(canViewAll ? { who: whoRaw || "all" } : {}), ...(q ? { q } : {}), ...(fStage ? { stage: fStage } : {}), ...(fTag ? { tag: fTag } : {}), ...(fDue ? { due: "1" } : {}), ...(fNa ? { na: "1" } : {}), ...(fQuiet ? { quiet: "1" } : {}), ...(fFresh ? { fresh: "1" } : {}), ...(fFocus ? { focus: "1" } : {}), ...over });
     for (const [k, v] of [...p.entries()]) if (!v) p.delete(k);
     return `/crm?${p.toString()}`;
   };
@@ -363,6 +371,19 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           <span className="ml-auto text-[11px] text-slate-400">{totalCount.toLocaleString()} leads · 💀 {deadOpps} archived — never deleted</span>
         </div>
       </Card>
+
+      {/* 🎯 Focus mode — one prominent toggle that collapses the board to only what needs
+          action today: a follow-up due, no next action set, or hot (Jon 2026-11-05). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          prefetch={false}
+          href={fFocus ? qs({ focus: "" }) : qs({ focus: "1", due: "", na: "", quiet: "", fresh: "", tag: "" })}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition ${fFocus ? "bg-brand-navy text-white ring-2 ring-brand-navy/30" : "bg-amber-400 text-brand-navy hover:bg-amber-300"}`}
+        >
+          🎯 {fFocus ? "Focus ON — today's work only" : "Focus mode — today's work"}
+        </Link>
+        {fFocus && <span className="text-[11px] text-slate-500">Showing only leads that need action today — follow-ups due, no next step, or 🔥 hot. Click to show the whole board.</span>}
+      </div>
 
       {/* ⚡ Smart Views — one-click working lists */}
       <div className="flex flex-wrap items-center gap-1.5">
