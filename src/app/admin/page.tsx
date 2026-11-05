@@ -146,10 +146,9 @@ export default async function AdminPage({
         id="admin"
         tabs={[
           { key: "team", label: "👥 Team" },
-          { key: "pay", label: "💵 Pay & Reviews" },
-          { key: "kpis", label: "🎯 KPIs & Alerts" },
+          { key: "notify", label: "🔔 Notifications" },
+          { key: "kpis", label: "🎯 KPIs" },
           { key: "business", label: "🏢 Business" },
-          { key: "chat", label: "🔔 Chat" },
           { key: "system", label: "⚙️ System" },
           { key: "tools", label: "🛠 Tools" },
           ...(owner ? [{ key: "preview", label: "🕵️ Member Preview" }] : []),
@@ -271,7 +270,67 @@ export default async function AdminPage({
       </section>
 
           </div>,
-          <div key="pay" className="space-y-8">
+          <div key="notify" className="space-y-8">
+      {/* ════ NOTIFICATIONS & DELIVERY ════ (Jon 2026-11-05: one home for every
+          "where does it go" setting — merged from the old KPIs-tab alerts block, the
+          Chat tab, and the Pay tab's payday recipients.) */}
+      <section id="alerts" className="scroll-mt-20">
+        <SectionTitle title="🔔 Notifications &amp; delivery" subtitle="One place for where alerts, digests & payday summaries go — chat rooms, email lists, timezone & schedule." accent="bg-red-400" />
+        <Card className="p-6">
+          <div className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">📧 Email delivery &amp; schedule</div>
+          <form action={saveSettings} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Google Chat webhook URL — alerts &amp; digests (main space)</span>
+              <input name="googleChatWebhook" defaultValue={settings.googleChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…" className={inputCls} />
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Time-card status webhook — clock-in / break / lunch posts (Timecard space)</span>
+              <input name="timecardChatWebhook" defaultValue={settings.timecardChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/AAQAEZsNlXQ/messages?key=…&token=…" className={inputCls} />
+              <span className="mt-1 block text-[11px] text-slate-400">Create an incoming webhook in the <strong>Timecard</strong> space (⋮ → Apps &amp; integrations → Webhooks → Add). Leave blank to use the main space.</span>
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Call-audit webhook — scored-call audit posts (Call Audit space)</span>
+              <input name="callAuditChatWebhook" defaultValue={settings.callAuditChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…/messages?key=…&token=…" className={inputCls} />
+              <span className="mt-1 block text-[11px] text-slate-400">Scored calls (with recordings) post here instead of the KPI space. Leave blank to use the main space.</span>
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Alert email recipients (comma-separated)</span>
+              <input name="alertEmailRecipients" defaultValue={settings.alertEmailRecipients} placeholder="manager@co.com, owner@co.com" className={inputCls} />
+            </label>
+            <label className="sm:col-span-2">
+              <span className={labelCls}>Weekly report email recipients (Monday AM team KPIs)</span>
+              <input name="weeklyEmailRecipients" defaultValue={settings.weeklyEmailRecipients} placeholder="you@gmail.com, marie@gmail.com" className={inputCls} />
+            </label>
+            <label>
+              <span className={labelCls}>Email from address</span>
+              <input name="emailFromAddress" defaultValue={settings.emailFromAddress} placeholder="kpi-alerts@co.com" className={inputCls} />
+            </label>
+            <label>
+              <span className={labelCls}>Workday cutoff (missing-entry check)</span>
+              <input type="time" name="workdayCutoff" defaultValue={settings.workdayCutoff} className={inputCls} />
+            </label>
+            <label>
+              <span className={labelCls}>Org timezone</span>
+              <select name="orgTimezone" defaultValue={settings.orgTimezone} className={inputCls}>
+                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className={labelCls}>Annual revenue goal ($) for the weekly report</span>
+              <input name="annualRevenueGoal" defaultValue={settings.annualRevenueGoal || ""} placeholder="e.g. 1000000" className={inputCls} />
+            </label>
+            <div className="sm:col-span-2">
+              <SaveBtn>Save settings</SaveBtn>
+            </div>
+          </form>
+        </Card>
+      </section>
+
+      {/* 💬 Google Chat rooms + phone-health webhook — folded in from the old Chat tab. */}
+      <section id="chat-rooms" className="scroll-mt-20">
+        <ChatSettingsPanel />
+      </section>
+
       {/* ════ PAY ════ */}
       {owner && (
         <section id="pay" className="scroll-mt-20">
@@ -378,66 +437,10 @@ export default async function AdminPage({
         </Card>
       </section>
 
-      {/* ════ NOTIFICATIONS & SCHEDULE ════ */}
-      <section id="alerts" className="scroll-mt-20">
-        <SectionTitle title="🔔 Notifications & schedule" subtitle="Where off-target alerts go, and when missing-entry checks fire" accent="bg-red-400" />
-        <Card className="p-6">
-          <form action={saveSettings} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Google Chat webhook URL — alerts &amp; digests (main space)</span>
-              <input name="googleChatWebhook" defaultValue={settings.googleChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…" className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Time-card status webhook — clock-in / break / lunch posts (Timecard space)</span>
-              <input name="timecardChatWebhook" defaultValue={settings.timecardChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/AAQAEZsNlXQ/messages?key=…&token=…" className={inputCls} />
-              <span className="mt-1 block text-[11px] text-slate-400">Create an incoming webhook in the <strong>Timecard</strong> space (⋮ → Apps &amp; integrations → Webhooks → Add). Leave blank to use the main space.</span>
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Call-audit webhook — scored-call audit posts (Call Audit space)</span>
-              <input name="callAuditChatWebhook" defaultValue={settings.callAuditChatWebhook} placeholder="https://chat.googleapis.com/v1/spaces/…/messages?key=…&token=…" className={inputCls} />
-              <span className="mt-1 block text-[11px] text-slate-400">Scored calls (with recordings) post here instead of the KPI space. Leave blank to use the main space.</span>
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Alert email recipients (comma-separated)</span>
-              <input name="alertEmailRecipients" defaultValue={settings.alertEmailRecipients} placeholder="manager@co.com, owner@co.com" className={inputCls} />
-            </label>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Weekly report email recipients (Monday AM team KPIs)</span>
-              <input name="weeklyEmailRecipients" defaultValue={settings.weeklyEmailRecipients} placeholder="you@gmail.com, marie@gmail.com" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Email from address</span>
-              <input name="emailFromAddress" defaultValue={settings.emailFromAddress} placeholder="kpi-alerts@co.com" className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Workday cutoff (missing-entry check)</span>
-              <input type="time" name="workdayCutoff" defaultValue={settings.workdayCutoff} className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>Org timezone</span>
-              <select name="orgTimezone" defaultValue={settings.orgTimezone} className={inputCls}>
-                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className={labelCls}>Annual revenue goal ($) for the weekly report</span>
-              <input name="annualRevenueGoal" defaultValue={settings.annualRevenueGoal || ""} placeholder="e.g. 1000000" className={inputCls} />
-            </label>
-            <div className="sm:col-span-2">
-              <SaveBtn>Save settings</SaveBtn>
-            </div>
-          </form>
-        </Card>
-      </section>
-
           </div>,
           <div key="business" className="space-y-6">
             {/* 🏢 Company legal identity — folded in from /settings/business (Jon 2026-11-03). */}
             <BusinessProfilePanel />
-          </div>,
-          <div key="chat" className="space-y-6">
-            {/* 🔔 Google Chat rooms + phone-health webhook — folded in from /settings/chat. */}
-            <ChatSettingsPanel />
           </div>,
           <div key="system" className="space-y-8">
       {/* ════ INTEGRATIONS (owner) — which API keys are live; where to get each ════ */}
@@ -448,14 +451,12 @@ export default async function AdminPage({
           <Card className="p-4">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {[
-                { env: "REIREPLY_API_KEY", name: "REI Reply (GoHighLevel)", powers: "talk time · dials · stage-move KPIs · CRM activity", get: "already connected" },
                 { env: "ANTHROPIC_API_KEY", name: "Anthropic (Claude)", powers: "call scoring · underwrite bot · packet context analysis", get: "console.anthropic.com" },
                 { env: "GEMINI_API_KEY", name: "Google Gemini", powers: "call-recording transcription", get: "aistudio.google.com" },
                 { env: "GOOGLE_SERVICE_ACCOUNT_JSON", name: "Google Drive (service account)", powers: "nightly backups · offering-packet storage · recordings", get: "already connected" },
                 { env: "REGRID_API_KEY", name: "Regrid parcels", powers: "packet builder: parcel polygon · acreage · zoning by APN", get: "regrid.com → account → API token" },
                 { env: "GOOGLE_MAPS_API_KEY", name: "Google Maps (Static + Geocoding)", powers: "packet aerials w/ parcel outline · faster cascade geocoding", get: "console.cloud.google.com → APIs → Maps Static API + Geocoding API" },
                 { env: "DIRECTREI_API_KEY", name: "Direct REI", powers: "contacts/campaigns/deals sync (calls stay CSV import)", get: "Direct REI → Settings → API & Zapier → + Create API key" },
-                { env: "GHL_PUSH_WEBHOOK_URL", name: "GoHighLevel push", powers: "Direct REI Qualified / send-to-ghl → GHL (polled every 15 min, each contact once)", get: "GHL → Automation → workflow → Inbound Webhook trigger → copy URL" },
                 { env: "RENTCAST_API_KEY", name: "RentCast comps", powers: "LIVE: 🔎 pull value & comps on the calculator (Sharyn+Marie, hard-capped 50/mo)", get: "rentcast.io → API" },
                 { env: "REIAI_API_KEY", name: "REI AI comps", powers: "NEXT: comps into the calculator — waiting on their API docs (paste the support email)", get: "REI AI → support" },
                 { env: "DEALMACHINE_API_KEY", name: "DealMachine", powers: "NEXT: property autofill (sqft · year · lot · est. value · owner equity) + mail sequences for the Mailers KPI", get: "DealMachine → Automation → API Docs" },
