@@ -109,8 +109,21 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
     !(a.email && activeKeys.has(a.email.toLowerCase())) &&
     !activeKeys.has(a.name.trim().toLowerCase()));
 
-  // commission plans (real structures from the signed agreements — C-suite view)
+  // commission plans (real structures from the signed agreements — C-suite view).
+  // Jon 2026-11-04: show EVERYONE with an uploaded Independent Contractor Agreement, each
+  // tied to their signed PDF — not just the two reps with hardcoded plans. A row appears when
+  // the member has a plan defined OR an agreement on file (so Sharyn/Kyle surface the moment
+  // their agreement is uploaded, even before their % terms are entered).
   const commPlans = await readCommissionPlans();
+  const agreementDocFor = (uid: string) => (docsByUser.get(uid) ?? []).find((d) => /agreement|contractor/i.test(d.label)) ?? null;
+  const commRows = active
+    .filter((u) => u.role !== "admin")
+    .map((u) => {
+      const first = u.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+      return { u, first, plan: commPlans[first] ?? null, agreement: agreementDocFor(u.id) };
+    })
+    .filter((r) => r.plan || r.agreement)
+    .sort((a, b) => a.u.name.localeCompare(b.u.name));
 
   return (
     <div className="space-y-5">
@@ -258,19 +271,37 @@ export default async function TeamRosterPage({ searchParams }: { searchParams: P
       <Card className="p-4">
         <div className="mb-2 text-sm font-extrabold text-slate-800">🎯 Commission plans <span className="font-normal text-slate-400">(from the signed agreements — C-suite only)</span></div>
         <div className="grid gap-2 sm:grid-cols-2">
-          {Object.entries(commPlans).map(([first, g]) => (
-            <div key={first} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
+          {commRows.map(({ u, plan: g, agreement }) => (
+            <div key={u.id} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
               <div className="flex items-baseline gap-2">
-                <span className="text-sm font-bold capitalize text-slate-800">{first}</span>
-                <span className="ml-auto text-lg font-extrabold text-slate-900">${g.goalMonthly.toLocaleString()}<span className="text-[10px] font-semibold text-slate-400">/mo goal</span></span>
+                <span className="text-sm font-bold text-slate-800">{u.name}</span>
+                {g ? (
+                  <span className="ml-auto text-lg font-extrabold text-slate-900">${g.goalMonthly.toLocaleString()}<span className="text-[10px] font-semibold text-slate-400">/mo goal</span></span>
+                ) : (
+                  <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">plan terms not entered</span>
+                )}
               </div>
-              <div className="mt-1 text-[11px] font-semibold text-slate-600">{g.base || "No base — commission only"}</div>
-              <div className="mt-1 text-[11px] text-slate-500">💵 {g.structure}</div>
-              <div className="mt-0.5 text-[11px] text-slate-400">⏱ {g.payout}</div>
+              {g ? (
+                <>
+                  <div className="mt-1 text-[11px] font-semibold text-slate-600">{g.base || "No base — commission only"}</div>
+                  <div className="mt-1 text-[11px] text-slate-500">💵 {g.structure}</div>
+                  <div className="mt-0.5 text-[11px] text-slate-400">⏱ {g.payout}</div>
+                </>
+              ) : (
+                <div className="mt-1 text-[11px] text-slate-500">Agreement on file — tell me {u.name.split(/\s+/)[0]}&apos;s % / base / payout and I&apos;ll add the plan.</div>
+              )}
+              <div className="mt-1.5">
+                {agreement ? (
+                  <a href={`/api/team-doc/${agreement.id}`} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-brand-navy hover:underline">📎 View signed agreement</a>
+                ) : (
+                  <span className="text-[11px] font-semibold text-amber-600">⚠️ No signed agreement uploaded yet</span>
+                )}
+              </div>
             </div>
           ))}
+          {commRows.length === 0 && <div className="text-[12px] text-slate-400">No commission plans or signed agreements on file yet. Upload each contractor&apos;s agreement on their row below.</div>}
         </div>
-        <div className="mt-2 text-[10px] text-slate-400">Each rep sees only their own plan (on their KPI entry page). Signed agreements: upload each PDF on the member&apos;s row below (HR docs).</div>
+        <div className="mt-2 text-[10px] text-slate-400">Each rep sees only their own plan (on their KPI entry page). Everyone with a signed Independent Contractor Agreement shows here. Upload each PDF on the member&apos;s row below (HR docs).</div>
       </Card>
 
       {sp.saved && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}

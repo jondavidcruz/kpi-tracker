@@ -41,6 +41,7 @@ function statusChip(p: KpiProof) {
     case "under_credited": return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">🟡 records show {p.systemCount}, scorecard has {p.recorded}</span>;
     case "records_only": return <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-700">ℹ️ {p.systemCount} in records (not on scorecard yet)</span>;
     case "auto": return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">🟢 auto-tracked — matches records</span>;
+    case "manual": return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">✍️ manual — self-reported{p.recorded != null ? ` (${p.recorded})` : ""}</span>;
     default: return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">🟢 matches records</span>;
   }
 }
@@ -72,7 +73,7 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <SectionTitle title="🧾 KPI Verification — trust but verify" subtitle="Every output number recomputed straight from the records behind it. Pick a day, week, or month and open any KPI to see the receipts — which cards, who, and when. C-suite only." accent={flagged ? "bg-red-500" : "bg-emerald-500"} />
+      <SectionTitle title="🧾 KPI Verification — trust but verify" subtitle="The 💰 Money Movers from each person's scorecard, recomputed straight from the records behind them. Pick a day, week, or month and open any KPI to see the receipts — which cards, which buyers, who, and when. C-suite only." accent={flagged ? "bg-red-500" : "bg-emerald-500"} />
 
       {/* Controls */}
       <Card className="p-4 space-y-3">
@@ -116,7 +117,7 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-lg">{p.emoji}</span>
               <span className="text-sm font-extrabold text-slate-800">{p.name}</span>
-              <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">records: {p.systemCount}</span>
+              {p.derivable && <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">records: {p.systemCount}</span>}
               {p.recorded != null && <span className="text-[11px] text-slate-400">scorecard: {p.recorded}{p.enteredBy ? ` · by ${p.enteredBy}` : ""}</span>}
               <span className="ml-auto">{statusChip(p)}</span>
             </div>
@@ -134,8 +135,10 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
                   ))}
                 </ul>
               </details>
-            ) : (
+            ) : p.derivable ? (
               <p className="mt-1 text-[12px] text-slate-400">No records found for this period{p.recorded ? ` — but ${p.recorded} is on the scorecard. Where did it come from?` : "."}</p>
+            ) : (
+              <p className="mt-1 text-[12px] text-slate-400">✍️ Self-reported KPI — no system trail to verify against yet{p.recorded ? `. Scorecard shows ${p.recorded}.` : "."}</p>
             )}
           </Card>
         ))}
@@ -143,7 +146,7 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
       </div>
 
       <Card className="border-l-4 border-slate-300 p-4 text-[12px] text-slate-600">
-        <b className="text-slate-800">How to read this:</b> the <b>records</b> number is recomputed live from what actually happened in the War Room (kanban stage-moves to “Vetted,” new cards created, contacts logged). <b>🟢 auto-tracked</b> means the scorecard pulls that number straight from the records — nobody types it. <b>🔴 over-reported</b> means a manually-entered scorecard number is higher than the records support — open the receipts and see what&apos;s really there. Carrier/manual KPIs without a records trail will say so.
+        <b className="text-slate-800">How to read this:</b> these are the <b>💰 Money Movers</b> from this person&apos;s scorecard. The <b>records</b> number is recomputed live from what actually happened in the War Room — real <b>conversations</b> (connected calls, not dial attempts), kanban stage-moves to “Vetted,” new cards created, buy-boxes captured, deals sent (DealSend), and offers logged. <b>🟢 auto-tracked</b> means the scorecard pulls that number straight from the records — nobody types it. <b>🔴 over-reported</b> means a manually-entered number is higher than the records support — open the receipts and see what&apos;s really there. <b>✍️ manual</b> KPIs (e.g. Contracts Assigned) have no system trail yet, so their self-reported number is shown but not flagged.
       </Card>
     </div>
   );
