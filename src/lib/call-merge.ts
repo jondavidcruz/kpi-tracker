@@ -35,6 +35,20 @@ export async function foldDispoIntoCall(contactId: string, summary: string): Pro
   return true;
 }
 
+/** Guard against duplicate disposition rows (Jon 2026-11-05: "the dialer disposition
+ *  logged 6 times for one call"). When there's no call/recording row to fold into, the
+ *  fallback used to log a fresh event every time the outcome was saved — a double-click or
+ *  a re-submit then piled up identical rows. Returns true if an identical disposition for
+ *  this contact was already logged inside the merge window, so the caller logs nothing. */
+export async function dispoAlreadyLogged(contactId: string, body: string): Promise<boolean> {
+  if (!contactId) return false;
+  const since = new Date(Date.now() - RECENT_MS);
+  const dup = await db.crmEvent.findFirst({
+    where: { contactId, kind: "call", body, at: { gte: since } }, select: { id: true },
+  }).catch(() => null);
+  return !!dup;
+}
+
 /** A recording landing when a row for the same call already exists (the browser-call /
  *  click-to-call start, or a bare disposition) → upgrade THAT row in place into the recording
  *  row (keeps its timeline position + any disposition it already carries). Returns true if it

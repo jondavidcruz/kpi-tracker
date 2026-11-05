@@ -125,6 +125,9 @@ export default function DialPad({ floating = false, owner = false }: { floating?
   // (Jon 2026-10-27: don't show both at once — you only categorize a call you actually talked on).
   const [dispoOutcome, setDispoOutcome] = useState<string | null>(null);
   const [lastCall, setLastCall] = useState<Ctx | null>(null); // outcome strip target
+  // 🛡 Stops the same disposition firing twice for one call (Jon 2026-11-05: logged 6×).
+  // "Talked" keeps the panel open for the KPI picker, so re-clicking it re-submitted.
+  const dispoSentRef = useRef<string>("");
   const [incoming, setIncoming] = useState<{ number: string; name?: string; deptLabel?: string } | null>(null);
   const [answeredBy, setAnsweredBy] = useState<{ agent: string; caller: string } | null>(null);
   const [micOk, setMicOk] = useState<boolean | null>(null); // null = unknown
@@ -412,7 +415,7 @@ export default function DialPad({ floating = false, owner = false }: { floating?
     // short window, so ending it doesn't ring again a couple seconds later (Jon 2026-10-29).
     if (ctx?.dir === "in" && ctx?.phone) { const k = leadKey(ctx.phone); declinedRef.current.set(k, Date.now()); setTimeout(() => declinedRef.current.delete(k), DECLINE_SILENCE_MS + 1000); }
     setState("idle"); setMuted(false); setSecs(0); setOnCall(null); setDtmfTrail(""); recStartedRef.current = false;
-    if (ctx?.oppId || ctx?.contactId || ctx?.phone) setLastCall({ ...ctx, secs: dur }); // keypad dials get the strip too (Jon 2026-10-09)
+    if (ctx?.oppId || ctx?.contactId || ctx?.phone) { dispoSentRef.current = ""; setLastCall({ ...ctx, secs: dur }); } // keypad dials get the strip too (Jon 2026-10-09); reset the dispo-dedup guard for the new call
     if (ctx?.phone || ctx?.contactId) {
       // log EVERY call — keypad dials included; the server find-or-creates the
       // contact so it shows in Conversations recents (Jon 2026-10-08)
@@ -924,6 +927,10 @@ export default function DialPad({ floating = false, owner = false }: { floating?
               <span className="flex flex-wrap gap-1">
                 {([["no_answer", "📵 No Answer"], ["voicemail", "📼 Voicemail"], ["follow_up", "🔁 Follow Up"], ["appointment", "📅 Appt Set"], ["talked", "✅ Talked"], ["not_interested", "🚫 Not Interested"], ["wrong_number", "❌ Wrong #"]] as const).map(([k, l]) => (
                   <button key={k} onClick={() => {
+                    // skip if this exact disposition was already sent for this call
+                    const sendKey = `${lastCall.contactId ?? lastCall.phone ?? ""}:${k}`;
+                    if (dispoSentRef.current === sendKey) { if (!(k === "talked" && (lastCall.secs ?? 0) >= 60)) { setLastCall(null); setDispoOutcome(null); } return; }
+                    dispoSentRef.current = sendKey;
                     const fd = new FormData();
                     fd.set("oppId", lastCall.oppId ?? "");
                     fd.set("contactId", lastCall.contactId ?? "");

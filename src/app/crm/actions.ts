@@ -1343,10 +1343,11 @@ export async function dialerOutcomeAction(formData: FormData) {
     const nf = new Date(Date.now() + NEXT_DAYS[outcome] * 86400000).toISOString().slice(0, 10);
     await db.crmOpportunity.update({ where: { id: oppId }, data: { nextFollowUp: nf, ...(outcome === "not_interested" ? { stage: "nurture" } : {}) } });
     // 🧹 Fold into the call's recording entry if it's already there (one clean timeline row).
-    const { foldDispoIntoCall } = await import("@/lib/call-merge");
+    const { foldDispoIntoCall, dispoAlreadyLogged } = await import("@/lib/call-merge");
     const summary = `📞 ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`;
-    if (!(await foldDispoIntoCall(contactId, summary)))
-      await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer: ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`, actor: me.name });
+    const body = `Dialer: ${label[outcome]}${note ? ` — ${note}` : ""} · next follow-up ${nf}`;
+    if (!(await foldDispoIntoCall(contactId, summary)) && !(await dispoAlreadyLogged(contactId, body)))
+      await logCrmEvent({ contactId, oppId, kind: "call", body, actor: me.name });
   }
   // 🎙 Disposition decides whether a recording stays filed (Jon 2026-10-26): record it so a
   // later recording.saved can skip Drive, and pull any already-filed recording if it was a VM.
@@ -1548,10 +1549,11 @@ export async function dialerOutcomeQuickAction(formData: FormData): Promise<void
   }
   // 🧹 Fold into the call's recording entry if it's already there (one clean timeline row).
   {
-    const { foldDispoIntoCall } = await import("@/lib/call-merge");
+    const { foldDispoIntoCall, dispoAlreadyLogged } = await import("@/lib/call-merge");
     const summary = `📞 ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`;
-    if (!(await foldDispoIntoCall(contactId, summary)))
-      await logCrmEvent({ contactId, oppId, kind: "call", body: `Dialer disposition: ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`, actor: me.name });
+    const body = `Dialer disposition: ${label[outcome]}${nf ? ` · next follow-up ${nf}` : ""}`;
+    if (!(await foldDispoIntoCall(contactId, summary)) && !(await dispoAlreadyLogged(contactId, body)))
+      await logCrmEvent({ contactId, oppId, kind: "call", body, actor: me.name });
   }
   // 🎙 Disposition decides whether the recording stays filed (Jon 2026-10-26).
   const { recordCallDispo, removeRecentRecording, NO_KEEP_OUTCOMES } = await import("@/lib/call-dispo");
