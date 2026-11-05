@@ -48,44 +48,62 @@ export type DreiLead = {
  *  changes). Shared by the ?dreipull cron and the owner "Pull now" button. Defensive field
  *  parsing because the /contacts response shape varies. */
 export async function pullDreiQualifiedLeads(): Promise<{ scanned: number; qualified: number; created: number; error?: string }> {
-  const { directReiContacts, directReiSellers } = await import("@/lib/directrei");
+  const { directReiContacts, directReiDeals } = await import("@/lib/directrei");
   const firstArray = (o: unknown, depth = 0): Array<Record<string, unknown>> | null => {
     if (Array.isArray(o)) return o as Array<Record<string, unknown>>;
     if (o && typeof o === "object" && depth < 2) {
-      for (const k of ["data", "contacts", "results", "items", "sellers", "rows", "records"]) {
+      for (const k of ["rows", "data", "contacts", "results", "items", "sellers", "records"]) {
         const found = firstArray((o as Record<string, unknown>)[k], depth + 1);
         if (found) return found;
       }
     }
     return null;
   };
-  // Prefer the SELLERS endpoint (sellers only — no buyers/developers); fall back to /contacts.
-  let res = await directReiSellers({ limit: "500" });
-  let rows = res.ok ? (firstArray(res.body) ?? []) : [];
-  if (rows.length === 0) { res = await directReiContacts({ limit: "500" }); rows = res.ok ? (firstArray(res.body) ?? []) : []; }
-  if (rows.length === 0) {
-    let snip = ""; try { snip = JSON.stringify(res.body).slice(0, 220); } catch { snip = String(res.body).slice(0, 220); }
-    return { scanned: 0, qualified: 0, created: 0, error: `no sellers found (HTTP ${res.status}). Raw: ${snip}` };
-  }
   const g = (c: Record<string, unknown>, ...keys: string[]) => { for (const k of keys) { const v = c[k]; if (v != null && String(v).trim()) return String(v); } return ""; };
+  // Direct REI confirmed shape: responding sellers that need attention = status "qualified"
+  // (stated a price) + "replied" (responded) — Jon's "Action Required" list is both. Plain
+  // /contacts is paginated to 50 of 2000+, so query each status explicitly. The ADDRESS lives
+  // on the DEAL (deal.name), linked by seller_id — joined in below to fill the property address.
+  const rows: Array<Record<string, unknown>> = [];
+  const seenId = new Set<string>();
+  let lastStatus = 0;
+  for (const st of ["qualified", "replied"]) {
+    const r = await directReiContacts({ status: st, limit: "500" });
+    lastStatus = r.status;
+    if (!r.ok) continue;
+    for (const row of (firstArray(r.body) ?? [])) {
+      const id = g(row, "id", "contact_id");
+      if (id && seenId.has(id)) continue; if (id) seenId.add(id);
+      rows.push(row);
+    }
+  }
+  if (rows.length === 0) {
+    return { scanned: 0, qualified: 0, created: 0, error: `no qualified/replied sellers (HTTP ${lastStatus}).` };
+  }
+  const dealsRes = await directReiDeals({ limit: "500" }).catch(() => null);
+  const dealRows = dealsRes?.ok ? (firstArray(dealsRes.body) ?? []) : [];
+  const dealBySeller = new Map<string, Record<string, unknown>>();
+  for (const dl of dealRows) { const sid = g(dl, "seller_id", "sellerId", "contact_id"); if (sid && !dealBySeller.has(sid)) dealBySeller.set(sid, dl); }
+
   let created = 0, qualified = 0;
   for (const c of rows) {
-    // 🚫 sellers only — never pull buyers/developers/agents into Michelle's seller pipeline.
-    const role = g(c, "role", "contact_type", "type", "lead_type", "contact_role", "category").toLowerCase();
-    if (/buyer|developer|builder|agent|investor|vendor|wholesaler|cash ?buyer/.test(role)) continue;
-    const status = g(c, "status", "stage", "action", "lead_status", "disposition").toLowerCase();
-    const notes = g(c, "ai_summary", "ai_reply", "summary", "action_note", "notes", "last_message", "last_reply", "reply", "last_inbound", "conversation", "message", "text", "ai_notes");
-    const isHot = /qualif|ready|action.?req|price|offer|interested|replied/i.test(status) || /\$[\d,]+|asking|per ?sqft|would take|willing to/i.test(notes);
-    if (!isHot) continue;
+    // 🚫 sellers only — Direct REI tags buyers/builders role:"buyer"; keep role:"seller"/"owner".
+    const role = `${g(c, "role")} ${g(c, "contact_type")}`.toLowerCase();
+    if (/buyer|developer|builder|investor|agent|wholesaler/.test(role)) continue;
     qualified++;
-    const price = (notes.match(/\$[\d,]+(?:\.\d+)?/) ?? [])[0] ?? g(c, "price", "asking_price", "offer_price", "list_price");
+    const id = g(c, "id", "contact_id");
+    const deal = id ? dealBySeller.get(id) : undefined;
+    const notes = g(c, "ai_summary", "ai_reply", "summary", "notes", "note", "last_message", "last_reply", "reply", "ai_notes", "action_note");
+    const dealAddr = deal ? g(deal, "name", "property_address", "address", "property") : "";
+    const dealPrice = deal ? g(deal, "offer_price", "contract_price", "arv", "emv") : "";
+    const price = dealPrice || ((notes.match(/\$[\d,]+(?:\.\d+)?/) ?? [])[0] ?? "");
     const r = await upsertDreiHotLead({
-      name: g(c, "name", "full_name", "contact_name", "seller_name", "owner_name"),
-      phone: g(c, "phone", "phone_number", "mobile", "phone1", "primary_phone"),
-      email: g(c, "email", "email_address"),
+      name: g(c, "name"),
+      phone: g(c, "phone", "phone_number", "mobile"),
+      email: g(c, "email"),
       market: g(c, "market", "city"),
-      address: g(c, "property_address", "mailing_street", "address", "street", "property_street", "situs_address", "situs", "prop_address", "full_address", "property"),
-      status, notes, price, dreiId: g(c, "id", "contact_id", "uuid"),
+      address: dealAddr || g(c, "address", "property_address"),
+      status: "qualified", notes, price: price ? (price.startsWith("$") ? price : `$${price}`) : "", dreiId: id,
     }).catch(() => null);
     if (r?.created) created++;
   }
