@@ -81,8 +81,11 @@ export async function upsertDreiHotLead(d: DreiLead): Promise<{ created: boolean
   let opp = await db.crmOpportunity.findFirst({ where: { contactId: contact.id, archivedAt: null } });
   if (!opp) {
     const pipe = (await readPipelines()).find((p) => p.name.toLowerCase().includes("michelle"));
+    // Land in the NEW stage (Jon 2026-11-05: "put it under New, not Follow Up"), falling back
+    // to the pipeline's first stage if there's no stage literally called "New".
+    const newStage = pipe?.stages.find((s) => /\bnew\b/i.test(`${s.key} ${s.label}`))?.key ?? pipe?.stages[0]?.key ?? "new";
     opp = await db.crmOpportunity.create({ data: {
-      contactId: contact.id, title, stage: pipe?.stages[0]?.key ?? "new", pipeline: pipe?.name ?? "", assignedTo: MICHELLE, tags: "hot",
+      contactId: contact.id, title, stage: newStage, pipeline: pipe?.name ?? "", assignedTo: MICHELLE, tags: "hot",
     } });
   }
   if (recent) return { created: false, oppId: opp.id }; // already handled — don't re-note/re-task
