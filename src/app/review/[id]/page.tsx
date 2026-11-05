@@ -9,14 +9,32 @@ import { Card, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-// A high-level weekly performance review for one rep — built for keep/reassign
-// decisions. Manager/admin only.
+// A high-level performance review for one rep — built for keep/reassign decisions.
+// Manager/admin only. Pull it over any period: week / month / quarter / year (Jon 2026-11-04).
+const PERIODS = [
+  { key: "week", label: "Last week" },
+  { key: "month", label: "This month" },
+  { key: "quarter", label: "This quarter" },
+  { key: "year", label: "This year" },
+] as const;
+
+function reviewRange(period: string, today: string): { start: string; end: string; label: string } {
+  const d = new Date(today + "T00:00:00Z");
+  const monthName = (ym: string) => new Date(ym + "-01T00:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+  switch (period) {
+    case "month": return { start: today.slice(0, 8) + "01", end: today, label: `${monthName(today.slice(0, 7))} (month-to-date)` };
+    case "quarter": { const m = d.getUTCMonth(); const qs = Math.floor(m / 3) * 3; return { start: `${d.getUTCFullYear()}-${String(qs + 1).padStart(2, "0")}-01`, end: today, label: `Q${Math.floor(m / 3) + 1} ${d.getUTCFullYear()} (quarter-to-date)` }; }
+    case "year": return { start: `${d.getUTCFullYear()}-01-01`, end: today, label: `${d.getUTCFullYear()} (year-to-date)` };
+    default: return lastWeekRange(today);
+  }
+}
+
 export default async function ReviewPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; period?: string }>;
 }) {
   const me = await getCurrentUser();
   if (!isAdmin(me)) {
@@ -34,7 +52,8 @@ export default async function ReviewPage({
   const sp = await searchParams;
   const settings = await getSettings();
   const today = sp.date ?? todayStr(settings.orgTimezone);
-  const wk = lastWeekRange(today);
+  const period = PERIODS.some((p) => p.key === sp.period) ? sp.period! : "week";
+  const wk = reviewRange(period, today);
   const workdays = datesInRange(wk.start, wk.end).filter((d) => {
     const dow = new Date(d + "T00:00:00Z").getUTCDay();
     return dow >= 1 && dow <= 5; // Mon–Fri
@@ -90,10 +109,19 @@ export default async function ReviewPage({
   return (
     <div className="space-y-6">
       <SectionTitle
-        title={`📋 Weekly Review: ${rep.name}`}
+        title={`📋 Performance Review: ${rep.name}`}
         subtitle={`${positionLabel(rep.position)} · ${wk.label}`}
         accent="bg-brand-gold"
       />
+
+      {/* Period picker (Jon 2026-11-04): pull the same review over any window. */}
+      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+        <span className="mr-1 font-semibold text-slate-400">Period:</span>
+        {PERIODS.map((p) => (
+          <Link key={p.key} href={`/review/${id}?period=${p.key}`} className={`rounded-lg px-2.5 py-1 font-bold ${period === p.key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{p.label}</Link>
+        ))}
+        <Link href={`/review/${id}/export`} className="ml-auto rounded-lg bg-white px-2.5 py-1 font-bold text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50" title="Printable all-time KPI record (Save as PDF)">📄 PDF record</Link>
+      </div>
 
       {/* Top-line signals */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -110,7 +138,7 @@ export default async function ReviewPage({
         <Card className="p-4 text-center">
           <div className="text-xs font-semibold text-slate-500">PROCESS CALLS (training)</div>
           <div className="mt-1 text-4xl font-extrabold text-slate-800">{processTraining ? processTraining.total : "—"}</div>
-          <div className="text-xs text-slate-400">last week total</div>
+          <div className="text-xs text-slate-400">period total</div>
         </Card>
       </div>
 
@@ -129,7 +157,7 @@ export default async function ReviewPage({
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/70 text-left">
               <th className="px-4 py-3 font-semibold">KPI</th>
-              <th className="px-3 py-3 text-right font-semibold">Week total</th>
+              <th className="px-3 py-3 text-right font-semibold">Period total</th>
               <th className="px-3 py-3 text-right font-semibold">Avg / logged day</th>
               <th className="px-3 py-3 text-right font-semibold">Goal</th>
               <th className="px-3 py-3 text-center font-semibold">Days logged</th>
@@ -157,7 +185,7 @@ export default async function ReviewPage({
           <li><strong>Training:</strong> process calls (in progress). Weigh whether a 2nd lead manager is justified by current lead volume.</li>
           <li><strong>Reliability</strong> reflects days logged vs Mon–Fri; low % often signals the known power/internet issues.</li>
         </ul>
-        <p className="mt-3 text-xs text-slate-400">Numbers are last completed week ({wk.label}). Adjust the week with ?date=YYYY-MM-DD.</p>
+        <p className="mt-3 text-xs text-slate-400">Numbers are for {wk.label}. Switch the window with the period buttons up top, or anchor a different day with ?date=YYYY-MM-DD.</p>
       </Card>
     </div>
   );

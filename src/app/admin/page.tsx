@@ -299,27 +299,8 @@ export default async function AdminPage({
         </section>
       )}
 
-      {/* ════ REVIEWS ════ */}
-      {owner && (
-        <section id="reviews" className="scroll-mt-20">
-          <SectionTitle title="📋 Weekly performance reviews 🔒" subtitle="Owner-only · keep / coach / reassign decisions" accent="bg-violet-400" />
-          <Card className="p-6">
-            <div className="flex flex-wrap gap-2">
-              {users.filter((u) => u.position).map((u) => (
-                <span key={u.id} className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
-                  <Link href={`/review/${u.id}`} className="bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">
-                    📋 {u.name}
-                  </Link>
-                  <Link href={`/review/${u.id}/export`} className="border-l border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100" title={`Printable all-time KPI record for ${u.name} (Save as PDF)`}>
-                    📄 PDF
-                  </Link>
-                </span>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-slate-400">Only you (admin) can see this section. &quot;📄 PDF&quot; opens a printable all-time KPI record — use it to archive someone&apos;s history before removing them.</p>
-          </Card>
-        </section>
-      )}
+      {/* 📋 Performance reviews moved to KPI Reports (/report) with week/month/quarter/year
+          pulls (Jon 2026-11-04). They're no longer on this admin tab. */}
 
           </div>,
           <div key="kpis" className="space-y-8">

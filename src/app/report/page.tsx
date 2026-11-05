@@ -170,6 +170,25 @@ export default async function ReportPage({
       </div>
       {sp.synced && <div className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Synced from REI Reply — KPIs are current.</div>}
 
+      {/* 📋 Performance reviews (Jon 2026-11-04): moved here from Admin. Open any rep's review,
+          then pull it by week / month / quarter / year inside. Managers + leadership only. */}
+      {manager && (
+        <section>
+          <SectionTitle title="📋 Performance Reviews" subtitle="Open a rep's review — then pull it by week, month, quarter, or year." accent="bg-violet-400" />
+          <Card className="p-4">
+            <div className="flex flex-wrap gap-2">
+              {reps.filter((u) => u.position && u.role !== "admin").map((u) => (
+                <span key={u.id} className="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200">
+                  <a href={`/review/${u.id}`} className="bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">📋 {u.name}</a>
+                  <a href={`/review/${u.id}/export`} className="border-l border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100" title={`Printable all-time KPI record for ${u.name} (Save as PDF)`}>📄</a>
+                </span>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-400">Active team only. Each review opens on last week; use the period buttons there for month / quarter / year. &quot;📄&quot; is the printable all-time record.</p>
+          </Card>
+        </section>
+      )}
+
       {/* CRM activity — auto-pulled through the day; managers only */}
       {/* CRM activity strip removed (Jon 2026-10-08): KPIs now auto-feed each member's numbers, so this was double. */}
 
