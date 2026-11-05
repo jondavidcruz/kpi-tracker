@@ -6,7 +6,7 @@ import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dreiLeadsOn } from "@/lib/directrei-leads";
 import { Card, SectionTitle } from "@/components/ui";
-import { toggleDreiLeadsAction, pullDreiNowAction, diagnoseDreiAction, resetDreiNowAction } from "./actions";
+import { toggleDreiLeadsAction, pullDreiNowAction, diagnoseDreiAction, resetDreiNowAction, importDreiCsvAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +81,16 @@ export default async function DirectReiLeadsPage({ searchParams }: { searchParam
           <code className="whitespace-nowrap text-[12px] text-emerald-300">{webhookUrl}</code>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">The <code className="rounded bg-slate-100 px-1">?k=</code> value is your private key — don&apos;t share the URL publicly. Keys are never shown to non-owners.</p>
+      </Card>
+
+      {/* 📥 CSV import — the reliable path (the export has the notes + prices the API hides) */}
+      <Card className="p-5">
+        <div className="text-sm font-extrabold text-slate-800">📥 Import a Direct REI sellers CSV</div>
+        <p className="mt-1 text-[13px] text-slate-500">Export your sellers from Direct REI (the ⬇ Export button), then drop the file here. It imports <b>only sellers who stated an asking price</b> in their notes, that have an address, and that aren&apos;t already in the War Room — into Michelle&apos;s New stage with the price + notes. Re-uploading is safe (duplicates are skipped).</p>
+        <form action={importDreiCsvAction} className="mt-3 flex flex-wrap items-center gap-2">
+          <input type="file" name="file" accept=".csv,text/csv" required className="text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-slate-700 hover:file:bg-slate-200" />
+          <button className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:bg-brand-navy-700">Import price-stated sellers</button>
+        </form>
       </Card>
 
       {/* 🔬 API diagnostic — find which endpoint holds the sellers + its shape */}

@@ -130,7 +130,7 @@ export async function pullDreiQualifiedLeads(): Promise<{ scanned: number; quali
 /** Upsert a Direct-REI-qualified seller as a HOT lead in Michelle's pipeline. Idempotent:
  *  won't re-tag / re-task a contact already flagged for this same qualification in the last
  *  3 days. Returns { created, oppId } or null if there's nothing to key on. */
-export async function upsertDreiHotLead(d: DreiLead): Promise<{ created: boolean; oppId: string } | null> {
+export async function upsertDreiHotLead(d: DreiLead, opts?: { skipTask?: boolean }): Promise<{ created: boolean; oppId: string } | null> {
   const phone = (d.phone ?? "").replace(/[^+\d]/g, "");
   const last10 = phone.replace(/\D/g, "").slice(-10);
   const email = (d.email ?? "").trim().toLowerCase();
@@ -185,8 +185,73 @@ export async function upsertDreiHotLead(d: DreiLead): Promise<{ created: boolean
   const priceLine = d.price ? ` · 💰 ${d.price}` : "";
   const noteLine = d.notes ? `\n“${d.notes.slice(0, 300)}”` : "";
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🔥 Direct REI QUALIFIED — replied, auto-routed to ${MICHELLE}${priceLine}${noteLine}`, actor: "directrei" }).catch(() => {});
-  const openTask = await db.crmTask.findFirst({ where: { contactId: contact.id, createdBy: "directrei", doneAt: null }, select: { id: true } }).catch(() => null);
-  if (!openTask) await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: `🔥 HOT — Direct REI reply${d.price ? ` (${d.price})` : ""} — call ${contact.name} NOW`, due: new Date().toISOString().slice(0, 10), assignedTo: MICHELLE, createdBy: "directrei" } }).catch(() => {});
+  if (!opts?.skipTask) {
+    const openTask = await db.crmTask.findFirst({ where: { contactId: contact.id, createdBy: "directrei", doneAt: null }, select: { id: true } }).catch(() => null);
+    if (!openTask) await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: `🔥 HOT — Direct REI reply${d.price ? ` (${d.price})` : ""} — call ${contact.name} NOW`, due: new Date().toISOString().slice(0, 10), assignedTo: MICHELLE, createdBy: "directrei" } }).catch(() => {});
+  }
   await db.crmOpportunity.update({ where: { id: opp.id }, data: { updatedAt: new Date() } }).catch(() => {});
   return { created: true, oppId: opp.id };
+}
+
+// ── CSV import ────────────────────────────────────────────────────────────────────────────
+// A tiny RFC-4180 parser (handles quoted fields with commas AND newlines — the AI Notes column
+// has line breaks). Returns an array of header-keyed row objects.
+function parseCsv(text: string): Array<Record<string, string>> {
+  const rows: string[][] = [];
+  let field = "", row: string[] = [], inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ",") { row.push(field); field = ""; }
+    else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else if (ch !== "\r") field += ch;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const headers = rows[0].map((h) => h.trim());
+  return rows.slice(1).filter((r) => r.some((c) => c.trim())).map((r) => Object.fromEntries(headers.map((h, i) => [h, (r[i] ?? "").trim()])));
+}
+
+/** Import a Direct REI "sellers" CSV export → leads in Michelle's pipeline WITH their notes.
+ *  Jon's spec (2026-11-05): ONLY sellers who stated an asking PRICE in the notes, that have an
+ *  ADDRESS, are not "not interested", and are NOT already in the War Room (no duplicate leads).
+ *  No per-lead task (bulk). Returns a full breakdown. */
+export async function importDreiSellersCsv(csvText: string): Promise<{ total: number; imported: number; duplicates: number; noPrice: number; skipped: number }> {
+  const recs = parseCsv(csvText);
+  let imported = 0, duplicates = 0, noPrice = 0, skipped = 0;
+  const seenLocal = new Set<string>();
+  for (const rec of recs) {
+    const status = (rec["Status"] || "").toLowerCase();
+    if (/not.?interested/.test(status)) { skipped++; continue; } // explicitly not interested
+    const notes = (rec["Notes"] || "").trim();
+    // must have STATED A PRICE in the notes
+    const priceM = notes.match(/\$\s?[\d,]+(?:\.\d+)?\s?k?/i) ?? notes.match(/asking(?:\s+price)?(?:\s+of)?\s+\$?[\d,]+\s?k?/i);
+    if (!priceM) { noPrice++; continue; }
+    const streetAddr = (rec["Property Address"] || "").trim();
+    if (!streetAddr) { skipped++; continue; } // must have an address
+    const phone = (rec["Phone"] || "").replace(/\D/g, "").slice(-10);
+    const email = (rec["Email"] || "").trim().toLowerCase();
+    const key = phone || email;
+    if (!key) { skipped++; continue; }
+    if (seenLocal.has(key)) { duplicates++; continue; } // same seller twice in the CSV
+    seenLocal.add(key);
+    // 🚫 skip if ALREADY in the War Room — don't import duplicates (Jon 2026-11-05).
+    const existing = await db.crmContact.findFirst({
+      where: { OR: [...(phone.length === 10 ? [{ phone: { contains: phone } }] : []), ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : [])] },
+      select: { id: true },
+    }).catch(() => null);
+    if (existing) { duplicates++; continue; }
+    const addr = [streetAddr, rec["Property City"], `${rec["Property State"] || ""} ${rec["Property Zip"] || ""}`.trim()].filter((s) => s && s.trim()).join(", ");
+    const price = (priceM[0].match(/\$?\s?[\d,]+(?:\.\d+)?\s?k?/i) ?? [priceM[0]])[0].trim();
+    const r = await upsertDreiHotLead({
+      name: rec["Name"], phone: rec["Phone"], email: rec["Email"],
+      market: rec["Property City"] || rec["Mailing City"] || "",
+      address: addr, status, notes, price: price.startsWith("$") ? price : `$${price}`,
+    }, { skipTask: true }).catch(() => null);
+    if (r?.created) imported++; else duplicates++;
+  }
+  return { total: recs.length, imported, duplicates, noPrice, skipped };
 }

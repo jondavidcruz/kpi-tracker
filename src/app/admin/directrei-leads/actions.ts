@@ -1,6 +1,6 @@
 "use server";
 import { getCurrentUser, isOwner } from "@/lib/auth";
-import { setDreiLeads, pullDreiQualifiedLeads, resetDreiPulledLeads } from "@/lib/directrei-leads";
+import { setDreiLeads, pullDreiQualifiedLeads, resetDreiPulledLeads, importDreiSellersCsv } from "@/lib/directrei-leads";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -11,6 +11,18 @@ export async function resetDreiNowAction(): Promise<void> {
   if (!isOwner(me)) return;
   const r = await resetDreiPulledLeads();
   redirect(`/admin/directrei-leads?pull=${encodeURIComponent(`archived ${r.archived} auto-pulled leads — now click Pull to bring back qualified-only`)}`);
+}
+
+/** 📥 Import an uploaded Direct REI sellers CSV — price-stated sellers with an address, not
+ *  already in the War Room. The reliable path (the CSV has the notes the API doesn't). */
+export async function importDreiCsvAction(formData: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) { redirect(`/admin/directrei-leads?pull=${encodeURIComponent("err:no file selected")}`); }
+  const text = await (file as File).text();
+  const r = await importDreiSellersCsv(text);
+  redirect(`/admin/directrei-leads?pull=${encodeURIComponent(`imported ${r.imported} new price-stated sellers · ${r.duplicates} already in War Room · ${r.noPrice} had no price · ${r.skipped} skipped (of ${r.total})`)}`);
 }
 
 /** 🔬 Probe the Direct REI API endpoints and stash the result so the page can show us which
