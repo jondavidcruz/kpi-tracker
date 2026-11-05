@@ -69,6 +69,26 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   for (const e of recent) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
   const contactIds = [...latestByContact.keys()].filter(inDept).slice(0, 200);
   const mineOnly = canSeeAll && sp.who === "me";
+  // 🏃 "Mine" = everyone I've CALLED or TEXTED today — a running tally so I know who I can
+  // text back — not just leads assigned to me (Jon 2026-11-05).
+  let myTodayIds: string[] = [];
+  if (mineOnly) {
+    const ORG_TZ = "America/Los_Angeles";
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: ORG_TZ, hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date());
+    const hh = (+(p.find((x) => x.type === "hour")?.value ?? "0")) % 24, mm = +(p.find((x) => x.type === "minute")?.value ?? "0"), ss = +(p.find((x) => x.type === "second")?.value ?? "0");
+    const startOfToday = new Date(Date.now() - (hh * 3600 + mm * 60 + ss) * 1000);
+    const mine = await db.crmEvent.findMany({
+      where: { actor: { equals: me!.name, mode: "insensitive" }, kind: { in: COMMS }, at: { gte: startOfToday } },
+      select: { contactId: true }, orderBy: { at: "desc" }, take: 500,
+    }).catch(() => [] as Array<{ contactId: string }>);
+    myTodayIds = [...new Set(mine.map((e) => e.contactId))].filter(inDept);
+    // these contacts may be outside the recent window → pull their latest comms for the list
+    const missing = myTodayIds.filter((id) => !latestByContact.has(id));
+    if (missing.length) {
+      const more = await db.crmEvent.findMany({ where: { contactId: { in: missing }, kind: { in: COMMS } }, orderBy: { at: "desc" }, take: 1000, select: { contactId: true, kind: true, body: true, at: true } });
+      for (const e of more) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
+    }
+  }
   // 🔴 Unread chip (queued since 2026-10-08): only threads where the seller wrote last
   const unreadOnly = sp.who === "unread";
   // 🔎 search the inbox by seller name or phone (Jon 2026-10-13) — searches ALL
@@ -79,7 +99,9 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const contacts = await db.crmContact.findMany({
     where: q
       ? { AND: [ownerWhere, { OR: [{ name: { contains: q, mode: "insensitive" } }, ...(qDigits.length >= 3 ? [{ phone: { contains: qDigits } }] : [])] }] }
-      : { id: { in: contactIds }, ...ownerWhere },
+      : mineOnly
+        ? { id: { in: myTodayIds } } // "Mine" = everyone I called/texted today
+        : { id: { in: contactIds }, ...ownerWhere },
     select: { id: true, name: true, phone: true, assignedTo: true },
     take: q ? 80 : 200,
   }).then((rows) => rows.filter((c) => inDept(c.id)));
