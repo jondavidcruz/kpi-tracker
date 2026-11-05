@@ -2301,35 +2301,9 @@ export async function GET(request: Request) {
   // Gated by DIRECTREI_LEADS=on (same flag as the webhook). Defensive field parsing because
   // the /contacts response shape varies.
   if (url.searchParams.get("dreipull") === "1") {
-    const { upsertDreiHotLead, dreiLeadsOn } = await import("@/lib/directrei-leads");
+    const { pullDreiQualifiedLeads, dreiLeadsOn } = await import("@/lib/directrei-leads");
     if (!(await dreiLeadsOn())) return NextResponse.json({ ok: true, disabled: "enable DirectREI auto-leads in Settings (or set DIRECTREI_LEADS=on)" });
-    const { directReiContacts } = await import("@/lib/directrei");
-    const res = await directReiContacts({ limit: "250" });
-    const b = res.body as unknown;
-    const rows: Array<Record<string, unknown>> = Array.isArray(b) ? b as Array<Record<string, unknown>>
-      : Array.isArray((b as { data?: unknown[] })?.data) ? (b as { data: Array<Record<string, unknown>> }).data
-      : Array.isArray((b as { contacts?: unknown[] })?.contacts) ? (b as { contacts: Array<Record<string, unknown>> }).contacts
-      : Array.isArray((b as { results?: unknown[] })?.results) ? (b as { results: Array<Record<string, unknown>> }).results : [];
-    const g = (c: Record<string, unknown>, ...keys: string[]) => { for (const k of keys) { const v = c[k]; if (v != null && String(v).trim()) return String(v); } return ""; };
-    let created = 0, qualified = 0;
-    for (const c of rows) {
-      const status = g(c, "status", "stage", "action", "lead_status", "disposition").toLowerCase();
-      const notes = g(c, "ai_summary", "ai_reply", "summary", "action_note", "notes", "last_message", "last_reply", "reply");
-      const isHot = /qualif|ready|action.?req|price|offer|interested/i.test(status) || /\$[\d,]+|asking|per ?sqft|would take|willing to/i.test(notes);
-      if (!isHot) continue;
-      qualified++;
-      const price = (notes.match(/\$[\d,]+(?:\.\d+)?/) ?? [])[0] ?? "";
-      const r = await upsertDreiHotLead({
-        name: g(c, "name", "full_name", "contact_name", "seller_name"),
-        phone: g(c, "phone", "phone_number", "mobile", "phone1"),
-        email: g(c, "email", "email_address"),
-        market: g(c, "market", "city"),
-        address: g(c, "property_address", "mailing_street", "address", "street"),
-        status, notes, price, dreiId: g(c, "id", "contact_id", "uuid"),
-      }).catch(() => null);
-      if (r?.created) created++;
-    }
-    return NextResponse.json({ ok: true, scanned: rows.length, qualified, created });
+    return NextResponse.json({ ok: true, ...(await pullDreiQualifiedLeads()) });
   }
 
   // 👻 Ghost sweep (?ghostsweep=1, Jon 2026-11-05): a lead we've called 6+ times over 7+ days

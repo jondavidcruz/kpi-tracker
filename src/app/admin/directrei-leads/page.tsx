@@ -6,13 +6,14 @@ import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dreiLeadsOn } from "@/lib/directrei-leads";
 import { Card, SectionTitle } from "@/components/ui";
-import { toggleDreiLeadsAction } from "./actions";
+import { toggleDreiLeadsAction, pullDreiNowAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 const BASE = "https://kpi-tracker-lovat.vercel.app";
 
-export default async function DirectReiLeadsPage() {
+export default async function DirectReiLeadsPage({ searchParams }: { searchParams: Promise<{ pull?: string }> }) {
+  const sp = await searchParams;
   const me = await getCurrentUser();
   if (!isOwner(me)) {
     return <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><div className="mb-2 text-3xl">🔒</div><h1 className="text-xl font-bold">Owner only</h1></div>;
@@ -42,7 +43,25 @@ export default async function DirectReiLeadsPage() {
             <button className={`rounded-lg px-4 py-2 text-sm font-bold text-white ${on ? "bg-slate-400 hover:bg-slate-500" : "bg-emerald-600 hover:bg-emerald-700"}`}>{on ? "Turn OFF" : "Turn ON"}</button>
           </form>
         </div>
-        {!keySet && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-700 ring-1 ring-amber-200">⚠️ DIRECTREI_API_KEY isn&apos;t set — the daily poll fallback won&apos;t work, but the real-time webhook below still will.</p>}
+        {!keySet && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-700 ring-1 ring-amber-200">⚠️ DIRECTREI_API_KEY isn&apos;t set — the &quot;Pull existing&quot; button + daily poll won&apos;t work, but the real-time webhook below still will.</p>}
+      </Card>
+
+      {/* Backfill existing qualified leads (the webhook only catches NEW qualifications) */}
+      <Card className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-extrabold text-slate-800">Pull in sellers who are ALREADY qualified</div>
+            <div className="mt-0.5 text-xs text-slate-500">The webhook only fires on a <b>new</b> qualification. Click this to sweep every currently-qualified Direct REI seller into Michelle&apos;s New stage right now.</div>
+          </div>
+          <form action={pullDreiNowAction}>
+            <button disabled={!keySet || !on} className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:bg-brand-navy-700 disabled:opacity-40" title={!on ? "Turn auto-leads ON first" : !keySet ? "Needs DIRECTREI_API_KEY" : "Pull now"}>🔥 Pull existing qualified now</button>
+          </form>
+        </div>
+        {sp.pull && (
+          <p className={`mt-3 rounded-lg px-3 py-2 text-[12px] font-semibold ring-1 ${sp.pull.startsWith("err:") ? "bg-red-50 text-red-700 ring-red-200" : "bg-emerald-50 text-emerald-700 ring-emerald-200"}`}>
+            {sp.pull.startsWith("err:") ? `⚠️ ${sp.pull.slice(4)}` : `✅ ${sp.pull}`}
+          </p>
+        )}
       </Card>
 
       {/* Webhook setup */}

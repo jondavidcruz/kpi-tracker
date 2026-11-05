@@ -43,6 +43,41 @@ export type DreiLead = {
   address?: string; status?: string; notes?: string; price?: string; dreiId?: string;
 };
 
+/** Pull ALL currently-qualified / replied-with-price Direct REI contacts into the War Room as
+ *  HOT leads for Michelle (the backfill the webhook can't do — it only fires on NEW status
+ *  changes). Shared by the ?dreipull cron and the owner "Pull now" button. Defensive field
+ *  parsing because the /contacts response shape varies. */
+export async function pullDreiQualifiedLeads(): Promise<{ scanned: number; qualified: number; created: number; error?: string }> {
+  const { directReiContacts } = await import("@/lib/directrei");
+  const res = await directReiContacts({ limit: "500" });
+  if (!res.ok) return { scanned: 0, qualified: 0, created: 0, error: `Direct REI API ${res.status}: ${String(JSON.stringify(res.body)).slice(0, 120)}` };
+  const b = res.body as unknown;
+  const rows: Array<Record<string, unknown>> = Array.isArray(b) ? b as Array<Record<string, unknown>>
+    : Array.isArray((b as { data?: unknown[] })?.data) ? (b as { data: Array<Record<string, unknown>> }).data
+    : Array.isArray((b as { contacts?: unknown[] })?.contacts) ? (b as { contacts: Array<Record<string, unknown>> }).contacts
+    : Array.isArray((b as { results?: unknown[] })?.results) ? (b as { results: Array<Record<string, unknown>> }).results : [];
+  const g = (c: Record<string, unknown>, ...keys: string[]) => { for (const k of keys) { const v = c[k]; if (v != null && String(v).trim()) return String(v); } return ""; };
+  let created = 0, qualified = 0;
+  for (const c of rows) {
+    const status = g(c, "status", "stage", "action", "lead_status", "disposition").toLowerCase();
+    const notes = g(c, "ai_summary", "ai_reply", "summary", "action_note", "notes", "last_message", "last_reply", "reply");
+    const isHot = /qualif|ready|action.?req|price|offer|interested|replied/i.test(status) || /\$[\d,]+|asking|per ?sqft|would take|willing to/i.test(notes);
+    if (!isHot) continue;
+    qualified++;
+    const price = (notes.match(/\$[\d,]+(?:\.\d+)?/) ?? [])[0] ?? "";
+    const r = await upsertDreiHotLead({
+      name: g(c, "name", "full_name", "contact_name", "seller_name"),
+      phone: g(c, "phone", "phone_number", "mobile", "phone1"),
+      email: g(c, "email", "email_address"),
+      market: g(c, "market", "city"),
+      address: g(c, "property_address", "mailing_street", "address", "street"),
+      status, notes, price, dreiId: g(c, "id", "contact_id", "uuid"),
+    }).catch(() => null);
+    if (r?.created) created++;
+  }
+  return { scanned: rows.length, qualified, created };
+}
+
 /** Upsert a Direct-REI-qualified seller as a HOT lead in Michelle's pipeline. Idempotent:
  *  won't re-tag / re-task a contact already flagged for this same qualification in the last
  *  3 days. Returns { created, oppId } or null if there's nothing to key on. */
