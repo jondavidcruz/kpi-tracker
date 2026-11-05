@@ -50,12 +50,27 @@ export type DreiLead = {
 export async function pullDreiQualifiedLeads(): Promise<{ scanned: number; qualified: number; created: number; error?: string }> {
   const { directReiContacts } = await import("@/lib/directrei");
   const res = await directReiContacts({ limit: "500" });
-  if (!res.ok) return { scanned: 0, qualified: 0, created: 0, error: `Direct REI API ${res.status}: ${String(JSON.stringify(res.body)).slice(0, 120)}` };
+  if (!res.ok) return { scanned: 0, qualified: 0, created: 0, error: `Direct REI API ${res.status}: ${String(JSON.stringify(res.body)).slice(0, 160)}` };
   const b = res.body as unknown;
-  const rows: Array<Record<string, unknown>> = Array.isArray(b) ? b as Array<Record<string, unknown>>
-    : Array.isArray((b as { data?: unknown[] })?.data) ? (b as { data: Array<Record<string, unknown>> }).data
-    : Array.isArray((b as { contacts?: unknown[] })?.contacts) ? (b as { contacts: Array<Record<string, unknown>> }).contacts
-    : Array.isArray((b as { results?: unknown[] })?.results) ? (b as { results: Array<Record<string, unknown>> }).results : [];
+  // Find the array of contacts wherever it lives — try the top level, common envelope keys,
+  // and one level of nesting (e.g. { data: { contacts: [...] } }).
+  const firstArray = (o: unknown, depth = 0): Array<Record<string, unknown>> | null => {
+    if (Array.isArray(o)) return o as Array<Record<string, unknown>>;
+    if (o && typeof o === "object" && depth < 2) {
+      for (const k of ["data", "contacts", "results", "items", "sellers", "rows", "records"]) {
+        const v = (o as Record<string, unknown>)[k];
+        const found = firstArray(v, depth + 1);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  const rows = firstArray(b) ?? [];
+  if (rows.length === 0) {
+    // Surface the raw shape so we can see exactly how Direct REI returns contacts.
+    let snip = ""; try { snip = JSON.stringify(b).slice(0, 220); } catch { snip = String(b).slice(0, 220); }
+    return { scanned: 0, qualified: 0, created: 0, error: `no contacts found (HTTP ${res.status}). Raw: ${snip}` };
+  }
   const g = (c: Record<string, unknown>, ...keys: string[]) => { for (const k of keys) { const v = c[k]; if (v != null && String(v).trim()) return String(v); } return ""; };
   let created = 0, qualified = 0;
   for (const c of rows) {
