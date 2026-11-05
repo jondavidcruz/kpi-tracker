@@ -4,6 +4,7 @@ import { readClosingActuals } from "@/app/actions";
 import { actualClosingTotal } from "@/lib/closing-actuals";
 import UnderwritingCalculator from "@/components/UnderwritingCalculator";
 import UnderwriteBot from "@/components/UnderwriteBot";
+import CalibrationSection from "@/components/CalibrationSection";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,9 @@ export default async function UnderwritingPage() {
         accent="bg-brand-gold"
       />
       <UnderwritingCalculator defaultCloseCost={defaultCloseCost} closeCostN={totals.length} repName={me?.name ?? ""} canPullComps={!!me} />
+
+      {/* 🎯 Calibration lives here now (managers/leadership only; renders null otherwise). */}
+      <CalibrationSection />
 
       <UnderwriteBot />
     </div>

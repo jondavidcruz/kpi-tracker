@@ -593,7 +593,7 @@ export default async function AdminPage({
                 { href: "/admin/chat-webhooks", emoji: "💬", name: "Chat Webhooks", desc: "Wire each Google Chat room's incoming webhook" },
                 { href: "/admin/form-builder", emoji: "🧱", name: "Form Builder", desc: "Build & edit the lead-intake forms" },
                 { href: "/admin/recalibrate", emoji: "🎯", name: "Recalibrate Goals", desc: "Reset per-rep daily goals to the real 28-day median" },
-                { href: "/admin/calibration", emoji: "⚖️", name: "Offer Calibration", desc: "Every exported offer scored against what actually closed" },
+                { href: "/underwriting#calibration", emoji: "⚖️", name: "Offer Calibration", desc: "Signed deals scored vs what actually closed — now lives in Underwriting" },
                 { href: "/admin/crm-audit", emoji: "🔎", name: "CRM Audit", desc: "Audit CRM activity — dials, texts, emails, stage moves" },
                 { href: "/admin/directrei", emoji: "🧹", name: "DirectREI Control", desc: "DirectREI mass-marketing admin + nightly pushes" },
                 { href: "/admin/workflow", emoji: "⚙️", name: "Master Workflow", desc: "Edit the master SMS / follow-up workflow" },
