@@ -1,9 +1,17 @@
 "use server";
 import { getCurrentUser, isOwner } from "@/lib/auth";
-import { setDreiLeads, pullDreiQualifiedLeads } from "@/lib/directrei-leads";
+import { setDreiLeads, pullDreiQualifiedLeads, resetDreiPulledLeads } from "@/lib/directrei-leads";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+
+/** 🧹 Archive every auto-pulled Direct REI lead so the owner can reset + re-pull clean. */
+export async function resetDreiNowAction(): Promise<void> {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const r = await resetDreiPulledLeads();
+  redirect(`/admin/directrei-leads?pull=${encodeURIComponent(`archived ${r.archived} auto-pulled leads — now click Pull to bring back qualified-only`)}`);
+}
 
 /** 🔬 Probe the Direct REI API endpoints and stash the result so the page can show us which
  *  endpoint holds the seller list + its exact shape (the pull returned 0). */

@@ -43,6 +43,20 @@ export type DreiLead = {
   address?: string; status?: string; notes?: string; price?: string; dreiId?: string;
 };
 
+/** 🧹 Reset — archive every auto-pulled Direct REI lead (contacts whose source is "Direct REI")
+ *  so Jon can clear the junk (buyers / not-interested repliers) and re-pull a clean QUALIFIED-only
+ *  set. Reversible: it archives, never deletes. Pre-existing leads (other sources) are untouched. */
+export async function resetDreiPulledLeads(): Promise<{ archived: number }> {
+  const contacts = await db.crmContact.findMany({ where: { source: { startsWith: "Direct REI" } }, select: { id: true } }).catch(() => [] as Array<{ id: string }>);
+  const ids = contacts.map((c) => c.id);
+  if (!ids.length) return { archived: 0 };
+  const r = await db.crmOpportunity.updateMany({ where: { contactId: { in: ids }, archivedAt: null }, data: { archivedAt: new Date() } }).catch(() => ({ count: 0 }));
+  // also clear the dedup notes so a fresh re-pull re-notes the genuinely-qualified ones
+  await db.crmEvent.deleteMany({ where: { contactId: { in: ids }, kind: "system", body: { startsWith: "🔥 Direct REI QUALIFIED" } } }).catch(() => {});
+  await db.crmTask.deleteMany({ where: { contactId: { in: ids }, createdBy: "directrei", doneAt: null } }).catch(() => {});
+  return { archived: r.count };
+}
+
 /** Pull ALL currently-qualified / replied-with-price Direct REI contacts into the War Room as
  *  HOT leads for Michelle (the backfill the webhook can't do — it only fires on NEW status
  *  changes). Shared by the ?dreipull cron and the owner "Pull now" button. Defensive field
@@ -60,25 +74,14 @@ export async function pullDreiQualifiedLeads(): Promise<{ scanned: number; quali
     return null;
   };
   const g = (c: Record<string, unknown>, ...keys: string[]) => { for (const k of keys) { const v = c[k]; if (v != null && String(v).trim()) return String(v); } return ""; };
-  // Direct REI confirmed shape: responding sellers that need attention = status "qualified"
-  // (stated a price) + "replied" (responded) — Jon's "Action Required" list is both. Plain
-  // /contacts is paginated to 50 of 2000+, so query each status explicitly. The ADDRESS lives
-  // on the DEAL (deal.name), linked by seller_id — joined in below to fill the property address.
-  const rows: Array<Record<string, unknown>> = [];
-  const seenId = new Set<string>();
-  let lastStatus = 0;
-  for (const st of ["qualified", "replied"]) {
-    const r = await directReiContacts({ status: st, limit: "500" });
-    lastStatus = r.status;
-    if (!r.ok) continue;
-    for (const row of (firstArray(r.body) ?? [])) {
-      const id = g(row, "id", "contact_id");
-      if (id && seenId.has(id)) continue; if (id) seenId.add(id);
-      rows.push(row);
-    }
-  }
+  // ONLY status "qualified" (Jon 2026-11-05: "replied" pulled in buyers + not-interested
+  // people). Qualified = Direct REI's AI judged they stated a price / are interested — the best
+  // signal available (the reply text itself isn't in the list API). Plain /contacts is paginated
+  // to 50 of 2000+, so query the status explicitly. ADDRESS is joined from /deals below.
+  const res = await directReiContacts({ status: "qualified", limit: "500" });
+  const rows = res.ok ? (firstArray(res.body) ?? []) : [];
   if (rows.length === 0) {
-    return { scanned: 0, qualified: 0, created: 0, error: `no qualified/replied sellers (HTTP ${lastStatus}).` };
+    return { scanned: 0, qualified: 0, created: 0, error: `no qualified sellers (HTTP ${res.status}).` };
   }
   const dealsRes = await directReiDeals({ limit: "500" }).catch(() => null);
   const dealRows = dealsRes?.ok ? (firstArray(dealsRes.body) ?? []) : [];

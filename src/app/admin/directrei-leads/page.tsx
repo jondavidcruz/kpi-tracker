@@ -6,7 +6,7 @@ import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dreiLeadsOn } from "@/lib/directrei-leads";
 import { Card, SectionTitle } from "@/components/ui";
-import { toggleDreiLeadsAction, pullDreiNowAction, diagnoseDreiAction } from "./actions";
+import { toggleDreiLeadsAction, pullDreiNowAction, diagnoseDreiAction, resetDreiNowAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -57,9 +57,14 @@ export default async function DirectReiLeadsPage({ searchParams }: { searchParam
             <div className="text-sm font-extrabold text-slate-800">Pull in sellers who are ALREADY qualified</div>
             <div className="mt-0.5 text-xs text-slate-500">The webhook only fires on a <b>new</b> qualification. Click this to sweep every currently-qualified Direct REI seller into Michelle&apos;s New stage right now.</div>
           </div>
-          <form action={pullDreiNowAction}>
-            <button disabled={!keySet || !on} className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:bg-brand-navy-700 disabled:opacity-40" title={!on ? "Turn auto-leads ON first" : !keySet ? "Needs DIRECTREI_API_KEY" : "Pull now"}>🔥 Pull existing qualified now</button>
-          </form>
+          <div className="flex items-center gap-2">
+            <form action={resetDreiNowAction}>
+              <button disabled={!keySet} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200 disabled:opacity-40" title="Archive all auto-pulled Direct REI leads so you can re-pull qualified-only">🧹 Reset</button>
+            </form>
+            <form action={pullDreiNowAction}>
+              <button disabled={!keySet || !on} className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-bold text-white hover:bg-brand-navy-700 disabled:opacity-40" title={!on ? "Turn auto-leads ON first" : !keySet ? "Needs DIRECTREI_API_KEY" : "Pull now"}>🔥 Pull existing qualified now</button>
+            </form>
+          </div>
         </div>
         {sp.pull && (
           <p className={`mt-3 rounded-lg px-3 py-2 text-[12px] font-semibold ring-1 ${sp.pull.startsWith("err:") ? "bg-red-50 text-red-700 ring-red-200" : "bg-emerald-50 text-emerald-700 ring-emerald-200"}`}>
