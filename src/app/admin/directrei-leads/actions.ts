@@ -22,7 +22,7 @@ export async function importDreiCsvAction(formData: FormData): Promise<void> {
   if (!(file instanceof File) || file.size === 0) { redirect(`/admin/directrei-leads?pull=${encodeURIComponent("err:no file selected")}`); }
   const text = await (file as File).text();
   const r = await importDreiSellersCsv(text);
-  redirect(`/admin/directrei-leads?pull=${encodeURIComponent(`imported ${r.imported} new price-stated sellers · ${r.duplicates} already in War Room · ${r.noPrice} had no price · ${r.skipped} skipped (of ${r.total})`)}`);
+  redirect(`/admin/directrei-leads?pull=${encodeURIComponent(`imported ${r.imported} interested sellers (replied/qualified) · ${r.duplicates} already in War Room · ${r.notReplied} not interested / no reply yet · ${r.noAddress} missing an address (of ${r.total})`)}`);
 }
 
 /** 🔬 Probe the Direct REI API endpoints and stash the result so the page can show us which

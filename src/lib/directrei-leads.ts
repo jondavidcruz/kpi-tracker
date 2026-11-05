@@ -216,26 +216,31 @@ function parseCsv(text: string): Array<Record<string, string>> {
 }
 
 /** Import a Direct REI "sellers" CSV export → leads in Michelle's pipeline WITH their notes.
- *  Jon's spec (2026-11-05): ONLY sellers who stated an asking PRICE in the notes, that have an
- *  ADDRESS, are not "not interested", and are NOT already in the War Room (no duplicate leads).
- *  No per-lead task (bulk). Returns a full breakdown. */
-export async function importDreiSellersCsv(csvText: string): Promise<{ total: number; imported: number; duplicates: number; noPrice: number; skipped: number }> {
+ *  Jon's spec (2026-11-05, loosened): import EVERY interested seller — status Replied OR
+ *  Qualified (or anyone who stated a price in their notes) — that has an ADDRESS and isn't
+ *  already in the War Room. A price is captured when present but NO LONGER required, so the
+ *  sellers who texted back without naming a number come in too. Still excludes "not interested"
+ *  / opted-out, and sellers who were only CONTACTED (no reply yet). No per-lead task (bulk). */
+export async function importDreiSellersCsv(csvText: string): Promise<{ total: number; imported: number; duplicates: number; notReplied: number; noAddress: number }> {
   const recs = parseCsv(csvText);
-  let imported = 0, duplicates = 0, noPrice = 0, skipped = 0;
+  let imported = 0, duplicates = 0, notReplied = 0, noAddress = 0;
   const seenLocal = new Set<string>();
   for (const rec of recs) {
     const status = (rec["Status"] || "").toLowerCase();
-    if (/not.?interested/.test(status)) { skipped++; continue; } // explicitly not interested
+    if (/not.?interested|opt.?out|unsubscrib|\bdnc\b/.test(status)) { notReplied++; continue; } // not interested / opted out
     const notes = (rec["Notes"] || "").trim();
-    // must have STATED A PRICE in the notes
+    // Price is OPTIONAL now — capture it if the seller named one in the notes.
     const priceM = notes.match(/\$\s?[\d,]+(?:\.\d+)?\s?k?/i) ?? notes.match(/asking(?:\s+price)?(?:\s+of)?\s+\$?[\d,]+\s?k?/i);
-    if (!priceM) { noPrice++; continue; }
+    // 🟢 Interested = they replied / are qualified, OR they named a price. A seller who was
+    //    only CONTACTED (outreach sent, no reply) is NOT imported — that would flood the board.
+    const interested = /replied|qualified|interested|respond/.test(status) || !!priceM;
+    if (!interested) { notReplied++; continue; }
     const streetAddr = (rec["Property Address"] || "").trim();
-    if (!streetAddr) { skipped++; continue; } // must have an address
+    if (!streetAddr) { noAddress++; continue; } // a seller lead needs a property address
     const phone = (rec["Phone"] || "").replace(/\D/g, "").slice(-10);
     const email = (rec["Email"] || "").trim().toLowerCase();
     const key = phone || email;
-    if (!key) { skipped++; continue; }
+    if (!key) { noAddress++; continue; }
     if (seenLocal.has(key)) { duplicates++; continue; } // same seller twice in the CSV
     seenLocal.add(key);
     // 🚫 skip if ALREADY in the War Room — don't import duplicates (Jon 2026-11-05).
@@ -245,13 +250,13 @@ export async function importDreiSellersCsv(csvText: string): Promise<{ total: nu
     }).catch(() => null);
     if (existing) { duplicates++; continue; }
     const addr = [streetAddr, rec["Property City"], `${rec["Property State"] || ""} ${rec["Property Zip"] || ""}`.trim()].filter((s) => s && s.trim()).join(", ");
-    const price = (priceM[0].match(/\$?\s?[\d,]+(?:\.\d+)?\s?k?/i) ?? [priceM[0]])[0].trim();
+    const price = priceM ? ((priceM[0].match(/\$?\s?[\d,]+(?:\.\d+)?\s?k?/i) ?? [priceM[0]])[0].trim()) : "";
     const r = await upsertDreiHotLead({
       name: rec["Name"], phone: rec["Phone"], email: rec["Email"],
       market: rec["Property City"] || rec["Mailing City"] || "",
-      address: addr, status, notes, price: price.startsWith("$") ? price : `$${price}`,
+      address: addr, status, notes, price: price ? (price.startsWith("$") ? price : `$${price}`) : "",
     }, { skipTask: true }).catch(() => null);
     if (r?.created) imported++; else duplicates++;
   }
-  return { total: recs.length, imported, duplicates, noPrice, skipped };
+  return { total: recs.length, imported, duplicates, notReplied, noAddress };
 }
