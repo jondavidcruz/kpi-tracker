@@ -599,10 +599,18 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                 <option value="pipeline">📂 Move to pipeline</option>
                 <option value="assign">👤 Change owner</option>
                 <option value="follower">👥 Add follower</option>
+                <option value="kind">🏕 Set type (House / Land)</option>
                 <option value="tag">🏷 Add tag</option>
                 <option value="untag">🏷 Remove tag</option>
                 <option value="delete">🗑 Delete (archive)</option>
               </select>
+              {bulk.op === "kind" && (
+                <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
+                  <option value="">pick a type…</option>
+                  <option value="land">🏕 Land</option>
+                  <option value="home">🏠 House</option>
+                </select>
+              )}
               {bulk.op === "stage" && (
                 <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
                   <option value="">pick a stage…</option>

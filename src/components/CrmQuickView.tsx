@@ -227,7 +227,16 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
               <button
                 title="Delete this lead (goes to the archive — recoverable, never truly gone)"
                 onClick={() => {
-                  if (!confirm(`Delete ${d.contact.name}? It moves to the archive (recoverable) — it is NOT permanently destroyed.`)) return;
+                  // 🛡 Extra guard for SIGNED / under-contract / dispo leads — Jon lost an hour when a
+                  // signed-and-handed-off lead got deleted (2026-11-05: "we can't ever have this happen
+                  // again"). For those, require typing DELETE; a plain lead keeps the one-tap confirm.
+                  const signed = /signed|contract|won/i.test(d.stage) || /signed|contract|escrow|won/i.test(d.pipeline) || isDispoDealPipeline(d.pipeline) || (d.value ?? 0) > 0;
+                  if (signed) {
+                    const typed = prompt(`⚠️ STOP — "${d.contact.name}" looks SIGNED / under contract or handed to dispo.\n\nDeleting takes it off every board. Type DELETE to confirm (it still goes to the archive and can be restored):`);
+                    if ((typed ?? "").trim().toUpperCase() !== "DELETE") return;
+                  } else if (!confirm(`Delete ${d.contact.name}? It moves to the archive (recoverable) — it is NOT permanently destroyed.`)) {
+                    return;
+                  }
                   const fd = new FormData(); fd.set("id", d.id);
                   start(async () => { await archiveOppAction(fd); setOppId(null); window.location.reload(); });
                 }}

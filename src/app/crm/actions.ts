@@ -1298,6 +1298,14 @@ export async function bulkOppAction(formData: FormData) {
       const cur = Array.isArray(fd.__followers) ? (fd.__followers as string[]) : [];
       await db.crmOpportunity.update({ where: { id }, data: { formData: { ...fd, __followers: [...new Set([...cur, val])] } as never } });
     }
+  } else if (op === "kind" && (val === "land" || val === "home")) {
+    // 🏕/🏠 Bulk-correct the lead TYPE — many DirectREI leads import as "house" just because they
+    // have an address, even though they're land (Jon 2026-11-05). Stored in formData.__leadKind.
+    for (const id of ids) {
+      const o = await db.crmOpportunity.findUnique({ where: { id }, select: { formData: true } });
+      const fd = (o?.formData ?? {}) as Record<string, unknown>;
+      await db.crmOpportunity.update({ where: { id }, data: { formData: { ...fd, __leadKind: val } as never } }).catch(() => {});
+    }
   } else if (op === "delete") {
     await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { archivedAt: new Date() } });
   } else return;
@@ -1346,7 +1354,8 @@ export async function bulkOppStageAction(formData: FormData) {
     await db.crmOpportunity.updateMany({ where, data: { pipeline: val, stage, archivedAt: null, ...(own ? { assignedTo: own } : {}) } });
   } else if (op === "delete") {
     await db.crmOpportunity.updateMany({ where, data: { archivedAt: new Date() } });
-  } else if (op === "tag" || op === "untag" || op === "follower") {
+  } else if (op === "tag" || op === "untag" || op === "follower" || op === "kind") {
+    if (op === "kind" && val !== "land" && val !== "home") return;
     const rows = await db.crmOpportunity.findMany({ where, select: { id: true, tags: true, formData: true }, take: 3000 });
     for (const o of rows) {
       if (op === "tag") {
@@ -1354,6 +1363,9 @@ export async function bulkOppStageAction(formData: FormData) {
       } else if (op === "untag") {
         const kept = o.tags.split(",").map((t) => t.trim()).filter((t) => t && t.toLowerCase() !== val.toLowerCase()).join(", ");
         if (kept !== o.tags) await db.crmOpportunity.update({ where: { id: o.id }, data: { tags: kept } });
+      } else if (op === "kind") {
+        const fd = (o.formData ?? {}) as Record<string, unknown>;
+        await db.crmOpportunity.update({ where: { id: o.id }, data: { formData: { ...fd, __leadKind: val } as never } });
       } else {
         const fd = (o.formData ?? {}) as Record<string, unknown>;
         const cur = Array.isArray(fd.__followers) ? (fd.__followers as string[]) : [];
