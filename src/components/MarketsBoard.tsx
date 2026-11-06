@@ -37,7 +37,7 @@ function ScoreBar({ label, n }: { label: string; n: number }) {
   );
 }
 
-export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geocodeRemaining = 0, territories = [] }: { markets: MarketView[]; canEdit: boolean; buyerPoints?: { lat: number; lng: number }[]; geocodeRemaining?: number; territories?: import("@/lib/map-territories").Territory[] }) {
+export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geocodeRemaining = 0, territories = [], terrStats = {} }: { markets: MarketView[]; canEdit: boolean; buyerPoints?: { lat: number; lng: number }[]; geocodeRemaining?: number; territories?: import("@/lib/map-territories").Territory[]; terrStats?: Record<string, { leads: number; deals: number }> }) {
   const [focus, setFocus] = useState<"" | LandFocus>("");
   const [cov, setCov] = useState<"" | Coverage["status"]>("");
   const [openPull, setOpenPull] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geoco
         </div>
       </div>
 
-      {view === "map" && <HaloMarketMap markets={rows} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} canEdit={canEdit} territories={territories} />}
+      {view === "map" && <HaloMarketMap markets={rows} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} canEdit={canEdit} territories={territories} terrStats={terrStats} />}
 
       <div className={`grid grid-cols-1 gap-3 lg:grid-cols-2 ${view === "map" ? "hidden" : ""}`}>
         {rows.map(({ m, coverage, leads, deals, momentum }) => {

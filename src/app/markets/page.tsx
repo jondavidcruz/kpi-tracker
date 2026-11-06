@@ -32,7 +32,7 @@ export default async function MarketsPage() {
   const buyerPoints = pointsFor(buyerPlaces, geocache);
   const geocodeRemaining = buyerPlaces.filter((p) => !(normalizePlace(p) in geocache)).length;
 
-  // 🖍 Hand-drawn territories (areas we market in / have pulled vs uncharted).
+  // 🖍 Hand-drawn / searched territories (areas we market in / have pulled vs uncharted).
   const { readTerritories } = await import("@/lib/map-territories");
   const territories = await readTerritories();
 
@@ -43,6 +43,19 @@ export default async function MarketsPage() {
     won: /won|closed|signed|sold/i.test(o.stage) && !/dead|died|lost|nurtur/i.test(o.stage),
     ageDays: (now - o.createdAt.getTime()) / DAY,
   }));
+
+  // 📊 Lead/deal count INSIDE each marked area — free text match of the CRM lead's ZIP / city
+  // to the territory name (searched ZIP/county/city areas; freehand draws with no place name
+  // just won't match). Turns the map into a performance tool: which painted areas produce.
+  const STOP = new Set(["county", "florida", "united", "states", "area", "city", "town", "the", "and"]);
+  const terrStats: Record<string, { leads: number; deals: number }> = {};
+  for (const t of territories) {
+    const zip = (t.name.match(/\b\d{5}\b/) || [])[0];
+    const toks = zip ? [zip] : t.name.toLowerCase().split(/[,\s]+/).map((w) => w.trim()).filter((w) => w.length >= 4 && !STOP.has(w));
+    let leads = 0, deals = 0;
+    if (toks.length) for (const o of oppHay) { if (toks.some((tk) => o.hay.includes(tk))) { leads++; if (o.won) deals++; } }
+    terrStats[t.id] = { leads, deals };
+  }
 
   const views: MarketView[] = markets.map((m) => {
     // Match tokens: city names in the market name + enclaves + region (≥4 chars to avoid noise).
@@ -73,7 +86,7 @@ export default async function MarketsPage() {
         subtitle="Where we hunt land — the high-net-worth, waterfront, business-dense Florida markets the wealthy keep building in through rate hikes, and that few wholesalers compete in. Track what we've pulled, how each market performs, and the 30-60-180 trend."
         accent="bg-emerald-400"
       />
-      <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} />
+      <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} />
     </div>
   );
 }
