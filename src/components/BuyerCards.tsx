@@ -139,18 +139,15 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
                     <span className="mt-0.5 block text-[10px] font-semibold text-slate-400">{b.mapUrl ? "🗺️ area map" : "🤖 auto coverage — where they buy"}</span>
                   </a>
                 )}
-                <button onClick={() => setCollapsed((s) => { const n = new Set(s); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })} className="mt-1.5 text-[11px] font-semibold text-slate-400 hover:text-brand-navy">{isOpen ? "▴ less" : "▾ scorecard & last touches"}</button>
+                <button onClick={() => setCollapsed((s) => { const n = new Set(s); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })} className="mt-1.5 text-[11px] font-semibold text-slate-400 hover:text-brand-navy">{isOpen ? "▴ less" : "▾ scorecard"}</button>
                 {isOpen && (
                   <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
                     <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
                       {b.checks.map((c) => <li key={c.key} className={c.ok ? "text-slate-700" : "text-slate-400"}><span className={c.ok ? "text-emerald-600" : "text-slate-300"}>{c.ok ? "✓" : "○"}</span> <b>{c.label}</b> <span className="text-slate-500">{c.detail}</span></li>)}
                     </ul>
                     {b.bestContact && <div className="text-[11px] text-slate-600">📇 {b.bestContact}</div>}
-                    {b.lastTouches.length > 0 && (
-                      <ul className="space-y-0.5 text-[11px] text-slate-600">
-                        {b.lastTouches.map((t, i) => <li key={i}><span className="font-mono text-slate-400">{t.at}</span> {t.channel ? `${t.channel} · ` : ""}{t.outcome ? `${t.outcome} · ` : ""}{(t.note ?? "").slice(0, 80)}</li>)}
-                      </ul>
-                    )}
+                    {/* Call-notes / touch log removed from the card (Jon 2026-11-05: "junk on the bottom") —
+                        it lives on the lead's own timeline, not on the buyer scorecard. */}
                     {b.mapUrl && <a href={b.mapUrl} target="_blank" rel="noreferrer" className="inline-block text-[11px] font-semibold text-indigo-600">🗺️ open area map</a>}
 
                   </div>
