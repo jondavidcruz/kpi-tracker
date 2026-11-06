@@ -337,6 +337,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       // next upcoming (after today) task + appointment dates for the card chips
       nextTask: (tasksByOpp.get(o.id) ?? []).map((t) => (t.due || "").slice(0, 10)).filter((d) => d >= today).sort()[0] ?? "",
       nextAppt: nextApptByOpp.get(o.id)?.toISOString() ?? "",
+      nextFollowUp: o.nextFollowUp || "",
       leadType: unifiedLeadBadge(isAgentNetworkName(o.pipeline) ? "buyer_agent" : isDevNetworkName(o.pipeline) ? "developer" : sellerKind(o.formData, o.pipeline), resolveLeadKind(o.formData, o.pipeline)),
       parcels: parcelCount(o.formData, o.contact.address, fd.property?.apn),
       acres: parseAcres(o.formData) ?? undefined,

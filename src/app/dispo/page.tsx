@@ -256,7 +256,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     waterfront: isWaterfront(o.formData),
     leadKind: resolveLeadKind(o.formData, o.pipeline),
     ...(() => { const t = localTimeForPhone(o.contact?.phone || ""); return t ? { tzLabel: `${t.time} ${t.abbr}`, tzRank: t.rank } : {}; })(),
-    nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "",
+    nextTask: nextTaskByDeal.get(o.id) ?? "", nextAppt: nextApptByDeal.get(o.id)?.toISOString() ?? "", nextFollowUp: o.nextFollowUp || "",
     leadType: unifiedLeadBadge(sellerKind(o.formData, o.pipeline), resolveLeadKind(o.formData, o.pipeline)),
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
     acres: parseAcres(o.formData) ?? undefined,

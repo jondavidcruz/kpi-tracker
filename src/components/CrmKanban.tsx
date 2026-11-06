@@ -36,6 +36,7 @@ export type CrmCard = {
   followUpDue?: boolean;  // 📞 follow-up due/overdue → blue card
   nextTask?: string;      // next upcoming (after today) task due date — green chip
   nextAppt?: string;      // next upcoming (after today) appointment ISO — red chip
+  nextFollowUp?: string;  // scheduled follow-up date (YYYY-MM-DD) — blue chip, bottom-right
   leadType?: { label: string; cls: string }; // 🏷 seller / land seller / buyer agent / developer — top-right
   parcels?: number; // 📦 how many parcels on this deal (>1 shows a badge)
   acres?: number;   // ⛰️ parcel size — shown as a chip + searchable by acre range
@@ -290,11 +291,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
           <button onClick={() => { setSelecting((v) => !v); setSelected(new Set()); setStageScope(null); }} className={`rounded-lg px-2.5 py-1 font-bold ${selecting ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>☑ Select</button>
           {/* 🔑 What the card colors mean (Jon 2026-10-27: define task vs appt vs follow-up). */}
           <span className="flex flex-wrap items-center gap-2 text-[9px] font-semibold text-slate-400">
-            <span className="flex cursor-help items-center gap-1" title="📅 Appointment — a scheduled meeting or call with the lead at a set DATE AND TIME (e.g. a listing walk-through Tue 2:00pm). The card turns RED on the day it's due.">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" /> 📅 appt today</span>
-            <span className="flex cursor-help items-center gap-1" title="✅ Task — a to-do you assign yourself or a teammate on this lead (e.g. 'send comps', 'pull title'). It's work to DO, not a meeting. The card turns GREEN when a task is due today.">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" /> ✅ task today</span>
-            <span className="flex cursor-help items-center gap-1" title="🔔 Follow-up — a date to REACH BACK OUT to the lead, with no set time (e.g. 'check back in 3 days'). The card turns BLUE when the follow-up is due or overdue.">
+            <span className="flex cursor-help items-center gap-1" title="📅 Appointment or ✅ task due today → the card lights up RED. An appointment is a scheduled meeting/call at a set date & time; a task is a to-do on the lead (send comps, pull title). Either one due today = red so you can't miss it.">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" /> 📅 appt / ✅ task due</span>
+            <span className="flex cursor-help items-center gap-1" title="🔔 Follow-up — a date to REACH BACK OUT to the lead. The card lights up BLUE when the follow-up is due today (or overdue).">
               <span className="inline-block h-2.5 w-2.5 rounded-sm bg-blue-500" /> 🔔 follow-up due</span>
           </span>
         </span>
@@ -407,8 +406,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     }}
                     onDragEnd={() => { setDragId(null); setOverCol(null); }}
                     onClick={() => selecting ? toggleSel(c.id) : window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id } }))}
-                    style={c.apptDueToday ? { border: "2px solid #ef4444" } : c.taskDueToday ? { border: "2px solid #22c55e" } : c.followUpDue ? { border: "2px solid #3b82f6" } : ageColor(c) ? { border: `2px solid ${ageColor(c)}` } : undefined}
-                    className={`cursor-pointer rounded-xl p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${c.apptDueToday ? "bg-red-50/60" : c.taskDueToday ? "bg-emerald-50/50" : c.followUpDue ? "bg-blue-50/50" : "bg-white"} ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : ""}`}
+                    style={c.apptDueToday || c.taskDueToday ? { border: "2px solid #ef4444" } : c.followUpDue ? { border: "2px solid #3b82f6" } : ageColor(c) ? { border: `2px solid ${ageColor(c)}` } : undefined}
+                    className={`cursor-pointer rounded-xl p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${c.apptDueToday || c.taskDueToday ? "bg-red-50/60" : c.followUpDue ? "bg-blue-50/50" : "bg-white"} ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : ""}`}
                   >
                     <div className="flex items-start gap-1">
                       {selecting && <input type="checkbox" readOnly checked={selected.has(c.id)} className="mr-1 mt-0.5 h-4 w-4 shrink-0 accent-indigo-600" />}
@@ -556,10 +555,11 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     {/* 📅 bottom-right due dates (Jon 2026-10-20): next task (green), then next
                         appointment (red). The "Entered" date was dropped — the 🕒 age chip above
                         already says how old the lead is (Jon 2026-11-04 declutter). */}
-                    {(c.nextTask || c.nextAppt) && (
+                    {(c.nextTask || c.nextAppt || c.nextFollowUp) && (
                       <div className="mt-1.5 flex flex-col items-end gap-1">
                         {c.nextTask && <span title="Next task due" className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-100">✅ Task {new Date(`${c.nextTask}T00:00:00`).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}
                         {c.nextAppt && <span title="Next appointment" className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700 ring-1 ring-red-100">📅 Appt {new Date(c.nextAppt).toLocaleDateString([], { month: "short", day: "numeric" })} · {new Date(c.nextAppt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
+                        {c.nextFollowUp && <span title="Scheduled follow-up" className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 ring-1 ring-blue-100">🔔 Follow-up {new Date(`${c.nextFollowUp}T00:00:00`).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}
                       </div>
                     )}
                   </div>
