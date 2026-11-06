@@ -44,7 +44,10 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
   const [q, setQ] = useState("");
   const [tier, setTier] = useState<"" | Tier>("");
   const [size, setSize] = useState<"" | "mompop" | "big">(""); // 🏠🏢 builder-size filter
-  const [open, setOpen] = useState<string | null>(null);
+  // Scorecards are OPEN by default and stay open (Jon 2026-11-05: "don't want to waste
+  // time opening it all the time"). We track which cards the user has COLLAPSED instead,
+  // so the default (empty set) = everything expanded.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // Per-viewer convenience only (localStorage); defaults to cards on the server.
   const view = useSyncExternalStore(subscribeView, readView, () => "cards" as const);
   const pick = (v: "cards" | "list") => { try { localStorage.setItem("vb_view", v); } catch {} ; window.dispatchEvent(new Event("vb_view")); };
@@ -101,7 +104,7 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {rows.map((b) => {
             const reach = [b.phone, b.email, b.igHandle].filter(Boolean).join(" · ");
-            const isOpen = open === b.id;
+            const isOpen = !collapsed.has(b.id);
             return (
               <div key={b.id} className={`rounded-xl bg-white p-3 ring-1 transition ${b.tier === "A" ? "ring-emerald-200" : b.tier === "B" ? "ring-amber-200" : "ring-slate-200"} ${b.paused ? "opacity-70" : ""}`}>
                 <div className="flex items-start gap-3">
@@ -136,7 +139,7 @@ export default function BuyerCards({ buyers, selectedCounty, onCountyClear }: { 
                     <span className="mt-0.5 block text-[10px] font-semibold text-slate-400">{b.mapUrl ? "🗺️ area map" : "🤖 auto coverage — where they buy"}</span>
                   </a>
                 )}
-                <button onClick={() => setOpen(isOpen ? null : b.id)} className="mt-1.5 text-[11px] font-semibold text-slate-400 hover:text-brand-navy">{isOpen ? "▴ less" : "▾ scorecard & last touches"}</button>
+                <button onClick={() => setCollapsed((s) => { const n = new Set(s); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })} className="mt-1.5 text-[11px] font-semibold text-slate-400 hover:text-brand-navy">{isOpen ? "▴ less" : "▾ scorecard & last touches"}</button>
                 {isOpen && (
                   <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
                     <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
