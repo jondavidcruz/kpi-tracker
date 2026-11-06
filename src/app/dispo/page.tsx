@@ -24,6 +24,8 @@ import { logDispoBuyerTouchAction, bulkAttachNetworkBuyerToDealsAction, runDispo
 import { leadTypeBadge, sellerKind, unifiedLeadBadge } from "@/lib/lead-type";
 import { stripAgentNotesBlock, parcelCount } from "@/lib/crm-shared";
 import DispoScoreboard, { type RepRow, type TeamStats } from "@/components/DispoScoreboard";
+import DispoVelocityPanel from "@/components/DispoVelocityPanel";
+import type { DispoVelocity } from "@/lib/dispo-velocity";
 import DispoCommandCenter from "@/components/DispoCommandCenter";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline, PATH_META } from "@/lib/dispo-gates";
 import { parseAcres, fmtAcres, parseAcreQuery, acreInRange } from "@/lib/acreage";
@@ -353,6 +355,8 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   let scoreReps: RepRow[] = [];
   let scoreTeam: TeamStats = { dealsPushed: 0, totalActive: 0, agentsReached: 0, thisHour: 0 };
   let scoreAlert: string | null = null;
+  let velocity: DispoVelocity | null = null;
+  if (tab === "team") velocity = await (await import("@/lib/dispo-velocity")).getDispoVelocity().catch(() => null);
   if (tab === "team") { // pace lives only on Team now (Jon 2026-10-22 de-dup) — top-right already tracks calls
     const tz = settings.orgTimezone;
     const p = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date());
@@ -611,6 +615,7 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
         <Link href="/dispo?tab=today" className="block rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-800 ring-1 ring-red-200 transition hover:bg-red-100">{scoreAlert}</Link>
       )}
       {tab === "team" && <DispoScoreboard reps={scoreReps} team={scoreTeam} />}
+      {tab === "team" && velocity && <DispoVelocityPanel v={velocity} />}
 
       {tab === "today" && command && (
         <>
