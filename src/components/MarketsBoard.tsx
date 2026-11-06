@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { logPullAction, setMarketTrendAction, setMarketStatusAction } from "@/app/markets/actions";
 import HaloMarketMap from "@/components/HaloMarketMap";
+import MarketAnalysisPanel from "@/components/MarketAnalysisPanel";
 import type { TargetMarket, Coverage, LandFocus } from "@/lib/target-markets";
 
 // Inlined (not imported from target-markets, which pulls in the server-only db client).
@@ -41,7 +42,7 @@ export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geoco
   const [focus, setFocus] = useState<"" | LandFocus>("");
   const [cov, setCov] = useState<"" | Coverage["status"]>("");
   const [openPull, setOpenPull] = useState<string | null>(null);
-  const [view, setView] = useState<"map" | "cards">("map");
+  const [view, setView] = useState<"map" | "cards" | "analysis">("map");
   const today = new Date().toISOString().slice(0, 10);
 
   const rows = useMemo(() => markets.filter((v) =>
@@ -67,12 +68,14 @@ export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geoco
         <div className="flex overflow-hidden rounded-full ring-1 ring-slate-200">
           <button onClick={() => setView("map")} className={`px-2.5 py-1 font-bold ${view === "map" ? "bg-brand-navy text-white" : "bg-white text-slate-600"}`}>🗺 Map</button>
           <button onClick={() => setView("cards")} className={`px-2.5 py-1 font-bold ${view === "cards" ? "bg-brand-navy text-white" : "bg-white text-slate-600"}`}>▦ Cards</button>
+          <button onClick={() => setView("analysis")} className={`px-2.5 py-1 font-bold ${view === "analysis" ? "bg-brand-navy text-white" : "bg-white text-slate-600"}`}>📊 Analysis</button>
         </div>
       </div>
 
+      {view === "analysis" && <MarketAnalysisPanel markets={rows} />}
       {view === "map" && <HaloMarketMap markets={rows} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} canEdit={canEdit} territories={territories} terrStats={terrStats} />}
 
-      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-2 ${view === "map" ? "hidden" : ""}`}>
+      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-2 ${view !== "cards" ? "hidden" : ""}`}>
         {rows.map(({ m, coverage, leads, deals, momentum }) => {
           const c = COV_META[coverage.status];
           return (
