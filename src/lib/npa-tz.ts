@@ -19,6 +19,56 @@ export function tzForPhone(phone: string): string | null {
   return NPA[npa] ?? null;
 }
 
+// 🏠 Timezone from the lead's ADDRESS (Jon 2026-11-05: judge quiet hours by area code AND
+// address — a ported number can lie about where the person actually is). Maps the US state
+// in the address to its primary IANA zone. Split-zone states use their primary zone; the
+// area-code signal covers the exceptions, and quietHoursWarning blocks if EITHER says quiet.
+const STATE_TZ: Record<string, string> = {};
+const addS = (tz: string, codes: string) => { for (const c of codes.split(" ")) STATE_TZ[c] = tz; };
+addS(E, "CT DE FL GA IN KY MA MD ME MI NC NH NJ NY OH PA RI SC VA VT WV DC");
+addS(C, "AL AR IL IA KS LA MN MS MO ND NE OK SD TN TX WI");
+addS(M, "CO ID MT NM UT WY");
+addS(MA, "AZ");
+addS(P, "CA NV OR WA");
+addS(AK, "AK");
+addS(H, "HI");
+// Full state names → abbreviation, for addresses that spell the state out.
+const STATE_NAMES: Record<string, string> = {
+  alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA", colorado: "CO", connecticut: "CT",
+  delaware: "DE", florida: "FL", georgia: "GA", hawaii: "HI", idaho: "ID", illinois: "IL", indiana: "IN", iowa: "IA",
+  kansas: "KS", kentucky: "KY", louisiana: "LA", maine: "ME", maryland: "MD", massachusetts: "MA", michigan: "MI",
+  minnesota: "MN", mississippi: "MS", missouri: "MO", montana: "MT", nebraska: "NE", nevada: "NV", "new hampshire": "NH",
+  "new jersey": "NJ", "new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND", ohio: "OH",
+  oklahoma: "OK", oregon: "OR", pennsylvania: "PA", "rhode island": "RI", "south carolina": "SC", "south dakota": "SD",
+  tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT", virginia: "VA", washington: "WA", "west virginia": "WV",
+  wisconsin: "WI", wyoming: "WY",
+};
+export function tzForAddress(address?: string | null): string | null {
+  const a = (address || "").trim();
+  if (!a) return null;
+  // 1) "…, FL 33139" — the 2-letter state right before a ZIP is the most reliable.
+  let m = a.match(/\b([A-Za-z]{2})\b[ ,]*\d{5}(?:-\d{4})?\b/);
+  if (m && STATE_TZ[m[1].toUpperCase()]) return STATE_TZ[m[1].toUpperCase()];
+  // 2) a spelled-out state name anywhere.
+  const low = ` ${a.toLowerCase()} `;
+  for (const [name, abbr] of Object.entries(STATE_NAMES)) if (low.includes(` ${name} `) || low.includes(`, ${name}`)) return STATE_TZ[abbr] ?? null;
+  // 3) any bare 2-letter state token (last one wins — usually nearest the ZIP).
+  const toks = a.toUpperCase().match(/\b[A-Z]{2}\b/g) || [];
+  for (let i = toks.length - 1; i >= 0; i--) if (STATE_TZ[toks[i]]) return STATE_TZ[toks[i]];
+  return null;
+}
+
+/** Is it 9pm–8am right now in this IANA zone? */
+function isQuietInZone(tz: string, d: Date): boolean {
+  try {
+    const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: tz }).format(d));
+    return hour >= 21 || hour < 8;
+  } catch { return false; }
+}
+function localLabel(tz: string, d: Date): string {
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).format(d);
+}
+
 // 🕐 Lead's local time + zone abbreviation + an east→west priority rank (Jon 2026-10-29:
 // work the East Coast first — they're ahead of us — then move west). Lower rank = more east
 // = work sooner. Returns null for an unknown area code.
@@ -31,19 +81,25 @@ export function localTimeForPhone(phone: string, nowMs: number = Date.now()): { 
   return { time, abbr: TZ_ABBR[tz] ?? "", rank: TZ_RANK[tz] ?? 9 };
 }
 
-/** Returns a human warning when it's quiet hours (9pm–8am) where the lead lives, else
- *  null. `nowMs` lets the caller pass a CLOCK-SKEW-CORRECTED time (server-trusted) so a
- *  wrong device clock can't falsely block a call (Jon 2026-10-24). */
-export function quietHoursWarning(phone: string, fallbackTz?: string, nowMs?: number): string | null {
-  const tz = tzForPhone(phone) ?? fallbackTz ?? null;
-  if (!tz) return null;
-  try {
-    const d = new Date(nowMs ?? Date.now());
-    const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: tz }).format(d));
-    if (hour >= 21 || hour < 8) {
-      const local = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).format(d);
-      return `It's ${local} where this lead lives (${tz.split("/")[1]?.replace("_", " ")}) — quiet hours are 9pm–8am. Call blocked to keep us compliant.`;
+/** Returns a human warning when it's quiet hours (9pm–8am) where the lead lives, else null.
+ *  Judges by BOTH the phone area code AND the lead's address (Jon 2026-11-05) and blocks if
+ *  EITHER zone is in quiet hours — the most compliant read when a ported number and the
+ *  address disagree about where the person actually is. `nowMs` lets the caller pass a
+ *  CLOCK-SKEW-CORRECTED time (server-trusted) so a wrong device clock can't bypass it. */
+export function quietHoursWarning(phone: string, address?: string | null, fallbackTz?: string, nowMs?: number): string | null {
+  const phoneTz = tzForPhone(phone);
+  const addrTz = tzForAddress(address);
+  // Zones to check: whatever we know. If we know neither, fall back to the org zone (safer to
+  // apply a window than none). De-dupe so we don't report the same zone twice.
+  const zones = [...new Set([phoneTz, addrTz].filter(Boolean) as string[])];
+  if (!zones.length && fallbackTz) zones.push(fallbackTz);
+  if (!zones.length) return null;
+  const d = new Date(nowMs ?? Date.now());
+  for (const tz of zones) {
+    if (isQuietInZone(tz, d)) {
+      const src = tz === addrTz && tz !== phoneTz ? "by address" : tz === phoneTz && tz !== addrTz ? "by area code" : "local";
+      return `It's ${localLabel(tz, d)} ${src === "local" ? "where this lead lives" : src} (${tz.split("/")[1]?.replace("_", " ")}) — quiet hours are 9pm–8am. Blocked to keep us compliant.`;
     }
-    return null;
-  } catch { return null; }
+  }
+  return null;
 }

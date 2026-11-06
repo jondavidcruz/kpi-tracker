@@ -905,7 +905,9 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   // own time zone (by area code) = blocked, logged so the rep sees why.
   {
     const { quietHoursWarning } = await import("@/lib/npa-tz");
-    const quiet = quietHoursWarning(to);
+    // judge quiet hours by area code AND the lead's address (Jon 2026-11-05)
+    const addr = contactId ? (await db.crmContact.findUnique({ where: { id: contactId }, select: { address: true } }).catch(() => null))?.address ?? "" : "";
+    const quiet = quietHoursWarning(to, addr);
     if (quiet) {
       await logCrmEvent({ contactId, oppId, kind: "sms", body: `🕘 SMS NOT SENT — ${quiet} Draft was: ${text.slice(0, 160)}`, actor: me.name });
       if (!skipRefresh) revalidatePath(`/crm/${oppId}`);

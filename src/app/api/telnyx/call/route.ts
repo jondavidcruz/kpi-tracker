@@ -553,25 +553,15 @@ export async function POST(req: NextRequest) {
       const hourKey = `mcb-${last10}-${new Date().toISOString().slice(0, 13)}`;
       const dup = contact ? await db.crmEvent.findFirst({ where: { contactId: contact.id, meta: { path: ["msgId"], equals: hourKey } }, select: { id: true } }).catch(() => null) : null;
       if (!dup) {
-        let texted = false;
-        if (process.env.TELNYX_API_KEY) {
-          const first = contact?.name.split(" ")[0] ?? "there";
-          // editable in CRM → Automations → Message automations (Jon 2026-10-08)
-          const { readMsgTemplates, fillTokens } = await import("@/lib/msg-templates");
-          const tpl = (await readMsgTemplates()).missed_call_sms;
-          const res = await fetch("https://api.telnyx.com/v2/messages", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ from: pay.to, to: pay.from, text: fillTokens(tpl, { first, rep: contact?.assignedTo?.split(" ")[0] }) }),
-          }).catch(() => null);
-          texted = !!res?.ok;
-        }
+        // 🚫 Missed-call auto-text DISABLED (Jon 2026-11-05: "no missed-call SMS text back").
+        // We no longer auto-text the caller — a human calls them back. This also removed an
+        // unguarded SMS path that could fire outside quiet hours.
         if (contact) {
-          await logCrmEvent({ contactId: contact.id, kind: "call", body: `📵 Missed inbound call from ${pay.from}${texted ? " — auto text-back sent ✅" : " (text-back failed — number may need a messaging profile)"}`, meta: { msgId: hourKey }, actor: "inbound" });
+          await logCrmEvent({ contactId: contact.id, kind: "call", body: `📵 Missed inbound call from ${pay.from} — call them back (no auto-text).`, meta: { msgId: hourKey }, actor: "inbound" });
           await db.crmTask.create({ data: { contactId: contact.id, title: `📞 CALL BACK NOW — they called us (${pay.from})`, due: new Date().toISOString().slice(0, 10), assignedTo: contact.assignedTo, createdBy: "inbound" } }).catch(() => {});
           try {
             const { sendPushTo } = await import("@/lib/push");
-            sendPushTo(contact.assignedTo ? [contact.assignedTo.split(" ")[0]] : "all", { title: `📵 Missed call — ${contact.name}`, body: `${pay.from} · auto text-back ${texted ? "sent" : "failed"} — call them back`, url: `/crm/conversations?c=${contact.id}`, tag: `missed-${contact.id}` }).catch(() => {});
+            sendPushTo(contact.assignedTo ? [contact.assignedTo.split(" ")[0]] : "all", { title: `📵 Missed call — ${contact.name}`, body: `${pay.from} — call them back`, url: `/crm/conversations?c=${contact.id}`, tag: `missed-${contact.id}` }).catch(() => {});
           } catch { /* best-effort */ }
         }
       }

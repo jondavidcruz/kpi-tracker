@@ -16,7 +16,7 @@ type PhoneData = {
   contacts: Array<{ id: string; name: string; phone: string }>;
   queue: Array<{ oppId: string; contactId: string; name: string; phone: string; title: string; due: string }>;
 };
-type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string; dir?: "in" | "out"; secs?: number };
+type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string; address?: string; dir?: "in" | "out"; secs?: number };
 
 const areaCode = (e164: string) => e164.replace(/\D/g, "").replace(/^1/, "").slice(0, 3);
 // "City, ST" → "ST" (empty for toll-free / unknown NPAs)
@@ -742,11 +742,11 @@ export default function DialPad({ floating = false, owner = false }: { floating?
     // BEFORE cleaning, or the "0" after the dot sticks to the number (Jon 2026-10-24)
     const to = ctx.phone.replace(/\.\d+$/, "").replace(/[^+\d]/g, "");
     if (to.replace(/\D/g, "").length < 10) { setMsg("enter a full number"); return; }
-    // 🕘 quiet-hours guard: 9pm–8am in the LEAD'S time zone (by area code) = blocked.
-    // Re-measure the clock skew RIGHT NOW so a just-fixed (or just-broken) device clock
-    // is reflected immediately, and use the server-corrected time for the decision.
+    // 🕘 quiet-hours guard: 9pm–8am in the LEAD'S time zone — by area code AND the lead's
+    // address (Jon 2026-11-05), blocked if either says quiet. Re-measure the clock skew RIGHT
+    // NOW so a just-fixed (or just-broken) device clock is reflected, and use server-corrected time.
     const skew = await measureSkew();
-    const quiet = quietHoursWarning(to, undefined, Date.now() + skew);
+    const quiet = quietHoursWarning(to, ctx.address, undefined, Date.now() + skew);
     if (quiet) { setState("error"); setMsg(Math.abs(skew) > 5 * 60_000 ? `${quiet}  (Your computer clock is off by ${Math.round(Math.abs(skew) / 60000)}m — this used the corrected time.)` : quiet); setTimeout(() => { setState("idle"); setMsg(""); }, 7000); return; }
     setOnCall({ ...ctx, dir: "out" }); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     dialStartRef.current = Date.now(); setEndConfirm(false);

@@ -144,12 +144,13 @@ const WELCOME_TEXTS = [
   (first: string, rep: string) => `Hi ${first} — Freedom Offers received your property details. ${rep} is calling from this number within 5 minutes, so please pick up! Reply STOP to opt out.`,
 ];
 
-export async function sendWelcomeText(o: { contactId: string; oppId: string; phone: string; name: string; repName: string }): Promise<void> {
+export async function sendWelcomeText(o: { contactId: string; oppId: string; phone: string; name: string; repName: string; address?: string }): Promise<void> {
   const from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID;
   if (!process.env.TELNYX_API_KEY || !from || !o.phone) return;
-  // 🕘 quiet hours (lead's own tz): skip the night text; the morning call covers it
+  // 🕘 quiet hours (lead's own tz, by area code AND address): skip the night text.
   const { quietHoursWarning } = await import("@/lib/npa-tz");
-  const quiet = quietHoursWarning(o.phone);
+  const addr = o.address ?? (o.contactId ? (await db.crmContact.findUnique({ where: { id: o.contactId }, select: { address: true } }).catch(() => null))?.address ?? "" : "");
+  const quiet = quietHoursWarning(o.phone, addr);
   if (quiet) {
     await logCrmEvent({ contactId: o.contactId, oppId: o.oppId, kind: "system", body: `🕘 Welcome text held — ${quiet}`, actor: "auto-welcome" }).catch(() => {});
     return;
