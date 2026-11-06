@@ -2731,20 +2731,39 @@ export async function pullCompsAction(formData: FormData): Promise<{
   ok: boolean; error?: string; value?: number | null; low?: number | null; high?: number | null;
   comps?: Array<{ address: string; price: number | null; acres: number | null; dom: number | null }>;
   used?: number; cap?: number;
+  cached?: boolean; cachedZip?: string; cachedAgeDays?: number; // served from the land-comps area cache (no RentCast call)
 }> {
   const me = await getCurrentUser();
   if (!me) return { ok: false, error: "sign in first" };
   const address = String(formData.get("address") ?? "").trim();
   if (!address) return { ok: false, error: "Enter the subject address first." };
   const land = String(formData.get("land") ?? "") === "1";
+  const fresh = String(formData.get("fresh") ?? "") === "1"; // force a new RentCast pull, bypass the area cache
+  const toOut = (comps: import("@/lib/rentcast").RcComp[]) =>
+    comps.map((c) => ({ address: c.address, price: c.price, acres: c.lotSize != null ? Math.round((c.lotSize / 43560) * 100) / 100 : null, dom: c.daysOnMarket }));
   try {
     const { rentcastValue, rentcastUsage } = await import("@/lib/rentcast");
+    // LAND: reuse this ZIP's already-pulled comps for free (Jon 2026-11-05 — avoid RentCast
+    // spend; land values move slowly so area comps stay good for ~90 days). Homes skip the
+    // cache (sold-ARV is address-specific, not an area number).
+    if (land && !fresh) {
+      const { getCachedLandComps } = await import("@/lib/land-comps-cache");
+      const hit = await getCachedLandComps(address);
+      if (hit) {
+        const u = await rentcastUsage();
+        return {
+          ok: true, value: hit.value, low: hit.low, high: hit.high, used: u.used, cap: u.cap,
+          comps: toOut(hit.comps), cached: true, cachedZip: hit.zip, cachedAgeDays: Math.round(hit.ageDays),
+        };
+      }
+    }
     const est = await rentcastValue(address, me!.name, land ? "Land" : undefined);
+    if (land) {
+      const { saveLandComps } = await import("@/lib/land-comps-cache");
+      await saveLandComps(address, est).catch(() => {}); // cache for the next underwrite in this ZIP
+    }
     const u = await rentcastUsage();
-    return {
-      ok: true, value: est.value, low: est.low, high: est.high, used: u.used, cap: u.cap,
-      comps: est.comps.map((c) => ({ address: c.address, price: c.price, acres: c.lotSize != null ? Math.round((c.lotSize / 43560) * 100) / 100 : null, dom: c.daysOnMarket })),
-    };
+    return { ok: true, value: est.value, low: est.low, high: est.high, used: u.used, cap: u.cap, comps: toOut(est.comps) };
   } catch (e) { return { ok: false, error: String(e).slice(0, 220) }; }
 }
 

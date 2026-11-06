@@ -166,7 +166,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   };
   const runBulk = () => {
     if (bulk.op !== "delete" && bulk.op !== "detectkind" && !bulk.val.trim()) return;
-    if (bulk.op === "detectkind" && !confirm("Auto-detect House vs Land on these leads?\n\nFree signals (APN, notes, pipeline) cost nothing; the ambiguous ones use a RentCast lookup (capped at 20 per run, 50/month). Already-set types are left alone.")) return;
+    if (bulk.op === "detectkind" && !confirm("Auto-detect House vs Land on these leads?\n\nUses FREE signals only — an APN (→ land), land/house words in the notes or address, or a 'Land' pipeline. No RentCast, no cost. Ambiguous ones are left unset for a manual pick; already-set types are left alone.")) return;
     // Whole-stage scope → the server applies to EVERY lead in the stage by (pipeline, stage), so it
     // scales past the id-based 500 cap. For the FIRST column we also pass the full list of column
     // keys so the server catches cards whose stored stage matches no column (e.g. imported devs on
@@ -601,7 +601,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                 <option value="assign">👤 Change owner</option>
                 <option value="follower">👥 Add follower</option>
                 <option value="kind">🏕 Set type (House / Land)</option>
-                <option value="detectkind">🔎 Auto-detect type (House/Land)</option>
+                <option value="detectkind">🔎 Auto-detect type (House/Land) — free</option>
                 <option value="tag">🏷 Add tag</option>
                 <option value="untag">🏷 Remove tag</option>
                 <option value="delete">🗑 Delete (archive)</option>

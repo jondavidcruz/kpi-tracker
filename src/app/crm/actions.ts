@@ -1307,11 +1307,10 @@ export async function bulkOppAction(formData: FormData) {
       await db.crmOpportunity.update({ where: { id }, data: { formData: { ...fd, __leadKind: val } as never } }).catch(() => {});
     }
   } else if (op === "detectkind") {
-    // 🔎 Auto-detect House vs Land. FREE signals (APN / notes-text / pipeline) cost nothing; the
-    // genuinely ambiguous ones fall back to an authoritative RentCast lookup, capped per run so one
-    // click can't eat the whole 50/mo allowance. Already-set (manual) kinds are left alone.
-    const { detectLeadKind } = await import("@/lib/lead-kind-detect");
-    const RC_PER_RUN = 20; let rcUsed = 0;
+    // 🔎 Auto-detect House vs Land — FREE signals ONLY (APN / notes-text / pipeline), no RentCast
+    // (Jon 2026-11-05: avoid RentCast spend). Ambiguous leads are left unset for a manual call.
+    // Already-set (manual) kinds are left alone.
+    const { freeKindSignal } = await import("@/lib/lead-kind-detect");
     for (const id of ids) {
       const o = await db.crmOpportunity.findUnique({ where: { id }, select: { title: true, pipeline: true, formData: true, contact: { select: { address: true } } } });
       if (!o) continue;
@@ -1319,8 +1318,7 @@ export async function bulkOppAction(formData: FormData) {
       if (fd.__leadKind === "land" || fd.__leadKind === "home") continue; // keep manual/already-set
       const apn = ((fd.property as { apn?: string } | undefined)?.apn) ?? "";
       const addr = o.title || o.contact?.address || "";
-      const res = await detectLeadKind({ apn, address: addr, pipeline: o.pipeline }, { useRentcast: rcUsed < RC_PER_RUN, by: me?.name ?? "bulk-detect" });
-      if (res.source.startsWith("rentcast")) rcUsed++;
+      const res = freeKindSignal({ apn, address: addr, pipeline: o.pipeline });
       if (res.kind) await db.crmOpportunity.update({ where: { id }, data: { formData: { ...fd, __leadKind: res.kind, __kindSource: res.source } as never } }).catch(() => {});
     }
   } else if (op === "delete") {
@@ -1372,16 +1370,15 @@ export async function bulkOppStageAction(formData: FormData) {
   } else if (op === "delete") {
     await db.crmOpportunity.updateMany({ where, data: { archivedAt: new Date() } });
   } else if (op === "detectkind") {
-    const { detectLeadKind } = await import("@/lib/lead-kind-detect");
+    // FREE signals only — no RentCast (Jon 2026-11-05: avoid RentCast spend).
+    const { freeKindSignal } = await import("@/lib/lead-kind-detect");
     const rows = await db.crmOpportunity.findMany({ where, select: { id: true, title: true, pipeline: true, formData: true, contact: { select: { address: true } } }, take: 3000 });
-    const RC_PER_RUN = 20; let rcUsed = 0;
     for (const o of rows) {
       const fd = (o.formData ?? {}) as Record<string, unknown>;
       if (fd.__leadKind === "land" || fd.__leadKind === "home") continue;
       const apn = ((fd.property as { apn?: string } | undefined)?.apn) ?? "";
       const addr = o.title || o.contact?.address || "";
-      const res = await detectLeadKind({ apn, address: addr, pipeline: o.pipeline }, { useRentcast: rcUsed < RC_PER_RUN, by: me?.name ?? "bulk-detect" });
-      if (res.source.startsWith("rentcast")) rcUsed++;
+      const res = freeKindSignal({ apn, address: addr, pipeline: o.pipeline });
       if (res.kind) await db.crmOpportunity.update({ where: { id: o.id }, data: { formData: { ...fd, __leadKind: res.kind, __kindSource: res.source } as never } }).catch(() => {});
     }
   } else if (op === "tag" || op === "untag" || op === "follower" || op === "kind") {

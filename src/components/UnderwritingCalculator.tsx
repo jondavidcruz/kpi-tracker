@@ -974,21 +974,31 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
     }
   }
 
-  async function pullRentcast(landMode: boolean) {
+  const [rcCached, setRcCached] = useState(false); // last land pull came from the area cache (offer a fresh pull)
+  async function pullRentcast(landMode: boolean, forceFresh = false) {
     const addr = v("subject");
     if (!addr.trim()) { setRcMsg("Enter the property address at the top first."); return; }
-    setRcBusy(true); setRcMsg("Pulling value + comps… (counts 1 of the 50/month)");
+    setRcBusy(true); setRcCached(false);
+    setRcMsg(landMode && !forceFresh ? "Checking area comps…" : "Pulling value + comps… (counts 1 of the 50/month)");
     try {
       const fd = new FormData();
       fd.set("address", addr);
       if (landMode) fd.set("land", "1");
+      if (forceFresh) fd.set("fresh", "1");
       const r = await pullCompsAction(fd);
       if (!r.ok) { setRcMsg(`⚠️ ${r.error}`); return; }
       if (landMode) {
         if (r.value != null) setV("clEmv", String(r.value));
         const withAcres = (r.comps ?? []).filter((c) => c.price != null && c.acres != null).slice(0, 3);
         withAcres.forEach((c, i) => { setV(`clC${i + 1}`, String(c.price)); setV(`clC${i + 1}A`, String(c.acres)); });
-        setRcMsg(`✅ Value $${r.value?.toLocaleString() ?? "—"} (range $${r.low?.toLocaleString() ?? "—"}–$${r.high?.toLocaleString() ?? "—"}) · ${withAcres.length} land comps filled · RentCast ${r.used}/${r.cap} used`);
+        const head = `✅ Value $${r.value?.toLocaleString() ?? "—"} (range $${r.low?.toLocaleString() ?? "—"}–$${r.high?.toLocaleString() ?? "—"}) · ${withAcres.length} land comps filled`;
+        if (r.cached) {
+          setRcCached(true);
+          const age = r.cachedAgeDays === 0 ? "today" : r.cachedAgeDays === 1 ? "1 day ago" : `${r.cachedAgeDays} days ago`;
+          setRcMsg(`♻️ Area comps for ${r.cachedZip} (pulled ${age}) — no RentCast call used. ${head.replace("✅ ", "")}`);
+        } else {
+          setRcMsg(`${head} · saved for this ZIP · RentCast ${r.used}/${r.cap} used`);
+        }
       } else {
         if (r.value != null) setV("arv", String(r.value));
         setRcMsg(`✅ ARV $${r.value?.toLocaleString() ?? "—"} (range $${r.low?.toLocaleString() ?? "—"}–$${r.high?.toLocaleString() ?? "—"}) · comps: ${(r.comps ?? []).map((c) => `${c.address.split(",")[0]} $${c.price?.toLocaleString()}`).slice(0, 3).join(" · ") || "none"} · RentCast ${r.used}/${r.cap} used`);
@@ -1504,7 +1514,11 @@ export default function UnderwritingCalculator({ defaultCloseCost = 1500, closeC
               {canPullComps && (
                 <div className="sm:col-span-2">
                   <button type="button" disabled={rcBusy} onClick={() => pullRentcast(true)} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-50">🔎 RentCast: pull land value &amp; comps</button>
+                  <span className="ml-2 text-[10px] text-slate-400">reuses this ZIP&apos;s saved comps for free when available</span>
                   {rcMsg && <p className="mt-1 text-[11px] text-slate-500">{rcMsg}</p>}
+                  {rcCached && !rcBusy && (
+                    <button type="button" onClick={() => pullRentcast(true, true)} className="mt-1 text-[11px] font-semibold text-sky-600 underline hover:text-sky-700">↻ Pull fresh instead (uses 1 of the 50/month)</button>
+                  )}
                 </div>
               )}
 
