@@ -378,6 +378,26 @@ export async function setOppStageAction(formData: FormData) {
         }
         if (/offer_call|verbal_offer/i.test(stage)) postToSpace("acquisitions", `💬 Offer in motion — ${(full.assignedTo || me.name).split(" ")[0]} ${stage.includes("verbal") ? "is negotiating a verbal offer" : "is making the offer call"} on ${addr || contact?.name || "a lead"}`).catch(() => {});
       } catch { /* chat bells never block */ }
+      // 📋 B7 coordinator handoff (Jon roadmap): when a DISPO deal enters ESCROW, auto-create
+      // the /closing escrow record + a coordinator task so the handoff isn't tracked by memory.
+      // Status "escrow" (NOT closed revenue — won't touch the P&L), deduped via a formData flag
+      // so a bump in/out of the stage never double-creates. No outreach.
+      try {
+        const { isDispoDealPipeline } = await import("@/lib/dispo-buyers");
+        const stageLabel = pipes.find((p) => p.name === full.pipeline)?.stages.find((s) => s.key === stage)?.label ?? "";
+        if (isDispoDealPipeline(full.pipeline) && (/escrow/i.test(stage) || /escrow/i.test(stageLabel))) {
+          const row = await db.crmOpportunity.findUnique({ where: { id: full.id }, select: { formData: true } });
+          const fd3 = (row?.formData ?? {}) as Record<string, unknown>;
+          if (!fd3.__closingCreated) {
+            const exit = /novation/i.test(full.pipeline) ? "novation" : "assignment";
+            await db.closing.create({ data: { address: addr || full.title || contact?.name || "Deal", exit, status: "escrow", revenue: full.value ?? full.askPrice ?? 0, openedDate: today } }).catch(() => {});
+            await db.crmOpportunity.update({ where: { id: full.id }, data: { formData: { ...fd3, __closingCreated: today } as never } }).catch(() => {});
+            const coord = await db.user.findFirst({ where: { active: true, position: "dispositions" }, select: { name: true } });
+            await db.crmTask.create({ data: { oppId: full.id, contactId: full.contactId, title: `📋 ESCROW OPENED — track ${addr || contact?.name || "the deal"} to close on /closing (set buyer, title co, close date)`, due: today, assignedTo: coord?.name ?? "", createdBy: "escrow-handoff" } }).catch(() => {});
+            await logCrmEvent({ contactId: full.contactId, oppId: full.id, kind: "system", body: "📋 Escrow opened — created a /closing record (status: escrow) for coordinator handoff.", actor: "escrow-handoff" });
+          }
+        }
+      } catch { /* never blocks the move */ }
       if (/sign/i.test(stage) && !/missed|dead/i.test(stage)) {
         // 💰 iSpeedToLead Closer Program (Jon 2026-10-08): they PAY us for
         // reporting closings on their leads — never let one slip.
