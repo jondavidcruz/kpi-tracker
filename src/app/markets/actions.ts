@@ -2,6 +2,8 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { readTargetMarkets, saveTargetMarkets, logMarketPull, type Trend, type MarketStatus } from "@/lib/target-markets";
+import { isManager } from "@/lib/auth";
+import { saveTerritory, deleteTerritory, type TerrStatus } from "@/lib/map-territories";
 
 // 📍 Log that we pulled leads in a market (updates coverage + cooldown).
 export async function logPullAction(formData: FormData) {
@@ -50,4 +52,29 @@ export async function setMarketStatusAction(formData: FormData) {
   m.status = status;
   await saveTargetMarkets(list);
   revalidatePath("/markets");
+}
+
+// 🖍 Save a hand-drawn territory on the map (manager). `points` is a JSON [lat,lng][] ring.
+export async function saveTerritoryAction(formData: FormData): Promise<{ ok: boolean; id?: string }> {
+  const me = await getCurrentUser();
+  if (!me || !isManager(me)) return { ok: false };
+  const name = String(formData.get("name") ?? "").trim();
+  const status = String(formData.get("status") ?? "") as TerrStatus;
+  if (!["pulled", "marketing", "target", "avoid"].includes(status)) return { ok: false };
+  let points: [number, number][] = [];
+  try { points = JSON.parse(String(formData.get("points") ?? "[]")); } catch { return { ok: false }; }
+  const id = String(formData.get("id") ?? "") || undefined;
+  const saved = await saveTerritory({ id, name, status, points, by: me.name });
+  revalidatePath("/markets");
+  return { ok: !!saved, id: saved ?? undefined };
+}
+
+// 🗑 Delete a drawn territory (manager).
+export async function deleteTerritoryAction(formData: FormData): Promise<{ ok: boolean }> {
+  const me = await getCurrentUser();
+  if (!me || !isManager(me)) return { ok: false };
+  const id = String(formData.get("id") ?? "");
+  if (id) await deleteTerritory(id);
+  revalidatePath("/markets");
+  return { ok: true };
 }

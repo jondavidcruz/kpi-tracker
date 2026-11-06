@@ -32,6 +32,10 @@ export default async function MarketsPage() {
   const buyerPoints = pointsFor(buyerPlaces, geocache);
   const geocodeRemaining = buyerPlaces.filter((p) => !(normalizePlace(p) in geocache)).length;
 
+  // 🖍 Hand-drawn territories (areas we market in / have pulled vs uncharted).
+  const { readTerritories } = await import("@/lib/map-territories");
+  const territories = await readTerritories();
+
   const now = Date.now(), DAY = 86_400_000;
   // Build a lowercase address haystack + created-age per opp once.
   const oppHay = opps.map((o) => ({
@@ -69,7 +73,7 @@ export default async function MarketsPage() {
         subtitle="Where we hunt land — the high-net-worth, waterfront, business-dense Florida markets the wealthy keep building in through rate hikes, and that few wholesalers compete in. Track what we've pulled, how each market performs, and the 30-60-180 trend."
         accent="bg-emerald-400"
       />
-      <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} />
+      <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} />
     </div>
   );
 }
