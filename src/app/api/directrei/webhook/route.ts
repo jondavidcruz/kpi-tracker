@@ -82,5 +82,15 @@ export async function POST(req: NextRequest) {
   const addr = normalizeAddress([d.mailing_street, d.mailing_city, `${d.mailing_state ?? ""} ${d.mailing_zip ?? ""}`.trim()].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(", "));
   const price = (notes.match(/\$[\d,]+(?:\.\d+)?/) ?? [])[0] ?? String(bodyAny.price ?? "");
   const r = await upsertDreiHotLead({ name: d.name, phone, email, market: d.market, address: addr, status: d.status, notes, price });
+  // 🆕 Real-time chat post when a NEW lead actually lands (Jon 2026-11-05: replaced the
+  // daily digest with a live "new lead came in" ping). created=true means a fresh qualified
+  // lead (not a recent dupe). Internal team chat post — fire-and-forget, never blocks the 2xx.
+  if (r?.created) {
+    const { postToSpace } = await import("@/lib/chat-spaces");
+    const roleTxt = /buy/i.test(d.role ?? "") ? "buyer" : "seller";
+    const whereTxt = addr || d.market || "";
+    const reach = phone || email || "";
+    postToSpace("directrei", `🆕 *New Direct REI ${roleTxt}* — ${d.name || "Unknown"}${whereTxt ? ` · ${whereTxt}` : ""}${price ? ` · ${price}` : ""} — replied & auto-landed in the CRM${roleTxt === "seller" ? " (→ Michelle)" : ""}.${reach ? ` ${reach}` : ""}`).catch(() => {});
+  }
   return NextResponse.json({ ok: true, ...(r ?? { skipped: "no phone/email" }) });
 }

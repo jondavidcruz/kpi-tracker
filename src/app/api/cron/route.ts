@@ -2639,18 +2639,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: commit ? "COMMITTED" : "DRY RUN", moved, newDefs: defs.map((d) => ({ name: d.name, stages: d.stages.length })) });
   }
 
-  // 📨 Direct REI daily recap (?dreidaily=1): one short line to the Direct REI
-  // chat space at EOD — totals only; their own qualified-lead pings handle the
-  // real-time side (Jon 2026-10-08).
+  // 📨 Direct REI daily recap — TURNED OFF (Jon 2026-11-05: "turn off this Direct REI
+  // chat; instead the webhook posts when new leads come in"). The real-time per-lead
+  // chat post now lives in /api/directrei/webhook. Left as a no-op so the scheduled
+  // caller still gets a clean 200 instead of running an unknown-param fallback.
   if (url.searchParams.get("dreidaily") === "1") {
-    const row = await db.resource.findFirst({ where: { category: "__directrei_feed__" } });
-    if (!row?.description) return NextResponse.json({ ok: false, error: "no feed yet" });
-    try {
-      const f = JSON.parse(row.description) as { seller?: { newToday?: number; repliesToday?: number; new7d?: number; replies7d?: number }; buyer?: { newToday?: number; repliesToday?: number } };
-      const { postToSpace } = await import("@/lib/chat-spaces");
-      const ok = await postToSpace("directrei", `📨 *Direct REI today* — Sellers: ${f.seller?.newToday ?? 0} new · ${f.seller?.repliesToday ?? 0} replied | Buyers: ${f.buyer?.newToday ?? 0} new · ${f.buyer?.repliesToday ?? 0} replied | 7-day: ${f.seller?.new7d ?? 0} seller leads, ${f.seller?.replies7d ?? 0} replies. Replied sellers auto-land in the CRM as warm leads.`);
-      return NextResponse.json({ ok, job: "dreidaily" });
-    } catch { return NextResponse.json({ ok: false, error: "bad feed json" }); }
+    return NextResponse.json({ ok: true, job: "dreidaily", disabled: "replaced by real-time webhook chat posts" });
   }
 
   // 🤖 Flag auto-reasons (?flagreasons=1, daily cron — Jon 2026-10-08: "Marie
