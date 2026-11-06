@@ -24,6 +24,19 @@ export type WhatsNewEntry = {
 // Newest first. Keep each how-to to a few plain steps the team can follow cold.
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: "market-research-map", date: "2026-11-06", emoji: "🗺", title: "Target Markets — research & pull land from a live map",
+    blurb: "A real map of our FL markets with buyer coverage, a market-analysis engine (Location Quotient + opportunity scoring), and DealMachine built in to research areas and pull land leads straight into the CRM.",
+    audience: ["leadership", "acq"], where: { label: "Target Markets", href: "/markets" },
+    steps: [
+      "🗺 Map: satellite view of our markets — glowing = we have buyers who'll take deals there, dim = open territory. Search a county or ZIP to mark where we're marketing / have pulled, or bulk-paste a list of ZIPs. Marked areas show how many leads & deals we have inside them.",
+      "📊 Analysis tab: markets ranked by an opportunity score. '🔥 PULL NOW' = buyers want it AND we've never pulled. Location Quotient (LQ) shows which markets over-index on wealth, demand, or deals. Hit 📚 Playbook for how each market-analysis tool works.",
+      "🏕 DealMachine research (bottom of the page): pick a county/city/ZIP + a land buy-box (infill, big acreage, commercial, absentee/out-of-state, tax-delinquent) → 'Count parcels' shows how much off-market land is there. Counts are FREE.",
+      "⬇️ Pull: once you like an area, 'Pull 25/50/100' skip-traces the owners and imports them as land leads to Michelle (uses ~1 credit each of our 10k/mo). They land in the Seller CRM, quiet-hours-safe.",
+      "📡 'Load live land inventory' on the Analysis tab counts real parcels in every market so you can rank by supply too.",
+      "Heads-up: if DealMachine shows 'needs v2 key', Jon adds a key in settings — the free map/analysis still work without it.",
+    ],
+  },
+  {
     id: "cards-cleaner-leadkind", date: "2026-11-04", emoji: "🧹", title: "Cleaner lead cards + mark Land vs House",
     blurb: "Card badges now stay on the card (no more running off the edge), land sellers show ONE badge, and you can set Land/House by hand when auto-detect is wrong.",
     audience: ["all"], where: { label: "Seller CRM", href: "/crm" },
