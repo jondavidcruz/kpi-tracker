@@ -147,6 +147,8 @@ export async function GET(request: Request) {
         out.DEALMACHINE_API_KEY.works = r.ok;
         out.DEALMACHINE_API_KEY.detail = r.ok ? `connected · ${Array.isArray(j.data) ? `${j.total ?? j.data.length}+ leads visible` : "ok"}` : `status ${r.status}: ${JSON.stringify(j).slice(0, 120)}`;
       } catch (e) { out.DEALMACHINE_API_KEY.works = false; out.DEALMACHINE_API_KEY.detail = String(e).slice(0, 120); }
+      // v2 API check (property search/count — for the War Room research tool)
+      try { const { dmPing } = await import("@/lib/dealmachine"); const p = await dmPing(); (out as Record<string, unknown>).DEALMACHINE_V2 = { works: p.countOk, detail: p.detail }; } catch (e) { (out as Record<string, unknown>).DEALMACHINE_V2 = { works: false, detail: String(e).slice(0, 120) }; }
     }
     out.DIRECTREI_API_KEY = { set: !!process.env.DIRECTREI_API_KEY };
     // Env-name discovery (names ONLY, never values) — finds what Jon called a
