@@ -20,6 +20,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/underwriting": "calculator offer mao comps deal analyzer novation assignment developer land cash double close",
   "/marketing": "vetted buyers buy box developers cash buyers jv partners map cascade rank deal",
   "/lead-sourcing": "leads pull markets areas where to pull sourcing farm demand",
+  "/markets": "target markets florida wealth high net worth waterfront oceanfront coverage pull cooldown 30 60 180 trend acreage infill luxury commercial land developers viktoriia research palm beach miami naples tampa",
   "/vetting": "buyer research vet developers unvetted",
   "/schedule": "time card timecard punch clock breaks lunch bathroom pto time off availability hours",
   "/closing-calc": "closing calculator settlement statement actual costs fees accuracy offer grade hud title escrow",
@@ -142,6 +143,7 @@ export default function Sidebar({
       { href: "/closing-calc", label: "Closing Calculator", Icon: Receipt, managerOnly: true },
     ] },
     { label: "Marketing", items: [
+      { href: "/markets", label: "Target Markets", Icon: Map, marketingOrManager: true },
       { href: "/lead-sourcing", label: "Lead Sourcing", Icon: TrendingUp, marketingOnly: true },
       { href: "/list-tracker", label: "List Tracker", Icon: ListChecks, marketingOrManager: true },
       { href: "/sop/list-recycle", label: "List Recycle SOP", Icon: BookOpen, marketingOrManager: true, external: true },
