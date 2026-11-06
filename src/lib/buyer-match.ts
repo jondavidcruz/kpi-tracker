@@ -6,6 +6,8 @@
 // buyBoxAreas). It never throws on missing data — a buyer with no areas simply
 // scores lower. No schema dependency; safe to run at render time.
 
+import type { BuyerFlags } from "./buyers/feedback";
+
 export type MatchBuyer = {
   id: string;
   name: string;
@@ -26,6 +28,7 @@ export type MatchBuyer = {
   maxOfferPct?: number;    // % of ARV they'll pay — the sharpest "pays the most" signal
   isLandBuyer?: boolean;   // tagged land buyer — boosted when ranking lot deals
   targetZips?: string;     // comma-separated zips; a match to the deal address boosts
+  track?: BuyerFlags | null; // real DealSend track record — proven behavior outranks a stated buy-box
 };
 
 export type BuyerMatch = {
@@ -168,6 +171,19 @@ export function matchBuyersForDeal(
     // 5) Vetted/active buyers are readier than raw leads.
     if (b.vetStage === "active") score += 2;
     else if (b.vetStage === "vetted") score += 1;
+
+    // 6) REAL TRACK RECORD (B1, Jon's roadmap) — rank by what a buyer has ACTUALLY done on
+    // our deals (DealSend outcomes), not just a stated buy-box. A proven closer jumps the
+    // line; repeat offerers rank up; tire-kickers and lowballers get demoted so the cascade
+    // stops leading with them. Buyers still only surface on a real area/zip fit (below), so
+    // this reorders WITHIN relevant buyers — it never sends a deal to the wrong market.
+    const tr = b.track;
+    if (tr) {
+      if (tr.closes > 0) { score += Math.min(9, tr.closes * 3); reasons.push(`🏆 closed ${tr.closes} with us`); }
+      else if (tr.offers > 0) { score += Math.min(4, tr.offers * 1.5); reasons.push(`📝 ${tr.offers} prior offer${tr.offers > 1 ? "s" : ""}`); }
+      if (tr.tireKicker) { score -= 4; reasons.push("🛑 tire-kicker"); }
+      if (tr.lowballer) { score -= 2; reasons.push("⬇️ lowballs"); }
+    }
 
     // Surface on a real area hit OR a target-zip hit (land buyers often match by zip).
     if ((hit || zipHit) && score > 0) {

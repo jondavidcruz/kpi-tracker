@@ -87,7 +87,8 @@ export default async function DealsPage({
   }
   const terms = mktAccess ? await readBuyerTerms() : {};
   const buyerLand = mktAccess ? await readBuyerLand() : {};
-  const buyersWithTerms = buyers.map((b) => ({ ...b, proofOfFunds: terms[b.id]?.pof, maxOfferPct: terms[b.id]?.maxOfferPct, isLandBuyer: buyerLand[b.id]?.isLandBuyer, targetZips: buyerLand[b.id]?.targetZips }));
+  const { parseFlags } = await import("@/lib/buyers/feedback");
+  const buyersWithTerms = buyers.map((b) => ({ ...b, proofOfFunds: terms[b.id]?.pof, maxOfferPct: terms[b.id]?.maxOfferPct, isLandBuyer: buyerLand[b.id]?.isLandBuyer, targetZips: buyerLand[b.id]?.targetZips, track: parseFlags(b.buyerFlags) }));
   const auto = mktAccess ? await readAuto() : {};
   const landMap = await readDealLand();
   const buyerNameById = new Map(buyers.map((b) => [b.id, b.name] as const));
