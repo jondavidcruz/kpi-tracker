@@ -14,12 +14,15 @@ export default async function MarketsPage() {
     return <Card className="mx-auto max-w-md p-8 text-center text-slate-500">Target Markets is for the acquisitions &amp; leadership team.</Card>;
   }
   const leader = isManager(me);
-  const [markets, pulls, opps] = await Promise.all([
+  const [markets, pulls, opps, buyers] = await Promise.all([
     readTargetMarkets(),
     readMarketPulls(),
     // Land-lead opps, for per-market performance (fuzzy address match). Light select.
     db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { title: true, stage: true, value: true, createdAt: true, contact: { select: { address: true } } }, take: 6000 }).catch(() => []),
+    // Vetted/active buyers' buy-boxes, for "where can we move deals" coverage (light text select).
+    db.marketContact.findMany({ where: { archivedAt: null, blacklistedAt: null, vetStage: { in: ["vetted", "active"] } }, select: { buyBoxAreas: true, market: true } }).catch(() => []),
   ]);
+  const buyerHay = buyers.map((b) => `${b.buyBoxAreas ?? ""} ${b.market ?? ""}`.toLowerCase());
 
   const now = Date.now(), DAY = 86_400_000;
   // Build a lowercase address haystack + created-age per opp once.
@@ -46,7 +49,9 @@ export default async function MarketsPage() {
       const priorPer30 = (d180 - d30) / 5;
       trend = d30 >= priorPer30 * 1.4 && d30 >= 1 ? "up" : d30 <= priorPer30 * 0.6 ? "down" : "flat";
     }
-    return { m, coverage: coverageFor(m.id, pulls), leads, deals, momentum: { d30, d60, d180, trend } };
+    // 🟢 Buyer coverage — how many vetted buyers can take a deal here ("charted" vs uncharted).
+    const buyerCount = buyerHay.filter((h) => toks.some((t) => h.includes(t))).length;
+    return { m, coverage: coverageFor(m.id, pulls), leads, deals, momentum: { d30, d60, d180, trend }, buyerCount };
   });
 
   return (

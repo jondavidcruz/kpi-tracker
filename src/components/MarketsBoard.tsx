@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { logPullAction, setMarketTrendAction, setMarketStatusAction } from "@/app/markets/actions";
-import FloridaMarketMap from "@/components/FloridaMarketMap";
+import HaloMarketMap from "@/components/HaloMarketMap";
 import type { TargetMarket, Coverage, LandFocus } from "@/lib/target-markets";
 
 // Inlined (not imported from target-markets, which pulls in the server-only db client).
@@ -12,7 +12,7 @@ const LAND_FOCUS_META: Record<LandFocus, { label: string; emoji: string }> = {
 };
 
 export type Momentum = { d30: number; d60: number; d180: number; trend: "up" | "flat" | "down" | "" };
-export type MarketView = { m: TargetMarket; coverage: Coverage; leads: number; deals: number; momentum: Momentum };
+export type MarketView = { m: TargetMarket; coverage: Coverage; leads: number; deals: number; momentum: Momentum; buyerCount: number };
 
 const TREND_META: Record<string, { label: string; cls: string }> = {
   up: { label: "📈 Trending up", cls: "bg-emerald-100 text-emerald-800 ring-emerald-200" },
@@ -70,7 +70,7 @@ export default function MarketsBoard({ markets, canEdit }: { markets: MarketView
         </div>
       </div>
 
-      {view === "map" && <FloridaMarketMap markets={rows} />}
+      {view === "map" && <HaloMarketMap markets={rows} />}
 
       <div className={`grid grid-cols-1 gap-3 lg:grid-cols-2 ${view === "map" ? "hidden" : ""}`}>
         {rows.map(({ m, coverage, leads, deals, momentum }) => {
