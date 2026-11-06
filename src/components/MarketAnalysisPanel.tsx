@@ -2,8 +2,10 @@
 // 📊 Market analysis view — Location Quotient + opportunity scoring + the demand-vs-coverage
 // gap, ranking target markets for where to source off-market land next. Plus a playbook of the
 // market-analysis strategies the team can apply.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { analyzeMarkets, type MarketAnalysis } from "@/lib/market-analysis";
+
+type Trend = { value: number; chg30: number; chg90: number; chg180: number; trend: string; metro: string };
 import type { MarketView } from "@/components/MarketsBoard";
 
 const PRIO: Record<MarketAnalysis["priority"], { label: string; cls: string }> = {
@@ -49,6 +51,16 @@ export default function MarketAnalysisPanel({ markets }: { markets: MarketView[]
   }
   const invVals = Object.values(inv).map((v) => v.parcels);
   const avgInv = invVals.length ? invVals.reduce((a, b) => a + b, 0) / invVals.length : 0;
+  // 📈 Real market price trend (free Zillow data), cached — load on mount, refresh on demand.
+  const [trends, setTrends] = useState<Record<string, Trend>>({});
+  const [trendAsOf, setTrendAsOf] = useState("");
+  const [trendBusy, setTrendBusy] = useState(false);
+  useEffect(() => { fetch("/api/markets/trends").then((r) => r.json()).then((j) => { if (j.store) { setTrends(j.store.byMarket ?? {}); setTrendAsOf(j.store.asOf ?? ""); } }).catch(() => {}); }, []);
+  async function refreshTrends() {
+    setTrendBusy(true);
+    try { const r = await fetch("/api/markets/trends", { method: "POST" }); const j = await r.json(); if (j.ok && j.store) { setTrends(j.store.byMarket ?? {}); setTrendAsOf(j.store.asOf ?? ""); } }
+    catch { /* */ } finally { setTrendBusy(false); }
+  }
 
   return (
     <div className="space-y-3">
@@ -56,8 +68,10 @@ export default function MarketAnalysisPanel({ markets }: { markets: MarketView[]
         <span className="text-sm font-extrabold">📊 Where to pull next — ranked by opportunity</span>
         {pullNow > 0 && <span className="rounded-full bg-red-500 px-2.5 py-0.5 text-[11px] font-bold">🔥 {pullNow} market{pullNow > 1 ? "s" : ""} to pull NOW</span>}
         <button onClick={loadInventory} disabled={invBusy} className="ml-auto rounded-lg bg-cyan-500/20 px-2.5 py-1 text-[11px] font-bold text-cyan-200 ring-1 ring-cyan-400/30 hover:bg-cyan-500/30 disabled:opacity-50">{invBusy ? "Counting…" : "📡 Load live land inventory (free)"}</button>
+        <button onClick={refreshTrends} disabled={trendBusy} className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-bold hover:bg-white/20 disabled:opacity-50">{trendBusy ? "Loading…" : trendAsOf ? "📈 Refresh prices" : "📈 Load market prices (free)"}</button>
         <button onClick={() => setShowPlay((s) => !s)} className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-bold hover:bg-white/20">📚 {showPlay ? "Hide" : "Show"} playbook</button>
       </div>
+      {trendAsOf && <div className="px-1 text-[11px] text-slate-500">📈 Zillow metro home-value trend (free) · as of {trendAsOf} · a proxy for land-market heat</div>}
       {invMsg && <div className="px-1 text-[11px] text-slate-500">{invMsg}</div>}
 
       {showPlay && (
@@ -82,6 +96,9 @@ export default function MarketAnalysisPanel({ markets }: { markets: MarketView[]
                 <div className="min-w-0">
                   <div className="truncate text-sm font-bold text-slate-800">{r.name}</div>
                   <div className="text-[11px] text-slate-500">🟢 {r.buyerCount} buyers · 📥 {r.leads} leads · 🏆 {r.deals} deals{inv[r.name] ? ` · 🏕 ${inv[r.name].parcels.toLocaleString()} land parcels` : ""}</div>
+                  {trends[r.name] && (
+                    <div className="text-[11px] text-slate-500">💵 ${trends[r.name].value.toLocaleString()} home value · <span className={trends[r.name].chg90 > 1 ? "font-bold text-emerald-600" : trends[r.name].chg90 < -1 ? "font-bold text-red-600" : "text-slate-500"}>{trends[r.name].chg90 > 0 ? "+" : ""}{trends[r.name].chg90}% 90d</span> · {trends[r.name].chg180 > 0 ? "+" : ""}{trends[r.name].chg180}% 180d</div>
+                  )}
                 </div>
                 <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ${p.cls}`}>{p.label}</span>
                 <div className="flex gap-2 text-[10px] font-bold">
