@@ -193,9 +193,10 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
       // OpenStreetMap tiles — keyless. (CARTO's free basemap started serving
       // "API key needed" tiles — Jon 2026-09-24.)
       // Carto basemap (OSM's own tile servers started blocking us — their
-      // volunteer servers disallow app traffic; Carto's free tier doesn't)
-      LL.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap contributors &copy; CARTO", maxZoom: 19, subdomains: "abcd",
+      // ESRI World Street Map — FREE, NO API KEY, and allowed for app traffic (Jon 2026-11-05:
+      // Carto now requires a key; OSM's volunteer tiles disallow app use, so ESRI is the fit).
+      LL.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "Tiles &copy; Esri", maxZoom: 19,
       }).addTo(map);
       mapRef.current = map;
       layerRef.current = LL.layerGroup().addTo(map);

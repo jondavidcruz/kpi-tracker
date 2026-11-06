@@ -12,9 +12,10 @@ type Pt = { lat: number; lng: number };
 
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
-// Dark "fog-of-war" basemap (free, attribution required). {r} = retina.
-const DARK_TILES = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+// Satellite "fog-of-war" basemap — FREE, NO API KEY (Jon 2026-11-05: Carto now requires a
+// key; ESRI World Imagery is free with attribution and gives the Halo satellite look).
+const DARK_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const TILE_ATTR = "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community";
 
 const COORDS: Record<string, [number, number]> = {
   "Miami / Coral Gables": [25.72, -80.26], "Palm Beach / West Palm Beach": [26.71, -80.06],
@@ -71,7 +72,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       if (mapRef.current) return;
       const map = L.map(ref.current, { center: [28.2, -82.2], zoom: 6, scrollWheelZoom: false, attributionControl: true });
       mapRef.current = map;
-      L.tileLayer(DARK_TILES, { attribution: TILE_ATTR, subdomains: "abcd", maxZoom: 18 }).addTo(map);
+      L.tileLayer(DARK_TILES, { attribution: TILE_ATTR, maxZoom: 18 }).addTo(map);
 
       const placed = markets.filter((v) => COORDS[v.m.name]);
       const maxDeals = Math.max(1, ...placed.map((v) => v.deals));
