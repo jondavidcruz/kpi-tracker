@@ -65,6 +65,23 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [searchBusy, setSearchBusy] = useState(false);
   const [big, setBig] = useState(false);
   const [show, setShow] = useState({ markets: true, buyers: true, terr: true });
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  async function bulkMark() {
+    const places = bulkText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+    if (!places.length) return;
+    setBulkBusy(true); setGeoMsg(`Marking ${places.length} area${places.length > 1 ? "s" : ""}… (~1s each, free)`);
+    try {
+      const r = await fetch("/api/markets/bulk-mark", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ places, status: bulkStatus }) });
+      const j = await r.json();
+      if (!r.ok) { setGeoMsg(j.error || "bulk-mark failed"); return; }
+      setGeoMsg(`✅ Marked ${j.marked}/${j.total}${j.failed?.length ? ` · couldn't find: ${j.failed.slice(0, 5).join(", ")}` : ""}`);
+      setBulkText(""); setBulkOpen(false); router.refresh();
+    } catch { setGeoMsg("network error"); } finally { setBulkBusy(false); }
+  }
 
   // 🔎 Search a county / ZIP → drop its boundary as a pending territory to name + save.
   async function searchArea() {
@@ -223,7 +240,21 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <span className="font-bold text-slate-400">🔎 Mark an area:</span>
           <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") searchArea(); }} placeholder="County or ZIP — e.g. Lee County, FL  or  33914" className="w-72 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" />
           <button onClick={searchArea} disabled={searchBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{searchBusy ? "Searching…" : "🔎 Find & mark"}</button>
-          <span className="text-slate-400">drops the boundary ready to name — no drawing needed. Or draw with the ▱/⬠ tools (top-right).</span>
+          <button onClick={() => setBulkOpen((b) => !b)} className="rounded-lg bg-slate-200 px-2.5 py-1 font-bold text-slate-700 hover:bg-slate-300">📋 Bulk-mark ZIPs</button>
+          <span className="text-slate-400">or draw with the ▱/⬠ tools (top-right).</span>
+        </div>
+      )}
+      {canEdit && bulkOpen && (
+        <div className="mb-1 flex flex-wrap items-start gap-2 rounded-xl bg-slate-800 px-2 py-2 text-[11px] ring-1 ring-slate-700">
+          <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={2} placeholder="Paste ZIPs or counties, comma or newline separated — e.g. 33914, 34102, Lee County FL" className="w-80 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" />
+          <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as TerrStatus)} className="rounded border border-slate-600 bg-slate-900 px-1.5 py-1 font-semibold text-white">
+            <option value="pulled">📥 Pulled leads</option>
+            <option value="marketing">📣 Marketing now</option>
+            <option value="target">🎯 Target / to pull</option>
+            <option value="avoid">⛔ Avoid / saturated</option>
+          </select>
+          <button onClick={bulkMark} disabled={bulkBusy} className="rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white hover:bg-emerald-700 disabled:opacity-50">{bulkBusy ? "Marking…" : "Mark all"}</button>
+          <span className="text-slate-400">up to 40 at a time</span>
         </div>
       )}
       {pending && (
