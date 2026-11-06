@@ -10,6 +10,7 @@ import { HEAT_META, cycleHeat, heatRank, type DealHeat } from "@/lib/deal-heat";
 import { STAGE_PROB, titleCase } from "@/lib/crm-shared";
 import { formatAddress } from "@/lib/address";
 import { stageHelp } from "@/lib/stage-help";
+import { LEAD_SOURCES } from "@/lib/lead-source";
 
 export type CrmCard = {
   id: string;
@@ -601,6 +602,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                 <option value="stage">→ Move to stage</option>
                 <option value="pipeline">📂 Move to pipeline</option>
                 <option value="assign">👤 Change owner</option>
+                <option value="leadsource">📍 Set lead source</option>
                 <option value="follower">👥 Add follower</option>
                 <option value="kind">🏕 Set type (House / Land)</option>
                 <option value="detectkind">🔎 Auto-detect type (House/Land) — free</option>
@@ -645,6 +647,12 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                 <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
                   <option value="">pick a person…</option>
                   {reps.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              )}
+              {bulk.op === "leadsource" && (
+                <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
+                  <option value="">pick a lead source…</option>
+                  {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               )}
               {(bulk.op === "tag" || bulk.op === "untag") && <input value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} placeholder="type a tag…" className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800" />}

@@ -1933,8 +1933,10 @@ export async function GET(request: Request) {
     }
 
     // 2) Markets it sourced in → 🎯 target areas on the map (deduped by name; free Nominatim geocode).
+    //    OFF by default (Jon 2026-11-06: "for the research map we don't need to add these yet") —
+    //    opt in with &mark=1 when he wants nightly research to paint the research map.
     let marked = 0; const markErrors: string[] = [];
-    if (marketNames.length) {
+    if (marketNames.length && url.searchParams.get("mark") === "1") {
       const { searchAreaBoundary } = await import("@/lib/geocode");
       const { saveTerritory, readTerritories } = await import("@/lib/map-territories");
       const existing = await readTerritories().catch(() => [] as Awaited<ReturnType<typeof readTerritories>>);

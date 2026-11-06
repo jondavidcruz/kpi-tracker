@@ -3,7 +3,7 @@
 // so adding/replacing a room's webhook needs no env change or redeploy.
 import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { saveChatWebhooksAction, testChatWebhookAction } from "@/app/actions";
+import { saveChatWebhooksAction, testChatWebhookAction, removeChatWebhookAction } from "@/app/actions";
 import { Card } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ function mask(url: string): string {
   return m ? `✅ set · space ${m[1]}` : "✅ set";
 }
 
-export default async function ChatWebhooksPage({ searchParams }: { searchParams: Promise<{ saved?: string; tested?: string; ok?: string }> }) {
+export default async function ChatWebhooksPage({ searchParams }: { searchParams: Promise<{ saved?: string; tested?: string; ok?: string; removed?: string }> }) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   if (!isOwner(me)) {
@@ -46,9 +46,10 @@ export default async function ChatWebhooksPage({ searchParams }: { searchParams:
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <div>
         <h1 className="text-xl font-bold text-slate-800">💬 Chat room webhooks</h1>
-        <p className="mt-1 text-sm text-slate-500">Paste a room&apos;s Google Chat <b>incoming webhook URL</b> to wire it. Saved to the app (no redeploy). Leave a field blank to keep what&apos;s there; type <code>__clear__</code> to remove one.</p>
+        <p className="mt-1 text-sm text-slate-500">Paste a room&apos;s Google Chat <b>incoming webhook URL</b> to wire it. Saved to the app (no redeploy). Leave a field blank to keep what&apos;s there; use <b>🗑 Remove</b> to turn a room off.</p>
       </div>
       {sp.saved && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ Saved.</div>}
+      {sp.removed && <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">🗑 Removed the “{sp.removed}” webhook — that room will stop receiving posts.</div>}
       {sp.tested && <div className={`rounded-lg px-3 py-2 text-sm font-semibold ring-1 ${sp.ok === "1" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`}>{sp.ok === "1" ? `✓ Test ping sent to “${sp.tested}”. Check the chat.` : `⚠️ Couldn't send to “${sp.tested}” — no webhook set for it yet.`}</div>}
 
       <form action={saveChatWebhooksAction}>
@@ -60,7 +61,14 @@ export default async function ChatWebhooksPage({ searchParams }: { searchParams:
                   <div className="text-sm font-bold text-slate-800">{r.label} <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{r.key}</span></div>
                   <div className="text-[11px] text-slate-400">{r.job}</div>
                 </div>
-                <div className="text-[11px] font-semibold text-slate-400">{cur[r.key] ? mask(cur[r.key]) : "— not set (uses env default if any)"}</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-[11px] font-semibold text-slate-400">{cur[r.key] ? mask(cur[r.key]) : "— not set (uses env default if any)"}</div>
+                  {cur[r.key] && (
+                    // formAction submits THIS form to removeChatWebhookAction (which reads only `space`),
+                    // so no nested <form> is needed. One click clears the room → it goes quiet.
+                    <button formAction={removeChatWebhookAction} name="space" value={r.key} className="rounded-lg bg-red-50 px-2 py-1 text-[11px] font-bold text-red-600 ring-1 ring-red-200 hover:bg-red-100">🗑 Remove</button>
+                  )}
+                </div>
               </div>
               <input name={`wh_${r.key}`} placeholder="https://chat.googleapis.com/v1/spaces/…/messages?key=…&token=…" className="mt-2 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[12px] text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
             </Card>

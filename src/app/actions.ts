@@ -4954,6 +4954,28 @@ export async function saveChatWebhooksAction(formData: FormData) {
   redirect("/admin/chat-webhooks?saved=1");
 }
 
+export async function removeChatWebhookAction(formData: FormData) {
+  // 🗑 One-click remove a room's webhook (Jon 2026-11-06: "make an option to remove webhooks" —
+  // e.g. turn off Receipts since the Gmail receipts aren't pulling accurately). Deletes the key from
+  // the __chat_webhooks__ override so postToSpace falls back to env (usually nothing) → that room
+  // goes quiet. Owner only.
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const space = String(formData.get("space") ?? "").trim();
+  if (!space) return;
+  const row = await db.resource.findFirst({ where: { category: "__chat_webhooks__" } });
+  if (row) {
+    let cur: Record<string, string> = {};
+    try { cur = row.description ? JSON.parse(row.description) : {}; } catch { cur = {}; }
+    if (space in cur) {
+      delete cur[space];
+      await db.resource.update({ where: { id: row.id }, data: { description: JSON.stringify(cur) } });
+    }
+  }
+  revalidatePath("/admin/chat-webhooks");
+  redirect(`/admin/chat-webhooks?removed=${encodeURIComponent(space)}`);
+}
+
 export async function testChatWebhookAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isOwner(me)) return;
