@@ -77,6 +77,41 @@ export function pointsFor(places: string[], cache: Cache): GeoPoint[] {
   return out;
 }
 
+/** 🔎 Search a county or ZIP and return its BOUNDARY as a [lat,lng] ring (free OSM Nominatim
+ *  with polygon_geojson). Falls back to the bounding box when no polygon exists (common for a
+ *  bare ZIP). Simplified + capped so the saved territory stays small. */
+export async function searchAreaBoundary(q: string): Promise<{ name: string; ring: [number, number][] } | null> {
+  const query = q.trim();
+  if (!query) return null;
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", /^\d{5}$/.test(query) ? query : `${query}, USA`);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("polygon_geojson", "1");
+  url.searchParams.set("polygon_threshold", "0.01"); // simplify the boundary server-side
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("countrycodes", "us");
+  try {
+    const res = await fetch(url.toString(), { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const rows = (await res.json()) as Array<{ display_name?: string; geojson?: { type?: string; coordinates?: unknown }; boundingbox?: string[] }>;
+    const r = rows?.[0];
+    if (!r) return null;
+    const name = (r.display_name ?? query).split(",").slice(0, 2).join(",").trim();
+    let ring: [number, number][] = [];
+    const gj = r.geojson;
+    const toRing = (coords: number[][]) => coords.filter((c) => Array.isArray(c) && c.length >= 2).map((c) => [c[1], c[0]] as [number, number]);
+    if (gj?.type === "Polygon") ring = toRing((gj.coordinates as number[][][])[0] ?? []);
+    else if (gj?.type === "MultiPolygon") ring = toRing(((gj.coordinates as number[][][][])[0] ?? [])[0] ?? []);
+    if (ring.length < 3 && r.boundingbox && r.boundingbox.length === 4) {
+      const [s, n, w, e] = r.boundingbox.map(Number); // south, north, west, east
+      if ([s, n, w, e].every(Number.isFinite)) ring = [[s, w], [s, e], [n, e], [n, w]];
+    }
+    if (ring.length < 3) return null;
+    if (ring.length > 300) { const step = Math.ceil(ring.length / 300); ring = ring.filter((_, i) => i % step === 0); }
+    return { name, ring };
+  } catch { return null; }
+}
+
 /** Pull distinct buy-box place strings from vetted buyers (cities / areas / zips). */
 export function placesFromBuyBoxes(buyers: { buyBoxAreas?: string | null; market?: string | null }[]): string[] {
   const out: string[] = [];

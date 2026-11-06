@@ -61,6 +61,27 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [name, setName] = useState("");
   const [status, setStatus] = useState<TerrStatus>("marketing");
   const [saving, setSaving] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [big, setBig] = useState(false);
+  const [show, setShow] = useState({ markets: true, buyers: true, terr: true });
+
+  // 🔎 Search a county / ZIP → drop its boundary as a pending territory to name + save.
+  async function searchArea() {
+    const q = searchQ.trim();
+    if (!q) return;
+    setSearchBusy(true); setGeoMsg("");
+    try {
+      const r = await fetch(`/api/markets/geo-search?q=${encodeURIComponent(q)}`);
+      const j = await r.json();
+      if (!r.ok) { setGeoMsg(j.error === "not found" ? `No boundary for "${q}" — try "Lee County, FL" or a 5-digit ZIP.` : "search failed"); return; }
+      const ring = j.ring as [number, number][];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const L = (window as any).L; const map = mapRef.current as any; const dg = drawnRef.current as any;
+      if (L && dg) { dg.clearLayers(); const poly = L.polygon(ring, { color: "#38bdf8", weight: 2, dashArray: "5", fillOpacity: 0.15 }).addTo(dg); if (map) { try { map.fitBounds(poly.getBounds().pad(0.2)); } catch { /* */ } } }
+      setPending(ring); setName(j.name || q); setStatus("marketing"); setSearchQ("");
+    } catch { setGeoMsg("network error"); } finally { setSearchBusy(false); }
+  }
 
   async function runGeocode() {
     setGeoBusy(true); setGeoMsg("Mapping buyer areas… (~25 at a time, cached forever)");
@@ -106,8 +127,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         mapRef.current = map;
         L.tileLayer(SAT_TILES, { attribution: TILE_ATTR, maxZoom: 18 }).addTo(map);
         dataRef.current = L.featureGroup().addTo(map);
-        if (canEdit && L.Control?.Draw) {
+        if (canEdit) {
           const drawn = L.featureGroup().addTo(map); drawnRef.current = drawn;
+          if (L.Control?.Draw) {
           const ctl = new L.Control.Draw({
             position: "topright",
             draw: { polygon: { showArea: false }, rectangle: {}, polyline: false, circle: false, marker: false, circlemarker: false },
@@ -120,6 +142,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
             const ring = (e.layer.getLatLngs()[0] || []).map((p) => [p.lat, p.lng] as [number, number]);
             setPending(ring);
           });
+          }
         }
         setReady(true);
       }).catch(() => { /* CDN blocked — card view still works */ });
@@ -138,14 +161,14 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     if (!L || !map || !group) return;
     group.clearLayers();
 
-    for (const t of territories) {
+    if (show.terr) for (const t of territories) {
       if (!t.points || t.points.length < 3) continue;
       const poly = L.polygon(t.points, { color: TERR_COLOR[t.status], weight: 2, fillColor: TERR_COLOR[t.status], fillOpacity: 0.22 }).addTo(group);
       poly.bindTooltip(`${TERR_LABEL[t.status]} — ${t.name}`, { sticky: true });
     }
-    for (const p of buyerPoints) L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
+    if (show.buyers) for (const p of buyerPoints) L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
 
-    const placed = markets.filter((v) => COORDS[v.m.name]);
+    const placed = show.markets ? markets.filter((v) => COORDS[v.m.name]) : [];
     const maxDeals = Math.max(1, ...placed.map((v) => v.deals));
     for (const v of placed) {
       const [lat, lng] = COORDS[v.m.name];
@@ -162,7 +185,16 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       marker.bindTooltip(v.m.name.split(" / ")[0], { permanent: true, direction: "top", className: "fo-map-label", offset: [0, -r] });
     }
     try { map.fitBounds(group.getBounds().pad(0.15)); } catch { /* no markers */ }
-  }, [ready, markets, buyerPoints, territories]);
+  }, [ready, markets, buyerPoints, territories, show]);
+
+  // Resize the map when the expand toggle changes.
+  useEffect(() => {
+    if (!ready) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const map = mapRef.current as any;
+    const t = setTimeout(() => { try { map?.invalidateSize?.(); } catch { /* */ } }, 220);
+    return () => clearTimeout(t);
+  }, [big, ready]);
 
   const charted = markets.filter((v) => v.buyerCount > 0).length;
   return (
@@ -174,11 +206,21 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-blue-500/40 ring-1 ring-blue-400" /> drawn territories</span>
         <span className="ml-auto rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} charted</span>
       </div>
+      <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
+        <span className="font-bold text-slate-400">Layers:</span>
+        {(["markets", "buyers", "terr"] as const).map((k) => (
+          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : "🖍 My areas"}</label>
+        ))}
+        <button onClick={() => setBig((b) => !b)} className="rounded-lg bg-slate-700 px-2.5 py-1 font-bold text-white hover:bg-slate-600">{big ? "⤡ Shrink" : "⛶ Expand"}</button>
+        {canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
+        {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
+      </div>
       {canEdit && (
         <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
-          <span className="font-bold text-slate-400">🖍 Draw a territory with the ▱ / ⬠ tools (top-right), then name it.</span>
-          <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyer areas"}</button>
-          {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
+          <span className="font-bold text-slate-400">🔎 Mark an area:</span>
+          <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") searchArea(); }} placeholder="County or ZIP — e.g. Lee County, FL  or  33914" className="w-72 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" />
+          <button onClick={searchArea} disabled={searchBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{searchBusy ? "Searching…" : "🔎 Find & mark"}</button>
+          <span className="text-slate-400">drops the boundary ready to name — no drawing needed. Or draw with the ▱/⬠ tools (top-right).</span>
         </div>
       )}
       {pending && (
@@ -195,7 +237,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <button onClick={clearDrawn} className="rounded-lg bg-slate-600 px-3 py-1 font-bold text-white hover:bg-slate-500">Cancel</button>
         </div>
       )}
-      <div ref={ref} className="h-[460px] w-full overflow-hidden rounded-xl" style={{ background: "#0b1220" }} />
+      <div ref={ref} className={`w-full overflow-hidden rounded-xl transition-all ${big ? "h-[82vh]" : "h-[560px]"}`} style={{ background: "#0b1220" }} />
       {territories.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5 px-1">
           {territories.map((t) => (
