@@ -68,5 +68,17 @@ export async function POST(req: Request) {
     await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🏕 Pulled from DealMachine (${body.areaName || "area"})${L.estValue ? ` · est. $${L.estValue.toLocaleString()}` : ""}${L.dnc ? " · ⚠️ owner phone is on DNC" : ""}`, actor: "dealmachine" }).catch(() => {});
   }
 
-  return NextResponse.json({ ok: true, creditsUsed: r.creditsUsed, totalAvailable: r.totalResults, pulled: leads.length, imported, duplicates, skipped, assignedTo: MICHELLE, today });
+  // 3) Auto-mark the pulled area on the coverage map — closes the research → pull → coverage
+  //    loop so "where we've pulled" updates itself the moment leads come in.
+  let marked = false;
+  try {
+    if (body.areaName && imported > 0) {
+      const { searchAreaBoundary } = await import("@/lib/geocode");
+      const { saveTerritory } = await import("@/lib/map-territories");
+      const area = await searchAreaBoundary(body.areaName);
+      if (area) { await saveTerritory({ name: `${area.name} · DM pull`, status: "pulled", points: area.ring, by: me.name }); marked = true; }
+    }
+  } catch { /* non-blocking */ }
+
+  return NextResponse.json({ ok: true, creditsUsed: r.creditsUsed, totalAvailable: r.totalResults, pulled: leads.length, imported, duplicates, skipped, assignedTo: MICHELLE, markedOnMap: marked, today });
 }
