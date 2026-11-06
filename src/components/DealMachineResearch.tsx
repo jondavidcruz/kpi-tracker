@@ -40,16 +40,21 @@ export default function DealMachineResearch() {
       const r = await fetch("/api/markets/dm/pull", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locations: [{ type: picked.type, code: picked.code }], land: input, perPage: n, areaName: picked.name }) });
       const j = await r.json();
       if (!r.ok) { setPullMsg(`⚠️ ${j.error || "pull failed"}`); return; }
-      setPullMsg(`✅ Pulled ${j.pulled} · imported ${j.imported} new land leads${j.duplicates ? ` · ${j.duplicates} already in CRM` : ""}${j.skipped ? ` · ${j.skipped} skipped (no contact)` : ""} · ~${j.creditsUsed} credits used → ${j.assignedTo}. Find them in the Seller CRM.`);
+      setPullMsg(`✅ Pulled ${j.pulled} · imported ${j.imported} new land leads${j.duplicates ? ` · ${j.duplicates} already in CRM` : ""}${j.skipped ? ` · ${j.skipped} skipped (no contact)` : ""} · ~${j.creditsUsed} credits used → ${j.assignedTo}${j.markedOnMap ? " · area marked 'pulled' on the map" : ""}. Find them in the Seller CRM.`);
+      loadPulls();
     } catch { setPullMsg("network error"); } finally { setPulling(false); }
   }
 
+  const [pulls, setPulls] = useState<{ at: string; by: string; area: string; credits: number; pulled: number }[]>([]);
+  const [creditsMo, setCreditsMo] = useState(0);
+  function loadPulls() { fetch("/api/markets/dm?action=pulls").then((r) => r.json()).then((j) => { setPulls(j.pulls ?? []); setCreditsMo(j.creditsThisMonth ?? 0); }).catch(() => {}); }
   useEffect(() => {
     fetch("/api/markets/dm?action=ping").then((r) => r.json()).then((j) => {
       if (!j.configured) { setStatus("off"); setStatusMsg("DealMachine key not set in Vercel."); }
       else if (j.countOk) { setStatus("ok"); setStatusMsg(j.detail); }
       else { setStatus("needkey"); setStatusMsg(j.detail || "v2 API not reachable with the current key."); }
     }).catch(() => { setStatus("needkey"); setStatusMsg("couldn't reach DealMachine"); });
+    loadPulls();
   }, []);
 
   async function searchLoc() {
@@ -156,7 +161,15 @@ export default function DealMachineResearch() {
           </div>
         </div>
       )}
-      <p className="mt-2 text-[10px] text-slate-400">Counts use DealMachine&apos;s property search (free). Pulling &amp; skip-tracing the matching owners uses your 10k/mo credits — that button comes next.</p>
+      {pulls.length > 0 && (
+        <div className="mt-3 border-t border-slate-100 pt-2">
+          <div className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Pull history {creditsMo > 0 && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-800">~{creditsMo} credits this month</span>}</div>
+          <div className="space-y-0.5 text-[11px]">
+            {pulls.map((p, i) => <div key={i} className="flex flex-wrap gap-2 text-slate-600"><span className="text-slate-400">{p.at.slice(0, 10)}</span> <span className="font-bold text-slate-700">{p.pulled}</span> from {p.area || "area"} · ~{p.credits} credits · {p.by}</div>)}
+          </div>
+        </div>
+      )}
+      <p className="mt-2 text-[10px] text-slate-400">Counts are free. Pulling skip-traces the owners and uses credits (~1/lead) — every pull is logged above for cost transparency.</p>
     </div>
   );
 }

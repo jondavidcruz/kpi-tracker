@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { dmPing, dmLocationSearch, dmCount, dmMarketInventory, buildLandFilters, type DmLoc, type DmFilter, type LandFilterInput } from "@/lib/dealmachine";
 
@@ -16,6 +17,13 @@ export async function GET(req: Request) {
   const action = url.searchParams.get("action") ?? "ping";
   if (action === "ping") return NextResponse.json(await dmPing());
   if (action === "inventory") return NextResponse.json(await dmMarketInventory());
+  if (action === "pulls") {
+    const row = await db.resource.findFirst({ where: { category: "__dm_pulls__" } }).catch(() => null);
+    let log: { at: string; by: string; area: string; credits: number; pulled: number }[] = [];
+    try { log = (JSON.parse(row?.description || "[]") as { at: string; by: string; area: string; credits: number; pulled: number; leads?: unknown }[]).map((p) => ({ at: p.at, by: p.by, area: p.area, credits: p.credits, pulled: p.pulled })); } catch { /* */ }
+    const creditsThisMonth = log.filter((p) => p.at.slice(0, 7) === new Date().toISOString().slice(0, 7)).reduce((s, p) => s + (p.credits || 0), 0);
+    return NextResponse.json({ pulls: log.slice(0, 15), creditsThisMonth });
+  }
   if (action === "locations") {
     const q = url.searchParams.get("q") ?? "";
     const type = (url.searchParams.get("type") ?? undefined) as "county" | "city" | "zip_code" | "state" | undefined;
