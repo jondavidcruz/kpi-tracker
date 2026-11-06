@@ -313,7 +313,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
 
       {/* The interactive map + searchable rolodex */}
       <Card className="p-4">
-        <MarketsMap buyers={buyers} markets={marketsForMap} />
+        <MarketsMap buyers={buyers} markets={marketsForMap} territories={await (await import("@/lib/map-territories")).readTerritories()} />
       </Card>
 
       {/* Buy-box area maps — upload Sharyn's detailed map per buyer; shows on the map above on click */}

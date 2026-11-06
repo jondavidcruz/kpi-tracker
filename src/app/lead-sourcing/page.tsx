@@ -127,7 +127,7 @@ export default async function LeadSourcingPage() {
           <span className="text-sm font-bold text-slate-700">📍 Buyer map — click a pin to see who buys there</span>
           <Link href="/marketing" className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700">Manage buyers</Link>
         </div>
-        <MarketsMap buyers={mapBuyers} markets={markets} />
+        <MarketsMap buyers={mapBuyers} markets={markets} territories={await (await import("@/lib/map-territories")).readTerritories()} />
         {withCoords < mapRows.length && (
           <p className="mt-2 text-[11px] text-amber-600">⚠️ {mapRows.length - withCoords} of {mapRows.length} vetted buyers aren&apos;t on the map yet (no location saved). Add a city/lat-lng on the Vetted Buyers page so they pin here.</p>
         )}

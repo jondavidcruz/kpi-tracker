@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { saveTerritoryAction } from "@/app/markets/actions";
+import type { Territory, TerrStatus } from "@/lib/map-territories";
+
+const TERR_COLOR: Record<TerrStatus, string> = { pulled: "#f59e0b", marketing: "#3b82f6", target: "#10b981", avoid: "#ef4444" };
+const TERR_LABEL: Record<TerrStatus, string> = { pulled: "📥 Pulled leads", marketing: "📣 Marketing now", target: "🎯 Target / to pull", avoid: "⛔ Avoid / saturated" };
 
 export type Buyer = {
   id: string; name: string; category: string; type: string; region: string; market: string;
@@ -132,7 +138,15 @@ function loadLeaflet(): Promise<unknown> {
   return leafletPromise;
 }
 
-export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; markets?: Market[] }) {
+export default function MarketsMap({ buyers, markets = [], territories = [] }: { buyers: Buyer[]; markets?: Market[]; territories?: Territory[] }) {
+  const router = useRouter();
+  const [big, setBig] = useState(false);
+  const [markQ, setMarkQ] = useState("");
+  const [markStatus, setMarkStatus] = useState<TerrStatus>("marketing");
+  const [markBusy, setMarkBusy] = useState(false);
+  const [markMsg, setMarkMsg] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const terrRef = useRef<any>(null);
   const [query, setQuery] = useState("");
   const [state, setState] = useState<string>("all"); // all | CA | TX | FL | TN | other
   const [county, setCounty] = useState<string>(""); // "" = all counties in the state
@@ -193,18 +207,62 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
       // OpenStreetMap tiles — keyless. (CARTO's free basemap started serving
       // "API key needed" tiles — Jon 2026-09-24.)
       // Carto basemap (OSM's own tile servers started blocking us — their
-      // ESRI World Street Map — FREE, NO API KEY, and allowed for app traffic (Jon 2026-11-05:
-      // Carto now requires a key; OSM's volunteer tiles disallow app use, so ESRI is the fit).
-      LL.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
-        attribution: "Tiles &copy; Esri", maxZoom: 19,
+      // ESRI World Imagery (satellite) — FREE, NO API KEY — matched to the Market Research map
+      // (Jon 2026-11-05: same settings on both maps). Carto now needs a key; OSM volunteer tiles
+      // disallow app traffic; ESRI is the free fit.
+      LL.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "Tiles &copy; Esri", maxZoom: 18,
       }).addTo(map);
       mapRef.current = map;
+      terrRef.current = LL.layerGroup().addTo(map); // hand-marked territories (shared with the research map)
       layerRef.current = LL.layerGroup().addTo(map);
       renderPins(LL);
+      renderTerritories(LL);
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Draw the shared territory overlay (marketing / pulled / target / avoid) + redraw on change.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderTerritories(LL: any) {
+    if (!terrRef.current) return;
+    terrRef.current.clearLayers();
+    for (const t of territories) {
+      if (!t.points || t.points.length < 3) continue;
+      const poly = LL.polygon(t.points, { color: TERR_COLOR[t.status], weight: 2, fillColor: TERR_COLOR[t.status], fillOpacity: 0.2 }).addTo(terrRef.current);
+      poly.bindTooltip(`${TERR_LABEL[t.status]} — ${t.name}`, { sticky: true });
+    }
+  }
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const LL = (typeof window !== "undefined" ? (window as any).L : null);
+    if (LL && terrRef.current) renderTerritories(LL);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [territories]);
+
+  // Resize when expanded.
+  useEffect(() => {
+    const t = setTimeout(() => { try { mapRef.current?.invalidateSize?.(); } catch { /* */ } }, 220);
+    return () => clearTimeout(t);
+  }, [big]);
+
+  // 🔎 Search a county/ZIP → geocode its boundary → save as a marked territory (shared store).
+  async function searchAndMark() {
+    const q = markQ.trim();
+    if (!q) return;
+    setMarkBusy(true); setMarkMsg("");
+    try {
+      const r = await fetch(`/api/markets/geo-search?q=${encodeURIComponent(q)}`);
+      const j = await r.json();
+      if (!r.ok) { setMarkMsg(j.error === "not found" ? `No boundary for "${q}" — try "Lee County, FL" or a ZIP.` : "search failed"); return; }
+      const fd = new FormData();
+      fd.set("name", j.name || q); fd.set("status", markStatus); fd.set("points", JSON.stringify(j.ring));
+      const res = await saveTerritoryAction(fd).catch(() => ({ ok: false }));
+      if ((res as { ok: boolean }).ok) { setMarkMsg(`✅ Marked ${j.name || q}`); setMarkQ(""); router.refresh(); }
+      else setMarkMsg("couldn't save (managers only)");
+    } catch { setMarkMsg("network error"); } finally { setMarkBusy(false); }
+  }
 
   // Re-render pins when the filtered set changes.
   useEffect(() => {
@@ -366,12 +424,28 @@ export default function MarketsMap({ buyers, markets = [] }: { buyers: Buyer[]; 
         </div>
       )}
 
+      {/* 🔎 Mark an area + expand — same tools as the Market Research map (shared territories). */}
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="font-bold text-slate-500">🔎 Mark an area:</span>
+        <input value={markQ} onChange={(e) => setMarkQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") searchAndMark(); }} placeholder="County or ZIP — e.g. Lee County, FL  or  33914" className="w-64 rounded border border-slate-300 px-2 py-1" />
+        <select value={markStatus} onChange={(e) => setMarkStatus(e.target.value as TerrStatus)} className="rounded border border-slate-300 px-1.5 py-1 font-semibold">
+          <option value="marketing">📣 Marketing now</option>
+          <option value="pulled">📥 Pulled leads</option>
+          <option value="target">🎯 Target / to pull</option>
+          <option value="avoid">⛔ Avoid / saturated</option>
+        </select>
+        <button onClick={searchAndMark} disabled={markBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{markBusy ? "Marking…" : "Find & mark"}</button>
+        <button onClick={() => setBig((b) => !b)} className="rounded-lg bg-slate-200 px-2.5 py-1 font-bold text-slate-700 hover:bg-slate-300">{big ? "⤡ Shrink" : "⛶ Expand"}</button>
+        {markMsg && <span className="text-slate-500">{markMsg}</span>}
+        {territories.length > 0 && <span className="ml-auto text-slate-400">{territories.length} marked areas shown — manage them on /markets</span>}
+      </div>
+
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.4fr_1fr]">
         {/* Map */}
-        <div ref={mapEl} className="h-[460px] w-full overflow-hidden rounded-xl ring-1 ring-slate-200" />
+        <div ref={mapEl} className={`w-full overflow-hidden rounded-xl ring-1 ring-slate-200 ${big ? "h-[78vh]" : "h-[460px]"}`} />
 
         {/* Rolodex (synced to the state/county/search filters) */}
-        <div className="max-h-[460px] overflow-y-auto rounded-xl ring-1 ring-slate-200">
+        <div className={`overflow-y-auto rounded-xl ring-1 ring-slate-200 ${big ? "max-h-[78vh]" : "max-h-[460px]"}`}>
           <div className="sticky top-0 flex flex-wrap gap-x-3 gap-y-0.5 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-500">
             {state === "all"
               ? STATE_ORDER.filter((st) => stateCounts[st]).map((st) => <span key={st}><span className="text-slate-800">{stateCounts[st]}</span> {STATES[st].name}</span>)
