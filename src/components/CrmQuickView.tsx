@@ -218,7 +218,7 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
               {saved && <span className="text-xs font-bold text-emerald-600">{saved}</span>}
               {pending && <span className="text-xs text-slate-400">saving…</span>}
               {d.contact.phone && d.me.canCall && (
-                <button onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: d.contact.phone, name: d.contact.name, oppId: d.id, contactId: d.contact.id, address: d.contact.address } }))} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">📞 Call</button>
+                <button onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: d.contact.phone, name: d.contact.name, oppId: d.id, contactId: d.contact.id } }))} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">📞 Call</button>
               )}
               {/* 📄 Buyer-safe details export, right in the quick-view (Jon 2026-10-27:
                   Marie builds the offer packet from here, not just the full page). */}

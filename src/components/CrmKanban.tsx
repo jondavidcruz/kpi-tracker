@@ -504,7 +504,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         <button
                           type="button"
                           title={`Call ${c.contactName} from the browser (Telnyx)`}
-                          onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: c.phone, name: c.contactName, oppId: c.id, contactId: c.contactId, address: c.address } }))}
+                          onClick={() => window.dispatchEvent(new CustomEvent("fo-call", { detail: { phone: c.phone, name: c.contactName, oppId: c.id, contactId: c.contactId } }))}
                           className="grid h-7 w-7 place-items-center rounded-md bg-emerald-500 text-[12px] text-white shadow-sm ring-1 ring-emerald-600 hover:bg-emerald-600"
                         >📞</button>
                       )}

@@ -18,24 +18,35 @@ export default async function MarketsPage() {
     readTargetMarkets(),
     readMarketPulls(),
     // Land-lead opps, for per-market performance (fuzzy address match). Light select.
-    db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { title: true, stage: true, value: true, contact: { select: { address: true } } }, take: 6000 }).catch(() => []),
+    db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { title: true, stage: true, value: true, createdAt: true, contact: { select: { address: true } } }, take: 6000 }).catch(() => []),
   ]);
 
-  // Build a lowercase address haystack per opp once.
+  const now = Date.now(), DAY = 86_400_000;
+  // Build a lowercase address haystack + created-age per opp once.
   const oppHay = opps.map((o) => ({
     hay: `${o.title ?? ""} ${o.contact?.address ?? ""}`.toLowerCase(),
     won: /won|closed|signed|sold/i.test(o.stage) && !/dead|died|lost|nurtur/i.test(o.stage),
+    ageDays: (now - o.createdAt.getTime()) / DAY,
   }));
 
   const views: MarketView[] = markets.map((m) => {
     // Match tokens: city names in the market name + enclaves + region (≥4 chars to avoid noise).
     const toks = [...m.name.split(/[/,&]/), ...m.enclaves, m.region]
       .map((t) => t.trim().toLowerCase()).filter((t) => t.length >= 4);
-    let leads = 0, deals = 0;
+    let leads = 0, deals = 0, d30 = 0, d60 = 0, d180 = 0;
     for (const o of oppHay) {
-      if (toks.some((t) => o.hay.includes(t))) { leads++; if (o.won) deals++; }
+      if (!toks.some((t) => o.hay.includes(t))) continue;
+      leads++; if (o.won) deals++;
+      if (o.ageDays <= 180) { d180++; if (o.ageDays <= 60) { d60++; if (o.ageDays <= 30) d30++; } }
     }
-    return { m, coverage: coverageFor(m.id, pulls), leads, deals };
+    // 📊 Auto-momentum (30-60-180, free — our own pipeline, no DealMachine/RentCast): compare
+    // the last-30-day lead pace to the average 30-day pace over the prior 150 days.
+    let trend: "up" | "flat" | "down" | "" = "";
+    if (d180 >= 3) {
+      const priorPer30 = (d180 - d30) / 5;
+      trend = d30 >= priorPer30 * 1.4 && d30 >= 1 ? "up" : d30 <= priorPer30 * 0.6 ? "down" : "flat";
+    }
+    return { m, coverage: coverageFor(m.id, pulls), leads, deals, momentum: { d30, d60, d180, trend } };
   });
 
   return (

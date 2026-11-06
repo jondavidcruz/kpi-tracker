@@ -742,12 +742,18 @@ export default function DialPad({ floating = false, owner = false }: { floating?
     // BEFORE cleaning, or the "0" after the dot sticks to the number (Jon 2026-10-24)
     const to = ctx.phone.replace(/\.\d+$/, "").replace(/[^+\d]/g, "");
     if (to.replace(/\D/g, "").length < 10) { setMsg("enter a full number"); return; }
-    // 🕘 quiet-hours guard: 9pm–8am in the LEAD'S time zone — by area code AND the lead's
-    // address (Jon 2026-11-05), blocked if either says quiet. Re-measure the clock skew RIGHT
-    // NOW so a just-fixed (or just-broken) device clock is reflected, and use server-corrected time.
-    const skew = await measureSkew();
-    const quiet = quietHoursWarning(to, ctx.address, undefined, Date.now() + skew);
-    if (quiet) { setState("error"); setMsg(Math.abs(skew) > 5 * 60_000 ? `${quiet}  (Your computer clock is off by ${Math.round(Math.abs(skew) / 60000)}m — this used the corrected time.)` : quiet); setTimeout(() => { setState("idle"); setMsg(""); }, 7000); return; }
+    // 🕘 quiet-hours guard: 9pm–8am where the OWNER lives — by phone area code AND their
+    // MAILING address (Jon 2026-11-05: a land lead's property may be in FL but the owner lives
+    // in CA; quiet hours follow the person, not the property). Checked SERVER-SIDE (authoritative
+    // time + the contact's mailing address from the DB), with a client area-code fallback if the
+    // request fails so a network blip can't let an after-hours call through.
+    let quiet: string | null = null;
+    try {
+      const r = await fetch(`/api/crm/quiet-check?phone=${encodeURIComponent(to)}&contactId=${encodeURIComponent(ctx.contactId ?? "")}`, { cache: "no-store" });
+      if (r.ok) quiet = (await r.json()).quiet ?? null;
+      else { const skew = await measureSkew(); quiet = quietHoursWarning(to, undefined, undefined, Date.now() + skew); }
+    } catch { const skew = await measureSkew(); quiet = quietHoursWarning(to, undefined, undefined, Date.now() + skew); }
+    if (quiet) { setState("error"); setMsg(quiet); setTimeout(() => { setState("idle"); setMsg(""); }, 7000); return; }
     setOnCall({ ...ctx, dir: "out" }); setState("connecting"); setMsg(`Calling ${ctx.name ?? to}…`);
     dialStartRef.current = Date.now(); setEndConfirm(false);
     try {

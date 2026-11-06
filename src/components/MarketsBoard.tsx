@@ -11,7 +11,8 @@ const LAND_FOCUS_META: Record<LandFocus, { label: string; emoji: string }> = {
   commercial: { label: "Commercial land", emoji: "🏗️" },
 };
 
-export type MarketView = { m: TargetMarket; coverage: Coverage; leads: number; deals: number };
+export type Momentum = { d30: number; d60: number; d180: number; trend: "up" | "flat" | "down" | "" };
+export type MarketView = { m: TargetMarket; coverage: Coverage; leads: number; deals: number; momentum: Momentum };
 
 const TREND_META: Record<string, { label: string; cls: string }> = {
   up: { label: "📈 Trending up", cls: "bg-emerald-100 text-emerald-800 ring-emerald-200" },
@@ -72,7 +73,7 @@ export default function MarketsBoard({ markets, canEdit }: { markets: MarketView
       {view === "map" && <FloridaMarketMap markets={rows} />}
 
       <div className={`grid grid-cols-1 gap-3 lg:grid-cols-2 ${view === "map" ? "hidden" : ""}`}>
-        {rows.map(({ m, coverage, leads, deals }) => {
+        {rows.map(({ m, coverage, leads, deals, momentum }) => {
           const c = COV_META[coverage.status];
           return (
             <div key={m.id} className={`rounded-2xl bg-white p-4 shadow-sm ring-1 ${m.status === "paused" ? "opacity-60 ring-slate-200" : coverage.status === "clear" || coverage.status === "never" ? "ring-emerald-200" : "ring-amber-200"}`}>
@@ -105,6 +106,14 @@ export default function MarketsBoard({ markets, canEdit }: { markets: MarketView
                 <div><div className="text-[9px] font-bold uppercase text-slate-400">Deals / leads</div><div className="text-[13px] font-extrabold tabular-nums text-slate-700">{deals}<span className="text-[10px] font-semibold text-slate-400">/{leads} in CRM</span></div></div>
               </div>
               <div className={`mt-1 text-[11px] ${c.cls}`}>{c.label(coverage)}</div>
+
+              {/* 📊 30-60-180 momentum (auto, from our own pipeline — free) */}
+              <div className="mt-1.5 flex items-center gap-2 text-[11px]">
+                <span className="font-bold text-slate-400">30/60/180:</span>
+                <span className="font-extrabold tabular-nums text-slate-700">{momentum.d30}<span className="text-slate-300"> / </span>{momentum.d60}<span className="text-slate-300"> / </span>{momentum.d180}</span>
+                <span className="text-slate-400">leads</span>
+                {momentum.trend && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ring-1 ${TREND_META[momentum.trend].cls}`}>{TREND_META[momentum.trend].label}</span>}
+              </div>
 
               {/* Actions */}
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
