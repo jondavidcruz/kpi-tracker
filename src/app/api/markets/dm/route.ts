@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { dmPing, dmLocationSearch, dmCount, buildLandFilters, type DmLoc, type DmFilter, type LandFilterInput } from "@/lib/dealmachine";
+import { dmPing, dmLocationSearch, dmCount, dmMarketInventory, buildLandFilters, type DmLoc, type DmFilter, type LandFilterInput } from "@/lib/dealmachine";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -15,6 +15,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action") ?? "ping";
   if (action === "ping") return NextResponse.json(await dmPing());
+  if (action === "inventory") return NextResponse.json(await dmMarketInventory());
   if (action === "locations") {
     const q = url.searchParams.get("q") ?? "";
     const type = (url.searchParams.get("type") ?? undefined) as "county" | "city" | "zip_code" | "state" | undefined;

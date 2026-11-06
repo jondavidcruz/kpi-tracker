@@ -32,14 +32,33 @@ export default function MarketAnalysisPanel({ markets }: { markets: MarketView[]
   const rows = analyzeMarkets(markets);
   const [showPlay, setShowPlay] = useState(false);
   const pullNow = rows.filter((r) => r.priority === "pull-now").length;
+  // 📡 Live DealMachine land inventory (free counts) keyed by market name → supply dimension.
+  const [inv, setInv] = useState<Record<string, { parcels: number; owners: number }>>({});
+  const [invBusy, setInvBusy] = useState(false);
+  const [invMsg, setInvMsg] = useState("");
+  async function loadInventory() {
+    setInvBusy(true); setInvMsg("Counting off-market land in every market… (free)");
+    try {
+      const r = await fetch("/api/markets/dm?action=inventory");
+      const j = await r.json();
+      if (!j.ok) { setInvMsg(`⚠️ ${j.error || "inventory failed"}${/key/i.test(j.error || "") ? " — add DEALMACHINE_V2_KEY in Vercel" : ""}`); return; }
+      const m: Record<string, { parcels: number; owners: number }> = {};
+      for (const x of j.markets as { name: string; parcels: number; owners: number }[]) if (x.parcels >= 0) m[x.name] = { parcels: x.parcels, owners: x.owners };
+      setInv(m); setInvMsg(`✓ Live inventory loaded — ${Object.values(m).reduce((s, v) => s + v.parcels, 0).toLocaleString()} parcels across our markets`);
+    } catch { setInvMsg("network error"); } finally { setInvBusy(false); }
+  }
+  const invVals = Object.values(inv).map((v) => v.parcels);
+  const avgInv = invVals.length ? invVals.reduce((a, b) => a + b, 0) / invVals.length : 0;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-white">
         <span className="text-sm font-extrabold">📊 Where to pull next — ranked by opportunity</span>
         {pullNow > 0 && <span className="rounded-full bg-red-500 px-2.5 py-0.5 text-[11px] font-bold">🔥 {pullNow} market{pullNow > 1 ? "s" : ""} to pull NOW</span>}
-        <button onClick={() => setShowPlay((s) => !s)} className="ml-auto rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-bold hover:bg-white/20">📚 {showPlay ? "Hide" : "Show"} analysis playbook</button>
+        <button onClick={loadInventory} disabled={invBusy} className="ml-auto rounded-lg bg-cyan-500/20 px-2.5 py-1 text-[11px] font-bold text-cyan-200 ring-1 ring-cyan-400/30 hover:bg-cyan-500/30 disabled:opacity-50">{invBusy ? "Counting…" : "📡 Load live land inventory (free)"}</button>
+        <button onClick={() => setShowPlay((s) => !s)} className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-bold hover:bg-white/20">📚 {showPlay ? "Hide" : "Show"} playbook</button>
       </div>
+      {invMsg && <div className="px-1 text-[11px] text-slate-500">{invMsg}</div>}
 
       {showPlay && (
         <div className="grid grid-cols-1 gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 md:grid-cols-2">
@@ -62,13 +81,14 @@ export default function MarketAnalysisPanel({ markets }: { markets: MarketView[]
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-extrabold text-white">{r.opportunity}</div>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-bold text-slate-800">{r.name}</div>
-                  <div className="text-[11px] text-slate-500">🟢 {r.buyerCount} buyers · 📥 {r.leads} leads · 🏆 {r.deals} deals</div>
+                  <div className="text-[11px] text-slate-500">🟢 {r.buyerCount} buyers · 📥 {r.leads} leads · 🏆 {r.deals} deals{inv[r.name] ? ` · 🏕 ${inv[r.name].parcels.toLocaleString()} land parcels` : ""}</div>
                 </div>
                 <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ${p.cls}`}>{p.label}</span>
                 <div className="flex gap-2 text-[10px] font-bold">
                   <span title="Wealth Location Quotient" className={lqCls(r.lq.wealth)}>W {r.lq.wealth}×</span>
                   <span title="Buyer-demand Location Quotient" className={lqCls(r.lq.demand)}>Demand {r.lq.demand}×</span>
                   <span title="Deal-production Location Quotient" className={lqCls(r.lq.deals)}>Deals {r.lq.deals}×</span>
+                  {inv[r.name] && avgInv > 0 && <span title="Off-market land supply Location Quotient (DealMachine)" className={lqCls(Math.round((inv[r.name].parcels / avgInv) * 100) / 100)}>Supply {Math.round((inv[r.name].parcels / avgInv) * 100) / 100}×</span>}
                 </div>
               </div>
               {r.reasons.length > 0 && (

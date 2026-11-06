@@ -88,6 +88,37 @@ export const LAND_PRESETS: { key: string; label: string; emoji: string; input: L
   { key: "delinquent", label: "Tax-delinquent (hot)", emoji: "🔥", input: { propertyTypes: [6], taxDelinquent: true, absentee: true } },
 ];
 
+// Primary county FIPS for each seeded target market → lets us pull DealMachine's live land
+// inventory per market without a location lookup each time (12 = Florida).
+export const MARKET_COUNTY_FIPS: Record<string, string> = {
+  "Miami / Coral Gables": "12086",              // Miami-Dade
+  "Palm Beach / West Palm Beach": "12099",      // Palm Beach
+  "Boca Raton / Fort Lauderdale": "12011",      // Broward
+  "Naples / Port Royal": "12021",               // Collier
+  "Orlando / Windermere / Winter Park": "12095",// Orange
+  "Tampa Bay": "12057",                         // Hillsborough
+  "Sarasota / Lakewood Ranch": "12115",         // Sarasota
+  "Jacksonville / Ponte Vedra": "12031",        // Duval
+  "Jupiter Island / Vero Beach": "12061",       // Indian River
+  "30A / Alys Beach (NW Florida)": "12131",     // Walton
+};
+
+/** Live off-market land inventory per market (free counts). Loops the markets' counties with a
+ *  broad land buy-box (vacant land, 0.1–20 ac, absentee or out-of-state owner). */
+export async function dmMarketInventory(): Promise<{ ok: boolean; error?: string; markets?: { name: string; fips: string; parcels: number; owners: number }[] }> {
+  if (!dmConfigured()) return { ok: false, error: "key not set" };
+  const filters = buildLandFilters({ propertyTypes: [6, 19, 20], acresMin: 0.1, acresMax: 20, absentee: true, excludeLandlocked: true });
+  const out: { name: string; fips: string; parcels: number; owners: number }[] = [];
+  let anyOk = false, firstErr = "";
+  for (const [name, fips] of Object.entries(MARKET_COUNTY_FIPS)) {
+    const c = await dmCount([{ type: "county", code: fips }], filters);
+    if (c.ok) { anyOk = true; out.push({ name, fips, parcels: c.count!.total_properties, owners: c.count!.total_people }); }
+    else { if (!firstErr) firstErr = c.error ?? "count failed"; out.push({ name, fips, parcels: -1, owners: -1 }); }
+  }
+  if (!anyOk) return { ok: false, error: firstErr || "all counts failed (v2 key?)" };
+  return { ok: true, markets: out };
+}
+
 /** Diagnostic — proves the key works on the v2 API (owner-only), with a sample location lookup. */
 export async function dmPing(): Promise<{ configured: boolean; locationsOk: boolean; countOk: boolean; detail: string }> {
   if (!dmConfigured()) return { configured: false, locationsOk: false, countOk: false, detail: "DEALMACHINE_API_KEY not set in Vercel" };
