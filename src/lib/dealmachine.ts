@@ -119,6 +119,39 @@ export async function dmMarketInventory(): Promise<{ ok: boolean; error?: string
   return { ok: true, markets: out };
 }
 
+// ── PULL (costs credits) — property search returns parcels WITH skip-traced owner contacts.
+// Each call charges credits (≈ 1/property + 1/person), so this only runs on an explicit,
+// capped, confirmed pull. Normalized to the fields we import into the CRM. ──
+export type DmLead = { propertyId: string; address: string; city: string; state: string; zip: string; estValue: number | null; ownerName: string; phone: string; email: string; mailing: string; dnc: boolean };
+type DmContact = { full_name?: string; phones?: { number?: string; type?: string; do_not_call?: boolean; match_confidence?: number }[]; emails?: { address?: string; match_confidence?: number }[]; residence?: { full_address?: string }; contact_type?: string };
+type DmProp = { dm_property_id?: string; full_address?: string; address?: string; city?: string; state?: string; zip?: string; estimated_value?: number; contacts?: DmContact[] };
+
+function bestPhone(c: DmContact): { number: string; dnc: boolean } {
+  const ps = (c.phones ?? []).filter((p) => p.number);
+  // prefer a non-DNC wireless with the highest confidence, else best available
+  const pick = ps.filter((p) => !p.do_not_call).sort((a, b) => (b.type === "wireless" ? 1 : 0) - (a.type === "wireless" ? 1 : 0) || (b.match_confidence ?? 0) - (a.match_confidence ?? 0))[0]
+    ?? ps.sort((a, b) => (b.match_confidence ?? 0) - (a.match_confidence ?? 0))[0];
+  return pick ? { number: pick.number!, dnc: !!pick.do_not_call } : { number: "", dnc: false };
+}
+
+export async function dmSearchLeads(locations: DmLoc[], filters: DmFilter[], perPage = 25): Promise<{ ok: boolean; error?: string; creditsUsed?: number; totalResults?: number; leads?: DmLead[] }> {
+  const r = await dmFetch<{ data?: DmProp[]; credits?: { used?: number }; pagination?: { total_results?: number } }>("/properties/search", {
+    method: "POST",
+    body: JSON.stringify({ locations, anchor: "properties", contact_audience: "owners", filters, per_page: Math.min(100, Math.max(1, perPage)), page: 1 }),
+  });
+  if (!r.ok) return { ok: false, error: r.error };
+  const leads: DmLead[] = (r.data!.data ?? []).map((p) => {
+    const owner = (p.contacts ?? []).find((c) => c.contact_type === "owner") ?? (p.contacts ?? [])[0] ?? {};
+    const ph = bestPhone(owner);
+    const email = (owner.emails ?? []).sort((a, b) => (b.match_confidence ?? 0) - (a.match_confidence ?? 0))[0]?.address ?? "";
+    return {
+      propertyId: p.dm_property_id ?? "", address: p.full_address ?? p.address ?? "", city: p.city ?? "", state: p.state ?? "", zip: p.zip ?? "",
+      estValue: p.estimated_value ?? null, ownerName: owner.full_name ?? "", phone: ph.number, email, mailing: owner.residence?.full_address ?? "", dnc: ph.dnc,
+    };
+  });
+  return { ok: true, creditsUsed: r.data!.credits?.used ?? 0, totalResults: r.data!.pagination?.total_results ?? leads.length, leads };
+}
+
 /** Diagnostic — proves the key works on the v2 API (owner-only), with a sample location lookup. */
 export async function dmPing(): Promise<{ configured: boolean; locationsOk: boolean; countOk: boolean; detail: string }> {
   if (!dmConfigured()) return { configured: false, locationsOk: false, countOk: false, detail: "DEALMACHINE_API_KEY not set in Vercel" };

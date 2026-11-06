@@ -27,6 +27,22 @@ export default function DealMachineResearch() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [log, setLog] = useState<{ area: string; preset: string; props: number; people: number }[]>([]);
+  const [pullSize, setPullSize] = useState(25);
+  const [pulling, setPulling] = useState(false);
+  const [pullMsg, setPullMsg] = useState("");
+
+  async function runPull() {
+    if (!picked || !count) return;
+    const n = Math.min(pullSize, count.total_properties);
+    if (!confirm(`Pull ${n} land lead${n > 1 ? "s" : ""} from ${picked.name} into the CRM?\n\nThis SKIP-TRACES the owners and uses roughly ${n} DealMachine credits (one-time). They import as land leads assigned to Michelle, respecting quiet hours. Continue?`)) return;
+    setPulling(true); setPullMsg("Pulling + skip-tracing… (do not close)");
+    try {
+      const r = await fetch("/api/markets/dm/pull", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locations: [{ type: picked.type, code: picked.code }], land: input, perPage: n, areaName: picked.name }) });
+      const j = await r.json();
+      if (!r.ok) { setPullMsg(`⚠️ ${j.error || "pull failed"}`); return; }
+      setPullMsg(`✅ Pulled ${j.pulled} · imported ${j.imported} new land leads${j.duplicates ? ` · ${j.duplicates} already in CRM` : ""}${j.skipped ? ` · ${j.skipped} skipped (no contact)` : ""} · ~${j.creditsUsed} credits used → ${j.assignedTo}. Find them in the Seller CRM.`);
+    } catch { setPullMsg("network error"); } finally { setPulling(false); }
+  }
 
   useEffect(() => {
     fetch("/api/markets/dm?action=ping").then((r) => r.json()).then((j) => {
@@ -118,6 +134,19 @@ export default function DealMachineResearch() {
         )}
         {err && <span className="text-[12px] font-semibold text-red-600">⚠️ {err}</span>}
       </div>
+
+      {/* 4) Pull (SPENDS CREDITS) — explicit + capped */}
+      {count && count.total_properties > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
+          <span className="text-[12px] font-bold text-amber-900">⬇️ Pull into the CRM:</span>
+          <select value={pullSize} onChange={(e) => setPullSize(Number(e.target.value))} className="rounded border border-amber-300 px-1.5 py-1 text-[12px] font-semibold">
+            <option value={25}>first 25</option><option value={50}>first 50</option><option value={100}>first 100</option>
+          </select>
+          <button onClick={runPull} disabled={pulling} className="rounded-lg bg-amber-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-amber-700 disabled:opacity-50">{pulling ? "Pulling…" : `Pull ${Math.min(pullSize, count.total_properties)} (~${Math.min(pullSize, count.total_properties)} credits)`}</button>
+          <span className="text-[11px] text-amber-700">skip-traces owners · imports as land leads to Michelle</span>
+          {pullMsg && <span className="w-full text-[12px] font-semibold text-amber-900">{pullMsg}</span>}
+        </div>
+      )}
 
       {log.length > 0 && (
         <div className="mt-3 border-t border-slate-100 pt-2">
