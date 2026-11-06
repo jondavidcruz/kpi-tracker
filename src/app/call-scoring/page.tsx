@@ -32,6 +32,8 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
     db.callScore.findMany({ orderBy: { createdAt: "desc" }, take: 25 }),
     db.callScript.findMany(),
   ]);
+  // 📊 Per-rep coaching rollup (A5) — manager-only, free (aggregates scores already taken).
+  const coaching = leader ? await (await import("@/lib/coach-rollup")).getCoachingScorecards().catch(() => []) : [];
   const scripts = new Map(scriptRows.map((r) => [r.callType, r.script]));
   const configured = !!process.env.ANTHROPIC_API_KEY;
   return (
@@ -77,6 +79,46 @@ export default async function CallScoringPage({ searchParams }: { searchParams: 
           </div>
         </form>
       </Card>
+
+      {leader && coaching.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-bold text-slate-700">📊 Coaching scorecard — by rep <span className="font-normal text-slate-400">(from every scored call — no extra cost)</span></h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {coaching.map((c) => {
+              const tone = c.avgOverall == null ? "text-slate-400" : c.avgOverall >= 80 ? "text-emerald-600" : c.avgOverall >= 60 ? "text-amber-600" : "text-red-600";
+              const arrow = c.trend === "up" ? "↑ improving" : c.trend === "down" ? "↓ slipping" : c.trend === "flat" ? "→ steady" : "";
+              const arrowCls = c.trend === "up" ? "text-emerald-600" : c.trend === "down" ? "text-red-600" : "text-slate-400";
+              return (
+                <Card key={c.rep} className="p-4">
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-bold text-slate-800">{c.rep}</div>
+                    <div className={`text-lg font-extrabold tabular-nums ${tone}`}>{c.avgOverall ?? "—"}<span className="text-xs font-semibold text-slate-400">/100</span></div>
+                    {arrow && <span className={`text-[11px] font-bold ${arrowCls}`}>{arrow}</span>}
+                    <span className="ml-auto text-[11px] text-slate-400">{c.calls} call{c.calls > 1 ? "s" : ""}{c.avgStars != null ? ` · ${c.avgStars.toFixed(1)}★` : ""}</span>
+                  </div>
+                  {c.focus.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-red-500">🎯 Coach these</div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {c.focus.map((a) => <span key={a.key} title={`${a.n} calls`} className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-200">{a.label} {Math.round(a.avg)}</span>)}
+                      </div>
+                    </div>
+                  )}
+                  {c.strengths.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">💪 Strengths</div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {c.strengths.map((a) => <span key={a.key} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">{a.label} {Math.round(a.avg)}</span>)}
+                      </div>
+                    </div>
+                  )}
+                  {c.focus[0] && <a href="/training" className="mt-2 inline-block text-[11px] font-semibold text-indigo-600 hover:text-indigo-700">🏋️ Build a drill for {c.focus[0].label} on Training →</a>}
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-2 text-sm font-bold text-slate-700">Recent scores</h2>
