@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import { readTargetMarkets, readMarketPulls, coverageFor } from "@/lib/target-markets";
 import MarketsBoard, { type MarketView } from "@/components/MarketsBoard";
+import DealMachineResearch from "@/components/DealMachineResearch";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,7 @@ export default async function MarketsPage() {
         accent="bg-emerald-400"
       />
       <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} />
+      {leader && <DealMachineResearch />}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { dmPing, dmLocationSearch, dmCount, type DmLoc, type DmFilter } from "@/lib/dealmachine";
+import { dmPing, dmLocationSearch, dmCount, buildLandFilters, type DmLoc, type DmFilter, type LandFilterInput } from "@/lib/dealmachine";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -27,9 +27,10 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const me = await getCurrentUser();
   if (!me || !isManager(me)) return NextResponse.json({ error: "managers only" }, { status: 403 });
-  const body = (await req.json().catch(() => ({}))) as { locations?: DmLoc[]; filters?: DmFilter[] };
+  const body = (await req.json().catch(() => ({}))) as { locations?: DmLoc[]; filters?: DmFilter[]; land?: LandFilterInput };
   if (!body.locations?.length) return NextResponse.json({ error: "pick an area first" }, { status: 400 });
-  const r = await dmCount(body.locations, body.filters ?? []);
+  const filters = body.land ? buildLandFilters(body.land) : (body.filters ?? []);
+  const r = await dmCount(body.locations, filters);
   if (!r.ok) return NextResponse.json({ error: r.error, status: r.status }, { status: 502 });
   return NextResponse.json({ ok: true, count: r.count });
 }

@@ -8,14 +8,18 @@
 // diagnostic (dmPing) verifies it in prod.
 const V2 = "https://api.v2.dealmachine.com/v1";
 
-export function dmConfigured(): boolean { return !!process.env.DEALMACHINE_API_KEY; }
+// Prefer a dedicated v2 key (dm_sk_live_…) if present, else reuse the existing key. The
+// legacy /leads key may be Classic-only; if v2 fails, Jon adds DEALMACHINE_V2_KEY in Vercel
+// (owner-only, per the never-ask-for-secrets rule) without touching the Classic integration.
+function dmKey(): string | undefined { return process.env.DEALMACHINE_V2_KEY || process.env.DEALMACHINE_API_KEY; }
+export function dmConfigured(): boolean { return !!dmKey(); }
 
 async function dmFetch<T>(path: string, init: RequestInit): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
   if (!dmConfigured()) return { ok: false, status: 0, error: "DEALMACHINE_API_KEY not set" };
   try {
     const res = await fetch(`${V2}${path}`, {
       ...init,
-      headers: { Authorization: `Bearer ${process.env.DEALMACHINE_API_KEY}`, "Content-Type": "application/json", Accept: "application/json", ...(init.headers ?? {}) },
+      headers: { Authorization: `Bearer ${dmKey()}`, "Content-Type": "application/json", Accept: "application/json", ...(init.headers ?? {}) },
       cache: "no-store",
       signal: AbortSignal.timeout(25000),
     });
@@ -57,6 +61,32 @@ export async function dmCount(locations: DmLoc[], filters: DmFilter[]): Promise<
   if (!r.ok) return { ok: false, error: r.error, status: r.status };
   return { ok: true, count: { total_properties: r.data!.total_properties ?? 0, total_people: r.data!.total_people ?? 0 } };
 }
+
+// ── Land buy-box → DealMachine filters (the land-course pull criteria: vacant land, lot-size
+// band, little/no improvement, absentee/out-of-state owner, tax-delinquent, not landlocked,
+// outside the flood hazard area). property_type: 6=Vacant Land, 19=Agriculture, 20=Dev Site. ──
+export type LandFilterInput = {
+  propertyTypes?: number[]; acresMin?: number; acresMax?: number; maxImprovementValue?: number;
+  outOfState?: boolean; absentee?: boolean; taxDelinquent?: boolean; excludeLandlocked?: boolean; excludeFlood?: boolean;
+};
+export function buildLandFilters(i: LandFilterInput): DmFilter[] {
+  const f: DmFilter[] = [F.multi("property_type", i.propertyTypes?.length ? i.propertyTypes : [6])];
+  if (i.acresMin != null || i.acresMax != null) f.push(F.range("lot_size_acres", i.acresMin, i.acresMax));
+  if (i.maxImprovementValue != null) f.push(F.lte("assessed_improvement_value", i.maxImprovementValue));
+  if (i.outOfState) f.push(F.bool("has_out_of_state_owners", true));
+  if (i.absentee) f.push(F.bool("has_absentee_owners", true));
+  if (i.taxDelinquent) f.push(F.bool("is_tax_delinquent", true));
+  if (i.excludeLandlocked) f.push(F.bool("is_landlocked", false));
+  if (i.excludeFlood) f.push(F.bool("is_inside_special_flood_hazard_area", false));
+  return f;
+}
+export const LAND_PRESETS: { key: string; label: string; emoji: string; input: LandFilterInput }[] = [
+  { key: "infill", label: "Infill luxury lots", emoji: "🏝️", input: { propertyTypes: [6], acresMin: 0.1, acresMax: 1, maxImprovementValue: 5000, absentee: true, excludeLandlocked: true } },
+  { key: "acreage", label: "Big acreage (rec/dev)", emoji: "🌄", input: { propertyTypes: [6, 19], acresMin: 1, acresMax: 20, outOfState: true, excludeLandlocked: true } },
+  { key: "commercial", label: "Commercial / dev land", emoji: "🏗️", input: { propertyTypes: [6, 20], acresMin: 0.5, maxImprovementValue: 25000, absentee: true } },
+  { key: "absentee", label: "Absentee / out-of-state", emoji: "✈️", input: { propertyTypes: [6], outOfState: true, absentee: true, excludeLandlocked: true } },
+  { key: "delinquent", label: "Tax-delinquent (hot)", emoji: "🔥", input: { propertyTypes: [6], taxDelinquent: true, absentee: true } },
+];
 
 /** Diagnostic — proves the key works on the v2 API (owner-only), with a sample location lookup. */
 export async function dmPing(): Promise<{ configured: boolean; locationsOk: boolean; countOk: boolean; detail: string }> {
