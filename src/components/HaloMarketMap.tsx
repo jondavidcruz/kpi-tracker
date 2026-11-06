@@ -4,8 +4,11 @@
 // markets with no buyer coverage are "uncharted" and dim. FREE + light on our infra —
 // Leaflet loads from a CDN (not bundled into Vercel), dark tiles come from Carto's CDN
 // (not our Supabase/Vercel), and all markers come from data the page already loaded.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MarketView } from "@/components/MarketsBoard";
+
+type Pt = { lat: number; lng: number };
 
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
@@ -40,9 +43,23 @@ function loadLeaflet(): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets }: { markets: MarketView[] }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
+  const router = useRouter();
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoMsg, setGeoMsg] = useState("");
+
+  async function runGeocode() {
+    setGeoBusy(true); setGeoMsg("Mapping buyer areas… (~25 at a time, cached forever)");
+    try {
+      const r = await fetch("/api/markets/geocode", { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) { setGeoMsg(j.error || "failed"); return; }
+      setGeoMsg(`✅ Mapped ${j.cached}/${j.total} buyer areas${j.remaining ? ` · ${j.remaining} left — click again` : " · all mapped"}`);
+      router.refresh();
+    } catch { setGeoMsg("network error"); } finally { setGeoBusy(false); }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -85,11 +102,17 @@ export default function HaloMarketMap({ markets }: { markets: MarketView[] }) {
         );
         marker.bindTooltip(v.m.name.split(" / ")[0], { permanent: true, direction: "top", className: "fo-map-label", offset: [0, -r] });
       }
+      // 🟢 Buyer buy-box coverage cloud — each geocoded buy-box area is a soft cyan circle;
+      // together they show the "charted" reach where we have buyers to move deals.
+      for (const p of buyerPoints) {
+        L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
+      }
+
       try { map.fitBounds(group.getBounds().pad(0.15)); } catch { /* single/no markers */ }
     }).catch(() => { /* CDN blocked — the card view still works */ });
 
     return () => { cancelled = true; const m = mapRef.current as { remove?: () => void } | null; if (m?.remove) { m.remove(); mapRef.current = null; } };
-  }, [markets]);
+  }, [markets, buyerPoints]);
 
   const charted = markets.filter((v) => v.buyerCount > 0).length;
   return (
@@ -98,9 +121,17 @@ export default function HaloMarketMap({ markets }: { markets: MarketView[] }) {
       <div className="mb-2 flex flex-wrap items-center gap-3 px-1 text-[11px] font-semibold text-slate-300">
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-cyan-400/40 ring-2 ring-cyan-400/40" /> Charted — buyers can move deals</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-500" /> Uncharted — no buyers yet</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-cyan-400/40" /> Buyer buy-box ({buyerPoints.length})</span>
         <span className="text-slate-400">· dot color = pull coverage · size = deals</span>
         <span className="ml-auto rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} charted</span>
       </div>
+      {canEdit && (
+        <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
+          <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyer areas"}</button>
+          {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
+          {!geoMsg && geocodeRemaining > 0 && <span className="text-amber-400">{geocodeRemaining} buyer areas not on the map yet — click to plot them (free, one-time).</span>}
+        </div>
+      )}
       <div ref={ref} className="h-[460px] w-full overflow-hidden rounded-xl" style={{ background: "#0b1220" }} />
       <p className="mt-1 px-1 text-[10px] text-slate-500">Click a market for coverage, buyers, and momentum. Glowing = you have buyers there; dim = open territory to go win buyers first.</p>
     </div>
