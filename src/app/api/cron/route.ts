@@ -1900,6 +1900,58 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, mode: "COMMITTED", ...r });
   }
 
+  // 🏗📥 Nightly research AUTO-INGEST (Jon 2026-11-06: "nightly list + auto-ingest"). The weekday
+  // "Daily Land Targets" research POSTs its researched developers here so they ACCUMULATE in the
+  // Unvetted Developers kanban (deduped) instead of only living in a Chat post + a Drive xlsx. Every
+  // market/area it names is marked 🎯 target on the market map. The nightly Chat call-list is
+  // unchanged — this only lands the records. Research/draft only; never contacts anyone. Secret-gated,
+  // capped (200 devs / 25 markets per call).
+  //   POST ?devingest=1  body { developers:[{name,company,phone,email,phone2,email2,phone3,email3,city,state,market,buyBox,notes}], markets?:["Lee County FL","33948"], source?:"..." }
+  if (url.searchParams.get("devingest") === "1") {
+    let body: { developers?: unknown; markets?: unknown; source?: string } = {};
+    try { body = await request.json(); } catch { /* no body */ }
+    const devs = Array.isArray(body.developers) ? (body.developers as Record<string, unknown>[]).slice(0, 200) : [];
+    const marketNames = Array.isArray(body.markets) ? (body.markets as unknown[]).map((m) => String(m ?? "").trim()).filter(Boolean).slice(0, 25) : [];
+    const defSource = (typeof body.source === "string" && body.source.trim()) ? body.source.trim().slice(0, 80) : "Daily Land Targets research";
+    if (!devs.length && !marketNames.length) return NextResponse.json({ ok: false, error: "no developers or markets in body" });
+
+    // 1) Developers → Unvetted Developers kanban (DS: Developers), deduped by phone/email.
+    const { upsertNetworkLead } = await import("@/lib/dispo-network-write");
+    const s = (v: unknown) => (v == null ? "" : String(v)).trim();
+    let created = 0, dupes = 0, skipped = 0;
+    for (const d of devs) {
+      const name = s(d.name) || s(d.company);
+      if (!name) { skipped++; continue; }
+      const res = await upsertNetworkLead({
+        name, kind: "developer", actor: "nightly-research", source: defSource,
+        company: s(d.company), phone: s(d.phone), phone2: s(d.phone2), phone3: s(d.phone3),
+        email: s(d.email), email2: s(d.email2), email3: s(d.email3),
+        city: s(d.city), market: s(d.market) || s(d.state), buyBox: s(d.buyBox), notes: s(d.notes),
+      }).catch(() => null);
+      if (!res) { skipped++; continue; }
+      if (res.created) created++; else dupes++;
+    }
+
+    // 2) Markets it sourced in → 🎯 target areas on the map (deduped by name; free Nominatim geocode).
+    let marked = 0; const markErrors: string[] = [];
+    if (marketNames.length) {
+      const { searchAreaBoundary } = await import("@/lib/geocode");
+      const { saveTerritory, readTerritories } = await import("@/lib/map-territories");
+      const existing = await readTerritories().catch(() => [] as Awaited<ReturnType<typeof readTerritories>>);
+      for (const q of marketNames) {
+        try {
+          const area = await searchAreaBoundary(q);
+          if (!area) { markErrors.push(`no boundary: ${q}`); continue; }
+          const prior = existing.find((t) => t.name.toLowerCase() === area.name.toLowerCase());
+          const tid = await saveTerritory({ id: prior?.id, name: area.name, status: "target", points: area.ring, by: "nightly-research" });
+          if (tid) marked++;
+        } catch { markErrors.push(`failed: ${q}`); }
+      }
+    }
+
+    return NextResponse.json({ ok: true, received: devs.length, created, dupes, skipped, marketsMarked: marked, markErrors: markErrors.slice(0, 10), note: "Developers landed in Unvetted Developers kanban; markets marked 🎯 on the map. Chat call-list unchanged." });
+  }
+
   // 🧹 Weekly DirectREI cleanup (Jon 2026-10-29) — stay under the 5,000 cap. Removes opted-out /
   // bad-contact / not-interested / bounced / guessed-email contacts. Qualified/interested/replied
   // are PROTECTED (never deleted) and sent to a manual-review list. DRY RUN by default; ?commit=1
