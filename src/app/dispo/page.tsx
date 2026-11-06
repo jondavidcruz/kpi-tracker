@@ -160,12 +160,16 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     : [];
   // 📅 next upcoming task / appointment per deal (today or later) → green/red card chips
   const dealIds = dealOpps.filter((o) => o.pipeline === dealPl).map((o) => o.id);
-  const [dealTasks, dealAppts] = tab === "deals" && dealIds.length
+  const [dealTasks, dealApptsRaw] = tab === "deals" && dealIds.length
     ? await Promise.all([
         db.crmTask.findMany({ where: { oppId: { in: dealIds }, doneAt: null }, select: { oppId: true, due: true } }),
-        db.crmAppointment.findMany({ where: { oppId: { in: dealIds }, at: { gte: new Date() } }, orderBy: { at: "asc" }, select: { oppId: true, at: true } }),
+        db.crmAppointment.findMany({ where: { oppId: { in: dealIds }, at: { gte: new Date() } }, orderBy: { at: "asc" }, select: { id: true, oppId: true, at: true } }),
       ])
     : [[], []];
+  // Appointments the owner marked done (no-schema set) don't show as the deal's next appt.
+  const { readApptDone } = await import("@/lib/appt-done");
+  const apptDone = await readApptDone();
+  const dealAppts = dealApptsRaw.filter((a) => !apptDone.has(a.id));
   const nextTaskByDeal = new Map<string, string>();
   for (const t of dealTasks) { const d = (t.due || "").slice(0, 10); if (d && d >= today && (!nextTaskByDeal.has(t.oppId) || d < nextTaskByDeal.get(t.oppId)!)) nextTaskByDeal.set(t.oppId, d); }
   const nextApptByDeal = new Map<string, Date>();

@@ -126,9 +126,7 @@ export default function DueReminders() {
                 </div>
                 <div className="mt-1.5 flex items-center gap-1.5">
                   <a href={it.oppId ? `/crm/${it.oppId}` : "/crm/tasks"} className="rounded-lg bg-brand-navy px-2.5 py-1 text-[11px] font-bold text-white hover:bg-brand-navy-700">Open →</a>
-                  {it.kind === "task" && (
-                    <button onClick={async () => { try { await fetch("/api/crm/task-done", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: it.id }) }); } catch { /* ok */ } snooze(it.id, 24 * 60); }} className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700">✓ Done</button>
-                  )}
+                  <button onClick={async () => { try { await fetch(it.kind === "appt" ? "/api/crm/appt-done" : "/api/crm/task-done", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: it.id }) }); } catch { /* ok */ } snooze(it.id, 24 * 60); }} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold text-white ${red ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"}`}>✓ Done</button>
                   <button onClick={() => snooze(it.id, urg ? 5 : 15)} className="ml-auto rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50">Snooze {urg ? "5" : "15"}m</button>
                 </div>
               </div>

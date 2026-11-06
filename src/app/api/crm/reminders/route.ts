@@ -36,7 +36,13 @@ export async function GET() {
     }),
   ]);
 
-  const cids = [...new Set([...apptRows, ...taskRows].map((r) => r.contactId).filter(Boolean))];
+  // Drop appointments the owner already marked done (no-schema done set) — they
+  // shouldn't keep popping up (Jon 2026-11-05).
+  const { readApptDone } = await import("@/lib/appt-done");
+  const apptDone = await readApptDone();
+  const liveAppts = apptRows.filter((a) => !apptDone.has(a.id));
+
+  const cids = [...new Set([...liveAppts, ...taskRows].map((r) => r.contactId).filter(Boolean))];
   const contacts = cids.length ? await db.crmContact.findMany({ where: { id: { in: cids } }, select: { id: true, name: true } }) : [];
   const cname = new Map(contacts.map((c) => [c.id, c.name]));
   const times = await readTaskTimes();
@@ -44,7 +50,7 @@ export async function GET() {
   return NextResponse.json({
     who: first,
     nowIso: new Date().toISOString(),
-    appts: apptRows.map((a) => ({ id: a.id, title: a.title, atIso: a.at.toISOString(), oppId: a.oppId, lead: cname.get(a.contactId) || "" })),
+    appts: liveAppts.map((a) => ({ id: a.id, title: a.title, atIso: a.at.toISOString(), oppId: a.oppId, lead: cname.get(a.contactId) || "" })),
     tasks: taskRows.map((t) => ({ id: t.id, title: t.title, due: t.due, time: times[t.id] || "", oppId: t.oppId, lead: cname.get(t.contactId) || "" })),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }
