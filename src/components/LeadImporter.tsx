@@ -30,7 +30,7 @@ function parseCsv(t: string): string[][] {
 function pick(r: Row, ...keys: string[]): string { for (const k of keys) { const v = r[k.toLowerCase()]; if (v && v.trim()) return v.trim(); } return ""; }
 function rankOf(notes: string): number { const m = notes.match(/rank:\s*(\d+)/i); return m ? parseInt(m[1], 10) : 9999; }
 
-export default function LeadImporter({ sources, repNames = [], pipelines = [] }: { sources: Src[]; repNames?: string[]; pipelines?: string[] }) {
+export default function LeadImporter({ sources, repNames = [], pipelines = [], pipelineStages = {} }: { sources: Src[]; repNames?: string[]; pipelines?: string[]; pipelineStages?: Record<string, { key: string; label: string }[]> }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [fileName, setFileName] = useState("");
   const [source, setSource] = useState("PPL");
@@ -41,7 +41,10 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [] }:
   const [singleRep, setSingleRep] = useState(defaultRep);
   const [splitReps, setSplitReps] = useState<Rep[]>([{ name: defaultRep, weight: 5 }, { name: repNames.find((r) => /kyle/i.test(r)) || "Kyle Brown", weight: 1 }]);
   const [forcePipeline, setForcePipeline] = useState("");  // "" = auto (by rep)
+  const [stage, setStage] = useState("");                  // "" = first stage (New)
   const [leadKind, setLeadKind] = useState<"home" | "land">("home");
+  const forcedStages = forcePipeline ? (pipelineStages[forcePipeline] || []) : [];
+  const stageLabel = stage ? (forcedStages.find((s) => s.key === stage)?.label || stage) : "New (first stage)";
   const [makeTask, setMakeTask] = useState(false);          // Jon: 500 "call now" tasks is too many
   const [taskTopN, setTaskTopN] = useState(0);              // 0 = all (only used when makeTask)
   const [priority, setPriority] = useState(true);
@@ -141,7 +144,7 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [] }:
         setProgress(`Importing ${Math.min(i + chunkSize, assigned.length)} / ${assigned.length}…`);
         const r = await fetch("/api/admin/import-leads", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ leads: chunk, source, listTag, priorityTag, extraTags, stage: "", leadKind, makeTask, taskTopN, pipeline: forcePipeline }),
+          body: JSON.stringify({ leads: chunk, source, listTag, priorityTag, extraTags, stage, leadKind, makeTask, taskTopN, pipeline: forcePipeline }),
         });
         const j = await r.json();
         if (!j.ok) { setProgress(`⚠️ Chunk failed: ${j.error || "error"} — stopped at ${totals.created} imported.`); setBusy(false); return; }
@@ -229,10 +232,22 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [] }:
               {/* Pipeline */}
               <div>
                 <div className="mb-1 text-sm font-semibold text-slate-700">Pipeline</div>
-                <select value={forcePipeline} onChange={(e) => setForcePipeline(e.target.value)} className={`w-full ${inputCls}`}>
+                <select value={forcePipeline} onChange={(e) => { setForcePipeline(e.target.value); setStage(""); }} className={`w-full ${inputCls}`}>
                   <option value="">Auto — the rep&apos;s pipeline</option>
                   {pipelines.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
+              </div>
+              {/* Stage */}
+              <div>
+                <div className="mb-1 text-sm font-semibold text-slate-700">Stage</div>
+                {forcePipeline && forcedStages.length ? (
+                  <select value={stage} onChange={(e) => setStage(e.target.value)} className={`w-full ${inputCls}`}>
+                    <option value="">New (first stage)</option>
+                    {forcedStages.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                  </select>
+                ) : (
+                  <div className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-[12px] text-slate-400 ring-1 ring-slate-200">Lands in <b>New</b> — pick a pipeline to choose a stage</div>
+                )}
               </div>
               {/* Lead source */}
               <div>
@@ -271,6 +286,52 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [] }:
             <label className="mt-2 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={priority} onChange={(e) => setPriority(e.target.checked)} /> Tag as 🔥 priority (all-new list)</label>
             <div className="mt-1 text-[11px] text-slate-400">Every lead is also auto-tagged with its state — 📍 {statesSummary || "TX / FL …"}.</div>
           </div>
+
+          {/* ── Mapping verification — exactly what each lead becomes (uses your top lead as the example) ── */}
+          {assigned[0] && (() => {
+            const ex = assigned[0];
+            const exTags = [`📋 ${listLabel}`, priority ? "🔥 priority" : "", ...extraTags.split(",").map((t) => t.trim()).filter(Boolean), (ex.state || "").toUpperCase() ? `📍 ${(ex.state || "").toUpperCase()}` : ""].filter(Boolean);
+            const field = (lbl: string, val: string, ok = true) => (
+              <div className="flex items-baseline gap-2 py-0.5">
+                <span className="w-28 shrink-0 text-[11px] font-semibold text-slate-400">{lbl}</span>
+                <span className={`min-w-0 flex-1 text-[13px] ${val ? "font-semibold text-slate-700" : "italic text-slate-300"}`}>{val || (ok ? "—" : "⚠️ missing")}</span>
+              </div>
+            );
+            return (
+              <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-indigo-200">
+                <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-indigo-500">✅ What each lead becomes <span className="font-normal normal-case text-slate-400">— verify this is right (example: your #{ex.rank} lead)</span></div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {/* Opportunity card */}
+                  <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">🗂 Opportunity card (the deal)</div>
+                    <div className="rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+                      <div className="text-[14px] font-bold text-slate-800">⭐ {ex.name || "(no name)"}</div>
+                      <div className="truncate text-[13px] font-semibold text-brand-navy">📍 {ex.propAddr || "⚠️ no property address"}</div>
+                      <div className="text-[13px] font-bold text-emerald-600">📞 {ex.phone || "⚠️ no phone"}</div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">{leadKind === "land" ? "🌵 Land" : "🏠 House"}</span>
+                        {exTags.map((t, i) => <span key={i} className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">{t}</span>)}
+                      </div>
+                    </div>
+                    <div className="mt-1.5 text-[11px] text-slate-500">→ <b>{ex.owner || "unassigned"}</b> · {forcePipeline || `${(ex.owner || "").split(" ")[0]}'s pipeline`} · <b>{stageLabel}</b> · source <b>{source}</b></div>
+                  </div>
+                  {/* Contact card */}
+                  <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">👤 Contact card (the person)</div>
+                    <div className="rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+                      {field("Name", ex.name, false)}
+                      {field("Phone", ex.phone, false)}
+                      {field("Email", ex.email)}
+                      {field("Property addr", ex.propAddr, false)}
+                      {field("Mailing addr", ex.mailing)}
+                    </div>
+                    <div className="mt-1.5 text-[11px] text-slate-400">Property address shows on the card&apos;s 📍 line; mailing is kept for mailers.</div>
+                  </div>
+                </div>
+                <div className="mt-2 text-[11px] text-slate-400">Columns read: <b>Seller Full Name</b> → name · <b>Seller Phone</b> → phone · <b>Seller Email</b> → email · <b>Property Address/City/State/Zip</b> → property line · <b>Property State</b> → 📍 tag · <b>rank: N</b> in notes → priority order. If a field says ⚠️ missing, the CSV column is empty for that lead.</div>
+              </div>
+            );
+          })()}
 
           {/* ── Preview ── */}
           <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">

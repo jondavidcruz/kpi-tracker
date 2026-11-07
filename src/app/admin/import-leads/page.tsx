@@ -31,6 +31,7 @@ export default async function ImportLeadsPage() {
         sources={LEAD_SOURCES.map((s) => ({ value: s.value, label: s.label }))}
         repNames={reps.map((r) => r.name)}
         pipelines={pipelines.map((p) => p.name)}
+        pipelineStages={Object.fromEntries(pipelines.map((p) => [p.name, p.stages.map((s) => ({ key: s.key, label: s.label }))]))}
       />
     </div>
   );
