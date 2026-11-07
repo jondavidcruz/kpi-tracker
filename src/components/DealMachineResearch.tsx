@@ -16,7 +16,7 @@ const PRESETS: { key: string; label: string; emoji: string; input: Partial<LandI
 ];
 const DEFAULT: LandInput = { propertyTypes: [6], acresMin: 0.1, acresMax: 5, outOfState: true, absentee: false, taxDelinquent: false, excludeLandlocked: true, excludeFlood: false };
 
-export default function DealMachineResearch({ quickMarkets = [] }: { quickMarkets?: { name: string; fips: string }[] }) {
+export default function DealMachineResearch({ quickMarkets = [] }: { quickMarkets?: { name: string; fips: string; preset?: string }[] }) {
   const [status, setStatus] = useState<"checking" | "ok" | "needkey" | "off">("checking");
   const [statusMsg, setStatusMsg] = useState("");
   const [locQ, setLocQ] = useState("");
@@ -106,7 +106,7 @@ export default function DealMachineResearch({ quickMarkets = [] }: { quickMarket
           <div className="mt-1.5 flex flex-wrap gap-1">
             <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 self-center">Quick pick:</span>
             {quickMarkets.map((q) => (
-              <button key={q.fips} onClick={() => { setPicked({ type: "county", code: q.fips, name: q.name }); setLocResults([]); }} className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${q.fips.startsWith("45") ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`} title={q.fips.startsWith("45") ? "South Carolina" : "Florida"}>{q.name.split(" / ")[0]}</button>
+              <button key={q.fips} onClick={() => { setPicked({ type: "county", code: q.fips, name: q.name }); setLocResults([]); const p = PRESETS.find((x) => x.key === q.preset); if (p) applyPreset(p.input); }} className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${q.fips.startsWith("45") ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`} title={`${q.fips.startsWith("45") ? "South Carolina" : "Florida"}${q.preset ? ` · applies ${q.preset} buy-box` : ""}`}>{q.name.split(" / ")[0]}</button>
             ))}
           </div>
         )}

@@ -80,9 +80,15 @@ export default async function MarketsPage() {
     return { m, coverage: coverageFor(m.id, pulls), leads, deals, momentum: { d30, d60, d180, trend }, buyerCount };
   });
 
-  // Quick-select counties for the DealMachine panel (click a market → county pre-selected, no typing).
+  // Quick-select counties for the DealMachine panel (click a market → county pre-selected + its
+  // recommended buy-box applied, no typing). Preset = the market's primary land focus.
   const { MARKET_COUNTY_FIPS } = await import("@/lib/dealmachine");
-  const quickMarkets = Object.entries(MARKET_COUNTY_FIPS).map(([name, fips]) => ({ name, fips }));
+  const focusPreset: Record<string, string> = { infill_luxury: "infill", acreage: "acreage", commercial: "commercial" };
+  const quickMarkets = Object.entries(MARKET_COUNTY_FIPS).map(([name, fips]) => {
+    const m = markets.find((x) => x.name === name);
+    const preset = m?.landFocus?.length ? (focusPreset[m.landFocus[0]] ?? "absentee") : "absentee";
+    return { name, fips, preset };
+  });
 
   return (
     <div className="space-y-5">
