@@ -26,6 +26,13 @@ const COORDS: Record<string, [number, number]> = {
   "Orlando / Windermere / Winter Park": [28.5, -81.5], "Tampa Bay": [27.95, -82.46],
   "Sarasota / Lakewood Ranch": [27.36, -82.53], "Jacksonville / Ponte Vedra": [30.24, -81.45],
   "Jupiter Island / Vero Beach": [27.5, -80.33], "30A / Alys Beach (NW Florida)": [30.3, -86.0],
+  // South Carolina (Jon 2026-11-06)
+  "Bluffton / Hardeeville (Jasper)": [32.22, -80.98], "Hilton Head / Beaufort (Beaufort)": [32.33, -80.76],
+  "Charleston / Mount Pleasant / Daniel Island": [32.8, -79.93], "Summerville / Nexton (Berkeley)": [33.0, -80.1],
+  "Myrtle Beach / Grand Strand (Horry)": [33.69, -78.89], "Greenville / Greer (Upstate)": [34.85, -82.4],
+  "Spartanburg (Upstate)": [34.95, -81.93], "Rock Hill / Fort Mill (York)": [35.0, -80.95],
+  "Lake Keowee / Clemson (Oconee)": [34.75, -82.92], "Aiken (CSRA)": [33.56, -81.72],
+  "Columbia / Lake Murray (Lexington)": [34.05, -81.3],
 };
 const COV_COLOR: Record<string, string> = { never: "#64748b", clear: "#10b981", cooldown: "#f59e0b" };
 const TERR_COLOR: Record<TerrStatus, string> = { pulled: "#f59e0b", marketing: "#3b82f6", target: "#10b981", avoid: "#ef4444" };
@@ -140,7 +147,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         if (cancelled || !ref.current || mapRef.current) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const L = (window as any).L;
-        const map = L.map(ref.current, { center: [28.2, -82.2], zoom: 6, scrollWheelZoom: false });
+        const map = L.map(ref.current, { center: [31.0, -81.5], zoom: 5, scrollWheelZoom: false }); // FL + SC in view
         mapRef.current = map;
         L.tileLayer(SAT_TILES, { attribution: TILE_ATTR, maxZoom: 18 }).addTo(map);
         dataRef.current = L.featureGroup().addTo(map);

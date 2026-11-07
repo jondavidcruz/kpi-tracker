@@ -101,6 +101,18 @@ export const MARKET_COUNTY_FIPS: Record<string, string> = {
   "Jacksonville / Ponte Vedra": "12031",        // Duval
   "Jupiter Island / Vero Beach": "12061",       // Indian River
   "30A / Alys Beach (NW Florida)": "12131",     // Walton
+  // South Carolina (Jon 2026-11-06)
+  "Bluffton / Hardeeville (Jasper)": "45053",            // Jasper
+  "Hilton Head / Beaufort (Beaufort)": "45013",         // Beaufort
+  "Charleston / Mount Pleasant / Daniel Island": "45019",// Charleston
+  "Summerville / Nexton (Berkeley)": "45015",           // Berkeley
+  "Myrtle Beach / Grand Strand (Horry)": "45051",       // Horry
+  "Greenville / Greer (Upstate)": "45045",              // Greenville
+  "Spartanburg (Upstate)": "45083",                     // Spartanburg
+  "Rock Hill / Fort Mill (York)": "45091",              // York
+  "Lake Keowee / Clemson (Oconee)": "45073",            // Oconee
+  "Aiken (CSRA)": "45003",                              // Aiken
+  "Columbia / Lake Murray (Lexington)": "45063",        // Lexington
 };
 
 /** Live off-market land inventory per market (free counts). Loops the markets' counties with a
