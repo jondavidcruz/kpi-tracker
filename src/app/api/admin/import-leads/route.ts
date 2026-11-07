@@ -33,7 +33,7 @@ export async function GET() {
 
 type LeadIn = {
   name?: string; phone?: string; phone2?: string; phone3?: string; email?: string; email2?: string;
-  mailing?: string; propAddr?: string; market?: string; county?: string; apn?: string; notes?: string;
+  mailing?: string; propAddr?: string; market?: string; county?: string; state?: string; apn?: string; notes?: string;
   rank?: number; owner?: string;
 };
 
@@ -57,14 +57,17 @@ export async function POST(req: Request) {
 
   // --- import a chunk ---
   const body = (await req.json().catch(() => ({}))) as {
-    leads?: LeadIn[]; source?: string; listTag?: string; priorityTag?: string; pipeline?: string; stage?: string;
+    leads?: LeadIn[]; source?: string; listTag?: string; priorityTag?: string; extraTags?: string; pipeline?: string; stage?: string;
   };
   const leads = Array.isArray(body.leads) ? body.leads.slice(0, 150) : [];
   if (!leads.length) return NextResponse.json({ ok: false, error: "no leads in chunk" }, { status: 400 });
   const source = (body.source || "PPL").trim().slice(0, 40);
   const listTag = (body.listTag || "").trim().slice(0, 60);
   const priorityTag = (body.priorityTag || "").trim().slice(0, 40);
-  const tags = [listTag, priorityTag].filter(Boolean).join(", ");
+  // Base tags on every lead in the chunk; each lead ALSO gets a 📍 STATE tag added per-lead below
+  // (Jon 2026-11-07 — a list can span states, so state is tagged per lead, not per upload).
+  const extraTags = (body.extraTags || "").split(",").map((t) => t.trim()).filter(Boolean).slice(0, 6);
+  const baseTags = [listTag, priorityTag, ...extraTags].filter(Boolean);
 
   const { toE164US } = await import("@/lib/crm-shared");
   const { normalizeAddress } = await import("@/lib/address");
@@ -106,19 +109,24 @@ export async function POST(req: Request) {
 
     const altPhone = (L.phone2 || "").trim() ? (toE164US(L.phone2!) || (L.phone2 || "").replace(/[^+\d]/g, "")) : "";
     const mailing = (L.mailing || "").trim() ? (normalizeAddress(L.mailing!.trim()) || L.mailing!.trim()) : "";
+    // The PROPERTY address is what reps act on and what the opp card / lead page show on the 📍
+    // property line (Jon 2026-11-07). Put it on contact.address; mailing (owner's) is kept in
+    // __import for mail campaigns. Fall back to mailing only if there's no property address.
+    const propAddrClean = (L.propAddr || "").trim() ? (normalizeAddress((L.propAddr || "").trim()) || (L.propAddr || "").trim()) : "";
+    const contactAddr = propAddrClean || mailing;
 
     const contact = existing
       ? await db.crmContact.update({ where: { id: existing.id }, data: {
           ...(existing.email || !email ? {} : { email }),
           ...(existing.altPhone || !altPhone ? {} : { altPhone }),
-          ...(existing.address || !mailing ? {} : { address: mailing }),
+          ...(existing.address || !contactAddr ? {} : { address: contactAddr }),
           ...(existing.source ? {} : { source }),
           ...(existing.assignedTo ? {} : { assignedTo: owner }),
         } }).catch(() => null)
       : await db.crmContact.create({ data: {
           name: name || propTitle,
           phone: phone ? (phone.startsWith("+") ? phone : p10.length === 10 ? `+1${p10}` : phone) : "",
-          altPhone, email, source, assignedTo: owner, address: mailing,
+          altPhone, email, source, assignedTo: owner, address: contactAddr,
         } }).catch(() => null);
     if (!contact) { skipped++; continue; }
 
@@ -128,13 +136,16 @@ export async function POST(req: Request) {
     } }).catch(() => null);
     if (dupeOpp) { dupes++; continue; }
 
+    // Per-lead tags: base + the lead's own state (📍 TX / 📍 FL …) so reps can filter by state.
+    const stateTag = (L.state || "").trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+    const tags = [...baseTags, stateTag ? `📍 ${stateTag}` : ""].filter(Boolean).join(", ");
     const { name: pipeline, stageKey } = pipeFor(owner);
     const opp = await db.crmOpportunity.create({ data: {
       contactId: contact.id, title: propTitle, pipeline, stage: stageKey, assignedTo: owner,
       ...(tags ? { tags } : {}),
       formData: {
         __leadKind: "home", __leadSource: source,
-        __import: { source, market: (L.market || "").trim(), county: (L.county || "").trim(), rank: L.rank ?? null, list: listTag },
+        __import: { source, market: (L.market || "").trim(), county: (L.county || "").trim(), state: stateTag, mailing, rank: L.rank ?? null, list: listTag },
         ...(L.apn ? { property: { apn: String(L.apn).trim() } } : {}),
       } as never,
     } }).catch(() => null);

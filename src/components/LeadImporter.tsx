@@ -8,7 +8,7 @@ type Src = { value: string; label: string };
 type Row = Record<string, string>;
 type Lead = {
   name: string; phone: string; phone2: string; email: string; mailing: string;
-  propAddr: string; market: string; county: string; apn: string; notes: string; rank: number; owner?: string;
+  propAddr: string; market: string; county: string; state: string; apn: string; notes: string; rank: number; owner?: string;
 };
 type Rep = { name: string; weight: number };
 type ImpLog = { seq: number; label: string; count: number; at: string; by: string };
@@ -34,6 +34,7 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
   const [source, setSource] = useState("PPL");
   const [reps, setReps] = useState<Rep[]>([{ name: "Nicholas Fair", weight: 5 }, { name: "Kyle Brown", weight: 1 }]);
   const [listLabel, setListLabel] = useState("");
+  const [extraTags, setExtraTags] = useState("");
   const [seq, setSeq] = useState<number | null>(null);
   const [priority, setPriority] = useState(true);
   const [history, setHistory] = useState<ImpLog[]>([]);
@@ -69,6 +70,7 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
           phone: pick(obj, "Seller Phone", "Phone", "Phone 1"), phone2: pick(obj, "Seller Phone 2", "Phone 2"),
           email: pick(obj, "Seller Email", "Email", "Email 1"),
           mailing, propAddr: addr, market: pick(obj, "Market / Metro", "Market"), county: pick(obj, "County"),
+          state: pick(obj, "Property State", "State"),
           apn: pick(obj, "Parcel ID", "APN"), notes, rank: rankOf(notes),
         };
       }).filter((l) => l.name || l.phone);
@@ -94,6 +96,13 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
     const m: Record<string, number> = {}; for (const l of assigned) if (l.owner) m[l.owner] = (m[l.owner] || 0) + 1; return m;
   }, [assigned]);
 
+  // States present in the file (for the "auto-tagged by state" hint + a quick sanity check).
+  const statesSummary = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const l of leads) { const s = (l.state || "").trim().toUpperCase(); if (s) m[s] = (m[s] || 0) + 1; }
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([s, c]) => `${s} (${c})`).join(" · ");
+  }, [leads]);
+
   async function runImport() {
     if (!assigned.length || busy) return;
     if (!confirm(`Import ${assigned.length} leads?\n\n${Object.entries(perRep).map(([n, c]) => `${n}: ${c}`).join("\n")}\n\nSource: ${source}\nTag: ${listLabel}${priority ? " + 🔥 priority" : ""}\n\nDeduped by phone/email. No welcome texts sent.`)) return;
@@ -108,7 +117,7 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
         setProgress(`Importing ${Math.min(i + chunkSize, assigned.length)} / ${assigned.length}…`);
         const r = await fetch("/api/admin/import-leads", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ leads: chunk, source, listTag, priorityTag, stage: "" }),
+          body: JSON.stringify({ leads: chunk, source, listTag, priorityTag, extraTags, stage: "" }),
         });
         const j = await r.json();
         if (!j.ok) { setProgress(`⚠️ Chunk failed: ${j.error || "error"} — stopped at ${totals.created} imported.`); setBusy(false); return; }
@@ -162,6 +171,11 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
                 <div className="text-xs font-bold uppercase tracking-wide text-slate-400">List tag {seq != null && <span className="text-slate-300">(seq #{seq})</span>}</div>
                 <input value={listLabel} onChange={(e) => setListLabel(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
               </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Extra tags <span className="font-normal normal-case text-slate-300">(comma-separated, optional)</span></div>
+                <input value={extraTags} onChange={(e) => setExtraTags(e.target.value)} placeholder="e.g. Vacant, Inherited, DealMachine" className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
+                <div className="mt-1 text-[11px] text-slate-400">Each lead is also auto-tagged with its state — 📍 {statesSummary || "TX / FL …"} — so reps can filter by state.</div>
+              </div>
               <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={priority} onChange={(e) => setPriority(e.target.checked)} /> Tag as 🔥 priority (all-new list)</label>
             </div>
           </div>
@@ -177,6 +191,7 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
                       <td className="py-1 pr-2 font-semibold text-slate-700">{l.name}</td>
                       <td className="py-1 pr-2 text-slate-500">{l.propAddr}</td>
                       <td className="py-1 pr-2 text-slate-500">{l.phone}</td>
+                      <td className="py-1 pr-2 text-[11px] font-bold text-slate-400">📍 {(l.state || "?").toUpperCase()}</td>
                       <td className="py-1 font-bold text-emerald-700">{l.owner}</td>
                     </tr>
                   ))}
