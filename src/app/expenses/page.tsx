@@ -6,7 +6,9 @@ import { Card, SectionTitle } from "@/components/ui";
 import ExpenseAdvisor from "@/components/ExpenseAdvisor";
 import PnlCharts from "@/components/PnlCharts";
 import FinancialHealth from "@/components/FinancialHealth";
+import PnlLoader from "@/components/PnlLoader";
 import { mergePnl, summarize, DEFAULT_ASSUMPTIONS, PNL_DATA_CAT, type PnlAssumptions, type PnlStore } from "@/lib/pnl-sheet";
+import { isOwner } from "@/lib/auth";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -147,6 +149,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
 
       {/* 📗 Financial Health cockpit — burn / runway / cost-to-run / close-target (Jon 2026-11-07) */}
       <FinancialHealth pnl={pnlRows} summary={pnlSummary} assume={assume} saved={sp.saved === "runway"} asOf={pnlStore?.asOf} />
+      {isOwner(me) && <PnlLoader />}
 
       {telnyx?.month === new Date().toISOString().slice(0, 7) && (
         <Card className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4">
