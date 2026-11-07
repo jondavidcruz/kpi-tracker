@@ -94,7 +94,7 @@ export default async function MarketsPage() {
     <div className="space-y-5">
       <SectionTitle
         title="🗺 Target Markets"
-        subtitle="Where we hunt land — the high-net-worth, waterfront, business-dense Florida markets the wealthy keep building in through rate hikes, and that few wholesalers compete in. Track what we've pulled, how each market performs, and the 30-60-180 trend."
+        subtitle="Where we hunt land — the high-net-worth, waterfront, business-dense Florida & South Carolina markets the wealthy keep building in through rate hikes, and that few wholesalers compete in. Track what we've pulled, how each market performs, and the 30-60-180 trend."
         accent="bg-emerald-400"
       />
       <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} />
