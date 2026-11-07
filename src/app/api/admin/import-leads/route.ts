@@ -58,7 +58,11 @@ export async function POST(req: Request) {
   // --- import a chunk ---
   const body = (await req.json().catch(() => ({}))) as {
     leads?: LeadIn[]; source?: string; listTag?: string; priorityTag?: string; extraTags?: string; pipeline?: string; stage?: string;
+    leadKind?: string; makeTask?: boolean; taskTopN?: number;
   };
+  const kind = body.leadKind === "land" ? "land" : "home";
+  const makeTask = body.makeTask === true;
+  const taskTopN = Math.max(0, Math.round(Number(body.taskTopN) || 0));
   const leads = Array.isArray(body.leads) ? body.leads.slice(0, 150) : [];
   if (!leads.length) return NextResponse.json({ ok: false, error: "no leads in chunk" }, { status: 400 });
   const source = (body.source || "PPL").trim().slice(0, 40);
@@ -144,7 +148,7 @@ export async function POST(req: Request) {
       contactId: contact.id, title: propTitle, pipeline, stage: stageKey, assignedTo: owner,
       ...(tags ? { tags } : {}),
       formData: {
-        __leadKind: "home", __leadSource: source,
+        __leadKind: kind, __leadSource: source,
         __import: { source, market: (L.market || "").trim(), county: (L.county || "").trim(), state: stateTag, mailing, rank: L.rank ?? null, list: listTag },
         ...(L.apn ? { property: { apn: String(L.apn).trim() } } : {}),
       } as never,
@@ -152,8 +156,10 @@ export async function POST(req: Request) {
     if (!opp) { skipped++; continue; }
     created++;
 
-    // a "call now" task so these new leads get worked (NO welcome SMS/email on a bulk list).
-    await db.crmTask.create({ data: { oppId: opp.id, contactId: contact.id, title: `📞 Call now — new lead ${(name || propTitle).split(" ")[0]}`, due: todayPT, assignedTo: owner, createdBy: "list-import" } }).catch(() => {});
+    // a "call now" task — ONLY if the import asked for it (Jon 2026-11-07: a 500-lead list makes 500
+    // tasks). When makeTask + taskTopN, only the top-ranked leads get a task. NO welcome SMS/email.
+    const wantTask = makeTask && (taskTopN <= 0 || (typeof L.rank === "number" && L.rank <= taskTopN));
+    if (wantTask) await db.crmTask.create({ data: { oppId: opp.id, contactId: contact.id, title: `📞 Call now — new lead ${(name || propTitle).split(" ")[0]}`, due: todayPT, assignedTo: owner, createdBy: "list-import" } }).catch(() => {});
     const noteBits = [L.notes?.trim(), L.market ? `Market: ${L.market}` : "", L.rank != null ? `Rank ${L.rank}` : ""].filter(Boolean).join(" · ");
     await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `📥 Imported from list "${listTag || source}"${noteBits ? ` · ${noteBits}` : ""}`, actor: "list-import" }).catch(() => {});
   }

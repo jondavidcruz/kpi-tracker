@@ -4,6 +4,8 @@
 import { getCurrentUser, isManager } from "@/lib/auth";
 import LeadImporter from "@/components/LeadImporter";
 import { LEAD_SOURCES } from "@/lib/lead-source";
+import { getActiveReps } from "@/lib/data";
+import { readPipelines } from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +20,18 @@ export default async function ImportLeadsPage() {
       </div>
     );
   }
+  const [reps, pipelines] = await Promise.all([getActiveReps(), readPipelines()]);
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4">
       <div>
         <h1 className="text-xl font-bold text-slate-800">📥 Import a lead list</h1>
-        <p className="mt-1 text-sm text-slate-500">Upload a CSV, set how it splits across reps, and import. Leads are deduped by phone/email, tagged with a list sequence, and get a &ldquo;call now&rdquo; task — no welcome text/email is sent to a bulk list.</p>
+        <p className="mt-1 text-sm text-slate-500">Upload a CSV, set exactly how it should be imported — who gets the leads, house vs land, tasks, tags — then import. Leads are deduped by phone/email and tagged with a list sequence; no welcome text/email is sent to a bulk list.</p>
       </div>
-      <LeadImporter sources={LEAD_SOURCES.map((s) => ({ value: s.value, label: s.label }))} />
+      <LeadImporter
+        sources={LEAD_SOURCES.map((s) => ({ value: s.value, label: s.label }))}
+        repNames={reps.map((r) => r.name)}
+        pipelines={pipelines.map((p) => p.name)}
+      />
     </div>
   );
 }

@@ -1,7 +1,9 @@
 "use client";
-// Client-side CSV lead importer. Parses the file, maps columns, splits leads across reps by a
-// weighted ratio (round-robin on rank so each rep gets a fair spread), previews, then POSTs to
-// /api/admin/import-leads in chunks. See the route for the server side.
+// Client-side CSV lead importer. Parses the file, lets the manager choose EXACTLY how the list is
+// imported (who gets it — one rep or a weighted split, house vs land, whether to make call tasks,
+// pipeline, tags), previews, then POSTs to /api/admin/import-leads in chunks. See the route for the
+// server side. Options added Jon 2026-11-07 ("I want all the options selectable so the system knows
+// how the leads should be uploaded"; default = all to Nick, no call-now task on bulk lists).
 import { useEffect, useMemo, useState } from "react";
 
 type Src = { value: string; label: string };
@@ -28,15 +30,25 @@ function parseCsv(t: string): string[][] {
 function pick(r: Row, ...keys: string[]): string { for (const k of keys) { const v = r[k.toLowerCase()]; if (v && v.trim()) return v.trim(); } return ""; }
 function rankOf(notes: string): number { const m = notes.match(/rank:\s*(\d+)/i); return m ? parseInt(m[1], 10) : 9999; }
 
-export default function LeadImporter({ sources }: { sources: Src[] }) {
+export default function LeadImporter({ sources, repNames = [], pipelines = [] }: { sources: Src[]; repNames?: string[]; pipelines?: string[] }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [fileName, setFileName] = useState("");
   const [source, setSource] = useState("PPL");
-  const [reps, setReps] = useState<Rep[]>([{ name: "Nicholas Fair", weight: 5 }, { name: "Kyle Brown", weight: 1 }]);
+
+  // ── How the list is imported (all selectable) ──
+  const [assignMode, setAssignMode] = useState<"one" | "split">("one");
+  const defaultRep = repNames.find((r) => /nicholas|nick/i.test(r)) || repNames[0] || "Nicholas Fair";
+  const [singleRep, setSingleRep] = useState(defaultRep);
+  const [splitReps, setSplitReps] = useState<Rep[]>([{ name: defaultRep, weight: 5 }, { name: repNames.find((r) => /kyle/i.test(r)) || "Kyle Brown", weight: 1 }]);
+  const [forcePipeline, setForcePipeline] = useState("");  // "" = auto (by rep)
+  const [leadKind, setLeadKind] = useState<"home" | "land">("home");
+  const [makeTask, setMakeTask] = useState(false);          // Jon: 500 "call now" tasks is too many
+  const [taskTopN, setTaskTopN] = useState(0);              // 0 = all (only used when makeTask)
+  const [priority, setPriority] = useState(true);
+
   const [listLabel, setListLabel] = useState("");
   const [extraTags, setExtraTags] = useState("");
   const [seq, setSeq] = useState<number | null>(null);
-  const [priority, setPriority] = useState(true);
   const [history, setHistory] = useState<ImpLog[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
@@ -80,9 +92,10 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
     reader.readAsText(file);
   }
 
-  // weighted round-robin on rank: assign each lead to the rep with the smallest (assigned+1)/weight.
+  // Assign leads to owners based on the chosen mode.
   const assigned = useMemo(() => {
-    const valid = reps.filter((r) => r.name.trim() && r.weight > 0);
+    if (assignMode === "one") return leads.map((l) => ({ ...l, owner: singleRep }));
+    const valid = splitReps.filter((r) => r.name.trim() && r.weight > 0);
     const counts: Record<string, number> = {}; valid.forEach((r) => (counts[r.name] = 0));
     return leads.map((l) => {
       if (!valid.length) return { ...l, owner: "" };
@@ -90,13 +103,12 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
       for (const r of valid) { const ratio = (counts[r.name] + 1) / r.weight; if (ratio < bestRatio) { bestRatio = ratio; best = r; } }
       counts[best.name]++; return { ...l, owner: best.name };
     });
-  }, [leads, reps]);
+  }, [leads, assignMode, singleRep, splitReps]);
 
   const perRep = useMemo(() => {
     const m: Record<string, number> = {}; for (const l of assigned) if (l.owner) m[l.owner] = (m[l.owner] || 0) + 1; return m;
   }, [assigned]);
 
-  // States present in the file (for the "auto-tagged by state" hint + a quick sanity check).
   const statesSummary = useMemo(() => {
     const m: Record<string, number> = {};
     for (const l of leads) { const s = (l.state || "").trim().toUpperCase(); if (s) m[s] = (m[s] || 0) + 1; }
@@ -105,7 +117,19 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
 
   async function runImport() {
     if (!assigned.length || busy) return;
-    if (!confirm(`Import ${assigned.length} leads?\n\n${Object.entries(perRep).map(([n, c]) => `${n}: ${c}`).join("\n")}\n\nSource: ${source}\nTag: ${listLabel}${priority ? " + 🔥 priority" : ""}\n\nDeduped by phone/email. No welcome texts sent.`)) return;
+    const summary = [
+      `Import ${assigned.length} leads as ${leadKind === "land" ? "🌵 LAND" : "🏠 HOUSE"} leads?`,
+      "",
+      Object.entries(perRep).map(([n, c]) => `${n}: ${c}`).join("\n"),
+      "",
+      `Source: ${source}`,
+      `Pipeline: ${forcePipeline || "auto (by rep)"}`,
+      `Tag: ${listLabel}${priority ? " + 🔥 priority" : ""}${extraTags.trim() ? " + " + extraTags : ""} + 📍 state`,
+      makeTask ? `📞 Call-now task: ${taskTopN > 0 ? `top ${taskTopN} by rank` : "every lead"}` : "No call-now tasks (bulk list)",
+      "",
+      "Deduped by phone/email. No welcome texts sent.",
+    ].join("\n");
+    if (!confirm(summary)) return;
     setBusy(true); setResult(null);
     const listTag = `📋 ${listLabel}`;
     const priorityTag = priority ? "🔥 priority" : "";
@@ -117,13 +141,12 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
         setProgress(`Importing ${Math.min(i + chunkSize, assigned.length)} / ${assigned.length}…`);
         const r = await fetch("/api/admin/import-leads", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ leads: chunk, source, listTag, priorityTag, extraTags, stage: "" }),
+          body: JSON.stringify({ leads: chunk, source, listTag, priorityTag, extraTags, stage: "", leadKind, makeTask, taskTopN, pipeline: forcePipeline }),
         });
         const j = await r.json();
         if (!j.ok) { setProgress(`⚠️ Chunk failed: ${j.error || "error"} — stopped at ${totals.created} imported.`); setBusy(false); return; }
         totals.created += j.created; totals.dupes += j.dupes; totals.skipped += j.skipped;
       }
-      // record the upload in the sequence log
       await fetch("/api/admin/import-leads?finalize=1", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ seq, label: listLabel, count: totals.created }),
@@ -133,6 +156,8 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
     setBusy(false);
   }
 
+  const inputCls = "rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm";
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -140,48 +165,119 @@ export default function LeadImporter({ sources }: { sources: Src[] }) {
           📄 Choose CSV file
           <input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
         </label>
-        {fileName && <span className="ml-3 text-sm text-slate-500">{fileName} — <b>{leads.length}</b> leads</span>}
+        {fileName && <span className="ml-3 text-sm text-slate-500">{fileName} — <b>{leads.length}</b> leads{statesSummary ? ` · ${statesSummary}` : ""}</span>}
       </div>
 
       {leads.length > 0 && (
         <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-              <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Split across reps (by weight)</div>
-              {reps.map((r, i) => (
-                <div key={i} className="mt-2 flex items-center gap-2">
-                  <input value={r.name} onChange={(e) => setReps((rs) => rs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="Rep name" className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
-                  <input type="number" min={0} value={r.weight} onChange={(e) => setReps((rs) => rs.map((x, j) => j === i ? { ...x, weight: Math.max(0, Number(e.target.value) || 0) } : x))} className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
-                  <span className="w-12 text-right text-sm font-bold text-emerald-700">{perRep[r.name] ?? 0}</span>
-                  {reps.length > 2 && <button onClick={() => setReps((rs) => rs.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500">✕</button>}
+          {/* ── Import options ── */}
+          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <div className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">How should these leads be imported?</div>
+
+            {/* Who gets them */}
+            <div className="mb-3">
+              <div className="mb-1.5 text-sm font-semibold text-slate-700">👤 Assign to</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm font-semibold ring-1 ${assignMode === "one" ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white text-slate-600 ring-slate-200"}`}>
+                  <input type="radio" className="hidden" checked={assignMode === "one"} onChange={() => setAssignMode("one")} /> One rep
+                </label>
+                <label className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm font-semibold ring-1 ${assignMode === "split" ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white text-slate-600 ring-slate-200"}`}>
+                  <input type="radio" className="hidden" checked={assignMode === "split"} onChange={() => setAssignMode("split")} /> Split across reps
+                </label>
+                {assignMode === "one" && (
+                  <select value={singleRep} onChange={(e) => setSingleRep(e.target.value)} className={inputCls}>
+                    {(repNames.length ? repNames : [singleRep]).map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                )}
+              </div>
+              {assignMode === "split" && (
+                <div className="mt-2 rounded-xl bg-slate-50 p-3">
+                  {splitReps.map((r, i) => (
+                    <div key={i} className="mt-1 flex items-center gap-2">
+                      {repNames.length ? (
+                        <select value={r.name} onChange={(e) => setSplitReps((rs) => rs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} className={`flex-1 ${inputCls}`}>
+                          <option value="">— rep —</option>
+                          {repNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      ) : (
+                        <input value={r.name} onChange={(e) => setSplitReps((rs) => rs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="Rep name" className={`flex-1 ${inputCls}`} />
+                      )}
+                      <input type="number" min={0} value={r.weight} onChange={(e) => setSplitReps((rs) => rs.map((x, j) => j === i ? { ...x, weight: Math.max(0, Number(e.target.value) || 0) } : x))} className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+                      <span className="w-12 text-right text-sm font-bold text-emerald-700">{perRep[r.name] ?? 0}</span>
+                      {splitReps.length > 1 && <button onClick={() => setSplitReps((rs) => rs.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500">✕</button>}
+                    </div>
+                  ))}
+                  <button onClick={() => setSplitReps((rs) => [...rs, { name: "", weight: 1 }])} className="mt-2 text-xs font-bold text-slate-500 hover:text-slate-700">+ add rep</button>
+                  <div className="mt-1 text-[11px] text-slate-400">Weight = share. 5 &amp; 1 → one rep gets 5× the other, interleaved by rank for a fair spread.</div>
                 </div>
-              ))}
-              <button onClick={() => setReps((rs) => [...rs, { name: "", weight: 1 }])} className="mt-2 text-xs font-bold text-slate-500 hover:text-slate-700">+ add rep</button>
-              <div className="mt-2 text-[11px] text-slate-400">Weight = share of leads. 5 &amp; 1 → one rep gets 5× the other. Interleaved by rank so each gets a fair spread of hot/cold.</div>
+              )}
             </div>
 
-            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 space-y-2.5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {/* House vs Land */}
               <div>
-                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Lead source</div>
-                <select value={source} onChange={(e) => setSource(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
+                <div className="mb-1 text-sm font-semibold text-slate-700">Lead type</div>
+                <div className="flex gap-2">
+                  <label className={`flex-1 cursor-pointer rounded-lg px-3 py-1.5 text-center text-sm font-semibold ring-1 ${leadKind === "home" ? "bg-emerald-600 text-white ring-emerald-600" : "bg-white text-slate-600 ring-slate-200"}`}>
+                    <input type="radio" className="hidden" checked={leadKind === "home"} onChange={() => setLeadKind("home")} /> 🏠 House
+                  </label>
+                  <label className={`flex-1 cursor-pointer rounded-lg px-3 py-1.5 text-center text-sm font-semibold ring-1 ${leadKind === "land" ? "bg-amber-600 text-white ring-amber-600" : "bg-white text-slate-600 ring-slate-200"}`}>
+                    <input type="radio" className="hidden" checked={leadKind === "land"} onChange={() => setLeadKind("land")} /> 🌵 Land
+                  </label>
+                </div>
+              </div>
+              {/* Pipeline */}
+              <div>
+                <div className="mb-1 text-sm font-semibold text-slate-700">Pipeline</div>
+                <select value={forcePipeline} onChange={(e) => setForcePipeline(e.target.value)} className={`w-full ${inputCls}`}>
+                  <option value="">Auto — the rep&apos;s pipeline</option>
+                  {pipelines.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              {/* Lead source */}
+              <div>
+                <div className="mb-1 text-sm font-semibold text-slate-700">Lead source</div>
+                <select value={source} onChange={(e) => setSource(e.target.value)} className={`w-full ${inputCls}`}>
                   {sources.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">List tag {seq != null && <span className="text-slate-300">(seq #{seq})</span>}</div>
-                <input value={listLabel} onChange={(e) => setListLabel(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
-              </div>
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Extra tags <span className="font-normal normal-case text-slate-300">(comma-separated, optional)</span></div>
-                <input value={extraTags} onChange={(e) => setExtraTags(e.target.value)} placeholder="e.g. Vacant, Inherited, DealMachine" className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
-                <div className="mt-1 text-[11px] text-slate-400">Each lead is also auto-tagged with its state — 📍 {statesSummary || "TX / FL …"} — so reps can filter by state.</div>
-              </div>
-              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={priority} onChange={(e) => setPriority(e.target.checked)} /> Tag as 🔥 priority (all-new list)</label>
             </div>
+
+            {/* Tasks */}
+            <div className="mt-3 rounded-xl bg-slate-50 p-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={makeTask} onChange={(e) => setMakeTask(e.target.checked)} /> 📞 Create a “call now” task per lead
+              </label>
+              {makeTask ? (
+                <div className="mt-1.5 flex items-center gap-2 text-sm text-slate-600">
+                  Only for the top
+                  <input type="number" min={0} value={taskTopN} onChange={(e) => setTaskTopN(Math.max(0, Number(e.target.value) || 0))} className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm" />
+                  by rank <span className="text-[11px] text-slate-400">(0 = every lead — careful with big lists)</span>
+                </div>
+              ) : <div className="mt-1 text-[11px] text-slate-400">Off by default — a 500-lead list would create 500 tasks. Leads still land in the “new” stage to work.</div>}
+            </div>
+
+            {/* Tags */}
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <div className="mb-1 text-sm font-semibold text-slate-700">List tag {seq != null && <span className="text-xs font-normal text-slate-300">(seq #{seq})</span>}</div>
+                <input value={listLabel} onChange={(e) => setListLabel(e.target.value)} className={`w-full ${inputCls}`} />
+              </div>
+              <div>
+                <div className="mb-1 text-sm font-semibold text-slate-700">Extra tags <span className="text-xs font-normal text-slate-300">(comma-separated)</span></div>
+                <input value={extraTags} onChange={(e) => setExtraTags(e.target.value)} placeholder="e.g. Vacant, Inherited" className={`w-full ${inputCls}`} />
+              </div>
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={priority} onChange={(e) => setPriority(e.target.checked)} /> Tag as 🔥 priority (all-new list)</label>
+            <div className="mt-1 text-[11px] text-slate-400">Every lead is also auto-tagged with its state — 📍 {statesSummary || "TX / FL …"}.</div>
           </div>
 
+          {/* ── Preview ── */}
           <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Preview — top by rank</div>
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Preview — top by rank</div>
+              <div className="text-xs font-semibold text-slate-500">{Object.entries(perRep).map(([n, c]) => `${n.split(" ")[0]}: ${c}`).join(" · ")}</div>
+            </div>
             <div className="mt-2 max-h-48 overflow-auto text-[12px]">
               <table className="w-full">
                 <tbody>
