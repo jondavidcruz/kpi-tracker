@@ -84,6 +84,23 @@ export default function FinancialHealth({ pnl, summary, assume, saved, asOf }: {
         </div>
       </div>
 
+      {/* 📅 Year-end outlook — forward projection (expense run-rate + what's left to close) */}
+      {(() => {
+        const elapsed = Math.max(1, s.closedCount);
+        const remaining = Math.max(0, 12 - elapsed);
+        const projAnnualExp = s.ytdExpenses + remaining * s.burnRate;
+        const toBreakeven = Math.max(0, projAnnualExp - s.ytdRevenue);
+        const deals = assume.avgFee > 0 ? toBreakeven / assume.avgFee : 0;
+        return (
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">📅 2026 outlook</div>
+            <div className="text-[13px] text-slate-600">Full-year cost ≈ <b className="tabular-nums text-slate-800">{usd(projAnnualExp)}</b> <span className="text-slate-400">({elapsed} mo actual + {remaining} mo @ {usd(s.burnRate)})</span></div>
+            <div className="text-[13px] text-slate-600">Booked <b className="tabular-nums text-emerald-600">{usd(s.ytdRevenue)}</b></div>
+            <div className="text-[13px] font-semibold text-slate-700">To break even for the year, close <b className="tabular-nums text-brand-navy">{usd(toBreakeven)}</b> ≈ <b>{deals.toFixed(1)}</b> deals @ {usd(assume.avgFee)}</div>
+          </div>
+        );
+      })()}
+
       {/* Owner inputs that aren't in the sheet */}
       <form action={savePnlAssumptions} className="mt-5 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4">
         <label className="block">
