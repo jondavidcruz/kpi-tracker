@@ -24,6 +24,18 @@ export type WhatsNewEntry = {
 // Newest first. Keep each how-to to a few plain steps the team can follow cold.
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: "markets-sc-pullplan", date: "2026-11-06", emoji: "🎯", title: "South Carolina markets + a 'Tonight's Pull Plan'",
+    blurb: "Added 11 South Carolina land markets (Charleston, Greenville, Myrtle Beach, Bluffton/Jasper — the #1 fastest-growing county in the US — and more) and new tools that tell you exactly where to pull next.",
+    audience: ["leadership", "acq"], where: { label: "Target Markets → Analysis", href: "/markets" },
+    steps: [
+      "The map now covers Florida AND South Carolina — 11 new SC markets (Lowcountry, Upstate, Grand Strand, Midlands, Charlotte border) are live with growth-based scores.",
+      "📊 Analysis tab now opens with 🎯 Tonight's Pull Plan: the top markets to pull next, ranked by opportunity, each with a ready-to-run DealMachine recipe (county + preset + absentee/out-of-state). Cooldown markets are held back.",
+      "🎯 'Motivated owners (free)' button: counts absentee / out-of-state / tax-delinquent land owners per market — the signals that answer cold mail fastest — and scores each market so you pull where the richest owner pool is.",
+      "📈 Market price trends now refresh themselves weekly (no button needed) and cover the SC metros too.",
+      "To pull: read the Pull Plan recipe → open the 🏕 DealMachine panel → search that county → set the preset → Count (free) → Pull.",
+    ],
+  },
+  {
     id: "market-research-map", date: "2026-11-06", emoji: "🗺", title: "Target Markets — research & pull land from a live map",
     blurb: "A real map of our FL markets with buyer coverage, a market-analysis engine (Location Quotient + opportunity scoring), and DealMachine built in to research areas and pull land leads straight into the CRM.",
     audience: ["leadership", "acq"], where: { label: "Target Markets", href: "/markets" },
