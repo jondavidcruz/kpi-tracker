@@ -543,6 +543,7 @@ export default async function AdminPage({
                 { href: "/admin/telnyx", emoji: "💸", name: "Telnyx Spend", desc: "Balance, burn rate & $100 recharge cadence" },
                 { href: "/admin/chat-webhooks", emoji: "💬", name: "Chat Webhooks", desc: "Wire each Google Chat room's incoming webhook" },
                 { href: "/admin/form-builder", emoji: "🧱", name: "Form Builder", desc: "Build & edit the lead-intake forms" },
+                { href: "/admin/import-leads", emoji: "📥", name: "Import Lead List", desc: "Upload a CSV, split across reps, dedupe & tag the batch" },
                 { href: "/admin/recalibrate", emoji: "🎯", name: "Recalibrate Goals", desc: "Reset per-rep daily goals to the real 28-day median" },
                 { href: "/underwriting#calibration", emoji: "⚖️", name: "Offer Calibration", desc: "Signed deals scored vs what actually closed — now lives in Underwriting" },
                 { href: "/admin/crm-audit", emoji: "🔎", name: "CRM Audit", desc: "Audit CRM activity — dials, texts, emails, stage moves" },

@@ -6,6 +6,7 @@ export type LeadSourceOption = { value: string; label: string; hint: string };
 export const LEAD_SOURCES: LeadSourceOption[] = [
   { value: "D4D",       label: "D4D — Driving for Dollars", hint: "Self-sourced by the acquisitions rep → 60/40 split (we keep 60%, they get 40%)" },
   { value: "PPL",       label: "PPL — Pay-per-lead",        hint: "Inbound, purchased lead source" },
+  { value: "DealMachine", label: "DealMachine",             hint: "Company-sourced list from DealMachine (not rep self-sourced)" },
   { value: "Website",   label: "Website",                   hint: "Organic traffic funnel" },
   { value: "Cold Call", label: "Cold Call",                 hint: "From our dialer" },
   { value: "Email",     label: "Email",                     hint: "Outbound email" },
