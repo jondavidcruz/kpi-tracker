@@ -42,8 +42,9 @@ export type PnlMonth = {
 };
 
 // Owner label overrides, keyed by `${cat}|${original-label-lowercased}`. Display-only — never changes
-// a number. { label? } renames a line; { hidden:true } drops it from the list (total stays).
-export type PnlOverride = { label?: string; hidden?: boolean };
+// a number. { label? } renames a line; { cut:true } marks it dropped (shown struck-through with a ✂️
+// badge so Jon can track what he's cut); { hidden:true } removes it from the list entirely.
+export type PnlOverride = { label?: string; cut?: boolean; hidden?: boolean };
 export type PnlOverrides = Record<string, PnlOverride>;
 export function lineKey(cat: string, label: string): string { return `${cat}|${label.trim().toLowerCase()}`; }
 

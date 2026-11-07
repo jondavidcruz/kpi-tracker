@@ -22,14 +22,15 @@ export async function GET() {
 export async function POST(req: Request) {
   const me = await getCurrentUser();
   if (!me || !isManager(me)) return NextResponse.json({ error: "managers only" }, { status: 403 });
-  const body = (await req.json().catch(() => ({}))) as { overrides?: Record<string, { label?: string; hidden?: boolean }> };
+  const body = (await req.json().catch(() => ({}))) as { overrides?: Record<string, { label?: string; cut?: boolean; hidden?: boolean }> };
   const clean: PnlOverrides = {};
   for (const [k, v] of Object.entries(body.overrides || {})) {
     if (typeof k !== "string" || !k.includes("|")) continue;
-    const o: { label?: string; hidden?: boolean } = {};
+    const o: { label?: string; cut?: boolean; hidden?: boolean } = {};
     if (typeof v?.label === "string" && v.label.trim()) o.label = v.label.trim().slice(0, 80);
+    if (v?.cut === true) o.cut = true;
     if (v?.hidden === true) o.hidden = true;
-    if (o.label || o.hidden) clean[k.slice(0, 160)] = o;
+    if (o.label || o.cut || o.hidden) clean[k.slice(0, 160)] = o;
   }
   const description = JSON.stringify(clean);
   const row = await db.resource.findFirst({ where: { category: PNL_OVERRIDES_CAT } }).catch(() => null);

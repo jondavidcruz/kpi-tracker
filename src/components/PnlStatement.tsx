@@ -28,17 +28,20 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
   const m = months[sel] || months[0];
   const maxMonthExp = Math.max(1, ...months.map((x) => x.expenses));
 
-  const disp = (cat: PnlCat, label: string) => { const o = ov[lineKey(cat, label)]; return { label: o?.label || label, hidden: !!o?.hidden }; };
-  function setOverride(cat: PnlCat, label: string, patch: { label?: string; hidden?: boolean }) {
+  const disp = (cat: PnlCat, label: string) => { const o = ov[lineKey(cat, label)]; return { label: o?.label || label, hidden: !!o?.hidden, cut: !!o?.cut }; };
+  function setOverride(cat: PnlCat, label: string, patch: { label?: string; cut?: boolean; hidden?: boolean }) {
     const k = lineKey(cat, label);
     setOv((prev) => {
       const cur = { ...(prev[k] || {}) };
       if (patch.label !== undefined) { if (patch.label.trim() && patch.label.trim() !== label) cur.label = patch.label.trim(); else delete cur.label; }
+      if (patch.cut !== undefined) { if (patch.cut) cur.cut = true; else delete cur.cut; }
       if (patch.hidden !== undefined) { if (patch.hidden) cur.hidden = true; else delete cur.hidden; }
-      const next = { ...prev }; if (cur.label || cur.hidden) next[k] = cur; else delete next[k];
+      const next = { ...prev }; if (cur.label || cur.cut || cur.hidden) next[k] = cur; else delete next[k];
       return next;
     });
   }
+  // Count of lines marked cut (for the header chip).
+  const cutCount = Object.values(ov).filter((o) => o?.cut).length;
   async function save() {
     setSaving(true); setSavedMsg("");
     try {
@@ -78,12 +81,15 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
                 <button onClick={() => { setOv(initialOverrides || {}); setEditing(false); }} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200">Cancel</button>
               </>
             ) : (
-              <button onClick={() => setEditing(true)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">✏️ Edit labels</button>
+              <>
+                {cutCount > 0 && <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 ring-1 ring-rose-200">✂️ {cutCount} cut</span>}
+                <button onClick={() => setEditing(true)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">✏️ Edit labels</button>
+              </>
             )}
           </div>
         )}
       </div>
-      {editing && <div className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">Rename a line or hide one you no longer use. This only changes how it reads here — every dollar amount stays exactly as your P&amp;L sheet has it.</div>}
+      {editing && <div className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">Rename a line, mark it <b>✂️ cut</b> (keeps it visible, struck-through, so you can track what you&apos;ve dropped), or <b>hide</b> it entirely. This only changes how it reads here — every dollar amount stays exactly as your P&amp;L sheet has it.</div>}
 
       {/* Headline for the selected month */}
       <div className="grid grid-cols-3 gap-3">
@@ -191,13 +197,14 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
                     {editing ? (
                       <>
                         <input defaultValue={d.label} onChange={(e) => setOverride(c.key, l.label, { label: e.target.value })} className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1 text-[13px] text-slate-600" />
+                        <label className={`flex items-center gap-1 text-[11px] ${d.cut ? "font-bold text-rose-600" : "text-slate-400"}`}><input type="checkbox" checked={d.cut} onChange={(e) => setOverride(c.key, l.label, { cut: e.target.checked })} /> ✂️ cut</label>
                         <label className="flex items-center gap-1 text-[11px] text-slate-400"><input type="checkbox" checked={d.hidden} onChange={(e) => setOverride(c.key, l.label, { hidden: e.target.checked })} /> hide</label>
                         <span className="w-20 text-right text-[13px] tabular-nums text-slate-400">{usd2(l.actual)}</span>
                       </>
                     ) : (
                       <>
-                        <span className="min-w-0 flex-1 truncate text-[13px] text-slate-600">{d.label}</span>
-                        <span className="w-24 text-right text-[13px] tabular-nums text-slate-500">{usd2(l.actual)}</span>
+                        <span className={`flex min-w-0 flex-1 items-center gap-1.5 truncate text-[13px] ${d.cut ? "text-slate-400 line-through" : "text-slate-600"}`}>{d.label}{d.cut && <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600 no-underline">✂️ CUT</span>}</span>
+                        <span className={`w-24 text-right text-[13px] tabular-nums ${d.cut ? "text-slate-400 line-through" : "text-slate-500"}`}>{usd2(l.actual)}</span>
                       </>
                     )}
                   </div>
