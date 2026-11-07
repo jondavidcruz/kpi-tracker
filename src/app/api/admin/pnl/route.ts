@@ -29,7 +29,12 @@ function cleanMonth(m: Record<string, unknown>): PnlMonth | null {
     if (!CATS.has(cat) || !label || !Number.isFinite(actual)) return null;
     return { cat: cat as PnlCat, label, actual: Math.round(actual * 100) / 100 };
   }).filter((l): l is PnlLine => !!l);
-  return { month, revenue, expenses, netProfit, payroll: n("payroll"), software: n("software"), dues: n("dues"), realEstate: n("realEstate"), controllable: n("controllable"), lines };
+  let budget: Partial<Record<PnlCat, number>> | undefined;
+  if (m.budget && typeof m.budget === "object") {
+    const b = m.budget as Record<string, unknown>; budget = {};
+    for (const c of ["payroll", "software", "dues", "realEstate", "controllable"] as PnlCat[]) { const v = Number(b[c]); if (Number.isFinite(v)) budget[c] = Math.round(v * 100) / 100; }
+  }
+  return { month, revenue, expenses, netProfit, payroll: n("payroll"), software: n("software"), dues: n("dues"), realEstate: n("realEstate"), controllable: n("controllable"), lines, ...(budget ? { budget } : {}) };
 }
 
 export async function GET() {

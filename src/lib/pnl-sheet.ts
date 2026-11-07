@@ -39,12 +39,14 @@ export type PnlMonth = {
   realEstate: number;   // total real estate expenses (escrow, deeds, repairs)
   controllable: number; // total controllable expenses (car, travel, meals, office)
   lines?: PnlLine[];    // detailed line items per category (from the Excel)
+  budget?: Partial<Record<PnlCat, number>>; // projected per category (the sheet's Budget column)
 };
 
 // Owner label overrides, keyed by `${cat}|${original-label-lowercased}`. Display-only — never changes
-// a number. { label? } renames a line; { cut:true } marks it dropped (shown struck-through with a ✂️
-// badge so Jon can track what he's cut); { hidden:true } removes it from the list entirely.
-export type PnlOverride = { label?: string; cut?: boolean; hidden?: boolean };
+// a number. { label? } renames a line; { cut:true } marks it dropped (struck-through + ✂️ badge, still
+// visible to track cuts); { oneTime:true } flags a non-recurring expense (e.g. the Prague rent) so it's
+// excluded from the typical monthly run-rate; { hidden:true } removes it from the list entirely.
+export type PnlOverride = { label?: string; cut?: boolean; oneTime?: boolean; hidden?: boolean };
 export type PnlOverrides = Record<string, PnlOverride>;
 export function lineKey(cat: string, label: string): string { return `${cat}|${label.trim().toLowerCase()}`; }
 

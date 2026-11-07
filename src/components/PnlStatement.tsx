@@ -28,20 +28,36 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
   const m = months[sel] || months[0];
   const maxMonthExp = Math.max(1, ...months.map((x) => x.expenses));
 
-  const disp = (cat: PnlCat, label: string) => { const o = ov[lineKey(cat, label)]; return { label: o?.label || label, hidden: !!o?.hidden, cut: !!o?.cut }; };
-  function setOverride(cat: PnlCat, label: string, patch: { label?: string; cut?: boolean; hidden?: boolean }) {
+  const [view, setView] = useState<"statement" | "budget" | "stack">("statement");
+  const disp = (cat: PnlCat, label: string) => { const o = ov[lineKey(cat, label)]; return { label: o?.label || label, hidden: !!o?.hidden, cut: !!o?.cut, oneTime: !!o?.oneTime }; };
+  function setOverride(cat: PnlCat, label: string, patch: { label?: string; cut?: boolean; oneTime?: boolean; hidden?: boolean }) {
     const k = lineKey(cat, label);
     setOv((prev) => {
       const cur = { ...(prev[k] || {}) };
       if (patch.label !== undefined) { if (patch.label.trim() && patch.label.trim() !== label) cur.label = patch.label.trim(); else delete cur.label; }
       if (patch.cut !== undefined) { if (patch.cut) cur.cut = true; else delete cur.cut; }
+      if (patch.oneTime !== undefined) { if (patch.oneTime) cur.oneTime = true; else delete cur.oneTime; }
       if (patch.hidden !== undefined) { if (patch.hidden) cur.hidden = true; else delete cur.hidden; }
-      const next = { ...prev }; if (cur.label || cur.cut || cur.hidden) next[k] = cur; else delete next[k];
+      const next = { ...prev }; if (cur.label || cur.cut || cur.oneTime || cur.hidden) next[k] = cur; else delete next[k];
       return next;
     });
   }
   // Count of lines marked cut (for the header chip).
   const cutCount = Object.values(ov).filter((o) => o?.cut).length;
+
+  // "My stack" — every unique line item across the year, grouped by category (latest amount + months seen).
+  const stack = useMemo(() => {
+    const map: Record<string, { cat: PnlCat; label: string; latest: number; months: number; total: number }> = {};
+    for (const mm of months) for (const l of mm.lines || []) {
+      const k = lineKey(l.cat, l.label);
+      const e = (map[k] ||= { cat: l.cat, label: l.label, latest: 0, months: 0, total: 0 });
+      e.months++; e.total += l.actual; e.latest = l.actual; // months are in order, so last wins
+    }
+    const byCat: Record<string, typeof map[string][]> = {};
+    for (const e of Object.values(map)) (byCat[e.cat] ||= []).push(e);
+    for (const c of Object.keys(byCat)) byCat[c].sort((a, b) => b.latest - a.latest);
+    return byCat;
+  }, [months]);
   async function save() {
     setSaving(true); setSavedMsg("");
     try {
@@ -61,23 +77,19 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
 
   return (
     <div className="space-y-4">
-      {/* Month switcher */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {months.map((x, i) => {
-          const has = x.expenses > 0 || x.revenue > 0;
-          return (
-            <button key={x.month} onClick={() => setSel(i)} disabled={!has}
-              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${i === sel ? "bg-brand-navy text-white" : has ? "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50" : "cursor-not-allowed bg-slate-50 text-slate-300"}`}>
-              {MONTHS3[Number(x.month.slice(5))]}{!has ? " ·" : ""}
-            </button>
-          );
-        })}
+      {/* View toggle + edit controls */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-xs font-bold">
+          {([["statement", "📋 Statement"], ["budget", "🎯 Budget vs Actual"], ["stack", "🧰 My stack"]] as const).map(([v, lbl]) => (
+            <button key={v} onClick={() => setView(v)} className={`rounded-md px-3 py-1.5 ${view === v ? "bg-white text-brand-navy shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>{lbl}</button>
+          ))}
+        </div>
         {canEdit && (
           <div className="ml-auto flex items-center gap-2">
             {savedMsg && <span className={`text-xs font-semibold ${savedMsg.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>{savedMsg}</span>}
             {editing ? (
               <>
-                <button onClick={save} disabled={saving} className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700 disabled:opacity-50">{saving ? "Saving…" : "💾 Save labels"}</button>
+                <button onClick={save} disabled={saving} className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700 disabled:opacity-50">{saving ? "Saving…" : "💾 Save"}</button>
                 <button onClick={() => { setOv(initialOverrides || {}); setEditing(false); }} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200">Cancel</button>
               </>
             ) : (
@@ -89,8 +101,91 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
           </div>
         )}
       </div>
-      {editing && <div className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">Rename a line, mark it <b>✂️ cut</b> (keeps it visible, struck-through, so you can track what you&apos;ve dropped), or <b>hide</b> it entirely. This only changes how it reads here — every dollar amount stays exactly as your P&amp;L sheet has it.</div>}
 
+      {/* Month switcher (statement + budget views) */}
+      {view !== "stack" && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {months.map((x, i) => {
+            const has = x.expenses > 0 || x.revenue > 0;
+            return (
+              <button key={x.month} onClick={() => setSel(i)} disabled={!has}
+                className={`rounded-full px-3 py-1.5 text-sm font-semibold ${i === sel ? "bg-brand-navy text-white" : has ? "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50" : "cursor-not-allowed bg-slate-50 text-slate-300"}`}>
+                {MONTHS3[Number(x.month.slice(5))]}{!has ? " ·" : ""}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {editing && <div className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">Rename a line, mark it <b>✂️ cut</b> (struck-through, tracks what you dropped), <b>1× one-time</b> (non-recurring, e.g. the Prague rent), or <b>hide</b> it. Only changes how it reads — every dollar stays exactly as your P&amp;L sheet has it.</div>}
+
+      {/* ═══ BUDGET VS ACTUAL ═══ */}
+      {view === "budget" && (() => {
+        const rows = PNL_CATS.map((c) => { const a = catTotal(m, c.key); const b = (m.budget?.[c.key] ?? 0); return { c, a, b, d: a - b }; });
+        const budTot = rows.reduce((s, r) => s + r.b, 0);
+        const maxv = Math.max(1, ...rows.flatMap((r) => [r.a, r.b]));
+        return (
+          <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-bold text-slate-800">{MONTHSF[Number(m.month.slice(5))]} — budget vs actual</div>
+              <div className="text-xs text-slate-500">Budget <b className="tabular-nums text-slate-600">{usd(budTot)}</b> · Actual <b className="tabular-nums text-rose-600">{usd(m.expenses)}</b> · <b className={`tabular-nums ${m.expenses <= budTot ? "text-emerald-600" : "text-red-600"}`}>{m.expenses <= budTot ? "under" : "over"} {usd(Math.abs(m.expenses - budTot))}</b></div>
+            </div>
+            <div className="space-y-2.5">
+              {rows.map(({ c, a, b, d }) => (
+                <div key={c.key}>
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="flex items-center gap-1.5 font-semibold text-slate-700"><span className={`h-2 w-2 rounded-full ${c.dot}`} />{c.emoji} {c.label}</span>
+                    <span className="tabular-nums text-slate-500">budget {usd(b)} · actual <b className="text-slate-800">{usd(a)}</b> · <span className={d <= 0 ? "font-bold text-emerald-600" : "font-bold text-red-600"}>{d <= 0 ? "−" : "+"}{usd(Math.abs(d))}</span></span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                      <div className="absolute inset-y-0 left-0 rounded-full bg-slate-300" style={{ width: `${(b / maxv) * 100}%` }} title={`budget ${usd(b)}`} />
+                      <div className={`absolute inset-y-0 left-0 rounded-full ${c.bar} opacity-80`} style={{ width: `${(a / maxv) * 100}%`, height: 6, top: 2 }} title={`actual ${usd(a)}`} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
+              <span className="flex items-center gap-1"><span className="h-2 w-4 rounded-full bg-slate-300" /> budget (your sheet)</span>
+              <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-indigo-500" /> actual</span>
+              <span className="ml-auto">Budget = the “Projected” column in your P&amp;L (prior-month run-rate).</span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ═══ MY STACK ═══ */}
+      {view === "stack" && (
+        <div className="space-y-3">
+          <div className="text-[11px] text-slate-400">Every expense you&apos;ve paid this year, line by line, by category — newest amount + how many months it appeared. {cutCount > 0 && <>Cut items are struck-through. </>}Use <b>✏️ Edit labels</b> to rename, mark ✂️ cut, or 1× one-time.</div>
+          {PNL_CATS.map((c) => {
+            const items = stack[c.key] || [];
+            if (!items.length) return null;
+            const catTot = items.reduce((s, e) => s + e.latest, 0);
+            return (
+              <div key={c.key} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2">
+                  <span className="flex items-center gap-1.5 text-sm font-bold text-slate-700"><span className={`h-2 w-2 rounded-full ${c.dot}`} />{c.emoji} {c.label}</span>
+                  <span className="text-[11px] text-slate-400">{items.length} items · latest total <b className="tabular-nums text-slate-600">{usd(catTot)}</b>/mo</span>
+                </div>
+                {items.map((e, idx) => { const d = disp(c.key, e.label); return (
+                  <div key={idx} className="flex items-center gap-3 px-4 py-1.5">
+                    <span className={`flex min-w-0 flex-1 items-center gap-1.5 text-[13px] ${d.cut ? "text-slate-400 line-through" : "text-slate-700"}`}>{d.label}
+                      {d.cut && <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600 no-underline">✂️ CUT</span>}
+                      {d.oneTime && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 no-underline">1× ONE-TIME</span>}
+                    </span>
+                    <span className="hidden text-[11px] text-slate-400 sm:block">{e.months} mo</span>
+                    <span className={`w-24 text-right text-[13px] font-bold tabular-nums ${d.cut ? "text-slate-400 line-through" : "text-slate-700"}`}>{usd2(e.latest)}</span>
+                  </div>
+                ); })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ═══ STATEMENT (default) ═══ */}
+      {view === "statement" && (<>
       {/* Headline for the selected month */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-100">
@@ -198,12 +293,13 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
                       <>
                         <input defaultValue={d.label} onChange={(e) => setOverride(c.key, l.label, { label: e.target.value })} className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1 text-[13px] text-slate-600" />
                         <label className={`flex items-center gap-1 text-[11px] ${d.cut ? "font-bold text-rose-600" : "text-slate-400"}`}><input type="checkbox" checked={d.cut} onChange={(e) => setOverride(c.key, l.label, { cut: e.target.checked })} /> ✂️ cut</label>
+                        <label className={`flex items-center gap-1 text-[11px] ${d.oneTime ? "font-bold text-amber-600" : "text-slate-400"}`}><input type="checkbox" checked={d.oneTime} onChange={(e) => setOverride(c.key, l.label, { oneTime: e.target.checked })} /> 1×</label>
                         <label className="flex items-center gap-1 text-[11px] text-slate-400"><input type="checkbox" checked={d.hidden} onChange={(e) => setOverride(c.key, l.label, { hidden: e.target.checked })} /> hide</label>
                         <span className="w-20 text-right text-[13px] tabular-nums text-slate-400">{usd2(l.actual)}</span>
                       </>
                     ) : (
                       <>
-                        <span className={`flex min-w-0 flex-1 items-center gap-1.5 truncate text-[13px] ${d.cut ? "text-slate-400 line-through" : "text-slate-600"}`}>{d.label}{d.cut && <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600 no-underline">✂️ CUT</span>}</span>
+                        <span className={`flex min-w-0 flex-1 items-center gap-1.5 truncate text-[13px] ${d.cut ? "text-slate-400 line-through" : "text-slate-600"}`}>{d.label}{d.cut && <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600 no-underline">✂️ CUT</span>}{d.oneTime && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 no-underline">1× ONE-TIME</span>}</span>
                         <span className={`w-24 text-right text-[13px] tabular-nums ${d.cut ? "text-slate-400 line-through" : "text-slate-500"}`}>{usd2(l.actual)}</span>
                       </>
                     )}
@@ -224,6 +320,7 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
           <span className={`text-lg font-extrabold tabular-nums ${m.netProfit >= 0 ? "text-emerald-700" : "text-red-700"}`}>{usd2(m.netProfit)}</span>
         </div>
       </div>
+      </>)}
     </div>
   );
 }
