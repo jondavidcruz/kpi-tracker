@@ -45,6 +45,18 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
   // Count of lines marked cut (for the header chip).
   const cutCount = Object.values(ov).filter((o) => o?.cut).length;
 
+  // Go-forward run-rate: the latest closed month's expenses minus anything marked ✂️ cut or 1× one-time
+  // — i.e. what it actually costs to keep running now, vs the trailing-3-mo burn (which lags the cuts).
+  const runRate = useMemo(() => {
+    const latest = closed[closed.length - 1];
+    if (!latest) return null;
+    let cut = 0, one = 0;
+    for (const l of latest.lines || []) { const o = ov[lineKey(l.cat, l.label)]; if (o?.cut) cut += l.actual; else if (o?.oneTime) one += l.actual; }
+    const closed3 = closed.slice(-3);
+    const burn = closed3.length ? closed3.reduce((s, x) => s + x.expenses, 0) / closed3.length : latest.expenses;
+    return { month: latest.month, base: latest.expenses, cut, one, go: Math.max(0, latest.expenses - cut - one), burn };
+  }, [closed, ov]);
+
   // "My stack" — every unique line item across the year, grouped by category (latest amount + months seen).
   const stack = useMemo(() => {
     const map: Record<string, { cat: PnlCat; label: string; latest: number; months: number; total: number }> = {};
@@ -77,6 +89,22 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
 
   return (
     <div className="space-y-4">
+      {/* Go-forward run-rate */}
+      {runRate && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-2xl bg-gradient-to-r from-emerald-50 to-sky-50 p-4 ring-1 ring-emerald-100">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">🏃 Go-forward run-rate</div>
+            <div className="text-2xl font-extrabold tabular-nums text-emerald-700">{usd(runRate.go)}<span className="text-sm font-semibold text-emerald-400">/mo</span></div>
+            <div className="text-[11px] text-slate-500">{MONTHS3[Number(runRate.month.slice(5))]} actual {usd(runRate.base)}{runRate.cut > 0 ? ` − ${usd(runRate.cut)} cut` : ""}{runRate.one > 0 ? ` − ${usd(runRate.one)} one-time` : ""}</div>
+          </div>
+          <div className="text-sm text-slate-600">
+            <div>vs trailing-3-mo burn <b className="tabular-nums text-rose-600">{usd(runRate.burn)}</b>/mo</div>
+            {runRate.go < runRate.burn && <div className="font-semibold text-emerald-600">↓ {usd(runRate.burn - runRate.go)}/mo lighter — ~{usd((runRate.burn - runRate.go) * 12)}/yr</div>}
+          </div>
+          <span className="ml-auto max-w-xs text-[11px] text-slate-400">Burn is a 3-month average, so it lags your cuts. Mark ✂️ cut / 1× one-time in <b>Edit labels</b> and this updates.</span>
+        </div>
+      )}
+
       {/* View toggle + edit controls */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-xs font-bold">
