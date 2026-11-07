@@ -32,8 +32,16 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const me = await getCurrentUser();
-  if (!me || !isManager(me)) return NextResponse.json({ error: "managers only" }, { status: 403 });
+  // Auth: an owner/manager session (in-app) OR the shared secret (so the monthly "Monthly P&L Sync"
+  // cloud task can update headlessly). Same pattern as the nightly research ingest.
+  const url = new URL(req.url);
+  const secret = process.env.CRON_SECRET;
+  const given = url.searchParams.get("secret") || (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const bySecret = !!secret && given === secret;
+  if (!bySecret) {
+    const me = await getCurrentUser();
+    if (!me || !isManager(me)) return NextResponse.json({ error: "managers only" }, { status: 403 });
+  }
   const body = (await req.json().catch(() => ({}))) as { year?: number; asOf?: string; sheetModified?: string; months?: Record<string, unknown>[] };
   const months = Array.isArray(body.months) ? body.months.map(cleanMonth).filter((m): m is PnlMonth => !!m) : [];
   if (!months.length) return NextResponse.json({ ok: false, error: "no valid months" }, { status: 400 });
