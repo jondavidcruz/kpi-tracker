@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { PNL_DATA_CAT, type PnlMonth, type PnlStore } from "@/lib/pnl-sheet";
+import { PNL_DATA_CAT, type PnlMonth, type PnlStore, type PnlLine, type PnlCat } from "@/lib/pnl-sheet";
+
+const CATS = new Set(["payroll", "software", "dues", "realEstate", "controllable"]);
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -19,7 +21,15 @@ function cleanMonth(m: Record<string, unknown>): PnlMonth | null {
   const n = (k: string) => { const v = Number(m[k]); return Number.isFinite(v) ? Math.round(v * 100) / 100 : 0; };
   const revenue = n("revenue"), expenses = n("expenses");
   const netProfit = m.netProfit != null && Number.isFinite(Number(m.netProfit)) ? Math.round(Number(m.netProfit) * 100) / 100 : Math.round((revenue - expenses) * 100) / 100;
-  return { month, revenue, expenses, netProfit, payroll: n("payroll"), software: n("software"), dues: n("dues"), realEstate: n("realEstate"), controllable: n("controllable") };
+  const rawLines = Array.isArray(m.lines) ? m.lines : [];
+  const lines: PnlLine[] = rawLines.map((l) => {
+    const o = l as Record<string, unknown>;
+    const cat = String(o.cat ?? "");
+    const actual = Number(o.actual); const label = String(o.label ?? "").trim().slice(0, 80);
+    if (!CATS.has(cat) || !label || !Number.isFinite(actual)) return null;
+    return { cat: cat as PnlCat, label, actual: Math.round(actual * 100) / 100 };
+  }).filter((l): l is PnlLine => !!l);
+  return { month, revenue, expenses, netProfit, payroll: n("payroll"), software: n("software"), dues: n("dues"), realEstate: n("realEstate"), controllable: n("controllable"), lines };
 }
 
 export async function GET() {

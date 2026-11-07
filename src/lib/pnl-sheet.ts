@@ -11,8 +11,22 @@
 export const SHEET_ID = "1KqzRg6x_AgHD03g0Y5xOtGsVrTJ42zi8";
 export const SHEET_URL = "https://docs.google.com/spreadsheets/d/1KqzRg6x_AgHD03g0Y5xOtGsVrTJ42zi8/edit";
 export const SHEET_TITLE = "Freedom Offers P & L";
-export const PNL_DATA_CAT = "__pnl_data__";     // Resource category holding the real figures
-export const PNL_RUNWAY_CAT = "__pnl_runway__";  // Resource category holding owner assumptions
+export const PNL_DATA_CAT = "__pnl_data__";        // Resource category holding the real figures
+export const PNL_RUNWAY_CAT = "__pnl_runway__";    // Resource category holding owner assumptions
+export const PNL_OVERRIDES_CAT = "__pnl_overrides__"; // owner label renames / hides (display only)
+
+export type PnlCat = "payroll" | "software" | "dues" | "realEstate" | "controllable";
+export type PnlLine = { cat: PnlCat; label: string; actual: number };
+
+// Category display metadata (order = how the statement lists them). Literal Tailwind classes so
+// they aren't purged.
+export const PNL_CATS: { key: PnlCat; label: string; emoji: string; bar: string; dot: string; soft: string; text: string }[] = [
+  { key: "payroll", label: "Payroll", emoji: "👥", bar: "bg-indigo-500", dot: "bg-indigo-500", soft: "bg-indigo-50", text: "text-indigo-700" },
+  { key: "software", label: "Software & Tools", emoji: "🧰", bar: "bg-sky-500", dot: "bg-sky-500", soft: "bg-sky-50", text: "text-sky-700" },
+  { key: "dues", label: "Dues & Licenses", emoji: "📜", bar: "bg-amber-500", dot: "bg-amber-500", soft: "bg-amber-50", text: "text-amber-700" },
+  { key: "realEstate", label: "Real Estate", emoji: "🏘️", bar: "bg-emerald-500", dot: "bg-emerald-500", soft: "bg-emerald-50", text: "text-emerald-700" },
+  { key: "controllable", label: "Controllable", emoji: "🚗", bar: "bg-rose-500", dot: "bg-rose-500", soft: "bg-rose-50", text: "text-rose-700" },
+];
 
 export type PnlMonth = {
   month: string;        // YYYY-MM
@@ -24,7 +38,14 @@ export type PnlMonth = {
   dues: number;         // total dues / licenses / membership
   realEstate: number;   // total real estate expenses (escrow, deeds, repairs)
   controllable: number; // total controllable expenses (car, travel, meals, office)
+  lines?: PnlLine[];    // detailed line items per category (from the Excel)
 };
+
+// Owner label overrides, keyed by `${cat}|${original-label-lowercased}`. Display-only — never changes
+// a number. { label? } renames a line; { hidden:true } drops it from the list (total stays).
+export type PnlOverride = { label?: string; hidden?: boolean };
+export type PnlOverrides = Record<string, PnlOverride>;
+export function lineKey(cat: string, label: string): string { return `${cat}|${label.trim().toLowerCase()}`; }
 
 // Zeroed skeleton — defines the 12-month order and is the safe fallback before any sync has run.
 // Change the year here each January; the real numbers come from the DB.
@@ -43,7 +64,8 @@ export function mergePnl(store: PnlStore | null): PnlMonth[] {
   const year = store.year || YEAR;
   return Array.from({ length: 12 }, (_, i) => {
     const key = `${year}-${String(i + 1).padStart(2, "0")}`;
-    return byMonth.get(key) ?? { month: key, revenue: 0, expenses: 0, netProfit: 0, payroll: 0, software: 0, dues: 0, realEstate: 0, controllable: 0 };
+    const m = byMonth.get(key);
+    return m ? { ...m, lines: m.lines ?? [] } : { month: key, revenue: 0, expenses: 0, netProfit: 0, payroll: 0, software: 0, dues: 0, realEstate: 0, controllable: 0, lines: [] };
   });
 }
 
