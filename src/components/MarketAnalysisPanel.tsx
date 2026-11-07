@@ -51,6 +51,29 @@ export default function MarketAnalysisPanel({ markets }: { markets: MarketView[]
   }
   const invVals = Object.values(inv).map((v) => v.parcels);
   const avgInv = invVals.length ? invVals.reduce((a, b) => a + b, 0) / invVals.length : 0;
+  // 🎯 Motivated-owner density (free DealMachine counts) keyed by market name.
+  const [mot, setMot] = useState<Record<string, { total: number; absentee: number; outOfState: number; delinquent: number }>>({});
+  const [motBusy, setMotBusy] = useState(false);
+  const [motMsg, setMotMsg] = useState("");
+  async function loadMotivation() {
+    setMotBusy(true); setMotMsg("Counting absentee / out-of-state / tax-delinquent land owners… (free)");
+    try {
+      const r = await fetch("/api/markets/dm?action=motivation");
+      const j = await r.json();
+      if (!j.ok) { setMotMsg(`⚠️ ${j.error || "failed"}${/key/i.test(j.error || "") ? " — add DEALMACHINE_V2_KEY in Vercel" : ""}`); return; }
+      const m: Record<string, { total: number; absentee: number; outOfState: number; delinquent: number }> = {};
+      for (const x of j.markets as { name: string; total: number; absentee: number; outOfState: number; delinquent: number }[]) if (x.total >= 0) m[x.name] = x;
+      setMot(m); setMotMsg(`✓ Motivated-owner profile loaded${j.cached ? " (cached)" : ""} — ${Object.keys(m).length} markets`);
+    } catch { setMotMsg("network error"); } finally { setMotBusy(false); }
+  }
+  // motivation score: tax-delinquent weighted heaviest, then out-of-state, then absentee share.
+  function motScore(name: string): number {
+    const x = mot[name]; if (!x || x.total <= 0) return 0;
+    const absPct = Math.max(0, x.absentee) / x.total;
+    const oosPct = Math.max(0, x.outOfState) / x.total;
+    const delPer1k = (Math.max(0, x.delinquent) / x.total) * 1000;
+    return Math.round((absPct * 25 + oosPct * 40 + Math.min(1, delPer1k / 50) * 35));
+  }
   // 📈 Real market price trend (free Zillow data), cached — load on mount, refresh on demand.
   const [trends, setTrends] = useState<Record<string, Trend>>({});
   const [trendAsOf, setTrendAsOf] = useState("");
@@ -68,11 +91,13 @@ export default function MarketAnalysisPanel({ markets }: { markets: MarketView[]
         <span className="text-sm font-extrabold">📊 Where to pull next — ranked by opportunity</span>
         {pullNow > 0 && <span className="rounded-full bg-red-500 px-2.5 py-0.5 text-[11px] font-bold">🔥 {pullNow} market{pullNow > 1 ? "s" : ""} to pull NOW</span>}
         <button onClick={loadInventory} disabled={invBusy} className="ml-auto rounded-lg bg-cyan-500/20 px-2.5 py-1 text-[11px] font-bold text-cyan-200 ring-1 ring-cyan-400/30 hover:bg-cyan-500/30 disabled:opacity-50">{invBusy ? "Counting…" : "📡 Load live land inventory (free)"}</button>
+        <button onClick={loadMotivation} disabled={motBusy} className="rounded-lg bg-amber-500/20 px-2.5 py-1 text-[11px] font-bold text-amber-200 ring-1 ring-amber-400/30 hover:bg-amber-500/30 disabled:opacity-50">{motBusy ? "Counting…" : "🎯 Motivated owners (free)"}</button>
         <button onClick={refreshTrends} disabled={trendBusy} className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-bold hover:bg-white/20 disabled:opacity-50">{trendBusy ? "Loading…" : trendAsOf ? "📈 Refresh prices" : "📈 Load market prices (free)"}</button>
         <button onClick={() => setShowPlay((s) => !s)} className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-bold hover:bg-white/20">📚 {showPlay ? "Hide" : "Show"} playbook</button>
       </div>
       {trendAsOf && <div className="px-1 text-[11px] text-slate-500">📈 Zillow metro home-value trend (free) · as of {trendAsOf} · a proxy for land-market heat</div>}
       {invMsg && <div className="px-1 text-[11px] text-slate-500">{invMsg}</div>}
+      {motMsg && <div className="px-1 text-[11px] text-slate-500">{motMsg}</div>}
 
       {showPlay && (
         <div className="grid grid-cols-1 gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 md:grid-cols-2">
@@ -98,6 +123,9 @@ export default function MarketAnalysisPanel({ markets }: { markets: MarketView[]
                   <div className="text-[11px] text-slate-500">🟢 {r.buyerCount} buyers · 📥 {r.leads} leads · 🏆 {r.deals} deals{inv[r.name] ? ` · 🏕 ${inv[r.name].parcels.toLocaleString()} land parcels` : ""}</div>
                   {trends[r.name] && (
                     <div className="text-[11px] text-slate-500">💵 ${trends[r.name].value.toLocaleString()} home value · <span className={trends[r.name].chg90 > 1 ? "font-bold text-emerald-600" : trends[r.name].chg90 < -1 ? "font-bold text-red-600" : "text-slate-500"}>{trends[r.name].chg90 > 0 ? "+" : ""}{trends[r.name].chg90}% 90d</span> · {trends[r.name].chg180 > 0 ? "+" : ""}{trends[r.name].chg180}% 180d</div>
+                  )}
+                  {mot[r.name] && mot[r.name].total > 0 && (
+                    <div className="text-[11px] text-slate-500">🎯 <span className="font-bold text-amber-700">{motScore(r.name)} motivation</span> · ✈️ {Math.round((Math.max(0, mot[r.name].absentee) / mot[r.name].total) * 100)}% absentee · 🗺 {mot[r.name].outOfState >= 0 ? mot[r.name].outOfState.toLocaleString() : "—"} out-of-state · 🔥 {mot[r.name].delinquent >= 0 ? mot[r.name].delinquent.toLocaleString() : "—"} tax-delinquent</div>
                   )}
                 </div>
                 <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ${p.cls}`}>{p.label}</span>

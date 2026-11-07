@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { dmPing, dmLocationSearch, dmCount, dmMarketInventory, buildLandFilters, type DmLoc, type DmFilter, type LandFilterInput } from "@/lib/dealmachine";
+import { dmPing, dmLocationSearch, dmCount, dmMarketInventory, dmMotivationByMarket, buildLandFilters, type DmLoc, type DmFilter, type LandFilterInput } from "@/lib/dealmachine";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // 🏕 DealMachine research endpoint (manager-only). Counts are FREE — no credits spent.
 //   GET  ?action=ping                 → verify the v2 key works
@@ -17,6 +17,29 @@ export async function GET(req: Request) {
   const action = url.searchParams.get("action") ?? "ping";
   if (action === "ping") return NextResponse.json(await dmPing());
   if (action === "inventory") return NextResponse.json(await dmMarketInventory());
+  if (action === "motivation") {
+    // 🎯 Motivated-owner density per market (free). Cached in __market_motivation__ (7-day TTL)
+    // since it's 4 counts × every county; ?refresh=1 recomputes.
+    const CAT = "__market_motivation__";
+    const fresh = url.searchParams.get("refresh") === "1";
+    if (!fresh) {
+      const row = await db.resource.findFirst({ where: { category: CAT } }).catch(() => null);
+      if (row?.description) {
+        try {
+          const s = JSON.parse(row.description) as { asOf: string; markets: unknown[] };
+          if (s.asOf && Date.now() - new Date(s.asOf).getTime() < 7 * 86400_000) return NextResponse.json({ ok: true, cached: true, ...s });
+        } catch { /* recompute */ }
+      }
+    }
+    const r = await dmMotivationByMarket();
+    if (!r.ok) return NextResponse.json(r);
+    const store = { asOf: new Date().toISOString(), markets: r.markets };
+    const row = await db.resource.findFirst({ where: { category: CAT } }).catch(() => null);
+    const description = JSON.stringify(store);
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } }).catch(() => {});
+    else await db.resource.create({ data: { title: "market-motivation", category: CAT, url: "", description } }).catch(() => {});
+    return NextResponse.json({ ok: true, cached: false, ...store });
+  }
   if (action === "pulls") {
     const row = await db.resource.findFirst({ where: { category: "__dm_pulls__" } }).catch(() => null);
     let log: { at: string; by: string; area: string; credits: number; pulled: number }[] = [];

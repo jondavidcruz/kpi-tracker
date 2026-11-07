@@ -131,6 +131,32 @@ export async function dmMarketInventory(): Promise<{ ok: boolean; error?: string
   return { ok: true, markets: out };
 }
 
+// 🎯 Motivated-owner density per market (FREE counts). For each county: total land + how many are
+// absentee-owned, out-of-state-owned, or tax-delinquent — the three signals that answer cold mail
+// fastest. Tells us where the richest pool of mailable, motivated land owners is, so we pull there
+// first (Jon 2026-11-06). 4 counts/county, run in parallel per county to stay under the time cap.
+export type MktMotivation = { name: string; fips: string; total: number; absentee: number; outOfState: number; delinquent: number };
+export async function dmMotivationByMarket(): Promise<{ ok: boolean; error?: string; markets?: MktMotivation[] }> {
+  if (!dmConfigured()) return { ok: false, error: "key not set" };
+  const base: LandFilterInput = { propertyTypes: [6, 19, 20], acresMin: 0.1, acresMax: 20, excludeLandlocked: true };
+  const fTotal = buildLandFilters({ ...base });
+  const fAbs = buildLandFilters({ ...base, absentee: true });
+  const fOos = buildLandFilters({ ...base, outOfState: true });
+  const fDel = buildLandFilters({ ...base, taxDelinquent: true });
+  const out: MktMotivation[] = [];
+  let anyOk = false, firstErr = "";
+  for (const [name, fips] of Object.entries(MARKET_COUNTY_FIPS)) {
+    const loc: DmLoc[] = [{ type: "county", code: fips }];
+    const [t, a, o, d] = await Promise.all([dmCount(loc, fTotal), dmCount(loc, fAbs), dmCount(loc, fOos), dmCount(loc, fDel)]);
+    if (t.ok) {
+      anyOk = true;
+      out.push({ name, fips, total: t.count!.total_properties, absentee: a.ok ? a.count!.total_properties : -1, outOfState: o.ok ? o.count!.total_properties : -1, delinquent: d.ok ? d.count!.total_properties : -1 });
+    } else { if (!firstErr) firstErr = t.error ?? "count failed"; out.push({ name, fips, total: -1, absentee: -1, outOfState: -1, delinquent: -1 }); }
+  }
+  if (!anyOk) return { ok: false, error: firstErr || "all counts failed (v2 key?)" };
+  return { ok: true, markets: out };
+}
+
 // ── PULL (costs credits) — property search returns parcels WITH skip-traced owner contacts.
 // Each call charges credits (≈ 1/property + 1/person), so this only runs on an explicit,
 // capped, confirmed pull. Normalized to the fields we import into the CRM. ──
