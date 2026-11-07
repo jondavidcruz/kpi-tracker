@@ -16,7 +16,16 @@ const ZMETRO: Record<string, string> = {
   "Naples / Port Royal": "Naples, FL", "Orlando / Windermere / Winter Park": "Orlando, FL", "Tampa Bay": "Tampa, FL",
   "Sarasota / Lakewood Ranch": "North Port, FL", "Jacksonville / Ponte Vedra": "Jacksonville, FL",
   "Jupiter Island / Vero Beach": "Sebastian, FL", "30A / Alys Beach (NW Florida)": "Crestview, FL",
+  // South Carolina (Jon 2026-11-06) — map each market to its Zillow metro (nearest for micros).
+  "Bluffton / Hardeeville (Jasper)": "Hilton Head Island, SC", "Hilton Head / Beaufort (Beaufort)": "Hilton Head Island, SC",
+  "Charleston / Mount Pleasant / Daniel Island": "Charleston, SC", "Summerville / Nexton (Berkeley)": "Charleston, SC",
+  "Myrtle Beach / Grand Strand (Horry)": "Myrtle Beach, SC", "Greenville / Greer (Upstate)": "Greenville, SC",
+  "Spartanburg (Upstate)": "Spartanburg, SC", "Rock Hill / Fort Mill (York)": "Charlotte, NC",
+  "Lake Keowee / Clemson (Oconee)": "Greenville, SC", "Aiken (CSRA)": "Augusta, GA",
+  "Columbia / Lake Murray (Lexington)": "Columbia, SC",
 };
+// States whose metros we read (FL + SC and the border metros SC markets fall into).
+const TREND_STATES = new Set(["FL", "SC", "NC", "GA"]);
 
 export type MarketTrend = { metro: string; value: number; chg30: number; chg90: number; chg180: number; trend: "up" | "flat" | "down"; asOf: string };
 export type TrendStore = { fetchedAt: string; asOf: string; byMarket: Record<string, MarketTrend> };
@@ -52,7 +61,7 @@ export async function refreshMarketTrends(): Promise<{ ok: boolean; error?: stri
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i]) continue;
     const cols = lines[i].split(",");
-    if (cols[iState] === "FL" && want.has(cols[iName])) metroRow[cols[iName]] = cols;
+    if (TREND_STATES.has(cols[iState]) && want.has(cols[iName])) metroRow[cols[iName]] = cols;
   }
 
   const byMarket: Record<string, MarketTrend> = {};

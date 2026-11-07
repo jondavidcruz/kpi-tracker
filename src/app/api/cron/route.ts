@@ -4017,7 +4017,19 @@ export async function GET(request: Request) {
   if (url.searchParams.get("automaps") === "1") {
     const { refreshAutoMaps } = await import("@/lib/geo/automaps");
     const res = await refreshAutoMaps({ limit: Math.min(12, Number(url.searchParams.get("n")) || 6) });
-    return NextResponse.json({ ok: true, automaps: res });
+    // 📈 Self-paced weekly refresh of the market price/momentum trends (free Zillow data) — only
+    // does the heavy fetch when the stored trend is >6 days stale, so it effectively runs once a
+    // week off this daily cron with no extra Vercel cron entry (Jon 2026-11-06: trends should
+    // refresh themselves, not wait for a button).
+    let trends: string | undefined;
+    try {
+      const { readMarketTrends, refreshMarketTrends } = await import("@/lib/market-trends");
+      const cur = await readMarketTrends();
+      const stale = !cur?.asOf || (Date.now() - new Date(cur.asOf).getTime() > 6 * 86400_000);
+      if (stale) { const t = await refreshMarketTrends(); trends = t.ok && t.store ? `refreshed (${Object.keys(t.store.byMarket || {}).length} metros)` : `refresh failed: ${t.error || "?"}`; }
+      else trends = "fresh — skipped";
+    } catch { trends = "skipped (error)"; }
+    return NextResponse.json({ ok: true, automaps: res, trends });
   }
 
   // One-shot: create the "War Room Vault" Shared Drive as the service account,
