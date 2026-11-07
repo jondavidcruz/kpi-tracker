@@ -5,6 +5,8 @@ import { EXPENSE_CATEGORIES, LEAD_KPI_KEYS } from "@/lib/expenses";
 import { Card, SectionTitle } from "@/components/ui";
 import ExpenseAdvisor from "@/components/ExpenseAdvisor";
 import PnlCharts from "@/components/PnlCharts";
+import FinancialHealth from "@/components/FinancialHealth";
+import { mergePnl, summarize, DEFAULT_ASSUMPTIONS, PNL_DATA_CAT, type PnlAssumptions, type PnlStore } from "@/lib/pnl-sheet";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -41,12 +43,25 @@ function Money({ name, value, big, placeholder = "0" }: { name: string; value: n
   );
 }
 
-export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ month?: string; saved?: string }> }) {
   const me = await getCurrentUser();
   if (!me || !canAccessCSuite(me)) {
     return <Card className="mx-auto max-w-md p-8 text-center text-slate-500">🔒 This page is restricted to the C-suite (Jon, Viktoriia, Enrico).</Card>;
   }
   const sp = await searchParams;
+
+  // 📗 Financial Health cockpit data — the real figures live in the private DB (never in this public
+  // repo). Read the synced P&L months + owner-entered runway assumptions from Resource rows.
+  const [pnlRow, runwayRow] = await Promise.all([
+    db.resource.findFirst({ where: { category: PNL_DATA_CAT } }).catch(() => null),
+    db.resource.findFirst({ where: { category: "__pnl_runway__" } }).catch(() => null),
+  ]);
+  let pnlStore: PnlStore | null = null;
+  try { if (pnlRow?.description) pnlStore = JSON.parse(pnlRow.description) as PnlStore; } catch { pnlStore = null; }
+  const pnlRows = mergePnl(pnlStore);
+  let assume: PnlAssumptions = { ...DEFAULT_ASSUMPTIONS };
+  try { if (runwayRow?.description) { const a = JSON.parse(runwayRow.description); assume = { cashOnHand: Number(a.cashOnHand) || 0, avgFee: Number(a.avgFee) || 10000, profitTarget: Number(a.profitTarget) || 0 }; } } catch { /* keep defaults */ }
+  const pnlSummary = summarize(assume, pnlRows);
 
   const monthRows = await db.expenseLine.findMany({ select: { month: true }, distinct: ["month"], orderBy: { month: "desc" } });
   const months = monthRows.map((r) => r.month);
@@ -130,6 +145,8 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         right={<span className="text-xs text-slate-400">Jon · Viktoriia · Enrico</span>}
       />
 
+      {/* 📗 Financial Health cockpit — burn / runway / cost-to-run / close-target (Jon 2026-11-07) */}
+      <FinancialHealth pnl={pnlRows} summary={pnlSummary} assume={assume} saved={sp.saved === "runway"} asOf={pnlStore?.asOf} />
 
       {telnyx?.month === new Date().toISOString().slice(0, 7) && (
         <Card className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4">

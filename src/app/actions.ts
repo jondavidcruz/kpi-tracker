@@ -4976,6 +4976,21 @@ export async function removeChatWebhookAction(formData: FormData) {
   redirect(`/admin/chat-webhooks?removed=${encodeURIComponent(space)}`);
 }
 
+export async function savePnlAssumptions(formData: FormData) {
+  // 💰 Owner-only: save the runway inputs that aren't in the P&L sheet — cash on hand today (→ runway),
+  // avg assignment fee (→ deals-to-close), and a monthly profit target. Stored in the Resource table
+  // (no migration). Burn/expenses/revenue come from the synced sheet (src/lib/pnl-sheet.ts).
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const num = (k: string) => { const v = Number(String(formData.get(k) ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(v) && v >= 0 ? v : 0; };
+  const data = JSON.stringify({ cashOnHand: num("cashOnHand"), avgFee: num("avgFee") || 10000, profitTarget: num("profitTarget"), at: new Date().toISOString(), by: me?.name ?? "owner" });
+  const row = await db.resource.findFirst({ where: { category: "__pnl_runway__" } });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: data } });
+  else await db.resource.create({ data: { title: "pnl-runway", category: "__pnl_runway__", url: "", description: data } });
+  revalidatePath("/expenses");
+  redirect("/expenses?saved=runway");
+}
+
 export async function testChatWebhookAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isOwner(me)) return;
