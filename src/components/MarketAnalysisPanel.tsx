@@ -30,10 +30,27 @@ const PLAYBOOK: { name: string; what: string; use: string }[] = [
   { name: "Waterfront / oceanfront premium", what: "Wealthy buyers keep building on the water through rate hikes — rate-insensitive demand.", use: "Weight waterfront markets up; they hold value when inland cools." },
 ];
 
+// 🧪 Recommended DealMachine recipe for a market, from its land focus (maps to the panel presets)
+// + the motivated-owner filters that answer cold mail fastest. Pure text the rep can punch in.
+const FOCUS_PRESET: Record<string, string> = { infill_luxury: "🏝️ Infill luxury", acreage: "🌄 Big acreage", commercial: "🏗️ Commercial" };
+function recipeFor(m: MarketView["m"]): string {
+  const presets = (m.landFocus || []).map((f) => FOCUS_PRESET[f]).filter(Boolean);
+  return `${m.name} county · ${presets.length ? presets.join(" + ") : "Vacant land"} · ✈️ absentee / out-of-state`;
+}
+
 export default function MarketAnalysisPanel({ markets }: { markets: MarketView[] }) {
   const rows = analyzeMarkets(markets);
+  const byName = Object.fromEntries(markets.map((v) => [v.m.name, v]));
   const [showPlay, setShowPlay] = useState(false);
+  const [showPlan, setShowPlan] = useState(true);
   const pullNow = rows.filter((r) => r.priority === "pull-now").length;
+  // 🎯 Tonight's pull plan — the markets to pull next (pull-now / strong, not on cooldown),
+  // ranked by opportunity, each with its ready-to-run DealMachine recipe (Jon 2026-11-06).
+  const pullPlan = rows
+    .filter((r) => (r.priority === "pull-now" || r.priority === "strong") && byName[r.name]?.coverage.status !== "cooldown")
+    .slice(0, 6)
+    .map((r) => ({ r, v: byName[r.name] }))
+    .filter((x) => x.v);
   // 📡 Live DealMachine land inventory (free counts) keyed by market name → supply dimension.
   const [inv, setInv] = useState<Record<string, { parcels: number; owners: number }>>({});
   const [invBusy, setInvBusy] = useState(false);
@@ -95,6 +112,32 @@ export default function MarketAnalysisPanel({ markets }: { markets: MarketView[]
         <button onClick={refreshTrends} disabled={trendBusy} className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-bold hover:bg-white/20 disabled:opacity-50">{trendBusy ? "Loading…" : trendAsOf ? "📈 Refresh prices" : "📈 Load market prices (free)"}</button>
         <button onClick={() => setShowPlay((s) => !s)} className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-bold hover:bg-white/20">📚 {showPlay ? "Hide" : "Show"} playbook</button>
       </div>
+      {pullPlan.length > 0 && (
+        <div className="rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 p-4 text-white shadow-sm">
+          <button onClick={() => setShowPlan((s) => !s)} className="flex w-full items-center gap-2 text-left">
+            <span className="text-sm font-extrabold">🎯 Tonight&apos;s pull plan — {pullPlan.length} market{pullPlan.length > 1 ? "s" : ""} ready</span>
+            <span className="ml-auto text-xs opacity-80">{showPlan ? "hide" : "show"}</span>
+          </button>
+          {showPlan && (
+            <div className="mt-2 space-y-1.5">
+              {pullPlan.map(({ r, v }, i) => (
+                <div key={r.id} className="rounded-xl bg-white/10 p-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/20 text-[11px] font-extrabold">{i + 1}</span>
+                    <span className="text-[13px] font-bold">{r.name}</span>
+                    <span className="rounded bg-white/20 px-1.5 py-0.5 text-[9px] font-bold">{v.m.state}</span>
+                    {r.priority === "pull-now" && <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[9px] font-extrabold text-amber-900">🔥 BUYERS WAITING</span>}
+                    <span className="ml-auto text-[11px] font-bold opacity-90">opp {r.opportunity}{mot[r.name] ? ` · 🎯${motScore(r.name)}` : ""}</span>
+                  </div>
+                  <div className="mt-1 text-[11px] font-semibold text-emerald-50">▶ {recipeFor(v.m)}</div>
+                  {r.reasons.length > 0 && <div className="mt-0.5 text-[10.5px] text-emerald-100/80">{r.reasons.slice(0, 2).join(" · ")}</div>}
+                </div>
+              ))}
+              <div className="px-1 pt-1 text-[10.5px] text-emerald-100/80">Open the 🏕 DealMachine panel below, search the county, set the preset, Count (free) → Pull. Sorted by opportunity; cooldown markets held back.</div>
+            </div>
+          )}
+        </div>
+      )}
       {trendAsOf && <div className="px-1 text-[11px] text-slate-500">📈 Zillow metro home-value trend (free) · as of {trendAsOf} · a proxy for land-market heat</div>}
       {invMsg && <div className="px-1 text-[11px] text-slate-500">{invMsg}</div>}
       {motMsg && <div className="px-1 text-[11px] text-slate-500">{motMsg}</div>}
