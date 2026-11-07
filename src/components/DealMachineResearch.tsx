@@ -16,7 +16,7 @@ const PRESETS: { key: string; label: string; emoji: string; input: Partial<LandI
 ];
 const DEFAULT: LandInput = { propertyTypes: [6], acresMin: 0.1, acresMax: 5, outOfState: true, absentee: false, taxDelinquent: false, excludeLandlocked: true, excludeFlood: false };
 
-export default function DealMachineResearch() {
+export default function DealMachineResearch({ quickMarkets = [] }: { quickMarkets?: { name: string; fips: string }[] }) {
   const [status, setStatus] = useState<"checking" | "ok" | "needkey" | "off">("checking");
   const [statusMsg, setStatusMsg] = useState("");
   const [locQ, setLocQ] = useState("");
@@ -101,6 +101,15 @@ export default function DealMachineResearch() {
           <button onClick={searchLoc} className="rounded-lg bg-slate-800 px-2.5 py-1 font-bold text-white hover:bg-slate-700">Find</button>
           {picked && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700 ring-1 ring-emerald-200">📍 {picked.name} ({picked.type.replace("_", " ")})</span>}
         </div>
+        {quickMarkets.length > 0 && (
+          // ⚡ One-click county pick for our target markets (no typing) — FIPS is the county code.
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 self-center">Quick pick:</span>
+            {quickMarkets.map((q) => (
+              <button key={q.fips} onClick={() => { setPicked({ type: "county", code: q.fips, name: q.name }); setLocResults([]); }} className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${q.fips.startsWith("45") ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`} title={q.fips.startsWith("45") ? "South Carolina" : "Florida"}>{q.name.split(" / ")[0]}</button>
+            ))}
+          </div>
+        )}
         {locResults.length > 0 && !picked && (
           <div className="mt-1 flex flex-wrap gap-1">
             {locResults.map((l) => (

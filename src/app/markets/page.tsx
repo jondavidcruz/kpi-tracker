@@ -80,6 +80,10 @@ export default async function MarketsPage() {
     return { m, coverage: coverageFor(m.id, pulls), leads, deals, momentum: { d30, d60, d180, trend }, buyerCount };
   });
 
+  // Quick-select counties for the DealMachine panel (click a market → county pre-selected, no typing).
+  const { MARKET_COUNTY_FIPS } = await import("@/lib/dealmachine");
+  const quickMarkets = Object.entries(MARKET_COUNTY_FIPS).map(([name, fips]) => ({ name, fips }));
+
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -88,7 +92,7 @@ export default async function MarketsPage() {
         accent="bg-emerald-400"
       />
       <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} />
-      {leader && <DealMachineResearch />}
+      {leader && <DealMachineResearch quickMarkets={quickMarkets} />}
     </div>
   );
 }
