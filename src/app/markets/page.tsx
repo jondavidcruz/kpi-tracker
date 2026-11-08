@@ -129,6 +129,14 @@ export default async function MarketsPage() {
     };
   }
 
+  // Pull coverage keyed by county FIPS — only for markets we actually track (target list), so the
+  // workbench badge never falsely claims "never pulled" for a county we have no record of.
+  const coverageByFips: Record<string, { status: "never" | "clear" | "cooldown"; cooldownLeft: number; lastPull: string | null }> = {};
+  for (const [fips, marketId] of Object.entries(targetFipsToId)) {
+    const cv = coverageFor(marketId, pulls);
+    coverageByFips[fips] = { status: cv.status, cooldownLeft: cv.cooldownLeft, lastPull: cv.lastPull };
+  }
+
   // 🎯 Buyer-demand market discovery — rank WHICH markets to pull by our vetted buyers' aggregated
   // buy-boxes (reverse-engineered from the developers we actually have), biased to NEW markets.
   const demand = await (async () => {
@@ -147,7 +155,7 @@ export default async function MarketsPage() {
       />
       <MarketFinder initial={scanStore} canRefresh={leader} />
       <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} />
-      {leader && <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} />}
+      {leader && <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} />}
     </div>
   );
 }

@@ -14,9 +14,11 @@ import type { DemandResult, RecommendedMarket } from "@/lib/buyer-demand-markets
 type Loc = { type: "county" | "city" | "zip_code" | "state"; code: string; name: string; state?: string; property_count?: number };
 type Glance = { name: string; state: string; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; landHigh: number | null; landTotal: number | null };
 
-const clone = (s: WorkbenchState): WorkbenchState => ({ enums: { ...s.enums }, bools: { ...s.bools }, nums: { ...s.nums } });
+const clone = (s: WorkbenchState): WorkbenchState => ({ enums: { ...s.enums }, bools: { ...s.bools }, nums: { ...s.nums }, strs: { ...(s.strs ?? {}) } });
 
-export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand }: { quickMarkets?: { name: string; fips: string }[]; scan?: Record<string, Glance>; demand?: DemandResult }) {
+type Cov = { status: "never" | "clear" | "cooldown"; cooldownLeft: number; lastPull: string | null };
+
+export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand, coverage = {} }: { quickMarkets?: { name: string; fips: string }[]; scan?: Record<string, Glance>; demand?: DemandResult; coverage?: Record<string, Cov> }) {
   const [status, setStatus] = useState<"checking" | "ok" | "needkey" | "off">("checking");
   const [statusMsg, setStatusMsg] = useState("");
   const [locQ, setLocQ] = useState("");
@@ -29,6 +31,7 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
   const [copied, setCopied] = useState(false);
   const [showAllRecs, setShowAllRecs] = useState(false);
   const [openRec, setOpenRec] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const reqSeq = useRef(0);
 
   useEffect(() => {
@@ -78,6 +81,7 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
   }
 
   const glance = picked && picked.type === "county" ? scan[picked.code] : undefined;
+  const cov = picked && picked.type === "county" ? coverage[picked.code] : undefined;
   const recipe = describeFilters(state);
   const nActive = activeCount(state);
 
@@ -92,6 +96,10 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
     if (v === "") delete cur[key]; else cur[key] = Number(v);
     const nums = { ...s.nums }; if (cur.min == null && cur.max == null) delete nums[id]; else nums[id] = cur;
     return { ...s, nums };
+  });
+  const setStr = (id: string, v: string) => setState((s) => {
+    const strs = { ...(s.strs ?? {}) }; if (v === "") delete strs[id]; else strs[id] = v;
+    return { ...s, strs };
   });
 
   function copyRecipe() {
@@ -119,6 +127,14 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
           className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${on ? (c.apply === false ? "bg-rose-50 text-rose-700 ring-rose-300" : "bg-emerald-50 text-emerald-700 ring-emerald-300") : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"}`}>
           {on ? "✓ " : ""}{c.emoji ? c.emoji + " " : ""}{c.label}
         </button>
+      );
+    }
+    if (c.kind === "str") {
+      return (
+        <label key={c.id} className="flex items-center gap-1 text-[11px] text-slate-600" title={c.hint}>
+          <span className="font-semibold">{c.label}</span>
+          <input type="text" value={(state.strs ?? {})[c.id] ?? ""} onChange={(e) => setStr(c.id, e.target.value)} placeholder={c.hint ?? "text"} className="w-28 rounded border border-slate-300 px-1 py-0.5" />
+        </label>
       );
     }
     const r = state.nums[c.id] ?? {};
@@ -250,6 +266,17 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
         </div>
       )}
 
+      {/* dedup / pull coverage — don't re-work ground we just pulled */}
+      {cov && (
+        <div className="mb-3 -mt-1 text-[11px]">
+          {cov.status === "never"
+            ? <span className="rounded-full bg-sky-100 px-2 py-0.5 font-bold text-sky-700">🆕 never pulled here</span>
+            : cov.status === "cooldown"
+            ? <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-700">⏳ on cooldown{cov.lastPull ? ` — pulled ${cov.lastPull.slice(0, 10)}` : ""}, {cov.cooldownLeft}d left</span>
+            : <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-700">✓ clear to pull{cov.lastPull ? ` — last pulled ${cov.lastPull.slice(0, 10)}` : ""}</span>}
+        </div>
+      )}
+
       {/* 2 · Buy-box */}
       <div className="mb-3" id="rw-buybox">
         <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
@@ -261,14 +288,31 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
         <div className="mb-2 flex flex-wrap gap-1">
           {PRESETS.map((p) => <button key={p.key} onClick={() => setState(p.state())} className="rounded-full bg-lime-50 px-2 py-0.5 text-[11px] font-semibold text-lime-800 ring-1 ring-lime-200 hover:bg-lime-100">{p.emoji} {p.label}</button>)}
         </div>
-        {/* groups */}
+        {/* primary groups */}
         <div className="space-y-2.5">
-          {CATALOG.map((g) => (
+          {CATALOG.filter((g) => !g.advanced).map((g) => (
             <div key={g.key}>
               <div className="mb-1 text-[11px] font-bold text-slate-700">{g.emoji} {g.title} <span className="font-normal text-slate-400">— {g.blurb}</span></div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">{g.controls.map(renderControl)}</div>
             </div>
           ))}
+        </div>
+        {/* advanced "all filters" — the long tail behind an expander */}
+        <div className="mt-2">
+          <button onClick={() => setShowAdvanced((v) => !v)} className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200">
+            {showAdvanced ? "▾ Hide advanced filters" : `▸ All filters (${CATALOG.filter((g) => g.advanced).reduce((n, g) => n + g.controls.length, 0)} more)`}
+          </button>
+          {showAdvanced && (
+            <div className="mt-2 space-y-2.5 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+              {CATALOG.filter((g) => g.advanced).map((g) => (
+                <div key={g.key}>
+                  <div className="mb-1 text-[11px] font-bold text-slate-700">{g.emoji} {g.title}</div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">{g.controls.map(renderControl)}</div>
+                </div>
+              ))}
+              <div className="text-[10px] text-slate-400">DealMachine exposes 342 filters in all; these are the land-research-relevant ones. Need a filter that isn&apos;t here? Tell me the field and I&apos;ll add it.</div>
+            </div>
+          )}
         </div>
       </div>
 

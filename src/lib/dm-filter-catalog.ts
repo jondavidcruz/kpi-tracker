@@ -12,14 +12,16 @@ export type Control =
   | { kind: "enum"; id: string; label: string; emoji?: string; hint?: string; options: EnumOpt[] }
   // apply=false ⇒ this toggle EXCLUDES (is_boolean false), e.g. "exclude landlocked"
   | { kind: "bool"; id: string; label: string; emoji?: string; hint?: string; apply?: boolean }
-  | { kind: "num"; id: string; label: string; emoji?: string; hint?: string; money?: boolean; step?: number; minOnly?: boolean };
+  | { kind: "num"; id: string; label: string; emoji?: string; hint?: string; money?: boolean; step?: number; minOnly?: boolean }
+  | { kind: "str"; id: string; label: string; emoji?: string; hint?: string };
 
-export type Group = { key: string; title: string; emoji: string; blurb?: string; controls: Control[] };
+export type Group = { key: string; title: string; emoji: string; blurb?: string; advanced?: boolean; controls: Control[] };
 
 export type WorkbenchState = {
   enums: Record<string, number[]>;
   bools: Record<string, boolean>;
   nums: Record<string, { min?: number; max?: number }>;
+  strs?: Record<string, string>;
 };
 
 export const PROPERTY_TYPE_OPTS: EnumOpt[] = [
@@ -73,10 +75,61 @@ export const CATALOG: Group[] = [
       { kind: "num", id: "road_frontage_feet", label: "Min road frontage", hint: "feet", minOnly: true },
     ],
   },
+  // ── Advanced groups (the long tail) — rendered behind an "All filters" expander. All
+  // properties-source + validated against the live v2 count API. ──
+  {
+    key: "valuation", title: "Valuation & equity", emoji: "💰", advanced: true, controls: [
+      { kind: "num", id: "assessed_total_value", label: "Total assessed value", money: true },
+      { kind: "num", id: "estimated_equity_amount", label: "Estimated equity", money: true },
+      { kind: "num", id: "estimated_equity_percentage", label: "Equity %" },
+      { kind: "num", id: "tax_amount", label: "Annual tax amount", money: true },
+    ],
+  },
+  {
+    key: "lot2", title: "Lot detail", emoji: "📐", advanced: true, controls: [
+      { kind: "num", id: "lot_size_sqft", label: "Lot size (sqft)" },
+      { kind: "num", id: "road_count", label: "Min road count", minOnly: true },
+      { kind: "num", id: "distance_to_road_feet", label: "Max distance to road (ft)" },
+      { kind: "bool", id: "is_corner_lot", label: "Corner lot", emoji: "📍" },
+      { kind: "str", id: "zoning", label: "Zoning contains", hint: "e.g. AG, RSF" },
+      { kind: "str", id: "subdivision_name", label: "Subdivision contains" },
+    ],
+  },
+  {
+    key: "distress2", title: "Distress detail", emoji: "📉", advanced: true, controls: [
+      { kind: "num", id: "tax_delinquent_year", label: "Delinquent since year (≤)" },
+      { kind: "num", id: "num_total_active_liens", label: "Min active liens", minOnly: true },
+      { kind: "num", id: "total_open_lien_amount", label: "Lien amount", money: true },
+      { kind: "bool", id: "has_hoa_lien", label: "HOA lien", emoji: "📎" },
+      { kind: "bool", id: "is_bank_owned", label: "Bank owned", emoji: "🏦" },
+      { kind: "enum", id: "foreclosure_status", label: "Foreclosure status", options: [{ id: 1, label: "Pre-foreclosure" }, { id: 2, label: "In foreclosure" }, { id: 3, label: "Bank owned" }] },
+    ],
+  },
+  {
+    key: "owner2", title: "More owner signals", emoji: "👥", advanced: true, controls: [
+      { kind: "enum", id: "ownership_entity_type", label: "Entity type", options: [{ id: 1, label: "Individual" }, { id: 2, label: "Corporation" }, { id: 3, label: "Trust" }, { id: 4, label: "Bank" }, { id: 5, label: "Government" }] },
+      { kind: "bool", id: "is_owner_occupied", label: "Exclude owner-occupied", apply: false },
+      { kind: "bool", id: "is_likely_to_move", label: "Likely to move", emoji: "📦" },
+    ],
+  },
+  {
+    key: "listing", title: "Listing / MLS", emoji: "🏘️", advanced: true, controls: [
+      { kind: "enum", id: "market_status", label: "Market status", options: [{ id: 1, label: "Active" }, { id: 2, label: "Pending" }, { id: 3, label: "Contingent" }, { id: 4, label: "Recently sold" }, { id: 5, label: "Expired" }, { id: 6, label: "Off market" }] },
+      { kind: "num", id: "mls_days_on_market", label: "Days on market" },
+      { kind: "bool", id: "is_recently_sold", label: "Recently sold", emoji: "🏷️" },
+    ],
+  },
+  {
+    key: "utilities", title: "Utilities", emoji: "🚰", advanced: true, controls: [
+      { kind: "enum", id: "water", label: "Water", options: [{ id: 2, label: "Municipal" }, { id: 5, label: "Well" }, { id: 1, label: "Cistern" }, { id: 4, label: "Spring" }] },
+      { kind: "enum", id: "sewer", label: "Sewer", options: [{ id: 1, label: "Municipal" }, { id: 4, label: "Septic" }, { id: 3, label: "Storm" }] },
+      { kind: "num", id: "year_built", label: "Year built", hint: "0 = unbuilt land" },
+    ],
+  },
 ];
 
 // Vacant Land + exclude landlocked is the sane starting point for every land hunt.
-export const DEFAULT_STATE: WorkbenchState = { enums: { property_type: [6] }, bools: { is_landlocked: true }, nums: {} };
+export const DEFAULT_STATE: WorkbenchState = { enums: { property_type: [6] }, bools: { is_landlocked: true }, nums: {}, strs: {} };
 
 export type Preset = { key: string; label: string; emoji: string; state: () => WorkbenchState };
 export const PRESETS: Preset[] = [
@@ -126,6 +179,9 @@ export function compileFilters(state: WorkbenchState): DmFilterSpec[] {
     else if (hasMin) out.push({ filter_id: id, operator: "greater_than_or_equal", value: r.min });
     else if (hasMax) out.push({ filter_id: id, operator: "less_than_or_equal", value: r.max });
   }
+  for (const [id, v] of Object.entries(state.strs ?? {})) {
+    if (v && v.trim()) out.push({ filter_id: id, operator: "contains", value: v.trim() });
+  }
   return out;
 }
 
@@ -150,6 +206,7 @@ export function describeFilters(state: WorkbenchState): string[] {
     const parts = [r.min != null ? "≥ " + fmt(r.min) : "", r.max != null ? "≤ " + fmt(r.max) : ""].filter(Boolean);
     lines.push(`${labelOf(id)}: ${parts.join(" · ")}`);
   }
+  for (const [id, v] of Object.entries(state.strs ?? {})) if (v && v.trim()) lines.push(`${labelOf(id)}: "${v.trim()}"`);
   return lines;
 }
 
@@ -159,5 +216,6 @@ export function activeCount(state: WorkbenchState): number {
   for (const [id, ids] of Object.entries(state.enums)) if (id !== "property_type" && ids?.length) n++;
   for (const on of Object.values(state.bools)) if (on) n++;
   for (const r of Object.values(state.nums)) if (r?.min != null || r?.max != null) n++;
+  for (const v of Object.values(state.strs ?? {})) if (v && v.trim()) n++;
   return n;
 }
