@@ -100,15 +100,36 @@ export default function Sidebar({
   // 📂 Per-department collapse (Jon 2026-10-24: "give the option to minimize the
   // departments"). Persist which group labels are collapsed, per viewer.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  useEffect(() => { try { const r = localStorage.getItem("fo_nav_collapsed_groups"); if (r) setCollapsedGroups(new Set(JSON.parse(r))); } catch { /* ok */ } }, []);
-  const toggleGroup = (label: string) => setCollapsedGroups((s) => { const n = new Set(s); if (n.has(label)) n.delete(label); else n.add(label); try { localStorage.setItem("fo_nav_collapsed_groups", JSON.stringify([...n])); } catch { /* ok */ } return n; });
-  // 🎨 Department color accent — Acquisitions = red, Dispositions = green, so the
-  // team can tell which section is which at a glance (Jon 2026-10-24).
-  const groupAccent = (label: string): { text: string; ring: string; bg: string } | null => {
-    if (/acquisition/i.test(label)) return { text: "text-rose-300", ring: "ring-rose-400/30", bg: "bg-rose-500/[0.04]" };
-    if (/disposition/i.test(label)) return { text: "text-emerald-300", ring: "ring-emerald-400/30", bg: "bg-emerald-500/[0.04]" };
-    return null;
+  // Default (Jon 2026-11-08): only the first three departments open; everything else minimized.
+  // Each viewer can still click any department header to open/close it — that choice persists.
+  const DEFAULT_OPEN_GROUPS = ["Team Overview", "Acquisitions", "Dispositions"];
+  const ALL_GROUP_LABELS = ["Team Overview", "Acquisitions", "Dispositions", "Marketing", "Business Heartbeat", "Performance", "Coaching", "EOS", "C-Suite", "Requests & Support", "Settings"];
+  useEffect(() => {
+    try {
+      const r = localStorage.getItem("fo_nav_groups_v2");
+      if (r) { setCollapsedGroups(new Set(JSON.parse(r))); return; }
+    } catch { /* ok */ }
+    setCollapsedGroups(new Set(ALL_GROUP_LABELS.filter((l) => !DEFAULT_OPEN_GROUPS.includes(l))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const toggleGroup = (label: string) => setCollapsedGroups((s) => { const n = new Set(s); if (n.has(label)) n.delete(label); else n.add(label); try { localStorage.setItem("fo_nav_groups_v2", JSON.stringify([...n])); } catch { /* ok */ } return n; });
+  // 🎨 Per-department color accent (Jon 2026-11-08: "every department its own color — marketing
+  // gold, etc. — so we know which section is which, more visually stimulating"). Full literal
+  // class strings so Tailwind keeps them; keyed on the ORIGINAL group label.
+  const GROUP_ACCENTS: Record<string, { text: string; ring: string; bg: string }> = {
+    "Team Overview":      { text: "text-sky-300",     ring: "ring-sky-400/30",     bg: "bg-sky-500/[0.05]" },
+    "Acquisitions":       { text: "text-rose-300",    ring: "ring-rose-400/30",    bg: "bg-rose-500/[0.05]" },
+    "Dispositions":       { text: "text-emerald-300", ring: "ring-emerald-400/30", bg: "bg-emerald-500/[0.05]" },
+    "Marketing":          { text: "text-amber-300",   ring: "ring-amber-400/30",   bg: "bg-amber-500/[0.05]" },
+    "Business Heartbeat": { text: "text-cyan-300",    ring: "ring-cyan-400/30",    bg: "bg-cyan-500/[0.05]" },
+    "Performance":        { text: "text-violet-300",  ring: "ring-violet-400/30",  bg: "bg-violet-500/[0.05]" },
+    "Coaching":           { text: "text-orange-300",  ring: "ring-orange-400/30",  bg: "bg-orange-500/[0.05]" },
+    "EOS":                { text: "text-indigo-300",  ring: "ring-indigo-400/30",  bg: "bg-indigo-500/[0.05]" },
+    "C-Suite":            { text: "text-fuchsia-300", ring: "ring-fuchsia-400/30", bg: "bg-fuchsia-500/[0.05]" },
+    "Requests & Support": { text: "text-teal-300",    ring: "ring-teal-400/30",    bg: "bg-teal-500/[0.05]" },
+    "Settings":           { text: "text-slate-300",   ring: "ring-slate-400/30",   bg: "bg-slate-500/[0.05]" },
   };
+  const groupAccent = (label: string) => GROUP_ACCENTS[label] ?? null;
 
   const groups: { label: string; items: Item[] }[] = [
     // Department columns (Jon 2026-10-06) — defaults only; every tab drags
