@@ -28,7 +28,7 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
   const m = months[sel] || months[0];
   const maxMonthExp = Math.max(1, ...months.map((x) => x.expenses));
 
-  const [view, setView] = useState<"statement" | "budget" | "stack">("statement");
+  const [view, setView] = useState<"statement" | "budget">("statement");
   const disp = (cat: PnlCat, label: string) => { const o = ov[lineKey(cat, label)]; return { label: o?.label || label, hidden: !!o?.hidden, cut: !!o?.cut, oneTime: !!o?.oneTime }; };
   function setOverride(cat: PnlCat, label: string, patch: { label?: string; cut?: boolean; oneTime?: boolean; hidden?: boolean }) {
     const k = lineKey(cat, label);
@@ -57,19 +57,6 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
     return { month: latest.month, base: latest.expenses, cut, one, go: Math.max(0, latest.expenses - cut - one), burn };
   }, [closed, ov]);
 
-  // "My stack" — every unique line item across the year, grouped by category (latest amount + months seen).
-  const stack = useMemo(() => {
-    const map: Record<string, { cat: PnlCat; label: string; latest: number; months: number; total: number }> = {};
-    for (const mm of months) for (const l of mm.lines || []) {
-      const k = lineKey(l.cat, l.label);
-      const e = (map[k] ||= { cat: l.cat, label: l.label, latest: 0, months: 0, total: 0 });
-      e.months++; e.total += l.actual; e.latest = l.actual; // months are in order, so last wins
-    }
-    const byCat: Record<string, typeof map[string][]> = {};
-    for (const e of Object.values(map)) (byCat[e.cat] ||= []).push(e);
-    for (const c of Object.keys(byCat)) byCat[c].sort((a, b) => b.latest - a.latest);
-    return byCat;
-  }, [months]);
   async function save() {
     setSaving(true); setSavedMsg("");
     try {
@@ -108,7 +95,7 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
       {/* View toggle + edit controls */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-xs font-bold">
-          {([["statement", "📋 Statement"], ["budget", "🎯 Budget vs Actual"], ["stack", "🧰 My stack"]] as const).map(([v, lbl]) => (
+          {([["statement", "📋 Statement"], ["budget", "🎯 Budget vs Actual"]] as const).map(([v, lbl]) => (
             <button key={v} onClick={() => setView(v)} className={`rounded-md px-3 py-1.5 ${view === v ? "bg-white text-brand-navy shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>{lbl}</button>
           ))}
         </div>
@@ -131,7 +118,7 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
       </div>
 
       {/* Month switcher (statement + budget views) */}
-      {view !== "stack" && (
+      {(
         <div className="flex flex-wrap items-center gap-1.5">
           {months.map((x, i) => {
             const has = x.expenses > 0 || x.revenue > 0;
@@ -181,36 +168,6 @@ export default function PnlStatement({ months, overrides: initialOverrides, canE
           </div>
         );
       })()}
-
-      {/* ═══ MY STACK ═══ */}
-      {view === "stack" && (
-        <div className="space-y-3">
-          <div className="text-[11px] text-slate-400">Every expense you&apos;ve paid this year, line by line, by category — newest amount + how many months it appeared. {cutCount > 0 && <>Cut items are struck-through. </>}Use <b>✏️ Edit labels</b> to rename, mark ✂️ cut, or 1× one-time.</div>
-          {PNL_CATS.map((c) => {
-            const items = stack[c.key] || [];
-            if (!items.length) return null;
-            const catTot = items.reduce((s, e) => s + e.latest, 0);
-            return (
-              <div key={c.key} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2">
-                  <span className="flex items-center gap-1.5 text-sm font-bold text-slate-700"><span className={`h-2 w-2 rounded-full ${c.dot}`} />{c.emoji} {c.label}</span>
-                  <span className="text-[11px] text-slate-400">{items.length} items · latest total <b className="tabular-nums text-slate-600">{usd(catTot)}</b>/mo</span>
-                </div>
-                {items.map((e, idx) => { const d = disp(c.key, e.label); return (
-                  <div key={idx} className="flex items-center gap-3 px-4 py-1.5">
-                    <span className={`flex min-w-0 flex-1 items-center gap-1.5 text-[13px] ${d.cut ? "text-slate-400 line-through" : "text-slate-700"}`}>{d.label}
-                      {d.cut && <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600 no-underline">✂️ CUT</span>}
-                      {d.oneTime && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 no-underline">1× ONE-TIME</span>}
-                    </span>
-                    <span className="hidden text-[11px] text-slate-400 sm:block">{e.months} mo</span>
-                    <span className={`w-24 text-right text-[13px] font-bold tabular-nums ${d.cut ? "text-slate-400 line-through" : "text-slate-700"}`}>{usd2(e.latest)}</span>
-                  </div>
-                ); })}
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {/* ═══ STATEMENT (default) ═══ */}
       {view === "statement" && (<>

@@ -5,7 +5,10 @@ import ExpenseAdvisor from "@/components/ExpenseAdvisor";
 import FinancialHealth from "@/components/FinancialHealth";
 import PnlLoader from "@/components/PnlLoader";
 import PnlStatement from "@/components/PnlStatement";
+import CurrentStack from "@/components/CurrentStack";
 import { mergePnl, summarize, DEFAULT_ASSUMPTIONS, PNL_DATA_CAT, PNL_OVERRIDES_CAT, PNL_RUNWAY_CAT, PNL_CATS, type PnlAssumptions, type PnlStore, type PnlOverrides, type PnlCat } from "@/lib/pnl-sheet";
+import { PNL_STACK_CAT, type StackStore } from "@/lib/pnl-stack";
+import { parseHourly, parseFlatDailyHours } from "@/lib/payroll";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +22,14 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   }
   const sp = await searchParams;
 
-  const [pnlRow, runwayRow, ovRow, spendRow] = await Promise.all([
+  const [pnlRow, runwayRow, ovRow, spendRow, stackRow, users, profiles] = await Promise.all([
     db.resource.findFirst({ where: { category: PNL_DATA_CAT } }).catch(() => null),
     db.resource.findFirst({ where: { category: PNL_RUNWAY_CAT } }).catch(() => null),
     db.resource.findFirst({ where: { category: PNL_OVERRIDES_CAT } }).catch(() => null),
     db.resource.findFirst({ where: { category: "__telnyx_spend__" } }).catch(() => null),
+    db.resource.findFirst({ where: { category: PNL_STACK_CAT } }).catch(() => null),
+    db.user.findMany({ where: { active: true }, select: { id: true, name: true } }).catch(() => []),
+    db.teamProfile.findMany({ select: { userId: true, name: true, payScale: true, payPeriod: true } }).catch(() => []),
   ]);
 
   let pnlStore: PnlStore | null = null;
@@ -55,6 +61,47 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     categories, topLines,
   });
 
+  // 🧾 Current Stack (editable go-forward cost). Real figures live in the private DB (__pnl_stack__).
+  let stackStore: StackStore = { items: [] };
+  try { if (stackRow?.description) stackStore = JSON.parse(stackRow.description) as StackStore; } catch { stackStore = { items: [] }; }
+
+  // Per-person payroll SEED, computed from the roster's own pay rates (teamProfile.payScale — the same
+  // source the payday email uses). Hourly → rate × hours/day × 5 days × (52/12). Flat-hours people (Marie)
+  // use their flat daily hours; everyone else defaults to 8h/day (Jon edits any of it). Salaried people
+  // (a plain $ amount, no "/hr") seed at that monthly number. Jon (owner) is the variable CEO draw below.
+  const WEEKS_PER_MONTH = 52 / 12;
+  const profByUser = new Map(profiles.map((p) => [p.userId ?? "", p]));
+  const peopleSeed: { cat: PnlCat; label: string; amount: number; person: boolean }[] = [];
+  for (const u of users) {
+    const first = u.name.trim().split(/\s+/)[0]?.toLowerCase();
+    if (first === "jon" || first === "jonathan") continue; // CEO draw handled separately
+    const prof = profByUser.get(u.id);
+    const ps = prof?.payScale || "";
+    const rate = parseHourly(ps);
+    let monthly = 0;
+    if (rate != null) {
+      const dailyH = parseFlatDailyHours(ps) ?? 8;
+      monthly = rate * dailyH * 5 * WEEKS_PER_MONTH;
+    } else {
+      const num = Number(ps.replace(/[^0-9.]/g, ""));
+      if (num > 0 && num < 50000) monthly = num; // a monthly salary figure (skip blanks / "commission")
+    }
+    if (monthly > 0) peopleSeed.push({ cat: "payroll", label: prof?.name || u.name, amount: Math.round(monthly), person: true });
+  }
+  peopleSeed.sort((a, b) => b.amount - a.amount);
+  // CEO draw (variable) — latest month in the sheet that recorded one.
+  let ceoDraw = 0;
+  for (const mm of pnlRows) { const l = (mm.lines || []).find((x) => x.cat === "payroll" && /ceo/i.test(x.label)); if (l) ceoDraw = l.actual; }
+  if (ceoDraw > 0) peopleSeed.push({ cat: "payroll", label: "CEO draw (Jon)", amount: Math.round(ceoDraw), person: true });
+
+  // Non-payroll seed = the latest closed month's tool/dues/real-estate/controllable lines (a realistic
+  // starting point; Jon deletes anything he's since cancelled).
+  const latestClosed = closed[closed.length - 1] || pnlRows[0];
+  const monthSeed = {
+    month: latestClosed.month,
+    items: (latestClosed.lines || []).filter((l) => l.cat !== "payroll").map((l) => ({ cat: l.cat, label: l.label, amount: l.actual })),
+  };
+
   return (
     <div className="space-y-5 pb-24">
       <SectionTitle
@@ -66,6 +113,10 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
 
       {/* 📗 Financial Health cockpit — burn / runway / cost-to-run / close-target */}
       <FinancialHealth pnl={pnlRows} summary={pnlSummary} assume={assume} saved={sp.saved === "runway"} asOf={pnlStore?.asOf} />
+
+      {/* 🧾 Current Stack — editable, go-forward true cost (per-person payroll + cut simulator) */}
+      <CurrentStack initial={stackStore} peopleSeed={peopleSeed} monthSeed={monthSeed} canEdit={isOwner(me)} trailingBurn={pnlSummary.burnRate} cash={assume.cashOnHand} avgFee={assume.avgFee} />
+
       {isOwner(me) && <PnlLoader />}
 
       {telnyx?.month === new Date().toISOString().slice(0, 7) && (

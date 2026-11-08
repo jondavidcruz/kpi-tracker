@@ -278,7 +278,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <button onClick={clearDrawn} className="rounded-lg bg-slate-600 px-3 py-1 font-bold text-white hover:bg-slate-500">Cancel</button>
         </div>
       )}
-      <div ref={ref} className={`w-full overflow-hidden rounded-xl transition-all ${big ? "h-[82vh]" : "h-[560px]"}`} style={{ background: "#0b1220" }} />
+      <div ref={ref} className={`w-full overflow-hidden rounded-xl transition-all ${big ? "h-[92vh]" : "h-[76vh] min-h-[560px]"}`} style={{ background: "#0b1220" }} />
       {territories.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5 px-1">
           {territories.map((t) => (
