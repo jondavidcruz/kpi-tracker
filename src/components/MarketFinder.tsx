@@ -6,6 +6,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ScanStore, CountyScan } from "@/lib/market-scan";
+import { landSoldFor } from "@/lib/land-sold";
 
 const TIER: Record<CountyScan["tier"], { label: string; dot: string; row: string }> = {
   target: { label: "🎯 Target", dot: "bg-emerald-500", row: "bg-emerald-50/60" },
@@ -46,6 +47,7 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
         case "yoyPct": return c.yoyPct ?? -999;
         case "daysToPending": return c.daysToPending == null ? 99999 : c.daysToPending; // asc-ish
         case "landHigh": return c.land?.highShare ?? -1;
+        case "landSold": return landSoldFor(c.fips)?.share ?? -1;
         case "inventory": return c.inventory ?? -1;
         default: return c.score;
       }
@@ -124,7 +126,8 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
                 <th className={th} onClick={() => setSort("medianSalePrice")}>Home median{sortArrow("medianSalePrice")}</th>
                 <th className={th} onClick={() => setSort("yoyPct")}>YoY{sortArrow("yoyPct")}</th>
                 <th className={th} onClick={() => setSort("daysToPending")}>Days→pending{sortArrow("daysToPending")}</th>
-                <th className={th} onClick={() => setSort("landHigh")}>Land ≥$100k{sortArrow("landHigh")}</th>
+                <th className={th} onClick={() => setSort("landHigh")} title="Share of land parcels the assessor values ≥$100k">Land ≥$100k{sortArrow("landHigh")}</th>
+                <th className={th} onClick={() => setSort("landSold")} title="Share of vacant land that has actually SOLD for ≥$100k in the last ~3 years">Sold ≥$100k{sortArrow("landSold")}</th>
                 <th className={th} onClick={() => setSort("inventory")}>For sale{sortArrow("inventory")}</th>
               </tr>
             </thead>
@@ -144,11 +147,12 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
                     <td className={`px-2 py-1.5 font-semibold ${c.yoyPct == null ? "text-slate-400" : c.yoyPct >= 0 ? "text-emerald-600" : "text-rose-500"}`}>{pct(c.yoyPct)}</td>
                     <td className="px-2 py-1.5 text-slate-600">{c.daysToPending == null ? "—" : `${Math.round(c.daysToPending)}d`}</td>
                     <td className="px-2 py-1.5 text-slate-600">{c.land ? `${Math.round(c.land.highShare * 100)}%` : <span className="text-slate-300">—</span>}</td>
+                    <td className="px-2 py-1.5 font-semibold">{(() => { const ls = landSoldFor(c.fips); return ls ? <span className={ls.share >= 0.5 ? "text-emerald-600" : "text-slate-500"}>{Math.round(ls.share * 100)}%</span> : <span className="text-slate-300">—</span>; })()}</td>
                     <td className="px-2 py-1.5 text-slate-500">{c.inventory == null ? "—" : Math.round(c.inventory).toLocaleString()}</td>
                   </tr>
                   {open === c.fips && (
                     <tr className="border-b border-slate-100 bg-slate-50/80">
-                      <td colSpan={7} className="px-3 py-2">
+                      <td colSpan={8} className="px-3 py-2">
                         <ul className="space-y-0.5 text-[11px] text-slate-600">
                           {c.reasons.map((r, i) => <li key={i}>• {r}</li>)}
                           {c.land ? (

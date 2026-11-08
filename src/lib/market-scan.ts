@@ -18,6 +18,7 @@
 import { db } from "@/lib/db";
 import { dmCount, dmConfigured, type DmLoc, type DmFilter } from "@/lib/dealmachine";
 import { wealthFor } from "@/lib/elite-markets";
+import { landSoldFor } from "@/lib/land-sold";
 
 export const MARKET_SCAN_CAT = "__market_scan__";
 
@@ -217,6 +218,9 @@ export function scoreCounties(counties: CountyScan[]): CountyScan[] {
       score = Math.min(100, score + Math.max(0, Math.round((wt.wealth - 3) * 8)));
       r.push(`🏆 ${wt.label} — elite market (wealth ${wt.wealth.toFixed(1)}/5${wt.enclaves.length ? `, enclaves: ${wt.enclaves.slice(0, 3).join(", ")}` : ""})`);
     }
+    // 🧾 Land SOLD signal — markets where land ACTUALLY sells ≥$100k rank up (truer than assessed).
+    const ls = landSoldFor(c.fips);
+    if (ls) { score = Math.min(100, score + Math.round(ls.share * 12)); r.push(`🧾 ${Math.round(ls.share * 100)}% of recent land sales ≥$100k (${ls.high.toLocaleString()} of ${ls.total.toLocaleString()})`); }
     c.score = score;
     c.tier = score >= 72 ? "target" : score >= 50 ? "watch" : "low";
     c.reasons = r;
