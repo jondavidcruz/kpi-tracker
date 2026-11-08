@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { APP_URL } from "@/lib/site";
 
 export const runtime = "edge";
 
@@ -18,7 +19,7 @@ export async function GET(req: Request) {
   const d = url.searchParams.get("d") ?? "";
   const sig = url.searchParams.get("sig") ?? "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || sig !== (await hmac(d))) return new Response("nope", { status: 403 });
-  const base = process.env.NEXT_PUBLIC_SITE_URL || "https://kpi-tracker-lovat.vercel.app";
+  const base = process.env.NEXT_PUBLIC_SITE_URL || APP_URL;
   const data = (await fetch(`${base}/api/cron?eodjson=1&d=${d}&secret=${process.env.CRON_SECRET}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null)) as { rows?: Row[] } | null;
   const rows = (data?.rows ?? []).sort((a, b) => b.missCount - a.missCount);
   const height = Math.max(400, 150 + rows.reduce((n, r) => n + 70 + r.kpis.length * 34 + r.kpis.filter((k) => !k.met && k.reason).length * 26, 0));
@@ -48,7 +49,7 @@ export async function GET(req: Request) {
           ))}
           {rows.length === 0 && <div style={{ display: "flex", fontSize: 22, color: "#94a3b8" }}>No KPI data for this day.</div>}
         </div>
-        <div style={{ display: "flex", marginTop: "auto", paddingTop: 14, fontSize: 15, color: "#64748b" }}>War Room · kpi-tracker-lovat.vercel.app/report</div>
+        <div style={{ display: "flex", marginTop: "auto", paddingTop: 14, fontSize: 15, color: "#64748b" }}>War Room · {base.replace(/^https?:\/\//, "")}/report</div>
       </div>
     ),
     { width: 1000, height },

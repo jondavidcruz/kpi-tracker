@@ -5,6 +5,7 @@
 // Share with specific people → the SA email below → "Make changes to events")
 // — then booked appointments appear straight on their personal calendar.
 import crypto from "crypto";
+import { APP_URL } from "@/lib/site";
 import { db } from "./db";
 
 type SA = { client_email: string; private_key: string };
@@ -67,7 +68,7 @@ export async function pushApptToGcal(a: { id: string; title: string; at: Date; n
       method: "POST", headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         summary: `${a.title}${a.leadName ? ` — ${a.leadName}` : ""}`,
-        description: `${a.note}\n\nWar Room: https://kpi-tracker-lovat.vercel.app/crm/${a.oppId ?? ""}`,
+        description: `${a.note}\n\nWar Room: ${APP_URL}/crm/${a.oppId ?? ""}`,
         start: { dateTime: a.at.toISOString() },
         end: { dateTime: new Date(a.at.getTime() + 30 * 60_000).toISOString() },
         reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }, { method: "popup", minutes: 10 }] },

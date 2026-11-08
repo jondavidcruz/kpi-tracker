@@ -402,7 +402,7 @@ export async function GET(request: Request) {
       const { sendHuddleChat } = await import("@/lib/notify");
       for (const a of soon) {
         const mins = Math.max(1, Math.round((a.at.getTime() - Date.now()) / 60_000));
-        await sendHuddleChat(`⏰ *Appointment in ${mins}m* — ${a.title} (${a.withWho})${a.note ? ` · ${a.note}` : ""}\nhttps://kpi-tracker-lovat.vercel.app/crm/${a.oppId}`);
+        await sendHuddleChat(`⏰ *Appointment in ${mins}m* — ${a.title} (${a.withWho})${a.note ? ` · ${a.note}` : ""}\n${APP_URL}/crm/${a.oppId}`);
         await db.crmAppointment.update({ where: { id: a.id }, data: { remindedAt: new Date() } });
       }
     }
@@ -415,7 +415,7 @@ export async function GET(request: Request) {
     const res = await fetch("https://api.resend.com/webhooks", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: "https://kpi-tracker-lovat.vercel.app/api/resend/events", events: ["email.opened", "email.clicked", "email.bounced", "email.complained"] }),
+      body: JSON.stringify({ endpoint: `${APP_URL}/api/resend/events`, events: ["email.opened", "email.clicked", "email.bounced", "email.complained"] }),
     });
     const body = (await res.json().catch(() => ({}))) as { id?: string; secret?: string; signing_secret?: string; message?: string };
     if (res.ok && body.id) {
@@ -487,7 +487,7 @@ export async function GET(request: Request) {
       if (!open) continue;
       lines.push(`• *${r.name.split(" ")[0]}*: ${open} leads · 📞 ${fuDue} follow-ups due · ⏰ ${tasksDue} tasks due${quiet ? ` · 🕸 ${quiet} quiet 3d+` : ""}`);
     }
-    lines.push("https://kpi-tracker-lovat.vercel.app/crm");
+    lines.push(`${APP_URL}/crm`);
     const sent = await sendHuddleChat(lines.join("\n"));
     return NextResponse.json({ ok: true, sent });
   }
@@ -1710,7 +1710,7 @@ export async function GET(request: Request) {
     const label = prev.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
     const { getChannelConfig, sendEmailTo } = await import("@/lib/notify");
     const cfg = await getChannelConfig();
-    const ok = await sendEmailTo(emails, `📊 ${label} P&L time`, `<p>Hi team,</p><p>It's the 1st — please send Jon the <b>${label}</b> P&L and enter it on the War Room's <a href="https://kpi-tracker-lovat.vercel.app/expenses">Profit &amp; Loss page</a> when ready.</p><p>— the War Room (automated monthly reminder)</p>`, cfg);
+    const ok = await sendEmailTo(emails, `📊 ${label} P&L time`, `<p>Hi team,</p><p>It's the 1st — please send Jon the <b>${label}</b> P&L and enter it on the War Room's <a href="${APP_URL}/expenses">Profit &amp; Loss page</a> when ready.</p><p>— the War Room (automated monthly reminder)</p>`, cfg);
     return NextResponse.json({ ok, sent: emails.length });
   }
 
@@ -2211,7 +2211,7 @@ export async function GET(request: Request) {
     // email only as a dialer-load convenience.
     try {
       const { postBuyerListToChat } = await import("@/lib/buyers-chat");
-      await postBuyerListToChat({ title: `New buyers to vet — ${date}`, count: addedToPool || fresh.length, sheetLink: "https://kpi-tracker-lovat.vercel.app/vetting", csvLink: link, byState, note: "Added to Buyer Research — call each, capture their buy box, then mark Vetted. Scrub DNC first." });
+      await postBuyerListToChat({ title: `New buyers to vet — ${date}`, count: addedToPool || fresh.length, sheetLink: `${APP_URL}/vetting`, csvLink: link, byState, note: "Added to Buyer Research — call each, capture their buy box, then mark Vetted. Scrub DNC first." });
     } catch { /* chat best-effort */ }
     await storeBuyerFeed({ date, count: fresh.length, link, byState, rows: fresh });
     return NextResponse.json({ ok: true, received: rows.length, fresh: fresh.length, addedToBuyerResearch: addedToPool, skippedDup, skippedMarket, byState, driveLink: link });
@@ -2788,7 +2788,7 @@ export async function GET(request: Request) {
     const crypto2 = await import("crypto");
     const sig2 = crypto2.createHmac("sha256", process.env.CRON_SECRET ?? "").update(d).digest("hex").slice(0, 20);
     const { postImageCard } = await import("@/lib/chat-spaces");
-    const ok2 = await postImageCard("kpi", `📊 EOD KPIs — ${d}`, `https://kpi-tracker-lovat.vercel.app/api/kpi-image?d=${d}&sig=${sig2}`);
+    const ok2 = await postImageCard("kpi", `📊 EOD KPIs — ${d}`, `${APP_URL}/api/kpi-image?d=${d}&sig=${sig2}`);
     return NextResponse.json({ ok: ok2, date: d });
   }
 
@@ -3011,7 +3011,7 @@ export async function GET(request: Request) {
     const profileId = url.searchParams.get("profile") ?? "4001a118-4be9-4916-9732-be7d6dec9063";
     const r = await fetch(`https://api.telnyx.com/v2/messaging_profiles/${profileId}`, {
       method: "PATCH", headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ webhook_url: "https://kpi-tracker-lovat.vercel.app/api/telnyx/sms", webhook_api_version: "2" }),
+      body: JSON.stringify({ webhook_url: `${APP_URL}/api/telnyx/sms`, webhook_api_version: "2" }),
     });
     const b = (await r.json().catch(() => ({}))) as { data?: { name?: string; webhook_url?: string } };
     return NextResponse.json({ ok: r.ok, profile: b.data?.name, webhook: b.data?.webhook_url, status: r.status });
@@ -3312,7 +3312,7 @@ export async function GET(request: Request) {
       steps.push(cfg.sipUser ? `sip user: ${cfg.sipUser}` : `sip user lookup failed ${cc.status}`);
     }
     if (!cfg.ccAppId) {
-      const app = await tx("/call_control_applications", { method: "POST", body: JSON.stringify({ application_name: "War Room Inbound", webhook_event_url: "https://kpi-tracker-lovat.vercel.app/api/telnyx/call" }) });
+      const app = await tx("/call_control_applications", { method: "POST", body: JSON.stringify({ application_name: "War Room Inbound", webhook_event_url: `${APP_URL}/api/telnyx/call` }) });
       const ab = app.body as { data?: { id?: string } };
       if (!app.ok || !ab.data?.id) return NextResponse.json({ ok: false, error: `call control app refused (${app.status}): ${app.text.slice(0, 180)}`, steps });
       cfg.ccAppId = ab.data.id;
@@ -3353,7 +3353,7 @@ export async function GET(request: Request) {
     const steps: string[] = [`number found (was connection ${pn.connection_id ?? "none"})`];
     const assign = await tx(`/phone_numbers/${pn.id}`, { method: "PATCH", body: JSON.stringify({ connection_id: cfg.connId }) });
     steps.push(assign.ok ? "number → WebRTC connection (browsers will ring)" : `assign failed ${assign.status}: ${assign.text}`);
-    const hook = await tx(`/credential_connections/${cfg.connId}`, { method: "PATCH", body: JSON.stringify({ webhook_event_url: "https://kpi-tracker-lovat.vercel.app/api/telnyx/call" }) });
+    const hook = await tx(`/credential_connections/${cfg.connId}`, { method: "PATCH", body: JSON.stringify({ webhook_event_url: `${APP_URL}/api/telnyx/call` }) });
     steps.push(hook.ok ? "webhooks → /api/telnyx/call (missed-call text-back armed)" : `webhook failed ${hook.status}: ${hook.text}`);
     return NextResponse.json({ ok: assign.ok && hook.ok, steps, inboundNumber: num });
   }
@@ -3998,7 +3998,7 @@ export async function GET(request: Request) {
       }
       lines.push(`• *${d.address}* (${d.assignedTo || "unassigned"}) — ${bits.join(" · ")}`);
     }
-    lines.push("Full board: https://kpi-tracker-lovat.vercel.app/deals");
+    lines.push(`Full board: ${APP_URL}/deals`);
     const sent = await sendHuddleChat(lines.join("\n"));
     return NextResponse.json({ ok: true, sent, deals: deals.length, followUps: fuCount });
   }

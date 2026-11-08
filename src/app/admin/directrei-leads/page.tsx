@@ -2,6 +2,7 @@
 // INSTANTLY so Michelle doesn't manually create the lead"). Owner page to turn it on, copy the
 // exact webhook URL + key into Direct REI, and watch deliveries land in real time.
 import crypto from "crypto";
+import { APP_URL } from "@/lib/site";
 import { getCurrentUser, isOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dreiLeadsOn } from "@/lib/directrei-leads";
@@ -10,7 +11,7 @@ import { toggleDreiLeadsAction, pullDreiNowAction, diagnoseDreiAction, resetDrei
 
 export const dynamic = "force-dynamic";
 
-const BASE = "https://kpi-tracker-lovat.vercel.app";
+const BASE = APP_URL;
 
 export default async function DirectReiLeadsPage({ searchParams }: { searchParams: Promise<{ pull?: string }> }) {
   const sp = await searchParams;

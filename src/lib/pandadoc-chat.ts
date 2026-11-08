@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { APP_URL } from "@/lib/site";
 
 // 👀 PandaDoc "agreement viewed" → Google Chat (acquisitions space). Jon 2026-10-19:
 // "every time someone in PandaDoc has viewed their agreement, post a message in the
@@ -61,7 +62,7 @@ export async function postPandaDocView(opts: { docId: string; docName: string; v
     ? `👀 ${who} just opened their ${kind}agreement`
     : `👀 An agreement was just opened`;
   const buttons = opts.oppId
-    ? [{ text: "Open the lead", onClick: { openLink: { url: `https://kpi-tracker-lovat.vercel.app/crm/${opts.oppId}` } } }]
+    ? [{ text: "Open the lead", onClick: { openLink: { url: `${APP_URL}/crm/${opts.oppId}` } } }]
     : [];
   const payload = {
     text: `${headline} — “${opts.docName}”`,

@@ -10,6 +10,8 @@
 //   dispositions → buyer/developer sourcing + "to research" lists for the dispo team
 //   directrei    → Direct REI AI updates + qualified-lead reporting
 //   warroom      → end-of-day "War Room updates" — what shipped in the app that day
+import { APP_URL } from "@/lib/site";
+
 export type ChatSpace = "contracts" | "kpi" | "phonehealth" | "receipts" | "leadership" | "team" | "acquisitions" | "dispositions" | "directrei" | "warroom";
 
 // 🔑 Resolve a room's webhook URL. A DB override (Resource "__chat_webhooks__", a
@@ -44,7 +46,7 @@ export async function postImageCard(space: ChatSpace, text: string, imageUrl: st
     if (!url) return false;
     const r = await fetch(url, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, cardsV2: [{ cardId: "kpi-eod", card: { sections: [{ widgets: [{ image: { imageUrl, onClick: { openLink: { url: "https://kpi-tracker-lovat.vercel.app/report" } } } }] }] } }] }),
+      body: JSON.stringify({ text, cardsV2: [{ cardId: "kpi-eod", card: { sections: [{ widgets: [{ image: { imageUrl, onClick: { openLink: { url: `${APP_URL}/report` } } } }] }] } }] }),
     });
     return r.ok;
   } catch { return false; }

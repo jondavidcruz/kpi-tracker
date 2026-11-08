@@ -2,6 +2,7 @@
 // Phase 3 extends sendAlert() to also deliver to Google Chat + email and adds
 // scheduled pace/missing-entry checks.
 import { db } from "./db";
+import { APP_URL } from "@/lib/site";
 import { getActiveReps, getSettings, resolveGoal, getAllTargets, resolveGoalWith } from "./data";
 import { navAllowlist, tracksSpeedTest } from "./auth";
 import { shiftStartHour } from "./shift";
@@ -601,7 +602,7 @@ export async function sendDailyDigest(date: string, opts?: { chat?: boolean; ema
     `📊 *EOD KPIs — ${date}*\n` +
     [...byWho.entries()].map(([who, misses]) => `• *${who}*: behind on ${misses.join(" · ")}`).join("\n") +
     (justified.length ? `\n✅ ${justified.length} miss${justified.length === 1 ? "" : "es"} justified with reasons` : "") +
-    `\n📈 Full picture: kpi-tracker-lovat.vercel.app/report`;
+    `\n📈 Full picture: ${APP_URL.replace(/^https?:\/\//, "")}/report`;
 
   // Only post to Google Chat when the CRUCIAL (money / hard) alert set actually CHANGED
   // vs the previous weekday — otherwise the same digest spams the channel every day. If a

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { APP_URL } from "@/lib/site";
 import { redirect } from "next/navigation";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
@@ -552,7 +553,7 @@ export async function ticketEscalateAction(formData: FormData) {
   const msgs = (await readTicketChats())[id] ?? [];
   if (escalationCount(msgs) >= 3) return;
   await appendTicketMsg(id, { by: me.name, at: new Date().toISOString(), text: `⚠️ ESCALATED: ${reason}`, kind: "escalation" });
-  try { await sendEmail(`⚠️ Ticket ESCALATED by ${me.name}: ${t.title}`, `<p><strong>${me.name}</strong> escalated their ticket for senior review.</p><p><strong>Reason:</strong> ${reason}</p><p>Open the triage queue: https://kpi-tracker-lovat.vercel.app/tickets</p>`); } catch { /* best-effort */ }
+  try { await sendEmail(`⚠️ Ticket ESCALATED by ${me.name}: ${t.title}`, `<p><strong>${me.name}</strong> escalated their ticket for senior review.</p><p><strong>Reason:</strong> ${reason}</p><p>Open the triage queue: ${APP_URL}/tickets</p>`); } catch { /* best-effort */ }
   revalidatePath("/tickets");
 }
 

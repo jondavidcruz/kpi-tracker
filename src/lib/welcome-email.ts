@@ -1,8 +1,7 @@
 import { db } from "@/lib/db";
 import { readCommissionPlans, planForUser, pathToGoal } from "@/lib/commissions";
 import { decryptSecret, vaultConfigured } from "@/lib/crypto";
-
-const APP_URL = "https://kpi-tracker-lovat.vercel.app";
+import { APP_URL } from "@/lib/site";
 
 // Role → the systems a new hire needs (mirrors the onboarding checklist). `soft`
 // is the Software-directory name we try to match for a shared login to include.

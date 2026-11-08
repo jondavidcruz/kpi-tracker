@@ -4,6 +4,7 @@
 // one action, and a per-hire "Send welcome email" that emails their logins, systems,
 // and pay/bonus schedule. Collapses the old roster + Admin→Team + Onboarding dance.
 import { db } from "@/lib/db";
+import { APP_URL } from "@/lib/site";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { defaultNewRepNavHidden } from "@/lib/navItems";
 import { buildWelcomeEmail } from "@/lib/welcome-email";
@@ -71,7 +72,7 @@ export async function sendWelcomeEmailAction(formData: FormData) {
         select: { token: true },
       });
     }
-    if (a?.token) assessUrl = `https://kpi-tracker-lovat.vercel.app/assess/${a.token}`;
+    if (a?.token) assessUrl = `${APP_URL}/assess/${a.token}`;
   } catch { /* assessment best-effort — email still sends without the link */ }
   const { subject, html } = await buildWelcomeEmail({ name: u.name, position: u.position ?? "", email: u.email, assessUrl });
   // Auto-attach their most recent signed agreement (TeamDoc) if one is uploaded,

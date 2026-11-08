@@ -2,6 +2,7 @@
 // Acquisitions CRM actions (Jon 2026-10-07). Access = acquisitions reps +
 // managers (same people who could touch these leads in GHL).
 import { revalidatePath } from "next/cache";
+import { APP_URL } from "@/lib/site";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
@@ -816,7 +817,7 @@ export async function sendCrmEmailAction(formData: FormData): Promise<{ ok: bool
   const fromAddr = `${displayName} <${localPart}@${domain}>`;
   // 🖼 branded signature image (their Gmail block), referenced by URL so it renders in email clients
   const sigImg = (await hasSignatureImage(firstOf(me.name)))
-    ? `<div style="margin-top:10px"><img src="https://kpi-tracker-lovat.vercel.app/api/sig/${encodeURIComponent(firstOf(me.name))}" alt="${me.name.replace(/"/g, "")}" style="max-width:380px;height:auto;display:block"></div>`
+    ? `<div style="margin-top:10px"><img src="${APP_URL}/api/sig/${encodeURIComponent(firstOf(me.name))}" alt="${me.name.replace(/"/g, "")}" style="max-width:380px;height:auto;display:block"></div>`
     : "";
   const html = `<p>${body.replace(/\n/g, "<br>")}</p><p style="color:#64748b;font-size:13px;white-space:pre-line">${sig.replace(/</g, "&lt;")}</p>${sigImg}`;
   const { getChannelConfig, sendEmailTo, sendEmailWithAttachment } = await import("@/lib/notify");
@@ -1809,7 +1810,7 @@ export async function telnyxCallAction(formData: FormData): Promise<{ ok: boolea
     const res = await fetch("https://api.telnyx.com/v2/calls", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ connection_id: conn, to: repPhone, from, client_state: Buffer.from(JSON.stringify({ bridgeTo: to, oppId, contactId, rep: me.name })).toString("base64"), webhook_url: "https://kpi-tracker-lovat.vercel.app/api/telnyx/call" }),
+      body: JSON.stringify({ connection_id: conn, to: repPhone, from, client_state: Buffer.from(JSON.stringify({ bridgeTo: to, oppId, contactId, rep: me.name })).toString("base64"), webhook_url: `${APP_URL}/api/telnyx/call` }),
     });
     if (!res.ok) return { ok: false, msg: `Telnyx: ${res.status} ${(await res.text()).slice(0, 120)}` };
     if (contactId) await logCrmEvent({ contactId, oppId, kind: "call", body: `Click-to-call started → ${to}`, actor: me.name });
