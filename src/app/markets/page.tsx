@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { Card, SectionTitle } from "@/components/ui";
 import { readTargetMarkets, readMarketPulls, coverageFor } from "@/lib/target-markets";
 import MarketsBoard, { type MarketView } from "@/components/MarketsBoard";
-import DealMachineResearch from "@/components/DealMachineResearch";
+import ResearchWorkbench from "@/components/ResearchWorkbench";
 import MarketFinder from "@/components/MarketFinder";
 import { readScan, scoreCounties } from "@/lib/market-scan";
 import { SCAN_SEED } from "@/lib/market-scan-seed";
@@ -111,6 +111,17 @@ export default async function MarketsPage() {
     }];
   });
 
+  // At-a-glance market read for the Research Workbench — keyed by county FIPS so picking a county
+  // shows its price tier / land ≥$100k share / YoY / days-to-pending right next to the filters.
+  const scanAtAGlance: Record<string, { name: string; state: string; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; landHigh: number | null; landTotal: number | null }> = {};
+  for (const c of scanStore.counties ?? []) {
+    scanAtAGlance[c.fips] = {
+      name: c.name, state: c.state, tier: c.tier,
+      price: c.medianSalePrice, yoy: c.yoyPct, dtp: c.daysToPending,
+      landShare: c.land ? c.land.highShare : null, landHigh: c.land ? c.land.high : null, landTotal: c.land ? c.land.total : null,
+    };
+  }
+
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -120,7 +131,7 @@ export default async function MarketsPage() {
       />
       <MarketFinder initial={scanStore} canRefresh={leader} />
       <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} />
-      {leader && <DealMachineResearch quickMarkets={quickMarkets} />}
+      {leader && <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} />}
     </div>
   );
 }

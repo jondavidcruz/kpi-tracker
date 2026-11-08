@@ -1,0 +1,231 @@
+"use client";
+// 🔬 Research Workbench — research a market BEFORE you pull. Pick a county/city/ZIP, dial the
+// land + owner-motivation buy-box, and watch the FREE live count update as you go (0 credits).
+// When the pool and the market read both look right, the Filter Recipe is your handoff — replicate
+// it in DealMachine to pull. Replaces the old 🏕 DealMachine panel (research-first, per Jon's flow:
+// "the main thing I use this map for is research first, before we start actually pulling").
+import { useEffect, useRef, useState } from "react";
+import {
+  CATALOG, PRESETS, DEFAULT_STATE, PROPERTY_TYPE_OPTS, compileFilters, describeFilters, activeCount,
+  type WorkbenchState, type Control,
+} from "@/lib/dm-filter-catalog";
+
+type Loc = { type: "county" | "city" | "zip_code" | "state"; code: string; name: string; state?: string; property_count?: number };
+type Glance = { name: string; state: string; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; landHigh: number | null; landTotal: number | null };
+
+const clone = (s: WorkbenchState): WorkbenchState => ({ enums: { ...s.enums }, bools: { ...s.bools }, nums: { ...s.nums } });
+
+export default function ResearchWorkbench({ quickMarkets = [], scan = {} }: { quickMarkets?: { name: string; fips: string }[]; scan?: Record<string, Glance> }) {
+  const [status, setStatus] = useState<"checking" | "ok" | "needkey" | "off">("checking");
+  const [statusMsg, setStatusMsg] = useState("");
+  const [locQ, setLocQ] = useState("");
+  const [locResults, setLocResults] = useState<Loc[]>([]);
+  const [picked, setPicked] = useState<Loc | null>(null);
+  const [state, setState] = useState<WorkbenchState>(() => clone(DEFAULT_STATE));
+  const [count, setCount] = useState<{ total_properties: number; total_people: number } | null>(null);
+  const [counting, setCounting] = useState(false);
+  const [err, setErr] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const reqSeq = useRef(0);
+
+  useEffect(() => {
+    fetch("/api/markets/dm?action=ping").then((r) => r.json()).then((j) => {
+      if (!j.configured) { setStatus("off"); setStatusMsg("DealMachine key not set in Vercel — filters still work, but live counts need it."); }
+      else if (j.countOk) { setStatus("ok"); setStatusMsg(j.detail || ""); }
+      else { setStatus("needkey"); setStatusMsg(j.detail || "v2 API not reachable with the current key."); }
+    }).catch(() => { setStatus("needkey"); setStatusMsg("couldn't reach DealMachine"); });
+  }, []);
+
+  // 🔴 Live FREE count — debounced. Re-runs on every filter/area change. Counting costs no credits,
+  // so this is the whole point: dial the buy-box and watch the pool move in real time.
+  useEffect(() => {
+    if (!picked || status === "off") { setCount(null); return; }
+    const seq = ++reqSeq.current;
+    setCounting(true); setErr("");
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch("/api/markets/dm", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ locations: [{ type: picked.type, code: picked.code }], filters: compileFilters(state) }),
+        });
+        const j = await r.json();
+        if (seq !== reqSeq.current) return; // a newer request superseded this one
+        if (!r.ok) { setErr(j.error || "count failed"); setCount(null); }
+        else setCount(j.count);
+      } catch { if (seq === reqSeq.current) setErr("network error"); }
+      finally { if (seq === reqSeq.current) setCounting(false); }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [picked, state, status]);
+
+  async function searchLoc() {
+    if (!locQ.trim()) return;
+    setErr("");
+    try { const r = await fetch(`/api/markets/dm?action=locations&q=${encodeURIComponent(locQ)}`); const j = await r.json(); setLocResults(j.data ?? []); }
+    catch { setErr("location search failed"); }
+  }
+
+  const glance = picked && picked.type === "county" ? scan[picked.code] : undefined;
+  const recipe = describeFilters(state);
+  const nActive = activeCount(state);
+
+  // control mutators
+  const setEnum = (id: string, optId: number) => setState((s) => {
+    const cur = s.enums[id] ?? []; const next = cur.includes(optId) ? cur.filter((x) => x !== optId) : [...cur, optId];
+    return { ...s, enums: { ...s.enums, [id]: next } };
+  });
+  const toggleBool = (id: string) => setState((s) => ({ ...s, bools: { ...s.bools, [id]: !s.bools[id] } }));
+  const setNum = (id: string, key: "min" | "max", v: string) => setState((s) => {
+    const cur = { ...(s.nums[id] ?? {}) };
+    if (v === "") delete cur[key]; else cur[key] = Number(v);
+    const nums = { ...s.nums }; if (cur.min == null && cur.max == null) delete nums[id]; else nums[id] = cur;
+    return { ...s, nums };
+  });
+
+  function copyRecipe() {
+    const text = (glance ? `${glance.name}, ${glance.state}\n` : picked ? `${picked.name}\n` : "") + recipe.map((l) => "• " + l).join("\n");
+    navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {});
+  }
+
+  function renderControl(c: Control) {
+    if (c.kind === "enum") {
+      const sel = state.enums[c.id] ?? [];
+      return (
+        <div key={c.id} className="flex flex-wrap items-center gap-1">
+          <span className="mr-1 text-[11px] font-semibold text-slate-600">{c.label}</span>
+          {c.options.map((o) => (
+            <button key={o.id} onClick={() => setEnum(c.id, o.id)}
+              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${sel.includes(o.id) ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{o.label}</button>
+          ))}
+        </div>
+      );
+    }
+    if (c.kind === "bool") {
+      const on = !!state.bools[c.id];
+      return (
+        <button key={c.id} onClick={() => toggleBool(c.id)} title={c.hint}
+          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${on ? (c.apply === false ? "bg-rose-50 text-rose-700 ring-rose-300" : "bg-emerald-50 text-emerald-700 ring-emerald-300") : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"}`}>
+          {on ? "✓ " : ""}{c.emoji ? c.emoji + " " : ""}{c.label}
+        </button>
+      );
+    }
+    const r = state.nums[c.id] ?? {};
+    return (
+      <label key={c.id} className="flex items-center gap-1 text-[11px] text-slate-600" title={c.hint}>
+        <span className="font-semibold">{c.label}{c.hint && !c.money ? ` (${c.hint})` : ""}</span>
+        {c.money && <span className="text-slate-400">$</span>}
+        <input type="number" step={c.step ?? 1} value={r.min ?? ""} onChange={(e) => setNum(c.id, "min", e.target.value)} placeholder="min" className="w-20 rounded border border-slate-300 px-1 py-0.5" />
+        {!c.minOnly && <>–<input type="number" step={c.step ?? 1} value={r.max ?? ""} onChange={(e) => setNum(c.id, "max", e.target.value)} placeholder="max" className="w-20 rounded border border-slate-300 px-1 py-0.5" /></>}
+      </label>
+    );
+  }
+
+  const tierPill = (t: Glance["tier"]) => t === "target" ? "bg-emerald-100 text-emerald-700" : t === "watch" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500";
+
+  return (
+    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-extrabold text-slate-800">🔬 Research Workbench</span>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${status === "ok" ? "bg-emerald-100 text-emerald-700" : status === "checking" ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-800"}`}>
+          {status === "ok" ? "✓ live counts" : status === "checking" ? "checking…" : status === "off" ? "counts need key" : "needs v2 key"}
+        </span>
+        <span className="ml-auto text-[11px] text-slate-400">research before you pull · counts are FREE</span>
+      </div>
+      {(status === "needkey" || status === "off") && (
+        <div className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800 ring-1 ring-amber-200">
+          {statusMsg} Add a <code>dm_sk_live_…</code> key from DealMachine → Settings → API in Vercel as <code>DEALMACHINE_V2_KEY</code>, then redeploy. You can still build + copy a filter recipe below without it.
+        </div>
+      )}
+
+      {/* 1 · Area */}
+      <div className="mb-3">
+        <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">1 · Where</div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+          <input value={locQ} onChange={(e) => setLocQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") searchLoc(); }} placeholder="County, city, or ZIP — e.g. Collier County, FL" className="w-64 rounded border border-slate-300 px-2 py-1" />
+          <button onClick={searchLoc} className="rounded-lg bg-slate-800 px-2.5 py-1 font-bold text-white hover:bg-slate-700">Find</button>
+          {picked && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700 ring-1 ring-emerald-200">📍 {picked.name} ({picked.type.replace("_", " ")})</span>}
+          {picked && <button onClick={() => { setPicked(null); setCount(null); }} className="text-[10px] font-semibold text-slate-400 hover:text-slate-600">change</button>}
+        </div>
+        {quickMarkets.length > 0 && !picked && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            <span className="self-center text-[10px] font-bold uppercase tracking-wide text-slate-400">Quick pick:</span>
+            {quickMarkets.map((q) => (
+              <button key={q.fips} onClick={() => { setPicked({ type: "county", code: q.fips, name: q.name }); setLocResults([]); }}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${q.fips.startsWith("45") ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}
+                title={q.fips.startsWith("45") ? "South Carolina" : "Florida"}>{q.name.split(" / ")[0]}</button>
+            ))}
+          </div>
+        )}
+        {locResults.length > 0 && !picked && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {locResults.map((l) => (
+              <button key={l.code + l.type} onClick={() => { setPicked(l); setLocResults([]); }} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-200">{l.name} · {l.type.replace("_", " ")}{l.property_count ? ` · ${l.property_count.toLocaleString()}` : ""}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* At-a-glance market read */}
+      {glance && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${tierPill(glance.tier)}`}>{glance.tier}</span>
+          <span className="text-[11px] text-slate-600"><b className="text-slate-800">{glance.price != null ? "$" + glance.price.toLocaleString() : "—"}</b> home median{glance.yoy != null ? <span className={glance.yoy >= 0 ? "text-emerald-600" : "text-rose-600"}> · {glance.yoy >= 0 ? "+" : ""}{glance.yoy}% YoY</span> : null}</span>
+          <span className="text-[11px] text-slate-600"><b className="text-slate-800">{glance.dtp != null ? glance.dtp : "—"}</b> days→pending</span>
+          {glance.landShare != null && <span className="text-[11px] text-slate-600"><b className="text-slate-800">{Math.round(glance.landShare * 100)}%</b> of land ≥$100k{glance.landHigh != null && glance.landTotal != null ? ` (${glance.landHigh.toLocaleString()}/${glance.landTotal.toLocaleString()})` : ""}</span>}
+          <span className="ml-auto text-[10px] text-slate-400">market read · from the Finder scan</span>
+        </div>
+      )}
+
+      {/* 2 · Buy-box */}
+      <div className="mb-3">
+        <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          2 · Buy-box
+          <button onClick={() => setState(clone(DEFAULT_STATE))} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-200">reset</button>
+          {nActive > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{nActive} filter{nActive > 1 ? "s" : ""} on</span>}
+        </div>
+        {/* presets */}
+        <div className="mb-2 flex flex-wrap gap-1">
+          {PRESETS.map((p) => <button key={p.key} onClick={() => setState(p.state())} className="rounded-full bg-lime-50 px-2 py-0.5 text-[11px] font-semibold text-lime-800 ring-1 ring-lime-200 hover:bg-lime-100">{p.emoji} {p.label}</button>)}
+        </div>
+        {/* groups */}
+        <div className="space-y-2.5">
+          {CATALOG.map((g) => (
+            <div key={g.key}>
+              <div className="mb-1 text-[11px] font-bold text-slate-700">{g.emoji} {g.title} <span className="font-normal text-slate-400">— {g.blurb}</span></div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">{g.controls.map(renderControl)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 3 · Live result */}
+      <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Live count {counting && <span className="text-slate-300">· counting…</span>}</div>
+          {!picked ? <div className="text-[13px] text-slate-400">pick an area to see the pool</div> : status === "off" ? <div className="text-[13px] text-amber-600">add the key for live counts</div> : (
+            <div className="flex items-center gap-4">
+              <div><div className={`text-3xl font-extrabold tabular-nums ${counting ? "text-slate-300" : "text-slate-800"}`}>{count ? count.total_properties.toLocaleString() : "—"}</div><div className="text-[10px] font-bold uppercase text-slate-400">parcels match</div></div>
+              <div><div className={`text-3xl font-extrabold tabular-nums ${counting ? "text-slate-300" : "text-slate-500"}`}>{count ? count.total_people.toLocaleString() : "—"}</div><div className="text-[10px] font-bold uppercase text-slate-400">mailable owners</div></div>
+            </div>
+          )}
+          {err && <span className="text-[12px] font-semibold text-red-600">⚠️ {err}</span>}
+        </div>
+
+        {/* Filter recipe — the handoff to DealMachine */}
+        <div className="ml-auto max-w-sm flex-1 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-700">📋 Filter recipe</span>
+            <button onClick={copyRecipe} className="ml-auto rounded bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-slate-700">{copied ? "✓ copied" : "copy"}</button>
+          </div>
+          <div className="space-y-0.5 text-[11px] text-slate-600">
+            {recipe.map((l, i) => <div key={i}>• {l}</div>)}
+          </div>
+          <div className="mt-1.5 text-[10px] text-slate-400">Replicate this in DealMachine to pull these owners.</div>
+        </div>
+      </div>
+
+      <p className="mt-2 text-[10px] text-slate-400">Counts are free and update live as you filter. This is the research step — when the pool + market read look right, pull in DealMachine using the recipe.</p>
+    </div>
+  );
+}
