@@ -24,6 +24,12 @@ export const LAND_SOLD: Record<string, LandSold> = {
   "12091": { share: 0.69, total: 2239, high: 1536 },   // Okaloosa / Destin
   "12103": { share: 0.92, total: 2829, high: 2601 },   // Pinellas
   "12057": { share: 0.90, total: 1521, high: 1362 },   // Hillsborough / Tampa
+  // South Carolina — the SALE-price signal works here (unlike the assessed signal, which is FL-only
+  // because SC assesses land at a fractional ratio). Actual dollars sold.
+  "45019": { share: 0.85, total: 4717, high: 4023 },   // Charleston
+  "45013": { share: 0.71, total: 3920, high: 2780 },   // Beaufort / Bluffton / Hilton Head
+  "45045": { share: 0.66, total: 5709, high: 3772 },   // Greenville
+  "45051": { share: 0.40, total: 3859, high: 1542 },   // Horry / Myrtle Beach
 };
 
 export function landSoldFor(fips: string): LandSold | null { return LAND_SOLD[fips] ?? null; }
