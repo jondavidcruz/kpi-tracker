@@ -149,6 +149,10 @@ export default async function MarketsPage() {
       return await recommendMarketsByBuyerDemand(scanStore.counties ?? [], pulls, targetFipsToId);
     } catch { return undefined; } // degrade gracefully — the strip just hides
   })();
+  // 💪 Buying-power county boundaries — where our vetted buyers want to buy (green on the map).
+  const buyerCoverage = demand
+    ? await (async () => { try { const { buyerCoverageRings } = await import("@/lib/buyer-coverage-map"); return await buyerCoverageRings(demand.markets.map((m) => ({ fips: m.fips, name: m.name, state: m.state, buyers: m.buyers, newMarket: m.newMarket }))); } catch { return []; } })()
+    : [];
 
   return (
     <div className="space-y-5">
@@ -159,7 +163,7 @@ export default async function MarketsPage() {
       />
       <MarketsTabs
         showResearch={leader}
-        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} />}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
       />
