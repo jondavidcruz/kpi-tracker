@@ -94,6 +94,13 @@ export default async function MarketsPage() {
     const preset = m?.landFocus?.length ? (focusPreset[m.landFocus[0]] ?? "absentee") : "absentee";
     return { name, fips, preset };
   });
+  // County FIPS → our target-market id, so the buyer-demand engine can read pull coverage for
+  // markets we already track (a county NOT in here is a brand-new market = discovery).
+  const targetFipsToId: Record<string, string> = {};
+  for (const [name, fips] of Object.entries(MARKET_COUNTY_FIPS)) {
+    const m = markets.find((x) => x.name === name);
+    if (m) targetFipsToId[fips] = m.id;
+  }
 
   // 🔎 Market Finder — the live scan from the DB, or the precomputed seed (scored on the fly)
   // until someone runs the first refresh. Shallow-copy the seed rows so scoring never mutates
@@ -122,6 +129,15 @@ export default async function MarketsPage() {
     };
   }
 
+  // 🎯 Buyer-demand market discovery — rank WHICH markets to pull by our vetted buyers' aggregated
+  // buy-boxes (reverse-engineered from the developers we actually have), biased to NEW markets.
+  const demand = await (async () => {
+    try {
+      const { recommendMarketsByBuyerDemand } = await import("@/lib/buyer-demand-markets");
+      return await recommendMarketsByBuyerDemand(scanStore.counties ?? [], pulls, targetFipsToId);
+    } catch { return undefined; } // degrade gracefully — the strip just hides
+  })();
+
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -131,7 +147,7 @@ export default async function MarketsPage() {
       />
       <MarketFinder initial={scanStore} canRefresh={leader} />
       <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} />
-      {leader && <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} />}
+      {leader && <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} />}
     </div>
   );
 }

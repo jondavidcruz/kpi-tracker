@@ -9,13 +9,14 @@ import {
   CATALOG, PRESETS, DEFAULT_STATE, PROPERTY_TYPE_OPTS, compileFilters, describeFilters, activeCount,
   type WorkbenchState, type Control,
 } from "@/lib/dm-filter-catalog";
+import type { DemandResult, RecommendedMarket } from "@/lib/buyer-demand-markets";
 
 type Loc = { type: "county" | "city" | "zip_code" | "state"; code: string; name: string; state?: string; property_count?: number };
 type Glance = { name: string; state: string; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; landHigh: number | null; landTotal: number | null };
 
 const clone = (s: WorkbenchState): WorkbenchState => ({ enums: { ...s.enums }, bools: { ...s.bools }, nums: { ...s.nums } });
 
-export default function ResearchWorkbench({ quickMarkets = [], scan = {} }: { quickMarkets?: { name: string; fips: string }[]; scan?: Record<string, Glance> }) {
+export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand }: { quickMarkets?: { name: string; fips: string }[]; scan?: Record<string, Glance>; demand?: DemandResult }) {
   const [status, setStatus] = useState<"checking" | "ok" | "needkey" | "off">("checking");
   const [statusMsg, setStatusMsg] = useState("");
   const [locQ, setLocQ] = useState("");
@@ -25,8 +26,9 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {} }: { qu
   const [count, setCount] = useState<{ total_properties: number; total_people: number } | null>(null);
   const [counting, setCounting] = useState(false);
   const [err, setErr] = useState("");
-  const [showAll, setShowAll] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showAllRecs, setShowAllRecs] = useState(false);
+  const [openRec, setOpenRec] = useState<string | null>(null);
   const reqSeq = useRef(0);
 
   useEffect(() => {
@@ -64,6 +66,15 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {} }: { qu
     setErr("");
     try { const r = await fetch(`/api/markets/dm?action=locations&q=${encodeURIComponent(locQ)}`); const j = await r.json(); setLocResults(j.data ?? []); }
     catch { setErr("location search failed"); }
+  }
+
+  // Load a buyer-demand recommendation into the workbench: pick the county + apply its derived
+  // buy-box → the live count runs automatically. This is the gold loop (demand → recipe → count).
+  function loadRec(m: RecommendedMarket) {
+    setPicked({ type: "county", code: m.fips, name: `${m.name}, ${m.state}` });
+    setState(clone(m.recipe));
+    setLocResults([]); setOpenRec(null);
+    if (typeof window !== "undefined") window.scrollTo({ top: (document.getElementById("rw-buybox")?.offsetTop ?? 0) - 80, behavior: "smooth" });
   }
 
   const glance = picked && picked.type === "county" ? scan[picked.code] : undefined;
@@ -138,6 +149,68 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {} }: { qu
         </div>
       )}
 
+      {/* 🎯 Recommended by your vetted buyers — the gold loop: demand → recipe → count */}
+      {demand && (
+        <div className="mb-3 rounded-xl bg-gradient-to-br from-emerald-50 to-cyan-50 p-3 ring-1 ring-emerald-200">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <span className="text-[12px] font-extrabold text-emerald-900">🎯 Pull where your buyers are hungry</span>
+            <span className="text-[11px] text-emerald-700">ranked from {demand.vettedBuyers} vetted buy-box{demand.vettedBuyers === 1 ? "" : "es"} · new markets first</span>
+            {demand.broadBuyers > 0 && <span className="text-[10px] text-emerald-600">· {demand.broadBuyers} nationwide/state-only (not county-ranked)</span>}
+          </div>
+          {demand.markets.length === 0 ? (
+            <div className="rounded-lg bg-white/70 px-3 py-2 text-[11px] text-slate-500">
+              No vetted buyer buy-boxes resolved to a FL/SC county yet. Capture buy-box areas on your vetted developers (county names) and they'll rank here.
+              {demand.unresolvedAreas.length > 0 && <span className="text-slate-400"> Unmapped areas seen: {demand.unresolvedAreas.join(", ")}.</span>}
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {(showAllRecs ? demand.markets : demand.markets.slice(0, 6)).map((m) => {
+                  const tierCls = m.scanTier === "target" ? "text-emerald-700" : m.scanTier === "watch" ? "text-amber-700" : "text-slate-500";
+                  return (
+                    <div key={m.fips} className="w-60 rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-slate-200">
+                      <div className="flex items-start gap-1.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[12px] font-bold text-slate-800">{m.name.replace(/ County$/, "")}, {m.state}</div>
+                          <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                            <span className="font-semibold text-slate-600">👥 {m.buyers}</span>
+                            {m.momPop > 0 && <span className="text-emerald-600">🏠{m.momPop}</span>}
+                            {m.bigBuilder > 0 && <span className="text-slate-400">🏢{m.bigBuilder}</span>}
+                          </div>
+                        </div>
+                        <span className={`rounded bg-slate-50 px-1.5 py-0.5 text-[11px] font-extrabold tabular-nums ${tierCls}`} title="opportunity score">{m.score}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1 text-[9px] font-bold uppercase">
+                        {m.newMarket && <span className="rounded bg-violet-100 px-1 py-0.5 text-violet-700">🆕 new</span>}
+                        {m.coverage === "never" && !m.newMarket && <span className="rounded bg-sky-100 px-1 py-0.5 text-sky-700">never pulled</span>}
+                        {m.coverage === "cooldown" && <span className="rounded bg-amber-100 px-1 py-0.5 text-amber-700">⏳ {m.cooldownLeft}d</span>}
+                        {m.landSharePct != null && <span className="rounded bg-emerald-100 px-1 py-0.5 text-emerald-700">💎 {m.landSharePct}% ≥$100k</span>}
+                        {m.priceCeil != null && <span className="rounded bg-slate-100 px-1 py-0.5 text-slate-500">≤${(m.priceCeil / 1000).toFixed(0)}k</span>}
+                      </div>
+                      <div className="mt-1.5 flex items-center gap-1">
+                        <button onClick={() => loadRec(m)} className="flex-1 rounded bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-emerald-700">Research this →</button>
+                        <button onClick={() => setOpenRec(openRec === m.fips ? null : m.fips)} className="rounded bg-slate-100 px-1.5 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-200" title="why">{openRec === m.fips ? "×" : "?"}</button>
+                      </div>
+                      {openRec === m.fips && (
+                        <div className="mt-1.5 border-t border-slate-100 pt-1.5 text-[10px] text-slate-600">
+                          {m.reasons.map((r, i) => <div key={i}>• {r}</div>)}
+                          {m.buyerNames.length > 0 && <div className="mt-1 text-slate-400">Wants it: {m.buyerNames.join(", ")}</div>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {demand.markets.length > 6 && (
+                <button onClick={() => setShowAllRecs((v) => !v)} className="mt-1.5 text-[10px] font-semibold text-emerald-700 hover:text-emerald-900">
+                  {showAllRecs ? "show fewer" : `show all ${demand.markets.length} →`}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* 1 · Area */}
       <div className="mb-3">
         <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">1 · Where</div>
@@ -178,7 +251,7 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {} }: { qu
       )}
 
       {/* 2 · Buy-box */}
-      <div className="mb-3">
+      <div className="mb-3" id="rw-buybox">
         <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
           2 · Buy-box
           <button onClick={() => setState(clone(DEFAULT_STATE))} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-200">reset</button>
