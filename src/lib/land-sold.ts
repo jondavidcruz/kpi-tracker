@@ -20,6 +20,10 @@ export const LAND_SOLD: Record<string, LandSold> = {
   "12011": { share: 0.93, total: 2412, high: 2235 },   // Broward
   "12081": { share: 0.96, total: 7043, high: 6763 },   // Manatee / Lakewood Ranch
   "12087": { share: 0.81, total: 1477, high: 1193 },   // Monroe / Keys
+  "12061": { share: 0.71, total: 2979, high: 2117 },   // Indian River / Vero Beach
+  "12091": { share: 0.69, total: 2239, high: 1536 },   // Okaloosa / Destin
+  "12103": { share: 0.92, total: 2829, high: 2601 },   // Pinellas
+  "12057": { share: 0.90, total: 1521, high: 1362 },   // Hillsborough / Tampa
 };
 
 export function landSoldFor(fips: string): LandSold | null { return LAND_SOLD[fips] ?? null; }
