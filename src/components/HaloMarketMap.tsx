@@ -76,7 +76,6 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [saving, setSaving] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
-  const [big, setBig] = useState(false);
   const [show, setShow] = useState({ markets: true, buyers: true, terr: true, opp: true });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -252,31 +251,34 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     try { map.fitBounds(group.getBounds().pad(0.15)); } catch { /* no markers */ }
   }, [ready, markets, buyerPoints, territories, show, scanPoints]);
 
-  // Resize the map when the expand toggle changes.
+  // Re-measure the map once it's ready (container has its real size by then).
   useEffect(() => {
     if (!ready) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const map = mapRef.current as any;
     const t = setTimeout(() => { try { map?.invalidateSize?.(); } catch { /* */ } }, 220);
     return () => clearTimeout(t);
-  }, [big, ready]);
+  }, [ready]);
 
   const charted = markets.filter((v) => v.buyerCount > 0).length;
   return (
     <div className="rounded-2xl bg-slate-900 p-2 shadow-sm ring-1 ring-slate-800">
       <style>{`.fo-map-label{background:transparent;border:none;box-shadow:none;color:#f1f5f9;font:700 10px system-ui;text-shadow:0 1px 3px #000}.leaflet-popup-content{margin:10px 12px}`}</style>
-      <div className="mb-2 flex flex-wrap items-center gap-3 px-1 text-[11px] font-semibold text-slate-300">
-        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-cyan-400/40 ring-2 ring-cyan-400/40" /> Charted</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-500" /> Uncharted</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-blue-500/40 ring-1 ring-blue-400" /> drawn territories</span>
-        <span className="ml-auto rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} charted</span>
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-semibold text-slate-300">
+        <span className="text-slate-400">What the circles mean:</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full" style={{ background: "#10b981" }} /> 🎯 Target market</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full" style={{ background: "#f59e0b" }} /> 👀 Watch market</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full bg-cyan-400/50 ring-2 ring-cyan-400/50" /> 🟢 Buyers here</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full" style={{ background: "#64748b" }} /> Uncharted / low</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-blue-500/40 ring-1 ring-blue-400" /> ✅ Explored (marked)</span>
+        <span className="text-slate-500">· bigger = higher opportunity score</span>
+        <span className="ml-auto rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
         <span className="font-bold text-slate-400">Layers:</span>
         {(["opp", "markets", "buyers", "terr"] as const).map((k) => (
           <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : "🖍 My areas"}</label>
         ))}
-        <button onClick={() => setBig((b) => !b)} className="rounded-lg bg-slate-700 px-2.5 py-1 font-bold text-white hover:bg-slate-600">{big ? "⤡ Shrink" : "⛶ Expand"}</button>
         {canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
         {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
       </div>
@@ -316,7 +318,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <button onClick={clearDrawn} className="rounded-lg bg-slate-600 px-3 py-1 font-bold text-white hover:bg-slate-500">Cancel</button>
         </div>
       )}
-      <div ref={ref} className={`w-full overflow-hidden rounded-xl transition-all ${big ? "h-[92vh]" : "h-[76vh] min-h-[560px]"}`} style={{ background: "#0b1220" }} />
+      <div ref={ref} className="h-[84vh] min-h-[600px] w-full overflow-hidden rounded-xl" style={{ background: "#0b1220" }} />
       {territories.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5 px-1">
           {territories.map((t) => (
