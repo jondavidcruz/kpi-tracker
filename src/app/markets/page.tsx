@@ -6,6 +6,7 @@ import MarketsBoard, { type MarketView } from "@/components/MarketsBoard";
 import DealMachineResearch from "@/components/DealMachineResearch";
 import MarketFinder from "@/components/MarketFinder";
 import { readScan } from "@/lib/market-scan";
+import { COUNTY_CENTROIDS } from "@/lib/county-centroids";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,17 @@ export default async function MarketsPage() {
     return { name, fips, preset };
   });
 
+  // 🔎 Market Finder points for the map — join each scanned county to its centroid.
+  const scanPoints = (scan?.counties ?? []).flatMap((c) => {
+    const ctr = COUNTY_CENTROIDS[c.fips];
+    if (!ctr) return [];
+    return [{
+      fips: c.fips, name: c.name.replace(/ County$/, ""), state: c.state, score: c.score, tier: c.tier,
+      price: c.medianSalePrice, yoy: c.yoyPct, dtp: c.daysToPending,
+      landShare: c.land ? c.land.highShare : null, lat: ctr[0], lng: ctr[1],
+    }];
+  });
+
   return (
     <div className="space-y-5">
       <SectionTitle
@@ -101,7 +113,7 @@ export default async function MarketsPage() {
         accent="bg-emerald-400"
       />
       <MarketFinder initial={scan} canRefresh={leader} />
-      <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} />
+      <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} />
       {leader && <DealMachineResearch quickMarkets={quickMarkets} />}
     </div>
   );

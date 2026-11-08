@@ -11,6 +11,7 @@ import type { MarketView } from "@/components/MarketsBoard";
 import type { Territory, TerrStatus } from "@/lib/map-territories";
 
 type Pt = { lat: number; lng: number };
+export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; lat: number; lng: number };
 
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
@@ -54,7 +55,7 @@ function loadScript(src: string, css?: string): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {} }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }> }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
@@ -71,7 +72,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [searchQ, setSearchQ] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
   const [big, setBig] = useState(false);
-  const [show, setShow] = useState({ markets: true, buyers: true, terr: true });
+  const [show, setShow] = useState({ markets: true, buyers: true, terr: true, opp: true });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
@@ -195,6 +196,22 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     }
     if (show.buyers) for (const p of buyerPoints) L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
 
+    // 🔎 Opportunity layer — Market Finder county scores (public data). Show target + watch only
+    // to keep the map clean; color by tier, size by score. Diamond-ish via a square-ish marker.
+    const OPP_COLOR = { target: "#10b981", watch: "#f59e0b", low: "#94a3b8" } as const;
+    if (show.opp) for (const s of scanPoints) {
+      if (s.tier === "low") continue;
+      const rad = 6 + (s.score / 100) * 14;
+      const mk = L.circleMarker([s.lat, s.lng], { radius: rad, color: "#ffffff", weight: 1.5, fillColor: OPP_COLOR[s.tier], fillOpacity: 0.8 }).addTo(group);
+      const landLine = s.landShare != null ? `<div>🏕 Land ≥$100k: <b>${Math.round(s.landShare * 100)}%</b> of parcels</div>` : "";
+      mk.bindPopup(
+        `<div style="font:12px system-ui;min-width:180px"><div style="font-weight:800;font-size:13px">${s.name} <span style="color:#64748b;font-weight:600">${s.state}</span></div>` +
+        `<div style="margin:3px 0"><b style="font-size:15px">${s.score}</b> opportunity · ${s.tier === "target" ? "🎯 Target" : "👀 Watch"}</div>` +
+        `<div>🏠 Median ${s.price != null ? "$" + Math.round(s.price).toLocaleString() : "—"}${s.yoy != null ? ` · ${s.yoy >= 0 ? "+" : ""}${s.yoy}% YoY` : ""}</div>` +
+        `<div>⏱ ${s.dtp != null ? "~" + Math.round(s.dtp) + " days to pending" : "—"}</div>${landLine}</div>`);
+      mk.bindTooltip(`${s.name} · ${s.score}`, { direction: "top", className: "fo-map-label", offset: [0, -rad] });
+    }
+
     const placed = show.markets ? markets.filter((v) => COORDS[v.m.name]) : [];
     const maxDeals = Math.max(1, ...placed.map((v) => v.deals));
     for (const v of placed) {
@@ -212,7 +229,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       marker.bindTooltip(v.m.name.split(" / ")[0], { permanent: true, direction: "top", className: "fo-map-label", offset: [0, -r] });
     }
     try { map.fitBounds(group.getBounds().pad(0.15)); } catch { /* no markers */ }
-  }, [ready, markets, buyerPoints, territories, show]);
+  }, [ready, markets, buyerPoints, territories, show, scanPoints]);
 
   // Resize the map when the expand toggle changes.
   useEffect(() => {
@@ -235,8 +252,8 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
         <span className="font-bold text-slate-400">Layers:</span>
-        {(["markets", "buyers", "terr"] as const).map((k) => (
-          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : "🖍 My areas"}</label>
+        {(["opp", "markets", "buyers", "terr"] as const).map((k) => (
+          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : "🖍 My areas"}</label>
         ))}
         <button onClick={() => setBig((b) => !b)} className="rounded-lg bg-slate-700 px-2.5 py-1 font-bold text-white hover:bg-slate-600">{big ? "⤡ Shrink" : "⛶ Expand"}</button>
         {canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
