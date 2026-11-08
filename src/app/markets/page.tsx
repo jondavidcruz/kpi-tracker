@@ -4,6 +4,8 @@ import { Card, SectionTitle } from "@/components/ui";
 import { readTargetMarkets, readMarketPulls, coverageFor } from "@/lib/target-markets";
 import MarketsBoard, { type MarketView } from "@/components/MarketsBoard";
 import DealMachineResearch from "@/components/DealMachineResearch";
+import MarketFinder from "@/components/MarketFinder";
+import { readScan } from "@/lib/market-scan";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +17,14 @@ export default async function MarketsPage() {
     return <Card className="mx-auto max-w-md p-8 text-center text-slate-500">Target Markets is for the acquisitions &amp; leadership team.</Card>;
   }
   const leader = isManager(me);
-  const [markets, pulls, opps, buyers] = await Promise.all([
+  const [markets, pulls, opps, buyers, scan] = await Promise.all([
     readTargetMarkets(),
     readMarketPulls(),
     // Land-lead opps, for per-market performance (fuzzy address match). Light select.
     db.crmOpportunity.findMany({ where: { archivedAt: null }, select: { title: true, stage: true, value: true, createdAt: true, contact: { select: { address: true } } }, take: 6000 }).catch(() => []),
     // Vetted/active buyers' buy-boxes, for "where can we move deals" coverage (light text select).
     db.marketContact.findMany({ where: { archivedAt: null, blacklistedAt: null, vetStage: { in: ["vetted", "active"] } }, select: { buyBoxAreas: true, market: true } }).catch(() => []),
+    readScan().catch(() => null),
   ]);
   const buyerHay = buyers.map((b) => `${b.buyBoxAreas ?? ""} ${b.market ?? ""}`.toLowerCase());
 
@@ -97,6 +100,7 @@ export default async function MarketsPage() {
         subtitle="Where we hunt land — the high-net-worth, waterfront, business-dense Florida & South Carolina markets the wealthy keep building in through rate hikes, and that few wholesalers compete in. Track what we've pulled, how each market performs, and the 30-60-180 trend."
         accent="bg-emerald-400"
       />
+      <MarketFinder initial={scan} canRefresh={leader} />
       <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} />
       {leader && <DealMachineResearch quickMarkets={quickMarkets} />}
     </div>
