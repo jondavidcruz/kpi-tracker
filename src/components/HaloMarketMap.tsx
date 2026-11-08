@@ -24,6 +24,7 @@ const TILE_ATTR = "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geograph
 // and roads/street names that fill in as you zoom, so the satellite is actually navigable.
 const LABEL_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
 const ROAD_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}";
+const STREET_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
 
 const COORDS: Record<string, [number, number]> = {
   "Miami / Coral Gables": [25.72, -80.26], "Palm Beach / West Palm Beach": [26.71, -80.06],
@@ -152,11 +153,25 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         if (cancelled || !ref.current || mapRef.current) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const L = (window as any).L;
-        const map = L.map(ref.current, { center: [31.0, -81.5], zoom: 5, scrollWheelZoom: false }); // FL + SC in view
+        // Restore the last view so marking an area (which refreshes) keeps you where you were
+        // instead of snapping back to the full map (Jon 2026-11-08). Default = FL + SC in view.
+        let center: [number, number] = [31.0, -81.5], zoom = 5;
+        try { const sv = JSON.parse(sessionStorage.getItem("fo_map_view") || "null"); if (sv && Number.isFinite(sv.lat) && Number.isFinite(sv.lng) && Number.isFinite(sv.zoom)) { center = [sv.lat, sv.lng]; zoom = sv.zoom; } } catch { /* default */ }
+        const map = L.map(ref.current, { center, zoom, scrollWheelZoom: false });
         mapRef.current = map;
-        L.tileLayer(SAT_TILES, { attribution: TILE_ATTR, maxZoom: 18 }).addTo(map);
-        L.tileLayer(ROAD_TILES, { maxZoom: 18 }).addTo(map);   // roads / street names
-        L.tileLayer(LABEL_TILES, { maxZoom: 18 }).addTo(map);  // city / county / place labels + boundaries
+        map.on("moveend zoomend", () => { try { sessionStorage.setItem("fo_map_view", JSON.stringify({ lat: map.getCenter().lat, lng: map.getCenter().lng, zoom: map.getZoom() })); } catch { /* ok */ } });
+        // 🗺 Base layers (flip Satellite ↔ Streets) + free ESRI label/road overlays on top. zIndex
+        // keeps the base below the labels so switching base never covers them (Jon 2026-11-08).
+        const satBase = L.tileLayer(SAT_TILES, { attribution: TILE_ATTR, maxZoom: 18, zIndex: 1 });
+        const streetBase = L.tileLayer(STREET_TILES, { attribution: TILE_ATTR, maxZoom: 18, zIndex: 1 });
+        const roadsOv = L.tileLayer(ROAD_TILES, { maxZoom: 18, zIndex: 2 });
+        const labelsOv = L.tileLayer(LABEL_TILES, { maxZoom: 18, zIndex: 3 });
+        satBase.addTo(map); roadsOv.addTo(map); labelsOv.addTo(map);
+        L.control.layers(
+          { "🛰 Satellite": satBase, "🗺 Streets": streetBase },
+          { "🏷 Place labels": labelsOv, "🛣 Roads / streets": roadsOv },
+          { position: "topleft", collapsed: true },
+        ).addTo(map);
         dataRef.current = L.featureGroup().addTo(map);
         if (canEdit) {
           const drawn = L.featureGroup().addTo(map); drawnRef.current = drawn;
