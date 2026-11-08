@@ -80,7 +80,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [saving, setSaving] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
-  const [show, setShow] = useState({ markets: true, buyers: true, terr: true, opp: true, leads: true, power: true });
+  // Sensible defaults so the map isn't overwhelming (Jon 2026-11-08): the key layers on, the two
+  // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
+  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
