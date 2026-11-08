@@ -33,6 +33,8 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
   const [showAllRecs, setShowAllRecs] = useState(false);
   const [openRec, setOpenRec] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showEnclaves, setShowEnclaves] = useState(false);
   const reqSeq = useRef(0);
 
   useEffect(() => {
@@ -267,13 +269,18 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
           // 🏆 Elite enclaves — the high-value SUB-COUNTY targets (Winter Park, Port Royal, …); a
           // click resolves the city/ZIP + applies the 🏗 developer-lots filter (big, valuable lots).
           <div className="mt-1.5 rounded-lg bg-amber-50/70 p-2 ring-1 ring-amber-200">
-            <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">🏆 Elite enclaves — pull the high-value sub-markets (applies 🏗 developer-lots)</div>
-            <div className="flex flex-wrap gap-1">
-              {ELITE_ENCLAVES.map((e) => (
-                <button key={e.name} onClick={() => pickEnclave(e)} title={`${e.region} · wealth ${e.wealth.toFixed(1)}/5`}
-                  className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">{e.name}</button>
-              ))}
-            </div>
+            <button onClick={() => setShowEnclaves((v) => !v)} className="flex w-full items-center text-[10px] font-bold uppercase tracking-wide text-amber-700 hover:opacity-80">
+              <span>🏆 Elite enclaves — the high-value sub-markets</span>
+              <span className="ml-auto">{showEnclaves ? "▾ hide" : `▸ show ${ELITE_ENCLAVES.length}`}</span>
+            </button>
+            {showEnclaves && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {ELITE_ENCLAVES.map((e) => (
+                  <button key={e.name} onClick={() => pickEnclave(e)} title={`${e.region} · wealth ${e.wealth.toFixed(1)}/5 · applies 🏗 developer-lots`}
+                    className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">{e.name}</button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {locResults.length > 0 && !picked && (
@@ -307,43 +314,55 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
         </div>
       )}
 
-      {/* 2 · Buy-box */}
+      {/* 2 · Pick your hunt — presets are the whole job for most people; the full filter grid is
+          tucked behind "Customize" so the default view stays simple (Jon 2026-11-08: "too many
+          things to look at, make it dummy-proof"). */}
       <div className="mb-3" id="rw-buybox">
-        <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-          2 · Buy-box
-          <button onClick={() => setState(clone(DEFAULT_STATE))} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-200">reset</button>
-          {nActive > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{nActive} filter{nActive > 1 ? "s" : ""} on</span>}
-        </div>
-        {/* presets */}
-        <div className="mb-2 flex flex-wrap gap-1">
-          {PRESETS.map((p) => <button key={p.key} onClick={() => setState(p.state())} className="rounded-full bg-lime-50 px-2 py-0.5 text-[11px] font-semibold text-lime-800 ring-1 ring-lime-200 hover:bg-lime-100">{p.emoji} {p.label}</button>)}
-        </div>
-        {/* primary groups */}
-        <div className="space-y-2.5">
-          {CATALOG.filter((g) => !g.advanced).map((g) => (
-            <div key={g.key}>
-              <div className="mb-1 text-[11px] font-bold text-slate-700">{g.emoji} {g.title} <span className="font-normal text-slate-400">— {g.blurb}</span></div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">{g.controls.map(renderControl)}</div>
-            </div>
+        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">2 · Pick your hunt</div>
+        {/* presets — the one simple choice, as clear buttons */}
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {PRESETS.map((p) => (
+            <button key={p.key} onClick={() => { setState(p.state()); setShowFilters(false); }}
+              className="rounded-lg bg-lime-50 px-3 py-1.5 text-[12px] font-bold text-lime-800 ring-1 ring-lime-300 hover:bg-lime-100">{p.emoji} {p.label}</button>
           ))}
         </div>
-        {/* advanced "all filters" — the long tail behind an expander */}
-        <div className="mt-2">
-          <button onClick={() => setShowAdvanced((v) => !v)} className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200">
-            {showAdvanced ? "▾ Hide advanced filters" : `▸ All filters (${CATALOG.filter((g) => g.advanced).reduce((n, g) => n + g.controls.length, 0)} more)`}
-          </button>
-          {showAdvanced && (
-            <div className="mt-2 space-y-2.5 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-              {CATALOG.filter((g) => g.advanced).map((g) => (
-                <div key={g.key}>
-                  <div className="mb-1 text-[11px] font-bold text-slate-700">{g.emoji} {g.title}</div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">{g.controls.map(renderControl)}</div>
+        {/* what's currently set — so they see the filters without the grid */}
+        {nActive > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-[11px] ring-1 ring-slate-200">
+            <span className="font-bold text-slate-500">On:</span>
+            <span className="text-slate-700">{recipe.filter((l) => !l.startsWith("Property type")).slice(0, 4).join(" · ") || "land only"}{nActive > 4 ? ` · +${nActive - 4} more` : ""}</span>
+            <button onClick={() => setState(clone(DEFAULT_STATE))} className="ml-auto text-[10px] font-semibold text-slate-400 hover:text-slate-600">reset</button>
+          </div>
+        )}
+        {/* customize — everything detailed lives here, collapsed by default */}
+        <button onClick={() => setShowFilters((v) => !v)} className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200">
+          {showFilters ? "▾ Hide filters" : "⚙️ Customize filters"}
+        </button>
+        {showFilters && (
+          <div className="mt-2 space-y-2.5 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            {CATALOG.filter((g) => !g.advanced).map((g) => (
+              <div key={g.key}>
+                <div className="mb-1 text-[11px] font-bold text-slate-700">{g.emoji} {g.title} <span className="font-normal text-slate-400">— {g.blurb}</span></div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">{g.controls.map(renderControl)}</div>
+              </div>
+            ))}
+            <div className="border-t border-slate-200 pt-2">
+              <button onClick={() => setShowAdvanced((v) => !v)} className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100">
+                {showAdvanced ? "▾ Hide extra filters" : `▸ ${CATALOG.filter((g) => g.advanced).reduce((n, g) => n + g.controls.length, 0)} more filters`}
+              </button>
+              {showAdvanced && (
+                <div className="mt-2 space-y-2.5">
+                  {CATALOG.filter((g) => g.advanced).map((g) => (
+                    <div key={g.key}>
+                      <div className="mb-1 text-[11px] font-bold text-slate-700">{g.emoji} {g.title}</div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">{g.controls.map(renderControl)}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              <div className="text-[10px] text-slate-400">DealMachine exposes 342 filters in all; these are the land-research-relevant ones. Need a filter that isn&apos;t here? Tell me the field and I&apos;ll add it.</div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 3 · Live result */}
