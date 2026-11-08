@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { saveTerritoryAction, deleteTerritoryAction } from "@/app/markets/actions";
 import type { MarketView } from "@/components/MarketsBoard";
 import type { Territory, TerrStatus } from "@/lib/map-territories";
+import { gradeMarket } from "@/lib/market-grade";
 
 type Pt = { lat: number; lng: number };
 export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; lat: number; lng: number };
@@ -210,9 +211,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       if (!t.points || t.points.length < 3) continue;
       const poly = L.polygon(t.points, { color: TERR_COLOR[t.status], weight: 2, fillColor: TERR_COLOR[t.status], fillOpacity: 0.22 }).addTo(group);
       const st = terrStats[t.id];
+      const tg = gradeMarket({ leads: st?.leads ?? 0, deals: st?.deals ?? 0 });
       const statLine = st && (st.leads || st.deals) ? ` · 📥 ${st.leads} leads · 🏆 ${st.deals} deals` : "";
-      poly.bindTooltip(`${TERR_LABEL[t.status]} — ${t.name}${statLine}`, { sticky: true });
-      poly.bindPopup(`<div style="font:12px system-ui"><b>${TERR_LABEL[t.status]}</b><br>${t.name}${t.at ? `<br>📅 Marked ${t.at.slice(0, 10)}${t.by ? ` by ${t.by.split(" ")[0]}` : ""}` : ""}${st ? `<br>📥 <b>${st.leads}</b> leads · 🏆 <b>${st.deals}</b> deals in our CRM here` : ""}</div>`);
+      poly.bindTooltip(`${TERR_LABEL[t.status]} — ${t.name} · ${tg.grade}${statLine}`, { sticky: true });
+      poly.bindPopup(`<div style="font:12px system-ui"><b>${TERR_LABEL[t.status]}</b><br>${t.name}${t.at ? `<br>📅 Marked ${t.at.slice(0, 10)}${t.by ? ` by ${t.by.split(" ")[0]}` : ""}` : ""}<br>🏅 <b style="color:${tg.color}">${tg.label}</b>${st ? `<br>📥 <b>${st.leads}</b> leads · 🏆 <b>${st.deals}</b> deals in our CRM here` : ""}</div>`);
     }
     if (show.buyers) for (const p of buyerPoints) L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
 
@@ -241,9 +243,11 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       const r = 7 + (v.deals / maxDeals) * 13;
       const cov = v.coverage.status === "never" ? "Never pulled" : v.coverage.status === "clear" ? `Clear to pull · last ${v.coverage.lastPull}` : `Cooldown ${v.coverage.cooldownLeft}d`;
       const marker = L.circleMarker([lat, lng], { radius: r, color: "#ffffff", weight: 1.5, fillColor: COV_COLOR[v.coverage.status] ?? "#64748b", fillOpacity: charted ? 0.9 : 0.4 }).addTo(group);
+      const mg = gradeMarket({ leads: v.leads, deals: v.deals });
       marker.bindPopup(
         `<div style="font:12px system-ui;min-width:170px"><div style="font-weight:800;font-size:13px">${v.m.name}${v.m.waterfront ? " 🌊" : ""}</div>` +
         `<div style="color:#475569">${v.m.region} · W${v.m.wealth}/B${v.m.business}</div>` +
+        `<div style="margin-top:4px">🏅 <b style="color:${mg.color}">${mg.label}</b></div>` +
         `<div style="margin-top:4px">${charted ? `🟢 <b>${v.buyerCount} buyer${v.buyerCount > 1 ? "s" : ""}</b> can move deals here` : "⚪ <b>Uncharted</b> — no buyers yet"}</div>` +
         `<div>📍 ${cov}</div><div>🏷 ${v.deals} deals · ${v.leads} leads · 30/60/180: ${v.momentum.d30}/${v.momentum.d60}/${v.momentum.d180}</div></div>`);
       marker.bindTooltip(v.m.name.split(" / ")[0], { permanent: true, direction: "top", className: "fo-map-label", offset: [0, -r] });
