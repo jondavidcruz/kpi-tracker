@@ -87,6 +87,9 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
       if (num > 0 && num < 50000) monthly = num; // a monthly salary figure (skip blanks / "commission")
     }
     if (monthly > 0) peopleSeed.push({ cat: "payroll", label: prof?.name || u.name, amount: Math.round(monthly), person: true });
+    // Salaried C-suite (Viktoriia, Enrico) have no hourly/flat pay scale — seed them as a $0
+    // placeholder so they're never silently left out of the stack; Jon types the salary in Edit.
+    else if (first === "viktoriia" || first === "enrico") peopleSeed.push({ cat: "payroll", label: prof?.name || u.name, amount: 0, person: true });
   }
   peopleSeed.sort((a, b) => b.amount - a.amount);
   // CEO draw (variable) — latest month in the sheet that recorded one.

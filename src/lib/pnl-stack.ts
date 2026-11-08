@@ -18,7 +18,19 @@ export type StackItem = {
   paused?: boolean;  // currently not paid (e.g. Viktoriia's maternity) — excluded from run cost
   note?: string;
 };
-export type StackStore = { items: StackItem[]; updatedAt?: string; seededFrom?: string };
+// A point-in-time snapshot of the true monthly run cost, so Jon can watch it fall month over
+// month as he trims the stack (Nov → Dec → Jan …).
+export type StackSnapshot = { month: string; total: number; at: string };
+export type StackStore = { items: StackItem[]; updatedAt?: string; seededFrom?: string; history?: StackSnapshot[] };
+
+/** Record this month's run cost into the history (replacing any earlier same-month entry), newest
+ *  last, capped at 24 months. */
+export function appendSnapshot(history: StackSnapshot[] | undefined, month: string, total: number): StackSnapshot[] {
+  const kept = (history ?? []).filter((h) => h.month !== month);
+  kept.push({ month, total: Math.round(total), at: new Date().toISOString() });
+  kept.sort((a, b) => a.month.localeCompare(b.month));
+  return kept.slice(-24);
+}
 
 export function newId(): string { return Math.random().toString(36).slice(2, 9); }
 

@@ -9,6 +9,8 @@ import { stackTotal, stackByCat, newId, type StackItem, type StackStore } from "
 
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const usd2 = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+const MON = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const monLabel = (ym: string) => `${MON[Number(ym.slice(5)) || 0] || ym} ’${ym.slice(2, 4)}`;
 
 type Seed = { cat: PnlCat; label: string; amount: number; person?: boolean };
 
@@ -137,6 +139,25 @@ export default function CurrentStack({ initial, peopleSeed, monthSeed, canEdit, 
             <div className="mt-3 rounded-xl bg-sky-50 px-4 py-2 text-[13px] text-sky-800 ring-1 ring-sky-200">🍼 <b>{usd(pausedCost)}/mo paused</b> (e.g. maternity leave) — already excluded from the numbers above. Un-pause in Edit when they return.</div>
           )}
           {editing && <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">Edit any price or name, 🗑 delete what you cancelled, <b>+ Add</b> a new line, mark someone <b>🍼 paused</b> (maternity — excluded until they return). Save when done.</div>}
+
+          {/* 📉 Month-over-month true cost — a snapshot is recorded each time you Save. */}
+          {initial.history && initial.history.length > 0 && !sim && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-slate-50 px-4 py-2 text-[12px] ring-1 ring-slate-200">
+              <span className="font-bold text-slate-500">📉 Real cost by month:</span>
+              {initial.history.map((h, i) => {
+                const prev = initial.history![i - 1];
+                const delta = prev ? h.total - prev.total : 0;
+                return (
+                  <span key={h.month} className="inline-flex items-center gap-1">
+                    <span className="font-semibold text-slate-500">{monLabel(h.month)}</span>
+                    <b className="tabular-nums text-slate-800">{usd(h.total)}</b>
+                    {prev && delta !== 0 && <span className={`font-semibold ${delta < 0 ? "text-emerald-600" : "text-red-500"}`}>{delta < 0 ? "↓" : "↑"}{usd(Math.abs(delta))}</span>}
+                  </span>
+                );
+              })}
+              <span className="text-slate-400">· snapshots on each Save</span>
+            </div>
+          )}
 
           {/* Editable list by category */}
           <div className="mt-4 space-y-3">
