@@ -5,6 +5,7 @@ import { readTargetMarkets, readMarketPulls, coverageFor } from "@/lib/target-ma
 import MarketsBoard, { type MarketView } from "@/components/MarketsBoard";
 import ResearchWorkbench from "@/components/ResearchWorkbench";
 import MarketFinder from "@/components/MarketFinder";
+import MarketsTabs from "@/components/MarketsTabs";
 import { readScan, scoreCounties } from "@/lib/market-scan";
 import { SCAN_SEED } from "@/lib/market-scan-seed";
 import { COUNTY_CENTROIDS } from "@/lib/county-centroids";
@@ -153,9 +154,12 @@ export default async function MarketsPage() {
         subtitle="Where we hunt land — the high-net-worth, waterfront, business-dense Florida & South Carolina markets the wealthy keep building in through rate hikes, and that few wholesalers compete in. Track what we've pulled, how each market performs, and the 30-60-180 trend."
         accent="bg-emerald-400"
       />
-      <MarketFinder initial={scanStore} canRefresh={leader} />
-      <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} />
-      {leader && <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} />}
+      <MarketsTabs
+        showResearch={leader}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} />}
+        research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} /> : null}
+        finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
+      />
     </div>
   );
 }
