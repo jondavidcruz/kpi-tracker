@@ -37,7 +37,7 @@ const COORDS: Record<string, [number, number]> = {
 };
 const COV_COLOR: Record<string, string> = { never: "#64748b", clear: "#10b981", cooldown: "#f59e0b" };
 const TERR_COLOR: Record<TerrStatus, string> = { pulled: "#f59e0b", marketing: "#3b82f6", target: "#10b981", avoid: "#ef4444" };
-const TERR_LABEL: Record<TerrStatus, string> = { pulled: "📥 Pulled leads", marketing: "📣 Marketing now", target: "🎯 Target / to pull", avoid: "⛔ Avoid / saturated" };
+const TERR_LABEL: Record<TerrStatus, string> = { pulled: "✅ Explored (pulled)", marketing: "📣 Marketing now", target: "🎯 Target / to pull", avoid: "⛔ Avoid / saturated" };
 
 function loadScript(src: string, css?: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -104,7 +104,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const L = (window as any).L; const map = mapRef.current as any; const dg = drawnRef.current as any;
       if (L && dg) { dg.clearLayers(); const poly = L.polygon(ring, { color: "#38bdf8", weight: 2, dashArray: "5", fillOpacity: 0.15 }).addTo(dg); if (map) { try { map.fitBounds(poly.getBounds().pad(0.2)); } catch { /* */ } } }
-      setPending(ring); setName(j.name || q); setStatus("marketing"); setSearchQ("");
+      setPending(ring); setName(j.name || q); setStatus("pulled"); setSearchQ("");
     } catch { setGeoMsg("network error"); } finally { setSearchBusy(false); }
   }
 
@@ -192,7 +192,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       const st = terrStats[t.id];
       const statLine = st && (st.leads || st.deals) ? ` · 📥 ${st.leads} leads · 🏆 ${st.deals} deals` : "";
       poly.bindTooltip(`${TERR_LABEL[t.status]} — ${t.name}${statLine}`, { sticky: true });
-      poly.bindPopup(`<div style="font:12px system-ui"><b>${TERR_LABEL[t.status]}</b><br>${t.name}${st ? `<br>📥 <b>${st.leads}</b> leads · 🏆 <b>${st.deals}</b> deals in our CRM here` : ""}</div>`);
+      poly.bindPopup(`<div style="font:12px system-ui"><b>${TERR_LABEL[t.status]}</b><br>${t.name}${t.at ? `<br>📅 Marked ${t.at.slice(0, 10)}${t.by ? ` by ${t.by.split(" ")[0]}` : ""}` : ""}${st ? `<br>📥 <b>${st.leads}</b> leads · 🏆 <b>${st.deals}</b> deals in our CRM here` : ""}</div>`);
     }
     if (show.buyers) for (const p of buyerPoints) L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
 
@@ -261,7 +261,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       </div>
       {canEdit && (
         <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
-          <span className="font-bold text-slate-400">🔎 Mark an area:</span>
+          <span className="font-bold text-slate-400">🔎 Mark explored:</span>
           <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") searchArea(); }} placeholder="County or ZIP — e.g. Lee County, FL  or  33914" className="w-72 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" />
           <button onClick={searchArea} disabled={searchBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{searchBusy ? "Searching…" : "🔎 Find & mark"}</button>
           <button onClick={() => setBulkOpen((b) => !b)} className="rounded-lg bg-slate-200 px-2.5 py-1 font-bold text-slate-700 hover:bg-slate-300">📋 Bulk-mark ZIPs</button>
