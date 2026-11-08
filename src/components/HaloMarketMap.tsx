@@ -75,6 +75,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [pending, setPending] = useState<[number, number][] | null>(null);
   const [name, setName] = useState("");
   const [status, setStatus] = useState<TerrStatus>("marketing");
+  const [pulled, setPulled] = useState("");
   const [saving, setSaving] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
@@ -140,13 +141,13 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     if (!pending) return;
     setSaving(true);
     const fd = new FormData();
-    fd.set("name", name || "Untitled area"); fd.set("status", status); fd.set("points", JSON.stringify(pending));
+    fd.set("name", name || "Untitled area"); fd.set("status", status); fd.set("points", JSON.stringify(pending)); fd.set("pulled", pulled);
     const res = await saveTerritoryAction(fd).catch(() => ({ ok: false }));
     setSaving(false);
     if (res.ok) { clearDrawn(); router.refresh(); } else setGeoMsg("⚠️ couldn't save the area");
   }
   function clearDrawn() {
-    setPending(null); setName("");
+    setPending(null); setName(""); setPulled("");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dg = drawnRef.current as any; if (dg?.clearLayers) dg.clearLayers();
   }
@@ -223,10 +224,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       if (!t.points || t.points.length < 3) continue;
       const poly = L.polygon(t.points, { color: TERR_COLOR[t.status], weight: 2, fillColor: TERR_COLOR[t.status], fillOpacity: 0.22 }).addTo(group);
       const st = terrStats[t.id];
-      const tg = gradeMarket({ leads: st?.leads ?? 0, deals: st?.deals ?? 0 });
+      const tg = gradeMarket({ leads: st?.leads ?? 0, deals: st?.deals ?? 0, pulled: t.pulled });
       const statLine = st && (st.leads || st.deals) ? ` · 📥 ${st.leads} leads · 🏆 ${st.deals} deals` : "";
       poly.bindTooltip(`${TERR_LABEL[t.status]} — ${t.name} · ${tg.grade}${statLine}`, { sticky: true });
-      poly.bindPopup(`<div style="font:12px system-ui"><b>${TERR_LABEL[t.status]}</b><br>${t.name}${t.at ? `<br>📅 Marked ${t.at.slice(0, 10)}${t.by ? ` by ${t.by.split(" ")[0]}` : ""}` : ""}<br>🏅 <b style="color:${tg.color}">${tg.label}</b>${st ? `<br>📥 <b>${st.leads}</b> leads · 🏆 <b>${st.deals}</b> deals in our CRM here` : ""}</div>`);
+      poly.bindPopup(`<div style="font:12px system-ui"><b>${TERR_LABEL[t.status]}</b><br>${t.name}${t.at ? `<br>📅 Marked ${t.at.slice(0, 10)}${t.by ? ` by ${t.by.split(" ")[0]}` : ""}` : ""}${t.pulled ? `<br>🎯 <b>${t.pulled.toLocaleString()}</b> leads pulled` : ""}<br>🏅 <b style="color:${tg.color}">${tg.label}</b>${st ? `<br>📥 <b>${st.leads}</b> leads · 🏆 <b>${st.deals}</b> deals in our CRM here` : ""}</div>`);
     }
     if (show.buyers) for (const p of buyerPoints) L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
 
@@ -342,6 +343,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
             <option value="target">🎯 Target / to pull</option>
             <option value="avoid">⛔ Avoid / saturated</option>
           </select>
+          <label className="flex items-center gap-1 text-slate-300"># leads pulled <input value={pulled} onChange={(e) => setPulled(e.target.value.replace(/[^\d]/g, ""))} placeholder="opt." className="w-16 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" /></label>
           <button onClick={saveDrawn} disabled={saving} className="rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white hover:bg-emerald-700 disabled:opacity-50">{saving ? "Saving…" : "Save area"}</button>
           <button onClick={clearDrawn} className="rounded-lg bg-slate-600 px-3 py-1 font-bold text-white hover:bg-slate-500">Cancel</button>
         </div>

@@ -20,6 +20,7 @@ export type Territory = {
   points: [number, number][]; // [lat, lng] ring
   by: string;
   at: string;
+  pulled?: number; // how many leads we pulled from this area (Victoria records it manually)
 };
 
 const CAT = "__map_territories__";
@@ -42,12 +43,14 @@ async function write(list: Territory[]): Promise<void> {
 }
 
 /** Add or update one territory. Returns the saved id. */
-export async function saveTerritory(t: { id?: string; name: string; status: TerrStatus; points: [number, number][]; by: string }): Promise<string | null> {
+export async function saveTerritory(t: { id?: string; name: string; status: TerrStatus; points: [number, number][]; by: string; pulled?: number }): Promise<string | null> {
   const pts = (t.points || []).filter((p) => Array.isArray(p) && p.length === 2 && Number.isFinite(p[0]) && Number.isFinite(p[1])).slice(0, MAX_POINTS);
   if (pts.length < 3) return null; // need a real polygon
   const list = await readTerritories();
   const tid = t.id && list.some((x) => x.id === t.id) ? t.id : id();
-  const entry: Territory = { id: tid, name: (t.name || "Untitled").slice(0, 80), status: t.status, points: pts, by: t.by, at: new Date().toISOString() };
+  const prev = list.find((x) => x.id === tid);
+  const pulled = t.pulled != null && Number.isFinite(t.pulled) ? t.pulled : prev?.pulled; // keep prior count on edit
+  const entry: Territory = { id: tid, name: (t.name || "Untitled").slice(0, 80), status: t.status, points: pts, by: t.by, at: new Date().toISOString(), ...(pulled != null ? { pulled } : {}) };
   const idx = list.findIndex((x) => x.id === tid);
   if (idx >= 0) list[idx] = entry; else list.unshift(entry);
   await write(list);

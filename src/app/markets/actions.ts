@@ -64,7 +64,9 @@ export async function saveTerritoryAction(formData: FormData): Promise<{ ok: boo
   let points: [number, number][] = [];
   try { points = JSON.parse(String(formData.get("points") ?? "[]")); } catch { return { ok: false }; }
   const id = String(formData.get("id") ?? "") || undefined;
-  const saved = await saveTerritory({ id, name, status, points, by: me.name });
+  const pulledRaw = String(formData.get("pulled") ?? "").replace(/[^\d]/g, "");
+  const pulled = pulledRaw ? Number(pulledRaw) : undefined;
+  const saved = await saveTerritory({ id, name, status, points, by: me.name, pulled });
   revalidatePath("/markets");
   return { ok: !!saved, id: saved ?? undefined };
 }
