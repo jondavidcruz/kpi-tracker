@@ -5,7 +5,8 @@ import { readTargetMarkets, readMarketPulls, coverageFor } from "@/lib/target-ma
 import MarketsBoard, { type MarketView } from "@/components/MarketsBoard";
 import DealMachineResearch from "@/components/DealMachineResearch";
 import MarketFinder from "@/components/MarketFinder";
-import { readScan } from "@/lib/market-scan";
+import { readScan, scoreCounties } from "@/lib/market-scan";
+import { SCAN_SEED } from "@/lib/market-scan-seed";
 import { COUNTY_CENTROIDS } from "@/lib/county-centroids";
 
 export const dynamic = "force-dynamic";
@@ -94,8 +95,13 @@ export default async function MarketsPage() {
     return { name, fips, preset };
   });
 
-  // 🔎 Market Finder points for the map — join each scanned county to its centroid.
-  const scanPoints = (scan?.counties ?? []).flatMap((c) => {
+  // 🔎 Market Finder — the live scan from the DB, or the precomputed seed (scored on the fly)
+  // until someone runs the first refresh. Shallow-copy the seed rows so scoring never mutates
+  // the shared import.
+  const scanStore = scan ?? { ...SCAN_SEED, counties: scoreCounties(SCAN_SEED.counties.map((c) => ({ ...c }))) };
+
+  // Market Finder points for the map — join each scanned county to its centroid.
+  const scanPoints = (scanStore.counties ?? []).flatMap((c) => {
     const ctr = COUNTY_CENTROIDS[c.fips];
     if (!ctr) return [];
     return [{
@@ -112,7 +118,7 @@ export default async function MarketsPage() {
         subtitle="Where we hunt land — the high-net-worth, waterfront, business-dense Florida & South Carolina markets the wealthy keep building in through rate hikes, and that few wholesalers compete in. Track what we've pulled, how each market performs, and the 30-60-180 trend."
         accent="bg-emerald-400"
       />
-      <MarketFinder initial={scan} canRefresh={leader} />
+      <MarketFinder initial={scanStore} canRefresh={leader} />
       <MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} />
       {leader && <DealMachineResearch quickMarkets={quickMarkets} />}
     </div>

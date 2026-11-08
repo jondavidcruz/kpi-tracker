@@ -142,25 +142,32 @@ function landFilter(min?: number, max?: number): DmFilter[] {
   }
   return f;
 }
-/** Land value profile for one county (5 free counts). Null if the v2 key isn't live. */
+// "valued" = land parcels that have a positive assessor land value. Using it as the denominator
+// (instead of all land, incl. null/zero assessor records) keeps the ≥$100k share honest in
+// counties where DealMachine's assessor coverage is sparse.
+function landValuedFilter(): DmFilter[] { return [...landFilter(), { filter_id: "assessed_land_value", operator: "greater_than_or_equal", value: 1 }]; }
+
+const MIN_VALUED = 1500; // below this the assessor sample is too thin to trust → treat as n/a
+
+/** Land value profile for ONE FL county (3 free counts). Null if the v2 key isn't live, the
+ *  assessor sample is too thin, or (caller's job) the county isn't FL. Assessed-value thresholds
+ *  only make sense in FL — SC assesses at a fractional ratio, so SC land is left n/a upstream. */
 export async function landProfileFor(fips: string): Promise<LandProfile | null> {
   if (!dmConfigured()) return null;
   const loc: DmLoc[] = [{ type: "county", code: fips }];
-  const [total, cheap, sweet, high, prem] = await Promise.all([
-    dmCount(loc, landFilter()),
-    dmCount(loc, landFilter(undefined, 40000)),
-    dmCount(loc, landFilter(100000, 200000)),
+  const [valued, high, sweet] = await Promise.all([
+    dmCount(loc, landValuedFilter()),
     dmCount(loc, landFilter(100000)),
-    dmCount(loc, landFilter(200000)),
+    dmCount(loc, landFilter(100000, 200000)),
   ]);
-  if (!total.ok) return null;
-  const t = total.count!.total_properties || 0;
+  if (!valued.ok) return null;
+  const v = valued.count!.total_properties || 0;
+  if (v < MIN_VALUED) return null;
   const hi = high.ok ? high.count!.total_properties : 0;
-  const ch = cheap.ok ? cheap.count!.total_properties : 0;
+  const sw = sweet.ok ? sweet.count!.total_properties : 0;
   return {
-    total: t, cheap: ch, sweet: sweet.ok ? sweet.count!.total_properties : 0,
-    high: hi, prem: prem.ok ? prem.count!.total_properties : 0,
-    highShare: t ? hi / t : 0, cheapShare: t ? ch / t : 0, asOf: new Date().toISOString(),
+    total: v, cheap: Math.max(0, v - hi), sweet: sw, high: hi, prem: Math.max(0, hi - sw),
+    highShare: v ? hi / v : 0, cheapShare: v ? Math.max(0, v - hi) / v : 0, asOf: new Date().toISOString(),
   };
 }
 
@@ -196,13 +203,14 @@ export function scoreCounties(counties: CountyScan[]): CountyScan[] {
       r.push(`Land: ${Math.round(c.land!.highShare * 100)}% of parcels assess ≥$100k (${c.land!.high.toLocaleString()} of ${c.land!.total.toLocaleString()})`);
       r.push(`${c.land!.sweet.toLocaleString()} parcels in the $100k–200k band`);
     }
-    // Hard cheap-land demotion (the Lehigh-Acres filter).
-    if (hasLand && c.land!.highShare < 0.05 && c.land!.cheapShare > 0.6) {
-      score = Math.min(score, 30);
-      r.push("⚠️ Cheap-land market — most land assesses ≤$40k (Lehigh-Acres style)");
+    // Hard cheap-land demotion (the Lehigh-Acres / Port-Charlotte filter): a high-VOLUME glut of
+    // low-value platted lots — lots of priced land, little of it ≥$100k.
+    if (hasLand && c.land!.total > 30000 && c.land!.highShare < 0.12) {
+      score = Math.min(score, 35);
+      r.push("⚠️ High-volume cheap-land glut — tons of platted lots, few ≥$100k (Lehigh-Acres / Port-Charlotte style)");
     }
     c.score = score;
-    c.tier = score >= 62 ? "target" : score >= 42 ? "watch" : "low";
+    c.tier = score >= 72 ? "target" : score >= 50 ? "watch" : "low";
     c.reasons = r;
   });
   return [...counties].sort((a, b) => b.score - a.score);

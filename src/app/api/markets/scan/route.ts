@@ -69,7 +69,7 @@ export async function GET(req: Request) {
   if (doLand && dmConfigured()) {
     const now = Date.now();
     const queue = [...counties]
-      .filter((c) => !c.land || now - new Date(c.land.asOf).getTime() > LAND_TTL_MS)
+      .filter((c) => c.state === "FL" && (!c.land || now - new Date(c.land.asOf).getTime() > LAND_TTL_MS)) // FL-only: SC uses an assessment ratio
       .sort((a, b) => (b.medianSalePrice ?? 0) - (a.medianSalePrice ?? 0));
     landDone = 0;
     for (const c of queue) {

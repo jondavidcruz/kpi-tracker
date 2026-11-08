@@ -151,8 +151,10 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
                       <td colSpan={7} className="px-3 py-2">
                         <ul className="space-y-0.5 text-[11px] text-slate-600">
                           {c.reasons.map((r, i) => <li key={i}>• {r}</li>)}
-                          {c.land && (
-                            <li className="pt-1 text-slate-500">Land breakdown — ≤$40k: <b>{c.land.cheap.toLocaleString()}</b> · $100–200k: <b>{c.land.sweet.toLocaleString()}</b> · ≥$200k: <b>{c.land.prem.toLocaleString()}</b> · total land parcels: <b>{c.land.total.toLocaleString()}</b></li>
+                          {c.land ? (
+                            <li className="pt-1 text-slate-500">Priced land — under $100k: <b>{c.land.cheap.toLocaleString()}</b> · $100–200k: <b>{c.land.sweet.toLocaleString()}</b> · ≥$200k: <b>{c.land.prem.toLocaleString()}</b> · parcels with an assessor value: <b>{c.land.total.toLocaleString()}</b></li>
+                          ) : (
+                            <li className="pt-1 text-slate-400">{c.state === "SC" ? "Land value n/a — SC assesses land at a fractional ratio (not comparable to a $100k market threshold)." : "Land value n/a — assessor land-value data too sparse here."}</li>
                           )}
                         </ul>
                       </td>
