@@ -20,6 +20,10 @@ const DRAW_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaf
 // Satellite basemap — FREE, NO API KEY (Carto now needs one). ESRI World Imagery = Halo look.
 const SAT_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const TILE_ATTR = "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community";
+// 🏷 Free ESRI reference overlays (same provider, no key) — place/city/county labels + boundaries,
+// and roads/street names that fill in as you zoom, so the satellite is actually navigable.
+const LABEL_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
+const ROAD_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}";
 
 const COORDS: Record<string, [number, number]> = {
   "Miami / Coral Gables": [25.72, -80.26], "Palm Beach / West Palm Beach": [26.71, -80.06],
@@ -151,6 +155,8 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         const map = L.map(ref.current, { center: [31.0, -81.5], zoom: 5, scrollWheelZoom: false }); // FL + SC in view
         mapRef.current = map;
         L.tileLayer(SAT_TILES, { attribution: TILE_ATTR, maxZoom: 18 }).addTo(map);
+        L.tileLayer(ROAD_TILES, { maxZoom: 18 }).addTo(map);   // roads / street names
+        L.tileLayer(LABEL_TILES, { maxZoom: 18 }).addTo(map);  // city / county / place labels + boundaries
         dataRef.current = L.featureGroup().addTo(map);
         if (canEdit) {
           const drawn = L.featureGroup().addTo(map); drawnRef.current = drawn;
