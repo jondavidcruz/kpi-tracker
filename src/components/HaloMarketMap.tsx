@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { saveTerritoryAction, deleteTerritoryAction } from "@/app/markets/actions";
 import type { MarketView } from "@/components/MarketsBoard";
 import type { Territory, TerrStatus } from "@/lib/map-territories";
-import { gradeMarket } from "@/lib/market-grade";
+import { gradeMarket, directMailReady } from "@/lib/market-grade";
 import type { LeadPin } from "@/lib/lead-pins";
 import type { BuyerCoverage } from "@/lib/buyer-coverage-map";
 
@@ -296,6 +296,11 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   }, [ready]);
 
   const charted = markets.filter((v) => v.buyerCount > 0).length;
+  // 📬 Markets/areas with PROVEN inbound response (A/B) — the ones worth the direct-mail spend.
+  const dmReady = [
+    ...markets.map((v) => ({ name: v.m.name.split(" / ")[0], g: gradeMarket({ leads: v.leads, deals: v.deals }) })),
+    ...territories.map((t) => ({ name: t.name, g: gradeMarket({ leads: terrStats[t.id]?.leads ?? 0, deals: terrStats[t.id]?.deals ?? 0, pulled: t.pulled }) })),
+  ].filter((x) => directMailReady(x.g.grade)).sort((a) => (a.g.grade === "A" ? -1 : 1));
   return (
     <div className="rounded-2xl bg-slate-900 p-2 shadow-sm ring-1 ring-slate-800">
       <style>{`.fo-map-label{background:transparent;border:none;box-shadow:none;color:#f1f5f9;font:700 10px system-ui;text-shadow:0 1px 3px #000}.leaflet-popup-content{margin:10px 12px}`}</style>
@@ -355,6 +360,15 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <label className="flex items-center gap-1 text-slate-300"># leads pulled <input value={pulled} onChange={(e) => setPulled(e.target.value.replace(/[^\d]/g, ""))} placeholder="opt." className="w-16 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" /></label>
           <button onClick={saveDrawn} disabled={saving} className="rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white hover:bg-emerald-700 disabled:opacity-50">{saving ? "Saving…" : "Save area"}</button>
           <button onClick={clearDrawn} className="rounded-lg bg-slate-600 px-3 py-1 font-bold text-white hover:bg-slate-500">Cancel</button>
+        </div>
+      )}
+      {dmReady.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-lg bg-emerald-900/30 px-2 py-1.5 text-[11px] ring-1 ring-emerald-700/40">
+          <span className="font-bold text-emerald-300">📬 Direct-mail ready ({dmReady.length}):</span>
+          {dmReady.slice(0, 12).map((x, i) => (
+            <span key={i} className="rounded-full px-2 py-0.5 font-semibold text-white" style={{ background: `${x.g.color}dd` }}>{x.g.grade} {x.name}</span>
+          ))}
+          <span className="text-emerald-400/70">— proven response, worth the direct-mail spend</span>
         </div>
       )}
       <div ref={ref} className="h-[84vh] min-h-[600px] w-full overflow-hidden rounded-xl" style={{ background: "#0b1220" }} />
