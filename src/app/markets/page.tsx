@@ -38,6 +38,9 @@ export default async function MarketsPage() {
   const buyerPlaces = placesFromBuyBoxes(buyers);
   const buyerPoints = pointsFor(buyerPlaces, geocache);
   const geocodeRemaining = buyerPlaces.filter((p) => !(normalizePlace(p) in geocache)).length;
+  // 📍 Lead pins — where our seller leads come from + where we've closed land deals.
+  const { buildLeadPins } = await import("@/lib/lead-pins");
+  const { pins: leadPins, uncachedZips: leadZipsRemaining } = buildLeadPins(opps, geocache);
 
   // 🖍 Hand-drawn / searched territories (areas we market in / have pulled vs uncharted).
   const { readTerritories } = await import("@/lib/map-territories");
@@ -156,7 +159,7 @@ export default async function MarketsPage() {
       />
       <MarketsTabs
         showResearch={leader}
-        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} />}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
       />

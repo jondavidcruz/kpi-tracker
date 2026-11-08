@@ -10,6 +10,7 @@ import { saveTerritoryAction, deleteTerritoryAction } from "@/app/markets/action
 import type { MarketView } from "@/components/MarketsBoard";
 import type { Territory, TerrStatus } from "@/lib/map-territories";
 import { gradeMarket } from "@/lib/market-grade";
+import type { LeadPin } from "@/lib/lead-pins";
 
 type Pt = { lat: number; lng: number };
 export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; lat: number; lng: number };
@@ -61,7 +62,7 @@ function loadScript(src: string, css?: string): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[] }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0 }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
@@ -77,7 +78,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [saving, setSaving] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
-  const [show, setShow] = useState({ markets: true, buyers: true, terr: true, opp: true });
+  const [show, setShow] = useState({ markets: true, buyers: true, terr: true, opp: true, leads: true });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
@@ -111,6 +112,17 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       if (L && dg) { dg.clearLayers(); const poly = L.polygon(ring, { color: "#38bdf8", weight: 2, dashArray: "5", fillOpacity: 0.15 }).addTo(dg); if (map) { try { map.fitBounds(poly.getBounds().pad(0.2)); } catch { /* */ } } }
       setPending(ring); setName(j.name || q); setStatus("pulled"); setSearchQ("");
     } catch { setGeoMsg("network error"); } finally { setSearchBusy(false); }
+  }
+
+  async function runGeocodeLeads() {
+    setGeoBusy(true); setGeoMsg("Mapping lead ZIPs… (~25 at a time, cached)");
+    try {
+      const r = await fetch("/api/markets/geocode-leads", { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) { setGeoMsg(j.error || "failed"); return; }
+      setGeoMsg(`✅ Mapped ${j.cached}/${j.total} lead ZIPs${j.remaining ? ` · ${j.remaining} left — click again` : " · all mapped"}`);
+      router.refresh();
+    } catch { setGeoMsg("network error"); } finally { setGeoBusy(false); }
   }
 
   async function runGeocode() {
@@ -218,6 +230,15 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     }
     if (show.buyers) for (const p of buyerPoints) L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
 
+    // 📍 Lead pins — seller leads by ZIP; a gold ⭐ marks ZIPs where we've CLOSED a land deal.
+    if (show.leads) for (const lp of leadPins) {
+      const g = gradeMarket({ leads: lp.leads, deals: lp.deals });
+      const hasDeal = lp.deals > 0;
+      const rad = 4 + Math.min(10, Math.log2(lp.leads + 1) * 2.2);
+      const mk = L.circleMarker([lp.lat, lp.lng], { radius: rad, color: hasDeal ? "#fbbf24" : "#ffffff", weight: hasDeal ? 2.5 : 1, fillColor: hasDeal ? "#f59e0b" : "#38bdf8", fillOpacity: 0.85 }).addTo(group);
+      mk.bindPopup(`<div style="font:12px system-ui"><b>ZIP ${lp.zip}</b><br>📥 <b>${lp.leads}</b> seller lead${lp.leads > 1 ? "s" : ""}${hasDeal ? `<br>⭐ <b>${lp.deals}</b> land deal${lp.deals > 1 ? "s" : ""} CLOSED here` : ""}<br>🏅 <b style="color:${g.color}">${g.label}</b></div>`);
+    }
+
     // 🔎 Opportunity layer — Market Finder county scores (public data). Show target + watch only
     // to keep the map clean; color by tier, size by score. Diamond-ish via a square-ish marker.
     const OPP_COLOR = { target: "#10b981", watch: "#f59e0b", low: "#94a3b8" } as const;
@@ -253,7 +274,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       marker.bindTooltip(v.m.name.split(" / ")[0], { permanent: true, direction: "top", className: "fo-map-label", offset: [0, -r] });
     }
     try { map.fitBounds(group.getBounds().pad(0.15)); } catch { /* no markers */ }
-  }, [ready, markets, buyerPoints, territories, show, scanPoints]);
+  }, [ready, markets, buyerPoints, territories, show, scanPoints, leadPins]);
 
   // Re-measure the map once it's ready (container has its real size by then).
   useEffect(() => {
@@ -275,15 +296,18 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full bg-cyan-400/50 ring-2 ring-cyan-400/50" /> 🟢 Buyers here</span>
         <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full" style={{ background: "#64748b" }} /> Uncharted / low</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-blue-500/40 ring-1 ring-blue-400" /> ✅ Explored (marked)</span>
-        <span className="text-slate-500">· bigger = higher opportunity score</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> 📍 Seller lead</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-amber-300" style={{ background: "#f59e0b" }} /> ⭐ Closed deal</span>
+        <span className="text-slate-500">· bigger = more</span>
         <span className="ml-auto rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
         <span className="font-bold text-slate-400">Layers:</span>
-        {(["opp", "markets", "buyers", "terr"] as const).map((k) => (
-          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : "🖍 My areas"}</label>
+        {(["opp", "markets", "buyers", "leads", "terr"] as const).map((k) => (
+          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "leads" ? "📍 Leads" : "🖍 My areas"}</label>
         ))}
         {canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
+        {canEdit && leadZipsRemaining > 0 && <button onClick={runGeocodeLeads} disabled={geoBusy} className="rounded-lg bg-sky-600 px-2.5 py-1 font-bold text-white hover:bg-sky-700 disabled:opacity-50">{geoBusy ? "Mapping…" : `📍 Map lead locations (${leadZipsRemaining} left)`}</button>}
         {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
       </div>
       {canEdit && (
