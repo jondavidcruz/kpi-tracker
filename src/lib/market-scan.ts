@@ -17,6 +17,7 @@
 // the live sources at request time).
 import { db } from "@/lib/db";
 import { dmCount, dmConfigured, type DmLoc, type DmFilter } from "@/lib/dealmachine";
+import { wealthFor } from "@/lib/elite-markets";
 
 export const MARKET_SCAN_CAT = "__market_scan__";
 
@@ -208,6 +209,13 @@ export function scoreCounties(counties: CountyScan[]): CountyScan[] {
     if (hasLand && c.land!.total > 30000 && c.land!.highShare < 0.12) {
       score = Math.min(score, 35);
       r.push("⚠️ High-volume cheap-land glut — tons of platted lots, few ≥$100k (Lehigh-Acres / Port-Charlotte style)");
+    }
+    // 🏆 Elite-market lift (Viktoriia's wealth research) — affluent / waterfront markets rank up
+    // even when land data is thin (e.g. Palm Beach shows land "—"). wealth 5.0 → +16, 4.5 → +12.
+    const wt = wealthFor(c.fips);
+    if (wt) {
+      score = Math.min(100, score + Math.max(0, Math.round((wt.wealth - 3) * 8)));
+      r.push(`🏆 ${wt.label} — elite market (wealth ${wt.wealth.toFixed(1)}/5${wt.enclaves.length ? `, enclaves: ${wt.enclaves.slice(0, 3).join(", ")}` : ""})`);
     }
     c.score = score;
     c.tier = score >= 72 ? "target" : score >= 50 ? "watch" : "low";

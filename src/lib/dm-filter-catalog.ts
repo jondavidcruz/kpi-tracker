@@ -133,6 +133,10 @@ export const DEFAULT_STATE: WorkbenchState = { enums: { property_type: [6] }, bo
 
 export type Preset = { key: string; label: string; emoji: string; state: () => WorkbenchState };
 export const PRESETS: Preset[] = [
+  // 🏗 The elite-land default (Jon 2026-11-08): BIG, valuable, buildable lots developers want —
+  // land value ≥$75k + ≥0.25 acre, so the penny lots (Lehigh Acres) never show up.
+  { key: "developer_lots", label: "Developer lots — big + valuable (not penny lots)", emoji: "🏗",
+    state: () => ({ enums: { property_type: [6] }, bools: { is_landlocked: true, has_absentee_owners: true }, nums: { assessed_land_value: { min: 75000 }, lot_size_acres: { min: 0.25 } } }) },
   { key: "motivated_multi", label: "Out-of-state · owns multiple · delinquent", emoji: "🎯",
     state: () => ({ enums: { property_type: [6] }, bools: { has_out_of_state_owners: true, is_tax_delinquent: true, is_landlocked: true }, nums: { ppm_num_properties_owned_by_owner: { min: 2 } } }) },
   { key: "high_value_land", label: "High-value land ($100k+)", emoji: "💎",

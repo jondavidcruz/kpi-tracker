@@ -38,7 +38,7 @@ export function encodePolyline(points: Array<[number, number]>): string {
 }
 
 /** County boundary ring, simplified hard (±~2km) — cached forever per county. */
-async function countyRing(county: string): Promise<Array<[number, number]> | null> {
+export async function countyRing(county: string): Promise<Array<[number, number]> | null> {
   const m = county.match(/^(.+?),\s*([A-Za-z]{2})$/);
   if (!m) return null;
   const fips = STATE_FIPS[m[2].toUpperCase()];

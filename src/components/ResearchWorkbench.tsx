@@ -10,6 +10,7 @@ import {
   type WorkbenchState, type Control,
 } from "@/lib/dm-filter-catalog";
 import type { DemandResult, RecommendedMarket } from "@/lib/buyer-demand-markets";
+import { ELITE_ENCLAVES, type Enclave } from "@/lib/elite-markets";
 
 type Loc = { type: "county" | "city" | "zip_code" | "state"; code: string; name: string; state?: string; property_count?: number };
 type Glance = { name: string; state: string; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; landHigh: number | null; landTotal: number | null };
@@ -69,6 +70,22 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
     setErr("");
     try { const r = await fetch(`/api/markets/dm?action=locations&q=${encodeURIComponent(locQ)}`); const j = await r.json(); setLocResults(j.data ?? []); }
     catch { setErr("location search failed"); }
+  }
+
+  // 📍 Elite enclave → resolve its city/ZIP via DealMachine, pick it, and apply the 🏗 developer-lots
+  // filter (big valuable buildable lots, not penny lots). Pulls BELOW the county level (Jon's gold).
+  async function pickEnclave(enc: Enclave) {
+    setErr("");
+    try {
+      const r = await fetch(`/api/markets/dm?action=locations&q=${encodeURIComponent(enc.q)}`);
+      const j = await r.json();
+      const loc = (j.data ?? [])[0];
+      if (loc) {
+        setPicked(loc); setLocResults([]);
+        const dev = PRESETS.find((p) => p.key === "developer_lots");
+        if (dev) setState(dev.state());
+      } else { setLocQ(enc.q); setErr(`No DealMachine match for ${enc.name} — try the Find box.`); }
+    } catch { setErr("enclave lookup failed"); }
   }
 
   // Load a buyer-demand recommendation into the workbench: pick the county + apply its derived
@@ -244,6 +261,19 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${q.fips.startsWith("45") ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}
                 title={q.fips.startsWith("45") ? "South Carolina" : "Florida"}>{q.name.split(" / ")[0]}</button>
             ))}
+          </div>
+        )}
+        {!picked && (
+          // 🏆 Elite enclaves — the high-value SUB-COUNTY targets (Winter Park, Port Royal, …); a
+          // click resolves the city/ZIP + applies the 🏗 developer-lots filter (big, valuable lots).
+          <div className="mt-1.5 rounded-lg bg-amber-50/70 p-2 ring-1 ring-amber-200">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">🏆 Elite enclaves — pull the high-value sub-markets (applies 🏗 developer-lots)</div>
+            <div className="flex flex-wrap gap-1">
+              {ELITE_ENCLAVES.map((e) => (
+                <button key={e.name} onClick={() => pickEnclave(e)} title={`${e.region} · wealth ${e.wealth.toFixed(1)}/5`}
+                  className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">{e.name}</button>
+              ))}
+            </div>
           </div>
         )}
         {locResults.length > 0 && !picked && (
