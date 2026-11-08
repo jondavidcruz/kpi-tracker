@@ -13,7 +13,7 @@ const TIER: Record<CountyScan["tier"], { label: string; dot: string; row: string
   watch: { label: "👀 Watch", dot: "bg-amber-500", row: "" },
   low: { label: "🔻 Low", dot: "bg-slate-400", row: "opacity-70" },
 };
-type SortKey = "score" | "medianSalePrice" | "yoyPct" | "daysToPending" | "landHigh" | "inventory";
+type SortKey = "score" | "medianSalePrice" | "yoyPct" | "daysToPending" | "landHigh" | "landSold" | "inventory";
 const money = (n: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString()}`);
 const pct = (n: number | null) => (n == null ? "—" : `${n >= 0 ? "+" : ""}${n}%`);
 
