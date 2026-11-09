@@ -52,7 +52,6 @@ export default function Deck({ slides, clock }: { slides: Slide[]; clock?: DeckC
   const part = clock?.parts[partIdx];
   const partElapsed = elapsed - (partStarts.current[partIdx] ?? 0);
   const partRemain = (part?.min ?? 0) * 60 - partElapsed;
-  const totalRemain = clock ? clock.totalMin * 60 - elapsed : 0;
   const partPct = part ? Math.min(100, (partElapsed / (part.min * 60)) * 100) : 0;
   const tone = (sec: number) => (sec < 0 ? "text-red-300" : sec <= 120 ? "text-amber-300" : "text-emerald-300");
 
@@ -77,20 +76,20 @@ export default function Deck({ slides, clock }: { slides: Slide[]; clock?: DeckC
   const present = () => wrapRef.current?.requestFullscreen?.();
 
   // Floating timer HUD — shows over the slide (incl. fullscreen) once the clock exists.
+  // The big number is the CURRENT speaker's own countdown (e.g. 15:00), which resets to
+  // their full budget when the deck crosses into the next part — so each half (Jon, then
+  // Dad) is its own 15-minute clock rather than one shared 30-minute total (Jon 2026-11-09).
   const hud = clock && (
     <div className="absolute right-[2.2%] top-[2.2%] z-10 flex items-center gap-2 rounded-xl bg-black/70 px-2.5 py-1.5 text-white shadow-lg ring-1 ring-white/15 backdrop-blur-sm">
       <div className="text-right leading-none">
-        <div className={`font-extrabold tabular-nums ${tone(totalRemain)}`} style={{ fontSize: "clamp(14px,2.2cqw,26px)" }}>{mmss(totalRemain)}</div>
-        <div className="text-white/50" style={{ fontSize: "clamp(6px,0.8cqw,10px)" }}>of {clock.totalMin}:00 left</div>
+        <div className={`font-extrabold tabular-nums ${tone(partRemain)}`} style={{ fontSize: "clamp(14px,2.2cqw,26px)" }}>{mmss(partRemain)}</div>
+        <div className="text-white/50" style={{ fontSize: "clamp(6px,0.8cqw,10px)" }}>{partRemain < 0 ? "over" : `of ${part?.min ?? clock.totalMin}:00 left`}</div>
       </div>
       <div className="h-7 w-px bg-white/20" />
       <div className="leading-tight">
         <div className="font-bold" style={{ fontSize: "clamp(8px,1cqw,13px)" }}>{part?.emoji} {part?.label}</div>
-        <div className="mt-0.5 flex items-center gap-1.5">
-          <div className="h-1 w-16 overflow-hidden rounded-full bg-white/20">
-            <div className={`h-full rounded-full ${partRemain < 0 ? "bg-red-400" : partRemain <= 120 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${partPct}%` }} />
-          </div>
-          <span className={`font-semibold tabular-nums ${tone(partRemain)}`} style={{ fontSize: "clamp(7px,0.9cqw,11px)" }}>{partRemain < 0 ? `${mmss(partRemain)} over` : `${mmss(partRemain)} left`}</span>
+        <div className="mt-1 h-1 w-20 overflow-hidden rounded-full bg-white/20">
+          <div className={`h-full rounded-full ${partRemain < 0 ? "bg-red-400" : partRemain <= 120 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${partPct}%` }} />
         </div>
       </div>
       <button onClick={() => setRunning((r) => !r)} className="ml-0.5 grid h-6 w-6 place-items-center rounded-md bg-white/15 hover:bg-white/25" title={running ? "Pause (t)" : "Start (t)"}>
@@ -120,7 +119,7 @@ export default function Deck({ slides, clock }: { slides: Slide[]; clock?: DeckC
       {clock && (
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           <button onClick={() => setRunning((r) => !r)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-white ${running ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}`}>
-            {running ? <><Pause size={14} /> Pause</> : <><Play size={14} /> {elapsed > 0 ? "Resume" : "Start 30-min clock"}</>}
+            {running ? <><Pause size={14} /> Pause</> : <><Play size={14} /> {elapsed > 0 ? "Resume" : "Start clock"}</>}
           </button>
           <button onClick={resetClock} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 ring-1 ring-slate-300 hover:bg-slate-100">
             <RotateCcw size={14} /> Reset
