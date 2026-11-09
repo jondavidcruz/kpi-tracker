@@ -30,13 +30,15 @@ export const CRM_SCRIPTS: Record<"property" | "land", ScriptBlock[]> = {
       ],
     },
     {
-      heading: "Their situation & motivation  →  Ready to sell · Motivation · How long · Agent · $ wanted · Offers · Creative · Timeline",
+      heading: "Their situation & motivation  →  Ready to sell · Motivation · How long · Agent · $ wanted · Offers · Creative · Occupancy · Timeline",
       lines: [
         "❓ Is selling something you're ready to do, or just exploring?",
         "❓ What's got you thinking about it — and how long have you owned it?",
-        "❓ Ever listed it with an agent, or gotten any offers?",
+        "❓ Ever listed it with an agent?",
         "❓ Is there a number that'd make it worth it for you?",
+        "❓ Gotten any offers on it?",
         "🎤 We're flexible — cash and a fast close, or terms if that nets you more.",
+        "❓ Is it vacant, owner-occupied, or is there a tenant?",
         "❓ Any timeline that matters, or no rush?",
       ],
     },
@@ -48,7 +50,7 @@ export const CRM_SCRIPTS: Record<"property" | "land", ScriptBlock[]> = {
       ],
     },
     {
-      heading: "Condition — big-ticket items  →  Roof · HVAC · Water heater · Foundation · Plumbing/electric · Kitchen & baths · Repairs · Condition",
+      heading: "Condition — big-ticket items  →  Roof · HVAC · Water heater · Foundation · Plumbing/electric · Kitchen & baths · Repairs · If tenant · Condition",
       lines: [
         "🎤 I just need a feel for condition so underwriting can price it. Mind walking me through the big stuff?",
         "❓ Roof — about how old, or when last replaced?",
@@ -57,8 +59,10 @@ export const CRM_SCRIPTS: Record<"property" | "land", ScriptBlock[]> = {
         "❓ Foundation — any cracks or settling?",
         "❓ Plumbing & electrical — updated or original?",
         "❓ Kitchen & baths — last updated?",
-        "→ Get the AGE/YEAR on each — that's exactly what underwriting needs. Jot it next to each field.",
-        "🎤 Anything else major I wouldn't see on paper?",
+        "→ Get the AGE/YEAR on each — that's exactly what underwriting needs.",
+        "❓ What would it need to sell retail? (their words, then your $ guess)",
+        "❓ If there's a tenant — rent, lease end, are they paying?",
+        "🎤 Anything else major I wouldn't see on paper? → then set the overall condition.",
       ],
     },
     {
@@ -88,13 +92,15 @@ export const CRM_SCRIPTS: Record<"property" | "land", ScriptBlock[]> = {
       ],
     },
     {
-      heading: "Situation & why selling  →  Ready to sell · Motivation · How long · Agent · $ wanted · Offers · Creative · Timeline",
+      heading: "Situation & why selling  →  Ready to sell · Motivation · How long · Agent · $ wanted · Offers · Creative · Occupancy · Timeline",
       lines: [
         "❓ Ready to sell, or just exploring?",
         "❓ What's got you thinking about letting it go — and how long have you owned it?",
-        "❓ Ever listed it or gotten offers?",
+        "❓ Ever listed it with an agent?",
         "❓ A number in mind that'd make it worth it?",
+        "❓ Gotten any offers on it?",
         "🎤 We can pay cash and close fast, or do terms if that nets you more.",
+        "❓ Anyone living on it or using it right now?",
         "❓ Any timeline, or no rush?",
       ],
     },

@@ -72,17 +72,20 @@ export const CRM_FORMS: CrmForm[] = [
       { key: "floodZone", label: "Flood zone?", type: "select", options: ["No / Zone X", "Partial", "Yes — in a flood zone", "Unknown"] },
       { key: "wetlands", label: "Wetlands?", type: "select", options: ["None", "Partial", "Significant", "Unknown"] },
       { key: "hazard", label: "Other hazards? (fire, etc.)", type: "text" },
+      // HOA/POA grouped with the other restrictions (flood/wetlands/hazard) so it's
+      // asked BEFORE the "what can you do with it" block — matches the call script (Jon 2026-11-09).
+      { key: "hoa", label: "HOA/POA restrictions?", type: "text" },
       { key: "build", label: "Can you build? Min/max size?", type: "text" },
       { key: "rv", label: "RV parking? Duration?", type: "text" },
       { key: "camp", label: "Camping? Duration?", type: "text" },
       { key: "str", label: "STR / AirBnB allowed?", type: "text" },
       { key: "develop", label: "What can be developed?", type: "text" },
-      { key: "hoa", label: "HOA/POA restrictions?", type: "text" },
-      { key: "special", label: "Anything special about the land?", type: "textarea" },
-      // 🏞 Buyer sell-points (Jon 2026-10-20) — checked uniformly so Marie can find
+      // 🏞 Utilities → sell-point features → catch-all, in that order to match the script.
+      { key: "utilities", label: "Utilities & access", type: "checks", options: ["Street/road access", "City water", "Well", "City electric", "Utility lines nearby", "City sewage", "Septic", "No water", "No sewage", "No electric", "Near water/lake", "Near hiking/rec", "Near RVs/houses"] },
+      // Buyer sell-points (Jon 2026-10-20) — checked uniformly so Marie can find
       // e.g. "waterfront" fast (search picks these up; one-click filter-ready).
       { key: "features", label: "Land features (buyer sell-points)", type: "checks", options: LAND_FEATURES },
-      { key: "utilities", label: "Utilities & access", type: "checks", options: ["Street/road access", "City water", "Well", "City electric", "Utility lines nearby", "City sewage", "Septic", "No water", "No sewage", "No electric", "Near water/lake", "Near hiking/rec", "Near RVs/houses"] },
+      { key: "special", label: "Anything special about the land?", type: "textarea" },
     ],
   },
   {
