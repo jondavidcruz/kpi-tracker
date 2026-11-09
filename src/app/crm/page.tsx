@@ -265,21 +265,24 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   // than the last outbound reply AND newer than the thread's last-read stamp.
   const cardCids = [...new Set(opps.map((o) => o.contactId))];
   const cardOids = opps.map((o) => o.id);
-  const [recentSms, readRow, touchEvs] = await Promise.all([
+  // ✋ last REAL human touch (Jon 2026-10-27) — note/call/text/email/task/appt/stage, no auto/system.
+  // Query by CONTACT, not opp: many calls/texts are logged with oppId:"" (dialer, SMS receipts,
+  // inbound) so an opp-only match wrongly showed "never touched" after Marie worked the lead
+  // (Jon 2026-10-29). We match the event to the opp OR to the opp's contact.
+  const TOUCH_KINDS = ["note", "call", "sms", "email", "task", "appt", "stage"];
+  const [recentSms, readRow, touchByContact, touchByOpp] = await Promise.all([
     cardCids.length ? db.crmEvent.findMany({ where: { contactId: { in: cardCids }, kind: "sms" }, orderBy: { at: "desc" }, take: 1500, select: { contactId: true, body: true, at: true } }) : [],
     db.resource.findFirst({ where: { category: "__conv_read__" } }),
-    // ✋ last REAL human touch (Jon 2026-10-27) — note/call/text/email/task/appt/stage, no auto/system.
-    // Query by CONTACT, not opp: many calls/texts are logged with oppId:"" (dialer, SMS receipts,
-    // inbound) so an opp-only match wrongly showed "never touched" after Marie worked the lead
-    // (Jon 2026-10-29). We match the event to the opp OR to the opp's contact.
-    cardCids.length ? db.crmEvent.findMany({ where: { contactId: { in: cardCids }, kind: { in: ["note", "call", "sms", "email", "task", "appt", "stage"] } }, orderBy: { at: "desc" }, take: 12000, select: { oppId: true, contactId: true, at: true } }) : [],
+    // Grouped in the DB (_max at) instead of shipping up to 12k event rows to the app just to keep
+    // the newest per group — identical result, far less Supabase egress, faster board load.
+    // (Jon overnight 2026-11-08: "run smoother and cut costs".)
+    cardCids.length ? db.crmEvent.groupBy({ by: ["contactId"], where: { contactId: { in: cardCids }, kind: { in: TOUCH_KINDS } }, _max: { at: true } }) : [],
+    cardCids.length ? db.crmEvent.groupBy({ by: ["oppId"], where: { contactId: { in: cardCids }, oppId: { in: cardOids }, kind: { in: TOUCH_KINDS } }, _max: { at: true } }) : [],
   ]);
   const lastTouchByOpp = new Map<string, Date>();
   const lastTouchByContact = new Map<string, Date>();
-  for (const e of touchEvs) {
-    if (e.oppId && !lastTouchByOpp.has(e.oppId)) lastTouchByOpp.set(e.oppId, e.at);
-    if (e.contactId && !lastTouchByContact.has(e.contactId)) lastTouchByContact.set(e.contactId, e.at);
-  }
+  for (const g of touchByContact) { if (g.contactId && g._max.at) lastTouchByContact.set(g.contactId, g._max.at); }
+  for (const g of touchByOpp) { if (g.oppId && g._max.at) lastTouchByOpp.set(g.oppId, g._max.at); }
   // latest of the opp-level touch and the contact-level touch
   const lastTouchFor = (oppId: string, contactId: string): Date | undefined => {
     const a = lastTouchByOpp.get(oppId), b = lastTouchByContact.get(contactId);
