@@ -80,6 +80,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [saving, setSaving] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
+  // 🔎 Zillow-style autocomplete for the search box (Jon 2026-11-09).
+  const [suggests, setSuggests] = useState<{ label: string; sub: string; lat: number; lon: number }[]>([]);
+  const sugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sensible defaults so the map isn't overwhelming (Jon 2026-11-08): the key layers on, the two
   // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
   const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false });
@@ -191,6 +194,25 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     await deleteTerritoryAction(fd).catch(() => {});
     router.refresh();
   }
+  // Debounced city/county/ZIP suggestions as you type (Zillow-style).
+  function onSearchChange(v: string) {
+    setSearchQ(v);
+    if (sugTimer.current) clearTimeout(sugTimer.current);
+    if (v.trim().length < 3) { setSuggests([]); return; }
+    sugTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/markets/geo-suggest?q=${encodeURIComponent(v.trim())}`);
+        const j = await r.json();
+        setSuggests(Array.isArray(j.items) ? j.items : []);
+      } catch { setSuggests([]); }
+    }, 280);
+  }
+  function pickSuggest(s: { label: string; lat: number; lon: number }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const map = mapRef.current as any;
+    if (map && Number.isFinite(s.lat) && Number.isFinite(s.lon)) { try { map.flyTo([s.lat, s.lon], 10); } catch { /* ignore */ } }
+    setSearchQ(s.label); setSuggests([]);
+  }
   // Click a marked area in the list → fly the map to it (Jon 2026-11-09).
   function zoomToTerritory(points?: [number, number][]) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -221,10 +243,18 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         const streetBase = L.tileLayer(STREET_TILES, { attribution: TILE_ATTR, maxZoom: 18, zIndex: 1 });
         const roadsOv = L.tileLayer(ROAD_TILES, { maxZoom: 18, zIndex: 2 });
         const labelsOv = L.tileLayer(LABEL_TILES, { maxZoom: 18, zIndex: 3 });
+        // 🗺 Census TIGERweb boundary overlays (free, no key) — toggle county / city / ZIP
+        // outlines so you can see where the lines delineate as you zoom (Jon 2026-11-09).
+        // (Neighborhoods aren't official public boundaries, so they're not available.)
+        const TIGER_WMS = "https://tigerweb.geo.census.gov/arcgis/services/TIGERweb/tigerWMS_Current/MapServer/WMSServer";
+        const wms = (layers: string) => L.tileLayer.wms(TIGER_WMS, { layers, format: "image/png", transparent: true, maxZoom: 18, opacity: 0.85, zIndex: 4 });
+        const countyBounds = wms("11");   // Counties
+        const cityBounds = wms("49");     // Incorporated Places (cities)
+        const zipBounds = wms("77");      // 2020 Census ZIP Code Tabulation Areas
         satBase.addTo(map); roadsOv.addTo(map); labelsOv.addTo(map);
         L.control.layers(
           { "🛰 Satellite": satBase, "🗺 Streets": streetBase },
-          { "🏷 Place labels": labelsOv, "🛣 Roads / streets": roadsOv },
+          { "🏷 Place labels": labelsOv, "🛣 Roads / streets": roadsOv, "▫️ County lines": countyBounds, "▫️ City lines": cityBounds, "▫️ ZIP code lines": zipBounds },
           { position: "topleft", collapsed: true },
         ).addTo(map);
         dataRef.current = L.featureGroup().addTo(map);
@@ -368,7 +398,18 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       {canEdit && (
         <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
           <span className="font-bold text-slate-400">🔎 Mark explored:</span>
-          <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") searchArea(); }} placeholder="County or ZIP — e.g. Lee County, FL  or  33914" className="w-72 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" />
+          <div className="relative">
+            <input value={searchQ} onChange={(e) => onSearchChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { setSuggests([]); searchArea(); } }} placeholder="Type a city, county, or ZIP — e.g. Cape Coral, FL" className="w-72 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" />
+            {suggests.length > 0 && (
+              <div className="absolute left-0 top-full z-[600] mt-1 w-80 overflow-hidden rounded-lg border border-slate-600 bg-slate-900 shadow-xl">
+                {suggests.map((s, i) => (
+                  <button key={i} type="button" onClick={() => pickSuggest(s)} className="block w-full px-3 py-1.5 text-left text-[12px] text-white hover:bg-slate-700">
+                    <span className="font-semibold">{s.label}</span>{s.sub && <span className="ml-1 text-slate-400">· {s.sub}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={searchArea} disabled={searchBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{searchBusy ? "Searching…" : "🔎 Find & mark"}</button>
           <button onClick={() => setBulkOpen((b) => !b)} className="rounded-lg bg-slate-200 px-2.5 py-1 font-bold text-slate-700 hover:bg-slate-300">📋 Bulk-mark ZIPs</button>
           <span className="text-slate-400">or draw with the ▱/⬠ tools (top-right).</span>
