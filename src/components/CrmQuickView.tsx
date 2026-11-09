@@ -26,7 +26,7 @@ import LeadKindChip from "@/components/LeadKindChip";
 import MoneyInput from "@/components/MoneyInput";
 import { parseLooseMoney, fmtDollars } from "@/lib/money";
 import DealHeatChip from "@/components/DealHeatChip";
-import { readListingHistory } from "@/lib/listing-history";
+import { readListingHistory, listingSummary, zillowUrl } from "@/lib/listing-history";
 import ListingHistoryPanel from "@/components/ListingHistoryPanel";
 import LeadTypePicker from "@/components/LeadTypePicker";
 import LeadSourceSelect from "@/components/LeadSourceSelect";
@@ -441,6 +441,30 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                   const showScript = (f.key === "property" || f.key === "land") && !!d.me.acqScript;
                   const fields = (
                     <div className="min-w-0 flex-1 space-y-3">
+                      {/* 📈 Prior listing on the Financials tab (Jon 2026-11-09): what it last
+                          listed / sold for, right where you price it — novation can't list higher
+                          than the last failed list. Full editable history lives on the 📈 tab. */}
+                      {f.key === "financial" && (() => {
+                        const { lastListed, lastSold } = listingSummary(readListingHistory(d.formData));
+                        const addr = formatAddress(d.title) || d.contact.address;
+                        return (
+                          <div className="rounded-xl bg-teal-50 px-3 py-2 text-[12px] leading-snug ring-1 ring-teal-200">
+                            <span className="font-bold text-teal-800">📈 Prior listing:</span>{" "}
+                            {lastListed || lastSold ? (
+                              <>
+                                {lastListed && <span>last listed <b className="text-teal-900">{lastListed.price}</b>{lastListed.date ? ` (${lastListed.date})` : ""}</span>}
+                                {lastListed && lastSold && " · "}
+                                {lastSold && <span>last sold <b className="text-teal-900">{lastSold.price}</b>{lastSold.date ? ` (${lastSold.date})` : ""}</span>}
+                                {lastListed?.price && <span className="text-teal-700"> — for novation, don&apos;t list above the last failed list ({lastListed.price}).</span>}
+                              </>
+                            ) : (
+                              <span className="text-teal-700">none logged yet — pull it so you don&apos;t over-list a novation.</span>
+                            )}{" "}
+                            <a href={zillowUrl(addr)} target="_blank" rel="noreferrer" className="font-semibold text-teal-700 underline">Zillow →</a>
+                            <span className="text-teal-500"> · add/edit on the 📈 Listing history tab</span>
+                          </div>
+                        );
+                      })()}
                       {/* 🏞 Land: skip the underwriting block, show the fast cash→novation play.
                           🏡 Home/unknown: the standard underwriting summary (Jon 2026-11-03).
                           Uses the SAME land decision as the form fields so they always agree. */}
