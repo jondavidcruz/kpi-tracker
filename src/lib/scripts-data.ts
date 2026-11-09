@@ -5,6 +5,11 @@ export type Script = {
   key: string;        // kebab-case unique id, e.g. "traditional-seller"
   name: string;       // human title, e.g. "Traditional / Fix & Flip Seller"
   group: string;      // one of: "Seller Scripts", "Buyer Scripts", "Agent Scripts"
+  // Which department this script belongs to, for access control on /scripts.
+  // "acquisitions" = seller/sourcing scripts (Nick, Kyle, Michelle). "dispositions"
+  // = buyer / developer / buyer-agent scripts. Omit = shared (everyone sees it).
+  // Managers/admins always see every script regardless of this field.
+  dept?: "acquisitions" | "dispositions";
   icon: string;       // a single emoji that fits
   summary: string;    // one short sentence on when to use this script
   steps: ScriptStep[];     // the ordered call flow; heading = the step title, body = the lines/paragraphs under it IN ORDER, copied verbatim
@@ -35,6 +40,7 @@ export const SCRIPTS: Script[] = [
     key: "traditional-seller",
     name: "Traditional / Fix & Flip Sellers",
     group: "Seller Scripts",
+    dept: "acquisitions",
     icon: "🔨",
     summary: "For distressed homeowners, estates, and investors wanting out of lower-price-point properties needing work.",
     steps: [
@@ -133,6 +139,7 @@ export const SCRIPTS: Script[] = [
   },
   {
     key: "luxury-seller",
+    dept: "acquisitions",
     name: "Luxury Market Sellers",
     group: "Seller Scripts",
     icon: "👑",
@@ -220,6 +227,7 @@ export const SCRIPTS: Script[] = [
   },
   {
     key: "fix-flip-investor-buyer",
+    dept: "dispositions",
     name: "Fix & Flip Investors",
     group: "Buyer Scripts",
     icon: "🔨",
@@ -260,6 +268,7 @@ export const SCRIPTS: Script[] = [
   },
   {
     key: "developer-buyer",
+    dept: "dispositions",
     name: "Developers",
     group: "Buyer Scripts",
     icon: "👑",
@@ -300,6 +309,7 @@ export const SCRIPTS: Script[] = [
   },
   {
     key: "linkedin-developer-outreach",
+    dept: "dispositions",
     name: "LinkedIn — Developer / Builder Outreach",
     group: "Buyer Scripts",
     icon: "💼",
@@ -348,6 +358,7 @@ export const SCRIPTS: Script[] = [
   },
   {
     key: "agent-disposition-luxury",
+    dept: "dispositions",
     name: "Agent Deal Disposition — Luxury (Developers)",
     group: "Agent Scripts",
     icon: "👑",
@@ -398,6 +409,7 @@ export const SCRIPTS: Script[] = [
   },
   {
     key: "agent-disposition-fix-flip",
+    dept: "dispositions",
     name: "Agent Deal Disposition — Fix & Flip (Investors)",
     group: "Agent Scripts",
     icon: "🔨",
@@ -449,6 +461,7 @@ export const SCRIPTS: Script[] = [
   },
   {
     key: "agent-sourcing-luxury",
+    dept: "acquisitions",
     name: "Agent Pocket Listing Sourcing — Luxury Tear-Down",
     group: "Agent Scripts",
     icon: "👑",
@@ -498,6 +511,7 @@ export const SCRIPTS: Script[] = [
   },
   {
     key: "agent-sourcing-fix-flip",
+    dept: "acquisitions",
     name: "Agent Pocket Listing Sourcing — Fix & Flip",
     group: "Agent Scripts",
     icon: "🔨",
@@ -543,5 +557,111 @@ export const SCRIPTS: Script[] = [
       },
     ],
     objections: [],
+  },
+  {
+    key: "land-seller",
+    name: "Land Sellers",
+    group: "Seller Scripts",
+    dept: "acquisitions",
+    icon: "🏞️",
+    summary: "For vacant-land owners. Shorter than the house script — runs in the SAME order as the Land Details tab, so fill the fields as you go.",
+    steps: [
+      {
+        heading: "1️⃣ Cold Opener — Build Credibility",
+        body: [
+          "🎤 Hey, [Name]? This is [Your Name] with Freedom Offers — we're a veteran-owned company out of San Diego. We buy land directly, as-is, no agents and no listings. I'm not gonna waste your time with a lowball, I promise. You got a quick minute?",
+          "💡 If they ask \"what company?\" → \"Freedom Offers. You can check us out at freedom-offers.com or call (877) 652-8991.\"",
+        ],
+      },
+      {
+        heading: "1️⃣ Warm Opener — Follow-Up from Previous Contact",
+        body: [
+          "🎤 Hey, [Name]? This is [Your Name] with Freedom Offers. My team spoke with you before about your land on [area] and you mentioned you might be open to selling. Do you have about 5 minutes?",
+          "💡 Use when there's already been contact — skip the credibility setup and go straight in.",
+        ],
+      },
+      {
+        heading: "2️⃣ 🤝 BUILD RAPPORT FIRST — before any talk about the land (do not skip)",
+        body: [
+          "⚠️ STOP. Don't jump to the parcel yet. Win the first couple minutes on THEM. Land sellers are often out-of-state or inherited the lot — there's a story. Get it.",
+          "❓ How'd you come to own the land out there? … Have you ever been out to see it? (then be quiet and let them talk)",
+          "✅ Move on only once it feels like a real conversation, not a survey.",
+        ],
+      },
+      {
+        heading: "3️⃣ Confirm the Parcel  →  Property address + APN",
+        body: [
+          "🎤 So I'm pulling it up right now — I've got the parcel out in [county/area]. Just want to make sure I've got the right piece of land. Does that sound right?",
+          "→ Fill: Property address + APN. Confirm what's on your map, don't interrogate — it signals you did your homework.",
+        ],
+      },
+      {
+        heading: "4️⃣ Their Situation & Why Selling  →  Ready to sell · Motivation · How long · Agent · $ wanted · Offers · Creative · Timeline",
+        body: [
+          "❓ Is selling something you're ready to do, or just exploring?  (→ Ready to sell today?)",
+          "❓ What's got you thinking about letting it go — and how long have you owned it?  (→ Motivation · How long)",
+          "❓ Have you ever listed it with an agent or gotten any offers on it?  (→ Tried an agent · Offers they've received)",
+          "❓ Do you have a number in mind that would make it worth it?  (→ Amount they want/need)",
+          "🎤 We're flexible — we can pay cash and close fast, or structure terms if that nets you more. Totally up to you.  (→ Open to creative)",
+          "❓ Any timeline that matters, or no rush?  (→ Vacancy / close timeline)",
+        ],
+      },
+      {
+        heading: "5️⃣ Size & Access  →  Acres · Legal/road access · Easements · Topography · Zoning",
+        body: [
+          "🎤 Let me get a quick feel for the lot so I can run it past our underwriters.",
+          "❓ How many acres is it, roughly?  (→ Acres)",
+          "❓ Is there legal road access — can you drive right up to it, or is it landlocked?  (→ Legal / road access)",
+          "❓ Any easements or shared roads you know of?  (→ Easements)",
+          "❓ Is it mostly flat, sloped, wooded?  (→ Topography)",
+          "❓ Do you know what it's zoned for — residential, ag, recreational?  (→ Zoned for)",
+        ],
+      },
+      {
+        heading: "6️⃣ Restrictions & Hazards  →  Flood · Wetlands · Hazards · HOA/POA",
+        body: [
+          "❓ Any of it in a flood zone or wetlands that you're aware of?  (→ Flood zone · Wetlands)",
+          "❓ Anything else a buyer should know — fire area, power lines, anything like that?  (→ Other hazards)",
+          "❓ Is there an HOA or POA with dues or restrictions?  (→ HOA/POA restrictions)",
+        ],
+      },
+      {
+        heading: "7️⃣ What Can You DO With It  →  Build · RV · Camping · STR · Development",
+        body: [
+          "💡 These are the buyer sell-points — the more \"yes\" answers, the more our buyers will pay. Get them.",
+          "❓ Can you build on it? Any min or max size on a home?  (→ Can you build? Min/max size)",
+          "❓ Can you park an RV out there, or camp — and for how long?  (→ RV parking · Camping)",
+          "❓ Any short-term-rental / Airbnb allowed?  (→ STR / Airbnb)",
+          "❓ What do you think someone could develop or use it for?  (→ What can be developed)",
+        ],
+      },
+      {
+        heading: "8️⃣ Features & Utilities  →  Features · Utilities · Anything special",
+        body: [
+          "❓ Does it have power, water, or septic nearby — or is it raw?  (→ Utilities & access)",
+          "❓ Any standout features — water frontage, views, paved road, corner lot, cleared?  (→ Land features)",
+          "❓ Anything special about this piece I should know?  (→ Anything special about the land)",
+        ],
+      },
+      {
+        heading: "9️⃣ Soft Close — run it by underwriting + get their email",
+        body: [
+          "🎤 Here's what I'd like to do: let me take everything you gave me, run it past our underwriters, and come back with what the land would qualify for. No obligation — just real numbers.",
+          "🎤 What's the best email to send that to? I'll include a quick breakdown.",
+          "→ Always get the email — it lets you send the offer in writing and follow up. Thank them and reference something they shared.",
+        ],
+      },
+    ],
+    objections: [
+      {
+        objection: "\"The land's been in the family — I'm not sure I want to sell.\"",
+        response: "Totally understand, and there's no pressure at all. A lot of folks we talk to are just tired of paying taxes on a piece they never use. If it ever makes sense, we'd love to be the first call. Mind if I check back down the road?",
+      },
+      {
+        objection: "\"I don't even know what it's worth.\"",
+        response: "That's exactly what I'm here for. Give me the basics and I'll run it past our underwriters and come back with a real number in writing — no obligation. What's the best email to send it to?",
+      },
+      ...SELLER_OBJECTIONS,
+    ],
   },
 ];

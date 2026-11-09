@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
+import { secondaryPositionOf } from "@/lib/roles";
 import { Card, SectionTitle } from "@/components/ui";
 import { SCRIPTS } from "@/lib/scripts-data";
 
@@ -50,12 +51,26 @@ function StepCard({ st }: { st: { heading: string; body: string[] } }) {
 export default async function ScriptsPage({ searchParams }: { searchParams: Promise<{ s?: string }> }) {
   const me = await getCurrentUser();
   if (!me) return <Card className="mx-auto max-w-md p-8 text-center">Please sign in.</Card>;
+
+  // Department access: acquisitions reps (Nick, Kyle, Michelle) see acquisitions
+  // scripts; dispositions reps see dispo scripts. Hybrid reps (e.g. Sharyn) see
+  // both. Managers/admins + anyone without a dept position see everything.
+  // Untagged scripts (no `dept`) are shared and always visible.
+  const DEPT_POSITIONS = new Set(["acquisitions", "dispositions"]);
+  const allowedDepts = new Set<string>();
+  if (me.position && DEPT_POSITIONS.has(me.position)) allowedDepts.add(me.position);
+  const secondary = secondaryPositionOf(me);
+  if (secondary && DEPT_POSITIONS.has(secondary)) allowedDepts.add(secondary);
+  const gated = !isManager(me) && allowedDepts.size > 0;
+  const visible = gated ? SCRIPTS.filter((s) => !s.dept || allowedDepts.has(s.dept)) : SCRIPTS;
+  if (!visible.length) return <Card className="mx-auto max-w-md p-8 text-center">No scripts assigned to your team yet.</Card>;
+
   const sp = await searchParams;
-  let i = SCRIPTS.findIndex((s) => s.key === sp.s);
+  let i = visible.findIndex((s) => s.key === sp.s);
   if (i < 0) i = 0;
-  const cur = SCRIPTS[i];
-  const prev = SCRIPTS[i - 1];
-  const next = SCRIPTS[i + 1];
+  const cur = visible[i];
+  const prev = visible[i - 1];
+  const next = visible[i + 1];
 
   return (
     <div className="space-y-5">
@@ -70,7 +85,7 @@ export default async function ScriptsPage({ searchParams }: { searchParams: Prom
         {/* Script list */}
         <div className="space-y-4">
           {GROUPS.map((g) => {
-            const items = SCRIPTS.filter((s) => s.group === g);
+            const items = visible.filter((s) => s.group === g);
             if (!items.length) return null;
             return (
               <div key={g}>
@@ -95,7 +110,7 @@ export default async function ScriptsPage({ searchParams }: { searchParams: Prom
         <Card className="p-5" id="top">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-bold text-slate-800">{cur.icon} {cur.name}</h2>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">Script {i + 1} of {SCRIPTS.length}</span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">Script {i + 1} of {visible.length}</span>
             <Link href="/call-scoring" className="ml-auto rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200">🎧 Score a call →</Link>
           </div>
           <p className="mb-4 text-sm text-slate-500">{cur.summary}</p>
