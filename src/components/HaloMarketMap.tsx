@@ -87,16 +87,38 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
   const [bulkBusy, setBulkBusy] = useState(false);
-  // 🖥 Full-screen map (Jon 2026-11-09): pop the map to fill the whole monitor.
+  // 🖥 Full-screen map (Jon 2026-11-09): use the native Fullscreen API so the map
+  // fills the ENTIRE physical screen — scaling to a MacBook or a big monitor alike,
+  // and hiding the browser chrome too — not just the browser window. Leaflet needs
+  // invalidateSize + a tile redraw when the container resizes, or the satellite
+  // tiles don't paint (that was the "black map" bug).
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [fs, setFs] = useState(false);
+  function enterFs() {
+    const el = wrapRef.current as any;
+    (el?.requestFullscreen ?? el?.webkitRequestFullscreen)?.call(el);
+  }
+  function exitFs() {
+    (document.exitFullscreen ?? (document as any).webkitExitFullscreen)?.call(document);
+  }
   useEffect(() => {
-    const m = mapRef.current as any;
-    // Leaflet must be told its container resized, or tiles don't fill the new size.
-    const t = setTimeout(() => { try { m?.invalidateSize?.(); } catch { /* ignore */ } }, 80);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFs(false); };
-    if (fs) window.addEventListener("keydown", onKey);
-    return () => { clearTimeout(t); window.removeEventListener("keydown", onKey); };
-  }, [fs]);
+    const onChange = () => {
+      const active = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      setFs(active);
+      const m = mapRef.current as any;
+      // Re-measure + force the satellite tiles to reload at the new size (a few
+      // passes so it catches after the fullscreen layout settles).
+      [60, 220, 500].forEach((d) => setTimeout(() => {
+        try { m?.invalidateSize?.(true); m?.eachLayer?.((l: any) => l?.redraw?.()); } catch { /* ignore */ }
+      }, d));
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange);
+    };
+  }, []);
 
   async function bulkMark() {
     const places = bulkText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
@@ -169,6 +191,13 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     await deleteTerritoryAction(fd).catch(() => {});
     router.refresh();
   }
+  // Click a marked area in the list → fly the map to it (Jon 2026-11-09).
+  function zoomToTerritory(points?: [number, number][]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const L = (window as any).L; const map = mapRef.current as any;
+    if (!L || !map || !points || points.length < 2) return;
+    try { map.fitBounds(L.latLngBounds(points), { padding: [60, 60], maxZoom: 12 }); } catch { /* ignore */ }
+  }
 
   // ── init the map ONCE (tiles + draw control) ──
   useEffect(() => {
@@ -183,7 +212,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         // instead of snapping back to the full map (Jon 2026-11-08). Default = FL + SC in view.
         let center: [number, number] = [31.0, -81.5], zoom = 5;
         try { const sv = JSON.parse(sessionStorage.getItem("fo_map_view") || "null"); if (sv && Number.isFinite(sv.lat) && Number.isFinite(sv.lng) && Number.isFinite(sv.zoom)) { center = [sv.lat, sv.lng]; zoom = sv.zoom; } } catch { /* default */ }
-        const map = L.map(ref.current, { center, zoom, scrollWheelZoom: false });
+        const map = L.map(ref.current, { center, zoom, scrollWheelZoom: true });
         mapRef.current = map;
         map.on("moveend zoomend", () => { try { sessionStorage.setItem("fo_map_view", JSON.stringify({ lat: map.getCenter().lat, lng: map.getCenter().lng, zoom: map.getZoom() })); } catch { /* ok */ } });
         // 🗺 Base layers (flip Satellite ↔ Streets) + free ESRI label/road overlays on top. zIndex
@@ -315,18 +344,16 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   ].filter((x) => directMailReady(x.g.grade)).sort((a) => (a.g.grade === "A" ? -1 : 1));
   return (
     <div className="rounded-2xl bg-slate-900 p-2 shadow-sm ring-1 ring-slate-800">
-      <style>{`.fo-map-label{background:transparent;border:none;box-shadow:none;color:#f1f5f9;font:700 10px system-ui;text-shadow:0 1px 3px #000}.leaflet-popup-content{margin:10px 12px}`}</style>
+      <style>{`.fo-map-label{background:transparent;border:none;box-shadow:none;color:#f1f5f9;font:700 10px system-ui;text-shadow:0 1px 3px #000}.leaflet-popup-content{margin:10px 12px}.fo-map-wrap:fullscreen,.fo-map-wrap:-webkit-full-screen{width:100vw;height:100vh}.fo-map-wrap:fullscreen .fo-map-canvas,.fo-map-wrap:-webkit-full-screen .fo-map-canvas{height:100vh!important;min-height:0!important;border-radius:0!important}`}</style>
       <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-semibold text-slate-300">
-        <span className="text-slate-400">What the circles mean:</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full" style={{ background: "#10b981" }} /> 🎯 Target market</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full" style={{ background: "#f59e0b" }} /> 👀 Watch market</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full bg-cyan-400/50 ring-2 ring-cyan-400/50" /> 🟢 Buyers here</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full" style={{ background: "#64748b" }} /> Uncharted / low</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-blue-500/40 ring-1 ring-blue-400" /> ✅ Explored (marked)</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> 📍 Seller lead</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-amber-300" style={{ background: "#f59e0b" }} /> ⭐ Closed deal</span>
+        <span className="text-slate-400">Legend:</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#10b981" }} /> Target market</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#f59e0b" }} /> Watch market</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> Seller lead</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-amber-300" style={{ background: "#f59e0b" }} /> Closed deal</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#3b82f6", opacity: 0.55 }} /> Explored area</span>
         <span className="text-slate-500">· bigger = more</span>
-        <button onClick={() => setFs(true)} className="ml-auto rounded-full bg-slate-700/70 px-2.5 py-1 font-bold text-slate-100 ring-1 ring-slate-600 hover:bg-slate-600">⛶ Full screen</button>
+        <button onClick={enterFs} className="ml-auto rounded-full bg-slate-700/70 px-2.5 py-1 font-bold text-slate-100 ring-1 ring-slate-600 hover:bg-slate-600">⛶ Full screen</button>
         <span className="rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
@@ -384,19 +411,26 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <span className="text-emerald-400/70">— proven response, worth the direct-mail spend</span>
         </div>
       )}
-      <div ref={ref} className={fs ? "fixed inset-0 z-[9998] h-screen w-screen overflow-hidden" : "h-[86vh] min-h-[600px] w-full overflow-hidden rounded-xl"} style={{ background: "#0b1220" }} />
-      {fs && (
-        <button onClick={() => setFs(false)} className="fixed left-1/2 top-3 z-[9999] -translate-x-1/2 rounded-lg bg-slate-900/90 px-4 py-2 text-sm font-bold text-white ring-1 ring-white/25 hover:bg-slate-800">✕ Exit full screen (Esc)</button>
-      )}
+      <div ref={wrapRef} className="fo-map-wrap relative">
+        <div ref={ref} className="fo-map-canvas h-[86vh] min-h-[600px] w-full overflow-hidden rounded-xl" style={{ background: "#0b1220" }} />
+        {fs && (
+          <button onClick={exitFs} className="absolute right-3 top-3 z-[1200] rounded-lg bg-slate-900/90 px-4 py-2 text-sm font-bold text-white ring-1 ring-white/25 hover:bg-slate-800">✕ Exit full screen (Esc)</button>
+        )}
+      </div>
       {territories.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5 px-1">
-          {territories.map((t) => (
-            <span key={t.id} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white" style={{ background: `${TERR_COLOR[t.status]}cc` }}>
-              {TERR_LABEL[t.status].split(" ")[0]} {t.name}
-              {terrStats[t.id] && (terrStats[t.id].leads > 0 || terrStats[t.id].deals > 0) && <span className="rounded bg-black/25 px-1 text-[10px]">📥{terrStats[t.id].leads} 🏆{terrStats[t.id].deals}</span>}
-              {canEdit && <button onClick={() => removeTerritory(t.id)} title="Delete" className="ml-0.5 text-white/80 hover:text-white">×</button>}
-            </span>
-          ))}
+        <div className="mt-2 px-1">
+          <div className="mb-1 text-[11px] font-bold text-slate-400">📍 Your marked areas ({territories.length}) — click one to zoom to it</div>
+          <div className="flex flex-wrap gap-1.5">
+            {territories.map((t) => (
+              <span key={t.id} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white" style={{ background: `${TERR_COLOR[t.status]}cc` }}>
+                <button onClick={() => zoomToTerritory(t.points)} title="Zoom to this area" className="inline-flex cursor-pointer items-center gap-1 hover:underline">
+                  {TERR_LABEL[t.status].split(" ")[0]} {t.name}
+                  {terrStats[t.id] && (terrStats[t.id].leads > 0 || terrStats[t.id].deals > 0) && <span className="rounded bg-black/25 px-1 text-[10px]">📥{terrStats[t.id].leads} 🏆{terrStats[t.id].deals}</span>}
+                </button>
+                {canEdit && <button onClick={() => removeTerritory(t.id)} title="Delete" className="ml-0.5 text-white/80 hover:text-white">×</button>}
+              </span>
+            ))}
+          </div>
         </div>
       )}
       <p className="mt-1 px-1 text-[10px] text-slate-500">Click a market for details. Glowing = buyers there. Draw areas to paint where you&apos;re marketing / have pulled vs open territory.</p>
