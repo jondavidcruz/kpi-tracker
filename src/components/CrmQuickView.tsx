@@ -38,6 +38,7 @@ import LienBuilder from "@/components/LienBuilder";
 import NoteComposer from "@/components/NoteComposer";
 import TimelineFilter from "@/components/TimelineFilter";
 import DetailsAutofill from "@/components/DetailsAutofill";
+import ScriptPanel from "@/components/ScriptPanel";
 import DocUploadForm from "@/components/DocUploadForm";
 import DripControl from "@/components/DripControl";
 import DispoBuyerTracker from "@/components/DispoBuyerTracker";
@@ -55,7 +56,7 @@ type Payload = {
   fieldOverrides?: import("@/lib/crm-forms").FieldOverrideMap;
   driveFiles?: Array<{ id: string; name: string; link: string; mimeType: string }>;
   siblingOpps?: Array<{ id: string; title: string; stage: string; pipeline: string }>;
-  me: { name: string; fromLabel: string; signature: string; sigImageUrl?: string; canSms: boolean; canEmail: boolean; canCall: boolean };
+  me: { name: string; fromLabel: string; signature: string; sigImageUrl?: string; canSms: boolean; canEmail: boolean; canCall: boolean; acqScript?: boolean };
   followers: string[];
   reps: string[];
   snippets: Array<{ id: string; name: string; kind: string; subject?: string; body: string }>;
@@ -190,7 +191,7 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
           signer={d.me.name} events={d.events} documents={lienDocs} />
       )}
       <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px]" onClick={() => setOppId(null)} />
-      <div className="fixed inset-x-0 top-[4vh] z-50 mx-auto flex h-[88vh] w-[min(60rem,95vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className={`fixed inset-x-0 top-[4vh] z-50 mx-auto flex h-[88vh] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ${d?.me.acqScript && (tab === "form:property" || tab === "form:land") ? "w-[min(78rem,96vw)]" : "w-[min(60rem,95vw)]"}`}>
         {!d ? (
           <div className="p-12 text-center text-sm text-slate-400">Loading…</div>
         ) : (
@@ -433,18 +434,30 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                   </AutoSaveForm>
                 )}
 
-                {buildForms(d.pipeline, d.customFields, d.fieldOverrides, resolveLeadKind(d.formData, d.pipeline)).map((f) => tab === `form:${f.key}` && (
-                  <div key={f.key} className="space-y-3">
-                    {/* 🏞 Land: skip the underwriting block, show the fast cash→novation play.
-                        🏡 Home/unknown: the standard underwriting summary (Jon 2026-11-03).
-                        Uses the SAME land decision as the form fields so they always agree. */}
-                    {f.key === "financial" && (isLandFinancial(d.pipeline, resolveLeadKind(d.formData, d.pipeline)) ? <LandOfferBlock d={d} /> : <UnderwriteBlock d={d} />)}
-                    {/* ✨ pull details straight out of the notes (Home/Land only) */}
-                    {(f.key === "property" || f.key === "land") && <DetailsAutofill oppId={d.id} formKey={f.key} onApplied={() => refetch(d.id)} />}
-                    {/* controlled fields — never blank out the rep's dropdown choices (Jon 2026-10-26) */}
-                    <CrmFormFields form={f} oppId={d.id} contactId={d.contact.id} initial={(d.formData?.[f.key] ?? {}) as Record<string, string | string[]>} />
-                  </div>
-                ))}
+                {buildForms(d.pipeline, d.customFields, d.fieldOverrides, resolveLeadKind(d.formData, d.pipeline)).map((f) => {
+                  if (tab !== `form:${f.key}`) return null;
+                  // 📜 Acquisitions reps get the call script beside Home/Land Details,
+                  // its blocks ordered to match the fields below (Jon 2026-11-09).
+                  const showScript = (f.key === "property" || f.key === "land") && !!d.me.acqScript;
+                  const fields = (
+                    <div className="min-w-0 flex-1 space-y-3">
+                      {/* 🏞 Land: skip the underwriting block, show the fast cash→novation play.
+                          🏡 Home/unknown: the standard underwriting summary (Jon 2026-11-03).
+                          Uses the SAME land decision as the form fields so they always agree. */}
+                      {f.key === "financial" && (isLandFinancial(d.pipeline, resolveLeadKind(d.formData, d.pipeline)) ? <LandOfferBlock d={d} /> : <UnderwriteBlock d={d} />)}
+                      {/* ✨ pull details straight out of the notes (Home/Land only) */}
+                      {(f.key === "property" || f.key === "land") && <DetailsAutofill oppId={d.id} formKey={f.key} onApplied={() => refetch(d.id)} />}
+                      {/* controlled fields — never blank out the rep's dropdown choices (Jon 2026-10-26) */}
+                      <CrmFormFields form={f} oppId={d.id} contactId={d.contact.id} initial={(d.formData?.[f.key] ?? {}) as Record<string, string | string[]>} />
+                    </div>
+                  );
+                  return (
+                    <div key={f.key} className={showScript ? "flex flex-col gap-4 lg:flex-row lg:items-start" : ""}>
+                      {fields}
+                      {showScript && <ScriptPanel formKey={f.key as "property" | "land"} />}
+                    </div>
+                  );
+                })}
 
                 {/* 🤝 Buyers on the deal + offers received — the SAME trackers as the full
                     contact view, read from formData so they stay in sync (Jon 2026-10-28). */}

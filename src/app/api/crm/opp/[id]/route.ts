@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, isManager, canManageAllLeads } from "@/lib/auth";
+import { secondaryPositionOf } from "@/lib/roles";
 import { stripHtml } from "@/lib/crm-shared";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +71,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       // 🖼 the uploaded signature IMAGE (Jon 2026-10-27: only the text sig was showing in the composer)
       sigImageUrl: (await hasSignatureImage(firstOf(me!.name))) ? `/api/sig/${encodeURIComponent(firstOf(me!.name))}` : "",
       canSms: comms.sms, canEmail: comms.email, canCall: comms.call,
+      // Show the in-modal call script (Home/Land Details) to acquisitions reps
+      // (Nick, Kyle, Michelle), hybrid reps cross-trained on acquisitions
+      // (Sharyn), and managers/owner for review. Dispo-only reps don't see it.
+      acqScript: isManager(me!) || me!.position === "acquisitions" || secondaryPositionOf(me!) === "acquisitions",
     },
     snippets: snippets.map((s) => ({ id: s.id, name: s.name, kind: s.kind, subject: s.subject, body: s.body })),
     smsHistory, emailHistory, underwrites,
