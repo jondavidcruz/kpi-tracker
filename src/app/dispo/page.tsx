@@ -186,15 +186,18 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
   // as a touch on the lead (Jon 2026-10-29: "Marie called + texted but it still said never touched").
   const dealCids = [...new Set(dealOpps.filter((o) => o.pipeline === dealPl).map((o) => o.contactId).filter((x): x is string => !!x))];
   if (tab === "deals" && dealIds.length) {
-    const [sevs, tevs] = await Promise.all([
-      db.crmEvent.findMany({ where: { oppId: { in: dealIds }, kind: "stage" }, orderBy: { at: "desc" }, take: 6000, select: { oppId: true, at: true } }).catch(() => [] as { oppId: string; at: Date }[]),
-      dealCids.length ? db.crmEvent.findMany({ where: { contactId: { in: dealCids }, kind: { in: ["note", "call", "sms", "email", "task", "appt", "stage"] } }, orderBy: { at: "desc" }, take: 12000, select: { oppId: true, contactId: true, at: true } }).catch(() => [] as { oppId: string; contactId: string; at: Date }[]) : [],
+    // Grouped in the DB (_max at) instead of shipping up to 18k event rows per deals-board load
+    // just to keep the newest per group — same result, far less Supabase egress + faster.
+    // (Jon overnight 2026-11-08: "run smoother and cut costs".)
+    const TOUCH_KINDS_D = ["note", "call", "sms", "email", "task", "appt", "stage"];
+    const [sgrp, tByContact, tByOpp] = await Promise.all([
+      db.crmEvent.groupBy({ by: ["oppId"], where: { oppId: { in: dealIds }, kind: "stage" }, _max: { at: true } }).catch(() => [] as { oppId: string; _max: { at: Date | null } }[]),
+      dealCids.length ? db.crmEvent.groupBy({ by: ["contactId"], where: { contactId: { in: dealCids }, kind: { in: TOUCH_KINDS_D } }, _max: { at: true } }).catch(() => [] as { contactId: string; _max: { at: Date | null } }[]) : [],
+      dealCids.length ? db.crmEvent.groupBy({ by: ["oppId"], where: { contactId: { in: dealCids }, oppId: { in: dealIds }, kind: { in: TOUCH_KINDS_D } }, _max: { at: true } }).catch(() => [] as { oppId: string; _max: { at: Date | null } }[]) : [],
     ]);
-    for (const e of sevs) if (e.oppId && !stageAtByDeal.has(e.oppId)) stageAtByDeal.set(e.oppId, e.at);
-    for (const e of tevs) {
-      if (e.oppId && !lastTouchByDeal.has(e.oppId)) lastTouchByDeal.set(e.oppId, e.at);
-      if (e.contactId && !lastTouchByContactD.has(e.contactId)) lastTouchByContactD.set(e.contactId, e.at);
-    }
+    for (const g of sgrp) if (g.oppId && g._max.at) stageAtByDeal.set(g.oppId, g._max.at);
+    for (const g of tByContact) if (g.contactId && g._max.at) lastTouchByContactD.set(g.contactId, g._max.at);
+    for (const g of tByOpp) if (g.oppId && g._max.at) lastTouchByDeal.set(g.oppId, g._max.at);
   }
   const lastTouchForDeal = (oppId: string, contactId?: string | null): Date | undefined => {
     const a = lastTouchByDeal.get(oppId), b = contactId ? lastTouchByContactD.get(contactId) : undefined;
