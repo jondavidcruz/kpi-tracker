@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MailCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { requestMagicLink } from "./actions";
 import Logo from "@/components/Logo";
 
 // Flip to `true` only AFTER Google is configured in the Supabase dashboard
@@ -58,18 +59,16 @@ export default function LoginForm() {
   async function sendLink() {
     setStatus("sending");
     setError("");
-    const supabase = createClient();
-    const origin = window.location.origin;
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` },
-    });
-    if (error) {
-      setError(error.message);
-      setStatus("error");
-    } else {
-      setStatus("sent");
+    // Goes through a roster-gated server action: a link is only actually sent if
+    // this email is an active team account. The response is the same either way,
+    // so a stranger can't use this to send themselves a link or probe who's on the
+    // team — and no junk auth row is ever created.
+    try {
+      await requestMagicLink(email.trim().toLowerCase(), next);
+    } catch {
+      /* uniform response regardless */
     }
+    setStatus("sent");
   }
 
   return (
@@ -85,7 +84,7 @@ export default function LoginForm() {
           <div className="space-y-3">
             <div className="flex items-start gap-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200">
               <MailCheck size={18} className="mt-0.5 shrink-0 text-emerald-600" />
-              <span>Check your email — we sent a one-tap sign-in link to <strong>{email}</strong>. Open it on this device.</span>
+              <span>If <strong>{email}</strong> is a team account, a one-tap sign-in link is on its way — check your inbox and open it on this device.</span>
             </div>
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-[12px] leading-snug text-slate-500 ring-1 ring-slate-200">
               💡 Once you&apos;re in, go to <strong>Account</strong> (bottom of the sidebar) → <strong>Change my password</strong> to set a password. Then you can sign in with email + password next time and skip the link.

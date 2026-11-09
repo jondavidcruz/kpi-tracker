@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   description: "Freedom Offers War Room — KPIs, deals, schedule, and the team's second brain",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "War Room" },
+  // Private internal tool — never let search engines index or follow ANY page, so
+  // the site can't be found by searching; the only way in is a link you were given.
+  robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
 };
 
 export const viewport: Viewport = {
