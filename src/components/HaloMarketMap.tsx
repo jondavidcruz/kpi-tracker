@@ -87,6 +87,16 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
   const [bulkBusy, setBulkBusy] = useState(false);
+  // 🖥 Full-screen map (Jon 2026-11-09): pop the map to fill the whole monitor.
+  const [fs, setFs] = useState(false);
+  useEffect(() => {
+    const m = mapRef.current as any;
+    // Leaflet must be told its container resized, or tiles don't fill the new size.
+    const t = setTimeout(() => { try { m?.invalidateSize?.(); } catch { /* ignore */ } }, 80);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFs(false); };
+    if (fs) window.addEventListener("keydown", onKey);
+    return () => { clearTimeout(t); window.removeEventListener("keydown", onKey); };
+  }, [fs]);
 
   async function bulkMark() {
     const places = bulkText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
@@ -316,7 +326,8 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> 📍 Seller lead</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-amber-300" style={{ background: "#f59e0b" }} /> ⭐ Closed deal</span>
         <span className="text-slate-500">· bigger = more</span>
-        <span className="ml-auto rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
+        <button onClick={() => setFs(true)} className="ml-auto rounded-full bg-slate-700/70 px-2.5 py-1 font-bold text-slate-100 ring-1 ring-slate-600 hover:bg-slate-600">⛶ Full screen</button>
+        <span className="rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
         <span className="font-bold text-slate-400">Layers:</span>
@@ -373,7 +384,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <span className="text-emerald-400/70">— proven response, worth the direct-mail spend</span>
         </div>
       )}
-      <div ref={ref} className="h-[84vh] min-h-[600px] w-full overflow-hidden rounded-xl" style={{ background: "#0b1220" }} />
+      <div ref={ref} className={fs ? "fixed inset-0 z-[9998] h-screen w-screen overflow-hidden" : "h-[86vh] min-h-[600px] w-full overflow-hidden rounded-xl"} style={{ background: "#0b1220" }} />
+      {fs && (
+        <button onClick={() => setFs(false)} className="fixed left-1/2 top-3 z-[9999] -translate-x-1/2 rounded-lg bg-slate-900/90 px-4 py-2 text-sm font-bold text-white ring-1 ring-white/25 hover:bg-slate-800">✕ Exit full screen (Esc)</button>
+      )}
       {territories.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5 px-1">
           {territories.map((t) => (
