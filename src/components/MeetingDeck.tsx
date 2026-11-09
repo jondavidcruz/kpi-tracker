@@ -170,6 +170,17 @@ function buildSlides(d: MeetingDeck): Slide[] {
     </div>
   )});
 
+  // Team-building activity — OPENS the meeting (Jon 2026-11-09: "start with the activity
+  // first instead of at the end"). A new 2–5 minute activity each week to kick things off.
+  s.push({ name: "Team Building", node: (
+    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-emerald-900 via-brand-navy to-brand-navy-950 px-[9%] text-center text-white">
+      <div className="text-emerald-300" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>LET&apos;S KICK OFF — TEAM TIME</div>
+      <div className="mt-[2.5%] font-extrabold" style={{ fontSize: "clamp(20px,3.6cqw,48px)" }}>🎉 {d.activity.title}</div>
+      <div className="mt-[2.5%] max-w-[82%] leading-snug text-white/90" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>{d.activity.how}</div>
+      <div className="mt-[3%] rounded-full bg-white/10 px-5 py-1.5 font-bold text-emerald-200 ring-1 ring-white/20" style={{ fontSize: "clamp(10px,1.4cqw,17px)" }}>⏱ {d.activity.minutes} min — then let&apos;s get into it</div>
+    </div>
+  )});
+
   // 2. Meet the team — owner-uploaded image if set, else the native "A small team" grid
   s.push({ name: "Team", node: d.teamSlideUrl
     ? <div className="h-full w-full bg-[#f5ede4] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${d.teamSlideUrl})` }} />
@@ -319,16 +330,6 @@ function buildSlides(d: MeetingDeck): Slide[] {
       <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>VERSE OF THE WEEK</div>
       <div className="mt-[4%] max-w-[85%] font-bold italic leading-snug" style={{ fontSize: "clamp(16px,3cqw,42px)" }}>&ldquo;{d.verse.text}&rdquo;</div>
       <div className="mt-[3%] font-semibold text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.8cqw,24px)" }}>— {d.verse.ref}</div>
-    </div>
-  )});
-
-  // Team-building closer — a new 2–5 minute activity every week, right before the send-off.
-  s.push({ name: "Team Building", node: (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-emerald-900 via-brand-navy to-brand-navy-950 px-[9%] text-center text-white">
-      <div className="text-emerald-300" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>BEFORE WE GO — TEAM TIME</div>
-      <div className="mt-[2.5%] font-extrabold" style={{ fontSize: "clamp(20px,3.6cqw,48px)" }}>🎉 {d.activity.title}</div>
-      <div className="mt-[2.5%] max-w-[82%] leading-snug text-white/90" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>{d.activity.how}</div>
-      <div className="mt-[3%] rounded-full bg-white/10 px-5 py-1.5 font-bold text-emerald-200 ring-1 ring-white/20" style={{ fontSize: "clamp(10px,1.4cqw,17px)" }}>⏱ {d.activity.minutes} min — then we&apos;re out</div>
     </div>
   )});
 

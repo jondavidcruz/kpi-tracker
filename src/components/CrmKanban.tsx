@@ -41,7 +41,9 @@ export type CrmCard = {
   leadType?: { label: string; cls: string }; // 🏷 seller / land seller / buyer agent / developer — top-right
   parcels?: number; // 📦 how many parcels on this deal (>1 shows a badge)
   acres?: number;   // ⛰️ parcel size — shown as a chip + searchable by acre range
-  offers?: { live: number; goal: number }; // 💰 offers received vs the 3-offer goal
+  offers?: { live: number; goal: number; total?: number }; // 💰 offers received vs the 3-offer goal
+  buyerCount?: number;  // 👥 how many buyers are being worked on this deal (dispo board)
+  underContract?: boolean; // 📝 deal is under contract (we have a cost locked in)
   staleStage?: string;  // ⚠️ stored stage no longer in this pipeline (rename orphan) — real stage to show
   gate?: { cleared: boolean; label: string }; // 🚦 Option B — this stage's SOP gate status
   builderSize?: "mompop" | "big"; // 🏠🏢 developer cards — mom & pop (work first) vs big builder
@@ -437,7 +439,11 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       {c.waterfront && <span title="Waterfront land — market these first (wealthy buyers keep building through rate hikes)" className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[9px] font-bold text-cyan-700 ring-1 ring-cyan-200">🌊 Waterfront</span>}
                       {c.gate && <span title={`SOP gate — ${c.gate.label}: ${c.gate.cleared ? "cleared, clear to advance" : "held, advance locked"}`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.gate.cleared ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-red-100 text-red-700 ring-red-200"}`}>{c.gate.cleared ? "✓ gate" : "🔒 gate"}</span>}
                       {!!c.parcels && c.parcels > 1 && <span title={`${c.parcels} parcels on this deal`} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 ring-1 ring-amber-200">📦 {c.parcels}</span>}
-                      {c.offers && c.offers.live > 0 && <span title={`${c.offers.live} of ${c.offers.goal} offers received`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.offers.live >= c.offers.goal ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : "bg-amber-100 text-amber-700 ring-amber-200"}`}>💰 {c.offers.live}/{c.offers.goal}</span>}
+                      {/* Dispo deal in play (has buyers / offers / under contract) → show the
+                          offers count, buyer count and UC status. Fresh leads stay clean. */}
+                      {c.offers && (c.offers.live > 0 || (c.buyerCount ?? 0) > 0 || c.underContract) && <span title={`${c.offers.live} live offer${c.offers.live === 1 ? "" : "s"} toward the goal of ${c.offers.goal}${c.offers.total && c.offers.total > c.offers.live ? ` · ${c.offers.total} received in all` : ""}`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${c.offers.live >= c.offers.goal ? "bg-emerald-100 text-emerald-700 ring-emerald-200" : c.offers.live > 0 ? "bg-amber-100 text-amber-700 ring-amber-200" : "bg-slate-100 text-slate-500 ring-slate-200"}`}>💰 {c.offers.live}/{c.offers.goal} offers</span>}
+                      {!!c.buyerCount && <span title={`${c.buyerCount} buyer${c.buyerCount === 1 ? "" : "s"} being worked on this deal`} className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] font-bold text-indigo-700 ring-1 ring-indigo-200">👥 {c.buyerCount}</span>}
+                      {c.underContract && <span title="Under contract — we have a cost locked in" className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold text-violet-700 ring-1 ring-violet-200">📝 UC</span>}
                       {c.staleStage && <span title={`This deal's saved stage ("${c.staleStage}") no longer exists in this pipeline after a rename — use "Re-sort deals" to file it correctly.`} className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700 ring-1 ring-orange-200">⚠️ was: {c.staleStage}</span>}
                       {c.builderSize && (() => { const m = builderSizeMeta(c.builderSize); return (
                         <button type="button" title={m.title} onClick={(e) => { e.stopPropagation(); flipBuilderSize(c.id, c.builderSize === "big" ? "mompop" : "big"); }} className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ring-1 ${m.cls} hover:opacity-80`}>{m.emoji} {m.label}</button>

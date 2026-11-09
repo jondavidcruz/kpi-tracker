@@ -29,7 +29,7 @@ import type { DispoVelocity } from "@/lib/dispo-velocity";
 import DispoCommandCenter from "@/components/DispoCommandCenter";
 import { gateForCurrentStage, gateCleared, readGateChecks, pathForPipeline, PATH_META } from "@/lib/dispo-gates";
 import { parseAcres, fmtAcres, parseAcreQuery, acreInRange } from "@/lib/acreage";
-import { readDispoOffers, offerStats, OFFER_GOAL } from "@/lib/dispo-offers";
+import { readDispoOffers, offerStats, OFFER_GOAL, readUnderContract } from "@/lib/dispo-offers";
 
 export const dynamic = "force-dynamic";
 
@@ -270,7 +270,11 @@ export default async function DispoPage({ searchParams }: { searchParams: Promis
     parcels: parcelCount(o.formData, o.contact?.address, (o.formData as { property?: { apn?: string } } | null)?.property?.apn),
     acres: parseAcres(o.formData) ?? undefined,
     heat: readDealHeat(o.formData),
-    offers: (() => { const s = offerStats(readDispoOffers(o.formData)); return { live: s.live, goal: OFFER_GOAL }; })(),
+    offers: (() => { const s = offerStats(readDispoOffers(o.formData)); return { live: s.live, goal: OFFER_GOAL, total: s.total }; })(),
+    // 👥 how many buyers are being worked on this deal, and 📝 whether it's under contract —
+    // detail we already track, now surfaced on the card (Jon 2026-11-09).
+    buyerCount: readDispoBuyers(o.formData).length,
+    underContract: readUnderContract(o.formData) != null,
     staleStage: o.stage && !dealStageKeys.has(o.stage) ? prettyStage(o.stage) : undefined,
     gate: (() => {
       const gt = gateForCurrentStage(pathForPipeline(o.pipeline), dealColumns.map((s) => ({ key: s.key, label: s.label })), o.stage);

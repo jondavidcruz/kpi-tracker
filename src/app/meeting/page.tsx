@@ -81,11 +81,11 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
             <div className="text-xs font-bold text-brand-navy">① Jon · the business — 15 min</div>
-            <p className="mt-0.5 text-xs text-slate-500">Wins → stoplight → the numbers (don&apos;t read every cell, hit what&apos;s off) → pipeline → recognition. Anything to solve is parked, not debated live.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Open with the team activity to kick things off → stoplight → the numbers (don&apos;t read every cell, hit what&apos;s off) → pipeline → recognition. Anything to solve is parked, not debated live.</p>
           </div>
           <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
             <div className="text-xs font-bold text-amber-700">② Dad · the message — 15 min</div>
-            <p className="mt-0.5 text-xs text-slate-500">Hands off at the Verse slide. The word for the week, then the team-building closer, then we&apos;re out.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Hands off at the Verse slide — the word for the week, then we&apos;re out.</p>
           </div>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">The timer in the top corner turns amber at 2 min left and red if a half runs over — the cue to wrap and move on.</p>
