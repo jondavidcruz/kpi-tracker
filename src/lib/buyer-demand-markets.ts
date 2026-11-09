@@ -11,6 +11,8 @@
 import { db } from "@/lib/db";
 import { parsePriceCeiling, parseAcreRange, areaTokens } from "@/lib/buyer-coverage";
 import { classifyBuilderSize } from "@/lib/builder-size";
+import { wealthFor } from "@/lib/elite-markets";
+import { landSoldFor } from "@/lib/land-sold";
 import { coverageFor, type MarketPull } from "@/lib/target-markets";
 import type { CountyScan } from "@/lib/market-scan";
 import type { WorkbenchState } from "@/lib/dm-filter-catalog";
@@ -162,7 +164,24 @@ export async function recommendMarketsByBuyerDemand(
     if (newMarket) { score += 25; reasons.push("🆕 not in our target list — a NEW market"); }
     if (cov.status === "never") { score += 15; if (!newMarket) reasons.push("🗺 never pulled"); }
     else if (cov.status === "cooldown") { score -= 10; reasons.push(`⏳ on cooldown (${cov.cooldownLeft}d)`); }
-    if (landSharePct != null) { score += Math.min(20, landSharePct); if (landSharePct >= 20) reasons.push(`💎 ${landSharePct}% of land ≥$100k`); }
+    // Margin / land-value signal — prefer ACTUAL recent land SALES (land-sold) over the assessor's
+    // value: the truest "does land really sell high here" read (Palm Beach 96% vs Lehigh 27%). This
+    // is what keeps the pull order on Jon's elite-land strategy — big valuable lots, not penny lots.
+    const sold = landSoldFor(c.fips);
+    if (sold) {
+      const pct = Math.round(sold.share * 100);
+      score += Math.round(sold.share * 22);
+      if (pct >= 50) reasons.push(`🧾 ${pct}% of recent land SOLD ≥$100k`);
+    } else if (landSharePct != null) {
+      score += Math.min(20, landSharePct);
+      if (landSharePct >= 20) reasons.push(`💎 ${landSharePct}% of land ≥$100k`);
+    }
+    // Wealth / waterfront enclaves — the affluent, business-dense areas the wealthy keep building in.
+    const wt = wealthFor(c.fips);
+    if (wt) {
+      score += Math.round((wt.wealth - 3) * 5);
+      if (wt.wealth >= 4.5) reasons.push(`👑 ${wt.label} — elite / waterfront`);
+    }
     if (c.tier === "target") { score += 8; reasons.push("🎯 strong market read"); }
     if (momPop > 0) { score += 5; reasons.push(`🏠 ${momPop} mom & pop (work first)`); }
     if (bigBuilder > 0) reasons.push(`🏢 ${bigBuilder} big builder${bigBuilder > 1 ? "s" : ""}`);
