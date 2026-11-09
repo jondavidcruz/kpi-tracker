@@ -45,11 +45,9 @@ export default function Deck({ slides, clock }: { slides: Slide[]; clock?: DeckC
   // Current part = last part whose startIndex ≤ current slide.
   const partIdx = clock ? clock.parts.reduce((acc, p, idx) => (i >= p.startIndex ? idx : acc), 0) : 0;
   // Snapshot when each part is first entered while the clock runs, for true per-part elapsed.
-  useEffect(() => {
-    if (!clock || !running) return;
-    if (partStarts.current[partIdx] == null) partStarts.current[partIdx] = elapsed;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partIdx, running, elapsed]);
+  // Cached synchronously here (not in an effect) so the HUD reads the right start on the very
+  // render the handoff happens — otherwise part 2 flashes "+15:00 over" for one tick.
+  if (clock && running && partStarts.current[partIdx] == null) partStarts.current[partIdx] = elapsed;
 
   const part = clock?.parts[partIdx];
   const partElapsed = elapsed - (partStarts.current[partIdx] ?? 0);
@@ -65,11 +63,10 @@ export default function Deck({ slides, clock }: { slides: Slide[]; clock?: DeckC
       if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); go(1); }
       else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
       else if (clock && (e.key === "t" || e.key === "T")) { e.preventDefault(); setRunning((r) => !r); }
-      else if (clock && (e.key === "r" || e.key === "R")) { e.preventDefault(); resetClock(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, clock, resetClock]);
+  }, [go, clock]);
 
   useEffect(() => {
     const onFs = () => setFs(Boolean(document.fullscreenElement));
