@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { L10 } from "@/lib/meeting";
 import { Card } from "@/components/ui";
+import L10Timer from "@/components/L10Timer";
 
 const ROCK_PILL: Record<string, string> = {
   on_track: "bg-emerald-100 text-emerald-700",
@@ -32,6 +33,9 @@ export default function L10Agenda({ l10, showIssues = true }: { l10: L10; showIs
         <span className="rounded-full bg-brand-gold/20 px-2.5 py-0.5 text-xs font-semibold text-brand-navy">Same day, same time, 30 min, same agenda — keep it tight</span>
         <span className="ml-auto text-xs text-slate-400">{l10.generatedOn} · {l10.quarterLabel}</span>
       </div>
+
+      {/* Live 30-min clock — start it and the meeting paces itself through the 7 segments. */}
+      <L10Timer />
 
       <Seg n={1} title="Segue" mins={2}>
         <p className="text-sm text-slate-500">Round the table — one piece of <strong>good news</strong> each, personal and business. Transition into work mode.</p>
