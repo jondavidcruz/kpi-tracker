@@ -2,9 +2,11 @@
 // Buyer Cascade (vetted-buyers Phase 3) — type a deal, get the ranked call list.
 // One search → geocode → every active buyer scored against the deal's location,
 // price, acreage, and asset type, with WHY chips on every card.
-import { useRef, useState, useTransition } from "react";
-import { cascadeRank, logBuyerOutreach, setBuilderSizeAction } from "@/app/actions";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { cascadeRank, logBuyerOutreach, setBuilderSizeAction, recentCascadeSearches } from "@/app/actions";
 import { builderSizeMeta } from "@/lib/builder-size";
+
+type RecentSearch = { address: string; price: number | null; acres: number | null; assetType: string; label: string; at: string };
 
 type Chip = { ok: boolean | "warn"; label: string };
 type Box = { priceMin: number | null; priceMax: number | null; priceUnit: string | null; priceNotes: string; priceText: string; discount: number | null; acresMin: number | null; acresMax: number | null; types: string[]; closeDays: number | null; funding: string | null; where: string[]; volumeNote: string; buyingNow: boolean | null; details?: { label: string; value: string }[] };
@@ -67,6 +69,10 @@ export default function CascadeBoard() {
   const toggleBox = (id: string) => setCollapsed((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const formRef = useRef<HTMLFormElement>(null);
   const addr = useRef("");
+  // 🔁 Recent searches (Jon overnight 2026-11-08) — one tap to re-rank a deal you already looked
+  // up, no retyping. Reads the CascadeSearch history the rank already writes.
+  const [recent, setRecent] = useState<RecentSearch[]>([]);
+  useEffect(() => { recentCascadeSearches().then(setRecent).catch(() => {}); }, []);
 
   const run = (fd: FormData) => {
     addr.current = String(fd.get("address") ?? "");
@@ -79,7 +85,18 @@ export default function CascadeBoard() {
       setNearest(res.nearest ?? null);
       setExcluded(res.excluded ?? []);
       setCollapsed(new Set()); // every new search opens all buy boxes
+      recentCascadeSearches().then(setRecent).catch(() => {}); // refresh the recent chips
     });
+  };
+
+  // Re-run a prior search: fill the form fields + rank, so the inputs reflect what ran.
+  const replay = (r: RecentSearch) => {
+    const f = formRef.current; if (!f) return;
+    (f.elements.namedItem("address") as HTMLInputElement).value = r.address;
+    (f.elements.namedItem("price") as HTMLInputElement).value = r.price != null ? String(r.price) : "";
+    (f.elements.namedItem("acres") as HTMLInputElement).value = r.acres != null ? String(r.acres) : "";
+    (f.elements.namedItem("assetType") as HTMLSelectElement).value = r.assetType || "";
+    run(new FormData(f));
   };
 
   const copy = async (text: string, tag: string) => {
@@ -127,6 +144,16 @@ const rowText = (c: Card) => `${c.name}${c.company ? ` (${c.company})` : ""} —
         </div>
         <p className="mt-1.5 text-[11px] text-slate-400">Every active buyer is scored on location (drawn area → radius → ZIP → city → county → region → state), price band, acreage, asset type, close speed, and touch recency.</p>
         {error && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
+        {recent.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-bold text-slate-400">🔁 Recent:</span>
+            {recent.map((r, i) => (
+              <button key={i} type="button" onClick={() => replay(r)} title={`Re-rank buyers for ${r.address}`} className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200">
+                {r.label}{r.price ? ` · $${r.price >= 1000 ? `${Math.round(r.price / 1000)}k` : r.price}` : ""}
+              </button>
+            ))}
+          </div>
+        )}
       </form>
 
       {geo && (

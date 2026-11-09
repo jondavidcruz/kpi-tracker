@@ -3220,6 +3220,30 @@ export async function cascadeRank(formData: FormData): Promise<{
   };
 }
 
+/** The team's recent cascade searches, deduped — so a rep can re-rank a deal they already
+ *  looked up with one tap instead of retyping the address/price/acres. Reads the CascadeSearch
+ *  history the rank already writes (previously stored but never surfaced). */
+export async function recentCascadeSearches(): Promise<{ address: string; price: number | null; acres: number | null; assetType: string; label: string; at: string }[]> {
+  const me = await getCurrentUser();
+  if (!canAccessMarketing(me)) return [];
+  const rows = await db.cascadeSearch.findMany({
+    orderBy: { at: "desc" }, take: 20,
+    select: { address: true, price: true, acres: true, assetType: true, geocode: true, at: true },
+  }).catch(() => []);
+  const seen = new Set<string>();
+  const out: { address: string; price: number | null; acres: number | null; assetType: string; label: string; at: string }[] = [];
+  for (const r of rows) {
+    const key = `${r.address.toLowerCase()}|${r.price ?? ""}|${r.acres ?? ""}|${r.assetType ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const g = (r.geocode ?? {}) as { city?: string; state?: string; county?: string };
+    const label = g.city && g.state ? `${g.city}, ${g.state}` : (r.address.length > 28 ? r.address.slice(0, 28) + "…" : r.address);
+    out.push({ address: r.address, price: r.price, acres: r.acres, assetType: r.assetType ?? "", label, at: r.at.toISOString() });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 /** Create or edit a Target Market (neighborhood/farm). Managers/marketing only. */
 export async function saveTargetMarket(formData: FormData) {
   const me = await getCurrentUser();
