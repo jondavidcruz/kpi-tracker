@@ -10,7 +10,7 @@ import Logo from "@/components/Logo";
 // (Authentication → Providers → Google) and a Google Cloud OAuth client is set up
 // with the Supabase callback URL. Until then we hide the button so the team never
 // sees a sign-in option that errors. (No env var — this is just a UI feature flag.)
-const GOOGLE_LOGIN_ENABLED = false;
+const GOOGLE_LOGIN_ENABLED = true;
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
