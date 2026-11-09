@@ -2,6 +2,7 @@
 
 import Deck, { Navy, Light, Bullets, money, type Slide, type DeckClock } from "@/components/Deck";
 import type { MeetingDeck } from "@/lib/meeting";
+import { applyDeckLayout } from "@/lib/deck-sections";
 
 export default function MeetingDeckView({ deck }: { deck: MeetingDeck }) {
   const slides = buildSlides(deck);
@@ -333,21 +334,23 @@ function buildSlides(d: MeetingDeck): Slide[] {
     </div>
   )});
 
-  // Closing — a final slide. When the owner has set a talking point (e.g. to speak to when
-  // Enrico isn't on the call), that replaces the default all-call send-off (Jon 2026-11-02).
-  s.push({ name: d.closing?.body ? "Talking point" : "That's the all-call", node: (
+  // Pass to Dad — the handoff slide. When the owner set a talking point it shows that;
+  // otherwise a warm transition that hands the meeting to Dad for the word of the week
+  // (Jon 2026-11-09). By default this sits just before the Verse slide (see deck-sections).
+  s.push({ name: d.closing?.body ? "Talking point" : "Pass to Dad", node: (
     d.closing?.body ? (
       <div className="flex h-full w-full flex-col justify-center bg-brand-navy px-[9%] text-white">
         <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>{d.closing.title ? d.closing.title.toUpperCase() : "ONE MORE THING"}</div>
         <div className="mt-[3%] max-w-[90%] whitespace-pre-line font-bold leading-snug" style={{ fontSize: "clamp(16px,2.8cqw,40px)" }}>{d.closing.body}</div>
       </div>
     ) : (
-      <div className="flex h-full w-full flex-col items-center justify-center bg-brand-navy text-center text-white">
-        <div className="font-extrabold" style={{ fontSize: "clamp(22px,4cqw,56px)" }}>That&apos;s the all-call 🙌</div>
-        <div className="mt-2 text-brand-gold-soft" style={{ fontSize: "clamp(12px,1.7cqw,22px)" }}>Let&apos;s have a great week.</div>
+      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-brand-navy via-brand-navy to-amber-900 px-[8%] text-center text-white">
+        <div className="text-brand-gold" style={{ fontSize: "clamp(10px,1.5cqw,18px)", letterSpacing: "0.25em" }}>NOW, OVER TO DAD</div>
+        <div className="mt-[3%] font-extrabold" style={{ fontSize: "clamp(20px,3.6cqw,48px)" }}>🙏 Take it away, Dad</div>
+        <div className="mt-[2.5%] max-w-[80%] leading-snug text-white/85" style={{ fontSize: "clamp(13px,2cqw,26px)" }}>Let&apos;s close out with the word for the week — then let&apos;s have a great one. 🙌</div>
       </div>
     )
   )});
 
-  return s;
+  return applyDeckLayout(s, d.layout, d.customSlides.map((c) => c.title || "Slide"));
 }

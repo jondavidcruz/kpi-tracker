@@ -2,6 +2,7 @@
 // last-week KPIs, month-to-date dashboard, active pipeline, annual goal,
 // recognition, and a weakest-KPI training tip. Reuses the report/deal helpers.
 import { db } from "./db";
+import { DECK_LAYOUT_CAT, type DeckLayout } from "./deck-sections";
 import {
   getSettings, getActiveReps, getKpis, getRangeSums, getMonthlyValues, getOpenDeals, getDealMetrics,
   getAllTargets, resolveGoalWith,
@@ -97,6 +98,18 @@ export interface MeetingDeck {
   activity: { title: string; how: string; minutes: number };
   // Weekly Stoplight Check — everyone's 🟢/🟡/🔴, grouped by department.
   stoplight: StoplightBoard;
+  // Owner's saved slide order + hidden sections (the /meeting slide manager).
+  layout: DeckLayout;
+}
+
+/** The owner's saved Monday-deck layout (reserved Resource JSON, no migration). */
+export async function readDeckLayout(): Promise<DeckLayout> {
+  const row = await db.resource.findFirst({ where: { category: DECK_LAYOUT_CAT } });
+  if (!row) return { order: [], hidden: [] };
+  try {
+    const j = JSON.parse(row.description || "{}");
+    return { order: Array.isArray(j.order) ? j.order : [], hidden: Array.isArray(j.hidden) ? j.hidden : [] };
+  } catch { return { order: [], hidden: [] }; }
 }
 
 const ROLLUP_KEYS = ["offers_made", "acq_contracts_sent", "deals_sold", "new_buyers"];
@@ -471,7 +484,9 @@ export async function getMeetingDeck(today: string): Promise<MeetingDeck> {
   const activity = TEAM_ACTIVITIES[weekOrdinal(wk.start) % TEAM_ACTIVITIES.length];
 
   const thisWeek = currentWeekRange(today);
+  const deckLayout = await readDeckLayout();
   return {
+    layout: deckLayout,
     weekLabel: wk.label,
     thisWeekLabel: thisWeek.label,
     titleSlideUrl: settings.titleSlideUrl ?? "",

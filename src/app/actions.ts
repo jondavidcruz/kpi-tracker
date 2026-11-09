@@ -22,6 +22,7 @@ import { scoreTranscript } from "@/lib/score";
 import { reportWeek, kpiPace, saveReport, LIGHTS } from "@/lib/stoplight";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
+import { DECK_SECTION_KEYS, resolveOrder, DECK_LAYOUT_CAT } from "@/lib/deck-sections";
 import { rollupResearchKpis, orgToday } from "@/lib/research-kpis";
 import { migrateScoreById } from "@/lib/recording-migrate";
 import { zonedTime } from "@/lib/shift";
@@ -813,6 +814,39 @@ export async function deleteDeckSlide(formData: FormData) {
   if (!isManager(me)) return;
   const id = String(formData.get("id") ?? "");
   if (id) await db.deckSlide.delete({ where: { id } }).catch(() => {});
+  revalidatePath("/meeting");
+}
+
+/** Reorder (up/down) or show/hide a BUILT-IN Monday-deck section — the slide
+ *  manager that lets the owner rearrange the deck with no code. Stored as
+ *  reserved Resource JSON (no migration). Managers only. */
+export async function saveDeckSection(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  const key = String(formData.get("key") ?? "");
+  const op = String(formData.get("op") ?? "");
+  if (!DECK_SECTION_KEYS.includes(key)) return;
+  const row = await db.resource.findFirst({ where: { category: DECK_LAYOUT_CAT } });
+  let order: string[] = [];
+  const hidden = new Set<string>();
+  if (row) {
+    try {
+      const j = JSON.parse(row.description || "{}");
+      if (Array.isArray(j.order)) order = j.order;
+      if (Array.isArray(j.hidden)) for (const h of j.hidden) hidden.add(String(h));
+    } catch {}
+  }
+  const full = resolveOrder(order);
+  if (op === "toggle") {
+    if (hidden.has(key)) hidden.delete(key); else hidden.add(key);
+  } else if (op === "up" || op === "down") {
+    const i = full.indexOf(key);
+    const j = op === "up" ? i - 1 : i + 1;
+    if (i >= 0 && j >= 0 && j < full.length) { const t = full[i]; full[i] = full[j]; full[j] = t; }
+  }
+  const data = JSON.stringify({ order: full, hidden: [...hidden] });
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: data } });
+  else await db.resource.create({ data: { title: "layout", url: "", category: DECK_LAYOUT_CAT, description: data } });
   revalidatePath("/meeting");
 }
 

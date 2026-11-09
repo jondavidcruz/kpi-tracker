@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording, addMeetingHighlight, deleteMeetingHighlight, saveDeckImages, addDeckSlide, updateDeckSlide, editDeckSlide, deleteDeckSlide, saveMeetingOverrides } from "@/app/actions";
+import { saveMeetingSettings, saveTrainingTip, deleteTrainingTip, addMeetingNote, deleteMeetingNote, addRecording, deleteRecording, addMeetingHighlight, deleteMeetingHighlight, saveDeckImages, addDeckSlide, updateDeckSlide, editDeckSlide, deleteDeckSlide, saveMeetingOverrides, saveDeckSection } from "@/app/actions";
 import ImageUpload from "@/components/ImageUpload";
 import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { getSettings, getKpis, getActiveReps } from "@/lib/data";
 import { readMeetingOverrides } from "@/lib/meeting-overrides";
 import { db } from "@/lib/db";
 import { getMeetingDeck, buildMeetingSummary } from "@/lib/meeting";
+import { layoutSections } from "@/lib/deck-sections";
 import { todayStr } from "@/lib/date";
 import { Card, SectionTitle } from "@/components/ui";
 import MeetingDeckView from "@/components/MeetingDeck";
@@ -41,6 +42,7 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
   const greenKpis = kpis.filter((k) => k.scope === "per_rep" && k.category === "green");
   const today = todayStr(settings.orgTimezone);
   const deck = await getMeetingDeck(today);
+  const deckSections = layoutSections(deck.layout);
   const owner = isOwner(me);
   const [reps, overrides] = owner ? await Promise.all([getActiveReps(), readMeetingOverrides()]) : [[], null];
   const potwForThisWeek = overrides && overrides.potwWeek === deck.recognitionWeek ? overrides.potwName : "";
@@ -180,6 +182,24 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
       {/* Slides & photos — swap the title/team images + add your own slides, no code. */}
       <div id="slides" className="scroll-mt-4 border-t border-slate-200 pt-6">
         <SectionTitle title="🖼️ Slides & Photos" subtitle="Swap the Title + Team photos and add your own slides yourself — no code needed. Changes show on the deck above." accent="bg-violet-400" />
+
+        {owner && (
+          <Card className="mb-3 p-5">
+            <div className="mb-1 text-sm font-bold text-slate-700">🎛️ Slide order &amp; visibility</div>
+            <p className="mb-3 text-xs text-slate-500">Reorder or hide any card on the Monday deck — changes show on the deck above instantly. Move <b>↑ / ↓</b> to reorder, <b>Hide</b> to drop a card from this week. (Your own custom slides are managed below; they move as one “✨ Your custom slides” block.)</p>
+            <div className="space-y-1.5">
+              {deckSections.map((sec, i) => (
+                <div key={sec.key} className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 ${sec.hidden ? "border-slate-100 bg-slate-50 opacity-60" : "border-slate-200"}`}>
+                  <span className="text-base">{sec.emoji}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{sec.label}{sec.hidden && <span className="ml-1 text-[11px] text-slate-400">(hidden)</span>}</span>
+                  <form action={saveDeckSection}><input type="hidden" name="key" value={sec.key} /><input type="hidden" name="op" value="up" /><button disabled={i === 0} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30" title="Move up">↑</button></form>
+                  <form action={saveDeckSection}><input type="hidden" name="key" value={sec.key} /><input type="hidden" name="op" value="down" /><button disabled={i === deckSections.length - 1} className="px-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30" title="Move down">↓</button></form>
+                  <form action={saveDeckSection}><input type="hidden" name="key" value={sec.key} /><input type="hidden" name="op" value="toggle" /><button className="rounded px-2 py-0.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-100">{sec.hidden ? "Show" : "Hide"}</button></form>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
         {(sp.saved === "Slide images" || sp.saved === "Slide added") && <div className="mb-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ Saved.</div>}
         {(sp.err === "noimage" || sp.err === "notext") && <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 ring-1 ring-red-200">{sp.err === "noimage" ? "Upload an image first." : "Add a title or some text first."}</div>}
 
