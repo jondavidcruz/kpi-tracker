@@ -71,6 +71,26 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
         }
       />
 
+      {/* Run of show — the discipline that keeps it to 30 min, like the best-run weekly meetings:
+          fixed structure, two timed halves, start on time and end on time. */}
+      <Card className="p-4 ring-1 ring-brand-gold/30">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-extrabold text-slate-800">⏱ Run of show — 30 minutes, start on time, end on time</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">Hit Present, then Start the clock</span>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+            <div className="text-xs font-bold text-brand-navy">① Jon · the business — 15 min</div>
+            <p className="mt-0.5 text-xs text-slate-500">Wins → stoplight → the numbers (don&apos;t read every cell, hit what&apos;s off) → pipeline → recognition. Anything to solve is parked, not debated live.</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+            <div className="text-xs font-bold text-amber-700">② Dad · the message — 15 min</div>
+            <p className="mt-0.5 text-xs text-slate-500">Hands off at the Verse slide. The word for the week, then the team-building closer, then we&apos;re out.</p>
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">The timer in the top corner turns amber at 2 min left and red if a half runs over — the cue to wrap and move on.</p>
+      </Card>
+
       {/* The deck itself comes first — on Monday morning "Present" must be above the fold. */}
       <MeetingDeckView deck={deck} />
 

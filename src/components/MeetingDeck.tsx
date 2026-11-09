@@ -1,10 +1,23 @@
 "use client";
 
-import Deck, { Navy, Light, Bullets, money, type Slide } from "@/components/Deck";
+import Deck, { Navy, Light, Bullets, money, type Slide, type DeckClock } from "@/components/Deck";
 import type { MeetingDeck } from "@/lib/meeting";
 
 export default function MeetingDeckView({ deck }: { deck: MeetingDeck }) {
-  return <Deck slides={buildSlides(deck)} />;
+  const slides = buildSlides(deck);
+  // 30-min all-call, run like the best: Part 1 = Jon on the business, Part 2 = Dad's
+  // message, which opens on the Verse slide. Keep each half to ~15 min — the clock enforces it.
+  const handoff = slides.findIndex((s) => s.name === "Verse of the week");
+  const clock: DeckClock = {
+    totalMin: 30,
+    parts: handoff > 0
+      ? [
+          { emoji: "①", label: "Jon · the business", min: 15, startIndex: 0 },
+          { emoji: "②", label: "Dad · the message", min: 15, startIndex: handoff },
+        ]
+      : [{ emoji: "①", label: "The meeting", min: 30, startIndex: 0 }],
+  };
+  return <Deck slides={slides} clock={clock} />;
 }
 
 // One position's KPI table, full width — positions stack top-to-bottom.
