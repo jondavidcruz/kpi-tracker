@@ -6,6 +6,8 @@ import MarketsBoard, { type MarketView } from "@/components/MarketsBoard";
 import ResearchWorkbench from "@/components/ResearchWorkbench";
 import MarketFinder from "@/components/MarketFinder";
 import MarketsTabs from "@/components/MarketsTabs";
+import MarketBlacklist from "@/components/MarketBlacklist";
+import { readBlacklist } from "@/lib/market-blacklist";
 import { readScan, scoreCounties } from "@/lib/market-scan";
 import { SCAN_SEED } from "@/lib/market-scan-seed";
 import { COUNTY_CENTROIDS } from "@/lib/county-centroids";
@@ -45,6 +47,7 @@ export default async function MarketsPage() {
   // 🖍 Hand-drawn / searched territories (areas we market in / have pulled vs uncharted).
   const { readTerritories } = await import("@/lib/map-territories");
   const territories = await readTerritories();
+  const blacklist = await readBlacklist();
 
   const now = Date.now(), DAY = 86_400_000;
   // Build a lowercase address haystack + created-age per opp once.
@@ -161,6 +164,7 @@ export default async function MarketsPage() {
         subtitle="Where we hunt land — the high-net-worth, waterfront, business-dense Florida & South Carolina markets the wealthy keep building in through rate hikes, and that few wholesalers compete in. Track what we've pulled, how each market performs, and the 30-60-180 trend."
         accent="bg-emerald-400"
       />
+      <MarketBlacklist entries={blacklist} canEdit={leader} />
       <MarketsTabs
         showResearch={leader}
         map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} />}

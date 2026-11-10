@@ -22,6 +22,22 @@ export async function logPullAction(formData: FormData) {
   revalidatePath("/markets");
 }
 
+// ⛔ Blacklist an area that's not worth pulling / un-blacklist it (manager-only). Jon 2026-11-09.
+export async function addBlacklistAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isManager(me)) return;
+  const { addBlacklist } = await import("@/lib/market-blacklist");
+  await addBlacklist(String(formData.get("area") ?? ""), String(formData.get("reason") ?? ""), me.name);
+  revalidatePath("/markets");
+}
+export async function removeBlacklistAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!me || !isManager(me)) return;
+  const { removeBlacklist } = await import("@/lib/market-blacklist");
+  await removeBlacklist(String(formData.get("id") ?? ""));
+  revalidatePath("/markets");
+}
+
 // 📈 Owner's 30-60-180 trend read for a market (up / flat / down + a note).
 export async function setMarketTrendAction(formData: FormData) {
   const me = await getCurrentUser();
