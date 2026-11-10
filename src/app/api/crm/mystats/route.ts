@@ -32,5 +32,32 @@ export async function GET() {
     return t?.goalValue ?? 0;
   };
   const [goalDials, goalConnects] = await Promise.all([goal("outbound_calls"), goal("connected_calls")]);
-  return NextResponse.json({ who: me!.name.split(" ")[0], position: me!.position ?? "", dials, connects, talkSecs, goalDials, goalConnects }, { headers: { "Cache-Control": "private, no-store" } });
+  // 🎯 Role core levers under the pill (Jon 2026-11-09): the 3 money levers we push on.
+  // Acquisitions = offers / contracts sent / signed; Dispositions = buy-boxes / deals sent
+  // to buyers / buyer offers in. Today's recorded KPI values for this rep.
+  const LEVERS: Record<string, { label: string; keys: string[] }[]> = {
+    acquisitions: [
+      { label: "offers", keys: ["offers_made"] },
+      { label: "sent", keys: ["acq_contracts_sent"] },
+      { label: "signed", keys: ["acq_signed_assignment", "acq_signed_novation", "acq_signed_creative"] },
+    ],
+    dispositions: [
+      { label: "buy-boxes", keys: ["buy_boxes_captured"] },
+      { label: "sent", keys: ["deals_sold"] },
+      { label: "offers in", keys: ["buyer_offers_received"] },
+    ],
+  };
+  const leverValue = async (keys: string[]): Promise<number> => {
+    let total = 0;
+    for (const key of keys) {
+      const kpi = await db.kpi.findFirst({ where: { key }, select: { id: true } });
+      if (!kpi) continue;
+      const e = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: me!.id, date: ptYmd }, select: { value: true } });
+      total += e?.value ?? 0;
+    }
+    return total;
+  };
+  const roleLevers = LEVERS[me!.position ?? ""] ?? [];
+  const levers = await Promise.all(roleLevers.map(async (l) => ({ label: l.label, value: await leverValue(l.keys) })));
+  return NextResponse.json({ who: me!.name.split(" ")[0], position: me!.position ?? "", dials, connects, talkSecs, goalDials, goalConnects, levers }, { headers: { "Cache-Control": "private, no-store" } });
 }
