@@ -11,8 +11,10 @@ import { geoForPhone } from "@/lib/npa-geo";
 import { localTimeForPhone } from "@/lib/npa-tz";
 
 type CallState = "idle" | "connecting" | "ringing" | "active" | "error";
+type NumHealth = { rate: number | null; calls: number; tone: "good" | "warn" | "bad" | "new" };
 type PhoneData = {
   numbers: string[]; defaultFrom: string;
+  health?: Record<string, NumHealth>; // inbound answer-rate proxy per line — which number is safe to dial from
   recents: Array<{ name: string; phone: string; contactId: string; when: string; body: string }>;
   contacts: Array<{ id: string; name: string; phone: string }>;
   queue: Array<{ oppId: string; contactId: string; name: string; phone: string; title: string; due: string }>;
@@ -888,8 +890,18 @@ export default function DialPad({ floating = false, owner = false }: { floating?
               <span className="block text-[13px] font-extrabold text-slate-800">Calling From</span>
               <select value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 w-52 rounded-md border border-slate-200 px-1.5 py-1 text-[13px] font-semibold text-slate-700">
                 <option value="auto">📍 Closest to the contact (auto · rotates on no-answer)</option>
-                {sortCallerIds(data?.numbers ?? []).map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{n}{g ? ` — ${g}` : ""}</option>; })}
+                {sortCallerIds(data?.numbers ?? []).map((n) => {
+                  const g = geoForPhone(n); const h = data?.health?.[n];
+                  const hl = !h ? "" : h.tone === "new" ? " · 🆕" : ` · ${h.tone === "good" ? "🟢" : h.tone === "warn" ? "🟡" : "🔴"} ${h.rate}%`;
+                  return <option key={n} value={n}>{n}{g ? ` — ${g}` : ""}{hl}</option>;
+                })}
               </select>
+              {(() => {
+                const h = from !== "auto" ? data?.health?.[from] : undefined;
+                if (!h) return null;
+                const txt = h.tone === "new" ? "🆕 No answer data yet (needs inbound calls)" : `${h.tone === "good" ? "🟢 Healthy" : h.tone === "warn" ? "🟡 Watch" : "🔴 Low"} · ${h.rate}% answer rate (last 14d, ${h.calls} calls)`;
+                return <span title="Inbound answer-rate proxy for carrier spam-flagging. Outbound dial metering isn't live yet, so this is an inbound signal. Full board: /phone-health" className="mt-1 block text-[10px] font-semibold text-slate-500">{txt}</span>;
+              })()}
             </span>
             <span className="flex items-center gap-1.5">
               <button onClick={() => setCallsMuted((v) => !v)} title={callsMuted ? "This window is MUTED for calls — incoming calls ring in your other window. Click to make this window ring." : "Mute calls on THIS window so only your other window rings (handy with multiple screens open)."} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${callsMuted ? "bg-slate-200 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}>{callsMuted ? "🔕 Muted" : "🔔 Rings here"}</button>

@@ -39,6 +39,23 @@ export async function GET(req: NextRequest) {
     } catch { /* dial still works with the default caller id */ }
   }
 
+  // 📞 Per-line health for the "Calling From" picker (Jon 2026-11-10): an inbound answer-rate
+  // proxy for carrier spam-flagging, so you can see which number is safe to dial FROM. Inbound-only
+  // (outbound WebRTC dials aren't metered yet) — surfaced honestly in the UI. Best-effort; never
+  // blocks the dialer. Full board lives on /phone-health.
+  const health: Record<string, { rate: number | null; calls: number; tone: "good" | "warn" | "bad" | "new" }> = {};
+  if (numbers.length) {
+    try {
+      const { readNumberStore, inboundFor } = await import("@/lib/number-stats");
+      const store = await readNumberStore();
+      for (const n of numbers) {
+        const r = inboundFor(store, n, 14);
+        const tone = r.rate == null || r.calls < 3 ? "new" : r.rate >= 50 ? "good" : r.rate >= 30 ? "warn" : "bad";
+        health[n] = { rate: r.rate, calls: r.calls, tone };
+      }
+    } catch { /* health is optional — dialer works without it */ }
+  }
+
   const manager = isManager(me!);
   const mine = manager ? {} : { assignedTo: { equals: me!.name, mode: "insensitive" as const } };
   const today = new Date().toISOString().slice(0, 10);
@@ -65,7 +82,7 @@ export async function GET(req: NextRequest) {
   const cById = new Map(cRows.map((c) => [c.id, c]));
 
   return NextResponse.json({
-    numbers,
+    numbers, health,
     // default to the configured caller id ONLY if it's a live line; otherwise the
     // first live number — never a porting number (Jon 2026-10-21).
     defaultFrom: (process.env.TELNYX_CALLER_ID && numbers.includes(process.env.TELNYX_CALLER_ID)) ? process.env.TELNYX_CALLER_ID : (numbers[0] ?? ""),

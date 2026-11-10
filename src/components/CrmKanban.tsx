@@ -568,7 +568,17 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                       <div className="mt-1.5 flex flex-col items-end gap-1">
                         {c.nextTask && <span title="Next task due" className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-100">✅ Task {new Date(`${c.nextTask}T00:00:00`).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}
                         {c.nextAppt && <span title="Next appointment" className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700 ring-1 ring-red-100">📅 Appt {new Date(c.nextAppt).toLocaleDateString([], { month: "short", day: "numeric" })} · {new Date(c.nextAppt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
-                        {c.nextFollowUp && <span title="Scheduled follow-up" className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 ring-1 ring-blue-100">🔔 Follow-up {new Date(`${c.nextFollowUp}T00:00:00`).toLocaleDateString([], { month: "short", day: "numeric" })}</span>}
+                        {c.nextFollowUp && (() => {
+                          // One follow-up chip for the whole card: blue when upcoming, amber when due
+                          // today, red + "Nd overdue" when past (Jon 2026-11-10 — replaced the duplicate
+                          // top badge). This is the single "when do we next reach out" signal.
+                          const fu = new Date(`${c.nextFollowUp}T00:00:00`);
+                          const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+                          const late = Math.round((t0.getTime() - fu.getTime()) / 86400000);
+                          const cls = late > 0 ? "bg-red-50 text-red-700 ring-red-200" : late === 0 ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-blue-50 text-blue-700 ring-blue-100";
+                          const label = late > 0 ? `${late}d overdue` : late === 0 ? "due today" : fu.toLocaleDateString([], { month: "short", day: "numeric" });
+                          return <span title={`Scheduled follow-up: ${c.nextFollowUp}`} className={`rounded px-1.5 py-0.5 text-[10px] font-bold ring-1 ${cls}`}>🔔 Follow-up {label}</span>;
+                        })()}
                       </div>
                     )}
                   </div>

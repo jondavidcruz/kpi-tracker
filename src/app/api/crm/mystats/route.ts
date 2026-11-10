@@ -59,5 +59,26 @@ export async function GET() {
   };
   const roleLevers = LEVERS[me!.position ?? ""] ?? [];
   const levers = await Promise.all(roleLevers.map(async (l) => ({ label: l.label, value: await leverValue(l.keys) })));
-  return NextResponse.json({ who: me!.name.split(" ")[0], position: me!.position ?? "", dials, connects, talkSecs, goalDials, goalConnects, levers }, { headers: { "Cache-Control": "private, no-store" } });
+  // 🏢 Owner/manager breakdown (Jon 2026-11-10): the whole team's money levers for BOTH departments,
+  // shown UNDER the pill all day so leadership watches Acquisitions vs Dispositions at a glance.
+  // Reps still see only their own single-department levers above; this cross-dept view is manager-only.
+  const deptLevers = async (position: string) => {
+    const users = await db.user.findMany({ where: { position }, select: { id: true } });
+    const uids = users.map((u) => u.id);
+    const defs = LEVERS[position] ?? [];
+    return Promise.all(defs.map(async (l) => {
+      let total = 0;
+      for (const key of l.keys) {
+        const kpi = await db.kpi.findFirst({ where: { key }, select: { id: true } });
+        if (!kpi) continue;
+        const agg = await db.entry.aggregate({ _sum: { value: true }, where: { kpiId: kpi.id, userId: { in: uids }, date: ptYmd } });
+        total += agg._sum.value ?? 0;
+      }
+      return { label: l.label, value: total };
+    }));
+  };
+  const depts = isManager(me!)
+    ? await Promise.all([deptLevers("acquisitions"), deptLevers("dispositions")]).then(([a, d]) => ({ acquisitions: a, dispositions: d }))
+    : null;
+  return NextResponse.json({ who: me!.name.split(" ")[0], position: me!.position ?? "", dials, connects, talkSecs, goalDials, goalConnects, levers, depts }, { headers: { "Cache-Control": "private, no-store" } });
 }

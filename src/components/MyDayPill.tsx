@@ -3,7 +3,8 @@
 // always visible bottom-left, refreshes itself. One glance — never a page.
 import { useEffect, useState } from "react";
 
-type Stats = { who?: string; position?: string; dials: number; connects: number; talkSecs?: number; goalDials: number; goalConnects: number; levers?: { label: string; value: number }[] };
+type Lever = { label: string; value: number };
+type Stats = { who?: string; position?: string; dials: number; connects: number; talkSecs?: number; goalDials: number; goalConnects: number; levers?: Lever[]; depts?: { acquisitions: Lever[]; dispositions: Lever[] } | null };
 
 export default function MyDayPill() {
   const [s, setS] = useState<Stats | null>(null);
@@ -19,8 +20,17 @@ export default function MyDayPill() {
   if (!s) return null;
   if (hidden) return <button onClick={toggle} title="Show my day" className="fixed right-28 top-4 z-40 grid h-7 w-7 place-items-center rounded-full bg-white text-[11px] shadow ring-1 ring-slate-200 hover:bg-slate-50">📊</button>;
   const tone = (v: number, g: number) => (g <= 0 ? "text-slate-700" : v >= g ? "text-emerald-600" : v >= g * 0.6 ? "text-amber-600" : "text-red-500");
+  const deptRow = (label: string, color: string, levers: Lever[]) => (
+    <div className="flex items-center gap-2">
+      <span className={`w-11 shrink-0 text-right font-extrabold uppercase tracking-wide ${color}`}>{label}</span>
+      {levers.length === 0 ? <span className="text-slate-300">—</span> : levers.map((l) => (
+        <span key={l.label} className={l.value > 0 ? "text-slate-700" : "text-slate-300"}>{l.value} {l.label}</span>
+      ))}
+    </div>
+  );
   return (
-    <span className="fixed right-28 top-4 z-40 flex items-center gap-2.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-extrabold shadow-lg ring-1 ring-slate-200">
+    <div className="fixed right-28 top-4 z-40 flex flex-col gap-1 rounded-2xl bg-white px-3 py-1.5 text-[11px] font-extrabold shadow-lg ring-1 ring-slate-200">
+      <div className="flex items-center gap-2.5">
       <span title={`${s?.who ?? "your"} numbers only — everyone sees their own`} className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">{s.who ? `${s.who}\u2019s day` : "My day"}</span>
       <span className={tone(s.dials, s.goalDials)}>📞 {s.dials}{s.goalDials > 0 ? `/${s.goalDials}` : ""} dials</span>
       <span className={tone(s.connects, s.goalConnects)}>✅ {s.connects}{s.goalConnects > 0 ? `/${s.goalConnects}` : ""} connects</span>
@@ -30,6 +40,13 @@ export default function MyDayPill() {
         <span key={l.label} title="Your core levers today — pushed on for KPIs" className={l.value > 0 ? "text-brand-navy" : "text-slate-400"}>{l.value} {l.label}</span>
       ))}
       <button onClick={toggle} title="Hide" className="text-slate-300 hover:text-slate-500">✕</button>
-    </span>
+      </div>
+      {s.depts && (
+        <div className="flex flex-col gap-0.5 border-t border-slate-100 pt-1 text-[10px]" title="Whole-team money levers today — Acquisitions vs Dispositions">
+          {deptRow("AQ", "text-cyan-600", s.depts.acquisitions)}
+          {deptRow("Dispo", "text-violet-600", s.depts.dispositions)}
+        </div>
+      )}
+    </div>
   );
 }
