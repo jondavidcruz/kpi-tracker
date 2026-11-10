@@ -5,6 +5,7 @@
 // indicator, where to look). Pure read of src/lib/land-niches.ts — no DB, no writes.
 import { useState } from "react";
 import { rankedNiches, BUYER_ARCHETYPES, SPREAD_TIER_LABEL, archetype, type Scores } from "@/lib/land-niches";
+import { nicheMarket, type HuntArea, type NicheMarket } from "@/lib/niche-markets";
 
 const DIMS: { key: keyof Scores; label: string }[] = [
   { key: "startSpeed", label: "Start speed" },
@@ -25,6 +26,93 @@ function Dots({ n }: { n: number }) {
 }
 
 type NicheMatch = { id: string; name: string; manual: boolean };
+
+const TIER_STYLE: Record<HuntArea["tier"], { ring: string; bg: string; text: string; label: string }> = {
+  primary: { ring: "ring-emerald-300", bg: "bg-emerald-50", text: "text-emerald-700", label: "GO" },
+  secondary: { ring: "ring-violet-200", bg: "bg-violet-50", text: "text-violet-700", label: "HIGH-$" },
+  watch: { ring: "ring-amber-200", bg: "bg-amber-50", text: "text-amber-700", label: "WATCH" },
+};
+
+// 🔭 Per-niche market intel — the sniper-research brain: where to hunt in FL, the pull filter,
+// signals to watch, buyers, spread. Only shows for niches we've researched (waterfront/solar/DC).
+function NicheResearch({ m }: { m: NicheMarket }) {
+  const byTier = (t: HuntArea["tier"]) => m.areas.filter((a) => a.tier === t);
+  const order: HuntArea["tier"][] = ["primary", "secondary", "watch"];
+  return (
+    <div className="space-y-3 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 p-4 text-slate-100">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-extrabold">🔭 Florida market intel</span>
+        <span className="text-[10px] text-slate-400">sniper research · updated {m.updated}</span>
+      </div>
+      <p className="text-[12px] leading-relaxed text-slate-200">{m.thesis}</p>
+      <div className="rounded-lg bg-emerald-500/10 p-2.5 ring-1 ring-emerald-500/20">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-300">💰 The spread</span>
+        <p className="mt-0.5 text-[12px] text-slate-200">{m.economics}</p>
+      </div>
+
+      {/* where to hunt */}
+      <div>
+        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">🎯 Where to hunt in Florida</div>
+        <div className="mt-1.5 space-y-1.5">
+          {order.flatMap((t) => byTier(t)).map((a) => {
+            const st = TIER_STYLE[a.tier];
+            return (
+              <div key={a.area} className="rounded-lg bg-white/5 p-2 ring-1 ring-white/10">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded px-1.5 py-0.5 text-[9px] font-extrabold ${st.bg} ${st.text}`}>{st.label}</span>
+                  <span className="text-[12px] font-bold text-white">{a.area}</span>
+                  {a.badge && <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold text-slate-200">{a.badge}</span>}
+                  {a.water && <span className="text-[10px] text-sky-300">{a.water}</span>}
+                  {a.priceBand && <span className="ml-auto text-[11px] font-bold text-emerald-300">{a.priceBand}</span>}
+                </div>
+                <p className="mt-0.5 text-[11px] text-slate-300">{a.why}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {m.avoid && m.avoid.length > 0 && (
+        <div className="rounded-lg bg-red-500/10 p-2.5 ring-1 ring-red-500/20">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-red-300">⛔ Skip these (penny-lot / wrong fit)</span>
+          <ul className="mt-1 space-y-0.5">
+            {m.avoid.map((a) => <li key={a} className="text-[11px] text-slate-300">• {a}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {/* sniper pull filter */}
+      <div className="rounded-lg bg-blue-500/10 p-2.5 ring-1 ring-blue-500/20">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-blue-300">🔫 Sniper pull filter</span>
+        <ul className="mt-1 space-y-1">
+          {m.pullFilter.map((f, i) => <li key={i} className="text-[11px] text-slate-200">{i + 1}. {f}</li>)}
+        </ul>
+      </div>
+
+      {/* signals + buyers */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-amber-300">📡 Signals to watch</div>
+          <ul className="mt-1 space-y-1">
+            {m.signals.map((s, i) => (
+              <li key={i} className="text-[11px] text-slate-300">
+                • {s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-sky-300 underline hover:text-sky-200">{s.label}</a> : s.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-300">👤 Buyers to marry deals to</div>
+          <ul className="mt-1 space-y-1">
+            {m.buyers.map((b, i) => <li key={i} className="text-[11px] text-slate-300">• {b}</li>)}
+          </ul>
+        </div>
+      </div>
+
+      {m.caveat && <p className="text-[10px] italic text-slate-400">⚠️ {m.caveat}</p>}
+    </div>
+  );
+}
 
 export default function NichePlaybook({ matches = {} }: { matches?: Record<string, NicheMatch[]> }) {
   const ranked = rankedNiches();
@@ -66,6 +154,9 @@ export default function NichePlaybook({ matches = {} }: { matches?: Record<strin
                   </span>
                   <span className="block truncate text-[11px] text-slate-500">{n.tagline}</span>
                 </span>
+                {nicheMarket(n.id) && (
+                  <span className="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-sky-300" title="Deep Florida market intel available">🔭 intel</span>
+                )}
                 {(matches[n.id]?.length ?? 0) > 0 && (
                   <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200" title="Vetted buyers who fit this niche">
                     👥 {matches[n.id].length}
@@ -90,6 +181,9 @@ export default function NichePlaybook({ matches = {} }: { matches?: Record<strin
                       </span>
                     ))}
                   </div>
+
+                  {/* 🔭 Florida market intel — the sniper research (only for researched niches) */}
+                  {nicheMarket(n.id) && <NicheResearch m={nicheMarket(n.id)!} />}
 
                   {/* spread */}
                   <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
