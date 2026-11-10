@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -47,21 +47,7 @@ export async function GET() {
       { label: "offers in", keys: ["buyer_offers_received"] },
     ],
   };
-  const leverValue = async (keys: string[]): Promise<number> => {
-    let total = 0;
-    for (const key of keys) {
-      const kpi = await db.kpi.findFirst({ where: { key }, select: { id: true } });
-      if (!kpi) continue;
-      const e = await db.entry.findFirst({ where: { kpiId: kpi.id, userId: me!.id, date: ptYmd }, select: { value: true } });
-      total += e?.value ?? 0;
-    }
-    return total;
-  };
-  const roleLevers = LEVERS[me!.position ?? ""] ?? [];
-  const levers = await Promise.all(roleLevers.map(async (l) => ({ label: l.label, value: await leverValue(l.keys) })));
-  // 🏢 Owner/manager breakdown (Jon 2026-11-10): the whole team's money levers for BOTH departments,
-  // shown UNDER the pill all day so leadership watches Acquisitions vs Dispositions at a glance.
-  // Reps still see only their own single-department levers above; this cross-dept view is manager-only.
+  // 🏢 Team money-lever breakdown under the pill (Jon 2026-11-10). Team-level dept totals for today.
   const deptLevers = async (position: string) => {
     const users = await db.user.findMany({ where: { position }, select: { id: true } });
     const uids = users.map((u) => u.id);
@@ -77,8 +63,13 @@ export async function GET() {
       return { label: l.label, value: total };
     }));
   };
-  const depts = isManager(me!)
-    ? await Promise.all([deptLevers("acquisitions"), deptLevers("dispositions")]).then(([a, d]) => ({ acquisitions: a, dispositions: d }))
-    : null;
-  return NextResponse.json({ who: me!.name.split(" ")[0], position: me!.position ?? "", dials, connects, talkSecs, goalDials, goalConnects, levers, depts }, { headers: { "Cache-Control": "private, no-store" } });
+  // Who sees which breakdown (Jon 2026-11-10): the OWNER sees BOTH; an acquisitions rep sees only AQ
+  // (offers / contracts sent / signed); a dispositions rep sees only Dispo (buy-boxes / deals sent /
+  // offers received); everyone else sees none.
+  const showDepts = isOwner(me!) ? ["acquisitions", "dispositions"]
+    : me!.position === "acquisitions" ? ["acquisitions"]
+    : me!.position === "dispositions" ? ["dispositions"]
+    : [];
+  const depts = await Promise.all(showDepts.map(async (p) => ({ key: p, label: p === "acquisitions" ? "AQ" : "Dispo", levers: await deptLevers(p) })));
+  return NextResponse.json({ who: me!.name.split(" ")[0], position: me!.position ?? "", dials, connects, talkSecs, goalDials, goalConnects, depts }, { headers: { "Cache-Control": "private, no-store" } });
 }

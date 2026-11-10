@@ -4,7 +4,8 @@
 import { useEffect, useState } from "react";
 
 type Lever = { label: string; value: number };
-type Stats = { who?: string; position?: string; dials: number; connects: number; talkSecs?: number; goalDials: number; goalConnects: number; levers?: Lever[]; depts?: { acquisitions: Lever[]; dispositions: Lever[] } | null };
+type Dept = { key: string; label: string; levers: Lever[] };
+type Stats = { who?: string; position?: string; dials: number; connects: number; talkSecs?: number; goalDials: number; goalConnects: number; depts?: Dept[] };
 
 export default function MyDayPill() {
   const [s, setS] = useState<Stats | null>(null);
@@ -35,16 +36,11 @@ export default function MyDayPill() {
       <span className={tone(s.dials, s.goalDials)}>📞 {s.dials}{s.goalDials > 0 ? `/${s.goalDials}` : ""} dials</span>
       <span className={tone(s.connects, s.goalConnects)}>✅ {s.connects}{s.goalConnects > 0 ? `/${s.goalConnects}` : ""} connects</span>
       <span className="text-slate-600" title="Total talk time today">⏱ {Math.floor((s.talkSecs ?? 0) / 60)}m talk</span>
-      {(s.levers?.length ?? 0) > 0 && <span className="h-3.5 w-px bg-slate-200" aria-hidden />}
-      {(s.levers ?? []).map((l) => (
-        <span key={l.label} title="Your core levers today — pushed on for KPIs" className={l.value > 0 ? "text-brand-navy" : "text-slate-400"}>{l.value} {l.label}</span>
-      ))}
       <button onClick={toggle} title="Hide" className="text-slate-300 hover:text-slate-500">✕</button>
       </div>
-      {s.depts && (
-        <div className="flex flex-col gap-0.5 border-t border-slate-100 pt-1 text-[10px]" title="Whole-team money levers today — Acquisitions vs Dispositions">
-          {deptRow("AQ", "text-cyan-600", s.depts.acquisitions)}
-          {deptRow("Dispo", "text-violet-600", s.depts.dispositions)}
+      {(s.depts?.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-0.5 border-t border-slate-100 pt-1 text-[10px]" title="Team money levers today">
+          {s.depts!.map((d) => deptRow(d.label, d.key === "acquisitions" ? "text-cyan-600" : "text-violet-600", d.levers))}
         </div>
       )}
     </div>

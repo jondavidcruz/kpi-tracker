@@ -94,7 +94,7 @@ DRIP_SEQUENCES.push(
     ],
   },
   {
-    key: "ten_days_hell", name: "10 days of hell — intensive close (5 touches / 10 days)",
+    key: "ten_days_hell", name: "10 days of hell — intensive close (5 touches / 10 days)", autoSend: true,
     steps: [
       { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — I really want to get {address} across the finish line for you. What's the one thing holding you back right now?" },
       { channel: "sms", delayDays: 2, sms: "{first}, checking back on {address}. If timing's the issue we can close on whatever date works for you — just say the word." },
