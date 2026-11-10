@@ -67,6 +67,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
+  const fogRef = useRef<unknown>(null);    // 🌫 fog-of-war overlay (under the data layer)
   const drawnRef = useRef<unknown>(null);  // the in-progress drawn shape
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -85,7 +86,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const sugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sensible defaults so the map isn't overwhelming (Jon 2026-11-08): the key layers on, the two
   // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
-  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false });
+  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: true });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
@@ -257,6 +258,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           { "🏷 Place labels": labelsOv, "🛣 Roads / streets": roadsOv, "▫️ County lines": countyBounds, "▫️ City lines": cityBounds, "▫️ ZIP code lines": zipBounds },
           { position: "topleft", collapsed: true },
         ).addTo(map);
+        fogRef.current = L.layerGroup().addTo(map); // 🌫 fog sits UNDER the data markers
         dataRef.current = L.featureGroup().addTo(map);
         if (canEdit) {
           const drawn = L.featureGroup().addTo(map); drawnRef.current = drawn;
@@ -291,6 +293,40 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     const L = (window as any).L; const map = mapRef.current as any; const group = dataRef.current as any;
     if (!L || !map || !group) return;
     group.clearLayers();
+
+    // 🌫 FOG OF WAR — the whole region sits under a light haze; it LIFTS (clears to full satellite)
+    // everywhere we've actually explored: territories we've pulled, ZIPs with seller leads in our
+    // CRM, and known markets with buyers/deals. Unexplored stays lightly fogged (not hidden) so Jon
+    // can still see the terrain but instantly reads what's charted vs blank. Kept in its own layer
+    // (not `group`) so it never distorts the auto-fit bounds. Built from data we already have — free.
+    const fog = fogRef.current as any;
+    if (fog) {
+      fog.clearLayers();
+      if (show.fog) {
+        const ring = (lat: number, lng: number, rd: number, seg = 28) => {
+          const pts: [number, number][] = [];
+          const k = Math.max(0.2, Math.cos((lat * Math.PI) / 180)); // keep holes round
+          for (let i = 0; i < seg; i++) { const a = (i / seg) * 2 * Math.PI; pts.push([lat + rd * Math.sin(a), lng + (rd * Math.cos(a)) / k]); }
+          return pts;
+        };
+        const holes: [number, number][][] = [];
+        // explored: every territory we've marked/pulled (use its real shape)
+        for (const t of territories) {
+          if (!t.points || t.points.length < 3) continue;
+          holes.push(t.points.map((p: any) => (Array.isArray(p) ? [p[0], p[1]] : [p.lat, p.lng])) as [number, number][]);
+        }
+        // explored: ZIPs where seller leads have landed in our CRM (bigger clearing where we closed)
+        for (const lp of leadPins) holes.push(ring(lp.lat, lp.lng, lp.deals > 0 ? 0.11 : 0.07));
+        // explored: known markets (buyers, leads, or deals here = we've engaged it)
+        for (const v of markets) {
+          const c = COORDS[v.m.name]; if (!c) continue;
+          if (v.buyerCount > 0 || v.leads > 0 || v.deals > 0) holes.push(ring(c[0], c[1], v.deals > 0 ? 0.2 : 0.12));
+        }
+        // one big donut: region rectangle minus every explored hole. Light haze, click-through.
+        const outer: [number, number][] = [[20, -90], [40, -90], [40, -74], [20, -74]];
+        L.polygon([outer, ...holes], { stroke: false, fillColor: "#dbeafe", fillOpacity: 0.4, interactive: false, className: "fo-fog" }).addTo(fog);
+      }
+    }
 
     // 💪 Buying-power layer (base) — counties where vetted buyers want to buy, as green boundaries.
     if (show.power) for (const bc of buyerCoverage) {
@@ -382,14 +418,15 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> Seller lead</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-amber-300" style={{ background: "#f59e0b" }} /> Closed deal</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#3b82f6", opacity: 0.55 }} /> Explored area</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#dbeafe", opacity: 0.5 }} /> 🌫 Unexplored (fog lifts as we pull leads)</span>
         <span className="text-slate-500">· bigger = more</span>
         <button onClick={enterFs} className="ml-auto rounded-full bg-slate-700/70 px-2.5 py-1 font-bold text-slate-100 ring-1 ring-slate-600 hover:bg-slate-600">⛶ Full screen</button>
         <span className="rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
         <span className="font-bold text-slate-400">Layers:</span>
-        {(["opp", "markets", "buyers", "power", "leads", "terr"] as const).map((k) => (
-          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : "🖍 My areas"}</label>
+        {(["fog", "opp", "markets", "buyers", "power", "leads", "terr"] as const).map((k) => (
+          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "fog" ? "🌫 Fog of war" : k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : "🖍 My areas"}</label>
         ))}
         {canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
         {canEdit && leadZipsRemaining > 0 && <button onClick={runGeocodeLeads} disabled={geoBusy} className="rounded-lg bg-sky-600 px-2.5 py-1 font-bold text-white hover:bg-sky-700 disabled:opacity-50">{geoBusy ? "Mapping…" : `📍 Map lead locations (${leadZipsRemaining} left)`}</button>}
