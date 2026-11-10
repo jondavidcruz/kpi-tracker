@@ -43,6 +43,13 @@ const COORDS: Record<string, [number, number]> = {
   "Lake Keowee / Clemson (Oconee)": [34.75, -82.92], "Aiken (CSRA)": [33.56, -81.72],
   "Columbia / Lake Murray (Lexington)": [34.05, -81.3],
 };
+// 🏘 Zillow-style parcel layer — FREE, NO KEY, CORS-ok (verified). FDEP "South District" cadastral
+// carries the full FL DOR tax-roll schema (use code, just value, acreage, last sale, owner) and
+// covers our SW-FL waterfront core: Lee (Cape Coral), Charlotte (Punta Gorda), Collier (Marco/
+// Naples). Only queried when zoomed in (≥ LOTS_MIN_ZOOM) with a small bbox. maxRecordCount 2000.
+const FDEP_CADASTRAL = "https://services1.arcgis.com/nRHtyn3uE1kyzoYc/arcgis/rest/services/FDORCadastral_SouthDistrict/FeatureServer/0/query";
+const LOTS_MIN_ZOOM = 15; // statewide parcels are 10M+ — only pull parcels at neighborhood zoom
+const LOTS_VACANT_WHERE = "DOR_UC IN ('000','010','040') OR (DOR_UC >= '050' AND DOR_UC <= '069')";
 const COV_COLOR: Record<string, string> = { never: "#64748b", clear: "#10b981", cooldown: "#f59e0b" };
 const TERR_COLOR: Record<TerrStatus, string> = { pulled: "#f59e0b", marketing: "#3b82f6", target: "#10b981", avoid: "#ef4444" };
 const TERR_LABEL: Record<TerrStatus, string> = { pulled: "✅ Explored (pulled)", marketing: "📣 Marketing now", target: "🎯 Target / to pull", avoid: "⛔ Avoid / saturated" };
@@ -68,6 +75,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
   const fogRef = useRef<unknown>(null);    // 🌫 fog-of-war overlay (under the data layer)
+  const lotsRef = useRef<unknown>(null);   // 🏘 live parcel/lot layer (on-zoom, free GIS)
+  const lotsLoaderRef = useRef<(() => void) | null>(null); // trigger a parcel refetch from outside the map effect
+  const showLotsRef = useRef(false);       // latest show.lots for the map event handler closure
   const drawnRef = useRef<unknown>(null);  // the in-progress drawn shape
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -86,7 +96,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const sugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sensible defaults so the map isn't overwhelming (Jon 2026-11-08): the key layers on, the two
   // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
-  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: true });
+  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: true, lots: false });
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
@@ -259,6 +269,47 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           { position: "topleft", collapsed: true },
         ).addTo(map);
         fogRef.current = L.layerGroup().addTo(map); // 🌫 fog sits UNDER the data markers
+        lotsRef.current = L.layerGroup().addTo(map); // 🏘 parcels above fog, below the data markers
+
+        // 🏘 On-zoom parcel layer — pulls vacant lots (and flags recent sales) from the free FDEP
+        // cadastral for the current viewport, debounced, only when zoomed in + toggled on. Failures
+        // (CORS/offline/too-many) degrade silently to an empty layer — never breaks the map.
+        let lotsTimer: ReturnType<typeof setTimeout> | null = null;
+        let lotsReqId = 0;
+        const loadLots = async () => {
+          const grp = lotsRef.current as any; if (!grp) return;
+          if (!showLotsRef.current || map.getZoom() < LOTS_MIN_ZOOM) { grp.clearLayers(); return; }
+          const b = map.getBounds();
+          const env = { xmin: b.getWest(), ymin: b.getSouth(), xmax: b.getEast(), ymax: b.getNorth(), spatialReference: { wkid: 4326 } };
+          const url = `${FDEP_CADASTRAL}?where=${encodeURIComponent(LOTS_VACANT_WHERE)}&geometry=${encodeURIComponent(JSON.stringify(env))}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${encodeURIComponent("PARCEL_ID,DOR_UC,JV,LND_SQFOOT,SALE_PRC1,SALE_YR1,SALE_MO1,OWN_NAME")}&returnGeometry=true&outSR=4326&resultRecordCount=1200&f=geojson`;
+          const myReq = ++lotsReqId;
+          try {
+            const res = await fetch(url);
+            const gj = await res.json();
+            if (myReq !== lotsReqId) return; // a newer pan/zoom superseded this one
+            grp.clearLayers();
+            const thisYear = new Date().getFullYear();
+            L.geoJSON(gj, {
+              style: (feat: any) => {
+                const p = feat.properties || {};
+                const sold = (p.SALE_YR1 || 0) >= thisYear - 2 && (p.SALE_PRC1 || 0) > 1000;
+                const c = sold ? "#f59e0b" : "#38bdf8";
+                return { color: c, weight: 1, fillColor: c, fillOpacity: sold ? 0.28 : 0.12 };
+              },
+              onEachFeature: (feat: any, layer: any) => {
+                const p = feat.properties || {};
+                const ac = p.LND_SQFOOT ? (p.LND_SQFOOT / 43560).toFixed(2) : "—";
+                const sale = p.SALE_YR1 && p.SALE_PRC1 > 1000 ? `🏷 Last sale ${p.SALE_MO1 || ""}/${p.SALE_YR1}: <b>$${Math.round(p.SALE_PRC1).toLocaleString()}</b>` : "🏷 No recent arm's-length sale";
+                const uc = p.DOR_UC === "000" ? "Vacant residential" : p.DOR_UC === "010" ? "Vacant commercial" : p.DOR_UC === "040" ? "Vacant industrial" : /^0[5-6]\d$/.test(p.DOR_UC) ? "Agricultural" : `Use ${p.DOR_UC}`;
+                layer.bindPopup(`<div style="font:12px system-ui;min-width:170px"><b>${uc}</b><br>💰 Just value: <b>$${Math.round(p.JV || 0).toLocaleString()}</b><br>📐 ${ac} ac<br>${sale}<br>👤 ${p.OWN_NAME || "—"}<br><span style="color:#64748b">Parcel ${p.PARCEL_ID || ""}</span></div>`);
+              },
+            }).addTo(grp);
+          } catch { try { (lotsRef.current as any)?.clearLayers(); } catch { /* ok */ } }
+        };
+        const scheduleLots = () => { if (lotsTimer) clearTimeout(lotsTimer); lotsTimer = setTimeout(loadLots, 450); };
+        lotsLoaderRef.current = scheduleLots;
+        map.on("moveend zoomend", scheduleLots);
+
         dataRef.current = L.featureGroup().addTo(map);
         if (canEdit) {
           const drawn = L.featureGroup().addTo(map); drawnRef.current = drawn;
@@ -285,6 +336,13 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       const m = mapRef.current as any; if (m?.remove) { m.remove(); mapRef.current = null; dataRef.current = null; drawnRef.current = null; }
     };
   }, [canEdit]);
+
+  // 🏘 Keep the parcel layer in sync with its toggle — refetch when turned on, clear when off.
+  useEffect(() => {
+    showLotsRef.current = show.lots;
+    if (show.lots) lotsLoaderRef.current?.();
+    else { try { (lotsRef.current as any)?.clearLayers?.(); } catch { /* ok */ } }
+  }, [show.lots, ready]);
 
   // ── redraw data layers whenever the data changes (markets, buyers, territories) ──
   useEffect(() => {
@@ -419,14 +477,16 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-amber-300" style={{ background: "#f59e0b" }} /> Closed deal</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#3b82f6", opacity: 0.55 }} /> Explored area</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#dbeafe", opacity: 0.5 }} /> 🌫 Unexplored (fog lifts as we pull leads)</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-sky-400" style={{ background: "#38bdf8", opacity: 0.4 }} /> 🏘 Vacant lot</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-amber-400" style={{ background: "#f59e0b", opacity: 0.5 }} /> Recently sold lot</span>
         <span className="text-slate-500">· bigger = more</span>
         <button onClick={enterFs} className="ml-auto rounded-full bg-slate-700/70 px-2.5 py-1 font-bold text-slate-100 ring-1 ring-slate-600 hover:bg-slate-600">⛶ Full screen</button>
         <span className="rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
         <span className="font-bold text-slate-400">Layers:</span>
-        {(["fog", "opp", "markets", "buyers", "power", "leads", "terr"] as const).map((k) => (
-          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "fog" ? "🌫 Fog of war" : k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : "🖍 My areas"}</label>
+        {(["fog", "lots", "opp", "markets", "buyers", "power", "leads", "terr"] as const).map((k) => (
+          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "fog" ? "🌫 Fog of war" : k === "lots" ? "🏘 Lots (zoom in)" : k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : "🖍 My areas"}</label>
         ))}
         {canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
         {canEdit && leadZipsRemaining > 0 && <button onClick={runGeocodeLeads} disabled={geoBusy} className="rounded-lg bg-sky-600 px-2.5 py-1 font-bold text-white hover:bg-sky-700 disabled:opacity-50">{geoBusy ? "Mapping…" : `📍 Map lead locations (${leadZipsRemaining} left)`}</button>}
