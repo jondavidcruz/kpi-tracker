@@ -4,7 +4,7 @@
 // preview, segment counter, and a "send from" picker over our Telnyx lines.
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { sendCrmSmsAction } from "@/app/crm/actions";
+import { sendCrmSmsAction, logIphoneTextAction } from "@/app/crm/actions";
 import { geoForPhone } from "@/lib/npa-geo";
 import { GOOGLE_REVIEW_LINK } from "@/lib/crm-shared";
 
@@ -31,6 +31,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   const [toNum, setToNum] = useState(to);
   useEffect(() => { setToNum(to); }, [to]);
   const [numbers, setNumbers] = useState<string[]>([]);
+  const [isOwner, setIsOwner] = useState(false); // 📱 owner-only "Send from my iPhone" (Jon 2026-11-10)
   // 📷 MMS attachment (Jon 2026-10-12) — compressed in the browser so it
   // always fits carrier limits (max 1280px, jpeg q0.8, ~<500KB)
   const [photo, setPhoto] = useState<{ blob: Blob; preview: string } | null>(null);
@@ -72,8 +73,9 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   useEffect(() => {
     fetch("/api/crm/phone").then(async (r) => {
       if (!r.ok) return;
-      const j = (await r.json()) as { numbers?: string[] };
+      const j = (await r.json()) as { numbers?: string[]; isOwner?: boolean };
       if (j.numbers?.length) { setNumbers(j.numbers); }
+      if (j.isOwner) setIsOwner(true);
     }).catch(() => {});
   }, []);
 
@@ -101,6 +103,21 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
     });
   };
   const undoSend = () => { clearSendTimers(); firedRef.current = false; setCountdown(null); };
+  // 📱 Owner-only: open Messages on Jon's own iPhone/Mac pre-filled (real blue iMessage, which
+  // bypasses carrier 10DLC filtering), then LOG it to the thread so history stays complete. No
+  // Telnyx send. The "📱 " marker makes it show as a blue bubble in the preview + thread.
+  const telE164 = "+1" + toNum.replace(/\D/g, "").slice(-10);
+  const iphoneHref = text.trim() ? `sms:${telE164}&body=${encodeURIComponent(text.trim())}` : undefined;
+  const sendFromIphone = () => {
+    const body = text.trim(); if (!body) return;
+    const fd = new FormData();
+    fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("to", toNum); fd.set("text", body);
+    start(async () => {
+      await logIphoneTextAction(fd);
+      setLocalMsgs((p) => [...p, { body: `📱 ${body}`, inbound: false, at: new Date().toISOString() }]);
+      setText(""); setSent("📱 Sent from iPhone (logged here)"); setTimeout(() => setSent(""), 2800); router.refresh();
+    });
+  };
   const send = () => {
     if (!text.trim() && !photo) return;
     if (countdown !== null) return; // a countdown is already running — ignore extra clicks
@@ -156,6 +173,11 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
           )}
           <span className={`text-[10px] font-bold ${segs > 1 ? "text-amber-600" : "text-slate-400"}`}>{len} chars · {segs || "—"} text{segs === 1 ? "" : "s"}{segs > 1 ? " (they'll see it stitched together)" : ""}</span>
           {sent && <span className="text-[11px] font-bold text-emerald-600">{sent}</span>}
+          {isOwner && countdown === null && !confirming && (
+            iphoneHref
+              ? <a href={iphoneHref} onClick={sendFromIphone} title="Opens Messages on your iPhone/Mac pre-filled with this text — you tap send (blue iMessage if they're on Apple), and it's logged here. Bypasses the 10DLC carrier blocks. Owner-only." className="ml-auto rounded-lg bg-[#1a7cff] px-3 py-1.5 text-xs font-extrabold text-white shadow-sm hover:brightness-110">📱 From my iPhone</a>
+              : <span className="ml-auto rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-extrabold text-slate-300">📱 From my iPhone</span>
+          )}
           {countdown !== null ? (
             <span className="ml-auto flex items-center gap-2">
               <span className="text-[11px] font-bold text-amber-700">Sending in {countdown}s…</span>
@@ -185,11 +207,17 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
             <div ref={threadRef} className={`flex flex-col gap-1 overflow-y-auto bg-white px-2.5 pb-2 pt-1 ${compact ? "h-[230px]" : "h-[260px]"}`}>
               <div className="mt-auto" />
               <div className="text-center text-[8px] font-semibold text-slate-400">Text Message · SMS{history.length ? "" : " · Today"}</div>
-              {[...history, ...localMsgs].map((m, i) => (
-                <div key={i} className={`flex ${m.inbound ? "justify-start" : "justify-end"}`}>
-                  <div className="max-w-[80%] whitespace-pre-line break-words rounded-2xl px-2.5 py-1.5 text-[11px] leading-snug" style={m.inbound ? { backgroundColor: "#e9e9eb", color: "#111", borderBottomLeftRadius: 4 } : { backgroundColor: "#34c759", color: "#fff", borderBottomRightRadius: 4 }}>{m.body}</div>
-                </div>
-              ))}
+              {[...history, ...localMsgs].map((m, i) => {
+                // 📱 iPhone/iMessage sends (body marked with 📱) render BLUE; Telnyx SMS stays green;
+                // inbound stays gray — so Jon can tell at a glance what went out as blue iMessage.
+                const iph = !m.inbound && m.body.startsWith("📱");
+                const bg = m.inbound ? "#e9e9eb" : iph ? "#1a7cff" : "#34c759";
+                return (
+                  <div key={i} className={`flex ${m.inbound ? "justify-start" : "justify-end"}`}>
+                    <div className="max-w-[80%] whitespace-pre-line break-words rounded-2xl px-2.5 py-1.5 text-[11px] leading-snug" style={{ backgroundColor: bg, color: m.inbound ? "#111" : "#fff", ...(m.inbound ? { borderBottomLeftRadius: 4 } : { borderBottomRightRadius: 4 }) }}>{m.body}</div>
+                  </div>
+                );
+              })}
               <div className="flex justify-end" style={{ display: text ? "flex" : "none" }}>
                 <div className="max-w-[80%] whitespace-pre-line break-words rounded-2xl rounded-br-[4px] px-2.5 py-1.5 text-[11px] leading-snug" style={{ backgroundColor: "#34c759", color: "#fff" }}>{text}</div>
               </div>

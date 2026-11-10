@@ -958,6 +958,25 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
   if (!skipRefresh) revalidatePath(`/crm/${oppId}`);
 }
 
+// 📱 Owner-only "Send from my iPhone" (Jon 2026-11-10). When a Telnyx text bounces (10DLC) or Jon
+// just wants a real blue iMessage, he sends it from his OWN iPhone — this action only LOGS it to the
+// CRM thread so history stays complete (no Telnyx send happens here). The "📱 " marker makes it show
+// as a BLUE bubble in the preview. Hard-gated to the owner; the team never gets the button or action.
+export async function logIphoneTextAction(formData: FormData): Promise<{ ok: boolean }> {
+  const me = await getCurrentUser();
+  if (!me || !isOwner(me)) return { ok: false };
+  const oppId = String(formData.get("oppId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+  const to = String(formData.get("to") ?? "");
+  const line = String(formData.get("line") ?? ""); // which of Jon's iPhone numbers (optional label)
+  const text = String(formData.get("text") ?? "").trim();
+  if (!contactId || !text) return { ok: false };
+  await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: 📱 ${text}`, meta: { dir: "outbound", via: "iphone", line, to }, actor: me.name });
+  if (oppId) revalidatePath(`/crm/${oppId}`);
+  revalidatePath("/crm");
+  return { ok: true };
+}
+
 // ── Task priority (Jon 2026-10-08: urgent/pending colors) — Resource map
 // __task_priority__ {taskId: "urgent"|"low"}; absent = normal (yellow/pending).
 export async function readTaskPriorities(): Promise<Record<string, string>> {

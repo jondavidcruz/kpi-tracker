@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isManager, isOwner } from "@/lib/auth";
 import { commsFor } from "@/lib/crm-comms";
 
 export const dynamic = "force-dynamic";
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
   const cById = new Map(cRows.map((c) => [c.id, c]));
 
   return NextResponse.json({
-    numbers, health,
+    numbers, health, isOwner: isOwner(me!),
     // default to the configured caller id ONLY if it's a live line; otherwise the
     // first live number — never a porting number (Jon 2026-10-21).
     defaultFrom: (process.env.TELNYX_CALLER_ID && numbers.includes(process.env.TELNYX_CALLER_ID)) ? process.env.TELNYX_CALLER_ID : (numbers[0] ?? ""),
