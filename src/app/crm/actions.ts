@@ -977,6 +977,18 @@ export async function logIphoneTextAction(formData: FormData): Promise<{ ok: boo
   return { ok: true };
 }
 
+// 🛑 Owner-only pause/resume for Level-2 auto-send follow-ups (Jon 2026-11-10). One click on
+// /sequences stops ALL auto-sending (Level-2 falls back to assisted tasks) with no env or redeploy.
+export async function setDripPauseAction(formData: FormData): Promise<{ ok: boolean }> {
+  const me = await getCurrentUser();
+  if (!me || !isOwner(me)) return { ok: false };
+  const paused = String(formData.get("paused") ?? "") === "1";
+  const { setDripAutoSendPaused } = await import("@/lib/drip");
+  await setDripAutoSendPaused(paused);
+  revalidatePath("/sequences");
+  return { ok: true };
+}
+
 // ── Task priority (Jon 2026-10-08: urgent/pending colors) — Resource map
 // __task_priority__ {taskId: "urgent"|"low"}; absent = normal (yellow/pending).
 export async function readTaskPriorities(): Promise<Record<string, string>> {

@@ -8,7 +8,9 @@ import "server-only";
 import { db } from "@/lib/db";
 
 export type DripStep = { channel: "sms" | "email"; delayDays: number; sms?: string; emailSubject?: string; emailBody?: string };
-export type DripSeq = { key: string; name: string; steps: DripStep[] };
+// autoSend=true → Level 2: the cron SENDS the step itself (with all guardrails). Omitted/false →
+// Level 1: the cron drops a ready-to-send task for a human to click. Set per-sequence (Jon 2026-11-10).
+export type DripSeq = { key: string; name: string; steps: DripStep[]; autoSend?: boolean };
 
 // Tokens: {first} {address} {rep}
 export const DRIP_SEQUENCES: DripSeq[] = [
@@ -31,11 +33,49 @@ export const DRIP_SEQUENCES: DripSeq[] = [
 // outbound-anonymity rule). Same SAFE assisted-task behavior; a reply stops it.
 DRIP_SEQUENCES.push(
   {
-    key: "contract_sent", name: "Contract sent — chase the signature (3 touches / ~5 days)",
+    key: "contract_sent", name: "Contract sent — chase the signature (5 touches / ~6 days)", autoSend: true,
     steps: [
       { channel: "sms", delayDays: 0, sms: "Hi {first}, just sent over the agreement for {address} — did it come through okay? Happy to walk you through any of it." },
-      { channel: "email", delayDays: 2, emailSubject: "Your agreement for {address}", emailBody: "Hi {first},\n\nChecking in on the agreement for {address}. No pressure at all — I just want to make sure it reached you and answer any questions before you sign. Reply here anytime and I'll help you through it.\n\n— {rep}" },
-      { channel: "sms", delayDays: 5, sms: "{first}, any questions on the agreement for {address}? Once it's signed we can keep things moving. I'm here if you need anything." },
+      { channel: "email", delayDays: 1, emailSubject: "Your agreement for {address}", emailBody: "Hi {first},\n\nChecking in on the agreement for {address}. No pressure at all — I just want to make sure it reached you and answer any questions before you sign. Reply here anytime and I'll help you through it.\n\n— {rep}" },
+      { channel: "sms", delayDays: 2, sms: "{first}, any questions on the agreement for {address}? Once it's signed we can keep things moving — I'm here if you need anything." },
+      { channel: "email", delayDays: 4, emailSubject: "Anything I can clear up on {address}?", emailBody: "Hi {first},\n\nJust making sure the agreement for {address} didn't get buried. If anything's unclear or you'd like to go over it on a quick call, I'm glad to help. Whenever you're ready, a quick signature keeps everything moving.\n\n— {rep}" },
+      { channel: "sms", delayDays: 6, sms: "Hi {first}, still here to get {address} wrapped up for you. Let me know if you need anything to feel good about signing." },
+    ],
+  },
+  {
+    key: "process_fu", name: "Process call follow-up (3 touches / ~5 days)",
+    steps: [
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — great talking about {address}. I'm pulling everything together and will have next steps for you shortly." },
+      { channel: "email", delayDays: 2, emailSubject: "Next steps on {address}", emailBody: "Hi {first},\n\nThanks again for the time on {address}. I'm finalizing the details on our end and I'll follow up with where we go from here. In the meantime, reply anytime with questions.\n\n— {rep}" },
+      { channel: "sms", delayDays: 5, sms: "{first}, checking back on {address}. Still want to make this easy for you — is now a good time to talk through the next step?" },
+    ],
+  },
+  {
+    key: "apt_set", name: "Appointment set — confirm + remind (2 touches / ~1 day)",
+    steps: [
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — looking forward to our call about {address}. I'll give you a ring at the time we set. Talk soon!" },
+      { channel: "sms", delayDays: 1, sms: "{first}, quick reminder about our call on {address}. If you need to move it, just let me know a better time — happy to work around you." },
+    ],
+  },
+  {
+    key: "comp_offer", name: "Comp → offer — set expectations (1 touch)",
+    steps: [
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — I'm running the numbers on {address} right now and will have your cash offer ready shortly. I'll reach out the moment it's done." },
+    ],
+  },
+  {
+    key: "contract_apt", name: "Signing appointment — confirm + remind (2 touches / ~1 day)",
+    steps: [
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — all set for our signing on {address}. I'll walk you through everything so it's quick and easy. See you then!" },
+      { channel: "sms", delayDays: 1, sms: "{first}, reminder about signing the agreement for {address}. If the timing's tight, tell me what works and we'll adjust." },
+    ],
+  },
+  {
+    key: "signed_nurture", name: "Signed — reassure through closing (3 touches / ~21 days)",
+    steps: [
+      { channel: "email", delayDays: 0, emailSubject: "What happens next with {address}", emailBody: "Hi {first},\n\nThanks for signing on {address}! Here's what's next: we'll handle the closing paperwork and keep you posted every step of the way. You don't need to do anything right now — if any questions come up, just reply here.\n\n— {rep}" },
+      { channel: "sms", delayDays: 7, sms: "Hi {first}, quick update on {address} — everything's moving along on our end. I'll let you know as soon as there's a closing date. Reach out anytime!" },
+      { channel: "email", delayDays: 21, emailSubject: "Checking in on {address}", emailBody: "Hi {first},\n\nJust a friendly check-in on {address}. We're working toward closing and I'll keep you updated the whole way. Thanks for trusting us with this — reply anytime if you need anything.\n\n— {rep}" },
     ],
   },
   {
@@ -64,7 +104,7 @@ DRIP_SEQUENCES.push(
     ],
   },
   {
-    key: "ghosted", name: "Ghosted — long re-engagement (3 touches / ~60 days)",
+    key: "ghosted", name: "Ghosted / nurture — long re-engagement (3 touches / ~60 days)", autoSend: true,
     steps: [
       { channel: "sms", delayDays: 7, sms: "Hi {first}, haven't heard back on {address} — no worries at all. Still here whenever you're ready to talk numbers." },
       { channel: "email", delayDays: 30, emailSubject: "Still here for {address}", emailBody: "Hi {first},\n\nJust circling back on {address}. If the timing's better now, I'd still love to get you a fair cash offer — no fees, no agents, close on your schedule. Reply anytime.\n\n— {rep}" },
@@ -75,12 +115,45 @@ DRIP_SEQUENCES.push(
 
 export function getDripSeq(key: string): DripSeq | undefined { return DRIP_SEQUENCES.find((s) => s.key === key); }
 
+// 🛑 Owner-operable auto-send brake (Jon 2026-11-10). Stored in a reserved Resource row (no env, no
+// redeploy) so Jon can pause ALL auto-sending from the /sequences page in one click. When paused,
+// Level 2 sequences fall back to assisted tasks — nothing sends itself. Level 1 is unaffected.
+const DRIP_PAUSE_CAT = "__drip_autosend_pause__";
+export async function isDripAutoSendPaused(): Promise<boolean> {
+  const row = await db.resource.findFirst({ where: { category: DRIP_PAUSE_CAT } }).catch(() => null);
+  return row?.description === "paused";
+}
+export async function setDripAutoSendPaused(paused: boolean): Promise<void> {
+  const row = await db.resource.findFirst({ where: { category: DRIP_PAUSE_CAT } }).catch(() => null);
+  if (row) await db.resource.update({ where: { id: row.id }, data: { description: paused ? "paused" : "live" } });
+  else await db.resource.create({ data: { title: "drip-autosend-pause", category: DRIP_PAUSE_CAT, url: "", description: paused ? "paused" : "live" } });
+}
+
 /** The sequences the team can start by hand (for the picker). */
 export function dripSeqOptions(): Array<{ key: string; name: string }> { return DRIP_SEQUENCES.map((s) => ({ key: s.key, name: s.name })); }
 
-// 🧭 Map a pipeline stage (its key/slug) → the sequence to auto-arm. Matched on the
-// normalized stage text so it works across pipelines with slightly different stage names.
+// 🧭 Exact acquisition stage → sequence (Jon 2026-11-10: EVERY stage now runs a cadence, not
+// just the 5 that matched a keyword). Keyed on the real ACQ_STAGES keys. `new_call_1_min` is left
+// out on purpose — brand-new leads stay human speed-to-lead. Level 2 (auto-send) is flagged on the
+// sequence itself (contract_sent, ghosted).
+export const STAGE_SEQ: Record<string, string> = {
+  "10_days_of_hell_qualify": "ten_days_hell",
+  "process_call_f_u": "process_fu",
+  "apt_set_process_offer_call": "apt_set",
+  "comp_to_offer_24_hrs": "comp_offer",
+  "comp_offer_24_hrs": "comp_offer",
+  "offer_call_asap": "offer_ready",
+  "verbal_offer_negotiate": "offer_negotiate",
+  "contract_sent_f_u": "contract_sent",
+  "contract_apt_set_sign": "contract_apt",
+  "contract_signed_dispo": "signed_nurture",
+  "nurture": "ghosted",
+};
+
+// 🧭 Map a pipeline stage (its key/slug) → the sequence to auto-arm. Exact ACQ keys first, then
+// a normalized keyword fallback so other pipelines / renamed stages still match.
 export function seqForStage(stageKey: string): string | null {
+  if (STAGE_SEQ[stageKey]) return STAGE_SEQ[stageKey];
   const s = stageKey.toLowerCase().replace(/[_-]+/g, " ");
   if (/contract\s*sent|sent\s*contract|agreement\s*sent|out\s*for\s*sign/.test(s)) return "contract_sent";
   if (/offer\s*ready|ready\s*to\s*present|present\s*offer|offer\s*to\s*present/.test(s)) return "offer_ready";
@@ -153,10 +226,86 @@ export async function stopDrip(oppId: string, reason = "stopped"): Promise<void>
   await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __dripEndedReason: reason } as never } });
 }
 
-/** Run every due drip step. Default = create a ready-to-send task (safe). DRIP_SEND=1 → auto-send. */
+// ── Level 2 auto-send (Jon 2026-11-10) ──────────────────────────────────────────────────────
+// Cron-safe senders that reuse the SAME guardrail libs as the manual send actions — owner-anonymity
+// scrub, quiet hours (by area code + address), live/sticky line pick, hard anti-duplicate. They
+// NEVER throw into the cron. DND is already enforced by the tag check in runDueDrips before we call
+// these. A reply stops the whole drip elsewhere. Master kill switch: DRIP_AUTOSEND_OFF=1.
+
+type DripContact = { name: string; phone: string; email: string; address: string; tags: string } | null;
+
+/** Pick a live, SMS-capable "from" line: sticky to the line this lead already knows, else any live one. */
+async function pickDripSmsFrom(contactId: string): Promise<string | null> {
+  let from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID || "";
+  try {
+    const prev = await db.crmEvent.findMany({ where: { contactId, kind: "sms" }, orderBy: { at: "desc" }, take: 20, select: { meta: true } });
+    for (const e of prev) { const m = e.meta as { line?: string } | null; if (m?.line) { from = m.line; break; } }
+  } catch { /* env default */ }
+  if (process.env.TELNYX_API_KEY) {
+    try {
+      const { partitionNumbers, pickWorkingCallerId, digits } = await import("@/lib/telnyx-numbers");
+      const { live } = await partitionNumbers();
+      const smsLive = live.filter((n) => n.msgProfile);
+      const fromD = digits(from);
+      const isLiveSms = !!fromD && smsLive.some((n) => digits(n.number) === fromD);
+      if (!isLiveSms) { const pick = smsLive[0]?.number || (await pickWorkingCallerId(from)).callerId; if (pick) from = pick; }
+    } catch { /* keep the configured line */ }
+  }
+  return from || null;
+}
+
+async function autoSendDripSms(contact: DripContact, contactId: string, oppId: string, rawText: string): Promise<{ sent: boolean; reason?: string }> {
+  const { logCrmEvent } = await import("@/lib/crm");
+  const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+  const text = scrubOwnerIdentity((rawText || "").trim().slice(0, 900));
+  if (!text) return { sent: false, reason: "empty" };
+  const d10 = (contact?.phone || "").replace(/\D/g, "").slice(-10);
+  const to = d10.length === 10 && /[2-9]/.test(d10[0]) && /[2-9]/.test(d10[3]) ? `+1${d10}` : "";
+  if (!to) return { sent: false, reason: "invalid number" };
+  const { quietHoursWarning } = await import("@/lib/npa-tz");
+  const quiet = quietHoursWarning(to, contact?.address || "");
+  if (quiet) return { sent: false, reason: `quiet hours — ${quiet}` };
+  const from = await pickDripSmsFrom(contactId);
+  if (!process.env.TELNYX_API_KEY || !from) return { sent: false, reason: "no live line" };
+  const sentPrefix = `➡️ Us: ${text}`.slice(0, 190);
+  const dup = await db.crmEvent.findFirst({ where: { contactId, kind: "sms", at: { gte: new Date(Date.now() - 120_000) }, body: { startsWith: sentPrefix } }, select: { id: true } }).catch(() => null);
+  if (dup) return { sent: false, reason: "duplicate" };
+  let ok = false, err = "";
+  try {
+    const res = await fetch("https://api.telnyx.com/v2/messages", { method: "POST", headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ from, to, text }) });
+    ok = res.ok; if (!ok) err = (await res.text()).slice(0, 140);
+  } catch (e) { err = String(e).slice(0, 140); }
+  await logCrmEvent({ contactId, oppId, kind: "sms", body: `➡️ Us: ${text}${ok ? "" : ` (AUTO-SEND FAILED: ${err})`}`, meta: { dir: "outbound", line: from, auto: true }, actor: "drip" }).catch(() => {});
+  return { sent: ok, reason: ok ? undefined : "telnyx error" };
+}
+
+async function autoSendDripEmail(contact: DripContact, contactId: string, oppId: string, rawSubject: string, rawBody: string, rep: string): Promise<{ sent: boolean; reason?: string }> {
+  const { logCrmEvent } = await import("@/lib/crm");
+  const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+  const subject = scrubOwnerIdentity((rawSubject || "Following up").trim().slice(0, 150));
+  const body = scrubOwnerIdentity((rawBody || "").trim().slice(0, 4000));
+  const to = (contact?.email || "").trim();
+  if (!to || !body) return { sent: false, reason: "no email on file" };
+  const { getChannelConfig, sendEmailTo } = await import("@/lib/notify");
+  const domain = (process.env.ALERT_EMAIL_FROM ?? "info@freedom-offers.com").split("@")[1] ?? "freedom-offers.com";
+  const localPart = (rep.match(/[a-z0-9]+([._-][a-z0-9]+)*/i)?.[0] || "team").toLowerCase();
+  const displayName = (rep || "").replace(/[<>"\\]/g, "").trim() || "Our team";
+  const cfg = { ...(await getChannelConfig()), emailFrom: `${displayName} <${localPart}@${domain}>` };
+  const html = `<p>${body.replace(/\n/g, "<br>")}</p>`;
+  const errOut: { msg?: string } = {};
+  let ok = false;
+  try { ok = await sendEmailTo([to], subject, html, cfg, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com", errOut); } catch (e) { errOut.msg = String(e).slice(0, 140); }
+  await logCrmEvent({ contactId, oppId, kind: "email", body: `➡️ Us: ${subject} — ${body.slice(0, 300)}${ok ? "" : ` (AUTO-SEND FAILED${errOut.msg ? `: ${errOut.msg}` : ""})`}`, meta: { dir: "outbound", auto: true }, actor: "drip" }).catch(() => {});
+  return { sent: ok, reason: ok ? undefined : errOut.msg };
+}
+
+/** Run every due drip step. Level-1 sequences drop a ready-to-send task (safe); Level-2 sequences
+ *  (autoSend) SEND the step themselves with full guardrails. DRIP_SEND=1 forces send on ALL;
+ *  DRIP_AUTOSEND_OFF=1 is the master brake that forces everything back to assisted tasks. */
 export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps: number; finished: number; mode: string }> {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
-  const autoSend = process.env.DRIP_SEND === "1";
+  const forceSendAll = process.env.DRIP_SEND === "1";
+  const autoSendOff = process.env.DRIP_AUTOSEND_OFF === "1" || await isDripAutoSendPaused();
   // Pull opps that have a drip due (JSON path filter; fall back handled by the guard below).
   let due: Array<{ id: string; title: string; contactId: string; assignedTo: string; formData: unknown; contact: { name: string; phone: string; email: string; address: string; tags: string } | null }> = [];
   try {
@@ -196,9 +345,24 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
     const body = channel === "sms" ? fillTemplate(step.sms || "", tok) : fillTemplate(step.emailBody || "", tok);
     const subject = channel === "email" ? fillTemplate(step.emailSubject || "Following up", tok) : "";
 
-    if (autoSend) {
-      // (gated) auto-send would go here — left to the existing send actions once Jon enables it.
-      await logCrmEvent({ contactId: o.contactId, oppId: o.id, kind: "system", body: `📨 Drip ${channel} step ${state.step + 1} queued (auto-send) — ${subject || body.slice(0, 60)}`, actor: "drip" }).catch(() => {});
+    // Level 2 (autoSend sequence, or DRIP_SEND=1) → send it now; the brake forces assisted tasks.
+    const doSend = (seq.autoSend === true || forceSendAll) && !autoSendOff;
+    if (doSend) {
+      const r = channel === "sms"
+        ? await autoSendDripSms(o.contact, o.contactId, o.id, body)
+        : await autoSendDripEmail(o.contact, o.contactId, o.id, subject, body, tok.rep);
+      if (!r.sent) {
+        // Didn't send (quiet hours / no line / dup / error) → drop an assisted task so the touch
+        // still happens by hand instead of vanishing.
+        const title = channel === "sms"
+          ? `📨 Follow-up text ${state.step + 1} → ${tok.first}: ${body.slice(0, 80)}`
+          : `📨 Follow-up email ${state.step + 1} → ${tok.first}: ${subject}`;
+        const existing = await db.crmTask.findFirst({ where: { contactId: o.contactId, title, createdAt: { gte: new Date(Date.now() - 14 * 86_400_000) } } }).catch(() => null);
+        if (!existing) {
+          const task = await db.crmTask.create({ data: { oppId: o.id, contactId: o.contactId, title: `${title} (auto-send skipped: ${r.reason ?? "unknown"})`.slice(0, 180), due: today, assignedTo: o.assignedTo, createdBy: "drip" } }).catch(() => null);
+          if (task) { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(task.id, channel === "email" ? `Subject: ${subject}\n\n${body}` : body).catch(() => {}); }
+        }
+      }
     } else {
       // SAFE: drop a ready-to-send task for the rep/VA.
       const title = channel === "sms"
@@ -215,5 +379,5 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
     }
     steps++;
   }
-  return { scanned: due.length, steps, finished, mode: autoSend ? "auto-send" : "assisted-task" };
+  return { scanned: due.length, steps, finished, mode: autoSendOff ? "assisted-task (brake on)" : "per-sequence (L2 auto-send + L1 tasks)" };
 }

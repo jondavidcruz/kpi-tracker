@@ -150,6 +150,7 @@ export default function Sidebar({
       { href: "/underwriting", label: "Underwriting", Icon: Calculator },
       { href: "/reduction", label: "Reduction Play", Icon: TrendingUp },
       { href: "/sop/acquisitions", label: "Acquisitions SOP", Icon: BookOpen, external: true },
+      { href: "/sequences", label: "Follow-up Automation", Icon: Workflow, managerOnly: true },
     ] },
     { label: "Dispositions", items: [
       { href: "/dispo", label: "Dispo CRM", Icon: Target, marketingOrManager: true },
