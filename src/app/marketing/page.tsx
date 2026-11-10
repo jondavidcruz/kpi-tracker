@@ -97,9 +97,14 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   const jvPartners = rows.filter(isJv).sort((a, b) => a.name.localeCompare(b.name));
   const isDevRow = (r: { category: string; type: string }) => r.category === "luxury" || r.type === "developer";
   const isAgentRow = (r: { type: string }) => r.type === "agent";
-  const devs = vettedRows.filter(isDevRow).map(toProspect);
-  const agents = vettedRows.filter(isAgentRow).map(toProspect);
-  const flips = vettedRows.filter((r) => !isDevRow(r) && !isAgentRow(r)).map(toProspect);
+  // 🎯 Niche tags (manual overrides) so the buy-box form pre-fills them. Reserved Resource, no DB cost.
+  const { readBuyerNicheMap } = await import("@/lib/buyer-niches");
+  const { nicheLabel } = await import("@/lib/land-niches");
+  const nicheMap = await readBuyerNicheMap();
+  const withNiche = (p: Prospect): Prospect => ({ ...p, niches: (nicheMap[p.id] ?? []).map(nicheLabel).join(", ") });
+  const devs = vettedRows.filter(isDevRow).map(toProspect).map(withNiche);
+  const agents = vettedRows.filter(isAgentRow).map(toProspect).map(withNiche);
+  const flips = vettedRows.filter((r) => !isDevRow(r) && !isAgentRow(r)).map(toProspect).map(withNiche);
   const buyerGroups = [
     { area: "🏗 Developers", prospects: devs },
     { area: "🔨 Fix & Flippers", prospects: flips },

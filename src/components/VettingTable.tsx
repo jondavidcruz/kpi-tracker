@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useRef, useState } from "react";
 import { setBuyerStatus, logBuyerOutreach, saveProspectField, saveProspect, saveBuyerBox, deleteProspect } from "@/app/actions";
 import MultiSelect from "@/components/MultiSelect";
+import { NICHE_LABELS } from "@/lib/land-niches";
 import DevInterviewForm from "@/components/DevInterviewForm";
 import type { BuyerLand } from "@/lib/buyer-land";
 
@@ -10,6 +11,7 @@ export type Prospect = {
   id: string; name: string; website: string; links: string; email: string; phone: string; phone2: string;
   buyBoxAreas: string; outreachLog: string; lastContacted: string; nextFollowUp: string;
   vetStage: string; vetStatus: string; igHandle: string; touchOn?: string;
+  niches?: string; // 🎯 land-niche tags as comma-joined labels (sniper tag)
   // CRM buy-box detail
   category: string; type: string; title: string; company: string; preferredContact: string;
   dealType: string; buildType: string; closingSpeed: string; priceRange: string; minLotSize: string;
@@ -167,6 +169,13 @@ function BuyBoxPanel({ p }: { p: Prospect }) {
       <Inp name="title" label="Contact name / title" def={p.title} />
       <Inp name="company" label="Company / Dev firm" def={p.company} />
       <MultiSelect name="preferredContact" label="Preferred contact" defaultValue={p.preferredContact} options={PREFERRED_CONTACT} />
+
+      {/* 🎯 Land niche — sniper tag (drives the Niches tab match). Manual picks override auto-suggest.
+          Leaving it blank on save never clears existing tags (empty = no change). */}
+      <div className="col-span-2 sm:col-span-4">
+        <MultiSelect name="niches" label="🎯 Land niche — sniper tag (shows on the Niches tab; blank = keep auto-suggest)" defaultValue={p.niches ?? ""} options={NICHE_LABELS} />
+      </div>
+      <input type="hidden" name="__nichefield" value="1" />
 
       {dev ? (
         <>

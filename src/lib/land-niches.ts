@@ -248,6 +248,11 @@ export function suggestNichesFromText(haystack: string): string[] {
 export function nicheLabel(id: string): string {
   return NICHES.find((n) => n.id === id)?.label ?? id;
 }
+// Plain labels (no emoji) for the vetting-form multi-select + label→id for saving.
+export const NICHE_LABELS = NICHES.map((n) => n.label);
+export function nicheIdForLabel(label: string): string | undefined {
+  return NICHES.find((n) => n.label === label.trim())?.id;
+}
 export function nicheEmoji(id: string): string {
   return NICHES.find((n) => n.id === id)?.emoji ?? "🎯";
 }

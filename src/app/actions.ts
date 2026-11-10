@@ -2703,7 +2703,15 @@ export async function saveBuyerBox(formData: FormData) {
     },
   });
   if (hasBox && !prev?.boxOn) await rollupResearchKpis(me!.id, today);
+  // 🎯 Land-niche sniper tag (reserved Resource, no migration). Empty = no change (never blanks).
+  if (formData.get("__nichefield")) {
+    const { nicheIdForLabel } = await import("@/lib/land-niches");
+    const { setBuyerNiches } = await import("@/lib/buyer-niches");
+    const ids = String(formData.get("niches") ?? "").split(",").map((s) => nicheIdForLabel(s)).filter((x): x is string => !!x);
+    if (ids.length) await setBuyerNiches(id, ids);
+  }
   revalidatePath("/vetting");
+  revalidatePath("/markets");
 }
 
 /** Inline-edit a prospect's core fields from the spreadsheet (name, contact, area). */
