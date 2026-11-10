@@ -117,6 +117,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState({ op: "stage", val: "", val2: "" });
+  // 📨 Automation sequences for the bulk "Start sequence" op (Jon 2026-11-10).
+  const [seqOpts, setSeqOpts] = useState<{ key: string; name: string; autoSend: boolean }[]>([]);
+  useEffect(() => { fetch("/api/crm/sequences").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.seqs) setSeqOpts(j.seqs); }).catch(() => {}); }, []);
   // when the rep clicks a stage's "select all N", we target the WHOLE stage
   // server-side (every lead, not just the loaded ~60). null = id-based select.
   const [stageScope, setStageScope] = useState<{ stage: string; count: number } | null>(null);
@@ -175,7 +178,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     // scales past the id-based 500 cap. For the FIRST column we also pass the full list of column
     // keys so the server catches cards whose stored stage matches no column (e.g. imported devs on
     // "new" while the column key is "new_research") — same orphan rule the board renders by.
-    if (stageScope) {
+    if (stageScope && bulk.op !== "sequence") {
       if (bulk.op === "delete" && !confirm(`Archive ALL ${stageScope.count} lead(s) in this stage? They can be restored.`)) return;
       const fd = new FormData();
       fd.set("pipeline", currentPipeline); fd.set("stage", stageScope.stage); fd.set("who", who);
@@ -191,6 +194,10 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     fd.set("op", bulk.op); fd.set("val", bulk.val.trim());
     if (bulk.op === "pipeline" && bulk.val2) fd.set("targetStage", bulk.val2);
     if (bulk.op === "delete" && !confirm(`Archive ${selected.size} selected lead(s)? They can be restored.`)) return;
+    if (bulk.op === "sequence") {
+      const nm = seqOpts.find((s) => s.key === bulk.val)?.name ?? bulk.val;
+      if (!confirm(`Start the automation "${nm}" on ${selected.size} selected lead(s)?\n\nEach lead gets this sequence's texts/emails on its cadence (a reply stops it). Double-check these leads fit this sequence's pipeline before confirming.`)) return;
+    }
     start(async () => { await bulkOppAction(fd); window.location.reload(); });
   };
   // quick-add popover: {cardId, kind} — one open at a time
@@ -622,6 +629,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                 <option value="follower">👥 Add follower</option>
                 <option value="kind">🏕 Set type (House / Land)</option>
                 <option value="detectkind">🔎 Auto-detect type (House/Land) — free</option>
+                <option value="sequence">📨 Start automation sequence</option>
                 <option value="tag">🏷 Add tag</option>
                 <option value="untag">🏷 Remove tag</option>
                 <option value="delete">🗑 Delete (archive)</option>
@@ -631,6 +639,12 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                   <option value="">pick a type…</option>
                   <option value="land">🏕 Land</option>
                   <option value="home">🏠 House</option>
+                </select>
+              )}
+              {bulk.op === "sequence" && (
+                <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800" title="Pick the automation that matches the pipeline these leads are in. ⚡ = auto-sends · ✋ = drops a ready-to-send task">
+                  <option value="">pick an automation…</option>
+                  {seqOpts.map((s) => <option key={s.key} value={s.key}>{s.autoSend ? "⚡ " : "✋ "}{s.name}</option>)}
                 </select>
               )}
               {bulk.op === "stage" && (

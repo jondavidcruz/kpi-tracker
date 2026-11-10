@@ -1371,6 +1371,13 @@ export async function bulkOppAction(formData: FormData) {
       const fd = (o?.formData ?? {}) as Record<string, unknown>;
       await db.crmOpportunity.update({ where: { id }, data: { formData: { ...fd, __leadKind: val } as never } }).catch(() => {});
     }
+  } else if (op === "sequence") {
+    // 📨 Bulk-start an automation sequence on the selected leads (Jon 2026-11-10). Manual enroll
+    // (stageArmed=false) so a later stage change won't clobber it; a reply still stops it. Pick the
+    // sequence that fits the pipeline these leads are in — that's the "minimize mistakes" part.
+    const { enrollDrip, getDripSeq } = await import("@/lib/drip");
+    if (!getDripSeq(val)) return;
+    for (const id of ids) { await enrollDrip(id, val, me?.name ?? "bulk").catch(() => {}); }
   } else if (op === "detectkind") {
     // 🔎 Auto-detect House vs Land — FREE signals ONLY (APN / notes-text / pipeline), no RentCast
     // (Jon 2026-11-05: avoid RentCast spend). Ambiguous leads are left unset for a manual call.
