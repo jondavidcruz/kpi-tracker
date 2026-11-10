@@ -34,6 +34,15 @@ add("Sarasota, FL", "941");
 add("Daytona, FL", "386");
 add("Pensacola, FL", "835");
 add("Lakeland, FL", "863");
+add("Port St Lucie/Treasure Coast, FL", "772");
+add("Miami, FL", "324");                    // Miami-Dade overlay
+add("West Palm Beach, FL", "728");          // Palm Beach overlay
+add("Orlando, FL", "645");                  // Orlando overlay
+add("Tallahassee/Panhandle, FL", "448");    // 850 overlay
+// South Carolina (land markets)
+add("Columbia, SC", "803 839");
+add("Charleston/Coastal, SC", "843 854");
+add("Greenville/Upstate, SC", "864");
 // California
 add("Los Angeles, CA", "213 323 310 424 818 747 820 661");
 add("San Diego, CA", "619 858 760 442");

@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { logBrowserCallAction, dialerOutcomeQuickAction, logCallTypeKpiAction } from "@/app/crm/actions";
 import { quietHoursWarning } from "@/lib/npa-tz";
 import { geoForPhone } from "@/lib/npa-geo";
+import { localTimeForPhone } from "@/lib/npa-tz";
 
 type CallState = "idle" | "connecting" | "ringing" | "active" | "error";
 type PhoneData = {
@@ -21,6 +22,20 @@ type Ctx = { phone: string; name?: string; oppId?: string; contactId?: string; a
 const areaCode = (e164: string) => e164.replace(/\D/g, "").replace(/^1/, "").slice(0, 3);
 // "City, ST" → "ST" (empty for toll-free / unknown NPAs)
 const stateOf = (e164: string) => { const g = geoForPhone(e164); if (!g || g === "Toll-free") return ""; return (g.split(",")[1] || "").trim().toUpperCase(); };
+// Order caller IDs the way Jon reads them (2026-11-09): toll-free first, then by time
+// zone West→East (CA → AZ → Central TN/TX → FL), then state, then the number itself.
+const isTollFree = (e164: string) => geoForPhone(e164) === "Toll-free";
+function sortCallerIds(nums: string[]): string[] {
+  return [...nums].sort((a, b) => {
+    const ta = isTollFree(a) ? 0 : 1, tb = isTollFree(b) ? 0 : 1;
+    if (ta !== tb) return ta - tb;                              // toll-free first
+    const ra = localTimeForPhone(a)?.rank ?? 0, rb = localTimeForPhone(b)?.rank ?? 0;
+    if (ra !== rb) return rb - ra;                              // higher rank = further west → first
+    const sa = stateOf(a), sb = stateOf(b);
+    if (sa !== sb) return sa.localeCompare(sb);
+    return a.localeCompare(b);
+  });
+}
 
 // 🔁 Local-presence rotation (Jon 2026-10-27): remember which of OUR lines we've
 // already used to call each lead, so a 2nd/3rd UNANSWERED attempt dials from a
@@ -873,7 +888,7 @@ export default function DialPad({ floating = false, owner = false }: { floating?
               <span className="block text-[13px] font-extrabold text-slate-800">Calling From</span>
               <select value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 w-52 rounded-md border border-slate-200 px-1.5 py-1 text-[13px] font-semibold text-slate-700">
                 <option value="auto">📍 Closest to the contact (auto · rotates on no-answer)</option>
-                {(data?.numbers ?? []).map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{n}{g ? ` — ${g}` : ""}</option>; })}
+                {sortCallerIds(data?.numbers ?? []).map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{n}{g ? ` — ${g}` : ""}</option>; })}
               </select>
             </span>
             <span className="flex items-center gap-1.5">
