@@ -9,6 +9,7 @@ import MarketsTabs from "@/components/MarketsTabs";
 import MarketBlacklist from "@/components/MarketBlacklist";
 import NichePlaybook from "@/components/NichePlaybook";
 import { readBlacklist } from "@/lib/market-blacklist";
+import { readBuyerNicheMap, buildNicheMatches } from "@/lib/buyer-niches";
 import { readScan, scoreCounties } from "@/lib/market-scan";
 import { SCAN_SEED } from "@/lib/market-scan-seed";
 import { COUNTY_CENTROIDS } from "@/lib/county-centroids";
@@ -49,6 +50,17 @@ export default async function MarketsPage() {
   const { readTerritories } = await import("@/lib/map-territories");
   const territories = await readTerritories();
   const blacklist = await readBlacklist();
+
+  // 🎯 Niche matches — which vetted buyers fit each land niche (manual tags win, else auto-suggested
+  // from their existing buy-box text). Light select; read-only; feeds the Niches tab.
+  const [nicheManual, nicheBuyerRows] = await Promise.all([
+    readBuyerNicheMap(),
+    db.marketContact.findMany({
+      where: { archivedAt: null, vetStage: { in: ["vetted", "active"] } },
+      select: { id: true, name: true, type: true, category: true, company: true, dealType: true, buildType: true, propertyType: true, buyBox: true, buyBoxAreas: true, marketDetails: true, notes: true, conditionTolerance: true, companySize: true },
+    }).catch(() => []),
+  ]);
+  const nicheMatches = buildNicheMatches(nicheBuyerRows, nicheManual);
 
   const now = Date.now(), DAY = 86_400_000;
   // Build a lowercase address haystack + created-age per opp once.
@@ -171,7 +183,7 @@ export default async function MarketsPage() {
         map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
-        niches={<NichePlaybook />}
+        niches={<NichePlaybook matches={nicheMatches} />}
       />
     </div>
   );

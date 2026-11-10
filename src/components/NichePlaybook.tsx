@@ -24,7 +24,9 @@ function Dots({ n }: { n: number }) {
   );
 }
 
-export default function NichePlaybook() {
+type NicheMatch = { id: string; name: string; manual: boolean };
+
+export default function NichePlaybook({ matches = {} }: { matches?: Record<string, NicheMatch[]> }) {
   const ranked = rankedNiches();
   const [open, setOpen] = useState<string | null>(ranked[0]?.id ?? null);
   const [showBuyers, setShowBuyers] = useState(false);
@@ -64,6 +66,11 @@ export default function NichePlaybook() {
                   </span>
                   <span className="block truncate text-[11px] text-slate-500">{n.tagline}</span>
                 </span>
+                {(matches[n.id]?.length ?? 0) > 0 && (
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200" title="Vetted buyers who fit this niche">
+                    👥 {matches[n.id].length}
+                  </span>
+                )}
                 <span className="hidden shrink-0 text-[11px] font-semibold text-slate-500 sm:block">{SPREAD_TIER_LABEL[n.spreadTier]}</span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-extrabold text-emerald-600">{n.score}</span>
@@ -136,6 +143,21 @@ export default function NichePlaybook() {
                   </div>
 
                   {n.note && <p className="text-[12px] italic text-slate-500">💡 {n.note}</p>}
+
+                  {/* matched vetted buyers (manual tag wins, else auto-suggested from their buy-box) */}
+                  {(matches[n.id]?.length ?? 0) > 0 && (
+                    <div className="rounded-xl bg-white p-3 ring-1 ring-emerald-200">
+                      <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-600">👥 Vetted buyers who fit ({matches[n.id].length})</div>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {matches[n.id].map((b) => (
+                          <span key={b.id} className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200" title={b.manual ? "Manually tagged" : "Auto-matched from their buy-box"}>
+                            {b.name}{b.manual ? " 📌" : ""}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-1.5 text-[10px] text-slate-400">📌 = manually tagged · others auto-matched from their buy-box text</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

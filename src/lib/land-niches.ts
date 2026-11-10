@@ -215,3 +215,39 @@ export const SPREAD_TIER_LABEL: Record<Niche["spreadTier"], string> = {
 export function archetype(id: string): BuyerArchetype | undefined {
   return BUYER_ARCHETYPES.find((a) => a.id === id);
 }
+
+// ── Auto-suggest (idea #1: tag buyers by niche without anyone typing) ─────────────────────────
+// Keyword signals per niche. We scan a buyer's existing buy-box text (type, build/deal/property
+// type, buy-box, notes, company) and suggest the niche(s) they already fit. Manual tags override.
+// Signals are intentionally distinctive (no bare "lot"/"land") to avoid everything matching infill.
+export const NICHE_SIGNALS: Record<string, string[]> = {
+  infill_residential: ["infill", "spec home", "spec builder", "single family", "sfr lot", "scattered lot"],
+  teardown_redev: ["teardown", "tear down", "redevelop", "townhome", "townhouse", "duplex", "triplex"],
+  subdividable_acreage: ["acreage", "subdivide", "subdivision", "assemblage", "land bank", "builder-developer", "master-planned", "master planned"],
+  waterfront: ["waterfront", "canal", "lakefront", "lake front", "gulf", "intracoastal", "riverfront", "river front", "dock", "seawall", "water front", "oceanfront", "bayfront"],
+  rv_boat_storage: ["storage", "self-storage", "self storage", "rv ", "boat storage", "rv/boat", "outdoor storage", "parking lot operator"],
+  commercial_pad: ["commercial", "retail pad", "pad site", "flex", "warehouse", "industrial", "net lease", "c-store", "qsr"],
+  mh_rv_park: ["mobile home", "manufactured", "mh park", "mh-zoned", "rv park", "mobile / manufactured", "park operator"],
+  solar: ["solar", "utility-scale", "utility scale", "ipp", "renewable", "photovoltaic", "power producer"],
+  data_center: ["data center", "data-center", "datacenter", "hyperscale", "hyperscaler"],
+  ag_timber: ["agricultural", "timber", "ranch", "farmland", "ag land", "cattle", "grove"],
+  mitigation: ["mitigation", "wetland", "conservation", "mitigation bank", "credit bank", "habitat"],
+  entitlement: ["entitle", "entitlement", "rezon", "zoning change", "land use change", "comp plan"],
+};
+
+// Suggest niche ids from a blob of a buyer's text (lowercased internally). Pure — client-safe.
+export function suggestNichesFromText(haystack: string): string[] {
+  const h = ` ${(haystack || "").toLowerCase()} `;
+  const hits: string[] = [];
+  for (const [id, signals] of Object.entries(NICHE_SIGNALS)) {
+    if (signals.some((sig) => h.includes(sig))) hits.push(id);
+  }
+  return hits;
+}
+
+export function nicheLabel(id: string): string {
+  return NICHES.find((n) => n.id === id)?.label ?? id;
+}
+export function nicheEmoji(id: string): string {
+  return NICHES.find((n) => n.id === id)?.emoji ?? "🎯";
+}
