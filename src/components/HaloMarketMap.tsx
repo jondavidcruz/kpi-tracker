@@ -48,8 +48,12 @@ const COORDS: Record<string, [number, number]> = {
 // covers our SW-FL waterfront core: Lee (Cape Coral), Charlotte (Punta Gorda), Collier (Marco/
 // Naples). Only queried when zoomed in (≥ LOTS_MIN_ZOOM) with a small bbox. maxRecordCount 2000.
 const FDEP_CADASTRAL = "https://services1.arcgis.com/nRHtyn3uE1kyzoYc/arcgis/rest/services/FDORCadastral_SouthDistrict/FeatureServer/0/query";
-const LOTS_MIN_ZOOM = 15; // statewide parcels are 10M+ — only pull parcels at neighborhood zoom
+const LOTS_MIN_ZOOM = 14; // statewide parcels are 10M+ — only pull parcels at neighborhood zoom
 const LOTS_VACANT_WHERE = "DOR_UC IN ('000','010','040') OR (DOR_UC >= '050' AND DOR_UC <= '069')";
+// 🌫 Fog of war only appears once you've zoomed IN past this level — the zoomed-out map stays
+// normal (no haze, no hard rectangle edges). At this zoom the fog's far edges are off-screen, so
+// you only ever see the light haze + the clearings we've explored, never a boxy border (Jon 2026-11-10).
+const FOG_MIN_ZOOM = 8;
 const COV_COLOR: Record<string, string> = { never: "#64748b", clear: "#10b981", cooldown: "#f59e0b" };
 const TERR_COLOR: Record<TerrStatus, string> = { pulled: "#f59e0b", marketing: "#3b82f6", target: "#10b981", avoid: "#ef4444" };
 const TERR_LABEL: Record<TerrStatus, string> = { pulled: "✅ Explored (pulled)", marketing: "📣 Marketing now", target: "🎯 Target / to pull", avoid: "⛔ Avoid / saturated" };
@@ -78,6 +82,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const lotsRef = useRef<unknown>(null);   // 🏘 live parcel/lot layer (on-zoom, free GIS)
   const lotsLoaderRef = useRef<(() => void) | null>(null); // trigger a parcel refetch from outside the map effect
   const showLotsRef = useRef(false);       // latest show.lots for the map event handler closure
+  const showFogRef = useRef(true);         // latest show.fog for the zoom handler closure
+  const syncFogRef = useRef<(() => void) | null>(null); // show/hide fog based on zoom, called from outside the map effect
+  const didFitRef = useRef(false);         // only auto-fit the view ONCE — never on a layer toggle (Jon 2026-11-10)
+  const hadSavedViewRef = useRef(false);   // restored a saved view → never auto-fit over it
   const drawnRef = useRef<unknown>(null);  // the in-progress drawn shape
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -97,6 +105,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   // Sensible defaults so the map isn't overwhelming (Jon 2026-11-08): the key layers on, the two
   // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
   const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: true, lots: false });
+  const [lotsMsg, setLotsMsg] = useState(""); // feedback for the on-zoom lot layer so you know WHY lots do/don't show
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
@@ -244,7 +253,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         // Restore the last view so marking an area (which refreshes) keeps you where you were
         // instead of snapping back to the full map (Jon 2026-11-08). Default = FL + SC in view.
         let center: [number, number] = [31.0, -81.5], zoom = 5;
-        try { const sv = JSON.parse(sessionStorage.getItem("fo_map_view") || "null"); if (sv && Number.isFinite(sv.lat) && Number.isFinite(sv.lng) && Number.isFinite(sv.zoom)) { center = [sv.lat, sv.lng]; zoom = sv.zoom; } } catch { /* default */ }
+        try { const sv = JSON.parse(sessionStorage.getItem("fo_map_view") || "null"); if (sv && Number.isFinite(sv.lat) && Number.isFinite(sv.lng) && Number.isFinite(sv.zoom)) { center = [sv.lat, sv.lng]; zoom = sv.zoom; hadSavedViewRef.current = true; } } catch { /* default */ }
         const map = L.map(ref.current, { center, zoom, scrollWheelZoom: true });
         mapRef.current = map;
         map.on("moveend zoomend", () => { try { sessionStorage.setItem("fo_map_view", JSON.stringify({ lat: map.getCenter().lat, lng: map.getCenter().lng, zoom: map.getZoom() })); } catch { /* ok */ } });
@@ -278,16 +287,21 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         let lotsReqId = 0;
         const loadLots = async () => {
           const grp = lotsRef.current as any; if (!grp) return;
-          if (!showLotsRef.current || map.getZoom() < LOTS_MIN_ZOOM) { grp.clearLayers(); return; }
+          if (!showLotsRef.current) { grp.clearLayers(); setLotsMsg(""); return; }
+          if (map.getZoom() < LOTS_MIN_ZOOM) { grp.clearLayers(); setLotsMsg("🔍 Zoom in to street level (SW-FL: Cape Coral · Punta Gorda · Naples) to load lots"); return; }
           const b = map.getBounds();
           const env = { xmin: b.getWest(), ymin: b.getSouth(), xmax: b.getEast(), ymax: b.getNorth(), spatialReference: { wkid: 4326 } };
           const url = `${FDEP_CADASTRAL}?where=${encodeURIComponent(LOTS_VACANT_WHERE)}&geometry=${encodeURIComponent(JSON.stringify(env))}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${encodeURIComponent("PARCEL_ID,DOR_UC,JV,LND_SQFOOT,SALE_PRC1,SALE_YR1,SALE_MO1,OWN_NAME")}&returnGeometry=true&outSR=4326&resultRecordCount=1200&f=geojson`;
           const myReq = ++lotsReqId;
+          setLotsMsg("Loading lots…");
           try {
             const res = await fetch(url);
             const gj = await res.json();
             if (myReq !== lotsReqId) return; // a newer pan/zoom superseded this one
             grp.clearLayers();
+            const feats = Array.isArray(gj?.features) ? gj.features : [];
+            if (!feats.length) { setLotsMsg("No vacant lots in view — this layer covers SW-FL (Lee · Charlotte · Collier) only"); return; }
+            setLotsMsg(`🏘 ${feats.length} vacant/sold lots in view · blue = vacant, amber = sold ≤2 yrs`);
             const thisYear = new Date().getFullYear();
             L.geoJSON(gj, {
               style: (feat: any) => {
@@ -304,11 +318,24 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
                 layer.bindPopup(`<div style="font:12px system-ui;min-width:170px"><b>${uc}</b><br>💰 Just value: <b>$${Math.round(p.JV || 0).toLocaleString()}</b><br>📐 ${ac} ac<br>${sale}<br>👤 ${p.OWN_NAME || "—"}<br><span style="color:#64748b">Parcel ${p.PARCEL_ID || ""}</span></div>`);
               },
             }).addTo(grp);
-          } catch { try { (lotsRef.current as any)?.clearLayers(); } catch { /* ok */ } }
+          } catch { try { (lotsRef.current as any)?.clearLayers(); } catch { /* ok */ } setLotsMsg("Couldn't load lots here — pan or zoom to retry"); }
         };
         const scheduleLots = () => { if (lotsTimer) clearTimeout(lotsTimer); lotsTimer = setTimeout(loadLots, 450); };
         lotsLoaderRef.current = scheduleLots;
         map.on("moveend zoomend", scheduleLots);
+
+        // 🌫 Fog sync — the haze ONLY appears once you've zoomed IN past FOG_MIN_ZOOM. Zoomed out, the
+        // fog layer is removed entirely so the map looks normal (no haze, no boxy rectangle edge).
+        // Toggling layers never rebuilds this — it only add/removes the prebuilt layer, so it's fast.
+        const syncFog = () => {
+          const fg = fogRef.current as any; if (!fg) return;
+          const want = showFogRef.current && map.getZoom() >= FOG_MIN_ZOOM;
+          if (want && !map.hasLayer(fg)) map.addLayer(fg);
+          else if (!want && map.hasLayer(fg)) map.removeLayer(fg);
+        };
+        syncFogRef.current = syncFog;
+        map.on("zoomend", syncFog);
+        syncFog();
 
         dataRef.current = L.featureGroup().addTo(map);
         if (canEdit) {
@@ -341,8 +368,14 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   useEffect(() => {
     showLotsRef.current = show.lots;
     if (show.lots) lotsLoaderRef.current?.();
-    else { try { (lotsRef.current as any)?.clearLayers?.(); } catch { /* ok */ } }
+    else { try { (lotsRef.current as any)?.clearLayers?.(); } catch { /* ok */ } setLotsMsg(""); }
   }, [show.lots, ready]);
+
+  // 🌫 Keep the fog toggle in sync — add/remove the prebuilt haze (honoring the zoom gate), no rebuild.
+  useEffect(() => {
+    showFogRef.current = show.fog;
+    syncFogRef.current?.();
+  }, [show.fog, ready]);
 
   // ── redraw data layers whenever the data changes (markets, buyers, territories) ──
   useEffect(() => {
@@ -384,6 +417,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         const outer: [number, number][] = [[20, -90], [40, -90], [40, -74], [20, -74]];
         L.polygon([outer, ...holes], { stroke: false, fillColor: "#dbeafe", fillOpacity: 0.4, interactive: false, className: "fo-fog" }).addTo(fog);
       }
+      syncFogRef.current?.(); // honor the zoom gate after a rebuild (fog shows only when zoomed in)
     }
 
     // 💪 Buying-power layer (base) — counties where vetted buyers want to buy, as green boundaries.
@@ -448,7 +482,11 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         `<div>📍 ${cov}</div><div>🏷 ${v.deals} deals · ${v.leads} leads · 30/60/180: ${v.momentum.d30}/${v.momentum.d60}/${v.momentum.d180}</div></div>`);
       marker.bindTooltip(v.m.name.split(" / ")[0], { permanent: true, direction: "top", className: "fo-map-label", offset: [0, -r] });
     }
-    try { map.fitBounds(group.getBounds().pad(0.15)); } catch { /* no markers */ }
+    // Auto-fit the view ONLY once on first load, and only if we didn't restore a saved view. Never
+    // on a layer toggle — toggling a layer must keep you exactly where you are (Jon 2026-11-10).
+    if (!didFitRef.current && !hadSavedViewRef.current) {
+      try { map.fitBounds(group.getBounds().pad(0.15)); didFitRef.current = true; } catch { /* no markers */ }
+    }
   }, [ready, markets, buyerPoints, territories, show, scanPoints, leadPins, buyerCoverage]);
 
   // Re-measure the map once it's ready (container has its real size by then).
@@ -476,7 +514,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> Seller lead</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-amber-300" style={{ background: "#f59e0b" }} /> Closed deal</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#3b82f6", opacity: 0.55 }} /> Explored area</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#dbeafe", opacity: 0.5 }} /> 🌫 Unexplored (fog lifts as we pull leads)</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#dbeafe", opacity: 0.5 }} /> 🌫 Unexplored — zoom in (fog lifts as we explore)</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-sky-400" style={{ background: "#38bdf8", opacity: 0.4 }} /> 🏘 Vacant lot</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-amber-400" style={{ background: "#f59e0b", opacity: 0.5 }} /> Recently sold lot</span>
         <span className="text-slate-500">· bigger = more</span>
@@ -491,6 +529,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         {canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
         {canEdit && leadZipsRemaining > 0 && <button onClick={runGeocodeLeads} disabled={geoBusy} className="rounded-lg bg-sky-600 px-2.5 py-1 font-bold text-white hover:bg-sky-700 disabled:opacity-50">{geoBusy ? "Mapping…" : `📍 Map lead locations (${leadZipsRemaining} left)`}</button>}
         {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
+        {show.lots && lotsMsg && <span className="font-semibold text-sky-300">{lotsMsg}</span>}
       </div>
       {canEdit && (
         <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
