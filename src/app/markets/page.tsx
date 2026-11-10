@@ -7,6 +7,7 @@ import ResearchWorkbench from "@/components/ResearchWorkbench";
 import MarketFinder from "@/components/MarketFinder";
 import MarketsTabs from "@/components/MarketsTabs";
 import MarketBlacklist from "@/components/MarketBlacklist";
+import NichePlaybook from "@/components/NichePlaybook";
 import { readBlacklist } from "@/lib/market-blacklist";
 import { readScan, scoreCounties } from "@/lib/market-scan";
 import { SCAN_SEED } from "@/lib/market-scan-seed";
@@ -170,6 +171,7 @@ export default async function MarketsPage() {
         map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
+        niches={<NichePlaybook />}
       />
     </div>
   );
