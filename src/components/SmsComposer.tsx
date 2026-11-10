@@ -31,7 +31,10 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   const [toNum, setToNum] = useState(to);
   useEffect(() => { setToNum(to); }, [to]);
   const [numbers, setNumbers] = useState<string[]>([]);
-  const [isOwner, setIsOwner] = useState(false); // 📱 owner-only "Send from my iPhone" (Jon 2026-11-10)
+  // 📡 Comms caps (Jon 2026-11-10): canSms = the paid Telnyx Send-SMS button; canIphone = the
+  // "Send from my iPhone" hand-off. A rep can be iPhone-text-only (canIphone + !canSms).
+  const [canSms, setCanSms] = useState(true);   // optimistic so existing texters don't flicker
+  const [canIphone, setCanIphone] = useState(false);
   // 📷 MMS attachment (Jon 2026-10-12) — compressed in the browser so it
   // always fits carrier limits (max 1280px, jpeg q0.8, ~<500KB)
   const [photo, setPhoto] = useState<{ blob: Blob; preview: string } | null>(null);
@@ -73,9 +76,14 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   useEffect(() => {
     fetch("/api/crm/phone").then(async (r) => {
       if (!r.ok) return;
-      const j = (await r.json()) as { numbers?: string[]; isOwner?: boolean };
+      const j = (await r.json()) as { numbers?: string[] };
       if (j.numbers?.length) { setNumbers(j.numbers); }
-      if (j.isOwner) setIsOwner(true);
+    }).catch(() => {});
+  }, []);
+  // Capabilities (separate endpoint — NOT gated on call, so iPhone-only reps still get theirs).
+  useEffect(() => {
+    fetch("/api/crm/caps").then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (j) { setCanSms(!!j.canSms); setCanIphone(!!j.canIphone); }
     }).catch(() => {});
   }, []);
 
@@ -141,11 +149,14 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
       <div className="min-w-0 flex-1 space-y-2">
         <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">💬 Text message</div>
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-          <span className="font-bold">From</span>
-          <select value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-semibold">
-            <option value="">Default line</option>
-            {numbers.map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{fmt(n)}{g ? ` — ${g}` : ""}</option>; })}
-          </select>
+          {canSms && <>
+            <span className="font-bold">From</span>
+            <select value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-semibold">
+              <option value="">Default line</option>
+              {numbers.map((n) => { const g = geoForPhone(n); return <option key={n} value={n}>{fmt(n)}{g ? ` — ${g}` : ""}</option>; })}
+            </select>
+          </>}
+          {!canSms && canIphone && <span className="font-bold text-[#1a7cff]">📱 iPhone text only</span>}
           <span className="font-bold">→ To</span>
           <input value={toNum} onChange={(e) => setToNum(e.target.value)} placeholder="recipient #" title="The number we'll text — edit if it's wrong or incomplete" className={`w-28 rounded border bg-white px-1.5 py-0.5 text-[11px] font-semibold ${toNum.replace(/\D/g, "").slice(-10).length === 10 && /[2-9]/.test(toNum.replace(/\D/g, "").slice(-10)[0]) ? "border-slate-200 text-slate-700" : "border-red-300 bg-red-50 text-red-700"}`} />
           <span className="text-[10px] text-slate-400">{geoForPhone(toNum) ?? ""}</span>
@@ -173,12 +184,12 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
           )}
           <span className={`text-[10px] font-bold ${segs > 1 ? "text-amber-600" : "text-slate-400"}`}>{len} chars · {segs || "—"} text{segs === 1 ? "" : "s"}{segs > 1 ? " (they'll see it stitched together)" : ""}</span>
           {sent && <span className="text-[11px] font-bold text-emerald-600">{sent}</span>}
-          {isOwner && countdown === null && !confirming && (
+          {canIphone && countdown === null && !confirming && (
             iphoneHref
-              ? <a href={iphoneHref} onClick={sendFromIphone} title="Opens Messages on your iPhone/Mac pre-filled with this text — you tap send (blue iMessage if they're on Apple), and it's logged here. Bypasses the 10DLC carrier blocks. Owner-only." className="ml-auto rounded-lg bg-[#1a7cff] px-3 py-1.5 text-xs font-extrabold text-white shadow-sm hover:brightness-110">📱 From my iPhone</a>
+              ? <a href={iphoneHref} onClick={sendFromIphone} title="Opens Messages on your iPhone/Mac pre-filled with this text — you tap send (blue iMessage if they're on Apple), and it's logged here. Bypasses the 10DLC carrier blocks." className="ml-auto rounded-lg bg-[#1a7cff] px-3 py-1.5 text-xs font-extrabold text-white shadow-sm hover:brightness-110">📱 From my iPhone</a>
               : <span className="ml-auto rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-extrabold text-slate-300">📱 From my iPhone</span>
           )}
-          {countdown !== null ? (
+          {canSms && (countdown !== null ? (
             <span className="ml-auto flex items-center gap-2">
               <span className="text-[11px] font-bold text-amber-700">Sending in {countdown}s…</span>
               <button onClick={undoSend} className="rounded-lg bg-amber-500 px-3.5 py-1.5 text-xs font-extrabold text-white shadow-sm hover:bg-amber-600">↩ Undo</button>
@@ -191,7 +202,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
             </span>
           ) : (
             <button onClick={send} disabled={pending || !text.trim()} className="ml-auto rounded-lg bg-sky-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-40">{pending ? "Sending…" : "Send SMS"}</button>
-          )}
+          ))}
         </div>
       </div>
 

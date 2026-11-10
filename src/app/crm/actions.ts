@@ -724,7 +724,7 @@ export async function saveCommsPermsAction(formData: FormData) {
   const map = await readCommsMap();
   const first = String(formData.get("first") ?? "").toLowerCase().trim();
   if (!first) return;
-  map[first] = { call: formData.get("call") === "on", sms: formData.get("sms") === "on", email: formData.get("email") === "on" };
+  map[first] = { call: formData.get("call") === "on", sms: formData.get("sms") === "on", email: formData.get("email") === "on", iphone: formData.get("iphone") === "on" };
   await writeCommsMap(map);
   revalidatePath("/crm");
 }
@@ -964,7 +964,9 @@ export async function sendCrmSmsAction(formData: FormData): Promise<void> {
 // as a BLUE bubble in the preview. Hard-gated to the owner; the team never gets the button or action.
 export async function logIphoneTextAction(formData: FormData): Promise<{ ok: boolean }> {
   const me = await getCurrentUser();
-  if (!me || !isOwner(me)) return { ok: false };
+  if (!me) return { ok: false };
+  const { commsFor } = await import("@/lib/crm-comms");
+  if (!(await commsFor(me)).iphone) return { ok: false };
   const oppId = String(formData.get("oppId") ?? "");
   const contactId = String(formData.get("contactId") ?? "");
   const to = String(formData.get("to") ?? "");

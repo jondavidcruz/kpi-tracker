@@ -39,7 +39,7 @@ export default async function CrmAccessPage() {
             const mgr = isManager(r) || r.role === "admin";
             const crown = ["enrico", "viktoriia"].includes(first);
             const owner = first === "jon" || first === "jonathan";
-            const p = owner || (!commsMap[first] && mgr) ? { call: true, sms: true, email: true } : commsMap[first] ?? { call: false, sms: false, email: false };
+            const p = owner ? { call: true, sms: true, email: true, iphone: true } : (!commsMap[first] && mgr) ? { call: true, sms: true, email: true, iphone: false } : commsMap[first] ?? { call: false, sms: false, email: false, iphone: false };
             return (
               <AutoSaveForm key={r.id} action={saveCommsPermsAction} className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs ring-1 ring-slate-100">
                 <input type="hidden" name="first" value={first} />
@@ -47,6 +47,7 @@ export default async function CrmAccessPage() {
                 <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="call" defaultChecked={p.call} disabled={owner} /> 📞 call</label>
                 <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="sms" defaultChecked={p.sms} disabled={owner} /> 💬 SMS</label>
                 <label className="flex items-center gap-1 font-semibold text-slate-600"><input type="checkbox" name="email" defaultChecked={p.email} disabled={owner} /> ✉️ email</label>
+                <label className="flex items-center gap-1 font-semibold text-slate-600" title="Lets this person use the 'Send from my iPhone' hand-off (they text from their own iPhone, logged as a blue bubble). Independent of SMS — tick this + untick SMS for an iPhone-only texter."><input type="checkbox" name="iphone" defaultChecked={!!p.iphone} disabled={owner} /> 📱 iPhone text</label>
                 {owner && <span className="ml-auto text-[10px] font-bold text-slate-400">owner — always on</span>}
               </AutoSaveForm>
             );

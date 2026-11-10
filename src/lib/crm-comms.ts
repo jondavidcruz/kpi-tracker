@@ -8,7 +8,10 @@ import { isManager } from "./auth";
 import type { User } from "@prisma/client";
 
 const CAT = "__crm_comms__";
-export type CommsPerm = { call: boolean; sms: boolean; email: boolean };
+// `iphone` (Jon 2026-11-10) = may use the owner-style "Send from my iPhone" hand-off (opens Messages
+// on their own iPhone; logs a blue bubble). Independent of `sms` (the paid Telnyx send), so a rep can
+// be iPhone-text-only: iphone:true + sms:false. Opt-in for everyone; Jon always has it.
+export type CommsPerm = { call: boolean; sms: boolean; email: boolean; iphone?: boolean };
 export type CommsMap = Record<string, CommsPerm>;
 
 export async function readCommsMap(): Promise<CommsMap> {
@@ -32,12 +35,13 @@ export async function commsFor(user: User | null): Promise<CommsPerm> {
   const first = firstOf(user.name);
   // Jon himself can never be locked out (by NAME — several teammates also
   // carry the admin role, and Jon manages their rows on /crm/access)
-  if (first === "jon" || first === "jonathan") return { call: true, sms: true, email: true };
+  if (first === "jon" || first === "jonathan") return { call: true, sms: true, email: true, iphone: true };
   const map = await readCommsMap();
   const rec = map[first];
-  // an explicit saved row wins for ANYONE; managers/admins default to full
-  if (rec) return rec;
-  return isManager(user) || user.role === "admin" ? { call: true, sms: true, email: true } : { call: false, sms: false, email: false };
+  // an explicit saved row wins for ANYONE; managers/admins default to full (but iPhone hand-off is
+  // opt-in — never auto-granted, even to managers).
+  if (rec) return { call: rec.call, sms: rec.sms, email: rec.email, iphone: rec.iphone ?? false };
+  return isManager(user) || user.role === "admin" ? { call: true, sms: true, email: true, iphone: false } : { call: false, sms: false, email: false, iphone: false };
 }
 
 // ── Per-agent email signatures (GHL-style "From" identity) ─────────────────
