@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isManager, isCSuitePerson } from "@/lib/auth";
 import { SectionTitle } from "@/components/ui";
 import { PLAYBOOKS, PLAYBOOK_CATEGORIES } from "@/lib/playbooks-data";
 import PlaybookCard from "@/components/PlaybookCard";
@@ -12,13 +12,16 @@ export const dynamic = "force-dynamic";
 export default async function PlaybooksPage() {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
+  // Acquisitions reps don't see dispositions-only plays; dispo (works both sides), managers and
+  // C-suite see everything (Jon 2026-11-10).
+  const hideDispo = me.position === "acquisitions" && !isManager(me) && !isCSuitePerson(me);
 
   return (
     <div className="space-y-5">
       <SectionTitle title="📚 Playbooks" subtitle="Reference guides on how deals actually get done — taught visually: follow the pipeline, the numbered steps, and the highlighted numbers." accent="bg-brand-gold" />
 
       {PLAYBOOK_CATEGORIES.map((cat) => {
-        const items = PLAYBOOKS.filter((p) => p.category === cat);
+        const items = PLAYBOOKS.filter((p) => p.category === cat && !(hideDispo && p.dept === "dispo"));
         if (items.length === 0) return null;
         return (
           <div key={cat} className="space-y-2">

@@ -175,7 +175,7 @@ export default function Sidebar({
       { href: "/comms-health", label: "Comms Guardian", Icon: Activity, managerOnly: true },
       { href: "/compliance", label: "Compliance", Icon: ShieldCheck },
       { href: "/phone-health", label: "Phone Health", Icon: Phone },
-      { href: "/email-health", label: "Email Health", Icon: Megaphone },
+      { href: "/email-health", label: "Email Health", Icon: Megaphone, managerOnly: true },
     ] },
     { label: "Performance", items: [
       { href: "/entry", label: "Enter KPIs", Icon: SquarePen },

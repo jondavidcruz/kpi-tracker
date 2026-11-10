@@ -146,7 +146,8 @@ export default async function AccessPreviewPage({ searchParams }: { searchParams
               <input type="hidden" name="userId" value={selected.id} />
               <button name="dept" value="acquisitions" className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-navy-700">🎯 Acquisitions access</button>
               <button name="dept" value="dispositions" className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">📦 Dispositions access</button>
-              <span className="text-[11px] text-slate-500">Grants that department&apos;s pages + Dashboard/KPIs/Coaching/Requests; hides the rest. Dispositions also gets Markets &amp; Buyers. You can fine-tune the checkboxes after.</span>
+              <button name="dept" value="master" className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600">👑 Trusted / all access</button>
+              <span className="text-[11px] text-slate-500"><b>Acquisitions</b> = acquisitions pages only (no dispo, no buyers, no business/compliance). <b>Dispositions</b> = dispo + acquisitions + buyers (trusted), still no business/C-suite. <b>Trusted</b> = everything (C-Suite &amp; pay stays locked to Jon/Enrico/Viktoriia). Fine-tune the checkboxes after.</span>
             </form>
           </div>
 

@@ -5,6 +5,7 @@
 export interface PBSection { heading: string; body?: string; bullets?: string[]; tip?: string; }
 export interface Playbook {
   key: string; title: string; emoji: string; category: string; summary: string; sections: PBSection[];
+  dept?: "acq" | "dispo";        // dispo-only plays are hidden from acquisitions reps (Jon 2026-11-10)
   pdfUrl?: string;               // the real document, viewable inline + downloadable
   pdfLabel?: string;             // link text for the PDF
   courseUrl?: string;            // in-app course-library link (e.g. /playbooks/land?doc=…)
@@ -28,7 +29,7 @@ export const LAND_COURSE_CATEGORY = "Land Courses";
 
 export const PLAYBOOKS: Playbook[] = [
   {
-    key: "k_dispo_sell_land_then_sign", title: "Dispositions SOP — Sell Land Then Sign", emoji: "🎯", category: "Scripts & Outreach",
+    key: "k_dispo_sell_land_then_sign", title: "Dispositions SOP — Sell Land Then Sign", emoji: "🎯", category: "Scripts & Outreach", dept: "dispo",
     summary: "The full Marie & Sharyn playbook for an uncontracted land deal: vet developers with the interview cards, send the deal to developers + buyer agents, work the follow-up tracker on the deal until you know what they'll pay, then go back to the seller and get it signed.",
     flow: [
       { emoji: "📥", label: "Deal lands (no buyer yet)" }, { emoji: "🔎", label: "Vet developers (interview)" }, { emoji: "📤", label: "Send to devs + buyer agents" },
@@ -72,7 +73,7 @@ export const PLAYBOOKS: Playbook[] = [
     ],
   },
   {
-    key: "k_dispo_team_operating", title: "Dispositions — How Sharyn & Marie Run It Together", emoji: "👥", category: "Scripts & Outreach",
+    key: "k_dispo_team_operating", title: "Dispositions — How Sharyn & Marie Run It Together", emoji: "👥", category: "Scripts & Outreach", dept: "dispo",
     summary: "The operating system for dispo: one source of truth (the War Room — no more Excel), a clear lane for each person, a daily cadence, and handoffs so dispo keeps running even if one of you is out.",
     flow: [
       { emoji: "🗂", label: "One source of truth: the War Room" }, { emoji: "📞", label: "Sharyn: outreach & phones" }, { emoji: "🗃", label: "Marie: data & organization" },
@@ -117,7 +118,7 @@ export const PLAYBOOKS: Playbook[] = [
     ],
   },
   {
-    key: "k_analyze_deal", title: "How To Analyze A Developer Deal (SOP)", emoji: "🏗️", category: "Deal Analysis",
+    key: "k_analyze_deal", title: "How To Analyze A Developer Deal (SOP)", emoji: "🏗️", category: "Deal Analysis", dept: "dispo",
     summary: "The Lux Blueprint step-by-step: how to look at a lot and figure out the most we should offer (the MAO) for a land-for-luxury-builds deal.",
     flow: [
       { emoji: "🎯", label: "Seller's number first" }, { emoji: "🔍", label: "Zillow check" }, { emoji: "🏗️", label: "$2M+ new builds?" },
@@ -352,7 +353,7 @@ export const PLAYBOOKS: Playbook[] = [
     ],
   },
   {
-    key: "k_dev_text_outreach", title: "Developer Text Outreach (cold SMS)", emoji: "🏗️", category: "Scripts & Outreach",
+    key: "k_dev_text_outreach", title: "Developer Text Outreach (cold SMS)", emoji: "🏗️", category: "Scripts & Outreach", dept: "dispo",
     summary: "The first text to a developer whose build you admired — opens the relationship and gets their buy box, without sounding like an agent.",
     sections: [
       { heading: "The template", body: "“Hello,\n\nI recently came across a property your team built at (ADDRESS). Absolutely stunning work.\n\nI focus on acquiring off-market properties, and this is one of my key target markets. I wanted to see if you're currently open to new acquisition opportunities for your builds. If so, I'd love to learn more about your buy box so I can bring you deals that align with your criteria.\n\nI'm not an agent. I control the deals I put under contract. My goal is to build relationships with a select group of serious developers rather than publicly blasting opportunities. I value my partners' time and only share deals that truly fit their needs.\n\nIf this sounds like something you'd be interested in, I'd be happy to connect and learn more about what you're actively looking for.\n\nLooking forward to hearing from you.\n\nBest,\n[YOUR NAME] · [COMPANY NAME] · [PHONE NUMBER]”" },

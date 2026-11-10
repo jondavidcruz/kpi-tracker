@@ -156,28 +156,37 @@ export async function saveUserAccess(formData: FormData) {
 /** One-click department access preset (Jon 2026-10-19: "choose by department — give
  *  Kyle & Nick everything in Acquisitions"). Grants that department's nav group +
  *  the universal sections, hides the rest. Dispositions also gets Markets & Buyers. */
+// Department access presets (Jon 2026-11-10 — tightened by department):
+//  • Acquisitions = ONLY their own work. NO Dispositions, NO Marketing/Buyers, NO Business Heartbeat
+//    (Compliance/Phone/Email/Comms), NO C-Suite, NO EOS leadership. Keeps Conversations (reps now
+//    read threads; texting is gated separately by comms caps).
+//  • Dispositions = trusted → their own pages + ALL of Acquisitions + Marketing/Buyers; still NO
+//    Business Heartbeat / C-Suite.
+//  • master = trusted/all-access (nothing hidden). C-Suite & pay stays NAME-locked regardless.
 const DEPT_ACCESS_GROUPS: Record<string, string[]> = {
-  acquisitions: ["Team Overview", "Acquisitions", "Performance", "Coaching", "EOS", "Requests & Support"],
-  dispositions: ["Team Overview", "Dispositions", "Marketing", "Performance", "Coaching", "EOS", "Requests & Support"],
+  acquisitions: ["Team Overview", "Acquisitions", "Performance", "Coaching", "Requests & Support", "Settings"],
+  dispositions: ["Team Overview", "Acquisitions", "Dispositions", "Marketing", "Performance", "Coaching", "Requests & Support", "Settings"],
 };
 export async function applyDeptAccessAction(formData: FormData) {
   const me = await getCurrentUser();
   if (!isAdmin(me)) return;
   const userId = String(formData.get("userId") ?? "");
   const dept = String(formData.get("dept") ?? "");
+  if (!userId) return;
+  if (dept === "master") {
+    // 👑 Trusted / all-access — nothing hidden. C-Suite & pay pages are still hard name-locked to
+    // Jon/Enrico/Viktoriia, so this can never leak financials to a non-C-suite person.
+    await db.user.update({ where: { id: userId }, data: { navHidden: "[]", accessMarketing: true, onboarding: false } });
+    revalidatePath("/admin/access-preview");
+    redirect(`/admin/access-preview?as=${userId}&saved=master`);
+  }
   const groups = DEPT_ACCESS_GROUPS[dept];
-  if (!userId || !groups) return;
+  if (!groups) return;
   const allow = new Set(NAV_GROUPS.filter((g) => groups.includes(g.group)).flatMap((g) => g.items.map((i) => i.href)));
-  // Acquisitions reps are notes-only (no phone/SMS/email) → the Conversations
-  // inbox is useless to them, so the preset leaves it off (Jon 2026-10-19). Tick
-  // it manually for anyone who does get comms.
-  if (dept === "acquisitions") allow.delete("/crm/conversations");
   const allHrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
   const navHidden = JSON.stringify(allHrefs.filter((h) => !allow.has(h)));
-  // Dispositions works the buyer side → grant Markets & Buyers; acquisitions doesn't.
   const accessMarketing = dept === "dispositions";
-  // Also clear the onboarding lock so the granted pages actually show (otherwise
-  // ONBOARDING_NAV overrides everything — Jon 2026-10-19).
+  // Clear the onboarding lock so the granted pages actually show (ONBOARDING_NAV would override).
   await db.user.update({ where: { id: userId }, data: { navHidden, accessMarketing, onboarding: false } });
   revalidatePath("/admin/access-preview");
   redirect(`/admin/access-preview?as=${userId}&saved=${dept}`);
