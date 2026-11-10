@@ -63,12 +63,12 @@ export async function GET() {
       return { label: l.label, value: total };
     }));
   };
-  // Who sees which breakdown (Jon 2026-11-10): the OWNER sees BOTH; an acquisitions rep sees only AQ
-  // (offers / contracts sent / signed); a dispositions rep sees only Dispo (buy-boxes / deals sent /
-  // offers received); everyone else sees none.
-  const showDepts = isOwner(me!) ? ["acquisitions", "dispositions"]
-    : me!.position === "acquisitions" ? ["acquisitions"]
-    : me!.position === "dispositions" ? ["dispositions"]
+  // Who sees which breakdown (Jon 2026-11-10): STRICTLY by department. Acquisitions (Jon, Nick,
+  // Michelle, Kyle) see only AQ (offers / contracts sent / signed); dispositions (Sharyn, Marie) see
+  // only Dispo (buy-boxes / deals sent / offers received). Jon is the owner but runs acquisitions, so
+  // he's treated as AQ here. Nobody sees both; anyone else (cc_lm etc.) sees none.
+  const showDepts = me!.position === "dispositions" ? ["dispositions"]
+    : (me!.position === "acquisitions" || isOwner(me!)) ? ["acquisitions"]
     : [];
   const depts = await Promise.all(showDepts.map(async (p) => ({ key: p, label: p === "acquisitions" ? "AQ" : "Dispo", levers: await deptLevers(p) })));
   return NextResponse.json({ who: me!.name.split(" ")[0], position: me!.position ?? "", dials, connects, talkSecs, goalDials, goalConnects, depts }, { headers: { "Cache-Control": "private, no-store" } });

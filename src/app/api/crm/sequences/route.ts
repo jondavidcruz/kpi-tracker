@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { DRIP_SEQUENCES } from "@/lib/drip";
+import { DRIP_SEQUENCES, STAGE_SEQ } from "@/lib/drip";
 
 export const dynamic = "force-dynamic";
 

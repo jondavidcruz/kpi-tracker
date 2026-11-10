@@ -201,7 +201,7 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
               <button onClick={() => setConfirming(false)} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">Cancel</button>
             </span>
           ) : (
-            <button onClick={send} disabled={pending || !text.trim()} className="ml-auto rounded-lg bg-sky-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-40">{pending ? "Sending…" : "Send SMS"}</button>
+            <button onClick={send} disabled={pending || !text.trim()} title="Sends a green SMS from the system (Telnyx)" className="ml-auto rounded-lg bg-[#34c759] px-3.5 py-1.5 text-xs font-bold text-white hover:brightness-110 disabled:opacity-40">{pending ? "Sending…" : "Send SMS"}</button>
           ))}
         </div>
       </div>

@@ -28,6 +28,7 @@ import { readDealHeat } from "@/lib/deal-heat";
 import { readMarketingSteps } from "@/lib/dispo-marketing-store";
 import { parseAcres } from "@/lib/acreage";
 import { commsFor } from "@/lib/crm-comms";
+import { getDripSeq } from "@/lib/drip";
 import { createCrmLeadAction, bulkOppAction } from "./actions";
 import CrmOwnerSelect from "@/components/CrmOwnerSelect";
 
@@ -311,6 +312,14 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     }
     const due = (tasksByOpp.get(o.id) ?? []).filter((t) => t.due && t.due.slice(0, 10) <= today);
     if (due.length) badges.push(`⏰ ${due.length} task${due.length > 1 ? "s" : ""} due`);
+    // 📨 Active automation sequence — show which one + which step/day so it's clear at a glance which
+    // automation this lead is being hit with (Jon 2026-11-10).
+    const dripSt = (o.formData as { __drip?: { seq?: string; step?: number } } | null)?.__drip;
+    if (dripSt?.seq) {
+      const sq = getDripSeq(dripSt.seq);
+      const short = (sq?.name ?? dripSt.seq).split("—")[0].trim();
+      badges.push(`📨 ${short} · step ${(dripSt.step ?? 0) + 1}${sq ? `/${sq.steps.length}` : ""}`);
+    }
     // Follow-up now lives in ONE place — the bottom-right 🔔 chip, which turns red + "Nd overdue"
     // when past. Removed the duplicate top "follow-up Nd overdue" badge AND the "🕸 quiet 3d+" chip
     // (it overlapped "✋ touched Nd ago"), so one card no longer says the same thing three times

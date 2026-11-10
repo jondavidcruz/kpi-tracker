@@ -119,7 +119,8 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   const [bulk, setBulk] = useState({ op: "stage", val: "", val2: "" });
   // 📨 Automation sequences for the bulk "Start sequence" op (Jon 2026-11-10).
   const [seqOpts, setSeqOpts] = useState<{ key: string; name: string; autoSend: boolean }[]>([]);
-  useEffect(() => { fetch("/api/crm/sequences").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.seqs) setSeqOpts(j.seqs); }).catch(() => {}); }, []);
+  const [stageSeqMap, setStageSeqMap] = useState<Record<string, string>>({});
+  useEffect(() => { fetch("/api/crm/sequences").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.seqs) setSeqOpts(j.seqs); if (j?.stageSeq) setStageSeqMap(j.stageSeq); }).catch(() => {}); }, []);
   // when the rep clicks a stage's "select all N", we target the WHOLE stage
   // server-side (every lead, not just the loaded ~60). null = id-based select.
   const [stageScope, setStageScope] = useState<{ stage: string; count: number } | null>(null);
@@ -641,12 +642,21 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                   <option value="home">🏠 House</option>
                 </select>
               )}
-              {bulk.op === "sequence" && (
-                <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800" title="Pick the automation that matches the pipeline these leads are in. ⚡ = auto-sends · ✋ = drops a ready-to-send task">
-                  <option value="">pick an automation…</option>
-                  {seqOpts.map((s) => <option key={s.key} value={s.key}>{s.autoSend ? "⚡ " : "✋ "}{s.name}</option>)}
-                </select>
-              )}
+              {bulk.op === "sequence" && (() => {
+                // When a WHOLE stage is selected, only that stage's own automation shows — so you can't
+                // accidentally fire the wrong (irreversible) sequence (Jon 2026-11-10).
+                const restrict = stageScope ? stageSeqMap[stageScope.stage] : null;
+                const opts = restrict ? seqOpts.filter((s) => s.key === restrict) : (stageScope ? [] : seqOpts);
+                return (
+                  <>
+                    <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800" title="Pick the automation. When a whole stage is selected, only that stage's automation is offered. ⚡ auto-sends · ✋ drops a task">
+                      <option value="">{stageScope ? "this stage's automation…" : "pick an automation…"}</option>
+                      {opts.map((s) => <option key={s.key} value={s.key}>{s.autoSend ? "⚡ " : "✋ "}{s.name}</option>)}
+                    </select>
+                    {stageScope && !restrict && <span className="rounded bg-amber-500/20 px-2 py-1 text-[11px] font-bold text-amber-200">No automation is set for this stage — nothing to start here.</span>}
+                  </>
+                );
+              })()}
               {bulk.op === "stage" && (
                 <select value={bulk.val} onChange={(e) => setBulk({ ...bulk, val: e.target.value })} className="rounded-lg bg-white px-2 py-1.5 text-xs text-slate-800">
                   <option value="">pick a stage…</option>
