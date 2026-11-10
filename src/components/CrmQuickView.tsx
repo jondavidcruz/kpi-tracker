@@ -27,7 +27,6 @@ import MoneyInput from "@/components/MoneyInput";
 import { parseLooseMoney, fmtDollars } from "@/lib/money";
 import DealHeatChip from "@/components/DealHeatChip";
 import { readListingHistory, listingSummary, zillowUrl } from "@/lib/listing-history";
-import ListingHistoryPanel from "@/components/ListingHistoryPanel";
 import LeadTypePicker from "@/components/LeadTypePicker";
 import LeadSourceSelect from "@/components/LeadSourceSelect";
 import { formatAddress } from "@/lib/address";
@@ -77,7 +76,7 @@ const tabsFor = (pipeline: string | null | undefined) => [
   ...formsForPipeline(pipeline).map((f) => ({ key: `form:${f.key}`, label: f.name, emoji: f.emoji })),
   // 📈 Listing history is a SELLER-lead concept only (what the property listed/sold for) — not
   // for developer / buyer-agent leads (Jon 2026-10-29).
-  ...(!isDevNetworkName(pipeline) && !isAgentNetworkName(pipeline) ? [{ key: "listing", label: "Listing history", emoji: "📈" }] : []),
+  ...[],  // 📈 Listing history tab removed (Jon 2026-11-09) — the prior-listing check is now inline next to Novation on Financials & Offer.
   { key: "buyers", label: "Buyers & Offers", emoji: "🤝" },
   { key: "files", label: "Files & docs", emoji: "📎" },
   { key: "tasks", label: "Tasks", emoji: "✅" },
@@ -441,30 +440,6 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
                   const showScript = (f.key === "property" || f.key === "land") && !!d.me.acqScript;
                   const fields = (
                     <div className="min-w-0 flex-1 space-y-3">
-                      {/* 📈 Prior listing on the Financials tab (Jon 2026-11-09): what it last
-                          listed / sold for, right where you price it — novation can't list higher
-                          than the last failed list. Full editable history lives on the 📈 tab. */}
-                      {f.key === "financial" && (() => {
-                        const { lastListed, lastSold } = listingSummary(readListingHistory(d.formData));
-                        const addr = formatAddress(d.title) || d.contact.address;
-                        return (
-                          <div className="rounded-xl bg-teal-50 px-3 py-2 text-[12px] leading-snug ring-1 ring-teal-200">
-                            <span className="font-bold text-teal-800">📈 Prior listing:</span>{" "}
-                            {lastListed || lastSold ? (
-                              <>
-                                {lastListed && <span>last listed <b className="text-teal-900">{lastListed.price}</b>{lastListed.date ? ` (${lastListed.date})` : ""}</span>}
-                                {lastListed && lastSold && " · "}
-                                {lastSold && <span>last sold <b className="text-teal-900">{lastSold.price}</b>{lastSold.date ? ` (${lastSold.date})` : ""}</span>}
-                                {lastListed?.price && <span className="text-teal-700"> — for novation, don&apos;t list above the last failed list ({lastListed.price}).</span>}
-                              </>
-                            ) : (
-                              <span className="text-teal-700">none logged yet — pull it so you don&apos;t over-list a novation.</span>
-                            )}{" "}
-                            <a href={zillowUrl(addr)} target="_blank" rel="noreferrer" className="font-semibold text-teal-700 underline">Zillow →</a>
-                            <span className="text-teal-500"> · add/edit on the 📈 Listing history tab</span>
-                          </div>
-                        );
-                      })()}
                       {/* 🏞 Land: skip the underwriting block, show the fast cash→novation play.
                           🏡 Home/unknown: the standard underwriting summary (Jon 2026-11-03).
                           Uses the SAME land decision as the form fields so they always agree. */}
@@ -485,9 +460,6 @@ export default function CrmQuickView({ stages, pipelineStages, marketingSteps = 
 
                 {/* 🤝 Buyers on the deal + offers received — the SAME trackers as the full
                     contact view, read from formData so they stay in sync (Jon 2026-10-28). */}
-                {tab === "listing" && !isDevNetworkName(d.pipeline) && !isAgentNetworkName(d.pipeline) && (
-                  <ListingHistoryPanel oppId={d.id} rows={readListingHistory(d.formData)} address={formatAddress(d.title) || d.contact.address} onSaved={() => refetch(d.id)} />
-                )}
 
                 {tab === "buyers" && (
                   <div className="space-y-3">
@@ -716,6 +688,24 @@ const CASH_BELOW_LOW = 0.40;        // suggested cash offer = (1 - 0.40) × low
 const NOVATION_HAIRCUT = 0.10;      // agent + escrow off the list price
 const DEFAULT_NOV_SPREAD = 15000;   // our profit target on a novation
 
+// 📈 Prior-listing check — lives INSIDE the Novation card so you never re-list at/above the
+// price it already FAILED to sell at (Jon 2026-11-09). Reads the deal's listing history + a live
+// Zillow link. This replaced the standalone Listing history tab.
+function PriorListingCheck({ d, list }: { d: Payload; list: number }) {
+  const { lastListed } = listingSummary(readListingHistory(d.formData));
+  const prior = lastListed ? (parseLooseMoney(lastListed.price) ?? 0) : 0;
+  const z = zillowUrl(d.contact.address || d.title);
+  if (!prior) {
+    return <div className="mt-1 border-t border-lime-200/70 pt-1 text-[11px] text-slate-500">📈 Check its prior list price so you don&apos;t re-list too high — <a href={z} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal-700 underline">Zillow ↗</a></div>;
+  }
+  const over = list > 0 && list >= prior;
+  return (
+    <div className={`mt-1 rounded border-t pt-1 text-[11px] ${over ? "border-red-300 bg-red-50 px-1 py-0.5 text-red-700" : "border-lime-200/70 text-slate-600"}`}>
+      📈 Last listed <b>{lastListed!.price}</b>{lastListed!.date ? ` (${lastListed!.date})` : ""}{over ? " — ⚠️ at/above the price it already failed to sell at. List lower." : list > 0 ? " — ✓ under the prior list." : ""} <a href={z} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal-700 underline">Zillow ↗</a>
+    </div>
+  );
+}
+
 function LandOfferBlock({ d }: { d: Payload }) {
   const fin = (d.formData?.financial ?? {}) as Record<string, string | string[]>;
   const num = (s: unknown) => parseLooseMoney(typeof s === "string" ? s : "") ?? 0;
@@ -785,6 +775,7 @@ function LandOfferBlock({ d }: { d: Payload }) {
               <div className="text-slate-600">Our profit: <b className="text-emerald-700">{money(novProfit)}</b></div>
             </>
           ) : cashNo ? <div className="mt-0.5 font-semibold text-amber-700">Cash was a no — set the novation list price below.</div> : <div className="mt-0.5 text-slate-400">Enter the list price to back out the seller offer.</div>}
+          <PriorListingCheck d={d} list={list} />
         </div>
       </div>
       {linkHref && <div className="text-[11px]"><a href={linkHref} target="_blank" rel="noopener noreferrer" className="font-semibold text-lime-800 underline">🔗 Competitor listing(s) ↗</a></div>}
@@ -844,6 +835,7 @@ function UnderwriteBlock({ d }: { d: Payload }) {
           <a href={calcHref} target="_blank" className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">Open calculator ↗</a>
         </span>
       </div>
+      <PriorListingCheck d={d} list={0} />
       {latest.size === 0 ? (
         <div className="text-[11px] text-slate-500">No saved underwriting matches this address yet — run it in the <a href={calcHref} target="_blank" className="font-bold text-indigo-700 underline">calculator</a> (address pre-filled) and the MAOs appear here automatically.</div>
       ) : (
