@@ -1,11 +1,25 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { addBlacklistAction, removeBlacklistAction } from "@/app/markets/actions";
 import type { BlacklistEntry } from "@/lib/market-blacklist";
 
 // ⛔ Areas not worth our time (Jon 2026-11-09). Manager-editable; everyone can see it.
 export default function MarketBlacklist({ entries, canEdit }: { entries: BlacklistEntry[]; canEdit: boolean }) {
   const [open, setOpen] = useState(false);
+  // 🔎 Geo-autocomplete on the Area field so typos get corrected to the real place name (Jon 2026-11-11).
+  const [areaQ, setAreaQ] = useState("");
+  const [sugs, setSugs] = useState<{ label: string; sub?: string }[]>([]);
+  const sugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onAreaChange = (v: string) => {
+    setAreaQ(v);
+    if (sugTimer.current) clearTimeout(sugTimer.current);
+    if (v.trim().length < 3) { setSugs([]); return; }
+    sugTimer.current = setTimeout(async () => {
+      try { const r = await fetch(`/api/markets/geo-suggest?q=${encodeURIComponent(v.trim())}`); const j = await r.json(); setSugs(Array.isArray(j.items) ? j.items : []); } catch { setSugs([]); }
+    }, 280);
+  };
+  // Clear the field once an add lands (entry count changes).
+  useEffect(() => { setAreaQ(""); setSugs([]); }, [entries.length]);
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-red-200">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 text-left">
@@ -39,9 +53,18 @@ export default function MarketBlacklist({ entries, canEdit }: { entries: Blackli
           </div>
           {canEdit && (
             <form action={addBlacklistAction} className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
-              <div className="flex flex-col">
+              <div className="relative flex flex-col">
                 <label className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Area</label>
-                <input name="area" required placeholder="e.g. Lehigh Acres, FL" className="w-56 rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-200" />
+                <input name="area" required value={areaQ} onChange={(e) => onAreaChange(e.target.value)} autoComplete="off" placeholder="Type a city/county — picks the real spelling" className="w-56 rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-200" />
+                {sugs.length > 0 && (
+                  <div className="absolute left-0 top-full z-[600] mt-1 w-72 overflow-hidden rounded-lg border border-slate-300 bg-white shadow-xl">
+                    {sugs.map((s, i) => (
+                      <button key={i} type="button" onClick={() => { setAreaQ(s.label); setSugs([]); }} className="block w-full px-3 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-100">
+                        <span className="font-semibold">{s.label}</span>{s.sub && <span className="ml-1 text-slate-400">· {s.sub}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex min-w-0 flex-1 flex-col">
                 <label className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Why (optional)</label>
