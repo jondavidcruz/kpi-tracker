@@ -47,6 +47,17 @@ export default async function MarketsPage() {
   const { buildLeadPins } = await import("@/lib/lead-pins");
   const { pins: leadPins, uncachedZips: leadZipsRemaining } = buildLeadPins(opps, geocache);
 
+  // 📄→📥 Pull-list CONVERSION (Phase 2): attribute CRM leads back to the pull that sourced them
+  // (lead's ZIP is in the batch + lead created on/after the pull date). Keyed by batch id so the map's
+  // client-loaded batch chips can show each pull's funnel (Pulled → lead → contract → closed).
+  const { readPullLists, attributePullConversion } = await import("@/lib/pull-lists");
+  const pullLists = await readPullLists();
+  const convOpps = opps.map((o) => {
+    const zs = (o.contact?.address ?? "").match(/\b\d{5}\b/g);
+    return { zip: zs && zs.length ? zs[zs.length - 1] : null, createdMs: o.createdAt.getTime(), stage: o.stage ?? "", value: o.value ?? 0 };
+  });
+  const pullStats = attributePullConversion(pullLists, convOpps);
+
   // 🖍 Hand-drawn / searched territories (areas we market in / have pulled vs uncharted).
   const { readTerritories } = await import("@/lib/map-territories");
   const territories = await readTerritories();
@@ -190,7 +201,7 @@ export default async function MarketsPage() {
       <MarketBlacklist entries={blacklist} canEdit={leader} />
       <MarketsTabs
         showResearch={leader}
-        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} />}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} marketStats={marketStatsByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
         niches={<NichePlaybook matches={nicheMatches} />}

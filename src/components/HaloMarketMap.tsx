@@ -92,7 +92,7 @@ function loadScript(src: string, css?: string): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[] }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {} }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; contractSent: number; closed: number; value: number }> }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
@@ -769,26 +769,50 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <button onClick={exitFs} className="absolute right-3 top-3 z-[1200] rounded-lg bg-slate-900/90 px-4 py-2 text-sm font-bold text-white ring-1 ring-white/25 hover:bg-slate-800">✕ Exit full screen (Esc)</button>
         )}
       </div>
-      {pullBatches.length > 0 && (
+      {pullBatches.length > 0 && (() => {
+        const conv = (id: string) => pullStats[id] || { leads: 0, contractSent: 0, closed: 0, value: 0 };
+        const agg = pullBatches.reduce((a, b) => { const c = conv(b.id); a.pulled += b.count; a.leads += c.leads; a.contract += c.contractSent; a.closed += c.closed; a.value += c.value; return a; }, { pulled: 0, leads: 0, contract: 0, closed: 0, value: 0 });
+        const pct = (n: number, d: number) => (d > 0 ? `${((n / d) * 100).toFixed(n / d < 0.1 ? 2 : 1)}%` : "—");
+        return (
         <div className="mt-2 px-1">
-          <div className="mb-1 flex items-center gap-2 text-[11px] font-bold text-slate-400">📄 Uploaded pull lists ({pullBatches.length}) — purple pins show exactly where each pull landed (not in the CRM)
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-400">📄 Uploaded pull lists ({pullBatches.length}) — purple pins show exactly where each pull landed (not in the CRM)
             <button onClick={() => zoomToTerritory(pullBatches.flatMap((b) => b.pts))} className="rounded bg-purple-500/20 px-1.5 py-0.5 text-purple-300 ring-1 ring-purple-500/40 hover:bg-purple-500/30">zoom to all</button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          {/* 📈 Conversion so far — leads traced back to each pull by ZIP + pull date. */}
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-slate-800/60 px-2.5 py-1.5 text-[11px] ring-1 ring-slate-700">
+            <span className="font-bold text-slate-200">📈 Pull → close conversion:</span>
+            <span className="text-slate-300">📤 <b>{agg.pulled.toLocaleString()}</b> pulled</span><span className="text-slate-600">→</span>
+            <span className="text-sky-300">📥 <b>{agg.leads.toLocaleString()}</b> CRM leads <span className="text-slate-500">({pct(agg.leads, agg.pulled)})</span></span><span className="text-slate-600">→</span>
+            <span className="text-emerald-300">📝 <b>{agg.contract.toLocaleString()}</b> contracts</span><span className="text-slate-600">→</span>
+            <span className="text-amber-300">⭐ <b>{agg.closed.toLocaleString()}</b> closed{agg.value > 0 ? ` · $${Math.round(agg.value).toLocaleString()}` : ""}</span>
+            <span className="ml-auto text-slate-500">traced by ZIP + “came in after the pull date”</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
             {pullBatches.map((b) => {
               const end = new Date(`${b.at}T00:00:00`); end.setDate(end.getDate() + 90);
               const left = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86_400_000));
+              const c = conv(b.id);
               return (
-                <span key={b.id} className="inline-flex items-center gap-1.5 rounded-full bg-purple-900/50 px-2 py-0.5 text-[11px] font-semibold text-purple-200 ring-1 ring-purple-700/60">
-                  <button onClick={() => zoomToTerritory(b.pts)} title={`Zoom to this pull · ${b.count.toLocaleString()} properties${b.count > b.pts.length ? ` (showing ${b.pts.length.toLocaleString()} sampled pins)` : ""}`} className="hover:underline">📄 {b.name} · {b.count.toLocaleString()}{b.zips.length ? ` · ${b.zips.length} ZIP${b.zips.length > 1 ? "s" : ""}` : ""} · {b.at}</button>
-                  <span className={left > 0 ? "text-amber-300" : "text-emerald-300"} title={left > 0 ? `Don't re-pull this area until ${end.toISOString().slice(0, 10)} (90-day cooldown)` : "Cooldown passed — OK to re-pull"}>{left > 0 ? `⏳ ${left}d` : "✓ clear"}</span>
-                  {canEdit && <button onClick={() => deletePullBatch(b.id)} title="Remove this pull list" className="text-purple-300/70 hover:text-white">×</button>}
-                </span>
+                <div key={b.id} className="rounded-lg bg-purple-900/40 px-2.5 py-1.5 text-[11px] ring-1 ring-purple-700/50">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-purple-200">
+                    <button onClick={() => zoomToTerritory(b.pts)} title={`Zoom to this pull · ${b.count.toLocaleString()} properties${b.count > b.pts.length ? ` (showing ${b.pts.length.toLocaleString()} sampled pins)` : ""}`} className="hover:underline">📄 {b.name} · {b.count.toLocaleString()}{b.zips.length ? ` · ${b.zips.length} ZIP${b.zips.length > 1 ? "s" : ""}` : ""} · {b.at}</button>
+                    <span className={left > 0 ? "text-amber-300" : "text-emerald-300"} title={left > 0 ? `Don't re-pull this area until ${end.toISOString().slice(0, 10)} (90-day cooldown)` : "Cooldown passed — OK to re-pull"}>{left > 0 ? `⏳ ${left}d` : "✓ clear"}</span>
+                    {canEdit && <button onClick={() => deletePullBatch(b.id)} title="Remove this pull list" className="ml-auto text-purple-300/70 hover:text-white">× remove</button>}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10.5px]">
+                    {c.leads > 0 ? (<>
+                      <span className="text-sky-300">📥 <b>{c.leads}</b> lead{c.leads > 1 ? "s" : ""} <span className="text-slate-500">({pct(c.leads, b.count)})</span></span><span className="text-slate-600">→</span>
+                      <span className="text-emerald-300">📝 <b>{c.contractSent}</b> contract{c.contractSent === 1 ? "" : "s"}</span><span className="text-slate-600">→</span>
+                      <span className="text-amber-300">⭐ <b>{c.closed}</b> closed{c.value > 0 ? ` · $${Math.round(c.value).toLocaleString()}` : ""}</span>
+                    </>) : (<span className="text-slate-500">No CRM leads traced to this pull yet — they’ll appear here as sellers from these ZIPs come in.</span>)}
+                  </div>
+                </div>
               );
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
       {territories.length > 0 && (
         <div className="mt-2 px-1">
           <div className="mb-1 text-[11px] font-bold text-slate-400">📍 Your marked areas ({territories.length}) — click one to zoom to it</div>

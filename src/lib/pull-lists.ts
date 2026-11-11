@@ -65,3 +65,33 @@ export async function removePullBatch(id: string): Promise<void> {
   const list = (await readPullLists()).filter((b) => b.id !== id);
   await writePullLists(list);
 }
+
+// ── Conversion tracking (Phase 2, Jon 2026-11-11) ───────────────────────────────────────────────
+// We DON'T import the pull list into the CRM — but once a seller from that area calls/texts in and a
+// rep makes them a CRM lead, we attribute them back to the pull that likely sourced them: the lead's
+// address ZIP is in the batch's ZIPs AND the lead was created ON/AFTER the pull date. Each lead is
+// credited to the MOST RECENT qualifying pull (so a ZIP pulled twice doesn't double-count). This turns
+// a raw pull into a funnel: Pulled → CRM lead → Contract sent → Closed ($), per batch.
+export type PullConv = { leads: number; contractSent: number; closed: number; value: number };
+export type ConvOpp = { zip: string | null; createdMs: number; stage: string; value: number };
+
+export function attributePullConversion(batches: PullBatch[], opps: ConvOpp[]): Record<string, PullConv> {
+  const out: Record<string, PullConv> = {};
+  for (const b of batches) out[b.id] = { leads: 0, contractSent: 0, closed: 0, value: 0 };
+  // Most-recent pull first, so .find() credits the latest pull that could have sourced the lead.
+  const prepared = batches
+    .map((b) => ({ id: b.id, atMs: Date.parse(`${b.at}T00:00:00Z`) || 0, zips: new Set(b.zips || []) }))
+    .sort((a, c) => c.atMs - a.atMs);
+  for (const o of opps) {
+    if (!o.zip) continue;
+    const hit = prepared.find((p) => p.atMs <= o.createdMs && p.zips.has(o.zip!));
+    if (!hit) continue;
+    const s = out[hit.id];
+    s.leads++;
+    const won = /won|closed|signed|sold/i.test(o.stage) && !/dead|lost|nurtur/i.test(o.stage);
+    const contract = won || /contract/i.test(o.stage);
+    if (contract) s.contractSent++;
+    if (won) { s.closed++; s.value += o.value || 0; }
+  }
+  return out;
+}
