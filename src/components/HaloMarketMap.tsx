@@ -127,7 +127,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const sugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sensible defaults so the map isn't overwhelming (Jon 2026-11-08): the key layers on, the two
   // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
-  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: true, lots: false, pull: true });
+  // 🧹 Simplified (Jon 2026-11-11): fog of war removed (the uploaded pulled-list pins now show where
+  // we've explored). Kept in state as off so no fog code path runs; it's gone from the UI.
+  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: false, lots: false, pull: true });
+  const [tools, setTools] = useState(false); // collapse the layer checkboxes + extra tools behind a menu
   const [lotsMsg, setLotsMsg] = useState(""); // feedback for the on-zoom lot layer so you know WHY lots do/don't show
   // 📄 Uploaded pulled-list batches (pins on the map, no CRM import) — Jon 2026-11-11.
   const [pullBatches, setPullBatches] = useState<{ id: string; name: string; at: string; by: string; count: number; zips: string[]; pts: [number, number][] }[]>([]);
@@ -605,7 +608,6 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> Seller lead</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-amber-300" style={{ background: "#f59e0b" }} /> Closed deal</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#3b82f6", opacity: 0.55 }} /> Explored area</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#dbeafe", opacity: 0.5 }} /> 🌫 Unexplored — zoom in (fog lifts as we explore)</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-sky-400" style={{ background: "#38bdf8", opacity: 0.4 }} /> 🏘 Vacant lot</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-amber-400" style={{ background: "#f59e0b", opacity: 0.5 }} /> Recently sold lot</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#a855f7" }} /> 📄 Pulled-list property</span>
@@ -614,25 +616,25 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
-        <span className="font-bold text-slate-400">Layers:</span>
-        {(["fog", "lots", "opp", "markets", "buyers", "power", "leads", "terr", "pull"] as const).map((k) => (
-          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "fog" ? "🌫 Fog of war" : k === "lots" ? "🏘 Lots (zoom in)" : k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : k === "terr" ? "🖍 My areas" : "📄 Pulled list"}</label>
-        ))}
-        {canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
-        {canEdit && leadZipsRemaining > 0 && <button onClick={runGeocodeLeads} disabled={geoBusy} className="rounded-lg bg-sky-600 px-2.5 py-1 font-bold text-white hover:bg-sky-700 disabled:opacity-50">{geoBusy ? "Mapping…" : `📍 Map lead locations (${leadZipsRemaining} left)`}</button>}
-        {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
-        {show.lots && lotsMsg && <span className="font-semibold text-sky-300">{lotsMsg}</span>}
+        <button onClick={() => setTools((t) => !t)} className="rounded-lg bg-slate-800 px-2.5 py-1 font-bold text-slate-200 ring-1 ring-slate-700 hover:bg-slate-700">⚙ Layers &amp; tools {tools ? "▴" : "▾"}</button>
         {canEdit && (
           <>
             <input ref={pullFileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onPullFile(f); e.target.value = ""; }} />
-            <button onClick={() => pullFileRef.current?.click()} title="Upload a pulled lead CSV (with latitude/longitude) → plots the exact properties on the map + marks those ZIP areas pulled. Does NOT import to the CRM." className="rounded-lg bg-purple-600 px-2.5 py-1 font-bold text-white hover:bg-purple-700">📄 Upload pull list (CSV)</button>
+            <button onClick={() => pullFileRef.current?.click()} title="Upload a pulled lead CSV (lat/lng) → plots the exact properties + marks those ZIP areas pulled. No CRM import. This is how we mark where we've pulled now." className="rounded-lg bg-purple-600 px-3 py-1 font-bold text-white hover:bg-purple-700">📄 Upload pull list (CSV)</button>
           </>
         )}
         {pullMsg && <span className="font-semibold text-purple-300">{pullMsg}</span>}
+        {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
+        {tools && (["pull", "leads", "markets", "lots", "terr", "opp", "buyers", "power"] as const).map((k) => (
+          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "lots" ? "🏘 Lots (zoom in)" : k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : k === "terr" ? "🖍 My areas" : "📄 Pulled list"}</label>
+        ))}
+        {tools && canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
+        {tools && canEdit && leadZipsRemaining > 0 && <button onClick={runGeocodeLeads} disabled={geoBusy} className="rounded-lg bg-sky-600 px-2.5 py-1 font-bold text-white hover:bg-sky-700 disabled:opacity-50">{geoBusy ? "Mapping…" : `📍 Map lead locations (${leadZipsRemaining} left)`}</button>}
+        {tools && show.lots && lotsMsg && <span className="font-semibold text-sky-300">{lotsMsg}</span>}
       </div>
-      {canEdit && (
+      {canEdit && tools && (
         <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
-          <span className="font-bold text-slate-400">🔎 Mark explored:</span>
+          <span className="font-bold text-slate-400">🔎 Mark by hand (optional — uploading a pull list is the main way now):</span>
           <div className="relative">
             <input value={searchQ} onChange={(e) => onSearchChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { setSuggests([]); searchArea(); } }} placeholder="Type a city, county, or ZIP — e.g. Cape Coral, FL" className="w-72 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" />
             {suggests.length > 0 && (
@@ -650,7 +652,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <span className="text-slate-400">Pick several from the dropdown to stage them, then mark all · or draw ▱/⬠.</span>
         </div>
       )}
-      {canEdit && picks.length > 0 && (
+      {canEdit && tools && picks.length > 0 && (
         <div className="mb-1 flex flex-wrap items-center gap-1.5 px-1 text-[11px]">
           <span className="font-bold text-slate-400">📌 Staged ({picks.length}):</span>
           {picks.map((p) => (
@@ -669,7 +671,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <button onClick={() => setPicks([])} className="text-slate-400 hover:text-slate-200">clear</button>
         </div>
       )}
-      {canEdit && bulkOpen && (
+      {canEdit && tools && bulkOpen && (
         <div className="mb-1 flex flex-wrap items-start gap-2 rounded-xl bg-slate-800 px-2 py-2 text-[11px] ring-1 ring-slate-700">
           <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} rows={2} placeholder="Paste ZIPs or counties, comma or newline separated — e.g. 33914, 34102, Lee County FL" className="w-80 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-white" />
           <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as TerrStatus)} className="rounded border border-slate-600 bg-slate-900 px-1.5 py-1 font-semibold text-white">
@@ -718,12 +720,17 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
             <button onClick={() => zoomToTerritory(pullBatches.flatMap((b) => b.pts))} className="rounded bg-purple-500/20 px-1.5 py-0.5 text-purple-300 ring-1 ring-purple-500/40 hover:bg-purple-500/30">zoom to all</button>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {pullBatches.map((b) => (
-              <span key={b.id} className="inline-flex items-center gap-1.5 rounded-full bg-purple-900/50 px-2 py-0.5 text-[11px] font-semibold text-purple-200 ring-1 ring-purple-700/60">
-                <button onClick={() => zoomToTerritory(b.pts)} title="Zoom to this pull" className="hover:underline">📄 {b.name} · {b.count.toLocaleString()}{b.zips.length ? ` · ${b.zips.length} ZIP${b.zips.length > 1 ? "s" : ""}` : ""} · {b.at}</button>
-                {canEdit && <button onClick={() => deletePullBatch(b.id)} title="Remove this pull list" className="text-purple-300/70 hover:text-white">×</button>}
-              </span>
-            ))}
+            {pullBatches.map((b) => {
+              const end = new Date(`${b.at}T00:00:00`); end.setDate(end.getDate() + 90);
+              const left = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86_400_000));
+              return (
+                <span key={b.id} className="inline-flex items-center gap-1.5 rounded-full bg-purple-900/50 px-2 py-0.5 text-[11px] font-semibold text-purple-200 ring-1 ring-purple-700/60">
+                  <button onClick={() => zoomToTerritory(b.pts)} title={`Zoom to this pull · ${b.count.toLocaleString()} properties${b.count > b.pts.length ? ` (showing ${b.pts.length.toLocaleString()} sampled pins)` : ""}`} className="hover:underline">📄 {b.name} · {b.count.toLocaleString()}{b.zips.length ? ` · ${b.zips.length} ZIP${b.zips.length > 1 ? "s" : ""}` : ""} · {b.at}</button>
+                  <span className={left > 0 ? "text-amber-300" : "text-emerald-300"} title={left > 0 ? `Don't re-pull this area until ${end.toISOString().slice(0, 10)} (90-day cooldown)` : "Cooldown passed — OK to re-pull"}>{left > 0 ? `⏳ ${left}d` : "✓ clear"}</span>
+                  {canEdit && <button onClick={() => deletePullBatch(b.id)} title="Remove this pull list" className="text-purple-300/70 hover:text-white">×</button>}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
