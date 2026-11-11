@@ -58,6 +58,23 @@ const COV_COLOR: Record<string, string> = { never: "#64748b", clear: "#10b981", 
 const TERR_COLOR: Record<TerrStatus, string> = { pulled: "#f59e0b", marketing: "#3b82f6", target: "#10b981", avoid: "#ef4444" };
 const TERR_LABEL: Record<TerrStatus, string> = { pulled: "✅ Explored (pulled)", marketing: "📣 Marketing now", target: "🎯 Target / to pull", avoid: "⛔ Avoid / saturated" };
 
+// Minimal CSV parser that respects quoted fields (handles commas/newlines inside quotes).
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []; let row: string[] = []; let field = ""; let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else if (c !== "\r") field += c;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
 function loadScript(src: string, css?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (css && !document.querySelector(`link[href="${css}"]`)) {
@@ -83,6 +100,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const lotsLoaderRef = useRef<(() => void) | null>(null); // trigger a parcel refetch from outside the map effect
   const showLotsRef = useRef(false);       // latest show.lots for the map event handler closure
   const showFogRef = useRef(true);         // latest show.fog for the zoom handler closure
+  const pullRef = useRef<unknown>(null);        // 📄 uploaded pulled-list pins layer
+  const pullCanvasRef = useRef<unknown>(null);  // canvas renderer so thousands of pins stay smooth
+  const pullFileRef = useRef<HTMLInputElement>(null);
   const syncFogRef = useRef<(() => void) | null>(null); // show/hide fog based on zoom, called from outside the map effect
   const didFitRef = useRef(false);         // only auto-fit the view ONCE — never on a layer toggle (Jon 2026-11-10)
   const hadSavedViewRef = useRef(false);   // restored a saved view → never auto-fit over it
@@ -107,8 +127,11 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const sugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sensible defaults so the map isn't overwhelming (Jon 2026-11-08): the key layers on, the two
   // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
-  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: true, lots: false });
+  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: true, lots: false, pull: true });
   const [lotsMsg, setLotsMsg] = useState(""); // feedback for the on-zoom lot layer so you know WHY lots do/don't show
+  // 📄 Uploaded pulled-list batches (pins on the map, no CRM import) — Jon 2026-11-11.
+  const [pullBatches, setPullBatches] = useState<{ id: string; name: string; at: string; by: string; count: number; zips: string[]; pts: [number, number][] }[]>([]);
+  const [pullMsg, setPullMsg] = useState("");
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
@@ -164,6 +187,42 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   async function bulkMark() {
     const places = bulkText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
     if (await markPlaces(places, bulkStatus)) { setBulkText(""); setBulkOpen(false); }
+  }
+
+  // 📄 Upload a pulled lead CSV (with lat/lng) → plot the EXACT properties on the map + mark the ZIP
+  // areas pulled. NO CRM import — this only shows where the pull landed + records coverage (Jon 2026-11-11).
+  async function onPullFile(file: File) {
+    setPullMsg("Reading file…");
+    try {
+      const rows = parseCsv(await file.text());
+      if (rows.length < 2) { setPullMsg("Empty or unreadable CSV."); return; }
+      const header = rows[0].map((h) => h.trim().toLowerCase());
+      const col = (...res: RegExp[]) => header.findIndex((h) => res.some((re) => re.test(h)));
+      const latI = col(/^lat/, /latitude/), lngI = col(/^lon/, /^lng/, /longitude/), zipI = col(/zip/, /postal/);
+      if (latI < 0 || lngI < 0) { setPullMsg("No latitude/longitude columns found in this CSV."); return; }
+      const pts: [number, number][] = []; const zipSet = new Set<string>(); let count = 0;
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i]; if (!r || r.length <= Math.max(latI, lngI)) continue;
+        count++;
+        const la = parseFloat(r[latI]), lo = parseFloat(r[lngI]);
+        if (Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180 && (la !== 0 || lo !== 0)) pts.push([la, lo]);
+        if (zipI >= 0) { const z = (r[zipI] || "").replace(/\D/g, "").slice(0, 5); if (z.length === 5) zipSet.add(z); }
+      }
+      if (!pts.length) { setPullMsg("No valid lat/long rows found in the file."); return; }
+      const zips = [...zipSet];
+      setPullMsg(`Plotting ${pts.length.toLocaleString()} properties…`);
+      const res = await fetch("/api/markets/pull-list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: file.name.replace(/\.csv$/i, "").slice(0, 60), count, zips, pts }) });
+      const j = await res.json();
+      if (!res.ok) { setPullMsg(j.error || "save failed"); return; }
+      setPullBatches((b) => [j.batch, ...b]);
+      setShow((s) => ({ ...s, pull: true }));
+      if (zips.length) markPlaces(zips.slice(0, 40), "pulled"); // mark the ZIP areas pulled (capped)
+      setPullMsg(`✅ Plotted ${pts.length.toLocaleString()} properties${zips.length ? ` · marked ${Math.min(40, zips.length)} ZIP${zips.length > 40 ? `/${zips.length}` : ""} pulled` : ""}`);
+    } catch { setPullMsg("Couldn't read that file."); }
+  }
+  async function deletePullBatch(id: string) {
+    await fetch(`/api/markets/pull-list?id=${id}`, { method: "DELETE" }).catch(() => {});
+    setPullBatches((b) => b.filter((x) => x.id !== id));
   }
 
   // 🔎 Search a county / ZIP → drop its boundary as a pending territory to name + save.
@@ -291,6 +350,8 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         ).addTo(map);
         fogRef.current = L.layerGroup().addTo(map); // 🌫 fog sits UNDER the data markers
         lotsRef.current = L.layerGroup().addTo(map); // 🏘 parcels above fog, below the data markers
+        pullCanvasRef.current = L.canvas({ padding: 0.5 }); // 📄 canvas renderer keeps thousands of pins smooth
+        pullRef.current = L.layerGroup().addTo(map);        // 📄 uploaded pulled-list pins
 
         // 🏘 On-zoom parcel layer — pulls vacant lots (and flags recent sales) from the free FDEP
         // cadastral for the current viewport, debounced, only when zoomed in + toggled on. Failures
@@ -388,6 +449,24 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     showFogRef.current = show.fog;
     syncFogRef.current?.();
   }, [show.fog, ready]);
+
+  // 📄 Load saved pulled-list batches once (manager-only endpoint; silently no-ops otherwise).
+  useEffect(() => {
+    fetch("/api/markets/pull-list").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.batches) setPullBatches(j.batches); }).catch(() => {});
+  }, []);
+
+  // 📄 Draw the pulled-list pins (canvas-rendered so thousands stay smooth) when batches/toggle change.
+  useEffect(() => {
+    if (!ready) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const L = (window as any).L; const grp = pullRef.current as any; if (!L || !grp) return;
+    grp.clearLayers();
+    if (!show.pull) return;
+    const canvas = pullCanvasRef.current;
+    for (const b of pullBatches) for (const [lat, lng] of b.pts) {
+      L.circleMarker([lat, lng], { renderer: canvas, radius: 3, stroke: false, fillColor: "#a855f7", fillOpacity: 0.6 }).addTo(grp);
+    }
+  }, [ready, pullBatches, show.pull]);
 
   // ── redraw data layers whenever the data changes (markets, buyers, territories) ──
   useEffect(() => {
@@ -529,19 +608,27 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#dbeafe", opacity: 0.5 }} /> 🌫 Unexplored — zoom in (fog lifts as we explore)</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-sky-400" style={{ background: "#38bdf8", opacity: 0.4 }} /> 🏘 Vacant lot</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-amber-400" style={{ background: "#f59e0b", opacity: 0.5 }} /> Recently sold lot</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#a855f7" }} /> 📄 Pulled-list property</span>
         <span className="text-slate-500">· bigger = more</span>
         <button onClick={enterFs} className="ml-auto rounded-full bg-slate-700/70 px-2.5 py-1 font-bold text-slate-100 ring-1 ring-slate-600 hover:bg-slate-600">⛶ Full screen</button>
         <span className="rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
         <span className="font-bold text-slate-400">Layers:</span>
-        {(["fog", "lots", "opp", "markets", "buyers", "power", "leads", "terr"] as const).map((k) => (
-          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "fog" ? "🌫 Fog of war" : k === "lots" ? "🏘 Lots (zoom in)" : k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : "🖍 My areas"}</label>
+        {(["fog", "lots", "opp", "markets", "buyers", "power", "leads", "terr", "pull"] as const).map((k) => (
+          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "fog" ? "🌫 Fog of war" : k === "lots" ? "🏘 Lots (zoom in)" : k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : k === "terr" ? "🖍 My areas" : "📄 Pulled list"}</label>
         ))}
         {canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
         {canEdit && leadZipsRemaining > 0 && <button onClick={runGeocodeLeads} disabled={geoBusy} className="rounded-lg bg-sky-600 px-2.5 py-1 font-bold text-white hover:bg-sky-700 disabled:opacity-50">{geoBusy ? "Mapping…" : `📍 Map lead locations (${leadZipsRemaining} left)`}</button>}
         {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
         {show.lots && lotsMsg && <span className="font-semibold text-sky-300">{lotsMsg}</span>}
+        {canEdit && (
+          <>
+            <input ref={pullFileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onPullFile(f); e.target.value = ""; }} />
+            <button onClick={() => pullFileRef.current?.click()} title="Upload a pulled lead CSV (with latitude/longitude) → plots the exact properties on the map + marks those ZIP areas pulled. Does NOT import to the CRM." className="rounded-lg bg-purple-600 px-2.5 py-1 font-bold text-white hover:bg-purple-700">📄 Upload pull list (CSV)</button>
+          </>
+        )}
+        {pullMsg && <span className="font-semibold text-purple-300">{pullMsg}</span>}
       </div>
       {canEdit && (
         <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
@@ -625,6 +712,21 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <button onClick={exitFs} className="absolute right-3 top-3 z-[1200] rounded-lg bg-slate-900/90 px-4 py-2 text-sm font-bold text-white ring-1 ring-white/25 hover:bg-slate-800">✕ Exit full screen (Esc)</button>
         )}
       </div>
+      {pullBatches.length > 0 && (
+        <div className="mt-2 px-1">
+          <div className="mb-1 flex items-center gap-2 text-[11px] font-bold text-slate-400">📄 Uploaded pull lists ({pullBatches.length}) — purple pins show exactly where each pull landed (not in the CRM)
+            <button onClick={() => zoomToTerritory(pullBatches.flatMap((b) => b.pts))} className="rounded bg-purple-500/20 px-1.5 py-0.5 text-purple-300 ring-1 ring-purple-500/40 hover:bg-purple-500/30">zoom to all</button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {pullBatches.map((b) => (
+              <span key={b.id} className="inline-flex items-center gap-1.5 rounded-full bg-purple-900/50 px-2 py-0.5 text-[11px] font-semibold text-purple-200 ring-1 ring-purple-700/60">
+                <button onClick={() => zoomToTerritory(b.pts)} title="Zoom to this pull" className="hover:underline">📄 {b.name} · {b.count.toLocaleString()}{b.zips.length ? ` · ${b.zips.length} ZIP${b.zips.length > 1 ? "s" : ""}` : ""} · {b.at}</button>
+                {canEdit && <button onClick={() => deletePullBatch(b.id)} title="Remove this pull list" className="text-purple-300/70 hover:text-white">×</button>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {territories.length > 0 && (
         <div className="mt-2 px-1">
           <div className="mb-1 text-[11px] font-bold text-slate-400">📍 Your marked areas ({territories.length}) — click one to zoom to it</div>
