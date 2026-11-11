@@ -185,8 +185,9 @@ export async function createCrmLeadAction(formData: FormData) {
       const { readMsgTemplates, fillTokens } = await import("@/lib/msg-templates");
       const tpls = await readMsgTemplates();
       const tok = { first: contact.name.split(" ")[0], rep: contact.assignedTo.split(" ")[0], address: title };
-      const subj = fillTokens(tpls.welcome_email_subject, tok);
-      const html = fillTokens(tpls.welcome_email_body, tok);
+      const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+      const subj = scrubOwnerIdentity(fillTokens(tpls.welcome_email_subject, tok));
+      const html = scrubOwnerIdentity(fillTokens(tpls.welcome_email_body, tok));
       const ok = await sendEmailTo([contact.email], subj, html);
       // 📧 log the FULL email (subject + body) so the thread shows what the seller
       // actually received, not just "welcome email" (Jon 2026-10-13).

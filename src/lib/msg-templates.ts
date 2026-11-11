@@ -14,10 +14,10 @@ export const MSG_TEMPLATE_META: Array<{ key: MsgTemplateKey; kind: "sms" | "emai
 ];
 
 export const MSG_DEFAULTS: Record<MsgTemplateKey, string> = {
-  welcome_sms: "Hi {first}, it's Freedom Offers — we got your request about your property. Save this number: {rep} from our team is calling you in the next 5 minutes. Reply STOP to opt out.",
-  missed_call_sms: "Hi {first}, this is Freedom Offers — sorry we missed your call! We'll ring you right back. If it's about your property, reply here and we're on it.",
+  welcome_sms: "Hi {first}, we got your request about your property. Save this number — {rep} from our team is calling you in the next 5 minutes. Reply STOP to opt out.",
+  missed_call_sms: "Hi {first}, sorry we missed your call! {rep} from our team will ring you right back. If it's about your property, reply here and we're on it.",
   welcome_email_subject: "We got your request — your private offer is in motion",
-  welcome_email_body: "<p>Hi {first},</p><p>Thanks for reaching out to <b>Freedom Offers</b> about <b>{address}</b>. We received your request and {rep} from our team will call you within the next few minutes from our number — please save it when the call comes in.</p><p>We'll prepare your private offer within 24 hours. No listings, no showings, no fees — and if you ever prefer email, just reply here.</p><p>— The Freedom Offers Team<br/>freedom-offers.com</p>",
+  welcome_email_body: "<p>Hi {first},</p><p>Thanks for reaching out about <b>{address}</b>. We received your request and {rep} from our team will call you within the next few minutes from our number — please save it when the call comes in.</p><p>We'll prepare your private offer within 24 hours. No listings, no showings, no fees — and if you ever prefer email, just reply here.</p><p>— {rep}</p>",
 };
 
 const CAT = "__msg_templates__";

@@ -94,13 +94,15 @@ DRIP_SEQUENCES.push(
     ],
   },
   {
-    key: "ten_days_hell", name: "10 days of hell — intensive close (5 touches / 10 days)", autoSend: true,
+    key: "ten_days_hell", name: "10 days of hell — intensive close (5 texts / 10 days)", autoSend: true,
+    // ⚡ Level 2, ALL TEXT (Jon 2026-11-11): these are the hottest leads trying to reach us ASAP, so
+    // it keeps texting them on its own — no email gaps while we wait on an offer.
     steps: [
       { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — I really want to get {address} across the finish line for you. What's the one thing holding you back right now?" },
       { channel: "sms", delayDays: 2, sms: "{first}, checking back on {address}. If timing's the issue we can close on whatever date works for you — just say the word." },
-      { channel: "email", delayDays: 4, emailSubject: "Let's get {address} done", emailBody: "Hi {first},\n\nI don't want {address} to slip away over something small. Whatever's in the way — price, timing, paperwork — tell me and let's solve it together. I can move fast on my end.\n\n— {rep}" },
+      { channel: "sms", delayDays: 4, sms: "{first}, I don't want {address} to slip away over something small — whatever's in the way (price, timing, paperwork), tell me and let's solve it. I can move fast." },
       { channel: "sms", delayDays: 7, sms: "{first}, still ready to make {address} happen for you. A quick call might clear everything up — when are you free?" },
-      { channel: "email", delayDays: 10, emailSubject: "Last push on {address}", emailBody: "Hi {first},\n\nI'll ease off after this — but I genuinely believe we can get {address} done in a way that works for you. If you're open to it, reply and we'll finish strong.\n\n— {rep}" },
+      { channel: "sms", delayDays: 10, sms: "{first}, last push on {address} — I really think we can get this done in a way that works for you. Reply and we'll finish strong." },
     ],
   },
   {
@@ -166,6 +168,16 @@ export function seqForStage(stageKey: string): string | null {
 /** Terminal stages where any auto-armed follow-up should stop. */
 export function isTerminalStage(stageKey: string): boolean {
   return /\b(won|signed|assigned|closed|dead|lost|rejected|not\s*interested|disqualified)\b/i.test(stageKey.replace(/[_-]+/g, " "));
+}
+
+/** 📧 Email guard (Jon 2026-11-11): only EMAIL sellers we've already SENT AN OFFER to — by then
+ *  they gave us their real email, so deliverability/consent is solid. Everything before the offer
+ *  stays text-only. Comp→Offer is still PRE-offer (we're only running numbers), so it doesn't count.
+ *  A drip email step for a lead that fails this is held (we advance past it; texts are unaffected). */
+export function offerAlreadySent(stageKey: string): boolean {
+  const s = (stageKey || "").toLowerCase().replace(/[_-]+/g, " ");
+  if (/comp\s*to\s*offer|comp\s*offer/.test(s)) return false; // pre-offer: just running numbers
+  return /offer\s*call|verbal\s*offer|negotiat|offer\s*made|contract|signed|escrow|closing|won/.test(s);
 }
 
 export type DripState = { seq: string; step: number; nextAt: string; startedBy: string; startedAt: string; stageArmed?: boolean };
@@ -319,11 +331,11 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
   const forceSendAll = process.env.DRIP_SEND === "1";
   const autoSendOff = process.env.DRIP_AUTOSEND_OFF === "1" || await isDripAutoSendPaused();
   // Pull opps that have a drip due (JSON path filter; fall back handled by the guard below).
-  let due: Array<{ id: string; title: string; contactId: string; assignedTo: string; formData: unknown; contact: { name: string; phone: string; email: string; address: string; tags: string } | null }> = [];
+  let due: Array<{ id: string; title: string; stage: string; contactId: string; assignedTo: string; formData: unknown; contact: { name: string; phone: string; email: string; address: string; tags: string } | null }> = [];
   try {
     due = await db.crmOpportunity.findMany({
       where: { archivedAt: null, formData: { path: ["__drip", "nextAt"], lte: today } as never },
-      select: { id: true, title: true, contactId: true, assignedTo: true, formData: true, contact: { select: { name: true, phone: true, email: true, address: true, tags: true } } },
+      select: { id: true, title: true, stage: true, contactId: true, assignedTo: true, formData: true, contact: { select: { name: true, phone: true, email: true, address: true, tags: true } } },
       take: limit,
     });
   } catch { due = []; }
@@ -377,6 +389,12 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
     const blocked = /\bdnc\b|\bdnd_all\b/i.test(tags) || (channel === "sms" ? /\bdnd_sms\b/i.test(tags) : /\bdnd_email\b/i.test(tags));
     const reachable = channel === "sms" ? !!o.contact?.phone : !!o.contact?.email;
     if (blocked || !reachable) { await logCrmEvent({ contactId: o.contactId, oppId: o.id, kind: "system", body: `📨 Drip step ${state.step + 1} skipped — ${channel} ${blocked ? "DND" : "no address on file"}`, actor: "drip" }).catch(() => {}); continue; }
+    // 📧 Email guard: only email sellers we've already sent an offer to (Jon 2026-11-11). A pre-offer
+    // email step is held — we advance past it so the text steps keep flowing.
+    if (channel === "email" && !offerAlreadySent(o.stage)) {
+      await logCrmEvent({ contactId: o.contactId, oppId: o.id, kind: "system", body: `📨 Email step ${state.step + 1} held — we only email sellers we've sent an offer to (no offer yet)`, actor: "drip" }).catch(() => {});
+      continue;
+    }
 
     const body = channel === "sms" ? fillTemplate(step.sms || "", tok) : fillTemplate(step.emailBody || "", tok);
     const subject = channel === "email" ? fillTemplate(step.emailSubject || "Following up", tok) : "";

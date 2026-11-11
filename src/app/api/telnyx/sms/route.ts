@@ -38,7 +38,6 @@ export async function POST(req: NextRequest) {
         select: { id: true, assignedTo: true, tags: true, name: true },
       });
     }
-    let wasDnced = false, declined = false, realtor = false, qualified = false;
     const text = String(p.text ?? "").slice(0, 900);
     const mediaUrls = (p.media ?? []).map((m) => m.url).filter(Boolean) as string[];
     const bodyTxt = [text, ...mediaUrls].filter(Boolean).join("\n") || "(empty message)";
@@ -49,116 +48,17 @@ export async function POST(req: NextRequest) {
       meta: { msgId, dir: "inbound", via: "telnyx", line: p.to?.[0]?.phone_number ?? "", ...(mediaUrls.length ? { media: mediaUrls } : {}) },
       actor: "inbound-sms",
     }).catch(() => {});
-    // 🚫 Classify the reply (Jon 2026-10-20): STOP/hostile/cussing → DNC + off the
-    // list; a civil "no / not interested / not selling" → move the lead to a
-    // Not-Interested stage (NOT a full DNC); anything else → a reply task.
-    try {
-      const { DNC_REGEX, dncContact } = await import("@/lib/crm-dnc");
-      const { replyIntentWith } = await import("@/lib/master-workflow");
-      const { loadWorkflowConfig } = await import("@/lib/master-workflow-store");
-      const wfCfg = await loadWorkflowConfig(); // ⚙️ owner-edited keywords + timings (/admin/workflow)
-      const DECLINE_REGEX = /\b(not\s*(interested|selling)|no\s*thank|already\s*sold|we\s*sold|don'?t\s*(want|wish|need)\s*to\s*sell|\bpass\b)\b|^\s*(no|nope)\b[.! ]*$/i;
-      const kw = replyIntentWith(text, wfCfg); // 🤖 Master Workflow: realtor / qualified keywords
-      if (DNC_REGEX.test(text)) { wasDnced = true; await dncContact(contact.id, `inbound text matched the STOP/hostile filter: "${text.slice(0, 80)}"`); }
-      else if (DECLINE_REGEX.test(text)) { declined = true; }
-      else if (kw === "working_with_realtor") { realtor = true; }
-      else if (kw === "qualified") { qualified = true; }
-      else if (text.length >= 12) {
-        // 🤖 AI screen — one call, three buckets.
-        try {
-          const { aiText } = await import("@/lib/ai");
-          const verdict = await aiText({
-            maxTokens: 6,
-            messages: [{ role: "user", content: `A homeowner replied to a real-estate investor's text:\n"""${text.slice(0, 400)}"""\nClassify their intent in ONE word:\nSTOP = demands we stop contacting, hostile/abusive/cussing, or "remove me from the list".\nDECLINE = simply not interested / not selling / already sold, but not hostile.\nREPLY = anything else (a question, interest, price, neutral).\nAnswer with exactly one word: STOP, DECLINE, or REPLY.` }],
-          });
-          if (/stop/i.test(verdict)) { wasDnced = true; await dncContact(contact.id, `AI screen — seller said stop/hostile: "${text.slice(0, 80)}"`); }
-          else if (/decline/i.test(verdict)) { declined = true; }
-        } catch { /* screen is best-effort; the rep task still fires */ }
-      }
-      // 🤖 MASTER WORKFLOW (Jonathan Duong 2026-10-28): auto-tag + auto-SCHEDULE the
-      // next follow-up so snoozed leads resurface instead of being lost, and the VA only
-      // works qualified ones. Not-interested → circle back in 30d; realtor → 50d.
-      const { intentTag, followUpDaysWith, followUpDate } = await import("@/lib/master-workflow");
-      const applyIntent = async (intent: "not_interested" | "working_with_realtor" | "qualified", moveStage: boolean) => {
-        if (!opp) return;
-        const days = followUpDaysWith(intent, wfCfg);
-        const tag = intentTag(intent);
-        const tags = tag && !new RegExp(tag, "i").test(opp.tags || "") ? [opp.tags, tag].filter(Boolean).join(",") : (opp.tags || "");
-        let stageData: Record<string, unknown> = {};
-        if (moveStage) {
-          const { readPipelines } = await import("@/lib/crm");
-          const pls = await readPipelines();
-          const pl = pls.find((x) => x.name === (opp.pipeline || "War Room")) ?? pls[0];
-          const match = (rx: RegExp) => pl?.stages.find((s) => rx.test(`${s.key} ${s.label}`));
-          const target = intent === "working_with_realtor"
-            ? (match(/nurtur/i) ?? match(/follow.?up/i))
-            : (match(/not.?interest|no.?interest/i) ?? match(/\bdead\b|lost/i) ?? match(/nurture/i));
-          if (target && target.key !== opp.stage) stageData = { stage: target.key };
-        }
-        await db.crmOpportunity.update({ where: { id: opp.id }, data: { ...stageData, tags, ...(days > 0 ? { nextFollowUp: followUpDate(days) } : {}) } }).catch(() => {});
-        const label = intent === "not_interested" ? "not interested" : intent === "working_with_realtor" ? "working with a realtor" : "qualified — interested";
-        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🤖 Auto-tagged “${intent === "qualified" ? "qualified ✅" : label}”${days > 0 ? ` · follow-up set ${followUpDate(days)} (${days}d)` : " · surfaced to the team now"}: "${text.slice(0, 60)}"`, actor: "master-workflow" }).catch(() => {});
-      };
-      // 🪦 CLEAR "not interested / sold / not the owner" (Jon 2026-11-11): move straight to DEAD with
-      // NO follow-up, so it never resurfaces — the team should only see repliers who ARE interested.
-      // Ambiguous replies are handled below (→ Follow Up for a human); only a CLEAR decline deads.
-      const applyDead = async (why: string) => {
-        if (!opp) return;
-        const { readPipelines } = await import("@/lib/crm");
-        const pls = await readPipelines();
-        const pl = pls.find((x) => x.name === (opp.pipeline || "War Room")) ?? pls[0];
-        const dead = pl?.stages.find((s) => /\bdead\b|lost|not.?interest|no.?interest/i.test(`${s.key} ${s.label}`));
-        const tag = "not-interested";
-        const tags = !new RegExp(tag, "i").test(opp.tags || "") ? [opp.tags, tag].filter(Boolean).join(",") : (opp.tags || "");
-        await db.crmOpportunity.update({ where: { id: opp.id }, data: { ...(dead && dead.key !== opp.stage ? { stage: dead.key } : {}), tags, nextFollowUp: "" } }).catch(() => {});
-        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🪦 Auto-moved to Dead — seller clearly NOT interested (no follow-up, off the team's list): "${why.slice(0, 80)}"`, actor: "master-workflow" }).catch(() => {});
-      };
-      if (declined && opp) await applyDead(text);
-      else if (realtor && opp) await applyIntent("working_with_realtor", true);
-      else if (qualified && opp) await applyIntent("qualified", false);
-      // 💰/📨 Stage automation (Jon 2026-11-05): a reply with a PRICE → move to Comp/Offer so the
-      // team can check the numbers; any other engaged reply → advance a COLD lead to Follow Up.
-      // Forward-only (never pulls a deal back) and skips declined/realtor/DNC replies.
-      if (opp && !declined && !realtor && !wasDnced) {
-        try {
-          const { readPipelines } = await import("@/lib/crm");
-          const pls = await readPipelines();
-          const pl = pls.find((x) => x.name === (opp.pipeline || "War Room")) ?? pls[0];
-          const stages = pl?.stages ?? [];
-          const find = (rx: RegExp) => stages.find((s) => rx.test(`${s.key} ${s.label}`));
-          const idxOf = (k?: string) => stages.findIndex((s) => s.key === k);
-          const priceHit = /\$\s?\d[\d,]{2,}|\b\d{2,3},\d{3}\b|\b\d{2,3}\s?k\b|\basking\b[^.]*\d|\bwant\b[^.]*\$?\d{3,}/i.test(text);
-          const comp = find(/comp.*offer|offer.*comp|\bcomp\b/i) ?? find(/\boffer\b/i);
-          const followUp = find(/follow.?up/i);
-          const curIdx = idxOf(opp.stage);
-          if (priceHit && comp && comp.key !== opp.stage && curIdx >= 0 && curIdx < idxOf(comp.key)) {
-            await db.crmOpportunity.update({ where: { id: opp.id }, data: { stage: comp.key } }).catch(() => {});
-            await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `💰 Auto-moved to ${comp.label} — seller replied with a price: "${text.slice(0, 80)}"`, actor: "master-workflow" }).catch(() => {});
-          } else if (followUp && followUp.key !== opp.stage && curIdx >= 0 && curIdx < idxOf(followUp.key)) {
-            await db.crmOpportunity.update({ where: { id: opp.id }, data: { stage: followUp.key } }).catch(() => {});
-            await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `📨 Auto-moved to ${followUp.label} — seller replied: "${text.slice(0, 80)}"`, actor: "master-workflow" }).catch(() => {});
-          }
-        } catch { /* best-effort — never breaks intake */ }
-      }
-      // 📨 Any reply STOPS the drip sequence — they engaged, hand it to a human (Jon 2026-10-29).
-      if (opp) { try { const { stopDrip } = await import("@/lib/drip"); await stopDrip(opp.id, "seller replied"); } catch { /* ok */ } }
-    } catch { /* guard never breaks intake */ }
-    // 📣 nudge the owner only if they're actually engaged (dup-guarded per day)
-    try {
-      // Only QUALIFIED/neutral replies reach the VA — not-interested & realtor are auto-snoozed
-      // (Master Workflow: "only qualified leads reach the VA's inbox" — Jonathan 2026-10-28).
-      if (!wasDnced && !declined && !realtor && contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags)) {
-        const today = new Date().toISOString().slice(0, 10);
-        const title = `${qualified ? "✅ QUALIFIED" : "💬"} ${contact.name.split(" ")[0]} texted back — reply (${fromNum})`;
-        const dup = await db.crmTask.findFirst({ where: { title, doneAt: null } });
-        if (!dup) await db.crmTask.create({ data: { contactId: contact.id, oppId: opp?.id ?? "", title, due: today, assignedTo: contact.assignedTo, createdBy: "inbound-sms" } });
-      }
-    } catch { /* best-effort */ }
+    // 📨 Classify + route the reply through the shared brain (same logic for text & email): DNC /
+    // decline → Dead / realtor snooze / qualified, forward-only stage move (price → Comp/Offer, else
+    // → Follow Up), STOP the drip, and drop a "call them now" task with the discovery checklist.
+    const { routeSellerReply } = await import("@/lib/inbound-reply");
+    const flags = await routeSellerReply({ channel: "sms", text, contact: { id: contact.id, name: contact.name, assignedTo: contact.assignedTo, tags: contact.tags }, opp, contactInfo: fromNum });
+    const { wasDnced, declined, realtor, qualified } = flags;
     // 📲 push to the installed iPhone/desktop app: assigned rep, else everyone
     try {
       if (wasDnced) return NextResponse.json({ ok: true, dnc: true });
       // auto-snoozed (not-interested / realtor) → no push; qualified/neutral → push the rep.
-      if (!declined && !realtor) {
+      if (!declined && !realtor && contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags)) {
         const { sendPushTo } = await import("@/lib/push");
         const who = contact.assignedTo ? [contact.assignedTo.split(" ")[0]] : ("all" as const);
         sendPushTo(who, { title: `${qualified ? "✅ " : "💬 "}${contact.name}`, body: text.slice(0, 120) || "📷 picture message", url: `/crm/conversations?c=${contact.id}`, tag: `sms-${contact.id}` }).catch(() => {});

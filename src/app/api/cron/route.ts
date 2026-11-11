@@ -453,8 +453,11 @@ export async function GET(request: Request) {
       }
       const step = seq.steps[st.step];
       if (!step) { delete state[oppId]; completed++; continue; }
-      const vars = { name: opp.contact.name, rep: opp.assignedTo || "Jon" };
-      const ok = await sendEmailTo([st.email], fillTemplate(step.subject, vars), `<p>${fillTemplate(step.body, vars).replace(/\n/g, "<br>")}</p>`, undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com");
+      const vars = { name: opp.contact.name, rep: (opp.assignedTo || "our team").split(" ")[0] };
+      const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+      const subject = scrubOwnerIdentity(fillTemplate(step.subject, vars));
+      const bodyHtml = `<p>${scrubOwnerIdentity(fillTemplate(step.body, vars)).replace(/\n/g, "<br>")}</p>`;
+      const ok = await sendEmailTo([st.email], subject, bodyHtml, undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com");
       await logCrmEvent({ contactId: opp.contactId, oppId, kind: "email", body: `➡️ Us (sequence ${st.step + 1}/${seq.steps.length}): ${fillTemplate(step.subject, vars)}${ok ? "" : " (SEND FAILED)"}`, actor: "sequence" });
       if (ok) sent++;
       const nextStep = seq.steps[st.step + 1];

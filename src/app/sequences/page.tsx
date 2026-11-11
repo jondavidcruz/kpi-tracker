@@ -39,8 +39,13 @@ export default async function SequencesPage() {
         <h1 className="text-2xl font-black text-slate-800">📨 Automation sequences</h1>
         <p className="mt-1 text-sm text-slate-500">
           Every acquisition stage auto-starts a follow-up sequence the moment a seller lands on it. Below is
-          exactly how often we text/email and what we send. Any reply from the seller stops the sequence.
+          exactly how often we text/email and what we send.
         </p>
+        <div className="mt-2 space-y-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+          <div>🛑 <b>Any reply — text OR email — stops the sequence</b> and hands the lead to a human (a price → Comp/Offer, otherwise → Follow Up), so no one keeps getting the same message.</div>
+          <div>📧 <b>Emails only go to sellers we&apos;ve already sent an offer to</b> (by then they gave us their real email) — everything before that is text-only.</div>
+          <div>🕶 Every message is scrubbed of the company name and website before it sends — only a rep&apos;s first name goes out.</div>
+        </div>
         <div className="mt-2 flex flex-wrap gap-3 text-[12px]">
           <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 font-semibold text-sky-700 ring-1 ring-sky-200">📱 text</span>
           <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 font-semibold text-violet-700 ring-1 ring-violet-200">📧 email</span>

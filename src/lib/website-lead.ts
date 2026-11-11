@@ -104,7 +104,8 @@ export async function createWebsiteLead(lead: WebsiteLead) {
       const first = lead.name.trim().split(/\s+/)[0] || "there";
       const tpls = await readMsgTemplates();
       const tok = { first, rep, address: lead.address };
-      const ok = await sendEmailTo([lead.email], fillTokens(tpls.welcome_email_subject, tok), fillTokens(tpls.welcome_email_body, tok));
+      const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+      const ok = await sendEmailTo([lead.email], scrubOwnerIdentity(fillTokens(tpls.welcome_email_subject, tok)), scrubOwnerIdentity(fillTokens(tpls.welcome_email_body, tok)));
       const { logCrmEvent } = await import("@/lib/crm");
       await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "email", body: `➡️ Us: welcome email (we got your request — offer within 24h)${ok ? "" : " (SEND FAILED)"}`, actor: "auto-welcome" }).catch(() => {});
     })().catch(() => {});
@@ -137,11 +138,12 @@ export async function createWebsiteLead(lead: WebsiteLead) {
 // 📲 Instant welcome text (Jon 2026-10-08): the moment a lead hits the
 // system, they get a save-our-number text promising a call in ≤5 minutes.
 // Rotating templates so it never reads canned. Consent-gated.
+// Neutral — no company name or website (Jon 2026-11-11 anonymity rule); first names are fine.
 const WELCOME_TEXTS = [
-  (first: string, rep: string) => `Hi ${first}! This is Freedom Offers — we got your property info. Save this number: ${rep} from our team is calling you in the next 5 minutes. Reply STOP to opt out.`,
-  (first: string, rep: string) => `${first}, thanks for reaching out to Freedom Offers! Save our number — ${rep} will ring you within 5 minutes to talk through your options. Reply STOP to opt out.`,
-  (first: string, rep: string) => `Hey ${first}, Freedom Offers here 👋 Your request is in. Keep this number handy — ${rep} on our team calls you in under 5 minutes. Reply STOP to opt out.`,
-  (first: string, rep: string) => `Hi ${first} — Freedom Offers received your property details. ${rep} is calling from this number within 5 minutes, so please pick up! Reply STOP to opt out.`,
+  (first: string, rep: string) => `Hi ${first}! We got your property info. Save this number — ${rep} from our team is calling you in the next 5 minutes. Reply STOP to opt out.`,
+  (first: string, rep: string) => `${first}, thanks for reaching out! Save our number — ${rep} will ring you within 5 minutes to talk through your options. Reply STOP to opt out.`,
+  (first: string, rep: string) => `Hey ${first} 👋 Your request is in. Keep this number handy — ${rep} on our team calls you in under 5 minutes. Reply STOP to opt out.`,
+  (first: string, rep: string) => `Hi ${first} — we received your property details. ${rep} is calling from this number within 5 minutes, so please pick up! Reply STOP to opt out.`,
 ];
 
 export async function sendWelcomeText(o: { contactId: string; oppId: string; phone: string; name: string; repName: string; address?: string }): Promise<void> {
@@ -161,9 +163,10 @@ export async function sendWelcomeText(o: { contactId: string; oppId: string; pho
   // rotating set only runs while no custom text is saved (Jon 2026-10-08).
   const { readMsgTemplates, fillTokens, MSG_DEFAULTS } = await import("@/lib/msg-templates");
   const tpl = (await readMsgTemplates()).welcome_sms;
-  const text = tpl !== MSG_DEFAULTS.welcome_sms
+  const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+  const text = scrubOwnerIdentity(tpl !== MSG_DEFAULTS.welcome_sms
     ? fillTokens(tpl, { first, rep })
-    : WELCOME_TEXTS[Math.floor(Math.random() * WELCOME_TEXTS.length)](first, rep);
+    : WELCOME_TEXTS[Math.floor(Math.random() * WELCOME_TEXTS.length)](first, rep));
   // always E.164 — raw "(909) 395-6195" from forms gets rejected by Telnyx
   const d10 = o.phone.replace(/\D/g, "").slice(-10);
   const toE164 = o.phone.trim().startsWith("+") ? o.phone.replace(/[^+\d]/g, "") : d10.length === 10 ? `+1${d10}` : o.phone;
