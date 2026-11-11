@@ -400,13 +400,51 @@ export async function GET(request: Request) {
     const soon = await db.crmAppointment.findMany({ where: { remindedAt: null, at: { gte: new Date(), lte: new Date(Date.now() + 75 * 60_000) } }, take: 10 });
     if (soon.length) {
       const { sendHuddleChat } = await import("@/lib/notify");
+      const { sendSellerApptReminder } = await import("@/lib/appt-invite");
       for (const a of soon) {
         const mins = Math.max(1, Math.round((a.at.getTime() - Date.now()) / 60_000));
         await sendHuddleChat(`⏰ *Appointment in ${mins}m* — ${a.title} (${a.withWho})${a.note ? ` · ${a.note}` : ""}\n${APP_URL}/crm/${a.oppId}`);
+        // ⏰ also text the SELLER a same-day reminder (cuts no-shows) — scrubbed + quiet-hours safe.
+        if (a.contactId) await sendSellerApptReminder({ id: a.id, oppId: a.oppId, contactId: a.contactId, at: a.at, note: a.note, withWho: a.withWho }).catch(() => {});
         await db.crmAppointment.update({ where: { id: a.id }, data: { remindedAt: new Date() } });
       }
     }
   } catch { /* alarms never break a cron */ }
+
+  // 🔁 No-show recovery (Jon 2026-11-11): an appointment whose time passed 2–26h ago, not marked
+  // done and with NO inbound reply from the seller since, gets ONE rebook text with a booking link
+  // so the lead doesn't die on a missed call. Idempotent via the __appt_recovered__ resource set.
+  try {
+    const now = Date.now();
+    const past = await db.crmAppointment.findMany({ where: { at: { gte: new Date(now - 26 * 3_600_000), lte: new Date(now - 2 * 3_600_000) }, contactId: { not: "" } }, take: 25 });
+    if (past.length) {
+      const recRow = await db.resource.findFirst({ where: { category: "__appt_recovered__" } }).catch(() => null);
+      let recovered: string[] = [];
+      try { recovered = recRow?.description ? JSON.parse(recRow.description) : []; } catch { recovered = []; }
+      const recSet = new Set(recovered);
+      const { readApptDone } = await import("@/lib/appt-done");
+      const done = await readApptDone();
+      const { sendNoShowRecovery } = await import("@/lib/appt-invite");
+      let changed = false;
+      for (const a of past) {
+        if (recSet.has(a.id) || done.has(a.id)) continue;
+        // skip if the seller already engaged since the appointment time (inbound sms/email)
+        const replied = await db.crmEvent.findFirst({ where: { contactId: a.contactId, kind: { in: ["sms", "email"] }, body: { startsWith: "⬅️" }, at: { gte: a.at } }, select: { id: true } }).catch(() => null);
+        if (replied) { recSet.add(a.id); changed = true; continue; }
+        const sent = await sendNoShowRecovery({ id: a.id, oppId: a.oppId, contactId: a.contactId, at: a.at, note: a.note, withWho: a.withWho }).catch(() => false);
+        recSet.add(a.id); changed = true; // mark regardless so we never double-text a no-show
+        if (sent && a.withWho) {
+          const today = new Date().toISOString().slice(0, 10);
+          await db.crmTask.create({ data: { oppId: a.oppId, contactId: a.contactId, title: `🔁 No-show follow-up — ${a.title.slice(0, 60)} (rebook link sent)`, due: today, assignedTo: a.withWho.split(" ")[0], createdBy: "appt-noshow" } }).catch(() => {});
+        }
+      }
+      if (changed) {
+        const description = JSON.stringify([...recSet].slice(-1000));
+        if (recRow) await db.resource.update({ where: { id: recRow.id }, data: { description } }).catch(() => {});
+        else await db.resource.create({ data: { title: "appt-recovered", category: "__appt_recovered__", url: "", description } }).catch(() => {});
+      }
+    }
+  } catch { /* recovery never breaks a cron */ }
 
   // One-time: register the Resend webhook so opens/clicks land on timelines.
   if (url.searchParams.get("resendhook") === "1") {

@@ -7,7 +7,9 @@ import "server-only";
 // drip. Enrollment is manual (the team picks who), so this is never cold mass outreach.
 import { db } from "@/lib/db";
 
-export type DripStep = { channel: "sms" | "email"; delayDays: number; sms?: string; emailSubject?: string; emailBody?: string };
+// `book: true` appends the seller's self-book link to that step so a "want a call?" text is one tap
+// to schedule (Jon 2026-11-11). Only used on SMS steps that invite a call.
+export type DripStep = { channel: "sms" | "email"; delayDays: number; sms?: string; emailSubject?: string; emailBody?: string; book?: boolean };
 // autoSend=true → Level 2: the cron SENDS the step itself (with all guardrails). Omitted/false →
 // Level 1: the cron drops a ready-to-send task for a human to click. Set per-sequence (Jon 2026-11-10).
 export type DripSeq = { key: string; name: string; steps: DripStep[]; autoSend?: boolean };
@@ -40,7 +42,7 @@ DRIP_SEQUENCES.push(
       { channel: "sms", delayDays: 2, sms: "{first}, any questions on the agreement for {address}? Once it's signed we can keep things moving — I'm here if you need anything." },
       { channel: "email", delayDays: 4, emailSubject: "Anything I can clear up on {address}?", emailBody: "Hi {first},\n\nJust making sure the agreement for {address} didn't get buried. If anything's unclear or you'd like to go over it on a quick call, I'm glad to help. Whenever you're ready, a quick signature keeps everything moving.\n\n— {rep}" },
       { channel: "sms", delayDays: 6, sms: "Hi {first}, still here to get {address} wrapped up for you. Let me know if you need anything to feel good about signing." },
-      { channel: "sms", delayDays: 9, sms: "{first}, would it be easier to go over the agreement for {address} on a quick call? I can walk you through it line by line — just tell me a good time." },
+      { channel: "sms", delayDays: 9, sms: "{first}, would it be easier to go over the agreement for {address} on a quick call? I can walk you through it line by line — just tell me a good time.", book: true },
       { channel: "email", delayDays: 12, emailSubject: "Ready whenever you are — {address}", emailBody: "Hi {first},\n\nNo rush on {address} — I just want to make signing as easy as possible for you. If there's anything holding you up, tell me and we'll sort it out together. Once it's signed, I handle everything from there.\n\n— {rep}" },
     ],
   },
@@ -49,7 +51,7 @@ DRIP_SEQUENCES.push(
     steps: [
       { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — great talking about {address}. I'm pulling everything together and will have next steps for you shortly." },
       { channel: "email", delayDays: 2, emailSubject: "Next steps on {address}", emailBody: "Hi {first},\n\nThanks again for the time on {address}. I'm finalizing the details on our end and I'll follow up with where we go from here. In the meantime, reply anytime with questions.\n\n— {rep}" },
-      { channel: "sms", delayDays: 5, sms: "{first}, checking back on {address}. Still want to make this easy for you — is now a good time to talk through the next step?" },
+      { channel: "sms", delayDays: 5, sms: "{first}, checking back on {address}. Still want to make this easy for you — is now a good time to talk through the next step?", book: true },
     ],
   },
   {
@@ -90,13 +92,13 @@ DRIP_SEQUENCES.push(
       { channel: "sms", delayDays: 5, sms: "{first}, any thoughts on the offer for {address}? If the number isn't quite there, tell me what you had in mind and I'll see what I can do." },
       { channel: "email", delayDays: 9, emailSubject: "Can we make {address} work?", emailBody: "Hi {first},\n\nI'd really like to find a number that works for both of us on {address}. If you tell me what you'd need to feel good about it, I'll do my best to get there — happy to hop on a quick call anytime.\n\n— {rep}" },
       { channel: "sms", delayDays: 14, sms: "{first}, still happy to work with you on {address}. Just reply with the number that gets us there and I'll do everything I can." },
-      { channel: "sms", delayDays: 21, sms: "Hi {first}, checking in one more time on {address}. The offer's still good — would a quick 2-minute call help you decide? Just tell me a time." },
+      { channel: "sms", delayDays: 21, sms: "Hi {first}, checking in one more time on {address}. The offer's still good — would a quick 2-minute call help you decide? Just tell me a time.", book: true },
     ],
   },
   {
     key: "offer_ready", name: "Offer ready — get it in front of them (2 touches / ~2 days)",
     steps: [
-      { channel: "sms", delayDays: 0, sms: "Hi {first}, good news — I've got a cash offer ready for {address}. When's a good time to walk you through it?" },
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, good news — I've got a cash offer ready for {address}. When's a good time to walk you through it?", book: true },
       { channel: "sms", delayDays: 2, sms: "{first}, still have that offer ready for {address} whenever you are — just reply and I'll send the details over." },
     ],
   },
@@ -108,7 +110,7 @@ DRIP_SEQUENCES.push(
       { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — I really want to get {address} across the finish line for you. What's the one thing holding you back right now?" },
       { channel: "sms", delayDays: 2, sms: "{first}, checking back on {address}. If timing's the issue we can close on whatever date works for you — just say the word." },
       { channel: "sms", delayDays: 4, sms: "{first}, I don't want {address} to slip away over something small — whatever's in the way (price, timing, paperwork), tell me and let's solve it. I can move fast." },
-      { channel: "sms", delayDays: 7, sms: "{first}, still ready to make {address} happen for you. A quick call might clear everything up — when are you free?" },
+      { channel: "sms", delayDays: 7, sms: "{first}, still ready to make {address} happen for you. A quick call might clear everything up — when are you free?", book: true },
       { channel: "sms", delayDays: 10, sms: "{first}, last push on {address} — I really think we can get this done in a way that works for you. Reply and we'll finish strong." },
     ],
   },
@@ -123,7 +125,7 @@ DRIP_SEQUENCES.push(
       { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — still thinking about selling {address}? No rush at all. If you'd ever want a cash offer, reply and I'll get you a number." },
       { channel: "sms", delayDays: 7, sms: "{first}, any thoughts on {address}? Even a 'maybe someday' is fine — happy to let you know what it could sell for. Want me to give you a quick call?" },
       { channel: "sms", delayDays: 21, sms: "Hi {first}, circling back on {address}. We buy land as-is for cash — no fees, no agents. Reply with a number you'd take and I'll see what I can do." },
-      { channel: "sms", delayDays: 45, sms: "{first}, still here whenever you're ready on {address}. Would a quick 2-minute call be easier? Just tell me a good time." },
+      { channel: "sms", delayDays: 45, sms: "{first}, still here whenever you're ready on {address}. Would a quick 2-minute call be easier? Just tell me a good time.", book: true },
       { channel: "sms", delayDays: 90, sms: "Hi {first}, quarterly check-in on {address} 🙂 Still open to a cash offer? Even a ballpark price helps me get you a real number." },
       { channel: "sms", delayDays: 150, sms: "{first}, thinking about {address} — if anything's changed, I can move fast with cash. Reply here or let me know when's good to call." },
       { channel: "sms", delayDays: 240, sms: "Hi {first}, it's been a while — any interest in selling {address}? Still glad to put together a no-pressure offer whenever you want." },
@@ -417,8 +419,13 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
       continue;
     }
 
-    const body = channel === "sms" ? fillTemplate(step.sms || "", tok) : fillTemplate(step.emailBody || "", tok);
+    let body = channel === "sms" ? fillTemplate(step.sms || "", tok) : fillTemplate(step.emailBody || "", tok);
     const subject = channel === "email" ? fillTemplate(step.emailSubject || "Following up", tok) : "";
+    // 📅 Append the one-tap self-book link on call-ask SMS steps (Jon 2026-11-11).
+    if (channel === "sms" && step.book) {
+      const { bookingUrl } = await import("@/lib/book-token");
+      body = `${body} Pick a time: ${bookingUrl(o.id)}`;
+    }
 
     // Level 2 (autoSend sequence, or DRIP_SEND=1) → send it now; the brake forces assisted tasks.
     if (willAutoSend) {

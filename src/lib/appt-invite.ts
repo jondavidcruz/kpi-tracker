@@ -6,8 +6,25 @@ import "server-only";
 // scrubbed; the text respects quiet hours. Best-effort — never blocks booking.
 import { db } from "@/lib/db";
 import { logCrmEvent } from "@/lib/crm";
+import { bookingUrl } from "@/lib/book-token";
 
 function icsStamp(d: Date): string { return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); }
+
+// 📲 Shared seller-SMS send: scrub owner identity, honor quiet hours, use a live line. Returns the
+// line used (or null if not sent). Reused by the confirmation, the reminder, and no-show recovery.
+async function sellerText(contact: { phone?: string | null; address?: string | null }, rawText: string): Promise<{ sent: boolean; from?: string }> {
+  const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+  const text = scrubOwnerIdentity((rawText || "").trim());
+  const d10 = (contact.phone || "").replace(/\D/g, "").slice(-10);
+  const to = d10.length === 10 ? `+1${d10}` : "";
+  if (!to || !text || !process.env.TELNYX_API_KEY) return { sent: false };
+  const { quietHoursWarning } = await import("@/lib/npa-tz");
+  if (quietHoursWarning(to, contact.address || "")) return { sent: false };
+  const from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID || "";
+  if (!from) return { sent: false };
+  try { const res = await fetch("https://api.telnyx.com/v2/messages", { method: "POST", headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ from, to, text }) }); return { sent: res.ok, from }; }
+  catch { return { sent: false, from }; }
+}
 
 function buildIcs(o: { title: string; at: Date; durationMin: number; description: string; uid: string }): string {
   const end = new Date(o.at.getTime() + o.durationMin * 60_000);
@@ -78,4 +95,35 @@ export async function sendSellerApptInvite(appt: { id: string; oppId: string; co
       }
     }
   } catch { /* best-effort — never blocks booking */ }
+}
+
+/** ⏰ Text the SELLER a same-day reminder shortly before the call (cuts no-shows). Best-effort. */
+export async function sendSellerApptReminder(appt: { id: string; oppId: string; contactId: string; at: Date; note: string; withWho: string }): Promise<void> {
+  try {
+    const contact = appt.contactId ? await db.crmContact.findUnique({ where: { id: appt.contactId }, select: { name: true, phone: true, address: true } }) : null;
+    if (!contact?.phone) return;
+    const first = (contact.name || "there").split(" ")[0];
+    const rep = (appt.withWho || "our team").split(" ")[0];
+    const timePT = appt.at.toLocaleString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
+    const inPerson = /in person|in-person/i.test(appt.note);
+    const text = `Hi ${first}, quick reminder — ${rep} ${inPerson ? "is meeting you" : "will call you"} today at ${timePT} (PT) about ${contact.address || "your property"}. ${inPerson ? "See you soon!" : "Talk soon!"} Reply here if you need to change it.`;
+    const r = await sellerText(contact, text);
+    if (r.sent) await logCrmEvent({ contactId: appt.contactId, oppId: appt.oppId, kind: "sms", body: `➡️ Us: ⏰ appointment reminder — ${timePT} PT`, meta: { dir: "outbound", line: r.from, auto: true }, actor: "appt-reminder" }).catch(() => {});
+  } catch { /* best-effort */ }
+}
+
+/** 🔁 No-show recovery: after a missed call with no contact, text the seller a rebook link so the
+ *  lead doesn't die on a missed appointment. Returns true if a message went out. Best-effort. */
+export async function sendNoShowRecovery(appt: { id: string; oppId: string; contactId: string; at: Date; note: string; withWho: string }): Promise<boolean> {
+  try {
+    const contact = appt.contactId ? await db.crmContact.findUnique({ where: { id: appt.contactId }, select: { name: true, phone: true, address: true } }) : null;
+    if (!contact?.phone) return false;
+    const first = (contact.name || "there").split(" ")[0];
+    const rep = (appt.withWho || "our team").split(" ")[0];
+    const link = appt.oppId ? bookingUrl(appt.oppId) : "";
+    const text = `Hi ${first}, it's ${rep} — sorry we missed each other about ${contact.address || "your property"}! No worries at all. Grab a new time that works for you${link ? `: ${link}` : " — just reply with a day/time"}.`;
+    const r = await sellerText(contact, text);
+    if (r.sent) await logCrmEvent({ contactId: appt.contactId, oppId: appt.oppId, kind: "sms", body: `➡️ Us: 🔁 no-show recovery — sent a rebook link`, meta: { dir: "outbound", line: r.from, auto: true }, actor: "appt-noshow" }).catch(() => {});
+    return r.sent;
+  } catch { return false; }
 }
