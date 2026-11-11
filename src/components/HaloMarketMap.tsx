@@ -503,6 +503,18 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     if (!L || !map || !group) return;
     group.clearLayers();
 
+    // 🟢 Area coverage — instead of a lone dot for a city, shade the WHOLE area in the market's color
+    // with a soft radial falloff (stacked translucent rings = a gradient the map still shows through),
+    // plus a small solid center dot so you still know the exact point (Jon 2026-11-11). Rings are
+    // non-interactive so clicks fall through to the lead/lot pins underneath; the center dot carries
+    // the popup/label. groundM = ground radius in metres (scales with zoom, unlike a pixel dot).
+    const areaCover = (lat: number, lng: number, color: string, groundM: number, centerR: number) => {
+      for (const [f, op] of [[1, 0.05], [0.64, 0.09], [0.34, 0.15]] as const) {
+        L.circle([lat, lng], { radius: groundM * f, stroke: false, fillColor: color, fillOpacity: op, interactive: false }).addTo(group);
+      }
+      return L.circleMarker([lat, lng], { radius: centerR, color: "#ffffff", weight: 1.5, fillColor: color, fillOpacity: 0.95 }).addTo(group);
+    };
+
     // 🌫 FOG OF WAR — the whole region sits under a light haze; it LIFTS (clears to full satellite)
     // everywhere we've actually explored: territories we've pulled, ZIPs with seller leads in our
     // CRM, and known markets with buyers/deals. Unexplored stays lightly fogged (not hidden) so Jon
@@ -558,13 +570,20 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     }
     if (show.buyers) for (const p of buyerPoints) L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
 
-    // 📍 Lead pins — seller leads by ZIP; a gold ⭐ marks ZIPs where we've CLOSED a land deal.
+    // 📍 Lead pins — seller leads by ZIP. A ZIP where we've CLOSED a land deal gets a gold ⭐ STAR
+    // (distinct from the purple pulled-list dots and visible even when deals are rare) (Jon 2026-11-11).
     if (show.leads) for (const lp of leadPins) {
       const g = gradeMarket({ leads: lp.leads, deals: lp.deals });
       const hasDeal = lp.deals > 0;
-      const rad = 4 + Math.min(10, Math.log2(lp.leads + 1) * 2.2);
-      const mk = L.circleMarker([lp.lat, lp.lng], { radius: rad, color: hasDeal ? "#f5d0fe" : "#ffffff", weight: hasDeal ? 3 : 1, fillColor: hasDeal ? "#d946ef" : "#38bdf8", fillOpacity: 0.9 }).addTo(group);
-      mk.bindPopup(`<div style="font:12px system-ui"><b>ZIP ${lp.zip}</b><br>📥 <b>${lp.leads}</b> seller lead${lp.leads > 1 ? "s" : ""}${hasDeal ? `<br>⭐ <b>${lp.deals}</b> land deal${lp.deals > 1 ? "s" : ""} CLOSED here` : ""}<br>🏅 <b style="color:${g.color}">${g.label}</b></div>`);
+      const popup = `<div style="font:12px system-ui"><b>ZIP ${lp.zip}</b><br>📥 <b>${lp.leads}</b> seller lead${lp.leads > 1 ? "s" : ""}${hasDeal ? `<br>⭐ <b>${lp.deals}</b> land deal${lp.deals > 1 ? "s" : ""} CLOSED here` : ""}<br>🏅 <b style="color:${g.color}">${g.label}</b></div>`;
+      if (hasDeal) {
+        const sz = 22 + Math.min(14, (lp.deals - 1) * 6);
+        const star = L.divIcon({ className: "fo-deal-star", html: `<div style="font-size:${sz}px;line-height:1;filter:drop-shadow(0 0 3px rgba(0,0,0,.7))">⭐</div>`, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] });
+        L.marker([lp.lat, lp.lng], { icon: star, zIndexOffset: 1000 }).addTo(group).bindPopup(popup);
+      } else {
+        const rad = 4 + Math.min(10, Math.log2(lp.leads + 1) * 2.2);
+        L.circleMarker([lp.lat, lp.lng], { radius: rad, color: "#ffffff", weight: 1, fillColor: "#38bdf8", fillOpacity: 0.9 }).addTo(group).bindPopup(popup);
+      }
     }
 
     // 🔎 Opportunity layer — Market Finder county scores (public data). Show target + watch only
@@ -572,8 +591,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     const OPP_COLOR = { target: "#10b981", watch: "#f59e0b", low: "#94a3b8" } as const;
     if (show.opp) for (const s of scanPoints) {
       if (s.tier === "low") continue;
-      const rad = 6 + (s.score / 100) * 14;
-      const mk = L.circleMarker([s.lat, s.lng], { radius: rad, color: "#ffffff", weight: 1.5, fillColor: OPP_COLOR[s.tier], fillOpacity: 0.8 }).addTo(group);
+      const rad = 5 + (s.score / 100) * 7;
+      // Whole-area coverage (soft gradient) instead of a lone dot — ground radius grows with the score.
+      const mk = areaCover(s.lat, s.lng, OPP_COLOR[s.tier], 7000 + (s.score / 100) * 7000, rad);
       const landLine = s.landShare != null ? `<div>🏕 Land ≥$100k: <b>${Math.round(s.landShare * 100)}%</b> of parcels</div>` : "";
       mk.bindPopup(
         `<div style="font:12px system-ui;min-width:180px"><div style="font-weight:800;font-size:13px">${s.name} <span style="color:#64748b;font-weight:600">${s.state}</span></div>` +
@@ -589,9 +609,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       const [lat, lng] = COORDS[v.m.name];
       const charted = v.buyerCount > 0;
       if (charted) L.circleMarker([lat, lng], { radius: 20 + Math.min(10, v.buyerCount * 2), stroke: false, fillColor: "#22d3ee", fillOpacity: 0.12 }).addTo(group);
-      const r = 7 + (v.deals / maxDeals) * 13;
+      const r = 6 + (v.deals / maxDeals) * 7;
       const cov = v.coverage.status === "never" ? "Never pulled" : v.coverage.status === "clear" ? `Clear to pull · last ${v.coverage.lastPull}` : `Cooldown ${v.coverage.cooldownLeft}d`;
-      const marker = L.circleMarker([lat, lng], { radius: r, color: "#ffffff", weight: 1.5, fillColor: COV_COLOR[v.coverage.status] ?? "#64748b", fillOpacity: charted ? 0.9 : 0.4 }).addTo(group);
+      // Whole-area coverage (soft gradient) instead of a lone dot — bigger area where we've closed more.
+      const marker = areaCover(lat, lng, COV_COLOR[v.coverage.status] ?? "#64748b", 6000 + (v.deals / maxDeals) * 7000, r);
       const mg = gradeMarket({ leads: v.leads, deals: v.deals });
       marker.bindPopup(
         `<div style="font:12px system-ui;min-width:170px"><div style="font-weight:800;font-size:13px">${v.m.name}${v.m.waterfront ? " 🌊" : ""}</div>` +
@@ -631,7 +652,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#10b981" }} /> Target market</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#f59e0b" }} /> Watch market</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> Seller lead</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-fuchsia-200" style={{ background: "#d946ef" }} /> Closed deal</span>
+        <span className="flex items-center gap-1.5"><span className="text-[13px] leading-none">⭐</span> Closed deal</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-red-400" style={{ background: "#ef4444", opacity: 0.6 }} /> 🏘 Vacant lot</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-yellow-400" style={{ background: "#eab308", opacity: 0.7 }} /> Recently sold lot</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#a855f7" }} /> 📄 Pulled-list property</span>
