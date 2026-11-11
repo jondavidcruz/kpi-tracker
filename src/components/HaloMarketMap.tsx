@@ -638,11 +638,15 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       // Whole-area coverage (soft gradient) instead of a lone dot — ground radius grows with the score.
       const mk = areaCover(s.lat, s.lng, OPP_COLOR[s.tier], 7000 + (s.score / 100) * 7000, rad);
       const landLine = s.landShare != null ? `<div>🏕 Land ≥$100k: <b>${Math.round(s.landShare * 100)}%</b> of parcels</div>` : "";
+      const yoyLine = s.yoy != null
+        ? `<div>📈 <b>${s.yoy >= 0 ? "+" : ""}${s.yoy}% YoY</b> — ${s.yoy >= 0 ? "prices growing here" : "cooling"}</div>`
+        : "";
       mk.bindPopup(
-        `<div style="font:12px system-ui;min-width:180px"><div style="font-weight:800;font-size:13px">${s.name} <span style="color:#64748b;font-weight:600">${s.state}</span></div>` +
-        `<div style="margin:3px 0"><b style="font-size:15px">${s.score}</b> opportunity · ${s.tier === "target" ? "🎯 Target" : "👀 Watch"}</div>` +
-        `<div>🏠 Median ${s.price != null ? "$" + Math.round(s.price).toLocaleString() : "—"}${s.yoy != null ? ` · ${s.yoy >= 0 ? "+" : ""}${s.yoy}% YoY` : ""}</div>` +
-        `<div>⏱ ${s.dtp != null ? "~" + Math.round(s.dtp) + " days to pending" : "—"}</div>${landLine}</div>`);
+        `<div style="font:12px system-ui;min-width:190px"><div style="font-weight:800;font-size:13px">${s.name} <span style="color:#64748b;font-weight:600">${s.state}</span></div>` +
+        `<div style="margin:3px 0"><b style="font-size:15px">${s.score}</b> opportunity · ${s.tier === "target" ? "🟢 Target — pull here next" : "🟠 Watch — monitor for now"}</div>` +
+        yoyLine + landLine +
+        `<div>⏱ ${s.dtp != null ? "~" + Math.round(s.dtp) + " days to pending (homes)" : "—"}</div>` +
+        `<div style="color:#94a3b8;font-size:11px;margin-top:3px">🏠 Area home price ${s.price != null ? "$" + Math.round(s.price).toLocaleString() : "—"} — wealth signal, not land</div></div>`);
       mk.bindTooltip(`${s.name} · ${s.score}`, { direction: "top", className: "fo-map-label", offset: [0, -rad] });
     }
 
@@ -692,8 +696,8 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       <style>{`.fo-map-label{background:transparent;border:none;box-shadow:none;color:#f1f5f9;font:700 10px system-ui;text-shadow:0 1px 3px #000}.leaflet-popup-content{margin:10px 12px}.fo-map-wrap:fullscreen,.fo-map-wrap:-webkit-full-screen{width:100vw;height:100vh}.fo-map-wrap:fullscreen .fo-map-canvas,.fo-map-wrap:-webkit-full-screen .fo-map-canvas{height:100vh!important;min-height:0!important;border-radius:0!important}`}</style>
       <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-semibold text-slate-300">
         <span className="text-slate-400">Legend:</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#10b981" }} /> Target market</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#f59e0b" }} /> Watch market</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#10b981" }} /> 🟢 Target — pull next</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#f59e0b" }} /> 🟠 Watch — monitor</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> Seller lead</span>
         <span className="flex items-center gap-1.5"><span className="text-[13px] leading-none">⭐</span> Closed deal</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-red-400" style={{ background: "#ef4444", opacity: 0.6 }} /> 🏘 Vacant lot</span>
