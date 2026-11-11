@@ -699,6 +699,8 @@ export async function addCrmApptAction(formData: FormData) {
     const r = await pushApptToGcal({ id: appt.id, title: appt.title, at: appt.at, note: appt.note, withWho: appt.withWho, leadName: c?.name, oppId });
     if (!r.ok && contactId) await logCrmEvent({ contactId, oppId, kind: "system", body: `📅 Google Calendar sync skipped: ${r.why} (share your calendar with the service account — see /crm/calendar)`, actor: "gcal" }).catch(() => {});
   })().catch(() => {});
+  // 📅 Send the SELLER their own calendar invite (.ics + Google link) + confirmation text.
+  (async () => { const { sendSellerApptInvite } = await import("@/lib/appt-invite"); await sendSellerApptInvite({ id: appt.id, oppId, contactId, title: appt.title, at: appt.at, note: appt.note, withWho: appt.withWho }); })().catch(() => {});
   if (contactId) await logCrmEvent({ contactId, oppId, kind: "appt", body: `Appointment set: ${title} — ${at.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}`, actor: me.name });
   revalidatePath(`/crm/${oppId}`);
   revalidatePath("/crm");

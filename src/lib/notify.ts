@@ -141,6 +141,7 @@ export async function sendEmailTo(
   cfg?: ChannelConfig,
   replyTo?: string,
   errOut?: { msg?: string }, // callers can surface the REAL reason on the timeline (Jon 2026-10-09)
+  attachments?: Array<{ filename: string; content: string }>, // Resend attachments (content = base64)
 ): Promise<boolean> {
   const c = cfg ?? (await getChannelConfig());
   if (!c.resendKey || to.length === 0 || !c.emailFrom) {
@@ -152,7 +153,7 @@ export async function sendEmailTo(
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${c.resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: c.emailFrom, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
+      body: JSON.stringify({ from: c.emailFrom, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}), ...(attachments && attachments.length ? { attachments } : {}) }),
     });
     if (!res.ok) {
       const t = await res.text();

@@ -17,7 +17,7 @@ const SEQ_OPTIONS: Array<{ key: string; label: string }> = [
   { key: "offer_negotiate", label: "Offer made / negotiating — keep it warm" },
   { key: "offer_ready", label: "Offer ready — get it in front of them" },
   { key: "ten_days_hell", label: "10 days of hell — intensive close" },
-  { key: "ghosted", label: "Ghosted — long re-engagement" },
+  { key: "cold_nurture", label: "Cold lead — long re-engagement (12 mo)" },
 ];
 
 function SeqPreview({ seq }: { seq?: Seq }) {
@@ -64,6 +64,19 @@ export default function DripControl({ oppId, contactId, drip, onChanged }: { opp
     const fd = new FormData(); fd.set("oppId", oppId); fd.set("contactId", contactId); fd.set("seq", seq);
     start(async () => { await fn(fd); onChanged?.(); });
   };
+  // 📅 Copy the seller's self-booking link to paste into a text/email (they pick a time → we send
+  // them a calendar invite). The signed link needs no login for the seller.
+  const [copied, setCopied] = useState(false);
+  const copyBooking = async () => {
+    try {
+      const r = await fetch(`/api/book?opp=${encodeURIComponent(oppId)}&link=1`);
+      const j = await r.json();
+      if (j?.url) { await navigator.clipboard.writeText(j.url); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    } catch { /* noop */ }
+  };
+  const bookBtn = (
+    <button type="button" onClick={copyBooking} className="rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-emerald-600 ring-1 ring-emerald-200 hover:bg-emerald-50" title="Copy a link the seller taps to pick a call time — we send them a calendar invite automatically">{copied ? "✅ Copied!" : "📅 Booking link"}</button>
+  );
 
   if (drip?.seq) {
     return (
@@ -73,6 +86,7 @@ export default function DripControl({ oppId, contactId, drip, onChanged }: { opp
           <span className="text-slate-500">step {(drip.step ?? 0) + 1}{drip.nextAt ? ` · next ${drip.nextAt}` : ""}{drip.stageArmed ? " · auto" : ""}</span>
           <button type="button" onClick={() => setPreview((p) => !p)} className="rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-sky-600 ring-1 ring-sky-200 hover:bg-sky-50" title="See the full cadence + messages">{preview ? "Hide" : "👁 Preview"}</button>
           <button type="button" disabled={pending} onClick={() => run(stopDripAction, drip.seq!)} className="rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-red-500 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-50">{pending ? "…" : "Stop"}</button>
+          {bookBtn}
         </div>
         {preview && <SeqPreview seq={seqByKey(drip.seq)} />}
       </>
@@ -86,6 +100,7 @@ export default function DripControl({ oppId, contactId, drip, onChanged }: { opp
         </select>
         <button type="button" onClick={() => setPreview((p) => !p)} className="rounded-lg bg-white px-2 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50" title="See the cadence + exact messages before you start">{preview ? "Hide" : "👁 Preview"}</button>
         <button type="button" disabled={pending} onClick={() => run(enrollDripAction, pick)} className="rounded-lg bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-700 ring-1 ring-sky-200 hover:bg-sky-200 disabled:opacity-50" title="Start this follow-up sequence. Level 2 auto-sends; Level 1 drops a ready-to-send task. Any reply stops it.">{pending ? "Starting…" : "📨 Start sequence"}</button>
+        {bookBtn}
       </div>
       {preview && <SeqPreview seq={seqByKey(pick)} />}
     </>

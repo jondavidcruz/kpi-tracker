@@ -33,13 +33,15 @@ export const DRIP_SEQUENCES: DripSeq[] = [
 // outbound-anonymity rule). Same SAFE assisted-task behavior; a reply stops it.
 DRIP_SEQUENCES.push(
   {
-    key: "contract_sent", name: "Contract sent — chase the signature (5 touches / ~6 days)", autoSend: true,
+    key: "contract_sent", name: "Contract sent — chase the signature (7 touches / ~12 days)", autoSend: true,
     steps: [
       { channel: "sms", delayDays: 0, sms: "Hi {first}, just sent over the agreement for {address} — did it come through okay? Happy to walk you through any of it." },
       { channel: "email", delayDays: 1, emailSubject: "Your agreement for {address}", emailBody: "Hi {first},\n\nChecking in on the agreement for {address}. No pressure at all — I just want to make sure it reached you and answer any questions before you sign. Reply here anytime and I'll help you through it.\n\n— {rep}" },
       { channel: "sms", delayDays: 2, sms: "{first}, any questions on the agreement for {address}? Once it's signed we can keep things moving — I'm here if you need anything." },
       { channel: "email", delayDays: 4, emailSubject: "Anything I can clear up on {address}?", emailBody: "Hi {first},\n\nJust making sure the agreement for {address} didn't get buried. If anything's unclear or you'd like to go over it on a quick call, I'm glad to help. Whenever you're ready, a quick signature keeps everything moving.\n\n— {rep}" },
       { channel: "sms", delayDays: 6, sms: "Hi {first}, still here to get {address} wrapped up for you. Let me know if you need anything to feel good about signing." },
+      { channel: "sms", delayDays: 9, sms: "{first}, would it be easier to go over the agreement for {address} on a quick call? I can walk you through it line by line — just tell me a good time." },
+      { channel: "email", delayDays: 12, emailSubject: "Ready whenever you are — {address}", emailBody: "Hi {first},\n\nNo rush on {address} — I just want to make signing as easy as possible for you. If there's anything holding you up, tell me and we'll sort it out together. Once it's signed, I handle everything from there.\n\n— {rep}" },
     ],
   },
   {
@@ -79,11 +81,16 @@ DRIP_SEQUENCES.push(
     ],
   },
   {
-    key: "offer_negotiate", name: "Offer made / negotiating — keep it warm (3 touches / ~6 days)",
+    key: "offer_negotiate", name: "Offer made — answer questions + close the gap (6 touches / ~21 days)",
+    // After we've given an offer: keep checking for questions and nudging toward a yes. Emails are
+    // allowed here (we've sent an offer → we have their real email).
     steps: [
-      { channel: "sms", delayDays: 0, sms: "Hi {first}, following up on the offer for {address}. Is the number close for you, or is there something we can adjust to make it work?" },
-      { channel: "email", delayDays: 3, emailSubject: "Can we make {address} work?", emailBody: "Hi {first},\n\nI'd like to find a number that works for both of us on {address}. If the offer isn't quite there, tell me what you had in mind and I'll see what I can do — happy to hop on a quick call too.\n\n— {rep}" },
-      { channel: "sms", delayDays: 6, sms: "{first}, still happy to work with you on {address}. Just let me know what number gets us there and I'll do my best." },
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, following up on the offer for {address}. Is the number close for you, or is there anything we can adjust to make it work?" },
+      { channel: "email", delayDays: 2, emailSubject: "Any questions on your offer for {address}?", emailBody: "Hi {first},\n\nJust making sure you got the offer for {address} and that everything made sense. If any part of it is unclear — the price, how closing works, timing — I'm glad to walk you through it on a quick call. What questions can I answer?\n\n— {rep}" },
+      { channel: "sms", delayDays: 5, sms: "{first}, any thoughts on the offer for {address}? If the number isn't quite there, tell me what you had in mind and I'll see what I can do." },
+      { channel: "email", delayDays: 9, emailSubject: "Can we make {address} work?", emailBody: "Hi {first},\n\nI'd really like to find a number that works for both of us on {address}. If you tell me what you'd need to feel good about it, I'll do my best to get there — happy to hop on a quick call anytime.\n\n— {rep}" },
+      { channel: "sms", delayDays: 14, sms: "{first}, still happy to work with you on {address}. Just reply with the number that gets us there and I'll do everything I can." },
+      { channel: "sms", delayDays: 21, sms: "Hi {first}, checking in one more time on {address}. The offer's still good — would a quick 2-minute call help you decide? Just tell me a time." },
     ],
   },
   {
