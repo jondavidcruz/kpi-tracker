@@ -126,7 +126,10 @@ export default async function MarketsPage() {
   // 🔎 Market Finder — the live scan from the DB, or the precomputed seed (scored on the fly)
   // until someone runs the first refresh. Shallow-copy the seed rows so scoring never mutates
   // the shared import.
-  const scanStore = scan ?? { ...SCAN_SEED, counties: scoreCounties(SCAN_SEED.counties.map((c) => ({ ...c }))) };
+  const scanStoreRaw = scan ?? { ...SCAN_SEED, counties: scoreCounties(SCAN_SEED.counties.map((c) => ({ ...c }))) };
+  // 🏖 Focus FLORIDA for land right now (Jon 2026-11-11) — drop SC from the Finder (SC is an
+  // attorney state, harder to wholesale). Filters a DB-stored scan too, not just the seed.
+  const scanStore = { ...scanStoreRaw, counties: (scanStoreRaw.counties ?? []).filter((c) => c.state !== "SC") };
 
   // Market Finder points for the map — join each scanned county to its centroid.
   const scanPoints = (scanStore.counties ?? []).flatMap((c) => {

@@ -101,6 +101,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [searchBusy, setSearchBusy] = useState(false);
   // 🔎 Zillow-style autocomplete for the search box (Jon 2026-11-09).
   const [suggests, setSuggests] = useState<{ label: string; sub: string; lat: number; lon: number }[]>([]);
+  // 📌 Multi-market staging (Jon 2026-11-11): pick several areas one at a time (a pull often spans
+  // several — e.g. Port St. Lucie + Fort Pierce), then mark them ALL explored in one click.
+  const [picks, setPicks] = useState<{ label: string; lat: number; lon: number }[]>([]);
   const sugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sensible defaults so the map isn't overwhelming (Jon 2026-11-08): the key layers on, the two
   // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
@@ -143,17 +146,24 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     };
   }, []);
 
-  async function bulkMark() {
-    const places = bulkText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
-    if (!places.length) return;
+  // Mark a list of named places (city/county/ZIP) explored in one call — shared by the staged-picks
+  // flow and the paste-a-list bulk box. Each is geocoded + saved as a territory server-side.
+  async function markPlaces(places: string[], status: TerrStatus): Promise<boolean> {
+    if (!places.length) return false;
     setBulkBusy(true); setGeoMsg(`Marking ${places.length} area${places.length > 1 ? "s" : ""}… (~1s each, free)`);
     try {
-      const r = await fetch("/api/markets/bulk-mark", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ places, status: bulkStatus }) });
+      const r = await fetch("/api/markets/bulk-mark", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ places, status }) });
       const j = await r.json();
-      if (!r.ok) { setGeoMsg(j.error || "bulk-mark failed"); return; }
+      if (!r.ok) { setGeoMsg(j.error || "bulk-mark failed"); return false; }
       setGeoMsg(`✅ Marked ${j.marked}/${j.total}${j.failed?.length ? ` · couldn't find: ${j.failed.slice(0, 5).join(", ")}` : ""}`);
-      setBulkText(""); setBulkOpen(false); router.refresh();
-    } catch { setGeoMsg("network error"); } finally { setBulkBusy(false); }
+      router.refresh();
+      return true;
+    } catch { setGeoMsg("network error"); return false; } finally { setBulkBusy(false); }
+  }
+
+  async function bulkMark() {
+    const places = bulkText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+    if (await markPlaces(places, bulkStatus)) { setBulkText(""); setBulkOpen(false); }
   }
 
   // 🔎 Search a county / ZIP → drop its boundary as a pending territory to name + save.
@@ -231,7 +241,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const map = mapRef.current as any;
     if (map && Number.isFinite(s.lat) && Number.isFinite(s.lon)) { try { map.flyTo([s.lat, s.lon], 10); } catch { /* ignore */ } }
-    setSearchQ(s.label); setSuggests([]);
+    // Stage it (don't replace) so you can add several, then mark them all (Jon 2026-11-11).
+    setPicks((p) => (p.some((x) => x.label === s.label) ? p : [...p, { label: s.label, lat: s.lat, lon: s.lon }]));
+    setSearchQ(""); setSuggests([]);
   }
   // Click a marked area in the list → fly the map to it (Jon 2026-11-09).
   function zoomToTerritory(points?: [number, number][]) {
@@ -546,9 +558,28 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
               </div>
             )}
           </div>
-          <button onClick={searchArea} disabled={searchBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{searchBusy ? "Searching…" : "🔎 Find & mark"}</button>
+          <button onClick={searchArea} disabled={searchBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{searchBusy ? "Searching…" : "🔎 Find & name one"}</button>
           <button onClick={() => setBulkOpen((b) => !b)} className="rounded-lg bg-slate-200 px-2.5 py-1 font-bold text-slate-700 hover:bg-slate-300">📋 Bulk-mark ZIPs</button>
-          <span className="text-slate-400">or draw with the ▱/⬠ tools (top-right).</span>
+          <span className="text-slate-400">Pick several from the dropdown to stage them, then mark all · or draw ▱/⬠.</span>
+        </div>
+      )}
+      {canEdit && picks.length > 0 && (
+        <div className="mb-1 flex flex-wrap items-center gap-1.5 px-1 text-[11px]">
+          <span className="font-bold text-slate-400">📌 Staged ({picks.length}):</span>
+          {picks.map((p) => (
+            <span key={p.label} className="inline-flex items-center gap-1 rounded-full bg-cyan-900/50 px-2 py-0.5 font-semibold text-cyan-200 ring-1 ring-cyan-700/60">
+              {p.label}
+              <button onClick={() => setPicks((xs) => xs.filter((x) => x.label !== p.label))} className="text-cyan-300/70 hover:text-white">×</button>
+            </span>
+          ))}
+          <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as TerrStatus)} className="rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 font-semibold text-white">
+            <option value="pulled">📥 Pulled</option>
+            <option value="marketing">📣 Marketing</option>
+            <option value="target">🎯 Target</option>
+            <option value="avoid">⛔ Avoid</option>
+          </select>
+          <button onClick={() => markPlaces(picks.map((p) => p.label), bulkStatus).then((ok) => { if (ok) setPicks([]); })} disabled={bulkBusy} className="rounded-lg bg-emerald-600 px-2.5 py-0.5 font-bold text-white hover:bg-emerald-700 disabled:opacity-50">{bulkBusy ? "Marking…" : `📌 Mark ${picks.length} explored`}</button>
+          <button onClick={() => setPicks([])} className="text-slate-400 hover:text-slate-200">clear</button>
         </div>
       )}
       {canEdit && bulkOpen && (

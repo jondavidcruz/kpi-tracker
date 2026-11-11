@@ -19,7 +19,7 @@ const pct = (n: number | null) => (n == null ? "—" : `${n >= 0 ? "+" : ""}${n}
 
 export default function MarketFinder({ initial, canRefresh }: { initial: ScanStore | null; canRefresh: boolean }) {
   const router = useRouter();
-  const [state, setState] = useState<"ALL" | "FL" | "SC">("ALL");
+  const [state] = useState<"ALL" | "FL">("ALL"); // FL-only now (SC removed) — kept so the filter below is a no-op pass-through
   const [minPrice, setMinPrice] = useState(0);
   const [maxDtp, setMaxDtp] = useState(0); // 0 = no cap
   const [hideCheap, setHideCheap] = useState(true);
@@ -59,7 +59,7 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
   async function refresh(withLand: boolean) {
     setBusy(true); setMsg(withLand ? "Scanning public data + land values… (up to ~45s)" : "Refreshing market data…");
     try {
-      const r = await fetch(`/api/markets/scan?refresh=1${withLand ? "&land=1" : ""}&states=FL,SC`, { cache: "no-store" });
+      const r = await fetch(`/api/markets/scan?refresh=1${withLand ? "&land=1" : ""}&states=FL`, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok || j.ok === false) { setMsg(j.error || "refresh failed"); return; }
       setMsg(`✅ Updated ${j.counties?.length ?? 0} counties${j.landEnrichedThisRun ? ` · land for ${j.landEnrichedThisRun} more` : ""}`);
@@ -77,7 +77,7 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
         <h2 className="text-lg font-extrabold text-slate-900">🔎 Market Finder</h2>
         <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">NEW</span>
         <span className="text-xs text-slate-500">
-          Scans every FL &amp; SC county from free public data to find the next high-margin land market.
+          Scans every Florida county from free public data to find the next high-margin land market.
         </span>
         {canRefresh && (
           <div className="ml-auto flex items-center gap-2">
@@ -95,9 +95,6 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
 
       {/* Filters */}
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-        <select value={state} onChange={(e) => setState(e.target.value as "ALL" | "FL" | "SC")} className="rounded-lg border border-slate-300 px-2 py-1 font-semibold">
-          <option value="ALL">All states</option><option value="FL">Florida</option><option value="SC">South Carolina</option>
-        </select>
         <select value={minPrice} onChange={(e) => setMinPrice(Number(e.target.value))} className="rounded-lg border border-slate-300 px-2 py-1">
           <option value={0}>Any home price</option><option value={300000}>≥ $300k</option><option value={400000}>≥ $400k</option><option value={500000}>≥ $500k</option><option value={750000}>≥ $750k</option>
         </select>

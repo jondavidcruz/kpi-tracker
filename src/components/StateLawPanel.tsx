@@ -14,6 +14,19 @@ export default function StateLawPanel() {
         rules with a licensed attorney in that state before working a deal</b> — laws change.
       </div>
 
+      {/* 🌱 Where to expand after Florida — Florida-like growth states that are ADDING land supply
+          (builders buying lots), not supply-constrained like CA (Jon 2026-11-11). */}
+      <div className="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
+        <div className="mb-1.5 text-[13px] font-black text-emerald-900">🌱 Where to expand after Florida</div>
+        <p className="mb-2 text-[12px] text-emerald-900/80">We want states like FL — fast population growth and builders <b>adding supply</b> (buying lots to build), with title-company closings (no attorney) so deals move. Not supply-constrained, over-regulated states like California.</p>
+        <ul className="space-y-1.5 text-[12px] text-slate-700">
+          <li>🟢 <b>Closest to Florida — Arizona &amp; Tennessee.</b> Booming growth, builders adding supply, title-company closings, and <b>sale prices are public</b> (easy to comp). Best next steps.</li>
+          <li>🟡 <b>Huge demand but harder — Texas.</b> Massive builder demand + title state, <b>but non-disclosure</b> (sale prices aren&apos;t public, so comps are harder — lean on agents/MLS). Colorado is also solid.</li>
+          <li>🔴 <b>Avoid for now — attorney states (SC, NC, GA, AL)</b> and <b>supply-constrained California</b> (slow-to-build, heavily regulated — the opposite of a land-supply market).</li>
+        </ul>
+        <p className="mt-2 text-[11px] text-emerald-800/70">Rule of thumb: 🟢 friendly + growing + public prices = aim here. Attorney state or no new supply = skip.</p>
+      </div>
+
       <div className="flex flex-wrap gap-3 text-[11px] font-semibold">
         {order.map((r) => (
           <span key={r} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 ${RATING_META[r].cls}`}>

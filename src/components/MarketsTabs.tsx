@@ -16,7 +16,7 @@ export default function MarketsTabs({
     ...(showResearch && research
       ? [{ key: "research", label: "🔬 Research", hint: "Pull where your buyers are hungry — dial a buy-box and watch live motivated-owner counts.", node: research }]
       : []),
-    { key: "finder", label: "🔎 Finder", hint: "Scan every FL & SC county from public data to discover the next high-margin market.", node: finder },
+    { key: "finder", label: "🔎 Finder", hint: "Scan every Florida county from public data to discover the next high-margin land market.", node: finder },
     { key: "niches", label: "🎯 Niches", hint: "Which land niche to attack — ranked do-first scorecard, buyer matches, spread bands, and where to look.", node: niches },
     { key: "laws", label: "⚖️ State Laws", hint: "Which states are easy vs hard to wholesale in — aim pulls at friendly ground, skip attorney-heavy states. Orientation only.", node: laws },
   ];
