@@ -402,8 +402,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
               style: (feat: any) => {
                 const p = feat.properties || {};
                 const sold = (p.SALE_YR1 || 0) >= thisYear - 2 && (p.SALE_PRC1 || 0) > 1000;
-                const c = sold ? "#f59e0b" : "#38bdf8";
-                return { color: c, weight: 1, fillColor: c, fillOpacity: sold ? 0.28 : 0.12 };
+                // Zillow-style, high-visibility lot boxes (Jon 2026-11-11): recently SOLD = yellow,
+                // vacant/available = red, with a clear outline so you can actually see the parcels.
+                const c = sold ? "#eab308" : "#ef4444";
+                return { color: c, weight: 1.6, fillColor: c, fillOpacity: sold ? 0.45 : 0.3 };
               },
               onEachFeature: (feat: any, layer: any) => {
                 const p = feat.properties || {};
@@ -558,7 +560,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       const g = gradeMarket({ leads: lp.leads, deals: lp.deals });
       const hasDeal = lp.deals > 0;
       const rad = 4 + Math.min(10, Math.log2(lp.leads + 1) * 2.2);
-      const mk = L.circleMarker([lp.lat, lp.lng], { radius: rad, color: hasDeal ? "#fbbf24" : "#ffffff", weight: hasDeal ? 2.5 : 1, fillColor: hasDeal ? "#f59e0b" : "#38bdf8", fillOpacity: 0.85 }).addTo(group);
+      const mk = L.circleMarker([lp.lat, lp.lng], { radius: rad, color: hasDeal ? "#f5d0fe" : "#ffffff", weight: hasDeal ? 3 : 1, fillColor: hasDeal ? "#d946ef" : "#38bdf8", fillOpacity: 0.9 }).addTo(group);
       mk.bindPopup(`<div style="font:12px system-ui"><b>ZIP ${lp.zip}</b><br>📥 <b>${lp.leads}</b> seller lead${lp.leads > 1 ? "s" : ""}${hasDeal ? `<br>⭐ <b>${lp.deals}</b> land deal${lp.deals > 1 ? "s" : ""} CLOSED here` : ""}<br>🏅 <b style="color:${g.color}">${g.label}</b></div>`);
     }
 
@@ -626,10 +628,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#10b981" }} /> Target market</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#f59e0b" }} /> Watch market</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#38bdf8" }} /> Seller lead</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-amber-300" style={{ background: "#f59e0b" }} /> Closed deal</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#3b82f6", opacity: 0.55 }} /> Explored area</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-sky-400" style={{ background: "#38bdf8", opacity: 0.4 }} /> 🏘 Vacant lot</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-amber-400" style={{ background: "#f59e0b", opacity: 0.5 }} /> Recently sold lot</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-fuchsia-200" style={{ background: "#d946ef" }} /> Closed deal</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-red-400" style={{ background: "#ef4444", opacity: 0.6 }} /> 🏘 Vacant lot</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-yellow-400" style={{ background: "#eab308", opacity: 0.7 }} /> Recently sold lot</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#a855f7" }} /> 📄 Pulled-list property</span>
         <span className="text-slate-500">· bigger = more</span>
         <button onClick={enterFs} className="ml-auto rounded-full bg-slate-700/70 px-2.5 py-1 font-bold text-slate-100 ring-1 ring-slate-600 hover:bg-slate-600">⛶ Full screen</button>
