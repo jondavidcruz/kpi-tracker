@@ -15,6 +15,7 @@ type NumHealth = { rate: number | null; calls: number; tone: "good" | "warn" | "
 type PhoneData = {
   numbers: string[]; defaultFrom: string;
   health?: Record<string, NumHealth>; // inbound answer-rate proxy per line — which number is safe to dial from
+  usage?: Record<string, { calls: number; texts: number; callCap: number; textCap: number; tone: "good" | "warn" | "bad" }>; // today's outbound volume vs cap (keyed by 10-digit)
   recents: Array<{ name: string; phone: string; contactId: string; when: string; body: string }>;
   contacts: Array<{ id: string; name: string; phone: string }>;
   queue: Array<{ oppId: string; contactId: string; name: string; phone: string; title: string; due: string }>;
@@ -892,15 +893,26 @@ export default function DialPad({ floating = false, owner = false }: { floating?
                 <option value="auto">📍 Closest to the contact (auto · rotates on no-answer)</option>
                 {sortCallerIds(data?.numbers ?? []).map((n) => {
                   const g = geoForPhone(n); const h = data?.health?.[n];
-                  const hl = !h ? "" : h.tone === "new" ? " · 🆕" : ` · ${h.tone === "good" ? "🟢" : h.tone === "warn" ? "🟡" : "🔴"} ${h.rate}%`;
-                  return <option key={n} value={n}>{n}{g ? ` — ${g}` : ""}{hl}</option>;
+                  const u = data?.usage?.[n.replace(/\D/g, "").slice(-10)];
+                  const dot = (t?: string) => (t === "good" ? "🟢" : t === "warn" ? "🟡" : t === "bad" ? "🔴" : "");
+                  const vol = u ? ` · ${dot(u.tone)} 📞${u.calls}/${u.callCap} 💬${u.texts}/${u.textCap}` : "";
+                  const hl = !h ? "" : h.tone === "new" ? "" : ` · ${h.rate}% ans`;
+                  return <option key={n} value={n}>{n}{g ? ` — ${g}` : ""}{vol}{hl}</option>;
                 })}
               </select>
               {(() => {
-                const h = from !== "auto" ? data?.health?.[from] : undefined;
-                if (!h) return null;
-                const txt = h.tone === "new" ? "🆕 No answer data yet (needs inbound calls)" : `${h.tone === "good" ? "🟢 Healthy" : h.tone === "warn" ? "🟡 Watch" : "🔴 Low"} · ${h.rate}% answer rate (last 14d, ${h.calls} calls)`;
-                return <span title="Inbound answer-rate proxy for carrier spam-flagging. Outbound dial metering isn't live yet, so this is an inbound signal. Full board: /phone-health" className="mt-1 block text-[10px] font-semibold text-slate-500">{txt}</span>;
+                if (from === "auto") return null;
+                const u = data?.usage?.[from.replace(/\D/g, "").slice(-10)];
+                const h = data?.health?.[from];
+                if (!u && !h) return null;
+                const over = !!u && (u.calls >= u.callCap || u.texts >= u.textCap);
+                const toneCls = over ? "text-red-600" : u?.tone === "warn" ? "text-amber-600" : "text-slate-500";
+                return (
+                  <span title="Today's outbound volume on this line vs a carrier-safe daily cap. Keep a line out of the red so it doesn't get spam-flagged — rest it or rotate to a greener number. Full board: /phone-health" className="mt-1 block text-[10px] font-semibold">
+                    {u && <span className={toneCls}>📞 {u.calls}/{u.callCap} calls · 💬 {u.texts}/{u.textCap} texts today{over ? " · ⛔ at cap — rest / rotate" : ""}</span>}
+                    {h && h.rate != null && <span className="ml-1 text-slate-400">· {h.rate}% answer</span>}
+                  </span>
+                );
               })()}
             </span>
             <span className="flex items-center gap-1.5">

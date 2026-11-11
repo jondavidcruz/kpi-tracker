@@ -56,6 +56,14 @@ export async function GET(req: NextRequest) {
     } catch { /* health is optional — dialer works without it */ }
   }
 
+  // 📵 Per-line DAILY volume vs carrier-safe cap (Jon 2026-11-11) — shown in the "Calling From"
+  // picker so you can protect a number at a glance (don't over-dial/over-text it into a spam flag).
+  let usage: Awaited<ReturnType<typeof import("@/lib/line-usage").lineUsageToday>> = {};
+  if (numbers.length) {
+    try { const { lineUsageToday } = await import("@/lib/line-usage"); usage = await lineUsageToday(numbers); }
+    catch { /* usage is optional — dialer works without it */ }
+  }
+
   const manager = isManager(me!);
   const mine = manager ? {} : { assignedTo: { equals: me!.name, mode: "insensitive" as const } };
   const today = new Date().toISOString().slice(0, 10);
@@ -82,7 +90,7 @@ export async function GET(req: NextRequest) {
   const cById = new Map(cRows.map((c) => [c.id, c]));
 
   return NextResponse.json({
-    numbers, health, isOwner: isOwner(me!),
+    numbers, health, usage, isOwner: isOwner(me!),
     // default to the configured caller id ONLY if it's a live line; otherwise the
     // first live number — never a porting number (Jon 2026-10-21).
     defaultFrom: (process.env.TELNYX_CALLER_ID && numbers.includes(process.env.TELNYX_CALLER_ID)) ? process.env.TELNYX_CALLER_ID : (numbers[0] ?? ""),

@@ -237,7 +237,7 @@ type DripContact = { name: string; phone: string; email: string; address: string
 /** Pick a live, SMS-capable "from" line. If the lead already knows a line, stay sticky to it; else
  *  ROTATE across our live texting lines by `rotateIdx` so a batch doesn't all come from one number
  *  (spreads carrier-spam risk — Jon 2026-11-10). */
-async function pickDripSmsFrom(contactId: string, rotateIdx = 0): Promise<string | null> {
+async function pickDripSmsFrom(contactId: string, rotateIdx = 0, capped?: Set<string>): Promise<string | null> {
   let from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID || "";
   let sticky = false;
   try {
@@ -249,20 +249,24 @@ async function pickDripSmsFrom(contactId: string, rotateIdx = 0): Promise<string
       const { partitionNumbers, pickWorkingCallerId, digits } = await import("@/lib/telnyx-numbers");
       const { live } = await partitionNumbers();
       const smsLive = live.filter((n) => n.msgProfile);
-      if (!sticky && smsLive.length) {
-        // brand-new conversation → round-robin across live lines so 100 leads don't all text from #1
-        from = smsLive[((rotateIdx % smsLive.length) + smsLive.length) % smsLive.length].number;
+      // Prefer lines UNDER today's carrier-safe text cap; if every line is capped, fall back to all.
+      const underCap = capped ? smsLive.filter((n) => !capped.has(digits(n.number))) : smsLive;
+      const pool = underCap.length ? underCap : smsLive;
+      const stickyCapped = sticky && !!capped && capped.has(digits(from));
+      if ((!sticky || stickyCapped) && pool.length) {
+        // brand-new conversation (or the sticky line is maxed) → round-robin across under-cap lines
+        from = pool[((rotateIdx % pool.length) + pool.length) % pool.length].number;
       } else {
         const fromD = digits(from);
         const isLiveSms = !!fromD && smsLive.some((n) => digits(n.number) === fromD);
-        if (!isLiveSms) { const pick = smsLive[rotateIdx % Math.max(1, smsLive.length)]?.number || smsLive[0]?.number || (await pickWorkingCallerId(from)).callerId; if (pick) from = pick; }
+        if (!isLiveSms) { const pick = pool[rotateIdx % Math.max(1, pool.length)]?.number || pool[0]?.number || (await pickWorkingCallerId(from)).callerId; if (pick) from = pick; }
       }
     } catch { /* keep the configured line */ }
   }
   return from || null;
 }
 
-async function autoSendDripSms(contact: DripContact, contactId: string, oppId: string, rawText: string, rotateIdx = 0): Promise<{ sent: boolean; reason?: string }> {
+async function autoSendDripSms(contact: DripContact, contactId: string, oppId: string, rawText: string, rotateIdx = 0, capped?: Set<string>): Promise<{ sent: boolean; reason?: string }> {
   const { logCrmEvent } = await import("@/lib/crm");
   const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
   const text = scrubOwnerIdentity((rawText || "").trim().slice(0, 900));
@@ -273,7 +277,7 @@ async function autoSendDripSms(contact: DripContact, contactId: string, oppId: s
   const { quietHoursWarning } = await import("@/lib/npa-tz");
   const quiet = quietHoursWarning(to, contact?.address || "");
   if (quiet) return { sent: false, reason: `quiet hours — ${quiet}` };
-  const from = await pickDripSmsFrom(contactId, rotateIdx);
+  const from = await pickDripSmsFrom(contactId, rotateIdx, capped);
   if (!process.env.TELNYX_API_KEY || !from) return { sent: false, reason: "no live line" };
   const sentPrefix = `➡️ Us: ${text}`.slice(0, 190);
   const dup = await db.crmEvent.findFirst({ where: { contactId, kind: "sms", at: { gte: new Date(Date.now() - 120_000) }, body: { startsWith: sentPrefix } }, select: { id: true } }).catch(() => null);
@@ -332,6 +336,19 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
   // weekday cron runs, daily throughput ≈ DRIP_SEND_CAP × 3.
   const SEND_CAP = Math.max(1, Number(process.env.DRIP_SEND_CAP) || 40);
   let autoSent = 0, rotateIdx = 0;
+  // 📵 Lines that have already hit today's carrier-safe TEXT cap — the rotation steers auto-sends
+  // away from them so automation never over-texts a number into a spam flag (Jon 2026-11-11).
+  let cappedLines: Set<string> | undefined;
+  try {
+    const { partitionNumbers, digits } = await import("@/lib/telnyx-numbers");
+    const { live } = await partitionNumbers();
+    const smsNums = live.filter((n) => n.msgProfile).map((n) => n.number);
+    if (smsNums.length) {
+      const { lineUsageToday, lineAtCap } = await import("@/lib/line-usage");
+      const u = await lineUsageToday(smsNums);
+      cappedLines = new Set(smsNums.map((n) => digits(n)).filter((d) => lineAtCap(u[d], "sms")));
+    }
+  } catch { /* no cap enforcement if number/usage lookup fails — sends still go, just unthrottled per-line */ }
   for (const o of due) {
     const state = readDrip(o.formData);
     const seq = state && getDripSeq(state.seq);
@@ -368,7 +385,7 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
     if (willAutoSend) {
       autoSent++; // consumes a wave slot (success or not) so we never hammer carriers in one run
       const r = channel === "sms"
-        ? await autoSendDripSms(o.contact, o.contactId, o.id, body, rotateIdx++)
+        ? await autoSendDripSms(o.contact, o.contactId, o.id, body, rotateIdx++, cappedLines)
         : await autoSendDripEmail(o.contact, o.contactId, o.id, subject, body, tok.rep);
       if (!r.sent) {
         // Didn't send (quiet hours / no line / dup / error) → drop an assisted task so the touch
