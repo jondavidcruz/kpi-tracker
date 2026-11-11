@@ -8,6 +8,7 @@ import MarketFinder from "@/components/MarketFinder";
 import MarketsTabs from "@/components/MarketsTabs";
 import MarketBlacklist from "@/components/MarketBlacklist";
 import NichePlaybook from "@/components/NichePlaybook";
+import StateLawPanel from "@/components/StateLawPanel";
 import { readBlacklist } from "@/lib/market-blacklist";
 import { readBuyerNicheMap, buildNicheMatches } from "@/lib/buyer-niches";
 import { readScan, scoreCounties } from "@/lib/market-scan";
@@ -184,6 +185,7 @@ export default async function MarketsPage() {
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
         niches={<NichePlaybook matches={nicheMatches} />}
+        laws={<StateLawPanel />}
       />
     </div>
   );

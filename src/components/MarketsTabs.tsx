@@ -9,8 +9,8 @@ import { useState, type ReactNode } from "react";
 type TabDef = { key: string; label: string; hint: string; node: ReactNode };
 
 export default function MarketsTabs({
-  map, research, finder, niches, showResearch = true,
-}: { map: ReactNode; research?: ReactNode; finder: ReactNode; niches: ReactNode; showResearch?: boolean }) {
+  map, research, finder, niches, laws, showResearch = true,
+}: { map: ReactNode; research?: ReactNode; finder: ReactNode; niches: ReactNode; laws: ReactNode; showResearch?: boolean }) {
   const tabs: TabDef[] = [
     { key: "map", label: "🗺 Map", hint: "The live satellite map — opportunity, buyer coverage, and your territories.", node: map },
     ...(showResearch && research
@@ -18,6 +18,7 @@ export default function MarketsTabs({
       : []),
     { key: "finder", label: "🔎 Finder", hint: "Scan every FL & SC county from public data to discover the next high-margin market.", node: finder },
     { key: "niches", label: "🎯 Niches", hint: "Which land niche to attack — ranked do-first scorecard, buyer matches, spread bands, and where to look.", node: niches },
+    { key: "laws", label: "⚖️ State Laws", hint: "Which states are easy vs hard to wholesale in — aim pulls at friendly ground, skip attorney-heavy states. Orientation only.", node: laws },
   ];
   const [active, setActive] = useState("map");
   const current = tabs.find((t) => t.key === active) ?? tabs[0];

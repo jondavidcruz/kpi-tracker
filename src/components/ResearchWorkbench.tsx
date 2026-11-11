@@ -11,6 +11,7 @@ import {
 } from "@/lib/dm-filter-catalog";
 import type { DemandResult, RecommendedMarket } from "@/lib/buyer-demand-markets";
 import { ELITE_ENCLAVES, type Enclave } from "@/lib/elite-markets";
+import { lawForState, RATING_META } from "@/lib/wholesale-law";
 
 type Loc = { type: "county" | "city" | "zip_code" | "state"; code: string; name: string; state?: string; property_count?: number };
 type Glance = { name: string; state: string; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; landHigh: number | null; landTotal: number | null };
@@ -291,6 +292,22 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
           </div>
         )}
       </div>
+
+      {/* ⚖️ Wholesaling-law read for this state — so you don't pour pulls into an attorney/restricted
+          state (Jon 2026-11-11). Orientation only; full detail on the State Laws tab. */}
+      {picked?.state && (() => {
+        const law = lawForState(picked.state);
+        if (!law) return null;
+        const m = RATING_META[law.rating];
+        return (
+          <div className={`mb-3 flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-[11px] ring-1 ${m.cls}`}>
+            <span className="font-bold">{m.dot} {law.name} — {m.label} to wholesale</span>
+            {law.attorneyState && <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">⚖️ attorney state</span>}
+            <span>· {law.verdict.replace(/^[🟢🟡🔴]\s*/u, "")}</span>
+            <span className="ml-auto text-[10px] opacity-70">orientation only · see ⚖️ State Laws tab</span>
+          </div>
+        );
+      })()}
 
       {/* At-a-glance market read */}
       {glance && (
