@@ -15,6 +15,7 @@ import type { BuyerCoverage } from "@/lib/buyer-coverage-map";
 
 type Pt = { lat: number; lng: number };
 export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; lat: number; lng: number };
+export type ClosedDeal = { lat: number; lng: number; address: string; soldPrice: number | null; fee: number | null; buyer: string; soldDate: string; dealType: string };
 
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
@@ -51,6 +52,18 @@ const COORDS: Record<string, [number, number]> = {
 const FDEP_CADASTRAL = "https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query";
 const LOTS_MIN_ZOOM = 15; // statewide parcels are 10M+ — pull only at neighborhood zoom so we don't hit the 2000 cap
 const LOTS_VACANT_WHERE = "DOR_UC IN ('000','010','040') OR (DOR_UC >= '050' AND DOR_UC <= '069')";
+// 🧾 Rich county-record popup for a single parcel (used when a pulled-list pin is clicked — we look
+// the lot up live from the statewide cadastral for FREE: owner, assessed/just value, land value,
+// acreage, last sale, site address). Keeps a pulled lead from being just an anonymous purple dot.
+function lotRecordHtml(p: Record<string, unknown>): string {
+  const num = (v: unknown) => (typeof v === "number" ? v : Number(v) || 0);
+  const uc = p.DOR_UC === "000" ? "Vacant residential" : p.DOR_UC === "010" ? "Vacant commercial" : p.DOR_UC === "040" ? "Vacant industrial" : /^0[5-6]\d$/.test(String(p.DOR_UC || "")) ? "Agricultural" : p.DOR_UC ? `Use code ${p.DOR_UC}` : "Parcel";
+  const ac = num(p.LND_SQFOOT) ? (num(p.LND_SQFOOT) / 43560).toFixed(2) : "—";
+  const sale = num(p.SALE_YR1) && num(p.SALE_PRC1) > 1000 ? `🏷 Last sale ${p.SALE_MO1 || ""}/${p.SALE_YR1}: <b>$${Math.round(num(p.SALE_PRC1)).toLocaleString()}</b>` : "🏷 No recent arm's-length sale";
+  const addr = p.PHY_ADDR1 ? `${String(p.PHY_ADDR1).trim()}${p.PHY_CITY ? ", " + String(p.PHY_CITY).trim() : ""}` : "";
+  const land = num(p.LND_VAL) > 0 ? `<div>🌱 Land value: <b>$${Math.round(num(p.LND_VAL)).toLocaleString()}</b></div>` : "";
+  return `<div style="font:12px system-ui;min-width:195px"><div style="font-weight:800">📄 Pulled lead · ${uc}</div>${addr ? `<div style="color:#334155">📍 ${addr}</div>` : ""}<div style="margin-top:3px">💰 Assessed (just) value: <b>$${Math.round(num(p.JV)).toLocaleString()}</b></div>${land}<div>📐 ${ac} ac</div><div>${sale}</div><div>👤 ${p.OWN_NAME || "—"}</div><div style="color:#64748b">Parcel ${p.PARCEL_ID || ""}</div></div>`;
+}
 // 🌫 Fog of war only appears once you've zoomed IN past this level — the zoomed-out map stays
 // normal (no haze, no hard rectangle edges). At this zoom the fog's far edges are off-screen, so
 // you only ever see the light haze + the clearings we've explored, never a boxy border (Jon 2026-11-10).
@@ -92,7 +105,7 @@ function loadScript(src: string, css?: string): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {} }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; contractSent: number; closed: number; value: number }> }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, closedDeals = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; contractSent: number; closed: number; value: number }>; closedDeals?: ClosedDeal[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
@@ -135,6 +148,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   // 🧹 Simplified (Jon 2026-11-11): fog of war removed (the uploaded pulled-list pins now show where
   // we've explored). Kept in state as off so no fog code path runs; it's gone from the UI.
   const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: false, lots: false, pull: true });
+  const [pullZoomR, setPullZoomR] = useState(3); // purple pulled-pin radius grows as you zoom in, so leads stay findable
   const [tools, setTools] = useState(false); // collapse the layer checkboxes + extra tools behind a menu
   const [lotsMsg, setLotsMsg] = useState(""); // feedback for the on-zoom lot layer so you know WHY lots do/don't show
   // 📄 Uploaded pulled-list batches (pins on the map, no CRM import) — Jon 2026-11-11.
@@ -482,7 +496,19 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     fetch("/api/markets/pull-list").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.batches) setPullBatches(j.batches); }).catch(() => {});
   }, []);
 
-  // 📄 Draw the pulled-list pins (canvas-rendered so thousands stay smooth) when batches/toggle change.
+  // 🔎 Pulled pins grow as you zoom in, so a lead never shrinks into an unfindable speck (Jon 2026-11-11).
+  useEffect(() => {
+    if (!ready) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const map = mapRef.current as any; if (!map) return;
+    const upd = () => { const z = map.getZoom(); setPullZoomR(z >= 17 ? 10 : z >= 15 ? 7 : z >= 13 ? 5 : 3); };
+    upd(); map.on("zoomend", upd);
+    return () => { try { map.off("zoomend", upd); } catch { /* ok */ } };
+  }, [ready]);
+
+  // 📄 Draw the pulled-list pins (canvas-rendered so thousands stay smooth). Each pin is CLICKABLE:
+  // clicking pulls that exact lot's county record for FREE (owner, assessed/just value, acreage, last
+  // sale) from the statewide cadastral AND draws the lot line — so a pulled lead is rich, not a dot.
   useEffect(() => {
     if (!ready) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -490,10 +516,24 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     grp.clearLayers();
     if (!show.pull) return;
     const canvas = pullCanvasRef.current;
+    const rad = pullZoomR;
+    const enrichLot = async (lat: number, lng: number, marker: any) => {
+      marker.bindPopup(`<div style="font:12px system-ui">📄 Pulled lead<br><span style="color:#64748b">Loading county record…</span></div>`).openPopup();
+      try {
+        const url = `${FDEP_CADASTRAL}?where=1%3D1&geometry=${lng},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${encodeURIComponent("PARCEL_ID,DOR_UC,JV,LND_VAL,LND_SQFOOT,SALE_PRC1,SALE_YR1,SALE_MO1,OWN_NAME,PHY_ADDR1,PHY_CITY")}&returnGeometry=true&outSR=4326&f=geojson`;
+        const gj = await (await fetch(url)).json();
+        const f = Array.isArray(gj?.features) ? gj.features[0] : null;
+        if (!f) { marker.setPopupContent(`<div style="font:12px system-ui">📄 Pulled lead<br><span style="color:#64748b">No county parcel right here — nudge the map and click again.</span></div>`); return; }
+        try { L.geoJSON(f, { style: { color: "#c084fc", weight: 2.5, fillColor: "#a855f7", fillOpacity: 0.1 } }).addTo(grp); } catch { /* ok */ }
+        marker.setPopupContent(lotRecordHtml(f.properties || {}));
+        marker.openPopup();
+      } catch { marker.setPopupContent(`<div style="font:12px system-ui">📄 Pulled lead<br><span style="color:#64748b">Couldn't reach county records — try again.</span></div>`); }
+    };
     for (const b of pullBatches) for (const [lat, lng] of b.pts) {
-      L.circleMarker([lat, lng], { renderer: canvas, radius: 3, stroke: false, fillColor: "#a855f7", fillOpacity: 0.6 }).addTo(grp);
+      const mk = L.circleMarker([lat, lng], { renderer: canvas, radius: rad, stroke: rad >= 5, color: "#ffffff", weight: 1, fillColor: "#a855f7", fillOpacity: 0.8, interactive: true }).addTo(grp);
+      mk.on("click", () => enrichLot(lat, lng, mk));
     }
-  }, [ready, pullBatches, show.pull]);
+  }, [ready, pullBatches, show.pull, pullZoomR]);
 
   // ── redraw data layers whenever the data changes (markets, buyers, territories) ──
   useEffect(() => {
@@ -570,20 +610,23 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     }
     if (show.buyers) for (const p of buyerPoints) L.circleMarker([p.lat, p.lng], { radius: 9, stroke: false, fillColor: "#22d3ee", fillOpacity: 0.22 }).addTo(group);
 
-    // 📍 Lead pins — seller leads by ZIP. A ZIP where we've CLOSED a land deal gets a gold ⭐ STAR
-    // (distinct from the purple pulled-list dots and visible even when deals are rare) (Jon 2026-11-11).
+    // 📍 Lead pins — seller-lead DENSITY by ZIP (blue, sized by lead count). Closed deals are their own
+    // authoritative ⭐ layer now (from the Deal board, exact address) — not inferred from ZIP here.
     if (show.leads) for (const lp of leadPins) {
       const g = gradeMarket({ leads: lp.leads, deals: lp.deals });
-      const hasDeal = lp.deals > 0;
-      const popup = `<div style="font:12px system-ui"><b>ZIP ${lp.zip}</b><br>📥 <b>${lp.leads}</b> seller lead${lp.leads > 1 ? "s" : ""}${hasDeal ? `<br>⭐ <b>${lp.deals}</b> land deal${lp.deals > 1 ? "s" : ""} CLOSED here` : ""}<br>🏅 <b style="color:${g.color}">${g.label}</b></div>`;
-      if (hasDeal) {
-        const sz = 22 + Math.min(14, (lp.deals - 1) * 6);
-        const star = L.divIcon({ className: "fo-deal-star", html: `<div style="font-size:${sz}px;line-height:1;filter:drop-shadow(0 0 3px rgba(0,0,0,.7))">⭐</div>`, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] });
-        L.marker([lp.lat, lp.lng], { icon: star, zIndexOffset: 1000 }).addTo(group).bindPopup(popup);
-      } else {
-        const rad = 4 + Math.min(10, Math.log2(lp.leads + 1) * 2.2);
-        L.circleMarker([lp.lat, lp.lng], { radius: rad, color: "#ffffff", weight: 1, fillColor: "#38bdf8", fillOpacity: 0.9 }).addTo(group).bindPopup(popup);
-      }
+      const rad = 4 + Math.min(10, Math.log2(lp.leads + 1) * 2.2);
+      L.circleMarker([lp.lat, lp.lng], { radius: rad, color: "#ffffff", weight: 1, fillColor: "#38bdf8", fillOpacity: 0.9 }).addTo(group)
+        .bindPopup(`<div style="font:12px system-ui"><b>ZIP ${lp.zip}</b><br>📥 <b>${lp.leads}</b> seller lead${lp.leads > 1 ? "s" : ""}<br>🏅 <b style="color:${g.color}">${g.label}</b></div>`);
+    }
+
+    // ⭐ Closed deals — the authoritative closed-deals section (Deal board), pinned at the EXACT
+    // property address as a gold star with a rich win popup (buyer, sale price, our fee) (Jon 2026-11-11).
+    if (show.leads) for (const d of closedDeals) {
+      const star = L.divIcon({ className: "fo-deal-star", html: `<div style="font-size:26px;line-height:1;filter:drop-shadow(0 0 4px rgba(0,0,0,.8))">⭐</div>`, iconSize: [26, 26], iconAnchor: [13, 13] });
+      const price = d.soldPrice ? `<div>🤝 Sold${d.buyer ? ` to ${d.buyer}` : ""}: <b>$${Math.round(d.soldPrice).toLocaleString()}</b></div>` : d.buyer ? `<div>🤝 Buyer: ${d.buyer}</div>` : "";
+      const fee = d.fee ? `<div>💰 Our fee: <b style="color:#16a34a">$${Math.round(d.fee).toLocaleString()}</b></div>` : "";
+      L.marker([d.lat, d.lng], { icon: star, zIndexOffset: 1200 }).addTo(group)
+        .bindPopup(`<div style="font:12px system-ui;min-width:180px"><div style="font-weight:800">⭐ CLOSED land deal</div><div style="color:#334155">📍 ${d.address}</div>${price}${fee}${d.dealType ? `<div>🏷 ${d.dealType}</div>` : ""}${d.soldDate ? `<div style="color:#64748b">Closed ${d.soldDate}</div>` : ""}</div>`);
     }
 
     // 🔎 Opportunity layer — Market Finder county scores (public data). Show target + watch only
@@ -627,7 +670,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     if (!didFitRef.current && !hadSavedViewRef.current) {
       try { map.fitBounds(group.getBounds().pad(0.15)); didFitRef.current = true; } catch { /* no markers */ }
     }
-  }, [ready, markets, buyerPoints, territories, show, scanPoints, leadPins, buyerCoverage]);
+  }, [ready, markets, buyerPoints, territories, show, scanPoints, leadPins, buyerCoverage, closedDeals]);
 
   // Re-measure the map once it's ready (container has its real size by then).
   useEffect(() => {

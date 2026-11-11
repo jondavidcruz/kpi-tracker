@@ -16,6 +16,9 @@ export async function POST() {
   const opps = await db.crmOpportunity
     .findMany({ where: { archivedAt: null }, select: { contact: { select: { address: true } } }, take: 6000 })
     .catch(() => []);
-  const res = await geocodeBatch(leadZips(opps), 25);
+  // ⭐ Also resolve CLOSED-deal property addresses (exact street address) so they pin at the real lot.
+  const closed = await db.deal.findMany({ where: { status: "closed" }, select: { address: true } }).catch(() => []);
+  const closedAddrs = closed.map((d) => d.address).filter((a): a is string => !!a && a.trim().length > 4);
+  const res = await geocodeBatch([...closedAddrs, ...leadZips(opps)], 25);
   return NextResponse.json({ ok: true, ...res });
 }

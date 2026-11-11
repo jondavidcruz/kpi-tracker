@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { logPullAction, setMarketTrendAction, setMarketStatusAction } from "@/app/markets/actions";
-import HaloMarketMap, { type ScanPt } from "@/components/HaloMarketMap";
+import HaloMarketMap, { type ScanPt, type ClosedDeal } from "@/components/HaloMarketMap";
 import type { LeadPin } from "@/lib/lead-pins";
 import type { BuyerCoverage } from "@/lib/buyer-coverage-map";
 import MarketAnalysisPanel from "@/components/MarketAnalysisPanel";
@@ -40,7 +40,7 @@ function ScoreBar({ label, n }: { label: string; n: number }) {
   );
 }
 
-export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geocodeRemaining = 0, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {} }: { markets: MarketView[]; canEdit: boolean; buyerPoints?: { lat: number; lng: number }[]; geocodeRemaining?: number; territories?: import("@/lib/map-territories").Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; contractSent: number; closed: number; value: number }> }) {
+export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geocodeRemaining = 0, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, closedDeals = [] }: { markets: MarketView[]; canEdit: boolean; buyerPoints?: { lat: number; lng: number }[]; geocodeRemaining?: number; territories?: import("@/lib/map-territories").Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; contractSent: number; closed: number; value: number }>; closedDeals?: ClosedDeal[] }) {
   const [focus, setFocus] = useState<"" | LandFocus>("");
   const [cov, setCov] = useState<"" | Coverage["status"]>("");
   const [openPull, setOpenPull] = useState<string | null>(null);
@@ -75,7 +75,7 @@ export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geoco
       </div>
 
       {view === "analysis" && <MarketAnalysisPanel markets={rows} />}
-      {view === "map" && <HaloMarketMap markets={rows} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} canEdit={canEdit} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} />}
+      {view === "map" && <HaloMarketMap markets={rows} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} canEdit={canEdit} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} closedDeals={closedDeals} />}
 
       <div className={`grid grid-cols-1 gap-3 lg:grid-cols-2 ${view !== "cards" ? "hidden" : ""}`}>
         {rows.map(({ m, coverage, leads, deals, momentum }) => {

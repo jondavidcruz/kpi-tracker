@@ -25,7 +25,7 @@ export default async function MarketsPage() {
     return <Card className="mx-auto max-w-md p-8 text-center text-slate-500">Target Markets is for the acquisitions &amp; leadership team.</Card>;
   }
   const leader = isManager(me);
-  const [markets, pulls, opps, buyers, scan] = await Promise.all([
+  const [markets, pulls, opps, buyers, scan, closed] = await Promise.all([
     readTargetMarkets(),
     readMarketPulls(),
     // Land-lead opps, for per-market performance (fuzzy address match). Light select.
@@ -33,6 +33,9 @@ export default async function MarketsPage() {
     // Vetted/active buyers' buy-boxes, for "where can we move deals" coverage (light text select).
     db.marketContact.findMany({ where: { archivedAt: null, blacklistedAt: null, vetStage: { in: ["vetted", "active"] } }, select: { buyBoxAreas: true, market: true } }).catch(() => []),
     readScan().catch(() => null),
+    // ⭐ CLOSED deals (the authoritative closed-deals section) with their real property address, to
+    // pin the exact lot where we've won (Jon 2026-11-11). Few of these — geocoded free + cached.
+    db.deal.findMany({ where: { status: "closed" }, select: { address: true, soldPrice: true, assignmentFee: true, buyerName: true, soldDate: true, dealType: true } }).catch(() => []),
   ]);
   const buyerHay = buyers.map((b) => `${b.buyBoxAreas ?? ""} ${b.market ?? ""}`.toLowerCase());
 
@@ -46,6 +49,14 @@ export default async function MarketsPage() {
   // 📍 Lead pins — where our seller leads come from + where we've closed land deals.
   const { buildLeadPins } = await import("@/lib/lead-pins");
   const { pins: leadPins, uncachedZips: leadZipsRemaining } = buildLeadPins(opps, geocache);
+
+  // ⭐ Closed-deal pins — exact property address (from the Deal board) geocoded via the shared free
+  // cache. Not-yet-geocoded addresses just don't pin until the manager runs "geocode leads".
+  const closedDeals = closed.map((d) => {
+    const pt = geocache[normalizePlace(d.address)];
+    return pt ? { lat: pt.lat, lng: pt.lng, address: d.address, soldPrice: d.soldPrice ?? null, fee: d.assignmentFee ?? null, buyer: d.buyerName || "", soldDate: d.soldDate || "", dealType: d.dealType || "" } : null;
+  }).filter((x): x is NonNullable<typeof x> => x != null);
+  const closedAddrsRemaining = closed.filter((d) => d.address && !(normalizePlace(d.address) in geocache)).length;
 
   // 📄→📥 Pull-list CONVERSION (Phase 2): attribute CRM leads back to the pull that sourced them
   // (lead's ZIP is in the batch + lead created on/after the pull date). Keyed by batch id so the map's
@@ -201,7 +212,7 @@ export default async function MarketsPage() {
       <MarketBlacklist entries={blacklist} canEdit={leader} />
       <MarketsTabs
         showResearch={leader}
-        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} />}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} closedDeals={closedDeals} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} marketStats={marketStatsByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
         niches={<NichePlaybook matches={nicheMatches} />}
