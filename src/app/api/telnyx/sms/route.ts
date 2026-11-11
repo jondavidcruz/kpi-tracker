@@ -99,7 +99,21 @@ export async function POST(req: NextRequest) {
         const label = intent === "not_interested" ? "not interested" : intent === "working_with_realtor" ? "working with a realtor" : "qualified — interested";
         await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🤖 Auto-tagged “${intent === "qualified" ? "qualified ✅" : label}”${days > 0 ? ` · follow-up set ${followUpDate(days)} (${days}d)` : " · surfaced to the team now"}: "${text.slice(0, 60)}"`, actor: "master-workflow" }).catch(() => {});
       };
-      if (declined && opp) await applyIntent("not_interested", true);
+      // 🪦 CLEAR "not interested / sold / not the owner" (Jon 2026-11-11): move straight to DEAD with
+      // NO follow-up, so it never resurfaces — the team should only see repliers who ARE interested.
+      // Ambiguous replies are handled below (→ Follow Up for a human); only a CLEAR decline deads.
+      const applyDead = async (why: string) => {
+        if (!opp) return;
+        const { readPipelines } = await import("@/lib/crm");
+        const pls = await readPipelines();
+        const pl = pls.find((x) => x.name === (opp.pipeline || "War Room")) ?? pls[0];
+        const dead = pl?.stages.find((s) => /\bdead\b|lost|not.?interest|no.?interest/i.test(`${s.key} ${s.label}`));
+        const tag = "not-interested";
+        const tags = !new RegExp(tag, "i").test(opp.tags || "") ? [opp.tags, tag].filter(Boolean).join(",") : (opp.tags || "");
+        await db.crmOpportunity.update({ where: { id: opp.id }, data: { ...(dead && dead.key !== opp.stage ? { stage: dead.key } : {}), tags, nextFollowUp: "" } }).catch(() => {});
+        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🪦 Auto-moved to Dead — seller clearly NOT interested (no follow-up, off the team's list): "${why.slice(0, 80)}"`, actor: "master-workflow" }).catch(() => {});
+      };
+      if (declined && opp) await applyDead(text);
       else if (realtor && opp) await applyIntent("working_with_realtor", true);
       else if (qualified && opp) await applyIntent("qualified", false);
       // 💰/📨 Stage automation (Jon 2026-11-05): a reply with a PRICE → move to Comp/Offer so the
