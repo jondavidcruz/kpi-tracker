@@ -106,16 +106,30 @@ DRIP_SEQUENCES.push(
     ],
   },
   {
-    key: "ghosted", name: "Ghosted / nurture — long re-engagement (3 touches / ~60 days)", autoSend: true,
+    // 🧊 COLD LEADS — long, low-pressure check-back over a FULL YEAR (Jon 2026-11-11: "a long
+    // follow-up sequence for them to check back if they're selling"). All TEXT (cold leads have no
+    // offer yet, so the email guard would hold emails anyway), Level 2 auto-send, spread way out so
+    // it never feels like spam. Goal every touch: restart the conversation → get them on the phone.
+    // Keyed `cold_nurture`; the old `ghosted` key aliases to this so in-flight drips keep running.
+    key: "cold_nurture", name: "Cold lead — long re-engagement (9 texts / 12 months)", autoSend: true,
     steps: [
-      { channel: "sms", delayDays: 7, sms: "Hi {first}, haven't heard back on {address} — no worries at all. Still here whenever you're ready to talk numbers." },
-      { channel: "email", delayDays: 30, emailSubject: "Still here for {address}", emailBody: "Hi {first},\n\nJust circling back on {address}. If the timing's better now, I'd still love to get you a fair cash offer — no fees, no agents, close on your schedule. Reply anytime.\n\n— {rep}" },
-      { channel: "sms", delayDays: 60, sms: "{first}, last check-in on {address}. If anything changes, I can move fast on a cash offer. Thanks either way!" },
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — still thinking about selling {address}? No rush at all. If you'd ever want a cash offer, reply and I'll get you a number." },
+      { channel: "sms", delayDays: 7, sms: "{first}, any thoughts on {address}? Even a 'maybe someday' is fine — happy to let you know what it could sell for. Want me to give you a quick call?" },
+      { channel: "sms", delayDays: 21, sms: "Hi {first}, circling back on {address}. We buy land as-is for cash — no fees, no agents. Reply with a number you'd take and I'll see what I can do." },
+      { channel: "sms", delayDays: 45, sms: "{first}, still here whenever you're ready on {address}. Would a quick 2-minute call be easier? Just tell me a good time." },
+      { channel: "sms", delayDays: 90, sms: "Hi {first}, quarterly check-in on {address} 🙂 Still open to a cash offer? Even a ballpark price helps me get you a real number." },
+      { channel: "sms", delayDays: 150, sms: "{first}, thinking about {address} — if anything's changed, I can move fast with cash. Reply here or let me know when's good to call." },
+      { channel: "sms", delayDays: 240, sms: "Hi {first}, it's been a while — any interest in selling {address}? Still glad to put together a no-pressure offer whenever you want." },
+      { channel: "sms", delayDays: 330, sms: "{first}, almost a year since we first talked about {address}. If you'd ever sell, I'd love the chance to make you an offer. A quick reply is all it takes." },
+      { channel: "sms", delayDays: 365, sms: "Hi {first}, last check-in for now on {address}. I'll be here if things change — reply anytime and I'll get you a cash offer fast." },
     ],
   },
 );
 
-export function getDripSeq(key: string): DripSeq | undefined { return DRIP_SEQUENCES.find((s) => s.key === key); }
+export function getDripSeq(key: string): DripSeq | undefined {
+  const k = key === "ghosted" ? "cold_nurture" : key; // legacy alias → the long cold sequence
+  return DRIP_SEQUENCES.find((s) => s.key === k);
+}
 
 // 🛑 Owner-operable auto-send brake (Jon 2026-11-10). Stored in a reserved Resource row (no env, no
 // redeploy) so Jon can pause ALL auto-sending from the /sequences page in one click. When paused,
@@ -149,7 +163,7 @@ export const STAGE_SEQ: Record<string, string> = {
   "contract_sent_f_u": "contract_sent",
   "contract_apt_set_sign": "contract_apt",
   "contract_signed_dispo": "signed_nurture",
-  "nurture": "ghosted",
+  "nurture": "cold_nurture",
 };
 
 // 🧭 Map a pipeline stage (its key/slug) → the sequence to auto-arm. Exact ACQ keys first, then
@@ -161,7 +175,7 @@ export function seqForStage(stageKey: string): string | null {
   if (/offer\s*ready|ready\s*to\s*present|present\s*offer|offer\s*to\s*present/.test(s)) return "offer_ready";
   if (/negotiat|counter|offer\s*made|making\s*offer/.test(s)) return "offer_negotiate";
   if (/10\s*day|ten\s*day|days?\s*of\s*hell|\bhell\b/.test(s)) return "ten_days_hell";
-  if (/ghost|cold|unrespons|no\s*response/.test(s)) return "ghosted";
+  if (/ghost|cold|unrespons|no\s*response/.test(s)) return "cold_nurture";
   return null;
 }
 
