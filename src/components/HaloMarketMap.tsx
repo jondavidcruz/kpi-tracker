@@ -43,12 +43,13 @@ const COORDS: Record<string, [number, number]> = {
   "Lake Keowee / Clemson (Oconee)": [34.75, -82.92], "Aiken (CSRA)": [33.56, -81.72],
   "Columbia / Lake Murray (Lexington)": [34.05, -81.3],
 };
-// 🏘 Zillow-style parcel layer — FREE, NO KEY, CORS-ok (verified). FDEP "South District" cadastral
-// carries the full FL DOR tax-roll schema (use code, just value, acreage, last sale, owner) and
-// covers our SW-FL waterfront core: Lee (Cape Coral), Charlotte (Punta Gorda), Collier (Marco/
-// Naples). Only queried when zoomed in (≥ LOTS_MIN_ZOOM) with a small bbox. maxRecordCount 2000.
-const FDEP_CADASTRAL = "https://services1.arcgis.com/nRHtyn3uE1kyzoYc/arcgis/rest/services/FDORCadastral_SouthDistrict/FeatureServer/0/query";
-const LOTS_MIN_ZOOM = 14; // statewide parcels are 10M+ — only pull parcels at neighborhood zoom
+// 🏘 Zillow-style parcel layer — FREE, NO KEY, CORS-ok (verified end-to-end 2026-11-11). The FL
+// Statewide Cadastral (CADASTRAL_DOR) carries the full DOR tax-roll schema — use code, just value,
+// acreage, last sale, owner, site address, land value — for EVERY Florida county (Port St Lucie,
+// Palm Beach, St Pete, Orlando, Palm Bay, Tampa… not just SW-FL anymore). Only queried when zoomed
+// in (≥ LOTS_MIN_ZOOM) with a small bbox. maxRecordCount 2000, so we gate to neighborhood zoom.
+const FDEP_CADASTRAL = "https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query";
+const LOTS_MIN_ZOOM = 15; // statewide parcels are 10M+ — pull only at neighborhood zoom so we don't hit the 2000 cap
 const LOTS_VACANT_WHERE = "DOR_UC IN ('000','010','040') OR (DOR_UC >= '050' AND DOR_UC <= '069')";
 // 🌫 Fog of war only appears once you've zoomed IN past this level — the zoomed-out map stays
 // normal (no haze, no hard rectangle edges). At this zoom the fog's far edges are off-screen, so
@@ -383,10 +384,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         const loadLots = async () => {
           const grp = lotsRef.current as any; if (!grp) return;
           if (!showLotsRef.current) { grp.clearLayers(); setLotsMsg(""); return; }
-          if (map.getZoom() < LOTS_MIN_ZOOM) { grp.clearLayers(); setLotsMsg("🔍 Zoom in to street level (SW-FL: Cape Coral · Punta Gorda · Naples) to load lots"); return; }
+          if (map.getZoom() < LOTS_MIN_ZOOM) { grp.clearLayers(); setLotsMsg("🔍 Zoom in to street level (any Florida metro) to load parcel boxes"); return; }
           const b = map.getBounds();
-          const env = { xmin: b.getWest(), ymin: b.getSouth(), xmax: b.getEast(), ymax: b.getNorth(), spatialReference: { wkid: 4326 } };
-          const url = `${FDEP_CADASTRAL}?where=${encodeURIComponent(LOTS_VACANT_WHERE)}&geometry=${encodeURIComponent(JSON.stringify(env))}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${encodeURIComponent("PARCEL_ID,DOR_UC,JV,LND_SQFOOT,SALE_PRC1,SALE_YR1,SALE_MO1,OWN_NAME")}&returnGeometry=true&outSR=4326&resultRecordCount=1200&f=geojson`;
+          const envelope = `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+          const url = `${FDEP_CADASTRAL}?where=${encodeURIComponent(LOTS_VACANT_WHERE)}&geometry=${encodeURIComponent(envelope)}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${encodeURIComponent("PARCEL_ID,DOR_UC,JV,LND_SQFOOT,SALE_PRC1,SALE_YR1,SALE_MO1,OWN_NAME,PHY_ADDR1,PHY_CITY,LND_VAL")}&returnGeometry=true&outSR=4326&resultRecordCount=2000&resultType=tile&f=geojson`;
           const myReq = ++lotsReqId;
           setLotsMsg("Loading lots…");
           try {
@@ -395,8 +396,8 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
             if (myReq !== lotsReqId) return; // a newer pan/zoom superseded this one
             grp.clearLayers();
             const feats = Array.isArray(gj?.features) ? gj.features : [];
-            if (!feats.length) { setLotsMsg("No vacant lots in view — this layer covers SW-FL (Lee · Charlotte · Collier) only"); return; }
-            setLotsMsg(`🏘 ${feats.length} vacant/sold lots in view · blue = vacant, amber = sold ≤2 yrs`);
+            if (!feats.length) { setLotsMsg("No vacant lots in this view — pan to a residential/land area and they'll box up"); return; }
+            setLotsMsg(`🏘 ${feats.length} lot boxes in view · 🔴 red = vacant · 🟡 yellow = sold ≤2 yrs · click a box for county record`);
             const thisYear = new Date().getFullYear();
             L.geoJSON(gj, {
               style: (feat: any) => {
@@ -412,7 +413,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
                 const ac = p.LND_SQFOOT ? (p.LND_SQFOOT / 43560).toFixed(2) : "—";
                 const sale = p.SALE_YR1 && p.SALE_PRC1 > 1000 ? `🏷 Last sale ${p.SALE_MO1 || ""}/${p.SALE_YR1}: <b>$${Math.round(p.SALE_PRC1).toLocaleString()}</b>` : "🏷 No recent arm's-length sale";
                 const uc = p.DOR_UC === "000" ? "Vacant residential" : p.DOR_UC === "010" ? "Vacant commercial" : p.DOR_UC === "040" ? "Vacant industrial" : /^0[5-6]\d$/.test(p.DOR_UC) ? "Agricultural" : `Use ${p.DOR_UC}`;
-                layer.bindPopup(`<div style="font:12px system-ui;min-width:170px"><b>${uc}</b><br>💰 Just value: <b>$${Math.round(p.JV || 0).toLocaleString()}</b><br>📐 ${ac} ac<br>${sale}<br>👤 ${p.OWN_NAME || "—"}<br><span style="color:#64748b">Parcel ${p.PARCEL_ID || ""}</span></div>`);
+                const addr = p.PHY_ADDR1 ? `📍 ${String(p.PHY_ADDR1).trim()}${p.PHY_CITY ? ", " + String(p.PHY_CITY).trim() : ""}<br>` : "";
+                const land = p.LND_VAL > 0 ? `<br>🌱 Land value: <b>$${Math.round(p.LND_VAL).toLocaleString()}</b>` : "";
+                layer.bindPopup(`<div style="font:12px system-ui;min-width:180px"><b>${uc}</b><br>${addr}💰 Just value: <b>$${Math.round(p.JV || 0).toLocaleString()}</b>${land}<br>📐 ${ac} ac<br>${sale}<br>👤 ${p.OWN_NAME || "—"}<br><span style="color:#64748b">Parcel ${p.PARCEL_ID || ""}</span></div>`);
               },
             }).addTo(grp);
           } catch { try { (lotsRef.current as any)?.clearLayers(); } catch { /* ok */ } setLotsMsg("Couldn't load lots here — pan or zoom to retry"); }
