@@ -124,6 +124,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   // 📌 Multi-market staging (Jon 2026-11-11): pick several areas one at a time (a pull often spans
   // several — e.g. Port St. Lucie + Fort Pierce), then mark them ALL explored in one click.
   const [picks, setPicks] = useState<{ label: string; lat: number; lon: number }[]>([]);
+  // 🔎 Always-visible "search a market to ZOOM" (Jon 2026-11-11) — just flies the map, no marking.
+  const [zoomQ, setZoomQ] = useState("");
+  const [zoomSugs, setZoomSugs] = useState<{ label: string; sub?: string; lat: number; lon: number }[]>([]);
+  const zoomTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sensible defaults so the map isn't overwhelming (Jon 2026-11-08): the key layers on, the two
   // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
@@ -219,8 +223,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       if (!res.ok) { setPullMsg(j.error || "save failed"); return; }
       setPullBatches((b) => [j.batch, ...b]);
       setShow((s) => ({ ...s, pull: true }));
-      if (zips.length) markPlaces(zips.slice(0, 40), "pulled"); // mark the ZIP areas pulled (capped)
-      setPullMsg(`✅ Plotted ${pts.length.toLocaleString()} properties${zips.length ? ` · marked ${Math.min(40, zips.length)} ZIP${zips.length > 40 ? `/${zips.length}` : ""} pulled` : ""}`);
+      // No more orange ZIP boxes — the pins ARE the coverage. The batch keeps the ZIPs for the
+      // cooldown + Phase-2 conversion tracking (Jon 2026-11-11).
+      setPullMsg(`✅ Plotted ${pts.length.toLocaleString()} properties${zips.length ? ` across ${zips.length} ZIP${zips.length > 1 ? "s" : ""}` : ""} · 90-day cooldown started`);
     } catch { setPullMsg("Couldn't read that file."); }
   }
   async function deletePullBatch(id: string) {
@@ -298,6 +303,20 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         setSuggests(Array.isArray(j.items) ? j.items : []);
       } catch { setSuggests([]); }
     }, 280);
+  }
+  function onZoomChange(v: string) {
+    setZoomQ(v);
+    if (zoomTimer.current) clearTimeout(zoomTimer.current);
+    if (v.trim().length < 3) { setZoomSugs([]); return; }
+    zoomTimer.current = setTimeout(async () => {
+      try { const r = await fetch(`/api/markets/geo-suggest?q=${encodeURIComponent(v.trim())}`); const j = await r.json(); setZoomSugs(Array.isArray(j.items) ? j.items : []); } catch { setZoomSugs([]); }
+    }, 280);
+  }
+  function flyToSuggest(s: { label: string; lat: number; lon: number }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const map = mapRef.current as any;
+    if (map && Number.isFinite(s.lat) && Number.isFinite(s.lon)) { try { map.flyTo([s.lat, s.lon], 11); } catch { /* ignore */ } }
+    setZoomQ(s.label); setZoomSugs([]);
   }
   function pickSuggest(s: { label: string; lat: number; lon: number }) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -524,6 +543,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
 
     if (show.terr) for (const t of territories) {
       if (!t.points || t.points.length < 3) continue;
+      if (t.status === "pulled") continue; // 🧹 no more orange "pulled" boxes — the uploaded pins show where we pulled now (Jon 2026-11-11)
       const poly = L.polygon(t.points, { color: TERR_COLOR[t.status], weight: 2, fillColor: TERR_COLOR[t.status], fillOpacity: 0.22 }).addTo(group);
       const st = terrStats[t.id];
       const tg = gradeMarket({ leads: st?.leads ?? 0, deals: st?.deals ?? 0, pulled: t.pulled });
@@ -616,6 +636,16 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px]">
+        <div className="relative">
+          <input value={zoomQ} onChange={(e) => onZoomChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && zoomSugs[0]) flyToSuggest(zoomSugs[0]); }} placeholder="🔎 Search a market to zoom…" className="w-56 rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 text-white placeholder:text-slate-500" />
+          {zoomSugs.length > 0 && (
+            <div className="absolute left-0 top-full z-[600] mt-1 w-72 overflow-hidden rounded-lg border border-slate-600 bg-slate-900 shadow-xl">
+              {zoomSugs.map((s, i) => (
+                <button key={i} type="button" onClick={() => flyToSuggest(s)} className="block w-full px-3 py-1.5 text-left text-[12px] text-white hover:bg-slate-700"><span className="font-semibold">{s.label}</span>{s.sub && <span className="ml-1 text-slate-400">· {s.sub}</span>}</button>
+              ))}
+            </div>
+          )}
+        </div>
         <button onClick={() => setTools((t) => !t)} className="rounded-lg bg-slate-800 px-2.5 py-1 font-bold text-slate-200 ring-1 ring-slate-700 hover:bg-slate-700">⚙ Layers &amp; tools {tools ? "▴" : "▾"}</button>
         {canEdit && (
           <>
