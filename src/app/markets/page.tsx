@@ -152,10 +152,16 @@ export default async function MarketsPage() {
 
   // Pull coverage keyed by county FIPS — only for markets we actually track (target list), so the
   // workbench badge never falsely claims "never pulled" for a county we have no record of.
-  const coverageByFips: Record<string, { status: "never" | "clear" | "cooldown"; cooldownLeft: number; lastPull: string | null }> = {};
+  const coverageByFips: Record<string, { status: "never" | "clear" | "cooldown"; cooldownLeft: number; lastPull: string | null; pulls90d: number; totalCount: number }> = {};
+  // 📊 Per-area pipeline results (leads/deals/wealth) so the workbench can give a "proven vs dead
+  // ground" verdict — don't re-pull areas that produced nothing (Jon 2026-11-11).
+  const viewById = new Map(views.map((v) => [v.m.id, v]));
+  const marketStatsByFips: Record<string, { leads: number; deals: number; wealth: number }> = {};
   for (const [fips, marketId] of Object.entries(targetFipsToId)) {
     const cv = coverageFor(marketId, pulls);
-    coverageByFips[fips] = { status: cv.status, cooldownLeft: cv.cooldownLeft, lastPull: cv.lastPull };
+    coverageByFips[fips] = { status: cv.status, cooldownLeft: cv.cooldownLeft, lastPull: cv.lastPull, pulls90d: cv.pulls90d ?? 0, totalCount: cv.totalCount ?? 0 };
+    const v = viewById.get(marketId);
+    if (v) marketStatsByFips[fips] = { leads: v.leads, deals: v.deals, wealth: v.m.wealth };
   }
 
   // 🎯 Buyer-demand market discovery — rank WHICH markets to pull by our vetted buyers' aggregated
@@ -182,7 +188,7 @@ export default async function MarketsPage() {
       <MarketsTabs
         showResearch={leader}
         map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} />}
-        research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} /> : null}
+        research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} marketStats={marketStatsByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
         niches={<NichePlaybook matches={nicheMatches} />}
         laws={<StateLawPanel />}

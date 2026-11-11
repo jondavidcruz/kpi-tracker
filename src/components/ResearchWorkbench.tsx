@@ -18,9 +18,10 @@ type Glance = { name: string; state: string; tier: "target" | "watch" | "low"; p
 
 const clone = (s: WorkbenchState): WorkbenchState => ({ enums: { ...s.enums }, bools: { ...s.bools }, nums: { ...s.nums }, strs: { ...(s.strs ?? {}) } });
 
-type Cov = { status: "never" | "clear" | "cooldown"; cooldownLeft: number; lastPull: string | null };
+type Cov = { status: "never" | "clear" | "cooldown"; cooldownLeft: number; lastPull: string | null; pulls90d?: number; totalCount?: number };
+type Stats = { leads: number; deals: number; wealth: number };
 
-export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand, coverage = {} }: { quickMarkets?: { name: string; fips: string }[]; scan?: Record<string, Glance>; demand?: DemandResult; coverage?: Record<string, Cov> }) {
+export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand, coverage = {}, marketStats = {} }: { quickMarkets?: { name: string; fips: string }[]; scan?: Record<string, Glance>; demand?: DemandResult; coverage?: Record<string, Cov>; marketStats?: Record<string, Stats> }) {
   const [status, setStatus] = useState<"checking" | "ok" | "needkey" | "off">("checking");
   const [statusMsg, setStatusMsg] = useState("");
   const [locQ, setLocQ] = useState("");
@@ -102,6 +103,7 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
 
   const glance = picked && picked.type === "county" ? scan[picked.code] : undefined;
   const cov = picked && picked.type === "county" ? coverage[picked.code] : undefined;
+  const stats = picked && picked.type === "county" ? marketStats[picked.code] : undefined;
   const recipe = describeFilters(state);
   const nActive = activeCount(state);
 
@@ -320,16 +322,25 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
         </div>
       )}
 
-      {/* dedup / pull coverage — don't re-work ground we just pulled */}
-      {cov && (
-        <div className="mb-3 -mt-1 text-[11px]">
-          {cov.status === "never"
-            ? <span className="rounded-full bg-sky-100 px-2 py-0.5 font-bold text-sky-700">🆕 never pulled here</span>
-            : cov.status === "cooldown"
-            ? <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-700">⏳ on cooldown{cov.lastPull ? ` — pulled ${cov.lastPull.slice(0, 10)}` : ""}, {cov.cooldownLeft}d left</span>
-            : <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-700">✓ clear to pull{cov.lastPull ? ` — last pulled ${cov.lastPull.slice(0, 10)}` : ""}</span>}
-        </div>
-      )}
+      {/* 🎯 Pull verdict — don't waste pulls on dead ground. Combines coverage (pulled? cooldown?)
+          with the pipeline results this area actually produced (Jon 2026-11-11). */}
+      {(cov || stats) && (() => {
+        const deals = stats?.deals ?? 0, leads = stats?.leads ?? 0;
+        const pulledBefore = !!cov && cov.status !== "never";
+        let vClass = "bg-sky-100 text-sky-700", vText = "🆕 Fresh ground — never pulled here";
+        if (cov?.status === "cooldown") { vClass = "bg-amber-100 text-amber-800"; vText = `⏳ Cooldown — ${cov.cooldownLeft}d before re-pull`; }
+        else if (pulledBefore && deals > 0) { vClass = "bg-emerald-100 text-emerald-800"; vText = `⭐ Proven — produced ${deals} deal${deals > 1 ? "s" : ""} · worth pulling again`; }
+        else if (pulledBefore && leads > 0) { vClass = "bg-amber-100 text-amber-800"; vText = `🟡 Pulled — ${leads} lead${leads > 1 ? "s" : ""}, 0 deals yet · re-pull cautiously`; }
+        else if (pulledBefore) { vClass = "bg-red-100 text-red-700"; vText = "🔴 Dead ground — pulled, nothing produced · skip"; }
+        else if (glance && glance.tier === "low") { vClass = "bg-slate-100 text-slate-600"; vText = "⚪ Unproven — never pulled, lower-tier market"; }
+        return (
+          <div className="mb-3 -mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+            <span className={`rounded-full px-2 py-0.5 font-bold ${vClass}`}>{vText}</span>
+            {pulledBefore && <span className="text-slate-500">pulled {cov!.pulls90d ?? 0}×/90d{cov!.totalCount ? ` · ${cov!.totalCount.toLocaleString()} owners` : ""}{cov!.lastPull ? ` · last ${cov!.lastPull.slice(0, 10)}` : ""}</span>}
+            {stats && <span className="text-slate-500">📥 {leads} leads · 🏆 {deals} deals here{stats.wealth ? ` · 💰 wealth ${stats.wealth}/5` : ""}</span>}
+          </div>
+        );
+      })()}
 
       {/* 2 · Pick your hunt — presets are the whole job for most people; the full filter grid is
           tucked behind "Customize" so the default view stays simple (Jon 2026-11-08: "too many
