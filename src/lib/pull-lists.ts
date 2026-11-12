@@ -72,12 +72,12 @@ export async function removePullBatch(id: string): Promise<void> {
 // address ZIP is in the batch's ZIPs AND the lead was created ON/AFTER the pull date. Each lead is
 // credited to the MOST RECENT qualifying pull (so a ZIP pulled twice doesn't double-count). This turns
 // a raw pull into a funnel: Pulled → CRM lead → Contract sent → Closed ($), per batch.
-export type PullConv = { leads: number; contractSent: number; closed: number; value: number };
+export type PullConv = { leads: number; offersMade: number; contractSent: number; closed: number; value: number };
 export type ConvOpp = { zip: string | null; createdMs: number; stage: string; value: number };
 
 export function attributePullConversion(batches: PullBatch[], opps: ConvOpp[]): Record<string, PullConv> {
   const out: Record<string, PullConv> = {};
-  for (const b of batches) out[b.id] = { leads: 0, contractSent: 0, closed: 0, value: 0 };
+  for (const b of batches) out[b.id] = { leads: 0, offersMade: 0, contractSent: 0, closed: 0, value: 0 };
   // Most-recent pull first, so .find() credits the latest pull that could have sourced the lead.
   const prepared = batches
     .map((b) => ({ id: b.id, atMs: Date.parse(`${b.at}T00:00:00Z`) || 0, zips: new Set(b.zips || []) }))
@@ -90,6 +90,10 @@ export function attributePullConversion(batches: PullBatch[], opps: ConvOpp[]): 
     s.leads++;
     const won = /won|closed|signed|sold/i.test(o.stage) && !/dead|lost|nurtur/i.test(o.stage);
     const contract = won || /contract/i.test(o.stage);
+    // 💵 Offer made = reached (or passed) an offer stage — a key "is this market responding to our
+    // SMS?" signal (Jon 2026-11-11). Offer precedes contract, so contract/won count as offered too.
+    const offered = contract || /\boffer\b|verbal|negotiat/i.test(o.stage);
+    if (offered) s.offersMade++;
     if (contract) s.contractSent++;
     if (won) { s.closed++; s.value += o.value || 0; }
   }

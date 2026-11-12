@@ -227,6 +227,27 @@ export async function landTrendsFor(fips: string): Promise<LandTrends | null> {
   };
 }
 
+// 🍩 Bid-rent "Conversion Ring" signal (Jon 2026-11-11, from bid-rent theory): the doughnut ring
+// where cheap LAND is actively being converted to HOUSING — where builders are marching outward.
+// HIGH when new construction is selling (demand frontier) AND vacant land is still liquid/available
+// (supply to flip). LOW at the maxed core (no land left) or the dead edge (no building yet). The
+// geometric mean rewards having BOTH; a market strong on only one dimension scores low on purpose.
+// `residual` = a rough "what a builder could pay for a lot" ≈ 15% of the finished-home price (a land
+// rule of thumb) — directional for targeting/offers, NOT an appraisal (underwrite properly per deal).
+export function bidRentSignals(c: CountyScan): { ring: number; residual: number | null } {
+  const t = c.trends;
+  const newcon90 = t?.newConSold.d90 ?? 0;
+  const land90 = t?.landSold.d90 ?? 0;
+  const yoy = t?.yoyLandPct ?? 0;
+  const demand = Math.min(1, newcon90 / 50);   // ~50 new-con sales/90d = strong expanding frontier
+  const supply = Math.min(1, land90 / 150);    // land actively transacting = liquid supply to flip
+  const growth = 1 + Math.max(-0.3, Math.min(0.5, yoy / 100));
+  const ring = t && (newcon90 || land90) ? Math.round(Math.min(100, 100 * Math.sqrt(demand * supply) * growth)) : 0;
+  const home = c.medianSalePrice;
+  const residual = home ? Math.round((home * 0.15) / 1000) * 1000 : null; // ≈15% of finished home = rough raw-land budget
+  return { ring, residual };
+}
+
 // ── Opportunity scoring ──
 function percentileRanks(vals: (number | null)[]): (number | null) [] {
   const present = vals.map((v, i) => ({ v, i })).filter((x) => x.v != null) as { v: number; i: number }[];

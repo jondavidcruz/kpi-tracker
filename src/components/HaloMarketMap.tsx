@@ -15,7 +15,7 @@ import type { BuyerCoverage } from "@/lib/buyer-coverage-map";
 
 type Pt = { lat: number; lng: number };
 export type LandTrends = { landSold: { d30: number; d90: number; d180: number }; newConSold: { d30: number; d90: number; d180: number }; landPending: number; newConPending: number; yoyLandPct: number | null; asOf: string };
-export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; trends?: LandTrends | null; buyers?: number; lat: number; lng: number };
+export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; trends?: LandTrends | null; buyers?: number; ring?: number; residual?: number | null; testMarket?: boolean; lat: number; lng: number };
 export type ClosedDeal = { lat: number; lng: number; address: string; soldPrice: number | null; fee: number | null; buyer: string; soldDate: string; dealType: string };
 
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
@@ -106,7 +106,7 @@ function loadScript(src: string, css?: string): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, closedDeals = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; contractSent: number; closed: number; value: number }>; closedDeals?: ClosedDeal[] }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, closedDeals = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; closedDeals?: ClosedDeal[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
@@ -655,8 +655,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       const homeYoy = s.yoy != null ? ` · ${s.yoy >= 0 ? "+" : ""}${s.yoy}% YoY` : "";
       mk.bindPopup(
         `<div style="font:12px system-ui;min-width:210px"><div style="font-weight:800;font-size:13px">${s.name} <span style="color:#64748b;font-weight:600">${s.state}</span></div>` +
-        `<div style="margin:3px 0"><b style="font-size:15px">${s.score}</b> opportunity · ${s.tier === "target" ? "🟢 Target — pull here next" : "🟠 Watch — monitor for now"}</div>` +
+        `<div style="margin:3px 0"><b style="font-size:15px">${s.score}</b> opportunity · ${s.tier === "target" ? "🟢 Target — pull here next" : "🟠 Watch — monitor for now"}${s.testMarket ? ` · <span style="background:#fae8ff;color:#a21caf;border-radius:4px;padding:1px 4px;font-weight:700">🧪 test market</span>` : ""}</div>` +
         (s.buyers != null ? `<div style="font-weight:700;color:${s.buyers > 0 ? "#0d9488" : "#94a3b8"}">💰 ${s.buyers > 0 ? `${s.buyers} vetted buyer${s.buyers === 1 ? "" : "s"} waiting here` : "No vetted buyers here yet"}</div>` : "") +
+        (s.ring ? `<div style="font-weight:700;color:#a21caf">🍩 Conversion ring: <b>${s.ring}</b>/100 — cheap land converting to housing${s.residual ? ` · 🏗 builder budget ~$${Math.round(s.residual / 1000)}k/lot` : ""}</div>` : "") +
         trendBlock + landLine +
         `<div>⏱ ${s.dtp != null ? "~" + Math.round(s.dtp) + " days to pending (homes)" : "—"}</div>` +
         `<div style="color:#94a3b8;font-size:11px;margin-top:3px">🏠 Area home price ${s.price != null ? "$" + Math.round(s.price).toLocaleString() : "—"}${homeYoy} — wealth signal, not land</div></div>`);
@@ -831,8 +832,8 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         )}
       </div>
       {pullBatches.length > 0 && (() => {
-        const conv = (id: string) => pullStats[id] || { leads: 0, contractSent: 0, closed: 0, value: 0 };
-        const agg = pullBatches.reduce((a, b) => { const c = conv(b.id); a.pulled += b.count; a.leads += c.leads; a.contract += c.contractSent; a.closed += c.closed; a.value += c.value; return a; }, { pulled: 0, leads: 0, contract: 0, closed: 0, value: 0 });
+        const conv = (id: string) => pullStats[id] || { leads: 0, offersMade: 0, contractSent: 0, closed: 0, value: 0 };
+        const agg = pullBatches.reduce((a, b) => { const c = conv(b.id); a.pulled += b.count; a.leads += c.leads; a.offers += c.offersMade; a.contract += c.contractSent; a.closed += c.closed; a.value += c.value; return a; }, { pulled: 0, leads: 0, offers: 0, contract: 0, closed: 0, value: 0 });
         const pct = (n: number, d: number) => (d > 0 ? `${((n / d) * 100).toFixed(n / d < 0.1 ? 2 : 1)}%` : "—");
         return (
         <div className="mt-2 px-1">
@@ -844,6 +845,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
             <span className="font-bold text-slate-200">📈 Pull → close conversion:</span>
             <span className="text-slate-300">📤 <b>{agg.pulled.toLocaleString()}</b> pulled</span><span className="text-slate-600">→</span>
             <span className="text-sky-300">📥 <b>{agg.leads.toLocaleString()}</b> CRM leads <span className="text-slate-500">({pct(agg.leads, agg.pulled)})</span></span><span className="text-slate-600">→</span>
+            <span className="text-teal-300" title="Leads we made an offer to — how the market is RESPONDING to our outreach">💵 <b>{agg.offers.toLocaleString()}</b> offers <span className="text-slate-500">({pct(agg.offers, agg.leads)} of leads)</span></span><span className="text-slate-600">→</span>
             <span className="text-emerald-300">📝 <b>{agg.contract.toLocaleString()}</b> contracts</span><span className="text-slate-600">→</span>
             <span className="text-amber-300">⭐ <b>{agg.closed.toLocaleString()}</b> closed{agg.value > 0 ? ` · $${Math.round(agg.value).toLocaleString()}` : ""}</span>
             <span className="ml-auto text-slate-500">traced by ZIP + “came in after the pull date”</span>
@@ -863,6 +865,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
                   <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10.5px]">
                     {c.leads > 0 ? (<>
                       <span className="text-sky-300">📥 <b>{c.leads}</b> lead{c.leads > 1 ? "s" : ""} <span className="text-slate-500">({pct(c.leads, b.count)})</span></span><span className="text-slate-600">→</span>
+                      <span className="text-teal-300" title="Offers made — market response to our SMS">💵 <b>{c.offersMade}</b> offer{c.offersMade === 1 ? "" : "s"}</span><span className="text-slate-600">→</span>
                       <span className="text-emerald-300">📝 <b>{c.contractSent}</b> contract{c.contractSent === 1 ? "" : "s"}</span><span className="text-slate-600">→</span>
                       <span className="text-amber-300">⭐ <b>{c.closed}</b> closed{c.value > 0 ? ` · $${Math.round(c.value).toLocaleString()}` : ""}</span>
                     </>) : (<span className="text-slate-500">No CRM leads traced to this pull yet — they’ll appear here as sellers from these ZIPs come in.</span>)}

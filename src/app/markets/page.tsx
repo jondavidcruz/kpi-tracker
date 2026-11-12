@@ -12,7 +12,7 @@ import NichePlaybook from "@/components/NichePlaybook";
 import StateLawPanel from "@/components/StateLawPanel";
 import { readBlacklist } from "@/lib/market-blacklist";
 import { readBuyerNicheMap, buildNicheMatches } from "@/lib/buyer-niches";
-import { readScan, scoreCounties } from "@/lib/market-scan";
+import { readScan, scoreCounties, bidRentSignals } from "@/lib/market-scan";
 import { SCAN_SEED } from "@/lib/market-scan-seed";
 import { COUNTY_CENTROIDS } from "@/lib/county-centroids";
 
@@ -203,30 +203,45 @@ export default async function MarketsPage() {
     ? await (async () => { try { const { buyerCoverageRings } = await import("@/lib/buyer-coverage-map"); return await buyerCoverageRings(demand.markets.map((m) => ({ fips: m.fips, name: m.name, state: m.state, buyers: m.buyers, newMarket: m.newMarket }))); } catch { return []; } })()
     : [];
 
-  // 💰 Buyers waiting per county (from the demand engine) → onto each map dot + the Pull Priority list.
+  // 💰 Buyers waiting + 🍩 bid-rent conversion-ring signals per county → map dots + Pull Priority.
   const buyersByFips: Record<string, number> = {};
-  if (demand) for (const m of demand.markets) buyersByFips[m.fips] = m.buyers;
-  const scanPointsRanked = scanPoints.map((p) => ({ ...p, buyers: buyersByFips[p.fips] ?? 0 }));
+  const newMarketByFips: Record<string, boolean> = {};
+  if (demand) for (const m of demand.markets) { buyersByFips[m.fips] = m.buyers; newMarketByFips[m.fips] = m.newMarket; }
+  // 🍩 Conversion-ring + residual + 🧪 test-market flag per county. Test market = a conversion ring
+  // we can SELL into (buyers) that we HAVEN'T saturated ourselves (never pulled / new market, not on
+  // cooldown) — the least-competed ground to test leads (Jon 2026-11-11).
+  const bidByFips: Record<string, { ring: number; residual: number | null; testMarket: boolean }> = {};
+  for (const c of (scanStore.counties ?? [])) {
+    const { ring, residual } = bidRentSignals(c);
+    const buyers = buyersByFips[c.fips] ?? 0;
+    const cov = coverageByFips[c.fips]?.status ?? "never";
+    const testMarket = ring >= 35 && buyers > 0 && cov !== "cooldown" && (newMarketByFips[c.fips] || cov === "never");
+    bidByFips[c.fips] = { ring, residual, testMarket };
+  }
+  const scanPointsRanked = scanPoints.map((p) => ({ ...p, buyers: buyersByFips[p.fips] ?? 0, ...(bidByFips[p.fips] ?? { ring: 0, residual: null, testMarket: false }) }));
 
   // 📋 PULL PRIORITY (Jon 2026-11-11: "make it easier to plan which market to pull"). One ranked
-  // answer to "where next?" = land velocity + growth + buyers-waiting + clear-to-pull coverage.
+  // answer to "where next?" = land velocity + growth + buyers-waiting + conversion-ring + clear coverage.
   const pullPriority = (scanStore.counties ?? [])
     .filter((c) => c.tier === "target" || c.tier === "watch")
     .map((c) => {
       const buyers = buyersByFips[c.fips] ?? 0;
       const cov = coverageByFips[c.fips];
       const t = c.trends;
+      const bid = bidByFips[c.fips] ?? { ring: 0, residual: null, testMarket: false };
       const land90 = t?.landSold.d90 ?? 0;
       const yoy = t?.yoyLandPct ?? null;
-      let pr = c.score * 0.4;                                   // base opportunity score
-      pr += Math.min(25, land90 / 20);                          // land velocity (more selling = more to pull)
-      pr += buyers > 0 ? Math.min(22, 10 + buyers * 4) : 0;     // demand: big boost where buyers wait
+      let pr = c.score * 0.35;                                  // base opportunity score
+      pr += Math.min(22, land90 / 20);                          // land velocity (more selling = more to pull)
+      pr += buyers > 0 ? Math.min(20, 10 + buyers * 4) : 0;     // demand: big boost where buyers wait
+      pr += bid.ring * 0.12;                                    // 🍩 conversion-ring (land→housing frontier)
       if (yoy != null) pr += yoy >= 0 ? Math.min(10, yoy / 3) : Math.max(-10, yoy / 3);
       if (cov?.status === "cooldown") pr -= 15;                 // recently pulled → wait
       else pr += 5;                                             // clear / never pulled → good to go
       return {
         fips: c.fips, name: c.name.replace(/ County$/, ""), state: c.state, tier: c.tier as "target" | "watch",
         land30: t?.landSold.d30 ?? 0, land90, newCon90: t?.newConSold.d90 ?? 0, yoy, buyers,
+        ring: bid.ring, residual: bid.residual, testMarket: bid.testMarket,
         coverage: (cov?.status ?? "never") as "never" | "clear" | "cooldown", cooldownLeft: cov?.cooldownLeft ?? 0,
         hasTrends: !!t, priority: Math.max(0, Math.min(100, Math.round(pr))),
       };
