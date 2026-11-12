@@ -644,7 +644,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       // 📈 Land & new-construction VELOCITY — the real "is this market moving?" read (Jon 2026-11-11).
       const trendBlock = t
         ? `<div style="margin:5px 0;padding:5px 7px;background:#f0fdf4;border-radius:6px;border:1px solid #bbf7d0">` +
-            `<div style="font-weight:700;color:#166534">🌱 LAND sold <span style="color:#64748b;font-weight:600">(30/90/180d)</span></div>` +
+            `<div style="font-weight:700;color:#166534">🌱 LAND sold ($50k+) <span style="color:#64748b;font-weight:600">(30/90/180d)</span></div>` +
             `<div style="font-size:14px;font-weight:800;color:#15803d">${t.landSold.d30} · ${t.landSold.d90} · ${t.landSold.d180}</div>` +
             `<div style="font-weight:700;color:#166534;margin-top:3px">🏗 New construction sold <span style="color:#64748b;font-weight:600">(30/90/180d)</span></div>` +
             `<div style="font-size:14px;font-weight:800;color:#15803d">${t.newConSold.d30} · ${t.newConSold.d90} · ${t.newConSold.d180}</div>` +

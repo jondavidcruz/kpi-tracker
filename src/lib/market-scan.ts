@@ -203,17 +203,20 @@ export async function landTrendsFor(fips: string): Promise<LandTrends | null> {
   const soldAfter = (d: string): DmFilter => ({ filter_id: "last_sale_date", operator: "is_after", value: d });
   const built: DmFilter = { filter_id: "year_built", operator: "greater_than_or_equal", value: newconYear };
   const pending: DmFilter = { filter_id: "is_mls_pending", operator: "is_boolean", value: true };
+  // 💰 Only count land that SELLS for ≥$50k — Jon's standing rule (2026-11-11): "nothing lower than
+  // 50k, those are the only lands we want to target." Keeps the velocity/ring honest (no $2k junk lots).
+  const land50 = { filter_id: "last_sale_price", operator: "greater_than_or_equal", value: 50000 } as DmFilter;
   const n = (r: { ok: boolean; count?: { total_properties: number } }) => (r.ok ? r.count!.total_properties || 0 : 0);
   const [l30, l90, l180, l365, l730, c30, c90, c180, lp, np] = await Promise.all([
-    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(30))]),
-    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(90))]),
-    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(180))]),
-    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(365))]),
-    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(730))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), land50, soldAfter(daysAgoISO(30))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), land50, soldAfter(daysAgoISO(90))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), land50, soldAfter(daysAgoISO(180))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), land50, soldAfter(daysAgoISO(365))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), land50, soldAfter(daysAgoISO(730))]),
     dmCount(loc, [pt(NEWCON_TYPES), built, soldAfter(daysAgoISO(30))]),
     dmCount(loc, [pt(NEWCON_TYPES), built, soldAfter(daysAgoISO(90))]),
     dmCount(loc, [pt(NEWCON_TYPES), built, soldAfter(daysAgoISO(180))]),
-    dmCount(loc, [pt(LAND_SOLD_TYPES), pending]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), land50, pending]),
     dmCount(loc, [pt(NEWCON_TYPES), built, pending]),
   ]);
   if (!l90.ok && !l30.ok && !l180.ok) return null; // v2 key down / all failed

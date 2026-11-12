@@ -8,6 +8,7 @@ import MarketFinder from "@/components/MarketFinder";
 import MarketsTabs from "@/components/MarketsTabs";
 import MarketBlacklist from "@/components/MarketBlacklist";
 import PullPriorityList from "@/components/PullPriorityList";
+import MarketGuide from "@/components/MarketGuide";
 import NichePlaybook from "@/components/NichePlaybook";
 import StateLawPanel from "@/components/StateLawPanel";
 import { readBlacklist } from "@/lib/market-blacklist";
@@ -257,6 +258,7 @@ export default async function MarketsPage() {
         accent="bg-emerald-400"
       />
       <MarketBlacklist entries={blacklist} canEdit={leader} />
+      {leader && <MarketGuide />}
       {leader && <PullPriorityList rows={pullPriority} />}
       <MarketsTabs
         showResearch={leader}
