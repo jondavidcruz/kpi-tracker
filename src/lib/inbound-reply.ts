@@ -35,7 +35,7 @@ export const SELLER_DISCOVERY_CHECKLIST =
 // identity — who we are, LLC/registered agent, address, licensing, how we got their number, or an
 // outright legal threat. People sometimes fish for our info to build a TCPA/consumer case. Flagged
 // loudly, and louder still when it's NOT an offer/contract lead (no reason to be asking yet).
-const LEGAL_REGEX = /\b(who\s*(are\s*you|is\s*this|do\s*you\s*(work|represent)\s*for|owns?\s*(this|the))|wh(at|ich)\s+(llc|company|business|corporation|entity)\b|what('?s|\s*is)?\s*(your|the)\s*(company|business|llc|l\.l\.c|corporation|website|address|legal\s*name|full\s*name)|company\s*name|business\s*(name|license|address)|registered\s*agent|(real\s*estate|broker'?s?)\s*licen[sc]e|are\s*you\s*licen[sc]ed|licen[sc]ed\s*(agent|broker|realtor)|your\s*(llc|ein|tax\s*id|license\s*number)|attorney|lawyer|law\s*suit|lawsuit|\bsue\b|legal\s*action|cease\s*and\s*desist|\btcpa\b|do\s*not\s*call\s*(list|registry)|report\s*you|attorney\s*general|\bftc\b|file\s*a\s*(complaint|report)|how\s*did\s*you\s*get\s*my)\b/i;
+const LEGAL_REGEX = /\b(who\s*(are\s*you|is\s*this|do\s*you\s*(work|represent)\s*for|owns?\s*(this|the))|wh(at|ich)\s+(llc|company|business|corporation|entity)\b|what('?s|\s*is)?\s*(your|the)\s*(company|business|llc|l\.l\.c|corporation|website|address|legal\s*name|full\s*name)|company\s*name|business\s*(name|license|address)|registered\s*agent|(real\s*estate|broker'?s?)\s*licen[sc]e|are\s*you\s*licen[sc]ed|licen[sc]ed\s*(agent|broker|realtor)|your\s*(llc|ein|tax\s*id|license\s*number)|attorney|lawyer|law\s*suit|lawsuit|litigat|prosecut|\bsu(e|ed|ing)\b|legal\s*action|take\s*legal|cease\s*(and\s*desist|all\s*|any\s*)?(contact|communicat)|cease\s*and\s*desist|\btcpa\b|do\s*not\s*(call|contact|text|message)|dnc\s*(list|registry)|consumer\s*(protection|information|privacy)|data\s*protection\s*act|violat(e|ing|ion)|\breported?\b.*\b(you|company|against)|report\s*(will\s*be\s*)?(filed|you)|filed?\s*(against|a\s*(report|complaint))|attorney\s*general|\bftc\b|\bfcc\b|file\s*a\s*(complaint|report)|\bdamages\b|statutory|how\s*did\s*you\s*get\s*my|remove\s*(this|my|me).*(number|list|call)|take\s*me\s*off.*(list|call))\b/i;
 
 /** Classify + route a seller's inbound reply. Returns the intent flags so the caller can decide
  *  whether to push a notification. `contactInfo` is the phone/email shown in the reply task title. */
@@ -167,6 +167,9 @@ export async function routeSellerReply(args: {
         await db.crmContact.update({ where: { id: contact.id }, data: { tags: [contact.tags, "legal-watch"].filter(Boolean).join(",") } }).catch(() => {});
       }
       await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `${sev} LEGAL WATCH — they asked for our company/legal info${established ? "" : " and are NOT an offer/contract lead (higher risk — people sometimes fish for our info to sue us)"}. Verify who they are before sharing anything; never send the company name, address, LLC, or licensing by text/email.`, actor: "legal-watch" }).catch(() => {});
+      // ⚖️ LITIGATOR PROTOCOL — snapshot the FULL record (import source + consent + every message in/
+      // out) into the permanent legal-defense file so it can never be lost (Jon 2026-11-12).
+      try { const { saveLegalWatchRecord } = await import("@/lib/legal-watch"); await saveLegalWatchRecord(contact.id, text, channel); } catch { /* best-effort */ }
       const ltoday = new Date().toISOString().slice(0, 10);
       const ltitle = `${sev} LEGAL WATCH: ${contact.name.split(" ")[0]} asked for company/legal info — verify before replying`.slice(0, 180);
       const ldup = await db.crmTask.findFirst({ where: { title: ltitle, doneAt: null } }).catch(() => null);

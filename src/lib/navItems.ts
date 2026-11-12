@@ -44,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
   { group: "Business Heartbeat", items: [
     { href: "/comms-health", label: "Comms Guardian", gate: "manager" },
     { href: "/compliance", label: "Compliance", gate: "all" },
+    { href: "/legal-watch", label: "Litigator Protocol", gate: "manager" },
     { href: "/phone-health", label: "Phone Health", gate: "all" },
     { href: "/email-health", label: "Email Health", gate: "manager" },
   ] },

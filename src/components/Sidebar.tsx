@@ -174,6 +174,7 @@ export default function Sidebar({
     { label: "Business Heartbeat", items: [
       { href: "/comms-health", label: "Comms Guardian", Icon: Activity, managerOnly: true },
       { href: "/compliance", label: "Compliance", Icon: ShieldCheck },
+      { href: "/legal-watch", label: "Litigator Protocol", Icon: ShieldCheck },
       { href: "/phone-health", label: "Phone Health", Icon: Phone },
       { href: "/email-health", label: "Email Health", Icon: Megaphone, managerOnly: true },
     ] },
