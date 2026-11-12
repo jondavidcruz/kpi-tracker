@@ -810,13 +810,15 @@ export async function sendCrmEmailAction(formData: FormData): Promise<{ ok: bool
   // GHL-style agent identity: From = the rep (on our domain), reply-to their
   // real inbox, their own signature appended.
   const { readSignatures, firstOf, defaultSignature, hasSignatureImage } = await import("@/lib/crm-comms");
-  const sig = (await readSignatures())[firstOf(me.name)] || defaultSignature(me.name);
+  // 🕶 Scrub the signature too — a rep's saved signature could contain the company name/website/phone.
+  const sig = scrubOwnerIdentity((await readSignatures())[firstOf(me.name)] || defaultSignature(me.name));
   const domain = (process.env.ALERT_EMAIL_FROM ?? "info@freedom-offers.com").split("@")[1] ?? "freedom-offers.com";
   // Build a VALID from: clean local-part (names like "Jon/Jonathan" produced an
   // illegal address → Resend 422 "Invalid from field") + a display name with no
   // angle brackets/quotes to break the "Name <email>" format (Jon 2026-10-21).
   const localPart = (firstOf(me.name).match(/[a-z0-9]+([._-][a-z0-9]+)*/i)?.[0] || "team").toLowerCase();
-  const displayName = me.name.replace(/[<>"\\]/g, "").trim() || "Freedom Offers";
+  // FIRST name only in the From display — never the full name or company (Jon 2026-11-12).
+  const displayName = firstOf(me.name).replace(/[<>"\\]/g, "").trim() || "Sales";
   const fromAddr = `${displayName} <${localPart}@${domain}>`;
   // 🖼 branded signature image (their Gmail block), referenced by URL so it renders in email clients
   const sigImg = (await hasSignatureImage(firstOf(me.name)))

@@ -59,7 +59,9 @@ export async function writeSignatures(map: SigMap): Promise<void> {
   else await db.resource.create({ data: { title: "crm-signatures", category: SIG_CAT, url: "", description } });
 }
 export function defaultSignature(name: string): string {
-  return `${name}\nFreedom Offers\n📞 1-877-652-8991 · freedom-offers.com`;
+  // ⚠️ Owner-anonymity: first name ONLY — never the company name, website, or the toll-free number
+  // (Jon 2026-11-12: no company info in any outbound seller message). Scrubbed again at send time.
+  return (name || "").trim().split(/\s+/)[0] || "";
 }
 
 // 🖼 Per-rep email signature IMAGE (Jon 2026-10-21) — upload your real Gmail

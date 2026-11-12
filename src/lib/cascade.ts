@@ -87,7 +87,9 @@ export async function sendRound(dealId: string): Promise<{ sent: number; done: b
     const pass = `${APP_URL}/api/cascade?d=${dealId}&b=${m.id}&a=pass&s=${sign(dealId, m.id, "pass")}`;
     // reply-to Jon's inbox so an interested buyer's reply reaches a human, not the robot sender
     const err: { msg?: string } = {};
-    const ok = await sendEmailTo([m.email], `Off-market deal — ${deal.address}`, offerHtml(deal, m.name, claim, pass), undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com", err);
+    // 🕶 Scrub any company/owner identity a rep may have typed into deal.address / nextSteps.
+    const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+    const ok = await sendEmailTo([m.email], scrubOwnerIdentity(`Off-market deal — ${deal.address}`), scrubOwnerIdentity(offerHtml(deal, m.name, claim, pass)), undefined, process.env.CASCADE_REPLY_TO || "info@freedom-offers.com", err);
     if (!ok) {
       // Don't record a send that never left (it was counting as "emailed" and
       // building a DealSend row even when the mail provider rejected it).

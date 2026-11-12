@@ -1252,7 +1252,7 @@ function offerEmail(deal: { address: string; contractPrice: number | null; askin
 <p><b>${escapeForEmail(deal.address)}</b><br>${priceLine}</p>
 ${deal.nextSteps ? `<p>${escapeForEmail(deal.nextSteps)}</p>` : ""}
 <p>You're first in line on this one. Reply or call if you want the full package (comps, photos, terms) — first to commit gets it.</p>
-<p>— ${escapeForEmail(from)}, Freedom Offers</p>`;
+<p>— ${escapeForEmail((from || "").trim().split(/\s+/)[0] || "")}</p>`;
 }
 /** Manager-initiated: email the drafted offer to a cascade buyer + mark them "sent". */
 export async function sendCascadeOffer(formData: FormData) {
@@ -1267,7 +1267,10 @@ export async function sendCascadeOffer(formData: FormData) {
   ]);
   if (!deal || !buyer) redirect("/deals?cascade=err");
   let sent = false;
-  if (buyer.email) sent = await sendEmailTo([buyer.email], `Off-market deal — ${deal.address}`, offerEmail(deal, buyer.name, me?.name ?? "Freedom Offers"));
+  if (buyer.email) {
+    const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+    sent = await sendEmailTo([buyer.email], scrubOwnerIdentity(`Off-market deal — ${deal.address}`), scrubOwnerIdentity(offerEmail(deal, buyer.name, (me?.name ?? "").split(" ")[0] || "Sales")));
+  }
   // Only record a send that actually left (it used to mark "sent" even on
   // "nomail", so the buyer looked contacted when nobody had reached them).
   if (sent) {

@@ -28,6 +28,17 @@ export function scrubOwnerIdentity(text?: string | null): string {
     const rx = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"), "gi");
     out = out.replace(rx, "our team");
   }
+  // ☎️ strip owner/company phone numbers (the toll-free Googles straight back to the company — Jon
+  // 2026-11-12). Any format of 877-652-8991, plus env OUTREACH_SCRUB_PHONES (comma-separated digits).
+  const phoneDigits = [...new Set([
+    ...(process.env.OUTREACH_SCRUB_PHONES || "").split(",").map((s) => s.replace(/\D/g, "")).filter((s) => s.length >= 10),
+    "8776528991",
+  ])];
+  for (const d10 of phoneDigits) {
+    const core = d10.slice(-10);
+    const rx = new RegExp(`\\+?1?[\\s.()-]*${core[0]}${core[1]}${core[2]}[\\s.()-]*${core[3]}${core[4]}${core[5]}[\\s.()-]*${core.slice(6)}`, "g");
+    out = out.replace(rx, "");
+  }
   // 🌐 strip website URLs, bare domains, and name@domain emails for each owned domain.
   for (const d of domains()) {
     const dq = d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
