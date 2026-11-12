@@ -31,6 +31,12 @@ export const SELLER_DISCOVERY_CHECKLIST =
   "• Utilities on the land + any easements?\n" +
   "• Any other offers or prices they've already been given?";
 
+// ⚖️ Info-fishing / litigation watch (Jon 2026-11-11): a reply probing for our COMPANY or LEGAL
+// identity — who we are, LLC/registered agent, address, licensing, how we got their number, or an
+// outright legal threat. People sometimes fish for our info to build a TCPA/consumer case. Flagged
+// loudly, and louder still when it's NOT an offer/contract lead (no reason to be asking yet).
+const LEGAL_REGEX = /\b(who\s*(are\s*you|is\s*this|do\s*you\s*(work|represent)\s*for|owns?\s*(this|the))|wh(at|ich)\s+(llc|company|business|corporation|entity)\b|what('?s|\s*is)?\s*(your|the)\s*(company|business|llc|l\.l\.c|corporation|website|address|legal\s*name|full\s*name)|company\s*name|business\s*(name|license|address)|registered\s*agent|(real\s*estate|broker'?s?)\s*licen[sc]e|are\s*you\s*licen[sc]ed|licen[sc]ed\s*(agent|broker|realtor)|your\s*(llc|ein|tax\s*id|license\s*number)|attorney|lawyer|law\s*suit|lawsuit|\bsue\b|legal\s*action|cease\s*and\s*desist|\btcpa\b|do\s*not\s*call\s*(list|registry)|report\s*you|attorney\s*general|\bftc\b|file\s*a\s*(complaint|report)|how\s*did\s*you\s*get\s*my)\b/i;
+
 /** Classify + route a seller's inbound reply. Returns the intent flags so the caller can decide
  *  whether to push a notification. `contactInfo` is the phone/email shown in the reply task title. */
 export async function routeSellerReply(args: {
@@ -70,6 +76,11 @@ export async function routeSellerReply(args: {
         else if (/decline/i.test(verdict)) { declined = true; }
       } catch { /* screen is best-effort; the rep task still fires */ }
     }
+
+    // ⚖️ Litigator / info-fishing watch — established = we've already sent them an offer/contract
+    // (then it's a normal question); otherwise asking for our company/legal info is a red flag.
+    const established = opp ? /offer_call|verbal_offer|contract|signed|escrow|closing|won/i.test(opp.stage) : false;
+    const legalFlag = LEGAL_REGEX.test(text);
 
     // 🤖 MASTER WORKFLOW (Jonathan Duong 2026-10-28): auto-tag + auto-SCHEDULE the next follow-up
     // so snoozed leads resurface instead of being lost, and the VA only works qualified ones.
@@ -139,9 +150,28 @@ export async function routeSellerReply(args: {
     // 📨 Any reply STOPS the drip sequence — they engaged, hand it to a human (text OR email).
     if (opp) { try { const { stopDrip } = await import("@/lib/drip"); await stopDrip(opp.id, `seller replied (${channel})`); } catch { /* ok */ } }
 
+    // ⚖️ Info-fishing / legal probe → flag HARD, tag the contact, warn the team, and DON'T drop a
+    // routine "call them" task (they must verify identity first). Louder when NOT an offer/contract
+    // lead. Never auto-DNCs — a human decides. (Jon 2026-11-11: "these people try to get our info to sue us".)
+    if (legalFlag && opp) {
+      const sev = established ? "ℹ️" : "⚠️";
+      if (!/\blegal-watch\b/i.test(contact.tags || "")) {
+        await db.crmContact.update({ where: { id: contact.id }, data: { tags: [contact.tags, "legal-watch"].filter(Boolean).join(",") } }).catch(() => {});
+      }
+      await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `${sev} LEGAL WATCH — they asked for our company/legal info${established ? "" : " and are NOT an offer/contract lead (higher risk — people sometimes fish for our info to sue us)"}. Verify who they are before sharing anything; never send the company name, address, LLC, or licensing by text/email.`, actor: "legal-watch" }).catch(() => {});
+      const ltoday = new Date().toISOString().slice(0, 10);
+      const ltitle = `${sev} LEGAL WATCH: ${contact.name.split(" ")[0]} asked for company/legal info — verify before replying`.slice(0, 180);
+      const ldup = await db.crmTask.findFirst({ where: { title: ltitle, doneAt: null } }).catch(() => null);
+      if (!ldup) {
+        const lt = await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: ltitle, due: ltoday, assignedTo: contact.assignedTo || "", createdBy: "legal-watch" } }).catch(() => null);
+        if (lt) { try { const { writeTaskNote } = await import("@/lib/task-notes"); await writeTaskNote(lt.id, `Their message: "${text.slice(0, 400)}"\n\n⚖️ Do NOT share the company name, address, LLC, registered agent, licensing, or any owner details by text or email. ${established ? "This IS an offer/contract lead, so it may be a normal question — still confirm it's really them." : "This is NOT an offer/contract lead — treat as a possible litigator fishing for info. Route to a manager."}`); } catch { /* note best-effort */ } }
+      }
+      try { const { sendPushTo } = await import("@/lib/push"); sendPushTo(contact.assignedTo ? [contact.assignedTo.split(" ")[0]] : ("all" as const), { title: `${sev} Legal watch`, body: `${contact.name} asked for company/legal info — verify before replying`, url: `/crm/conversations?c=${contact.id}`, tag: `legal-${contact.id}` }).catch(() => {}); } catch { /* push best-effort */ }
+    }
+
     // ✅ Drop ONE "call them now" task carrying the discovery checklist — only for engaged repliers
-    // (not DNC / not-interested / realtor, which are auto-snoozed). Deduped by title.
-    if (!wasDnced && !declined && !realtor && contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags || "")) {
+    // (not DNC / not-interested / realtor / legal-flagged, which are handled above). Deduped by title.
+    if (!legalFlag && !wasDnced && !declined && !realtor && contact.assignedTo && !/\bdnc\b|\bdnd_all\b/i.test(contact.tags || "")) {
       const today = new Date().toISOString().slice(0, 10);
       const info = args.contactInfo ? ` (${args.contactInfo})` : "";
       const icon = channel === "email" ? "✉️" : "💬";
