@@ -63,16 +63,29 @@ export default async function MarketsPage() {
   // 📄→📥 Pull-list CONVERSION (Phase 2): attribute CRM leads back to the pull that sourced them
   // (lead's ZIP is in the batch + lead created on/after the pull date). Keyed by batch id so the map's
   // client-loaded batch chips can show each pull's funnel (Pulled → lead → contract → closed).
-  const { readPullLists, attributePullConversion, attributeDreiResponses } = await import("@/lib/pull-lists");
+  const { readPullLists, attributePullConversion } = await import("@/lib/pull-lists");
   const pullLists = await readPullLists();
   const convOpps = opps.map((o) => {
     const zs = (o.contact?.address ?? "").match(/\b\d{5}\b/g);
     return { zip: zs && zs.length ? zs[zs.length - 1] : null, createdMs: o.createdAt.getTime(), stage: o.stage ?? "", value: o.value ?? 0 };
   });
   const pullStats = attributePullConversion(pullLists, convOpps);
-  // 📊 Campaign Health — Direct REI text responses per uploaded pull list (every reply, not just imports).
-  const dreiResponses = await (async () => { try { const { readDreiResponses } = await import("@/lib/directrei-leads"); return await readDreiResponses(); } catch { return []; } })();
-  const campaignHealth = attributeDreiResponses(pullLists, dreiResponses);
+  // 📊 Campaign Health — pulled from the Direct REI API feed (refreshed 5×/day, every response
+  // classified by status) and matched to each uploaded pull list by normalized campaign name.
+  const campaignHealth: Record<string, { replied: number; interested: number; priced: number; notInterested: number; optedOut: number }> = {};
+  try {
+    const { readDreiFeed, normCampaignName } = await import("@/lib/directrei-sync");
+    const feed = await readDreiFeed();
+    const byName: Record<string, { replied: number; interested: number; priced: number; notInterested: number; optedOut: number }> = {};
+    for (const h of (feed?.campaignHealth ?? [])) byName[normCampaignName(h.name)] = h;
+    const keys = Object.keys(byName);
+    for (const b of pullLists) {
+      const key = normCampaignName(b.name);
+      let h = byName[key];
+      if (!h && key) { const hitKey = keys.find((k) => k && (k.includes(key) || key.includes(k))); if (hitKey) h = byName[hitKey]; }
+      if (h) campaignHealth[b.id] = { replied: h.replied, interested: h.interested, priced: h.priced, notInterested: h.notInterested, optedOut: h.optedOut };
+    }
+  } catch { /* feed unavailable — campaign health just won't show */ }
 
   // 🖍 Hand-drawn / searched territories (areas we market in / have pulled vs uncharted).
   const { readTerritories } = await import("@/lib/map-territories");

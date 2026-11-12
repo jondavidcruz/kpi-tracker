@@ -14,6 +14,18 @@ export type DreiReply = {
   at: string; needsAttention: boolean; phone: string; email: string; address?: string;
 };
 export type DreiSide = { newToday: number; new7d: number; repliesToday: number; replies7d: number; smsRepliesToday: number; smsReplies7d: number; emailRepliesToday?: number; emailReplies7d: number };
+// 📊 Per-campaign response health (Jon 2026-11-12: Market Finder should show, per uploaded list,
+// who replied / is interested / gave a price / not-interested / opted-out — pulled from Direct REI
+// 5×/day, keyed by a NORMALIZED campaign name so it matches our uploaded pull-list names.
+export type DreiCampaignHealth = { name: string; replied: number; interested: number; priced: number; notInterested: number; optedOut: number };
+// Normalize a campaign / pull-list name so "Gulf_County_FL_..._DM_DREI_READY_2" matches the Direct
+// REI campaign name regardless of the DM/DREI/date/Final/Ready suffixes.
+export function normCampaignName(s: string): string {
+  return (s || "").toLowerCase()
+    .replace(/\.csv$/i, "")
+    .replace(/\b(dm|drei|final|ready|vacant|land|tax|delinquent|owners?|list|pull|war ?room|\d{4}-\d{2}-\d{2}|\d{4}|50k|\d+)\b/g, " ")
+    .replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+}
 export type DreiFeed = {
   at: string;
   newSellersToday?: Array<{ name: string; phone: string; email: string }>;
@@ -22,6 +34,7 @@ export type DreiFeed = {
   smsRepliesToday: number; // all campaigns — feeds the team "Text Responses" KPI
   seller: DreiSide; buyer: DreiSide;
   recentReplies: DreiReply[]; // newest first, max 12
+  campaignHealth?: DreiCampaignHealth[]; // per-campaign response tally (keyed by normCampaignName)
   campaigns: Array<{ name: string; channel: string; side: "seller" | "buyer" | "other"; paused: boolean }>;
 };
 
@@ -67,6 +80,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
   const sides = { seller: empty(), buyer: empty(), other: empty() };
   const newSellers: Array<{ name: string; phone: string; email: string }> = [];
   const replies: DreiReply[] = [];
+  const health: Record<string, DreiCampaignHealth> = {}; // per-campaign response tally (all-time)
   let total = 0, scanned = 0, smsRepliesToday = 0;
 
   for (let page = 0; page < 20; page++) {
@@ -88,6 +102,20 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
       if (added >= weekAgo) bucket.new7d++;
       const optedOut = !!(c.sms_opted_out_at || c.email_opted_out_at);
       const replyDay = (c.last_reply_at ?? "").slice(0, 10);
+      // 📊 Campaign Health tally — every response classified by Direct REI status (all-time), keyed
+      // by normalized campaign name so Market Finder can match it to each uploaded pull list.
+      if (camp?.name) {
+        const key = normCampaignName(camp.name);
+        const h = (health[key] ??= { name: camp.name, replied: 0, interested: 0, priced: 0, notInterested: 0, optedOut: 0 });
+        const st = (c.status || "").toLowerCase();
+        if (optedOut || /\bopt|unsub|\bstop\b|\bdnc\b/.test(st)) h.optedOut++;
+        else if (replyDay || /replied|interest|price|offer|qualif|hot|warm|not.?interest/.test(st)) {
+          h.replied++;
+          if (/\$|price|offer|asking|would take/.test(st)) { h.priced++; h.interested++; }
+          else if (/not.?interest|dead|wrong|disqualif/.test(st)) h.notInterested++;
+          else if (/interest|qualif|hot|warm|ready|\byes\b/.test(st)) h.interested++;
+        }
+      }
       if (replyDay && !optedOut) {
         if (replyDay === todayYmd) {
           bucket.repliesToday++;
@@ -118,6 +146,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
     seller: sides.seller,
     buyer: sides.buyer,
     recentReplies: replies.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12),
+    campaignHealth: Object.values(health).filter((h) => h.replied || h.optedOut),
     campaigns: campRows.map((c) => ({ name: c.name, channel: c.channel, paused: c.paused, side: /seller/i.test(c.name) ? "seller" as const : /buyer/i.test(c.name) ? "buyer" as const : "other" as const })),
   };
 }
