@@ -35,11 +35,25 @@ export type LandProfile = {
   total: number; cheap: number; sweet: number; high: number; prem: number; // ≤40k / 100-200k / ≥100k / ≥200k
   highShare: number; cheapShare: number; asOf: string;
 };
+// 📈 Market VELOCITY from DealMachine (Jon 2026-11-11: "how many lands sold in 30/90/180, same for
+// new construction, how fast pending"). All FREE counts, validated filter shapes:
+//   land sold = property_type[6,19,20] + last_sale_date is_after <date>
+//   new-con sold = property_type[1,2,3] + year_built ≥ (yr-3) + last_sale_date is_after <date>
+//   pending = property_type + is_mls_pending=true
+//   YoY land = land sold last 365d vs. the 365d before (both via is_after; no date_range needed).
+export type LandTrends = {
+  landSold: { d30: number; d90: number; d180: number };
+  newConSold: { d30: number; d90: number; d180: number };
+  landPending: number; newConPending: number;
+  yoyLandPct: number | null; // land-sales growth: +% = more land selling than a year ago
+  asOf: string;
+};
 export type CountyScan = {
   fips: string; name: string; state: string; metro: string;
   medianSalePrice: number | null; yoyPct: number | null; priceAsOf: string | null;
   daysToPending: number | null; inventory: number | null;
   land: LandProfile | null;
+  trends?: LandTrends | null; // added 2026-11-11; optional so pre-existing cached scans/seed still fit
   score: number; tier: "target" | "watch" | "low"; reasons: string[];
 };
 export type ScanStore = {
@@ -130,7 +144,7 @@ export async function buildZillowCounties(states = ["FL"]): Promise<{ counties: 
       fips, name: m.name, state: m.state, metro: m.metro,
       medianSalePrice: p?.latest ?? null, yoyPct: p?.yoy ?? null, priceAsOf: p?.asOf ?? null,
       daysToPending: dtp.get(fips)?.latest ?? null, inventory: inv.get(fips)?.latest ?? null,
-      land: null, score: 0, tier: "low", reasons: [],
+      land: null, trends: null, score: 0, tier: "low", reasons: [],
     });
   }
   return { counties, zillowAsOf };
@@ -170,6 +184,46 @@ export async function landProfileFor(fips: string): Promise<LandProfile | null> 
   return {
     total: v, cheap: Math.max(0, v - hi), sweet: sw, high: hi, prem: Math.max(0, hi - sw),
     highShare: v ? hi / v : 0, cheapShare: v ? Math.max(0, v - hi) / v : 0, asOf: new Date().toISOString(),
+  };
+}
+
+// ── 📈 Land + new-construction VELOCITY (free DealMachine counts) ──
+const LAND_SOLD_TYPES = [6, 19, 20];      // Vacant Land, Agriculture, Development Site
+const NEWCON_TYPES = [1, 2, 3];           // Single Family, Townhouse, Condominium
+function daysAgoISO(days: number): string { return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10); }
+
+/** 10 free counts: how much LAND and NEW CONSTRUCTION sold in the last 30/90/180 days, how many are
+ *  pending now, and the land-sales YoY. Null if the v2 key isn't live. FL/SC both fine (counts, not
+ *  assessed-value thresholds). */
+export async function landTrendsFor(fips: string): Promise<LandTrends | null> {
+  if (!dmConfigured()) return null;
+  const loc: DmLoc[] = [{ type: "county", code: fips }];
+  const newconYear = new Date().getFullYear() - 3;
+  const pt = (ids: number[]): DmFilter => ({ filter_id: "property_type", operator: "contains_any", value: ids });
+  const soldAfter = (d: string): DmFilter => ({ filter_id: "last_sale_date", operator: "is_after", value: d });
+  const built: DmFilter = { filter_id: "year_built", operator: "greater_than_or_equal", value: newconYear };
+  const pending: DmFilter = { filter_id: "is_mls_pending", operator: "is_boolean", value: true };
+  const n = (r: { ok: boolean; count?: { total_properties: number } }) => (r.ok ? r.count!.total_properties || 0 : 0);
+  const [l30, l90, l180, l365, l730, c30, c90, c180, lp, np] = await Promise.all([
+    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(30))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(90))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(180))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(365))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), soldAfter(daysAgoISO(730))]),
+    dmCount(loc, [pt(NEWCON_TYPES), built, soldAfter(daysAgoISO(30))]),
+    dmCount(loc, [pt(NEWCON_TYPES), built, soldAfter(daysAgoISO(90))]),
+    dmCount(loc, [pt(NEWCON_TYPES), built, soldAfter(daysAgoISO(180))]),
+    dmCount(loc, [pt(LAND_SOLD_TYPES), pending]),
+    dmCount(loc, [pt(NEWCON_TYPES), built, pending]),
+  ]);
+  if (!l90.ok && !l30.ok && !l180.ok) return null; // v2 key down / all failed
+  const last365 = n(l365), prior365 = Math.max(0, n(l730) - n(l365));
+  const yoy = prior365 > 0 ? Math.round(((last365 - prior365) / prior365) * 100) : null;
+  return {
+    landSold: { d30: n(l30), d90: n(l90), d180: n(l180) },
+    newConSold: { d30: n(c30), d90: n(c90), d180: n(c180) },
+    landPending: n(lp), newConPending: n(np),
+    yoyLandPct: yoy, asOf: new Date().toISOString(),
   };
 }
 

@@ -14,7 +14,8 @@ import type { LeadPin } from "@/lib/lead-pins";
 import type { BuyerCoverage } from "@/lib/buyer-coverage-map";
 
 type Pt = { lat: number; lng: number };
-export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; lat: number; lng: number };
+export type LandTrends = { landSold: { d30: number; d90: number; d180: number }; newConSold: { d30: number; d90: number; d180: number }; landPending: number; newConPending: number; yoyLandPct: number | null; asOf: string };
+export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; trends?: LandTrends | null; lat: number; lng: number };
 export type ClosedDeal = { lat: number; lng: number; address: string; soldPrice: number | null; fee: number | null; buyer: string; soldDate: string; dealType: string };
 
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
@@ -639,15 +640,25 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       // Whole-area coverage (soft gradient) instead of a lone dot — ground radius grows with the score.
       const mk = areaCover(s.lat, s.lng, OPP_COLOR[s.tier], 7000 + (s.score / 100) * 7000, rad);
       const landLine = s.landShare != null ? `<div>🏕 Land ≥$100k: <b>${Math.round(s.landShare * 100)}%</b> of parcels</div>` : "";
-      const yoyLine = s.yoy != null
-        ? `<div>📈 <b>${s.yoy >= 0 ? "+" : ""}${s.yoy}% YoY</b> — ${s.yoy >= 0 ? "prices growing here" : "cooling"}</div>`
-        : "";
+      const t = s.trends;
+      // 📈 Land & new-construction VELOCITY — the real "is this market moving?" read (Jon 2026-11-11).
+      const trendBlock = t
+        ? `<div style="margin:5px 0;padding:5px 7px;background:#f0fdf4;border-radius:6px;border:1px solid #bbf7d0">` +
+            `<div style="font-weight:700;color:#166534">🌱 LAND sold <span style="color:#64748b;font-weight:600">(30/90/180d)</span></div>` +
+            `<div style="font-size:14px;font-weight:800;color:#15803d">${t.landSold.d30} · ${t.landSold.d90} · ${t.landSold.d180}</div>` +
+            `<div style="font-weight:700;color:#166534;margin-top:3px">🏗 New construction sold <span style="color:#64748b;font-weight:600">(30/90/180d)</span></div>` +
+            `<div style="font-size:14px;font-weight:800;color:#15803d">${t.newConSold.d30} · ${t.newConSold.d90} · ${t.newConSold.d180}</div>` +
+            `<div style="margin-top:3px;color:#334155">⏳ Pending now: <b>${t.landPending}</b> land · <b>${t.newConPending}</b> new-con</div>` +
+            (t.yoyLandPct != null ? `<div style="color:${t.yoyLandPct >= 0 ? "#15803d" : "#b91c1c"};font-weight:700">📊 Land sales ${t.yoyLandPct >= 0 ? "+" : ""}${t.yoyLandPct}% YoY ${t.yoyLandPct >= 0 ? "(growing 🔥)" : "(cooling)"}</div>` : "") +
+          `</div>`
+        : `<div style="color:#94a3b8;font-size:11px;margin:3px 0">📈 Land-sales velocity loading — run a market refresh to fill it in.</div>`;
+      const homeYoy = s.yoy != null ? ` · ${s.yoy >= 0 ? "+" : ""}${s.yoy}% YoY` : "";
       mk.bindPopup(
-        `<div style="font:12px system-ui;min-width:190px"><div style="font-weight:800;font-size:13px">${s.name} <span style="color:#64748b;font-weight:600">${s.state}</span></div>` +
+        `<div style="font:12px system-ui;min-width:210px"><div style="font-weight:800;font-size:13px">${s.name} <span style="color:#64748b;font-weight:600">${s.state}</span></div>` +
         `<div style="margin:3px 0"><b style="font-size:15px">${s.score}</b> opportunity · ${s.tier === "target" ? "🟢 Target — pull here next" : "🟠 Watch — monitor for now"}</div>` +
-        yoyLine + landLine +
+        trendBlock + landLine +
         `<div>⏱ ${s.dtp != null ? "~" + Math.round(s.dtp) + " days to pending (homes)" : "—"}</div>` +
-        `<div style="color:#94a3b8;font-size:11px;margin-top:3px">🏠 Area home price ${s.price != null ? "$" + Math.round(s.price).toLocaleString() : "—"} — wealth signal, not land</div></div>`);
+        `<div style="color:#94a3b8;font-size:11px;margin-top:3px">🏠 Area home price ${s.price != null ? "$" + Math.round(s.price).toLocaleString() : "—"}${homeYoy} — wealth signal, not land</div></div>`);
       mk.bindTooltip(`${s.name} · ${s.score}`, { direction: "top", className: "fo-map-label", offset: [0, -rad] });
     }
 

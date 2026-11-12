@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { dmConfigured } from "@/lib/dealmachine";
 import {
-  buildZillowCounties, landProfileFor, scoreCounties, readScan, writeScan,
+  buildZillowCounties, landProfileFor, landTrendsFor, scoreCounties, readScan, writeScan,
   type CountyScan, type ScanStore,
 } from "@/lib/market-scan";
 
@@ -23,6 +23,7 @@ function secretOk(req: Request): boolean {
 }
 
 const LAND_TTL_MS = 14 * 86_400_000; // re-pull a county's land profile at most every 2 weeks
+const TRENDS_TTL_MS = 7 * 86_400_000; // velocity moves faster — refresh land/new-con trends weekly
 
 export async function GET(req: Request) {
   const me = await getCurrentUser();
@@ -57,25 +58,31 @@ export async function GET(req: Request) {
   catch (e) { return NextResponse.json({ ok: false, error: `zillow fetch failed: ${String(e).slice(0, 120)}` }, { status: 502 }); }
   const counties = zillow.counties;
 
-  // Carry forward land profiles already pulled (keyed by FIPS) so a refresh never loses them.
+  // Carry forward land profiles + trends already pulled (keyed by FIPS) so a refresh never loses them.
   const prior = await readScan();
   const priorLand = new Map<string, CountyScan["land"]>((prior?.counties ?? []).map((c) => [c.fips, c.land]));
-  for (const c of counties) { const l = priorLand.get(c.fips); if (l) c.land = l; }
+  const priorTrends = new Map<string, CountyScan["trends"]>((prior?.counties ?? []).map((c) => [c.fips, c.trends]));
+  for (const c of counties) { const l = priorLand.get(c.fips); if (l) c.land = l; const t = priorTrends.get(c.fips); if (t) c.trends = t; }
 
   // Land enrichment (free counts) — only when the v2 key is live and asked for. Time-boxed so a
   // serverless invocation never exceeds the 60s cap: enrich the highest-priced counties first
-  // (where $100k+ land actually exists), skipping any whose land was pulled within the TTL.
+  // (where $100k+ land actually exists), skipping any whose data is still within the TTL. Each
+  // county gets its land value buckets (3 counts) + velocity trends (10 counts: land/new-con sold
+  // 30/90/180, pending, YoY). FL+SC for trends (counts, not assessed-value thresholds).
   let landDone = prior?.landDone ?? 0;
   if (doLand && dmConfigured()) {
     const now = Date.now();
+    const needsLand = (c: CountyScan) => c.state === "FL" && (!c.land || now - new Date(c.land.asOf).getTime() > LAND_TTL_MS);
+    const needsTrends = (c: CountyScan) => !c.trends || now - new Date(c.trends.asOf).getTime() > TRENDS_TTL_MS;
     const queue = [...counties]
-      .filter((c) => c.state === "FL" && (!c.land || now - new Date(c.land.asOf).getTime() > LAND_TTL_MS)) // FL-only: SC uses an assessment ratio
+      .filter((c) => needsLand(c) || needsTrends(c))
       .sort((a, b) => (b.medianSalePrice ?? 0) - (a.medianSalePrice ?? 0));
     landDone = 0;
     for (const c of queue) {
       if (Date.now() - started > 45_000) break; // leave headroom under maxDuration
-      const lp = await landProfileFor(c.fips).catch(() => null);
-      if (lp) { c.land = lp; landDone++; }
+      if (c.state === "FL" && needsLand(c)) { const lp = await landProfileFor(c.fips).catch(() => null); if (lp) { c.land = lp; landDone++; } }
+      if (Date.now() - started > 48_000) break;
+      if (needsTrends(c)) { const tr = await landTrendsFor(c.fips).catch(() => null); if (tr) c.trends = tr; }
     }
   }
 

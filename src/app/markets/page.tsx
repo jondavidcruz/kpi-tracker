@@ -160,7 +160,7 @@ export default async function MarketsPage() {
     return [{
       fips: c.fips, name: c.name.replace(/ County$/, ""), state: c.state, score: c.score, tier: c.tier,
       price: c.medianSalePrice, yoy: c.yoyPct, dtp: c.daysToPending,
-      landShare: c.land ? c.land.highShare : null, lat: ctr[0], lng: ctr[1],
+      landShare: c.land ? c.land.highShare : null, trends: c.trends, lat: ctr[0], lng: ctr[1],
     }];
   });
 
