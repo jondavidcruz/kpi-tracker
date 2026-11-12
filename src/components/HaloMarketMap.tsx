@@ -15,7 +15,7 @@ import type { BuyerCoverage } from "@/lib/buyer-coverage-map";
 
 type Pt = { lat: number; lng: number };
 export type LandTrends = { landSold: { d30: number; d90: number; d180: number }; newConSold: { d30: number; d90: number; d180: number }; landPending: number; newConPending: number; yoyLandPct: number | null; asOf: string };
-export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; trends?: LandTrends | null; lat: number; lng: number };
+export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; trends?: LandTrends | null; buyers?: number; lat: number; lng: number };
 export type ClosedDeal = { lat: number; lng: number; address: string; soldPrice: number | null; fee: number | null; buyer: string; soldDate: string; dealType: string };
 
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
@@ -656,6 +656,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       mk.bindPopup(
         `<div style="font:12px system-ui;min-width:210px"><div style="font-weight:800;font-size:13px">${s.name} <span style="color:#64748b;font-weight:600">${s.state}</span></div>` +
         `<div style="margin:3px 0"><b style="font-size:15px">${s.score}</b> opportunity · ${s.tier === "target" ? "🟢 Target — pull here next" : "🟠 Watch — monitor for now"}</div>` +
+        (s.buyers != null ? `<div style="font-weight:700;color:${s.buyers > 0 ? "#0d9488" : "#94a3b8"}">💰 ${s.buyers > 0 ? `${s.buyers} vetted buyer${s.buyers === 1 ? "" : "s"} waiting here` : "No vetted buyers here yet"}</div>` : "") +
         trendBlock + landLine +
         `<div>⏱ ${s.dtp != null ? "~" + Math.round(s.dtp) + " days to pending (homes)" : "—"}</div>` +
         `<div style="color:#94a3b8;font-size:11px;margin-top:3px">🏠 Area home price ${s.price != null ? "$" + Math.round(s.price).toLocaleString() : "—"}${homeYoy} — wealth signal, not land</div></div>`);
