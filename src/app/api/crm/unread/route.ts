@@ -18,11 +18,18 @@ async function smsThreads(meName: string, managerAll: boolean) {
   if (!latest.size) return { unread: [], all: [] };
   const contacts = await db.crmContact.findMany({
     where: { id: { in: [...latest.keys()] }, ...(managerAll ? {} : { assignedTo: { in: ["", meName] } }) },
-    select: { id: true, name: true, phone: true, assignedTo: true },
+    select: { id: true, name: true, phone: true, assignedTo: true, tags: true },
   });
+  // 🙈 DNC / dead / not-interested never count as unread (Jon 2026-11-12) — hidden for everyone.
+  const hideIds = new Set<string>();
+  for (const c of contacts) if (/\bdnc\b|dnd_all|not-?interest/i.test(c.tags || "")) hideIds.add(c.id);
+  try {
+    const hopps = await db.crmOpportunity.findMany({ where: { contactId: { in: contacts.map((c) => c.id) } }, select: { contactId: true, stage: true, tags: true } });
+    for (const o of hopps) if (/\bdead\b|\bdnc\b|not-?interest|\blost\b|disqualif|rejected/i.test(`${o.stage} ${o.tags}`)) hideIds.add(o.contactId);
+  } catch { /* best-effort */ }
   const rows = contacts.map((c) => {
     const l = latest.get(c.id)!;
-    const unread = l.body.startsWith("⬅") && (!convRead[c.id] || l.at.toISOString() > convRead[c.id]);
+    const unread = !hideIds.has(c.id) && l.body.startsWith("⬅") && (!convRead[c.id] || l.at.toISOString() > convRead[c.id]);
     return { id: c.id, name: c.name, phone: c.phone, owner: c.assignedTo.split(" ")[0] || "—", snippet: l.body.replace(/^[⬅➡️️\s]*(Seller|Us):\s*/u, "").slice(0, 70), at: l.at.toISOString(), unread };
   }).sort((a, b) => b.at.localeCompare(a.at));
   return { unread: rows.filter((r) => r.unread), all: rows };

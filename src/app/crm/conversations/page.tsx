@@ -102,7 +102,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
       : mineOnly
         ? { id: { in: myTodayIds } } // "Mine" = everyone I called/texted today
         : { id: { in: contactIds }, ...ownerWhere },
-    select: { id: true, name: true, phone: true, assignedTo: true },
+    select: { id: true, name: true, phone: true, assignedTo: true, tags: true },
     take: q ? 80 : 200,
   }).then((rows) => rows.filter((c) => inDept(c.id)));
   // searched contacts may not be in the recent-600 window → fetch their latest comms
@@ -113,18 +113,29 @@ export default async function ConversationsPage({ searchParams }: { searchParams
       for (const e of more) if (!latestByContact.has(e.contactId)) latestByContact.set(e.contactId, e);
     }
   }
-  // 👁 red dot = seller wrote last AND the thread hasn't been opened since
+  // 🙈 Never show DNC / dead / not-interested as UNREAD — for ANYONE, regardless of who owns the lead
+  // (Jon 2026-11-12: "if these are not interested, show red for everyone so they don't even see it").
+  // The unread flag is owner-scoped, so marking DNC alone didn't clear it — this hides them outright.
+  const hideIds = new Set<string>();
+  for (const c of contacts) if (/\bdnc\b|dnd_all|not-?interest/i.test(c.tags || "")) hideIds.add(c.id);
+  try {
+    const hopps = await db.crmOpportunity.findMany({ where: { contactId: { in: contacts.map((c) => c.id) } }, select: { contactId: true, stage: true, tags: true } });
+    for (const o of hopps) if (/\bdead\b|\bdnc\b|not-?interest|\blost\b|disqualif|rejected/i.test(`${o.stage} ${o.tags}`)) hideIds.add(o.contactId);
+  } catch { /* best-effort — if the lookup fails, fall back to not hiding */ }
+
+  // 👁 red dot = seller wrote last AND the thread hasn't been opened since AND they're not DNC/dead
   const convRead = await readConvMap();
+  const isUnread = (c: { id: string }, l?: { body: string; at: Date }) =>
+    !!l && !hideIds.has(c.id) && stripHtml(l.body).startsWith("⬅") && (!convRead[c.id] || l.at.toISOString() > convRead[c.id]);
   const threads = contacts
     .map((c) => {
       const last = latestByContact.get(c.id) ?? { kind: "sms", body: "(no messages yet — open to start)", at: new Date(0) };
-      const unseen = !convRead[c.id] || last.at.toISOString() > convRead[c.id];
-      return { ...c, last, needsReply: stripHtml(last.body).startsWith("⬅") && unseen };
+      return { ...c, last, needsReply: isUnread(c, last) };
     })
     .filter((t) => !unreadOnly || t.needsReply)
     .sort((a, b) => (Number(b.needsReply) - Number(a.needsReply)) || (b.last.at.getTime() - a.last.at.getTime()))
     .slice(0, 200);
-  const unreadCount = contacts.filter((c) => { const l = latestByContact.get(c.id); return !!l && stripHtml(l.body).startsWith("⬅") && (!convRead[c.id] || l.at.toISOString() > convRead[c.id]); }).length;
+  const unreadCount = contacts.filter((c) => isUnread(c, latestByContact.get(c.id))).length;
 
   // selected thread
   const cId = sp.c || threads[0]?.id || "";
