@@ -150,6 +150,14 @@ export async function routeSellerReply(args: {
     // 📨 Any reply STOPS the drip sequence — they engaged, hand it to a human (text OR email).
     if (opp) { try { const { stopDrip } = await import("@/lib/drip"); await stopDrip(opp.id, `seller replied (${channel})`); } catch { /* ok */ } }
 
+    // 🙈 Keep the Team Inbox clean (Jon 2026-11-12): STOP/DNC, clear "not interested", and
+    // working-with-a-realtor replies are auto-marked READ so they never sit in the unread queue —
+    // the team should only SEE messages from people who are interested / gave a price. Legal-flagged
+    // replies are NOT auto-read (they still need eyes). Qualified/engaged/price replies stay unread.
+    if ((wasDnced || declined || realtor) && !legalFlag) {
+      try { const { setConvRead } = await import("@/lib/conv-read"); await setConvRead([contact.id], true); } catch { /* best-effort */ }
+    }
+
     // ⚖️ Info-fishing / legal probe → flag HARD, tag the contact, warn the team, and DON'T drop a
     // routine "call them" task (they must verify identity first). Louder when NOT an offer/contract
     // lead. Never auto-DNCs — a human decides. (Jon 2026-11-11: "these people try to get our info to sue us".)
