@@ -590,10 +590,11 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       syncFogRef.current?.(); // honor the zoom gate after a rebuild (fog shows only when zoomed in)
     }
 
-    // 💪 Buying-power layer (base) — counties where vetted buyers want to buy, as green boundaries.
+    // 💪 Buying-power layer (base) — counties where vetted buyers want to buy, as TEAL boundaries
+    // (teal, not green, so it never gets confused with the green Target-market dots — Jon 2026-11-11).
     if (show.power) for (const bc of buyerCoverage) {
       const op = Math.min(0.4, 0.12 + bc.buyers * 0.05);
-      const poly = L.polygon(bc.ring, { color: "#16a34a", weight: 1.5, fillColor: "#22c55e", fillOpacity: op }).addTo(group);
+      const poly = L.polygon(bc.ring, { color: "#0d9488", weight: 1.5, fillColor: "#14b8a6", fillOpacity: op }).addTo(group);
       poly.bindTooltip(`💪 ${bc.name.replace(/ County$/, "")} — ${bc.buyers} buyer${bc.buyers > 1 ? "s" : ""}`, { sticky: true });
       poly.bindPopup(`<div style="font:12px system-ui"><b>💪 ${bc.name}</b><br><b>${bc.buyers}</b> vetted buyer${bc.buyers > 1 ? "s" : ""} want this market${bc.newMarket ? " · 🆕 new" : ""}</div>`);
     }
@@ -703,6 +704,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-red-400" style={{ background: "#ef4444", opacity: 0.6 }} /> 🏘 Vacant lot</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm ring-1 ring-yellow-400" style={{ background: "#eab308", opacity: 0.7 }} /> Recently sold lot</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#a855f7" }} /> 📄 Pulled-list property</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "#14b8a6", opacity: 0.5 }} /> 💪 Buyer coverage</span>
         <span className="text-slate-500">· bigger = more</span>
         <button onClick={enterFs} className="ml-auto rounded-full bg-slate-700/70 px-2.5 py-1 font-bold text-slate-100 ring-1 ring-slate-600 hover:bg-slate-600">⛶ Full screen</button>
         <span className="rounded-full bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-300 ring-1 ring-cyan-500/30">{charted}/{markets.length} w/ buyers</span>

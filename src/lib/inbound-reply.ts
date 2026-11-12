@@ -49,7 +49,10 @@ export async function routeSellerReply(args: {
     const { replyIntentWith } = await import("@/lib/master-workflow");
     const { loadWorkflowConfig } = await import("@/lib/master-workflow-store");
     const wfCfg = await loadWorkflowConfig(); // ⚙️ owner-edited keywords + timings (/admin/workflow)
-    const DECLINE_REGEX = /\b(not\s*(interested|selling)|no\s*thank|already\s*sold|we\s*sold|don'?t\s*(want|wish|need)\s*to\s*sell|\bpass\b)\b|^\s*(no|nope)\b[.! ]*$/i;
+    // Clear "not interested" → Dead (no follow-up). Catches colloquial phrasings ("don't wanna
+    // sell", "won't sell", "not gonna sell", "not looking to sell", "not for sale") so a clear
+    // decline isn't missed and wrongly given a 30-day circle-back (Jon 2026-11-11).
+    const DECLINE_REGEX = /\b(not\s*(interested|selling|for\s*sale|looking\s*to\s*sell)|no\s*thank|already\s*sold|we\s*sold|don'?t\s*(want|wanna|wish|need|plan|intend|care)\s*(to\s*)?sell|won'?t\s*sell|not\s*(gonna|going\s*to|planning\s*to|looking\s*to|trying\s*to)\s*sell|\bpass\b|take\s*me\s*off|wrong\s*(number|person))\b|^\s*(no|nope)\b[.! ]*$/i;
     const kw = replyIntentWith(text, wfCfg); // 🤖 Master Workflow: realtor / qualified keywords
     if (DNC_REGEX.test(text)) { wasDnced = true; await dncContact(contact.id, `inbound ${channel} matched the STOP/hostile filter: "${text.slice(0, 80)}"`); }
     else if (DECLINE_REGEX.test(text)) { declined = true; }
