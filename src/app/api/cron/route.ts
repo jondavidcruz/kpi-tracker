@@ -4073,6 +4073,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, automaps: res, trends });
   }
 
+  // 📈 Self-paced Market Finder refresh — rebuild Zillow + enrich the stalest land buckets AND
+  // land/new-construction velocity trends (free DealMachine counts), time-boxed. Runs daily; the
+  // per-county TTL spreads the work so trends fill in on their own, no button needed (Jon 2026-11-11).
+  if (url.searchParams.get("scanrefresh") === "1") {
+    const { refreshMarketScan } = await import("@/lib/market-scan");
+    const scan = await refreshMarketScan({ budgetMs: 50_000 }).catch((e) => ({ ok: false, landDone: 0, trendsDone: 0, error: String(e).slice(0, 120) }));
+    return NextResponse.json({ ok: true, scan });
+  }
+
   // One-shot: create the "War Room Vault" Shared Drive as the service account,
   // save it as the Drive root, and prove it with a test upload. If Google
   // refuses (some Workspace policies block SA-created drives), the response

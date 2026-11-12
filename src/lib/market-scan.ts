@@ -294,3 +294,38 @@ export async function writeScan(store: ScanStore): Promise<void> {
   if (row) await db.resource.update({ where: { id: row.id }, data: { description } }).catch(() => {});
   else await db.resource.create({ data: { title: "market-scan", category: MARKET_SCAN_CAT, url: "", description } }).catch(() => {});
 }
+
+export const LAND_TTL_MS = 14 * 86_400_000;   // land value buckets: slow-moving assessor data → 2 weeks
+export const TRENDS_TTL_MS = 7 * 86_400_000;   // velocity moves faster → refresh land/new-con trends weekly
+
+/** 🔁 Self-paced market-scan refresh (free data) — rebuild Zillow, carry forward + enrich the
+ *  stalest land buckets + velocity trends (time-boxed), re-score, store. Used by the daily cron so
+ *  the map's land-trends fill in on their own (Jon 2026-11-11), and reusable by the manager button. */
+export async function refreshMarketScan(opts?: { states?: string[]; budgetMs?: number }): Promise<{ ok: boolean; landDone: number; trendsDone: number; error?: string }> {
+  const started = Date.now();
+  const budget = opts?.budgetMs ?? 48_000;
+  const states = opts?.states ?? ["FL", "SC"];
+  let zillow;
+  try { zillow = await buildZillowCounties(states); } catch (e) { return { ok: false, landDone: 0, trendsDone: 0, error: `zillow: ${String(e).slice(0, 100)}` }; }
+  const counties = zillow.counties;
+  const prior = await readScan();
+  const priorLand = new Map<string, CountyScan["land"]>((prior?.counties ?? []).map((c) => [c.fips, c.land]));
+  const priorTrends = new Map<string, CountyScan["trends"]>((prior?.counties ?? []).map((c) => [c.fips, c.trends]));
+  for (const c of counties) { const l = priorLand.get(c.fips); if (l) c.land = l; const t = priorTrends.get(c.fips); if (t) c.trends = t; }
+  let landDone = 0, trendsDone = 0;
+  if (dmConfigured()) {
+    const now = Date.now();
+    const needsLand = (c: CountyScan) => c.state === "FL" && (!c.land || now - new Date(c.land.asOf).getTime() > LAND_TTL_MS);
+    const needsTrends = (c: CountyScan) => !c.trends || now - new Date(c.trends.asOf).getTime() > TRENDS_TTL_MS;
+    const queue = [...counties].filter((c) => needsLand(c) || needsTrends(c)).sort((a, b) => (b.medianSalePrice ?? 0) - (a.medianSalePrice ?? 0));
+    for (const c of queue) {
+      if (Date.now() - started > budget) break;
+      if (c.state === "FL" && needsLand(c)) { const lp = await landProfileFor(c.fips).catch(() => null); if (lp) { c.land = lp; landDone++; } }
+      if (Date.now() - started > budget) break;
+      if (needsTrends(c)) { const tr = await landTrendsFor(c.fips).catch(() => null); if (tr) { c.trends = tr; trendsDone++; } }
+    }
+  }
+  const scored = scoreCounties(counties);
+  await writeScan({ asOf: new Date().toISOString(), zillowAsOf: zillow.zillowAsOf, landConfigured: dmConfigured(), landDone, counties: scored });
+  return { ok: true, landDone, trendsDone };
+}
