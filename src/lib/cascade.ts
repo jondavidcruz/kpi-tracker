@@ -64,7 +64,7 @@ function offerHtml(deal: { address: string; contractPrice: number | null; asking
     <p style="font-size:17px"><b>${deal.address.replace(/[<>&]/g, "")}</b><br>${price ? `Asking $${Math.round(price).toLocaleString()}` : "Call for pricing"}</p>
     ${deal.nextSteps ? `<p style="color:#475569">${deal.nextSteps.replace(/[<>&]/g, "")}</p>` : ""}
     <p style="margin-top:18px">${btn(claim, "#059669", "✅ I want this deal")}${btn(pass, "#94a3b8", "Pass")}</p>
-    <p style="font-size:12px;color:#94a3b8;margin-top:14px">First to claim gets first look at the full package (comps, photos, terms). — Freedom Offers</p>
+    <p style="font-size:12px;color:#94a3b8;margin-top:14px">First to claim gets first look at the full package (comps, photos, terms).</p>
   </div>`;
 }
 
