@@ -73,6 +73,34 @@ export async function removePullBatch(id: string): Promise<void> {
 // credited to the MOST RECENT qualifying pull (so a ZIP pulled twice doesn't double-count). This turns
 // a raw pull into a funnel: Pulled → CRM lead → Contract sent → Closed ($), per batch.
 export type PullConv = { leads: number; offersMade: number; contractSent: number; closed: number; value: number };
+
+// 📊 Campaign Health per pull list — Direct REI text responses attributed to each uploaded campaign
+// by ZIP + "came in after the pull date" (Jon 2026-11-12: "see every text coming in from our
+// campaign"). Replied = any response; the rest break it down.
+export type CampaignHealth = { replied: number; interested: number; priced: number; notInterested: number; optedOut: number };
+export function attributeDreiResponses(
+  batches: PullBatch[],
+  responses: Array<{ zip: string; type: "replied" | "interested" | "priced" | "notInterested" | "optedOut"; at: string }>,
+): Record<string, CampaignHealth> {
+  const out: Record<string, CampaignHealth> = {};
+  for (const b of batches) out[b.id] = { replied: 0, interested: 0, priced: 0, notInterested: 0, optedOut: 0 };
+  const prepared = batches
+    .map((b) => ({ id: b.id, atMs: Date.parse(`${b.at}T00:00:00Z`) || 0, zips: new Set(b.zips || []) }))
+    .sort((a, c) => c.atMs - a.atMs); // most-recent first → credit the latest qualifying pull
+  for (const r of responses) {
+    if (!r.zip) continue;
+    const rMs = Date.parse(r.at) || 0;
+    const hit = prepared.find((p) => p.atMs <= rMs && p.zips.has(r.zip));
+    if (!hit) continue;
+    const s = out[hit.id];
+    s.replied++; // every response counts as a reply
+    if (r.type === "interested") s.interested++;
+    else if (r.type === "priced") { s.priced++; s.interested++; }
+    else if (r.type === "notInterested") s.notInterested++;
+    else if (r.type === "optedOut") s.optedOut++;
+  }
+  return out;
+}
 export type ConvOpp = { zip: string | null; createdMs: number; stage: string; value: number };
 
 export function attributePullConversion(batches: PullBatch[], opps: ConvOpp[]): Record<string, PullConv> {

@@ -48,9 +48,27 @@ export async function POST(req: NextRequest) {
   const phone = (d.phone ?? "").replace(/[^+\d]/g, "");
   const last10 = phone.replace(/\D/g, "").slice(-10);
   const email = (d.email ?? "").trim().toLowerCase();
-  const { upsertDreiHotLead, dreiLeadsOn, logDreiWebhook } = await import("@/lib/directrei-leads");
+  const { upsertDreiHotLead, dreiLeadsOn, logDreiWebhook, recordDreiResponse } = await import("@/lib/directrei-leads");
   // 📨 log every authenticated delivery so we can SEE what Direct REI actually sends.
   await logDreiWebhook({ event: ev, status: d.status ?? "", name: d.name ?? "", phone: last10, channel: body.channel ?? "" });
+
+  // 📊 Campaign Health (Jon 2026-11-12): record EVERY campaign response by ZIP so Market Finder can
+  // show per-campaign reply/interested/priced/opt-out health attributed to each uploaded pull list.
+  try {
+    const zMatch = String(d.mailing_zip ?? "").match(/\d{5}/) ?? String(d.market ?? "").match(/\d{5}/);
+    const zip = zMatch ? zMatch[0] : "";
+    if (zip) {
+      const st = `${ev} ${d.status ?? ""}`.toLowerCase();
+      const noteTxt = String((body as Record<string, unknown>).notes ?? (body as Record<string, unknown>).ai_summary ?? (body as Record<string, unknown>).message ?? "");
+      const hasPrice = /\$[\d,]{3,}|asking|would take|willing to/i.test(noteTxt);
+      const type = /opt.?out|unsub|opted_out|\bdnc\b|\bstop\b/.test(st) ? "optedOut"
+        : /not.?interest|no.?interest|declin|dead/.test(st) ? "notInterested"
+        : hasPrice ? "priced"
+        : /qualif|interest|hot|ready/.test(st) ? "interested"
+        : "replied";
+      await recordDreiResponse(zip, type as "replied" | "interested" | "priced" | "notInterested" | "optedOut");
+    }
+  } catch { /* health tracking never blocks the webhook */ }
 
   // find the contact however we can — phone first, then email
   const existing = last10.length === 10 || email

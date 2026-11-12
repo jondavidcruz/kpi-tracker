@@ -63,13 +63,16 @@ export default async function MarketsPage() {
   // 📄→📥 Pull-list CONVERSION (Phase 2): attribute CRM leads back to the pull that sourced them
   // (lead's ZIP is in the batch + lead created on/after the pull date). Keyed by batch id so the map's
   // client-loaded batch chips can show each pull's funnel (Pulled → lead → contract → closed).
-  const { readPullLists, attributePullConversion } = await import("@/lib/pull-lists");
+  const { readPullLists, attributePullConversion, attributeDreiResponses } = await import("@/lib/pull-lists");
   const pullLists = await readPullLists();
   const convOpps = opps.map((o) => {
     const zs = (o.contact?.address ?? "").match(/\b\d{5}\b/g);
     return { zip: zs && zs.length ? zs[zs.length - 1] : null, createdMs: o.createdAt.getTime(), stage: o.stage ?? "", value: o.value ?? 0 };
   });
   const pullStats = attributePullConversion(pullLists, convOpps);
+  // 📊 Campaign Health — Direct REI text responses per uploaded pull list (every reply, not just imports).
+  const dreiResponses = await (async () => { try { const { readDreiResponses } = await import("@/lib/directrei-leads"); return await readDreiResponses(); } catch { return []; } })();
+  const campaignHealth = attributeDreiResponses(pullLists, dreiResponses);
 
   // 🖍 Hand-drawn / searched territories (areas we market in / have pulled vs uncharted).
   const { readTerritories } = await import("@/lib/map-territories");
@@ -191,6 +194,33 @@ export default async function MarketsPage() {
     if (v) marketStatsByFips[fips] = { leads: v.leads, deals: v.deals, wealth: v.m.wealth };
   }
 
+  // 📄→🗺 AUTO-COVERAGE (Jon 2026-11-12: "when we upload the list, show it's been pulled — I don't
+  // want to manually do it"). Map each uploaded pull list's pins to the nearest county centroid and
+  // mark that county PULLED (clear/cooldown by the upload date) — so the Pull Priority coverage fills
+  // itself in from the uploads, no manual pull-logging. 90-day cooldown, same as a manual pull.
+  {
+    const centroids = Object.entries(COUNTY_CENTROIDS) as Array<[string, [number, number]]>;
+    const nearestFips = (lat: number, lng: number): string | null => {
+      let best: string | null = null, bd = Infinity;
+      for (const [fips, [clat, clng]] of centroids) { const d = (lat - clat) ** 2 + (lng - clng) ** 2; if (d < bd) { bd = d; best = fips; } }
+      return bd < 1.2 ? best : null; // ~1° guard so a stray pin can't mis-tag a far county
+    };
+    const pullByFips: Record<string, string> = {}; // fips → most-recent upload date covering it
+    for (const b of pullLists) {
+      const seen = new Set<string>();
+      for (const [lat, lng] of (b.pts || []).slice(0, 120)) { const f = nearestFips(lat, lng); if (f) seen.add(f); }
+      for (const f of seen) if (!pullByFips[f] || b.at > pullByFips[f]) pullByFips[f] = b.at;
+    }
+    for (const [fips, at] of Object.entries(pullByFips)) {
+      const days = Math.floor((Date.now() - (Date.parse(`${at}T00:00:00Z`) || Date.now())) / 86_400_000);
+      const cur = coverageByFips[fips];
+      // Only fill/upgrade coverage — never downgrade a more-recent manual pull.
+      if (!cur || cur.status === "never" || (cur.lastPull && at > cur.lastPull) || !cur.lastPull) {
+        coverageByFips[fips] = { status: days < 90 ? "cooldown" : "clear", cooldownLeft: Math.max(0, 90 - days), lastPull: at, pulls90d: cur?.pulls90d ?? 1, totalCount: cur?.totalCount ?? 0 };
+      }
+    }
+  }
+
   // 🎯 Buyer-demand market discovery — rank WHICH markets to pull by our vetted buyers' aggregated
   // buy-boxes (reverse-engineered from the developers we actually have), biased to NEW markets.
   const demand = await (async () => {
@@ -232,22 +262,30 @@ export default async function MarketsPage() {
       const bid = bidByFips[c.fips] ?? { ring: 0, residual: null, testMarket: false };
       const land90 = t?.landSold.d90 ?? 0;
       const yoy = t?.yoyLandPct ?? null;
-      let pr = c.score * 0.35;                                  // base opportunity score
-      pr += Math.min(22, land90 / 20);                          // land velocity (more selling = more to pull)
-      pr += buyers > 0 ? Math.min(20, 10 + buyers * 4) : 0;     // demand: big boost where buyers wait
-      pr += bid.ring * 0.12;                                    // 🍩 conversion-ring (land→housing frontier)
-      if (yoy != null) pr += yoy >= 0 ? Math.min(10, yoy / 3) : Math.max(-10, yoy / 3);
+      const inv = c.inventory ?? 0; // active-listing inventory = a proxy for big-metro saturation
+      // Our THESIS tier leads (green Target first), not raw volume. Big saturated metros (Miami/
+      // Orlando/Tampa-scale) are penalized — "great markets but everyone's already there, like
+      // trying to flip in Coronado" (Jon 2026-11-12). Velocity is capped so county SIZE doesn't win.
+      let pr = c.tier === "target" ? 50 : 28;                   // thesis tier is the base, not the scan score
+      pr += buyers > 0 ? Math.min(16, 7 + buyers * 3) : 0;      // demand: buyers waiting
+      pr += bid.ring * 0.12;                                    // 🍩 conversion-ring (opportunity quality, 0-100)
+      pr += Math.min(10, land90 / 45);                          // velocity, capped so big counties don't dominate
+      if (yoy != null) pr += yoy >= 0 ? Math.min(8, yoy / 15) : Math.max(-8, yoy / 15);
+      const saturated = inv > 10000;
+      if (saturated) pr -= 26;                                  // mega-metro everyone works → sink it
+      else if (inv > 5000) pr -= 12;                            // large market → down-weight
       if (cov?.status === "cooldown") pr -= 15;                 // recently pulled → wait
-      else pr += 5;                                             // clear / never pulled → good to go
+      else pr += 4;                                             // clear / never pulled → good to go
       return {
         fips: c.fips, name: c.name.replace(/ County$/, ""), state: c.state, tier: c.tier as "target" | "watch",
         land30: t?.landSold.d30 ?? 0, land90, newCon90: t?.newConSold.d90 ?? 0, yoy, buyers,
-        ring: bid.ring, residual: bid.residual, testMarket: bid.testMarket,
+        ring: bid.ring, residual: bid.residual, testMarket: bid.testMarket, saturated,
         coverage: (cov?.status ?? "never") as "never" | "clear" | "cooldown", cooldownLeft: cov?.cooldownLeft ?? 0,
         hasTrends: !!t, priority: Math.max(0, Math.min(100, Math.round(pr))),
       };
     })
-    .sort((a, b) => b.priority - a.priority)
+    // 🟢 Green Target markets ALWAYS rank above 🟠 Watch (our thesis first), then by priority.
+    .sort((a, b) => (a.tier === b.tier ? b.priority - a.priority : a.tier === "target" ? -1 : 1))
     .slice(0, 20);
 
   return (
@@ -262,7 +300,7 @@ export default async function MarketsPage() {
       {leader && <PullPriorityList rows={pullPriority} />}
       <MarketsTabs
         showResearch={leader}
-        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} closedDeals={closedDeals} />}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} closedDeals={closedDeals} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} marketStats={marketStatsByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
         niches={<NichePlaybook matches={nicheMatches} />}

@@ -38,6 +38,29 @@ export async function logDreiWebhook(entry: Record<string, unknown>): Promise<vo
   } catch { /* logging never blocks the webhook */ }
 }
 
+// 📊 Campaign-response log (Jon 2026-11-12: "track every text coming in from our campaign").
+// Every Direct REI response event is recorded by ZIP + type so Market Finder can show per-campaign
+// health (replied / interested / priced / opted-out) attributed to each uploaded pull list.
+export type DreiResponseType = "replied" | "interested" | "priced" | "notInterested" | "optedOut";
+export type DreiResponse = { zip: string; type: DreiResponseType; at: string };
+const DREI_RESP_CAT = "__drei_responses__";
+export async function recordDreiResponse(zip: string, type: DreiResponseType): Promise<void> {
+  if (!zip || !/^\d{5}$/.test(zip)) return;
+  try {
+    const row = await db.resource.findFirst({ where: { category: DREI_RESP_CAT } });
+    let list: DreiResponse[] = [];
+    try { list = row?.description ? JSON.parse(row.description) : []; } catch { list = []; }
+    list.unshift({ zip, type, at: new Date().toISOString() });
+    const description = JSON.stringify(list.slice(0, 8000)); // bounded so the row can't bloat
+    if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
+    else await db.resource.create({ data: { title: "drei-responses", category: DREI_RESP_CAT, url: "", description } });
+  } catch { /* never blocks the webhook */ }
+}
+export async function readDreiResponses(): Promise<DreiResponse[]> {
+  const row = await db.resource.findFirst({ where: { category: DREI_RESP_CAT } }).catch(() => null);
+  try { return row?.description ? (JSON.parse(row.description) as DreiResponse[]) : []; } catch { return []; }
+}
+
 export type DreiLead = {
   name?: string; email?: string; phone?: string; market?: string;
   address?: string; status?: string; notes?: string; price?: string; dreiId?: string;

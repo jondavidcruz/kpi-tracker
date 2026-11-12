@@ -4,7 +4,7 @@
 type Row = {
   fips: string; name: string; state: string; tier: "target" | "watch";
   land30: number; land90: number; newCon90: number; yoy: number | null; buyers: number;
-  ring: number; residual: number | null; testMarket: boolean;
+  ring: number; residual: number | null; testMarket: boolean; saturated?: boolean;
   coverage: "never" | "clear" | "cooldown"; cooldownLeft: number; hasTrends: boolean; priority: number;
 };
 
@@ -46,6 +46,7 @@ export default function PullPriorityList({ rows }: { rows: Row[] }) {
                 <td className="px-2 py-1.5 font-bold text-slate-800">
                   {r.tier === "target" ? "🟢" : "🟠"} {r.name} <span className="font-semibold text-slate-400">{r.state}</span>
                   {r.testMarket && <span className="ml-1 rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-700" title="Test market: a conversion ring we can sell into (buyers) that we haven't saturated — least-competed ground to test leads">🧪 test</span>}
+                  {r.saturated && <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-500" title="Big, heavily-worked metro — great market but saturated; ranked down in favor of less-competed ground">🏙 saturated</span>}
                 </td>
                 <td className="px-2 py-1.5">
                   <div className="flex items-center gap-1.5">

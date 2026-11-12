@@ -106,7 +106,7 @@ function loadScript(src: string, css?: string): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, closedDeals = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; closedDeals?: ClosedDeal[] }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, campaignHealth = {}, closedDeals = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; campaignHealth?: Record<string, { replied: number; interested: number; priced: number; notInterested: number; optedOut: number }>; closedDeals?: ClosedDeal[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
@@ -870,6 +870,16 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
                       <span className="text-amber-300">⭐ <b>{c.closed}</b> closed{c.value > 0 ? ` · $${Math.round(c.value).toLocaleString()}` : ""}</span>
                     </>) : (<span className="text-slate-500">No CRM leads traced to this pull yet — they’ll appear here as sellers from these ZIPs come in.</span>)}
                   </div>
+                  {/* 📊 Campaign Health — EVERY Direct REI text response for this campaign (not just imports). */}
+                  {(() => { const h = campaignHealth[b.id]; if (!h || h.replied === 0) return null; return (
+                    <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded bg-slate-800/60 px-1.5 py-1 text-[10.5px] ring-1 ring-slate-700">
+                      <span className="font-bold text-slate-300" title="Direct REI campaign responses">📊 Campaign:</span>
+                      <span className="text-sky-300">💬 <b>{h.replied}</b> replied <span className="text-slate-500">({pct(h.replied, b.count)})</span></span><span className="text-slate-600">·</span>
+                      <span className="text-emerald-300">👍 <b>{h.interested}</b> interested</span><span className="text-slate-600">·</span>
+                      <span className="text-teal-300">💵 <b>{h.priced}</b> priced</span><span className="text-slate-600">·</span>
+                      <span className="text-slate-400">🚫 <b>{h.notInterested + h.optedOut}</b> no/opt-out</span>
+                    </div>
+                  ); })()}
                 </div>
               );
             })}
