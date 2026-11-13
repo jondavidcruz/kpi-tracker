@@ -291,8 +291,10 @@ export default async function MarketsPage() {
       else pr += 4;                                             // clear / never pulled → good to go
       return {
         fips: c.fips, name: c.name.replace(/ County$/, ""), state: c.state, tier: c.tier as "target" | "watch",
-        land30: t?.landSold.d30 ?? 0, land90, newCon90: t?.newConSold.d90 ?? 0, yoy, buyers,
-        ring: bid.ring, residual: bid.residual, testMarket: bid.testMarket, saturated,
+        land30: t?.landSold.d30 ?? 0, land90, land180: t?.landSold.d180 ?? 0,
+        newCon30: t?.newConSold.d30 ?? 0, newCon90: t?.newConSold.d90 ?? 0, newCon180: t?.newConSold.d180 ?? 0,
+        yoy, buyers, ring: bid.ring, residual: bid.residual, testMarket: bid.testMarket, saturated,
+        wealth: c.medianSalePrice ?? null, landShare: c.land ? c.land.highShare : null,
         coverage: (cov?.status ?? "never") as "never" | "clear" | "cooldown", cooldownLeft: cov?.cooldownLeft ?? 0,
         hasTrends: !!t, priority: Math.max(0, Math.min(100, Math.round(pr))),
       };
