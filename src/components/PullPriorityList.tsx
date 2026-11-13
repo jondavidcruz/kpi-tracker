@@ -8,6 +8,7 @@ type Row = {
   yoy: number | null; buyers: number;
   ring: number; residual: number | null; testMarket: boolean; saturated?: boolean;
   wealth: number | null; landShare: number | null;
+  medianBand?: string | null; medianSold?: number | null; oosShare?: number | null; absenteeShare?: number | null;
   coverage: "never" | "clear" | "cooldown"; cooldownLeft: number; hasTrends: boolean; priority: number;
 };
 
@@ -37,6 +38,8 @@ export default function PullPriorityList({ rows }: { rows: Row[] }) {
               <th className="px-2 py-1.5" title="New-construction homes SOLD in the last 30 / 90 / 180 days. The building frontier expanding outward — this is what pulls nearby land values up.">🏗 NewCon 30/90/180</th>
               <th className="px-2 py-1.5" title="🍩 CONVERSION RING (0–100): how actively cheap LAND is turning into HOUSING here. HIGH = lots of new building AND plenty of land still selling = the sweet spot where a builder will soon pay a premium for dirt. LOW = either maxed out (no land left) or dead (nobody building yet). Read it with coverage: a high ring we haven't pulled = go.">🍩 Ring</th>
               <th className="px-2 py-1.5" title="Est. BUILDER LAND BUDGET ≈ 15% of the area's finished-home price — a rough ceiling for what a builder could pay per lot (your offer guide). This is NOT the average land sale price; it's a derived budget. Always underwrite the real deal.">🏗 Builder $/lot</th>
+              <th className="px-2 py-1.5" title="Typical price a $50k+ LAND parcel actually SOLD for here in the last year (the median sale band). This is the real 'how expensive is land here' — Lehigh-style areas sit in the $50–100k band, wealthy/waterfront land lands in $250k+. Blank until the next refresh.">🏷 Land $ sold</th>
+              <th className="px-2 py-1.5" title="Share of valued LAND owned by out-of-state / absentee owners — the sellers who actually move. Higher = more motivated sellers = easier pulls. Shown as out-of-state% · absentee%.">🎯 Motivated</th>
               <th className="px-2 py-1.5" title="Area home price (wealth signal) — how affluent the area is. 💎 = $500k+ (wealthy). Not the land price; a proxy for buyer wealth + waterfront desirability.">💎 Wealth</th>
               <th className="px-2 py-1.5" title="Land SALES year-over-year — are more parcels selling than a year ago? Green/+ = market growing, red/− = cooling.">📈 YoY</th>
               <th className="px-2 py-1.5" title="How many of our VETTED buyers' buy-boxes cover this market — i.e. who we could sell the deal to. Pull where land is moving AND buyers are waiting.">💰 Buyers</th>
@@ -71,6 +74,16 @@ export default function PullPriorityList({ rows }: { rows: Row[] }) {
                   ) : <span className="text-slate-300">—</span>}
                 </td>
                 <td className="px-2 py-1.5 font-semibold text-slate-600" title="Rough builder land budget (~15% of finished-home price) — not the avg land sale price">{r.residual != null ? `~$${Math.round(r.residual / 1000)}k` : "—"}</td>
+                <td className="px-2 py-1.5 font-semibold" title={r.medianBand ? `Median $50k+ land SALE in the last year falls in the ${r.medianBand} band` : "Fills in after the next market refresh"}>
+                  {r.medianBand ? <span className={(r.medianSold ?? 0) >= 250000 ? "text-violet-700" : (r.medianSold ?? 0) >= 150000 ? "text-emerald-700" : "text-slate-500"}>{r.medianBand}</span> : <span className="text-slate-300">—</span>}
+                </td>
+                <td className="px-2 py-1.5 tabular-nums" title={r.oosShare != null || r.absenteeShare != null ? "Out-of-state % · absentee % of valued land owners — motivation density" : "Fills in after the next refresh"}>
+                  {r.oosShare != null || r.absenteeShare != null ? (
+                    <span className={(r.oosShare ?? 0) >= 0.35 ? "font-bold text-emerald-700" : "font-semibold text-slate-600"}>
+                      {r.oosShare != null ? `${Math.round(r.oosShare * 100)}%` : "—"}<span className="text-slate-300"> · </span><span className="font-normal text-slate-400">{r.absenteeShare != null ? `${Math.round(r.absenteeShare * 100)}%` : "—"}</span>
+                    </span>
+                  ) : <span className="text-slate-300">—</span>}
+                </td>
                 <td className="px-2 py-1.5 font-semibold" title={r.wealth != null ? `Area home price — ${r.wealth >= 500000 ? "wealthy area" : "moderate"}${r.landShare != null ? ` · ${Math.round(r.landShare * 100)}% of land ≥$100k` : ""}` : ""}>
                   {r.wealth != null ? <span className={r.wealth >= 500000 ? "text-violet-700" : "text-slate-500"}>{r.wealth >= 500000 ? "💎 " : ""}${Math.round(r.wealth / 1000)}k</span> : <span className="text-slate-300">—</span>}
                 </td>

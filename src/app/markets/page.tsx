@@ -277,6 +277,8 @@ export default async function MarketsPage() {
       const bid = bidByFips[c.fips] ?? { ring: 0, residual: null, testMarket: false };
       const land90 = t?.landSold.d90 ?? 0;
       const yoy = t?.yoyLandPct ?? null;
+      const oosShare = c.land?.oosShare ?? null;      // out-of-state land owners — the sellers who move
+      const absenteeShare = c.land?.absenteeShare ?? null;
       const inv = c.inventory ?? 0; // active-listing inventory = a proxy for big-metro saturation
       // Our THESIS tier leads (green Target first), not raw volume. Big saturated metros (Miami/
       // Orlando/Tampa-scale) are penalized — "great markets but everyone's already there, like
@@ -286,6 +288,7 @@ export default async function MarketsPage() {
       pr += bid.ring * 0.12;                                    // 🍩 conversion-ring (opportunity quality, 0-100)
       pr += Math.min(10, land90 / 45);                          // velocity, capped so big counties don't dominate
       if (yoy != null) pr += yoy >= 0 ? Math.min(8, yoy / 15) : Math.max(-8, yoy / 15);
+      if (oosShare != null) pr += Math.min(6, oosShare * 12); // motivation density — out-of-state owners sell (bounded +6)
       const saturated = inv > 10000;
       if (saturated) pr -= 26;                                  // mega-metro everyone works → sink it
       else if (inv > 5000) pr -= 12;                            // large market → down-weight
@@ -297,6 +300,7 @@ export default async function MarketsPage() {
         newCon30: t?.newConSold.d30 ?? 0, newCon90: t?.newConSold.d90 ?? 0, newCon180: t?.newConSold.d180 ?? 0,
         yoy, buyers, ring: bid.ring, residual: bid.residual, testMarket: bid.testMarket, saturated,
         wealth: c.medianSalePrice ?? null, landShare: c.land ? c.land.highShare : null,
+        medianBand: t?.medianBand ?? null, medianSold: t?.medianSold ?? null, oosShare, absenteeShare,
         coverage: (cov?.status ?? "never") as "never" | "clear" | "cooldown", cooldownLeft: cov?.cooldownLeft ?? 0,
         hasTrends: !!t, priority: Math.max(0, Math.min(100, Math.round(pr))),
       };

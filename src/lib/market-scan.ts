@@ -34,6 +34,9 @@ const LAND_TYPES = [6, 19, 20];
 export type LandProfile = {
   total: number; cheap: number; sweet: number; high: number; prem: number; // ≤40k / 100-200k / ≥100k / ≥200k
   highShare: number; cheapShare: number; asOf: string;
+  // 🎯 Owner-motivation density among valued land (added 2026-11-13; optional so seed/old scans fit).
+  // Absentee + out-of-state owners are the sellers who actually move — higher share = easier pulls.
+  absenteeShare?: number | null; oosShare?: number | null;
 };
 // 📈 Market VELOCITY from DealMachine (Jon 2026-11-11: "how many lands sold in 30/90/180, same for
 // new construction, how fast pending"). All FREE counts, validated filter shapes:
@@ -46,6 +49,10 @@ export type LandTrends = {
   newConSold: { d30: number; d90: number; d180: number };
   landPending: number; newConPending: number;
   yoyLandPct: number | null; // land-sales growth: +% = more land selling than a year ago
+  // 🏷 Typical sold-land PRICE band over the last year (added 2026-11-13; optional so old scans fit).
+  // DealMachine can't median a $/acre field, so we bucket recently-SOLD land ($50k+) by sale price
+  // and take the band the median falls in — the honest, count-derivable "how expensive is land here".
+  medianBand?: string | null; medianSold?: number | null; // medianSold = band lower bound, for sorting
   asOf: string;
 };
 export type CountyScan = {
@@ -171,19 +178,26 @@ const MIN_VALUED = 1500; // below this the assessor sample is too thin to trust 
 export async function landProfileFor(fips: string): Promise<LandProfile | null> {
   if (!dmConfigured()) return null;
   const loc: DmLoc[] = [{ type: "county", code: fips }];
-  const [valued, high, sweet] = await Promise.all([
+  const absenteeF: DmFilter[] = [...landValuedFilter(), { filter_id: "has_absentee_owners", operator: "is_boolean", value: true }];
+  const oosF: DmFilter[] = [...landValuedFilter(), { filter_id: "has_out_of_state_owners", operator: "is_boolean", value: true }];
+  const [valued, high, sweet, absentee, oos] = await Promise.all([
     dmCount(loc, landValuedFilter()),
     dmCount(loc, landFilter(100000)),
     dmCount(loc, landFilter(100000, 200000)),
+    dmCount(loc, absenteeF),
+    dmCount(loc, oosF),
   ]);
   if (!valued.ok) return null;
   const v = valued.count!.total_properties || 0;
   if (v < MIN_VALUED) return null;
   const hi = high.ok ? high.count!.total_properties : 0;
   const sw = sweet.ok ? sweet.count!.total_properties : 0;
+  const ab = absentee.ok ? absentee.count!.total_properties : null;
+  const os = oos.ok ? oos.count!.total_properties : null;
   return {
     total: v, cheap: Math.max(0, v - hi), sweet: sw, high: hi, prem: Math.max(0, hi - sw),
     highShare: v ? hi / v : 0, cheapShare: v ? Math.max(0, v - hi) / v : 0, asOf: new Date().toISOString(),
+    absenteeShare: ab != null && v ? ab / v : null, oosShare: os != null && v ? os / v : null,
   };
 }
 
@@ -206,8 +220,12 @@ export async function landTrendsFor(fips: string): Promise<LandTrends | null> {
   // 💰 Only count land that SELLS for ≥$50k — Jon's standing rule (2026-11-11): "nothing lower than
   // 50k, those are the only lands we want to target." Keeps the velocity/ring honest (no $2k junk lots).
   const land50 = { filter_id: "last_sale_price", operator: "greater_than_or_equal", value: 50000 } as DmFilter;
+  const soldGte = (v: number): DmFilter => ({ filter_id: "last_sale_price", operator: "greater_than_or_equal", value: v });
   const n = (r: { ok: boolean; count?: { total_properties: number } }) => (r.ok ? r.count!.total_properties || 0 : 0);
-  const [l30, l90, l180, l365, l730, c30, c90, c180, lp, np] = await Promise.all([
+  // 🏷 Median-price buckets: recently-SOLD land (last 365d) at rising price floors. The gaps between
+  // them give the price distribution → the band the median sale falls in.
+  const sold365 = (minPrice: number): DmFilter[] => [pt(LAND_SOLD_TYPES), soldGte(minPrice), soldAfter(daysAgoISO(365))];
+  const [l30, l90, l180, l365, l730, c30, c90, c180, lp, np, p100, p150, p250, p400] = await Promise.all([
     dmCount(loc, [pt(LAND_SOLD_TYPES), land50, soldAfter(daysAgoISO(30))]),
     dmCount(loc, [pt(LAND_SOLD_TYPES), land50, soldAfter(daysAgoISO(90))]),
     dmCount(loc, [pt(LAND_SOLD_TYPES), land50, soldAfter(daysAgoISO(180))]),
@@ -218,15 +236,39 @@ export async function landTrendsFor(fips: string): Promise<LandTrends | null> {
     dmCount(loc, [pt(NEWCON_TYPES), built, soldAfter(daysAgoISO(180))]),
     dmCount(loc, [pt(LAND_SOLD_TYPES), land50, pending]),
     dmCount(loc, [pt(NEWCON_TYPES), built, pending]),
+    dmCount(loc, sold365(100000)),
+    dmCount(loc, sold365(150000)),
+    dmCount(loc, sold365(250000)),
+    dmCount(loc, sold365(400000)),
   ]);
   if (!l90.ok && !l30.ok && !l180.ok) return null; // v2 key down / all failed
   const last365 = n(l365), prior365 = Math.max(0, n(l730) - n(l365));
   const yoy = prior365 > 0 ? Math.round(((last365 - prior365) / prior365) * 100) : null;
+  // Median band: walk the ≥X counts and find where the cumulative-from-low crosses half of total.
+  // Floors/labels line up: ≥50k(total) → 100 → 150 → 250 → 400. median lands in the first band whose
+  // "below" count reaches total/2.
+  let medianBand: string | null = null, medianSold: number | null = null;
+  const total = last365;
+  if (l365.ok && total >= 20) {
+    const floors: { floor: number; atLeast: number; label: string }[] = [
+      { floor: 50000, atLeast: total, label: "$50–100k" },
+      { floor: 100000, atLeast: n(p100), label: "$100–150k" },
+      { floor: 150000, atLeast: n(p150), label: "$150–250k" },
+      { floor: 250000, atLeast: n(p250), label: "$250–400k" },
+      { floor: 400000, atLeast: n(p400), label: "$400k+" },
+    ];
+    const half = total / 2;
+    for (let i = 0; i < floors.length; i++) {
+      const below = total - floors[i].atLeast; // how many sold under this floor
+      if (below >= half) { medianBand = floors[i - 1]?.label ?? floors[0].label; medianSold = floors[i - 1]?.floor ?? floors[0].floor; break; }
+    }
+    if (!medianBand) { medianBand = floors[floors.length - 1].label; medianSold = floors[floors.length - 1].floor; }
+  }
   return {
     landSold: { d30: n(l30), d90: n(l90), d180: n(l180) },
     newConSold: { d30: n(c30), d90: n(c90), d180: n(c180) },
     landPending: n(lp), newConPending: n(np),
-    yoyLandPct: yoy, asOf: new Date().toISOString(),
+    yoyLandPct: yoy, medianBand, medianSold, asOf: new Date().toISOString(),
   };
 }
 
