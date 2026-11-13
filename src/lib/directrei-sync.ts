@@ -5,7 +5,7 @@
 // name containing seller/buyer; contacts in unlabeled campaigns fall back to
 // their role / contact_type fields.
 import { db } from "@/lib/db";
-import { directReiConfigured, directReiContacts, directReiCampaigns } from "@/lib/directrei";
+import { directReiConfigured, directReiContacts, directReiCampaigns, directReiCampaignPerf } from "@/lib/directrei";
 
 export const DREI_FEED_CAT = "__directrei_feed__";
 
@@ -17,7 +17,7 @@ export type DreiSide = { newToday: number; new7d: number; repliesToday: number; 
 // 📊 Per-campaign response health (Jon 2026-11-12: Market Finder should show, per uploaded list,
 // who replied / is interested / gave a price / not-interested / opted-out — pulled from Direct REI
 // 5×/day, keyed by a NORMALIZED campaign name so it matches our uploaded pull-list names.
-export type DreiCampaignHealth = { name: string; replied: number; interested: number; priced: number; notInterested: number; optedOut: number };
+export type DreiCampaignHealth = { name: string; sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number };
 // Normalize a campaign / pull-list name so "Gulf_County_FL_..._DM_DREI_READY_2" matches the Direct
 // REI campaign name regardless of the DM/DREI/date/Final/Ready suffixes.
 export function normCampaignName(s: string): string {
@@ -106,7 +106,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
       // by normalized campaign name so Market Finder can match it to each uploaded pull list.
       if (camp?.name) {
         const key = normCampaignName(camp.name);
-        const h = (health[key] ??= { name: camp.name, replied: 0, interested: 0, priced: 0, notInterested: 0, optedOut: 0 });
+        const h = (health[key] ??= { name: camp.name, sent: 0, replied: 0, interested: 0, priced: 0, notInterested: 0, optedOut: 0 });
         const st = (c.status || "").toLowerCase();
         if (optedOut || /\bopt|unsub|\bstop\b|\bdnc\b/.test(st)) h.optedOut++;
         else if (replyDay || /replied|interest|price|offer|qualif|hot|warm|not.?interest/.test(st)) {
@@ -146,7 +146,21 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
     seller: sides.seller,
     buyer: sides.buyer,
     recentReplies: replies.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12),
-    campaignHealth: Object.values(health).filter((h) => h.replied || h.optedOut),
+    campaignHealth: await (async () => {
+      // 📊 Merge Direct REI's NATIVE per-campaign stats (/campaigns: sent + replied) — the
+      // authoritative "how many texts/replies per campaign" — over the contact-status tally.
+      try {
+        const perf = await directReiCampaignPerf();
+        if ("rows" in perf) for (const p of perf.rows) {
+          const key = normCampaignName(p.name);
+          const h = (health[key] ??= { name: p.name, sent: 0, replied: 0, interested: 0, priced: 0, notInterested: 0, optedOut: 0 });
+          if (typeof p.sent === "number") h.sent = p.sent;
+          if (typeof p.replied === "number") h.replied = Math.max(h.replied, p.replied); // native reply count wins
+          if (typeof p.optedOut === "number") h.optedOut = Math.max(h.optedOut, p.optedOut);
+        }
+      } catch { /* native stats optional — contact-status tally still shows */ }
+      return Object.values(health).filter((h) => h.sent || h.replied || h.optedOut);
+    })(),
     campaigns: campRows.map((c) => ({ name: c.name, channel: c.channel, paused: c.paused, side: /seller/i.test(c.name) ? "seller" as const : /buyer/i.test(c.name) ? "buyer" as const : "other" as const })),
   };
 }

@@ -72,18 +72,20 @@ export default async function MarketsPage() {
   const pullStats = attributePullConversion(pullLists, convOpps);
   // 📊 Campaign Health — pulled from the Direct REI API feed (refreshed 5×/day, every response
   // classified by status) and matched to each uploaded pull list by normalized campaign name.
-  const campaignHealth: Record<string, { replied: number; interested: number; priced: number; notInterested: number; optedOut: number }> = {};
+  const campaignHealth: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }> = {};
+  let campaignHealthSyncedAt = "";
   try {
     const { readDreiFeed, normCampaignName } = await import("@/lib/directrei-sync");
     const feed = await readDreiFeed();
-    const byName: Record<string, { replied: number; interested: number; priced: number; notInterested: number; optedOut: number }> = {};
+    campaignHealthSyncedAt = feed?.at ?? "";
+    const byName: Record<string, { sent?: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }> = {};
     for (const h of (feed?.campaignHealth ?? [])) byName[normCampaignName(h.name)] = h;
     const keys = Object.keys(byName);
     for (const b of pullLists) {
       const key = normCampaignName(b.name);
       let h = byName[key];
       if (!h && key) { const hitKey = keys.find((k) => k && (k.includes(key) || key.includes(k))); if (hitKey) h = byName[hitKey]; }
-      if (h) campaignHealth[b.id] = { replied: h.replied, interested: h.interested, priced: h.priced, notInterested: h.notInterested, optedOut: h.optedOut };
+      if (h) campaignHealth[b.id] = { sent: h.sent ?? 0, replied: h.replied, interested: h.interested, priced: h.priced, notInterested: h.notInterested, optedOut: h.optedOut };
     }
   } catch { /* feed unavailable — campaign health just won't show */ }
 
@@ -315,7 +317,7 @@ export default async function MarketsPage() {
       {leader && <PullPriorityList rows={pullPriority} />}
       <MarketsTabs
         showResearch={leader}
-        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} closedDeals={closedDeals} />}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} campaignHealthSyncedAt={campaignHealthSyncedAt} closedDeals={closedDeals} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} marketStats={marketStatsByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
         niches={<NichePlaybook matches={nicheMatches} />}
