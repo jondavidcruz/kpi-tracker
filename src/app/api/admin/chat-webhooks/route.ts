@@ -7,7 +7,7 @@ import { getCurrentUser, isOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-const SPACES = ["contracts", "kpi", "phonehealth", "receipts", "leadership", "team", "acquisitions", "directrei"];
+const SPACES = ["contracts", "kpi", "phonehealth", "receipts", "leadership", "team", "acquisitions", "dispositions", "directrei", "warroom", "bottleneck"];
 
 async function gate(request: Request): Promise<boolean> {
   const url = new URL(request.url);

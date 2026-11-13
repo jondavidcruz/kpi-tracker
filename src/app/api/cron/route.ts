@@ -16,6 +16,7 @@ import { sendHuddleBrief, sendHuddleNudge } from "@/lib/huddle-brief";
 import { writeDay, writeOpps, writeActivity } from "@/lib/crm-sync";
 import { migrateRecordingsToDrive } from "@/lib/recording-migrate";
 import { sendLeaksReport } from "@/lib/diagnostics";
+import { sendBottleneckReport } from "@/lib/bottleneck";
 import { sendBuyerBoxReport } from "@/lib/buyer-report";
 
 // Current America/Los_Angeles hour (0–23) + weekday (0=Sun…6=Sat), DST-safe.
@@ -4464,6 +4465,16 @@ export async function GET(request: Request) {
     const today = date ?? todayStr(settings.orgTimezone);
     const sent = await sendLeaksReport(today);
     return NextResponse.json({ ok: true, leaks: sent });
+  }
+
+  // Friday ~7–8am PT: the weekly BOTTLENECK audit — marketing + acquisitions + dispo
+  // leaks in one read, delivered to the C-suite Ops chat space + email, and a WoW
+  // snapshot saved. Lives on the /bottleneck page the rest of the week (Jon 2026-11-13).
+  if (url.searchParams.get("bottleneck") === "1") {
+    const settings = await getSettings();
+    const today = date ?? todayStr(settings.orgTimezone);
+    const r = await sendBottleneckReport(today);
+    return NextResponse.json({ ok: true, bottleneck: r });
   }
 
   // End-of-day: post the "money calls vs recordings uploaded" check to the team so

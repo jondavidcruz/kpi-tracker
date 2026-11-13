@@ -47,6 +47,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   "/email-health": "email health bounce rate deliverability opens clicks resend direct rei campaigns domain reputation",
   "/comms-health": "comms guardian uptime calling texting email inbound outbound telnyx resend line down monitor always working 24/7 phones sms voice health check",
   "/kpi-audit": "kpi verification audit trust but verify receipts proof vetted developers accurate accountability who when evidence check numbers",
+  "/bottleneck": "bottleneck audit leaks funnel marketing acquisitions dispositions sold buyers vetted weekly friday diagnostic where deals die",
   "/phone-health": "phone health answer rate spam likely scam twilio telnyx carrier caller id registration flagged dialer numbers list pull skip trace sms sop directrei regrid skipmatrix scrub dnc litigator suppression texting campaign",
   "/compliance": "compliance a2p 10dlc sms tcpa cold call dnc do not call telemarketing direct mail can-spam email consent state laws twilio telnyx recording two party legal",
   "/ai-training": "ai training claude chatgpt gemini perplexity prompt prompting models haiku sonnet opus fable effort artificial intelligence learn",
@@ -209,6 +210,7 @@ export default function Sidebar({
       { href: "/team-360", label: "Team 360", Icon: Sparkles },
     ] },
     { label: "C-Suite", items: [
+      { href: "/bottleneck", label: "Bottleneck Audit", Icon: Activity, csuiteOnly: true },
       { href: "/expenses", label: "Profit & Loss Report", Icon: Receipt, csuiteOnly: true },
       { href: "/timecard", label: "Payroll", Icon: Wallet, csuiteOnly: true },
       { href: "/team-roster", label: "Team Roster", Icon: Users, csuiteOnly: true },

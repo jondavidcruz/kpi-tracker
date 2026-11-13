@@ -19,6 +19,7 @@ const ROOMS: { key: string; label: string; job: string }[] = [
   { key: "phonehealth", label: "Phone Health", job: "Number rotation + text deliverability" },
   { key: "receipts", label: "Receipts", job: "PDF receipts from subscriptions" },
   { key: "directrei", label: "Direct REI", job: "Direct REI AI updates + qualified-lead reporting" },
+  { key: "bottleneck", label: "War Room Ops (Bottleneck)", job: "Friday weekly bottleneck audit — C-SUITE ONLY (carries financials; keep membership limited)" },
 ];
 
 function mask(url: string): string {

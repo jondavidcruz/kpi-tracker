@@ -10,9 +10,11 @@
 //   dispositions → buyer/developer sourcing + "to research" lists for the dispo team
 //   directrei    → Direct REI AI updates + qualified-lead reporting
 //   warroom      → end-of-day "War Room updates" — what shipped in the app that day
+//   bottleneck   → Friday weekly bottleneck audit (C-SUITE ONLY — carries financials;
+//                  keep this space's membership limited to the C-suite)
 import { APP_URL } from "@/lib/site";
 
-export type ChatSpace = "contracts" | "kpi" | "phonehealth" | "receipts" | "leadership" | "team" | "acquisitions" | "dispositions" | "directrei" | "warroom";
+export type ChatSpace = "contracts" | "kpi" | "phonehealth" | "receipts" | "leadership" | "team" | "acquisitions" | "dispositions" | "directrei" | "warroom" | "bottleneck";
 
 // 🔑 Resolve a room's webhook URL. A DB override (Resource "__chat_webhooks__", a
 // JSON map) wins over the CHAT_WEBHOOKS_JSON env var — so Jon can add/replace a

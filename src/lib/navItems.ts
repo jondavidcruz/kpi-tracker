@@ -79,6 +79,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { href: "/team-360", label: "Team 360", gate: "all" },
   ] },
   { group: "C-Suite", items: [
+    { href: "/bottleneck", label: "Bottleneck Audit", gate: "csuite" },
     { href: "/expenses", label: "Profit & Loss Report", gate: "csuite" },
     { href: "/timecard", label: "Payroll", gate: "csuite" },
     { href: "/team-roster", label: "Team Roster", gate: "csuite" },

@@ -145,6 +145,10 @@
       "schedule": "0 1 * * 6"
     },
     {
+      "path": "/api/cron?bottleneck=1",
+      "schedule": "0 15 * * 5"
+    },
+    {
       "path": "/api/cron?monthend=1",
       "schedule": "0 16 1 * *"
     },
