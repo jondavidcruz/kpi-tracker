@@ -149,6 +149,92 @@ export const PRESETS: Preset[] = [
     state: () => ({ enums: { property_type: [6, 19] }, bools: { has_out_of_state_owners: true, is_landlocked: true }, nums: { lot_size_acres: { min: 1, max: 20 } } }) },
 ];
 
+// 🎯 Niche snipers — Jon's focus plays (waterfront / solar / data-center). One click loads the part
+// of each sniper filter DealMachine can COUNT for free (property type, value/acre gates, owner skew,
+// flood), and lists the geo steps you then apply on the map (transmission / navigable-water
+// proximity, subdivision blacklist) — those are NOT DealMachine count filters (verified against the
+// live 342-filter catalog: no transmission/substation/canal/coast/navigable filter exists). Full
+// area intel + live source links live on the 🎯 Niches tab (niche-markets.ts). "Sell the use, not
+// the dirt." Each area is a plain query string resolved via /api/markets/dm?action=locations.
+export type NicheArea = { name: string; q: string; badge?: string };
+export type NichePreset = {
+  key: string; nicheId: string; label: string; emoji: string; blurb: string;
+  state: () => WorkbenchState;
+  autoApplied: string[]; // enforced by the live FREE count
+  refine: string[];      // apply on the map / in DealMachine at pull time (not a free count filter)
+  areas: NicheArea[];    // recommended hunt areas — a click resolves + picks it, keeping the buy-box
+};
+
+export const NICHE_PRESETS: NichePreset[] = [
+  {
+    key: "waterfront", nicheId: "waterfront", emoji: "🌊", label: "Waterfront land",
+    blurb: "Vacant waterfront lots over the $50k penny-lot floor → canal & luxury spec builders. Our proven play.",
+    state: () => ({ enums: { property_type: [6] }, bools: { is_landlocked: true, has_absentee_owners: true }, nums: { assessed_land_value: { min: 50000 }, lot_size_acres: { min: 0.15 } } }),
+    autoApplied: [
+      "Vacant land · assessed land value ≥ $50k (auto-kills Lehigh / Rotonda / Burnt Store Lakes penny lots)",
+      "Lot ≥ 0.15 ac · not landlocked · absentee owner (away = motivated)",
+    ],
+    refine: [
+      "On the map turn on the 🏘 parcel layer (zoom ≥15) and keep only lots on a NAVIGABLE canal / river / Gulf / ICW / lake — drop freshwater drainage & retention.",
+      "Prefer no-fixed-bridge / direct water access — the single biggest value multiplier.",
+      "At pull time exclude penny-lot subdivisions: Lehigh Acres, Burnt Store Lakes, Rotonda interior, Golden Gate Estates, Citrus Springs, Marion Oaks, Poinciana.",
+      "Optional tighteners (Customize): owns free & clear, road frontage ≥ 60 ft (80'+ for sailboat/premium).",
+    ],
+    areas: [
+      { name: "Cape Coral", q: "Cape Coral, FL", badge: "volume" },
+      { name: "Punta Gorda", q: "Punta Gorda, FL", badge: "sailboat" },
+      { name: "Marco Island", q: "Marco Island, FL" },
+      { name: "Apollo Beach", q: "Apollo Beach, FL" },
+      { name: "Palm Coast", q: "Palm Coast, FL" },
+      { name: "Crystal River", q: "Crystal River, FL" },
+    ],
+  },
+  {
+    key: "solar", nicheId: "solar", emoji: "☀️", label: "Solar land",
+    blurb: "Flat, cheap ag land near transmission — the 'be the only wholesaler hitting it' play. Almost no one sources for it.",
+    state: () => ({ enums: { property_type: [6, 19] }, bools: { is_landlocked: true, is_inside_special_flood_hazard_area: true, has_absentee_owners: true }, nums: { lot_size_acres: { min: 150, max: 1500 } } }),
+    autoApplied: [
+      "Vacant + agriculture · 150–1,500 ac (prioritize 400–1,000 contiguous)",
+      "Not landlocked · out of the flood hazard area · absentee rural owner",
+    ],
+    refine: [
+      "Transmission is the game — keep parcels within ~2 mi of a 138 kV+ line AND ~2 mi of a substation (gen-tie runs ~$1–3M/mi). Not a DealMachine filter.",
+      "Cross-reference against the utility Ten-Year Site Plan preferred sites + county conditional-use agendas (live links on the 🎯 Niches tab).",
+      "Exclude parcels already owned by FPL / Duke / TECO / Origis / NextEra — already taken.",
+      "Flag adjacent same-owner parcels for assembly; favor aging cattle/citrus operations.",
+    ],
+    areas: [
+      { name: "Manatee", q: "Manatee County, FL", badge: "FPL" },
+      { name: "Hendry", q: "Hendry County, FL", badge: "FPL" },
+      { name: "St. Lucie", q: "St. Lucie County, FL", badge: "FPL" },
+      { name: "Polk", q: "Polk County, FL" },
+      { name: "Okeechobee", q: "Okeechobee County, FL", badge: "FPL" },
+    ],
+  },
+  {
+    key: "data_center", nicheId: "data_center", emoji: "🖥", label: "Data-center land",
+    blurb: "Big tracts near power — highest ROI, down the line. Buy raw land before the hyperscaler/utility arrives.",
+    state: () => ({ enums: { property_type: [6, 19, 20] }, bools: { is_landlocked: true, is_inside_special_flood_hazard_area: true, has_absentee_owners: true }, nums: { lot_size_acres: { min: 100, max: 2000 } } }),
+    autoApplied: [
+      "Vacant + ag + development site · ≥ 100 ac (sweet spot 150–1,500; land-bank ≥ 1,000)",
+      "Not landlocked · out of the flood hazard area · absentee owner",
+    ],
+    refine: [
+      "Power adjacency is the whole thesis — within ~1 mi of a 138–500 kV line AND ~5–10 mi of a substation with spare capacity (TYSP). Not a DealMachine filter.",
+      "Prefer single-owner contiguous tracts; flag adjacent same-owner parcels for assembly.",
+      "Owner skew: ag/ranch/timber corps, phosphate/mining, citrus estates, land trusts, decommissioned power-plant sites.",
+      "Watch county data-center moratoria (negative signal) — links on the 🎯 Niches tab.",
+    ],
+    areas: [
+      { name: "Polk", q: "Polk County, FL", badge: "1GW+" },
+      { name: "St. Lucie", q: "St. Lucie County, FL" },
+      { name: "DeSoto", q: "DeSoto County, FL" },
+      { name: "Palm Beach", q: "Palm Beach County, FL" },
+      { name: "Citrus", q: "Citrus County, FL" },
+    ],
+  },
+];
+
 const BOOL_APPLY = (() => {
   const m = new Map<string, boolean>();
   for (const g of CATALOG) for (const c of g.controls) if (c.kind === "bool") m.set(c.id, c.apply ?? true);

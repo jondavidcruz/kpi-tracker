@@ -6,8 +6,8 @@
 // "the main thing I use this map for is research first, before we start actually pulling").
 import { useEffect, useRef, useState } from "react";
 import {
-  CATALOG, PRESETS, DEFAULT_STATE, PROPERTY_TYPE_OPTS, compileFilters, describeFilters, activeCount,
-  type WorkbenchState, type Control,
+  CATALOG, PRESETS, NICHE_PRESETS, DEFAULT_STATE, PROPERTY_TYPE_OPTS, compileFilters, describeFilters, activeCount,
+  type WorkbenchState, type Control, type NichePreset, type NicheArea,
 } from "@/lib/dm-filter-catalog";
 import type { DemandResult, RecommendedMarket } from "@/lib/buyer-demand-markets";
 import { ELITE_ENCLAVES, type Enclave } from "@/lib/elite-markets";
@@ -37,6 +37,7 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showEnclaves, setShowEnclaves] = useState(false);
+  const [niche, setNiche] = useState<string | null>(null);
   const reqSeq = useRef(0);
 
   useEffect(() => {
@@ -92,11 +93,33 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
     } catch { setErr("enclave lookup failed"); }
   }
 
+  // 🎯 Niche sniper → load the countable buy-box (property type + value/acre/owner/flood gates) and
+  // surface the geo steps you then apply on the map. The live count runs once an area is picked.
+  function applyNiche(p: NichePreset) {
+    setState(p.state());
+    setNiche(p.key);
+    setShowFilters(false);
+  }
+  // Pick a recommended hunt-area for the active niche WITHOUT resetting the niche buy-box.
+  async function pickNicheArea(a: NicheArea) {
+    setErr("");
+    try {
+      const r = await fetch(`/api/markets/dm?action=locations&q=${encodeURIComponent(a.q)}`);
+      const j = await r.json();
+      const loc = (j.data ?? [])[0];
+      if (loc) {
+        setPicked(loc); setLocResults([]);
+        if (typeof window !== "undefined") window.scrollTo({ top: (document.getElementById("rw-buybox")?.offsetTop ?? 0) - 80, behavior: "smooth" });
+      } else { setLocQ(a.q); setErr(`No DealMachine match for ${a.name} — try the Find box.`); }
+    } catch { setErr("area lookup failed"); }
+  }
+
   // Load a buyer-demand recommendation into the workbench: pick the county + apply its derived
   // buy-box → the live count runs automatically. This is the gold loop (demand → recipe → count).
   function loadRec(m: RecommendedMarket) {
     setPicked({ type: "county", code: m.fips, name: `${m.name}, ${m.state}` });
     setState(clone(m.recipe));
+    setNiche(null);
     setLocResults([]); setOpenRec(null);
     if (typeof window !== "undefined") window.scrollTo({ top: (document.getElementById("rw-buybox")?.offsetTop ?? 0) - 80, behavior: "smooth" });
   }
@@ -347,10 +370,54 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
           things to look at, make it dummy-proof"). */}
       <div className="mb-3" id="rw-buybox">
         <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">2 · Pick your hunt</div>
-        {/* presets — the one simple choice, as clear buttons */}
+        {/* 🎯 Niche snipers — Jon's focus plays. One click loads the countable buy-box + the geo steps
+            to refine on the map (sniper pulls, not county pulls). Full intel on the 🎯 Niches tab. */}
+        <div className="mb-2 rounded-xl bg-gradient-to-br from-sky-50 to-indigo-50 p-2.5 ring-1 ring-sky-200">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <span className="text-[12px] font-extrabold text-indigo-900">🎯 Niche snipers</span>
+            <span className="text-[11px] text-indigo-600">sell the use, not the dirt · full intel on the 🎯 Niches tab</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {NICHE_PRESETS.map((p) => (
+              <button key={p.key} onClick={() => applyNiche(p)}
+                className={`rounded-lg px-3 py-1.5 text-[12px] font-bold ring-1 ${niche === p.key ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white text-indigo-800 ring-indigo-300 hover:bg-indigo-50"}`}>{p.emoji} {p.label}</button>
+            ))}
+            {niche && <button onClick={() => { setNiche(null); setState(clone(DEFAULT_STATE)); }} className="text-[10px] font-semibold text-slate-400 hover:text-slate-600">clear</button>}
+          </div>
+          {niche && (() => {
+            const p = NICHE_PRESETS.find((x) => x.key === niche);
+            if (!p) return null;
+            return (
+              <div className="mt-2 rounded-lg bg-white/80 p-2.5 ring-1 ring-indigo-100">
+                <div className="text-[11px] font-semibold text-slate-700">{p.blurb}</div>
+                <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">✓ Counting now</div>
+                    <ul className="mt-0.5 space-y-0.5 text-[11px] text-slate-600">{p.autoApplied.map((l, i) => <li key={i}>• {l}</li>)}</ul>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-amber-600">⚑ Then refine (map / pull)</div>
+                    <ul className="mt-0.5 space-y-0.5 text-[11px] text-slate-600">{p.refine.map((l, i) => <li key={i}>• {l}</li>)}</ul>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Hunt here:</span>
+                  {p.areas.map((a) => (
+                    <button key={a.q} onClick={() => pickNicheArea(a)} title={`research ${a.q}`}
+                      className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
+                      {a.name}{a.badge ? <span className="ml-1 text-[9px] text-indigo-400">{a.badge}</span> : null}
+                    </button>
+                  ))}
+                  <span className="ml-auto text-[10px] text-slate-400">click an area → live count runs</span>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+        {/* presets — the general buy-boxes */}
         <div className="mb-2 flex flex-wrap gap-1.5">
           {PRESETS.map((p) => (
-            <button key={p.key} onClick={() => { setState(p.state()); setShowFilters(false); }}
+            <button key={p.key} onClick={() => { setState(p.state()); setShowFilters(false); setNiche(null); }}
               className="rounded-lg bg-lime-50 px-3 py-1.5 text-[12px] font-bold text-lime-800 ring-1 ring-lime-300 hover:bg-lime-100">{p.emoji} {p.label}</button>
           ))}
         </div>
@@ -359,7 +426,7 @@ export default function ResearchWorkbench({ quickMarkets = [], scan = {}, demand
           <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-[11px] ring-1 ring-slate-200">
             <span className="font-bold text-slate-500">On:</span>
             <span className="text-slate-700">{recipe.filter((l) => !l.startsWith("Property type")).slice(0, 4).join(" · ") || "land only"}{nActive > 4 ? ` · +${nActive - 4} more` : ""}</span>
-            <button onClick={() => setState(clone(DEFAULT_STATE))} className="ml-auto text-[10px] font-semibold text-slate-400 hover:text-slate-600">reset</button>
+            <button onClick={() => { setState(clone(DEFAULT_STATE)); setNiche(null); }} className="ml-auto text-[10px] font-semibold text-slate-400 hover:text-slate-600">reset</button>
           </div>
         )}
         {/* customize — everything detailed lives here, collapsed by default */}
