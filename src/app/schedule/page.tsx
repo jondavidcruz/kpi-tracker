@@ -12,6 +12,7 @@ import HolidaysPanel from "@/components/HolidaysPanel";
 import CulturePanel from "@/components/CulturePanel";
 import { upcomingHolidays } from "@/lib/holidays";
 import TimeClock from "@/components/TimeClock";
+import DstReminder from "@/components/DstReminder";
 import BreakHistory, { type OutageView } from "@/components/BreakHistory";
 import ShiftBar, { ShiftBarLegend } from "@/components/ShiftBar";
 import { SPEED_CHECKS_CATEGORY, latestSpeedFromRows } from "@/lib/speed-checks";
@@ -82,6 +83,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     return (
       <div className="space-y-6">
         <SectionTitle title="🗓️ My Schedule" subtitle="Tap the days you can work and request time off." accent="bg-indigo-400" right={<span className="text-sm font-semibold text-slate-500">{friendlyDate(today)}</span>} />
+        <DstReminder />
 
         <Card className="p-5" id="availform">
           <h3 className="mb-1 text-sm font-bold text-slate-700">📅 When can you work?</h3>
@@ -318,6 +320,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         accent="bg-indigo-400"
         right={<span className="text-sm font-semibold text-slate-500">{friendlyDate(today)}</span>}
       />
+      <DstReminder />
 
       {/* LIVE AVAILABILITY */}
       <section>
