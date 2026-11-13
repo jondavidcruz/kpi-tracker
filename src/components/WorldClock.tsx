@@ -35,6 +35,15 @@ export default function WorldClock() {
   const [now, setNow] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [skew, setSkew] = useState(0); // serverNow - deviceNow (ms)
+  // 🕰 Next US Daylight Saving change (PH doesn't observe it) — computed client-side after mount.
+  const [dst, setDst] = useState<{ when: string; type: "spring" | "fall"; days: number; soon: boolean } | null>(null);
+  useEffect(() => {
+    import("@/lib/dst").then(({ nextUsDstChange, dstReminder }) => {
+      const c = nextUsDstChange();
+      const r = dstReminder(c);
+      setDst({ when: r.when, type: c.type, days: c.daysUntil, soon: c.daysUntil <= 21 });
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     // 🧭 Anchor to SERVER time, not the device clock (Jon 2026-10-24). We run from
@@ -104,6 +113,11 @@ export default function WorldClock() {
             </div>
           ))}
         </div>
+        {dst && (
+          <div className="border-t border-white/10 px-2.5 py-1.5 text-[9px] leading-snug text-amber-200/90">
+            🕰 US Daylight Saving: <b>{dst.when}</b> ({dst.soon ? `in ${dst.days}d — ` : ""}{dst.type === "spring" ? "spring forward" : "fall back"}). 🇵🇭 PH doesn&apos;t change — set alarms {dst.type === "spring" ? "1h earlier" : "1h later"}.
+          </div>
+        )}
       </div>
     );
   }

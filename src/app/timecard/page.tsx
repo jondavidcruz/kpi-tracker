@@ -9,6 +9,7 @@ import { workedMinutes, paidMinutes } from "@/lib/presence";
 import { workCapAt, shiftStartAt, shiftEndAt } from "@/lib/shift";
 import { parseHourly, parseFlatDailyHours, fmtHours } from "@/lib/payroll";
 import { positionLabel } from "@/lib/roles";
+import DstReminder from "@/components/DstReminder";
 import { editPunchAction, addPunchAction, deletePunchAction, saveTimeAdjustment, saveBonus, deleteBonus, savePayHours, savePayDiscrepancy, deleteOutage } from "@/app/actions";
 import { Card, SectionTitle } from "@/components/ui";
 
@@ -129,6 +130,7 @@ export default async function TimecardPage({ searchParams }: { searchParams: Pro
             <Link href={`/timecard?p=${off + 1}`} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-200">→</Link>
           </div>
         } />
+      <DstReminder />
 
       {/* 🔍 Time edits awaiting C-suite sign-off (Marie can edit; leaders verify) */}
       {meCsuite && pendingEdits.length > 0 && (

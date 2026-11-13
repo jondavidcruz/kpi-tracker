@@ -61,6 +61,25 @@ function firstName(who?: string | null): string {
   return (who ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
 }
 
+// 🕗 EASTERN-TIME SHIFT (Jon 2026-11-13, effective Mon 2026-11-16): "the girls" — Michelle, Sharyn,
+// and Marie — now work on EASTERN time, because all our leads are in Florida. Login 8:45 AM ET (dial
+// systems in + review the day, paid), start calling 9:00 AM ET, two 15-min breaks + a 1-hour lunch.
+//   • Michelle & Sharyn: 8:45 AM–6:00 PM ET (8h + 1h lunch) — 6 PM ET = 3 PM PT.
+//   • Marie: 8:45 AM–2:00 PM ET (5h, NO lunch) — starts with the girls now.
+// Their shift hours below are EASTERN wall-clock; shiftTzFor() resolves the correct zone so the time
+// clock logs them against Eastern (and they can log in / dial earlier than the Pacific team).
+const EST_SHIFT_FROM = "2026-11-16";
+const EST_TZ = "America/New_York";
+function onEstSchedule(dateStr: string, who?: string | null): boolean {
+  const f = firstName(who);
+  return (f === "michelle" || f === "sharyn" || f === "sharon" || f === "marie") && dateStr >= EST_SHIFT_FROM;
+}
+/** The zone a person's scheduled hours are expressed in — Eastern for the EST-schedule team, else the
+ *  org/Pacific default. Keeps the time clock honest across the two timezones. */
+function shiftTzFor(dateStr: string, who: string | null | undefined, fallbackTz: string): string {
+  return onEstSchedule(dateStr, who) ? EST_TZ : fallbackTz;
+}
+
 /**
  * Scheduled shift end (hour/min) for a date, or null on days with no shift.
  * Pass `who` (the person's name) to apply per-person exceptions — Marie ends at
@@ -74,6 +93,8 @@ export function shiftEndHour(dateStr: string, who?: string | null): { hour: numb
   if (firstName(who) === "nick" || firstName(who) === "nicholas") return { hour: 12, min: 0 };
   // Kyle Brown — new acquisitions hire, 8:00 AM–12:00 PM Mon/Wed/Fri only; off Tue/Thu (Jon 2026-10-14).
   if (firstName(who) === "kyle") return dow === 2 || dow === 4 ? null : { hour: 12, min: 0 };
+  // 🕗 EST schedule (Mon–Fri from 2026-11-16): Marie ends 2:00 PM ET (5h); Michelle & Sharyn 6:00 PM ET.
+  if (onEstSchedule(dateStr, who)) return firstName(who) === "marie" ? { hour: 14, min: 0 } : { hour: 18, min: 0 };
   if (dow === 5) return { hour: 14, min: 0 }; //            Fri     → 2:00 PM (whole team, no lunch — incl. Sharyn)
   // Marie Mon–Thu: 6:00 PM through 2026-10-10; from Mon 2026-10-12 her shift
   // moves to 10:00 AM–4:00 PM (Jon 2026-10-07). Fridays stay whole-team 8–2.
@@ -86,7 +107,7 @@ export function shiftEndHour(dateStr: string, who?: string | null): { hour: numb
 /** The scheduled shift-end instant for `dateStr`, or null on weekends. */
 export function shiftEndAt(dateStr: string, tz: string = DEFAULT_TZ, who?: string | null): Date | null {
   const e = shiftEndHour(dateStr, who);
-  return e ? zonedTime(dateStr, e.hour, e.min, tz) : null;
+  return e ? zonedTime(dateStr, e.hour, e.min, shiftTzFor(dateStr, who, tz)) : null;
 }
 
 /**
@@ -101,6 +122,8 @@ export function shiftStartHour(dateStr: string, who?: string | null): { hour: nu
   if (firstName(who) === "nick" || firstName(who) === "nicholas") return { hour: 8, min: 0 };
   // Kyle Brown — new hire, works Mon/Wed/Fri only (8:00 AM–12:00 PM); off Tue/Thu (Jon 2026-10-14).
   if (firstName(who) === "kyle") return dow === 2 || dow === 4 ? null : { hour: 8, min: 0 };
+  // 🕗 EST schedule (Mon–Fri from 2026-11-16): 8:45 AM ET login (paid prep) for Michelle, Sharyn, Marie.
+  if (onEstSchedule(dateStr, who)) return { hour: 8, min: 45 };
   if (dow === 5) return { hour: 8, min: 0 }; // Fri → 8:00 AM (whole team)
   // Marie Mon–Thu: noon start through 2026-10-10; 10:00 AM from 2026-10-12.
   if (firstName(who) === "marie") return dateStr === "2026-10-15" ? { hour: 8, min: 0 } : dateStr >= "2026-10-12" ? { hour: 10, min: 0 } : { hour: 12, min: 0 };
@@ -121,7 +144,7 @@ export function workdaysFor(start: string, end: string, who?: string | null): nu
 /** The scheduled shift-start instant for `dateStr` (pay floor), or null on weekends. */
 export function shiftStartAt(dateStr: string, tz: string = DEFAULT_TZ, who?: string | null): Date | null {
   const s = shiftStartHour(dateStr, who);
-  return s ? zonedTime(dateStr, s.hour, s.min, tz) : null;
+  return s ? zonedTime(dateStr, s.hour, s.min, shiftTzFor(dateStr, who, tz)) : null;
 }
 
 /** Grace minutes past shift end counted as real work before the hard cap. */
@@ -150,5 +173,8 @@ export function shiftEndLabel(dateStr: string, who?: string | null): string | nu
   if (!e) return null;
   const ap = e.hour >= 12 ? "PM" : "AM";
   const h = e.hour % 12 || 12;
-  return `${h}:${String(e.min).padStart(2, "0")} ${ap}`;
+  // EST-schedule people (Michelle/Sharyn/Marie) have Eastern hours — label them so nobody reads 6 PM
+  // as Pacific. 6 PM ET = 3 PM PT.
+  const tzTag = onEstSchedule(dateStr, who) ? " ET" : "";
+  return `${h}:${String(e.min).padStart(2, "0")} ${ap}${tzTag}`;
 }
