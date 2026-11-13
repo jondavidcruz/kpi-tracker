@@ -93,8 +93,13 @@ export function shiftEndHour(dateStr: string, who?: string | null): { hour: numb
   if (firstName(who) === "nick" || firstName(who) === "nicholas") return { hour: 12, min: 0 };
   // Kyle Brown — new acquisitions hire, 8:00 AM–12:00 PM Mon/Wed/Fri only; off Tue/Thu (Jon 2026-10-14).
   if (firstName(who) === "kyle") return dow === 2 || dow === 4 ? null : { hour: 12, min: 0 };
-  // 🕗 EST schedule (Mon–Fri from 2026-11-16): Marie ends 2:00 PM ET (5h); Michelle & Sharyn 6:00 PM ET.
-  if (onEstSchedule(dateStr, who)) return firstName(who) === "marie" ? { hour: 14, min: 0 } : { hour: 18, min: 0 };
+  // 🕗 EST schedule (from 2026-11-16): FRIDAY is a short 6-hour day for the girls — 9 AM–3 PM ET,
+  // ending 3:00 PM ET (= 12:00 PM PST / Jon's lunchtime). Mon–Thu: Marie ends 2 PM ET (5h), Michelle
+  // & Sharyn 6 PM ET (8h + lunch).
+  if (onEstSchedule(dateStr, who)) {
+    if (dow === 5) return { hour: 15, min: 0 };
+    return firstName(who) === "marie" ? { hour: 14, min: 0 } : { hour: 18, min: 0 };
+  }
   if (dow === 5) return { hour: 14, min: 0 }; //            Fri     → 2:00 PM (whole team, no lunch — incl. Sharyn)
   // Marie Mon–Thu: 6:00 PM through 2026-10-10; from Mon 2026-10-12 her shift
   // moves to 10:00 AM–4:00 PM (Jon 2026-10-07). Fridays stay whole-team 8–2.
