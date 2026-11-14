@@ -407,11 +407,14 @@ export async function runDueDrips(limit = 200): Promise<{ scanned: number; steps
     if (!nextState) finished++;
 
     const channel = step.channel;
-    // DND is tag-based on the contact — never drip to a blocked channel.
+    // DND is tag-based on the contact — never drip to a blocked channel. Uses the shared
+    // suppression guard so dnc / dnd_* AND legal-watch (litigator) all stop an automated drip.
     const tags = o.contact?.tags || "";
-    const blocked = /\bdnc\b|\bdnd_all\b/i.test(tags) || (channel === "sms" ? /\bdnd_sms\b/i.test(tags) : /\bdnd_email\b/i.test(tags));
+    const { suppressionFor } = await import("@/lib/contact-guard");
+    const supp = suppressionFor(tags, channel);
+    const blocked = supp.blocked;
     const reachable = channel === "sms" ? !!o.contact?.phone : !!o.contact?.email;
-    if (blocked || !reachable) { await logCrmEvent({ contactId: o.contactId, oppId: o.id, kind: "system", body: `📨 Drip step ${state.step + 1} skipped — ${channel} ${blocked ? "DND" : "no address on file"}`, actor: "drip" }).catch(() => {}); continue; }
+    if (blocked || !reachable) { await logCrmEvent({ contactId: o.contactId, oppId: o.id, kind: "system", body: `📨 Drip step ${state.step + 1} skipped — ${channel} ${blocked ? `suppressed: ${supp.reason}` : "no address on file"}`, actor: "drip" }).catch(() => {}); continue; }
     // 📧 Email guard: only email sellers we've already sent an offer to (Jon 2026-11-11). A pre-offer
     // email step is held — we advance past it so the text steps keep flowing.
     if (channel === "email" && !offerAlreadySent(o.stage)) {

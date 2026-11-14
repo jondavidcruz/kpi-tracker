@@ -167,9 +167,19 @@ export async function routeSellerReply(args: {
         await db.crmContact.update({ where: { id: contact.id }, data: { tags: [contact.tags, "legal-watch"].filter(Boolean).join(",") } }).catch(() => {});
       }
       await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `${sev} LEGAL WATCH — they asked for our company/legal info${established ? "" : " and are NOT an offer/contract lead (higher risk — people sometimes fish for our info to sue us)"}. Verify who they are before sharing anything; never send the company name, address, LLC, or licensing by text/email.`, actor: "legal-watch" }).catch(() => {});
-      // ⚖️ LITIGATOR PROTOCOL — snapshot the FULL record (import source + consent + every message in/
-      // out) into the permanent legal-defense file so it can never be lost (Jon 2026-11-12).
-      try { const { saveLegalWatchRecord } = await import("@/lib/legal-watch"); await saveLegalWatchRecord(contact.id, text, channel); } catch { /* best-effort */ }
+      // ⚖️ An EXPLICIT litigation threat (sue / lawsuit / cease-and-desist / TCPA / attorney /
+      // harassment) → auto-opt-out so NO automation ever contacts them again (Jon 2026-11-13).
+      // Info-fishing-only questions ("who are you / what LLC") do NOT auto-opt-out — a human decides.
+      // dncContact is live-deal-safe (suppresses texting but keeps a real deal workable by a human).
+      const { HARD_THREAT_REGEX, threatType } = await import("@/lib/contact-guard");
+      const isHardThreat = HARD_THREAT_REGEX.test(text);
+      if (!wasDnced && isHardThreat) {
+        try { await dncContact(contact.id, `⚖️ litigation threat via ${channel}: "${text.slice(0, 80)}"`); wasDnced = true; } catch { /* best-effort */ }
+      }
+      // ⚖️ LITIGATOR PROTOCOL — snapshot the FULL record (import source + consent + opt-out status +
+      // every message in/out) into the permanent legal-defense file so it can never be lost. Run AFTER
+      // the auto-opt-out above so the snapshot records that we suppressed them (Jon 2026-11-12/13).
+      try { const { saveLegalWatchRecord } = await import("@/lib/legal-watch"); await saveLegalWatchRecord(contact.id, text, channel, threatType(text)); } catch { /* best-effort */ }
       const ltoday = new Date().toISOString().slice(0, 10);
       const ltitle = `${sev} LEGAL WATCH: ${contact.name.split(" ")[0]} asked for company/legal info — verify before replying`.slice(0, 180);
       const ldup = await db.crmTask.findFirst({ where: { title: ltitle, doneAt: null } }).catch(() => null);
