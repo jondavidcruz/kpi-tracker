@@ -9,6 +9,10 @@
       "schedule": "30 15 * * 1-5"
     },
     {
+      "path": "/api/cron?telnyxeod=1",
+      "schedule": "0 2 * * 2-6"
+    },
+    {
       "path": "/api/cron",
       "schedule": "0 2 * * 2-5"
     },

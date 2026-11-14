@@ -83,6 +83,16 @@ export type SpendReport = {
   endBal: number | null;
 };
 
+/** 💸 Spend for ONE local day (org timezone), read off the balance curve — the number behind the
+ *  single end-of-day "today's shift spend" post (Jon 2026-11-13). Reuses the same recharge-aware
+ *  analyzer the /admin/telnyx page trusts; just scoped to the snapshots taken on that calendar day. */
+export function spendForLocalDay(snaps: BalanceSnap[], tz = "America/Los_Angeles", day?: string): SpendReport {
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
+  const target = day || fmt.format(new Date());
+  const todays = snaps.filter((s) => { try { return fmt.format(new Date(s.at)) === target; } catch { return false; } });
+  return analyzeTelnyxSpend(todays);
+}
+
 /** Read the burn rate off the sampled balance curve. */
 export function analyzeTelnyxSpend(snaps: BalanceSnap[]): SpendReport {
   const s = [...snaps].sort((a, b) => a.at.localeCompare(b.at));

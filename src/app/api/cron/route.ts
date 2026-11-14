@@ -716,6 +716,39 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, ...snapshot, balAlerts });
   }
 
+  // 💸 ONE end-of-day Telnyx spend post (Jon 2026-11-13: "I just want to see it ONE time, end of
+  // the day — total spend for that shift," not the repeated posts). Idempotent: dedupes by local
+  // day so it posts at most once per day even if the cron fires more than once. Spend is read off
+  // the sampled balance curve (recharge-aware), scoped to today. Posts to the comms / phone-health
+  // space only — NOT the KPI room (chat-channels rule).
+  if (url.searchParams.get("telnyxeod") === "1") {
+    const { snapshotTelnyxBalance, readSnaps, spendForLocalDay, getTelnyxBalance } = await import("@/lib/telnyx-billing");
+    const settings = await getSettings();
+    const tz = settings.orgTimezone || "America/Los_Angeles";
+    const day = date ?? todayStr(tz);
+    await snapshotTelnyxBalance(true).catch(() => null); // force an end-of-day balance point
+    const postedRow = await db.resource.findFirst({ where: { category: "__telnyx_eod_posted__" } });
+    if (!force && postedRow?.description === day) return NextResponse.json({ ok: true, job: "telnyxeod", skipped: "already posted today", day });
+    const rep = spendForLocalDay(await readSnaps(), tz, day);
+    const bal = await getTelnyxBalance().catch(() => null);
+    const spend = rep.totalSpend;
+    const lines = [
+      `💸 *Telnyx — today's shift spend*`,
+      `Spent *$${spend.toFixed(2)}* today${rep.samples >= 2 ? "" : " (few samples — rough estimate)"}.`,
+    ];
+    if (bal?.balance != null) lines.push(`Balance now $${bal.balance.toFixed(2)} (auto-recharges to $100).`);
+    if (rep.recharges.length) lines.push(`🔁 ${rep.recharges.length} auto-recharge${rep.recharges.length === 1 ? "" : "s"} hit today.`);
+    lines.push(`📊 Full burn rate & month-to-date: War Room → Comms Guardian / Admin → Telnyx.`);
+    const text = lines.join("\n");
+    let posted = false;
+    try { const { postToSpace } = await import("@/lib/chat-spaces"); posted = await postToSpace("phonehealth", text); } catch { /* best-effort */ }
+    if (posted) {
+      if (postedRow) await db.resource.update({ where: { id: postedRow.id }, data: { description: day } });
+      else await db.resource.create({ data: { title: "telnyx-eod-posted", category: "__telnyx_eod_posted__", url: "", description: day } });
+    }
+    return NextResponse.json({ ok: true, job: "telnyxeod", day, spend, posted, balance: bal?.balance ?? null, samples: rep.samples });
+  }
+
   // 🗑 Stage removal (?stagedrop=1&match=<regex>&commit=1): delete matching
   // stages from every pipeline in __crm_pipelines__; leads sitting in them
   // move to the pipeline's regular appointment stage (or the stage before).
