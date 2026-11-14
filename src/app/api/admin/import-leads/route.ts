@@ -16,7 +16,7 @@ export const maxDuration = 60;
 
 const LOG_CAT = "__lead_imports__";
 
-type ImpLog = { seq: number; label: string; count: number; at: string; by: string };
+type ImpLog = { seq: number; label: string; count: number; at: string; by: string; scrubbed?: boolean; scrubVia?: string; dncSuppressed?: number };
 
 async function readLog(): Promise<ImpLog[]> {
   const row = await db.resource.findFirst({ where: { category: LOG_CAT } }).catch(() => null);
@@ -28,7 +28,9 @@ export async function GET() {
   if (!me || !isManager(me)) return NextResponse.json({ error: "managers only" }, { status: 403 });
   const log = await readLog();
   const nextSeq = (log.reduce((m, x) => Math.max(m, x.seq || 0), 0) || 0) + 1;
-  return NextResponse.json({ ok: true, nextSeq, history: log.slice(0, 20) });
+  const { internalDncCount } = await import("@/lib/dnc-registry");
+  const internalDnc = await internalDncCount().catch(() => 0);
+  return NextResponse.json({ ok: true, nextSeq, history: log.slice(0, 20), internalDnc });
 }
 
 type LeadIn = {
@@ -44,10 +46,10 @@ export async function POST(req: Request) {
 
   // --- finalize: record the upload in the sequence log ---
   if (url.searchParams.get("finalize") === "1") {
-    const b = (await req.json().catch(() => ({}))) as { seq?: number; label?: string; count?: number };
+    const b = (await req.json().catch(() => ({}))) as { seq?: number; label?: string; count?: number; scrubbed?: boolean; scrubVia?: string; dncSuppressed?: number };
     if (!b.seq || !b.label) return NextResponse.json({ ok: false, error: "seq + label required" }, { status: 400 });
     const log = await readLog();
-    log.unshift({ seq: Math.round(b.seq), label: String(b.label).slice(0, 80), count: Math.max(0, Math.round(b.count ?? 0)), at: new Date().toISOString(), by: me.name });
+    log.unshift({ seq: Math.round(b.seq), label: String(b.label).slice(0, 80), count: Math.max(0, Math.round(b.count ?? 0)), at: new Date().toISOString(), by: me.name, scrubbed: !!b.scrubbed, scrubVia: String(b.scrubVia || "").slice(0, 40), dncSuppressed: Math.max(0, Math.round(b.dncSuppressed ?? 0)) });
     const row = await db.resource.findFirst({ where: { category: LOG_CAT } }).catch(() => null);
     const description = JSON.stringify(log.slice(0, 100));
     if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
@@ -76,6 +78,10 @@ export async function POST(req: Request) {
   const { toE164US } = await import("@/lib/crm-shared");
   const { normalizeAddress } = await import("@/lib/address");
   const { logCrmEvent } = await import("@/lib/crm");
+  // 🚫 Our internal DNC/litigator set — any uploaded phone that's already on it is removed before
+  // import so we can NEVER re-contact someone we opted out or who threatened us (Jon 2026-11-13).
+  const { loadInternalDncSet } = await import("@/lib/dnc-registry");
+  const dncSet = await loadInternalDncSet().catch(() => new Set<string>());
   const pls = await readPipelines();
   const todayPT = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
 
@@ -92,7 +98,7 @@ export async function POST(req: Request) {
     return { name: p?.name ?? "", stageKey };
   }
 
-  let created = 0, dupes = 0, skipped = 0;
+  let created = 0, dupes = 0, skipped = 0, dncSuppressed = 0;
   for (const L of leads) {
     const name = (L.name || "").trim();
     const rawPhone = (L.phone || "").trim();
@@ -100,6 +106,9 @@ export async function POST(req: Request) {
     const p10 = phone.replace(/\D/g, "").slice(-10);
     const email = (L.email || "").trim();
     if (!name && p10.length !== 10) { skipped++; continue; }
+    // 🚫 Already on our DNC / litigator list → never re-import. Also check the alt phone.
+    const alt10 = (L.phone2 || "").replace(/\D/g, "").slice(-10);
+    if ((p10.length === 10 && dncSet.has(p10)) || (alt10.length === 10 && dncSet.has(alt10))) { dncSuppressed++; continue; }
     const owner = (L.owner || "").trim() || (michellePipe ? "Michelle Lagudas" : me.name);
     const propTitle = normalizeAddress((L.propAddr || "").trim()) || (L.propAddr || "").trim() || "New lead";
 
@@ -164,5 +173,5 @@ export async function POST(req: Request) {
     await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `📥 Imported from list "${listTag || source}"${noteBits ? ` · ${noteBits}` : ""}`, actor: "list-import" }).catch(() => {});
   }
 
-  return NextResponse.json({ ok: true, created, dupes, skipped });
+  return NextResponse.json({ ok: true, created, dupes, skipped, dncSuppressed });
 }

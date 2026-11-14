@@ -13,7 +13,7 @@ type Lead = {
   propAddr: string; market: string; county: string; state: string; apn: string; notes: string; rank: number; owner?: string;
 };
 type Rep = { name: string; weight: number };
-type ImpLog = { seq: number; label: string; count: number; at: string; by: string };
+type ImpLog = { seq: number; label: string; count: number; at: string; by: string; scrubbed?: boolean; scrubVia?: string; dncSuppressed?: number };
 
 // minimal RFC-4180 CSV parser (quoted fields, embedded commas/quotes/newlines)
 function parseCsv(t: string): string[][] {
@@ -55,17 +55,38 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [], p
   const [history, setHistory] = useState<ImpLog[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
-  const [result, setResult] = useState<{ created: number; dupes: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ created: number; dupes: number; skipped: number; dncSuppressed: number } | null>(null);
+  // 🚫 DNC scrub attestation (Jon 2026-11-13) — every list must be verified DNC-scrubbed before import.
+  const [scrubbed, setScrubbed] = useState(false);
+  const [scrubVia, setScrubVia] = useState("DealMachine");
+  const [internalDnc, setInternalDnc] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/import-leads").then((r) => r.json()).then((j) => {
       if (j.ok) {
         setSeq(j.nextSeq); setHistory(j.history ?? []);
+        if (typeof j.internalDnc === "number") setInternalDnc(j.internalDnc);
         const d = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
         setListLabel(`List #${j.nextSeq} — ${d}`);
       }
     }).catch(() => {});
   }, []);
+
+  // ⬇️ Export just the phone numbers as a CSV ready to upload to cleanleads365.com/cleaner.
+  function exportForCleaner() {
+    const seen = new Set<string>();
+    const rows = ["phone,name"];
+    for (const l of leads) {
+      const p = (l.phone || "").trim(); if (!p) continue;
+      const key = p.replace(/\D/g, "").slice(-10); if (key.length === 10 && seen.has(key)) continue; if (key.length === 10) seen.add(key);
+      rows.push(`${p.replace(/"/g, "")},${(l.name || "").replace(/[",\n]/g, " ")}`);
+      const p2 = (l.phone2 || "").trim(); if (p2) { const k2 = p2.replace(/\D/g, "").slice(-10); if (!(k2.length === 10 && seen.has(k2))) { if (k2.length === 10) seen.add(k2); rows.push(`${p2.replace(/"/g, "")},${(l.name || "").replace(/[",\n]/g, " ")}`); } }
+    }
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `${(listLabel || "list").replace(/[^\w-]+/g, "_")}_phones_for_cleanleads.csv`;
+    a.click(); URL.revokeObjectURL(a.href);
+  }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file) return;
@@ -130,14 +151,15 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [], p
       `Tag: ${listLabel}${priority ? " + 🔥 priority" : ""}${extraTags.trim() ? " + " + extraTags : ""} + 📍 state`,
       makeTask ? `📞 Call-now task: ${taskTopN > 0 ? `top ${taskTopN} by rank` : "every lead"}` : "No call-now tasks (bulk list)",
       "",
-      "Deduped by phone/email. No welcome texts sent.",
+      scrubbed ? `✅ DNC-scrubbed via ${scrubVia}.` : "⚠️ NOT marked DNC-scrubbed — this batch will be flagged. Scrub it (cleanleads365 / DealMachine) first to protect us.",
+      "Also auto-removes anyone already on OUR DNC / litigator list. Deduped by phone/email. No welcome texts sent.",
     ].join("\n");
     if (!confirm(summary)) return;
     setBusy(true); setResult(null);
     const listTag = `📋 ${listLabel}`;
     const priorityTag = priority ? "🔥 priority" : "";
     const chunkSize = 100;
-    const totals = { created: 0, dupes: 0, skipped: 0 };
+    const totals = { created: 0, dupes: 0, skipped: 0, dncSuppressed: 0 };
     try {
       for (let i = 0; i < assigned.length; i += chunkSize) {
         const chunk = assigned.slice(i, i + chunkSize);
@@ -148,11 +170,11 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [], p
         });
         const j = await r.json();
         if (!j.ok) { setProgress(`⚠️ Chunk failed: ${j.error || "error"} — stopped at ${totals.created} imported.`); setBusy(false); return; }
-        totals.created += j.created; totals.dupes += j.dupes; totals.skipped += j.skipped;
+        totals.created += j.created; totals.dupes += j.dupes; totals.skipped += j.skipped; totals.dncSuppressed += (j.dncSuppressed || 0);
       }
       await fetch("/api/admin/import-leads?finalize=1", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seq, label: listLabel, count: totals.created }),
+        body: JSON.stringify({ seq, label: listLabel, count: totals.created, scrubbed, scrubVia, dncSuppressed: totals.dncSuppressed }),
       }).catch(() => {});
       setResult(totals); setProgress("");
     } catch { setProgress("⚠️ Network error during import."); }
@@ -357,6 +379,31 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [], p
             </div>
           </div>
 
+          {/* ── 🚫 DNC verification — protect us before anything imports ── */}
+          <div className={`rounded-2xl p-4 shadow-sm ring-1 ${scrubbed ? "bg-emerald-50 ring-emerald-200" : "bg-amber-50 ring-amber-300"}`}>
+            <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">🚫 DNC check — protect us before import</div>
+            <label className="flex items-start gap-2 text-sm font-semibold text-slate-700">
+              <input type="checkbox" checked={scrubbed} onChange={(e) => setScrubbed(e.target.checked)} className="mt-0.5 h-4 w-4" />
+              <span>This list was scrubbed for DNC before upload
+                <select value={scrubVia} onChange={(e) => setScrubVia(e.target.value)} className="ml-2 rounded border border-slate-300 px-1.5 py-0.5 text-[13px]" onClick={(e) => e.preventDefault()}>
+                  <option>DealMachine</option>
+                  <option>cleanleads365</option>
+                  <option>Both</option>
+                  <option>Other</option>
+                </select>
+              </span>
+            </label>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+              <button type="button" onClick={exportForCleaner} className="rounded-lg bg-slate-800 px-3 py-1.5 font-bold text-white hover:bg-slate-700">⬇️ Export phones for cleanleads365</button>
+              <a href="https://cleanleads365.com/cleaner" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-600 hover:underline">Open cleanleads365 cleaner →</a>
+              <span className="text-slate-400">scrub there (1 credit/number), then re-upload the cleaned file.</span>
+            </div>
+            <div className="mt-2 text-[12px] text-slate-600">
+              {!scrubbed && <span className="font-semibold text-amber-700">⚠️ Not marked scrubbed — the batch will be flagged. </span>}
+              We also auto-remove anyone already on <b>OUR</b> DNC / litigator list{internalDnc != null ? ` (${internalDnc.toLocaleString()} numbers)` : ""} — they can never be re-imported.
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <button onClick={runImport} disabled={busy} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50">{busy ? "Importing…" : `Import ${assigned.length} leads`}</button>
             {progress && <span className="text-sm font-semibold text-slate-600">{progress}</span>}
@@ -366,7 +413,7 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [], p
 
       {result && (
         <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
-          ✓ Imported <b>{result.created}</b> new leads. {result.dupes > 0 && <>Skipped <b>{result.dupes}</b> already in the CRM. </>}{result.skipped > 0 && <>Couldn&apos;t place {result.skipped}. </>}They&apos;re on the board now, tagged &ldquo;{listLabel}&rdquo;.
+          ✓ Imported <b>{result.created}</b> new leads. {result.dncSuppressed > 0 && <><b className="text-red-700">🚫 Removed {result.dncSuppressed}</b> already on our DNC/litigator list. </>}{result.dupes > 0 && <>Skipped <b>{result.dupes}</b> already in the CRM. </>}{result.skipped > 0 && <>Couldn&apos;t place {result.skipped}. </>}They&apos;re on the board now, tagged &ldquo;{listLabel}&rdquo;{scrubbed ? ` · ✅ DNC-scrubbed (${scrubVia})` : " · ⚠️ not marked DNC-scrubbed"}.
         </div>
       )}
 
@@ -376,7 +423,7 @@ export default function LeadImporter({ sources, repNames = [], pipelines = [], p
           <div className="mt-2 space-y-1 text-[12px]">
             {history.map((h) => (
               <div key={h.seq} className="flex justify-between text-slate-600">
-                <span><b>#{h.seq}</b> · {h.label}</span>
+                <span><b>#{h.seq}</b> · {h.label} {h.scrubbed ? <span className="text-emerald-600" title={`DNC-scrubbed via ${h.scrubVia || "?"}`}>✅ scrubbed</span> : <span className="text-amber-600">⚠️ not scrubbed</span>}{(h.dncSuppressed ?? 0) > 0 ? <span className="text-red-600"> · 🚫 {h.dncSuppressed} removed</span> : null}</span>
                 <span className="text-slate-400">{h.count} leads · {new Date(h.at).toLocaleDateString()} · {h.by}</span>
               </div>
             ))}
