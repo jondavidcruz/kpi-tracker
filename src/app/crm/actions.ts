@@ -1038,11 +1038,20 @@ export async function toggleDndAction(formData: FormData) {
   revalidatePath("/crm");
 }
 
-/** DND check used by every outbound sender. */
+/** DND check used by every outbound sender. Blocks opted-out (dnc / dnd_*) contacts, AND — to protect
+ *  us — a litigator-flagged (legal-watch) contact who has NO active offer/deal (Jon 2026-11-13: "build
+ *  the litigator system out as much as we can to protect ourselves"). A legal-watch lead who IS in a
+ *  live offer/deal stage can still be replied to by a human (don't break a real deal). */
 export async function isDnd(contactId: string, channel: "sms" | "email" | "call"): Promise<boolean> {
   const c = await db.crmContact.findUnique({ where: { id: contactId }, select: { tags: true } });
   if (!c) return false;
-  return /\bdnc\b|\bdnd_all\b/i.test(c.tags) || new RegExp(`\\bdnd_${channel}\\b`, "i").test(c.tags);
+  if (/\bdnc\b|\bdnd_all\b/i.test(c.tags) || new RegExp(`\\bdnd_${channel}\\b`, "i").test(c.tags)) return true;
+  if (/\blegal-watch\b/i.test(c.tags)) {
+    const opps = await db.crmOpportunity.findMany({ where: { contactId, archivedAt: null }, select: { stage: true } }).catch(() => [] as { stage: string }[]);
+    const established = opps.some((o) => /offer|verbal|contract|signed|escrow|closing|won/i.test(o.stage));
+    if (!established) return true; // litigator with no live deal → no manual contact either
+  }
+  return false;
 }
 
 /** 🗑 Delete a task — archive-style: marked done with a deleted stamp so the
