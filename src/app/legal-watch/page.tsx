@@ -1,6 +1,6 @@
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { readLegalWatchRecords, type LegalWatchRecord } from "@/lib/legal-watch";
-import { logManualThreat, optOutNow } from "./actions";
+import { logManualThreat, optOutNow, scanHistory } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +41,12 @@ export default async function LegalWatchPage() {
         <Stat label="🚫 Opted out" value={optedOut} tone="emerald" />
         <Stat label="⚠️ Not opted out" value={notOptedOut} tone={notOptedOut > 0 ? "red" : "slate"} hint="review these" />
       </div>
-      {thisMonth > 0 && <p className="text-[12px] text-slate-500">📅 {thisMonth} flagged this month.</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        {thisMonth > 0 && <p className="text-[12px] text-slate-500">📅 {thisMonth} flagged this month.</p>}
+        <form action={scanHistory} className="ml-auto">
+          <button type="submit" className="rounded-lg bg-slate-700 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-slate-800" title="Scan recent CRM message history for anyone who threatened legal action before this system existed, and file them here (record only — review and opt out each).">🔎 Scan history for past threats</button>
+        </form>
+      </div>
 
       {/* ➕ Log a threat made on a call / in person */}
       <details className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

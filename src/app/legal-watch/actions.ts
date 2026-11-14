@@ -1,6 +1,6 @@
 "use server";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { addManualLegalWatch, optOutLegalWatchContact } from "@/lib/legal-watch";
+import { addManualLegalWatch, optOutLegalWatchContact, scanHistoryForThreats } from "@/lib/legal-watch";
 import { revalidatePath } from "next/cache";
 
 // ⚖️ Log a litigation threat made on a CALL / in person (no inbound text to auto-catch it) — Jon
@@ -30,5 +30,14 @@ export async function optOutNow(formData: FormData): Promise<void> {
   const contactId = String(formData.get("contactId") ?? "").trim();
   if (!contactId) return;
   await optOutLegalWatchContact(contactId, me!.name);
+  revalidatePath("/legal-watch");
+}
+
+// 🔎 Backfill the defense file from CRM history — catches people who threatened to sue us before
+// this system existed. Record-only (no auto-opt-out); a manager reviews each.
+export async function scanHistory(): Promise<void> {
+  const me = await getCurrentUser();
+  if (!isManager(me)) return;
+  await scanHistoryForThreats();
   revalidatePath("/legal-watch");
 }

@@ -141,3 +141,39 @@ export async function readLegalWatchRecords(): Promise<LegalWatchRecord[]> {
   const { list } = await readList();
   return list;
 }
+
+/** 🔎 One-time backfill: scan recent INBOUND messages for explicit litigation threats and file any
+ *  that aren't already on the watch list, so the defense file also covers people who threatened to
+ *  sue us BEFORE this system existed (Jon 2026-11-13). Record-only — it does NOT auto-opt-out (a
+ *  human reviews each and clicks "Opt them out now"), so it can't surprise a live deal. Capped. */
+export async function scanHistoryForThreats(limit = 8000): Promise<{ scanned: number; newlyFlagged: number; names: string[] }> {
+  const { HARD_THREAT_REGEX } = await import("@/lib/contact-guard");
+  const events = await db.crmEvent.findMany({
+    where: { kind: { in: ["sms", "email", "note"] } },
+    orderBy: { at: "desc" }, take: limit,
+    select: { contactId: true, body: true, at: true, kind: true },
+  }).catch(() => []);
+  const { list } = await readList();
+  const already = new Set(list.map((r) => r.contactId));
+  // Most-recent threatening INBOUND message per contact not already on the list.
+  const found = new Map<string, { trigger: string; kind: string }>();
+  for (const e of events) {
+    if (!e.contactId || already.has(e.contactId) || found.has(e.contactId)) continue;
+    const body = e.body || "";
+    const inbound = /^⬅/.test(body); // their message, not ours
+    if (!inbound) continue;
+    if (HARD_THREAT_REGEX.test(body)) found.set(e.contactId, { trigger: body.replace(/^⬅️?\s*(Them:|)\s*/i, "").slice(0, 300), kind: e.kind });
+  }
+  const names: string[] = [];
+  let newlyFlagged = 0;
+  for (const [contactId, hit] of found) {
+    if (newlyFlagged >= 200) break;
+    const c = await db.crmContact.findUnique({ where: { id: contactId }, select: { name: true, tags: true } }).catch(() => null);
+    if (!c) continue;
+    try { if (!/\blegal-watch\b/i.test(c.tags || "")) await db.crmContact.update({ where: { id: contactId }, data: { tags: [c.tags, "legal-watch"].filter(Boolean).join(",") } }); } catch { /* best-effort */ }
+    await saveLegalWatchRecord(contactId, hit.trigger, `${hit.kind} (history backfill)`, "litigation-threat");
+    names.push(c.name || contactId);
+    newlyFlagged++;
+  }
+  return { scanned: events.length, newlyFlagged, names };
+}
