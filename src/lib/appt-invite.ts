@@ -53,6 +53,7 @@ export async function sendSellerApptInvite(appt: { id: string; oppId: string; co
     const contact = appt.contactId ? await db.crmContact.findUnique({ where: { id: appt.contactId }, select: { name: true, phone: true, email: true, address: true, tags: true } }) : null;
     if (!contact) return;
     const { scrubOwnerIdentity } = await import("@/lib/scrub-identity");
+    const { isSuppressed } = await import("@/lib/contact-guard"); // never auto-contact dnc / legal-watch leads
     const first = (contact.name || "there").split(" ")[0];
     const rep = (appt.withWho || "our team").split(" ")[0];
     const whenPT = appt.at.toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -62,7 +63,7 @@ export async function sendSellerApptInvite(appt: { id: string; oppId: string; co
     const details = scrubOwnerIdentity(`${rep} will ${inPerson ? "meet you" : "call you"} about ${contact.address || "your property"}. Reply to your original message anytime with questions.`);
 
     // ✉️ Email with .ics + Google link (if we have an email).
-    if (contact.email) {
+    if (contact.email && !isSuppressed(contact.tags, "email")) {
       const ics = buildIcs({ title: summary, at: appt.at, durationMin: 30, description: details, uid: `appt-${appt.id}@freedom` });
       const gLink = googleCalLink({ title: summary, at: appt.at, durationMin: 30, details });
       const subject = scrubOwnerIdentity(`Confirmed: ${inPerson ? "meeting" : "call"} with ${rep} — ${whenPT} PT`);
@@ -82,7 +83,7 @@ export async function sendSellerApptInvite(appt: { id: string; oppId: string; co
     // 📲 Confirmation text (if we have a phone + we're not in quiet hours).
     const d10 = (contact.phone || "").replace(/\D/g, "").slice(-10);
     const to = d10.length === 10 ? `+1${d10}` : "";
-    if (to && process.env.TELNYX_API_KEY) {
+    if (to && process.env.TELNYX_API_KEY && !isSuppressed(contact.tags, "sms")) {
       const { quietHoursWarning } = await import("@/lib/npa-tz");
       if (!quietHoursWarning(to, contact.address || "")) {
         const from = process.env.TELNYX_SMS_FROM || process.env.TELNYX_CALLER_ID || "";
@@ -100,8 +101,10 @@ export async function sendSellerApptInvite(appt: { id: string; oppId: string; co
 /** ⏰ Text the SELLER a same-day reminder shortly before the call (cuts no-shows). Best-effort. */
 export async function sendSellerApptReminder(appt: { id: string; oppId: string; contactId: string; at: Date; note: string; withWho: string }): Promise<void> {
   try {
-    const contact = appt.contactId ? await db.crmContact.findUnique({ where: { id: appt.contactId }, select: { name: true, phone: true, address: true } }) : null;
+    const contact = appt.contactId ? await db.crmContact.findUnique({ where: { id: appt.contactId }, select: { name: true, phone: true, address: true, tags: true } }) : null;
     if (!contact?.phone) return;
+    const { isSuppressed } = await import("@/lib/contact-guard");
+    if (isSuppressed(contact.tags, "sms")) return; // never auto-text a dnc / legal-watch lead
     const first = (contact.name || "there").split(" ")[0];
     const rep = (appt.withWho || "our team").split(" ")[0];
     const timePT = appt.at.toLocaleString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
@@ -116,8 +119,10 @@ export async function sendSellerApptReminder(appt: { id: string; oppId: string; 
  *  lead doesn't die on a missed appointment. Returns true if a message went out. Best-effort. */
 export async function sendNoShowRecovery(appt: { id: string; oppId: string; contactId: string; at: Date; note: string; withWho: string }): Promise<boolean> {
   try {
-    const contact = appt.contactId ? await db.crmContact.findUnique({ where: { id: appt.contactId }, select: { name: true, phone: true, address: true } }) : null;
+    const contact = appt.contactId ? await db.crmContact.findUnique({ where: { id: appt.contactId }, select: { name: true, phone: true, address: true, tags: true } }) : null;
     if (!contact?.phone) return false;
+    const { isSuppressed } = await import("@/lib/contact-guard");
+    if (isSuppressed(contact.tags, "sms")) return false; // never auto-text a dnc / legal-watch lead
     const first = (contact.name || "there").split(" ")[0];
     const rep = (appt.withWho || "our team").split(" ")[0];
     const link = appt.oppId ? bookingUrl(appt.oppId) : "";

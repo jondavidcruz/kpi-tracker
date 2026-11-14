@@ -24,6 +24,29 @@ export type WhatsNewEntry = {
 // Newest first. Keep each how-to to a few plain steps the team can follow cold.
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: "litigator-protocol", date: "2026-11-13", emoji: "⚖️", title: "Litigator Protocol — never contact a flagged lead again",
+    blurb: "If anyone threatens to sue us or fishes for our company info, we now auto-flag them, stop ALL automation to them, and keep a permanent legal-defense file — plus you can log a threat made on a call.",
+    audience: ["leadership"], where: { label: "Business Heartbeat → Litigator Protocol", href: "/legal-watch" },
+    steps: [
+      "Automatic: when a seller texts/emails a legal threat (sue, lawsuit, cease-and-desist, TCPA, attorney) OR fishes for our info ('who are you / what LLC'), the lead is flagged and a defense file is captured — when they entered our system, their consent, and every message in & out.",
+      "An EXPLICIT threat now auto-opts them out — no drip, appointment text, or automation will ever reach them again. Plain 'who are you' questions are flagged but a human decides the opt-out.",
+      "Open /legal-watch (managers only) for the monitoring summary: how many are on file, how many are threats, who's opted out, and who still needs it.",
+      "Someone threatened to sue on a CALL? Click ➕ Log a threat manually — enter what they said and check 'Opt them out now'. It's saved to the defense file forever.",
+      "Any record not yet opted out shows a 🚫 Opt them out now button — one click stops all automated contact.",
+      "Our name, company, website, and phone are already scrubbed from every automated text/email — never share the LLC, address, or licensing with a fishing lead; route them to a manager.",
+    ],
+  },
+  {
+    id: "telnyx-eod-spend", date: "2026-11-13", emoji: "💸", title: "Telnyx spend — one end-of-day number",
+    blurb: "Instead of spend posting all day, you get ONE clean 'today's shift spend' message after the shift, in the phone-health chat space.",
+    audience: ["leadership"], where: { label: "Admin → Telnyx", href: "/admin/telnyx" },
+    steps: [
+      "Once a day, ~6-7pm PT, a single message posts the day's total Telnyx spend (+ current balance and any auto-recharge) to the phone-health space.",
+      "It's idempotent — it posts at most once per day, no more repeated spend pings.",
+      "The full burn rate, month-to-date, and recharge cadence still live on Admin → Telnyx and the Comms Guardian page.",
+    ],
+  },
+  {
     id: "markets-sc-pullplan", date: "2026-11-06", emoji: "🎯", title: "South Carolina markets + a 'Tonight's Pull Plan'",
     blurb: "Added 11 South Carolina land markets (Charleston, Greenville, Myrtle Beach, Bluffton/Jasper — the #1 fastest-growing county in the US — and more) and new tools that tell you exactly where to pull next.",
     audience: ["leadership", "acq"], where: { label: "Target Markets → Analysis", href: "/markets" },
