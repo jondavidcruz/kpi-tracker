@@ -6,6 +6,19 @@
 // their role / contact_type fields.
 import { db } from "@/lib/db";
 import { directReiConfigured, directReiContacts, directReiCampaigns, directReiCampaignPerf } from "@/lib/directrei";
+import { upsertDreiHotLead } from "@/lib/directrei-leads";
+
+// 🟢 Owner-flippable auto-card switch (Jon 2026-11-14). Replaces the dead
+// DIRECTREI_LEADS env flag that silently stayed OFF after the 10-24 pause, so
+// interested repliers never became CRM cards. Default ON; owner sets the
+// Resource "__directrei_autocard__" description to "off" to kill it from inside
+// the app (no Vercel access needed). Env DIRECTREI_LEADS="on" still force-enables.
+const DREI_AUTOCARD_CAT = "__directrei_autocard__";
+async function dreiAutoCardOn(): Promise<boolean> {
+  if (process.env.DIRECTREI_LEADS === "on") return true;
+  const row = await db.resource.findFirst({ where: { category: DREI_AUTOCARD_CAT }, select: { description: true } }).catch(() => null);
+  return (row?.description ?? "on").trim().toLowerCase() !== "off"; // default ON
+}
 
 export const DREI_FEED_CAT = "__directrei_feed__";
 
@@ -34,6 +47,7 @@ export type DreiFeed = {
   smsRepliesToday: number; // all campaigns — feeds the team "Text Responses" KPI
   seller: DreiSide; buyer: DreiSide;
   recentReplies: DreiReply[]; // newest first, max 12
+  interestedLeads?: Array<{ name: string; phone: string; email: string; address: string; market: string; status: string }>; // interested/priced seller repliers to auto-card — stripped before persist
   campaignHealth?: DreiCampaignHealth[]; // per-campaign response tally (keyed by normCampaignName)
   campaigns: Array<{ name: string; channel: string; side: "seller" | "buyer" | "other"; paused: boolean }>;
 };
@@ -77,6 +91,10 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
   const campById = new Map(campRows.map((c) => [c.id, c]));
 
   const weekAgo = new Date(Date.parse(todayYmd) - 7 * 86400000).toISOString().slice(0, 10);
+  // 🎯 Auto-card window (Jon 2026-11-14): capture every INTERESTED/PRICED seller
+  // replier from the last 14 days — not just today's 12 — so nothing warm slips.
+  const cardWindow = new Date(Date.parse(todayYmd) - 14 * 86400000).toISOString().slice(0, 10);
+  const interestedLeads: Array<{ name: string; phone: string; email: string; address: string; market: string; status: string }> = [];
   const sides = { seller: empty(), buyer: empty(), other: empty() };
   const newSellers: Array<{ name: string; phone: string; email: string }> = [];
   const replies: DreiReply[] = [];
@@ -117,6 +135,18 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
         }
       }
       if (replyDay && !optedOut) {
+        // 🎯 Auto-card ONLY interested/priced seller replies (Jon 2026-11-14 choice).
+        // Direct REI's /contacts API exposes no reply TEXT — only `status` + `needs_attention` —
+        // so "interested/priced" is read from those: a priced/asking/interested status, OR a
+        // reply Direct REI flagged for human attention (a real inbound that its status engine
+        // didn't auto-classify — exactly the ones that were slipping). Explicit not-interested
+        // is excluded. The dedup/idempotency lives in upsertDreiHotLead.
+        const stC = (c.status || "").toLowerCase();
+        const notInterested = /not.?interest|dead|wrong|disqualif|dnc|unsub|\bstop\b|\bopt/.test(stC);
+        const pricedOrInterested = /\$|price|offer|asking|would take|interest|qualif|hot|warm|ready|\byes\b/.test(stC);
+        if (side === "seller" && replyDay >= cardWindow && !notInterested && (pricedOrInterested || c.needs_attention) && interestedLeads.length < 150) {
+          interestedLeads.push({ name: c.name ?? "", phone: c.phone ?? "", email: c.email ?? "", address: dreiAddress(c), market: (c.mailing_state ?? "").trim(), status: c.status ?? "" });
+        }
         if (replyDay === todayYmd) {
           bucket.repliesToday++;
           if (/sms|text/i.test(camp?.channel ?? "")) { smsRepliesToday++; bucket.smsRepliesToday++; }
@@ -146,6 +176,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
     seller: sides.seller,
     buyer: sides.buyer,
     recentReplies: replies.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12),
+    interestedLeads,
     campaignHealth: await (async () => {
       // 📊 Merge Direct REI's NATIVE per-campaign stats (/campaigns: sent + replied) — the
       // authoritative "how many texts/replies per campaign" — over the contact-status tally.
@@ -174,6 +205,10 @@ export async function readDreiFeed(): Promise<DreiFeed | null> {
 export async function refreshDreiFeed(todayYmd: string): Promise<DreiFeed | null> {
   const feed = await buildDreiFeed(todayYmd);
   if (!feed) return null;
+  // Pull the auto-card list off the feed and DON'T persist it (keeps the cached
+  // feed JSON lean — it's only needed for this run's carding below).
+  const interestedLeads = feed.interestedLeads ?? [];
+  delete feed.interestedLeads;
   const description = JSON.stringify(feed);
   const row = await db.resource.findFirst({ where: { category: DREI_FEED_CAT } });
   if (row) await db.resource.update({ where: { id: row.id }, data: { description } });
@@ -198,44 +233,25 @@ export async function refreshDreiFeed(todayYmd: string): Promise<DreiFeed | null
     await feedTeamKpi2(["buyer_email_replies"], "Buyer Email Replies", feed.buyer.emailRepliesToday ?? 0);
   } catch { /* KPI feed is additive */ }
 
-  // 🤖 Replied-seller automation (Jon 2026-10-08, replacing the 10-07 version):
-  // Direct REI already texts/emails/calls every NEW lead for us — walking all
-  // of them into the CRM buried Michelle under 50 "first call" tasks in a day.
-  // Now only sellers who actually REPLY become CRM leads (they're warm), with
-  // a call-now task. Dedupe by phone/name.
+  // 🤖 Replied-seller auto-card (Jon 2026-11-14, rebuilt): card ONLY interested/
+  // priced seller replies — captured across the last 14 days in the loop above,
+  // not just "today's 12" — so warm repliers stop slipping. Routing, dedup,
+  // Michelle-pipeline placement, the HOT call task and the note all live in the
+  // shared upsertDreiHotLead (same path the webhook uses → the two converge
+  // idempotently). On/off is the owner-flippable __directrei_autocard__ flag
+  // (default ON), NOT the stale DIRECTREI_LEADS env var that stayed off.
   try {
-    const { logCrmEvent, readPipelines } = await import("@/lib/crm");
-    // 🎯 Jon 2026-10-16: Direct REI seller leads were landing in the generic
-    // War Room pipeline (no pipeline set). Route them all to MICHELLE's pipeline
-    // and owner (she runs seller acquisitions). Fall back to the first acq rep
-    // only if Michelle has no account/pipeline.
-    const pls = await readPipelines();
-    const michellePipe = pls.find((p) => /michelle/i.test(p.name));
-    const michelleUser = await db.user.findFirst({ where: { active: true, name: { contains: "Michelle", mode: "insensitive" } }, select: { name: true } });
-    const reps = await db.user.findMany({ where: { active: true, position: { in: ["acquisitions", "cc_lm"] } }, select: { name: true } });
-    const replied = (feed.recentReplies ?? []).filter((r) => r.side === "seller" && (r.at ?? "").slice(0, 10) === todayYmd);
-    // 🛑 Kill switch (Jon 2026-10-24): Jon disabled Direct REI, but this daily sync
-    // kept CREATING leads (in the War Room pipeline) from replied sellers. Lead
-    // creation is OFF unless DIRECTREI_LEADS="on" is set — the KPI feed above still
-    // runs, but no auto-leads. Set the env var to turn it back on.
-    const leadsOn = process.env.DIRECTREI_LEADS === "on";
-    if (leadsOn && (michelleUser || reps.length) && replied.length) {
-      const rep = michelleUser?.name ?? reps[0]?.name ?? "";
-      const pipeName = michellePipe?.name ?? "";
-      const stageKey = michellePipe?.stages[0]?.key ?? "new";
-      for (const lead of replied) {
-        const last10 = (lead.phone ?? "").replace(/\D/g, "").slice(-10);
-        const dup = await db.crmContact.findFirst({ where: { OR: [...(last10.length === 10 ? [{ phone: { contains: last10 } }] : []), { name: { equals: lead.name, mode: "insensitive" as const } }] }, select: { id: true } });
-        if (dup) continue;
-        // Jon 2026-10-13: keep the NAME clean (just the seller) — the fact that
-        // it came from Direct REI lives in the `source` field, and "seller
-        // replied" lives in a note. The rep fills in the property address later.
-        const addr = (lead.address ?? "").trim();
-        const contact = await db.crmContact.create({ data: { name: lead.name, phone: lead.phone ?? "", email: lead.email ?? "", address: addr, source: "Direct REI", assignedTo: rep } });
-        const opp = await db.crmOpportunity.create({ data: { contactId: contact.id, title: addr || lead.name || "New Direct REI seller", stage: stageKey, pipeline: pipeName, assignedTo: rep, nextFollowUp: todayYmd } });
-        await db.crmTask.create({ data: { contactId: contact.id, oppId: opp.id, title: `📞 Call now — warm seller (replied to our ${lead.channel || "campaign"})`, due: todayYmd, assignedTo: rep, createdBy: "automation" } });
-        await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "note", body: `Seller replied — source: Direct REI${lead.campaign ? ` (${lead.campaign})` : ""}. Auto-assigned ${rep}.`, actor: "automation" });
+    if (interestedLeads.length && await dreiAutoCardOn()) {
+      let carded = 0;
+      for (const lead of interestedLeads) {
+        const r = await upsertDreiHotLead({
+          name: lead.name, phone: lead.phone, email: lead.email, address: lead.address,
+          market: lead.market, status: lead.status,
+          notes: `Interested/priced reply via Direct REI${lead.status ? ` (status: ${lead.status})` : ""}`,
+        }).catch(() => null);
+        if (r?.created) carded++;
       }
+      if (carded) console.log(`[directrei-sync] auto-carded ${carded} interested/priced seller repliers (of ${interestedLeads.length} in window)`);
     }
   } catch { /* lead automation never breaks the feed */ }
   return feed;
