@@ -37,7 +37,7 @@ export function isSuppressed(tags: string | null | undefined, channel: SendChann
 // attorney / harassment claim) — the subset of legal signals we AUTO-suppress texting on, even when
 // the broader "who are you / what LLC" info-fishing questions do not (those can be a normal question
 // from an established offer lead, so a human decides). Conservative on purpose.
-export const HARD_THREAT_REGEX = /\b(sue|sued|suing|law\s?suit|litigat\w*|cease\s*(and|&)?\s*desist|\btcpa\b|attorney|lawyer|legal\s*action|take\s*legal|file\s*(a\s*)?(complaint|report|suit|claim)|attorney\s*general|statutory\s*damages|harass(ment|ing|ed)?)\b/i;
+export const HARD_THREAT_REGEX = /\b(sue|sued|suing|law\s?suit|litigat\w*|cease\s*(and|&)?\s*desist|\btcpa\b|attorney|lawyer|legal\s*action|take\s*legal|fil(e|ing|ed)\s*(a\s*)?(complaint|report|suit|claim)|attorney\s*general|statutory\s*damages|harass(ment|ing|ed)?)\b/i;
 
 /** Classify why a message tripped the litigator watch, for the legal-defense record. */
 export function threatType(text: string): "litigation-threat" | "info-fishing" {
