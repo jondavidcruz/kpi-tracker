@@ -124,7 +124,7 @@ function loadScript(src: string, css?: string): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, campaignHealth = {}, campaignHealthSyncedAt = "", closedDeals = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; campaignHealth?: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }>; campaignHealthSyncedAt?: string; closedDeals?: ClosedDeal[] }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, campaignHealth = {}, campaignInterested = {}, campaignOffers = {}, campaignNotes = {}, campaignLinks = {}, campaignOptions = [], campaignHealthSyncedAt = "", closedDeals = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; campaignHealth?: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }>; campaignInterested?: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>>; campaignOffers?: Record<string, Array<{ name: string; address: string; value: number; stage: string; at: string }>>; campaignNotes?: Record<string, Array<{ text: string; by: string; at: string }>>; campaignLinks?: Record<string, string>; campaignOptions?: string[]; campaignHealthSyncedAt?: string; closedDeals?: ClosedDeal[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
@@ -174,6 +174,35 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   // 📄 Uploaded pulled-list batches (pins on the map, no CRM import) — Jon 2026-11-11.
   const [pullBatches, setPullBatches] = useState<{ id: string; name: string; at: string; by: string; count: number; zips: string[]; pts: [number, number][] }[]>([]);
   const [pullMsg, setPullMsg] = useState("");
+  // 📊 Per-campaign detail panel (Direct REI link · who to offer · offers logged · notes) — Jon 2026-11-15.
+  const [openCampaign, setOpenCampaign] = useState<string | null>(null);
+  const [notesState, setNotesState] = useState<Record<string, Array<{ text: string; by: string; at: string }>>>(campaignNotes);
+  const [linkState, setLinkState] = useState<Record<string, string>>(campaignLinks);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [metaBusy, setMetaBusy] = useState(false);
+  async function saveCampaignLink(batchId: string, campaign: string) {
+    setLinkState((s) => ({ ...s, [batchId]: campaign }));
+    try {
+      await fetch("/api/markets/campaign-meta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "link", batchId, campaign }) });
+      router.refresh(); // re-resolve interested repliers + offers now attached by the new link
+    } catch { /* optimistic */ }
+  }
+  async function addCampaignNote(batchId: string) {
+    const text = noteDraft.trim(); if (!text) return;
+    setMetaBusy(true);
+    try {
+      const r = await fetch("/api/markets/campaign-meta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "note", batchId, text }) });
+      const j = await r.json();
+      if (r.ok && Array.isArray(j.notes)) { setNotesState((s) => ({ ...s, [batchId]: j.notes })); setNoteDraft(""); }
+    } catch { /* ignore */ } finally { setMetaBusy(false); }
+  }
+  async function delCampaignNote(batchId: string, at: string) {
+    try {
+      const r = await fetch("/api/markets/campaign-meta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delnote", batchId, at }) });
+      const j = await r.json();
+      if (r.ok) setNotesState((s) => ({ ...s, [batchId]: Array.isArray(j.notes) ? j.notes : (s[batchId] || []).filter((n) => n.at !== at) }));
+    } catch { /* ignore */ }
+  }
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState<TerrStatus>("pulled");
@@ -947,6 +976,93 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
                       <span className="text-slate-400">🚫 <b>{h.notInterested + h.optedOut}</b> no/opt-out</span>
                     </div>
                   ); })()}
+                  {/* 🔗 Campaign detail — Direct REI link · who to offer · offers logged · notes (Jon 2026-11-15).
+                      stopPropagation so interacting here never toggles the map-area highlight. */}
+                  {(() => {
+                    const interested = campaignInterested[b.id] || [];
+                    const offers = campaignOffers[b.id] || [];
+                    const notes = notesState[b.id] || [];
+                    const linked = linkState[b.id] || "";
+                    const open = openCampaign === b.id;
+                    const money = (v: number) => (v > 0 ? `$${Math.round(v).toLocaleString()}` : "");
+                    return (
+                      <div onClick={(e) => e.stopPropagation()} className="mt-1 cursor-default">
+                        <button onClick={() => { setOpenCampaign(open ? null : b.id); setNoteDraft(""); }} className="flex w-full flex-wrap items-center gap-2 rounded bg-slate-900/50 px-1.5 py-1 text-[10.5px] font-semibold text-slate-300 ring-1 ring-slate-700 hover:bg-slate-800/70">
+                          <span className="text-emerald-300">👍 {interested.length} to offer</span>
+                          <span className="text-teal-300">💵 {offers.length} offers logged</span>
+                          <span className="text-amber-200">📝 {notes.length} note{notes.length === 1 ? "" : "s"}</span>
+                          {linked && <span className="text-purple-300" title="Linked to this Direct REI campaign">🔗 {linked}</span>}
+                          <span className="ml-auto text-slate-500">{open ? "▴ hide" : "▾ details & notes"}</span>
+                        </button>
+                        {open && (
+                          <div className="mt-1 space-y-2 rounded-lg bg-slate-900/60 p-2 ring-1 ring-slate-700">
+                            {canEdit && campaignOptions.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1.5 text-[10.5px]">
+                                <span className="font-bold text-purple-200">🔗 Direct REI campaign:</span>
+                                <select value={linked} onChange={(e) => saveCampaignLink(b.id, e.target.value)} className="max-w-[260px] rounded bg-slate-800 px-1.5 py-0.5 text-slate-200 ring-1 ring-slate-600">
+                                  <option value="">— auto-match by name —</option>
+                                  {campaignOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                                <span className="text-slate-500">{linked ? "linked — responses attach reliably" : "pick the matching campaign if responses aren't showing"}</span>
+                              </div>
+                            )}
+                            <div>
+                              <div className="mb-0.5 text-[10.5px] font-bold text-emerald-300">👍 Interested / priced — who to offer ({interested.length})</div>
+                              {interested.length ? (
+                                <div className="max-h-40 space-y-0.5 overflow-auto">
+                                  {interested.map((p, i) => (
+                                    <div key={i} className="flex flex-wrap items-center gap-x-1.5 text-[10.5px] text-slate-300">
+                                      <span className="font-semibold text-white">{p.name || "—"}</span>
+                                      {p.phone && <span className="text-slate-400">{p.phone}</span>}
+                                      {p.address && <span className="text-slate-500">· {p.address}</span>}
+                                      {p.status && <span className="rounded bg-emerald-500/15 px-1 text-emerald-300">{p.status}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : <div className="text-[10.5px] text-slate-500">No interested/priced replies attributed yet{!linked && campaignOptions.length ? " — try linking the Direct REI campaign above." : "."}</div>}
+                            </div>
+                            {offers.length > 0 && (
+                              <div>
+                                <div className="mb-0.5 text-[10.5px] font-bold text-teal-300">💵 Offers logged in the War Room — traced by ZIP + date ({offers.length})</div>
+                                <div className="max-h-40 space-y-0.5 overflow-auto">
+                                  {offers.map((o, i) => (
+                                    <div key={i} className="flex flex-wrap items-center gap-x-1.5 text-[10.5px] text-slate-300">
+                                      <span className="font-semibold text-white">{o.name}</span>
+                                      {o.value > 0 && <span className="text-teal-300">{money(o.value)}</span>}
+                                      <span className="rounded bg-slate-700/60 px-1 text-slate-300">{o.stage}</span>
+                                      <span className="text-slate-500">{o.at.slice(0, 10)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <div>
+                              <div className="mb-0.5 text-[10.5px] font-bold text-amber-200">📝 Campaign notes ({notes.length})</div>
+                              {notes.length > 0 && (
+                                <div className="mb-1 max-h-40 space-y-1 overflow-auto">
+                                  {notes.map((n) => (
+                                    <div key={n.at} className="rounded bg-slate-800/70 px-1.5 py-1 text-[10.5px] text-slate-200 ring-1 ring-slate-700">
+                                      <div className="whitespace-pre-wrap">{n.text}</div>
+                                      <div className="mt-0.5 flex items-center gap-1 text-[9.5px] text-slate-500">
+                                        <span>— {n.by} · {new Date(n.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                                        {canEdit && <button onClick={() => delCampaignNote(b.id, n.at)} className="text-slate-500 hover:text-red-300">× delete</button>}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {canEdit && (
+                                <div className="flex items-start gap-1.5">
+                                  <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} rows={2} placeholder="Log an offer or follow-up (e.g. 'Offered $18k via DREI text to J. Smith — mirrored to War Room, following up Fri')" className="flex-1 resize-y rounded bg-slate-800 px-1.5 py-1 text-[10.5px] text-slate-200 ring-1 ring-slate-600 placeholder:text-slate-600" />
+                                  <button onClick={() => addCampaignNote(b.id)} disabled={metaBusy || !noteDraft.trim()} className="rounded bg-amber-500/20 px-2 py-1 text-[10.5px] font-bold text-amber-200 ring-1 ring-amber-500/40 hover:bg-amber-500/30 disabled:opacity-40">+ note</button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

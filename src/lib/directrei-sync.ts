@@ -49,6 +49,7 @@ export type DreiFeed = {
   recentReplies: DreiReply[]; // newest first, max 12
   interestedLeads?: Array<{ name: string; phone: string; email: string; address: string; market: string; status: string }>; // interested/priced seller repliers to auto-card — stripped before persist
   campaignHealth?: DreiCampaignHealth[]; // per-campaign response tally (keyed by normCampaignName)
+  campaignInterested?: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>>; // interested/priced repliers BY campaign (normCampaignName key) — who Michelle should offer
   campaigns: Array<{ name: string; channel: string; side: "seller" | "buyer" | "other"; paused: boolean }>;
 };
 
@@ -99,6 +100,7 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
   const newSellers: Array<{ name: string; phone: string; email: string }> = [];
   const replies: DreiReply[] = [];
   const health: Record<string, DreiCampaignHealth> = {}; // per-campaign response tally (all-time)
+  const interestedByCamp: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>> = {}; // WHO replied interested/priced, per campaign → shown on the /markets campaign so Michelle knows who to offer
   let total = 0, scanned = 0, smsRepliesToday = 0;
 
   for (let page = 0; page < 20; page++) {
@@ -129,9 +131,16 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
         if (optedOut || /\bopt|unsub|\bstop\b|\bdnc\b/.test(st)) h.optedOut++;
         else if (replyDay || /replied|interest|price|offer|qualif|hot|warm|not.?interest/.test(st)) {
           h.replied++;
-          if (/\$|price|offer|asking|would take/.test(st)) { h.priced++; h.interested++; }
+          const priced = /\$|price|offer|asking|would take/.test(st);
+          const interested = /interest|qualif|hot|warm|ready|\byes\b/.test(st);
+          if (priced) { h.priced++; h.interested++; }
           else if (/not.?interest|dead|wrong|disqualif/.test(st)) h.notInterested++;
-          else if (/interest|qualif|hot|warm|ready|\byes\b/.test(st)) h.interested++;
+          else if (interested) h.interested++;
+          // 🎯 Keep the actual interested/priced repliers (not just a count) so each /markets campaign
+          // can list exactly WHO to offer. Capped per campaign; most recent kept at build end.
+          if ((priced || interested || c.needs_attention) && !/not.?interest|dead|wrong|disqualif/.test(st)) {
+            (interestedByCamp[key] ??= []).push({ name: c.name ?? "—", phone: c.phone ?? "", address: dreiAddress(c), status: c.status ?? (priced ? "priced" : "interested"), at: c.last_reply_at ?? "" });
+          }
         }
       }
       if (replyDay && !optedOut) {
@@ -192,6 +201,9 @@ export async function buildDreiFeed(todayYmd: string): Promise<DreiFeed | null> 
       } catch { /* native stats optional — contact-status tally still shows */ }
       return Object.values(health).filter((h) => h.sent || h.replied || h.optedOut);
     })(),
+    campaignInterested: Object.fromEntries(
+      Object.entries(interestedByCamp).map(([k, list]) => [k, list.sort((a, b) => (b.at || "").localeCompare(a.at || "")).slice(0, 15)]),
+    ),
     campaigns: campRows.map((c) => ({ name: c.name, channel: c.channel, paused: c.paused, side: /seller/i.test(c.name) ? "seller" as const : /buyer/i.test(c.name) ? "buyer" as const : "other" as const })),
   };
 }

@@ -73,21 +73,56 @@ export default async function MarketsPage() {
   // 📊 Campaign Health — pulled from the Direct REI API feed (refreshed 5×/day, every response
   // classified by status) and matched to each uploaded pull list by normalized campaign name.
   const campaignHealth: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }> = {};
+  // 👍 Interested/priced repliers BY campaign (who Michelle should offer) + 💵 offers traced to each
+  // campaign + 📝 manual notes + 🔗 the explicit Direct REI campaign link & the list of campaign options.
+  const campaignInterested: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>> = {};
+  const campaignOffers: Record<string, Array<{ name: string; address: string; value: number; stage: string; at: string }>> = {};
+  let campaignNotes: Record<string, Array<{ text: string; by: string; at: string }>> = {};
+  let campaignLinks: Record<string, string> = {};
+  let campaignOptions: string[] = [];
   let campaignHealthSyncedAt = "";
   try {
     const { readDreiFeed, normCampaignName } = await import("@/lib/directrei-sync");
-    const feed = await readDreiFeed();
+    const { readCampaignLinks, readCampaignNotes } = await import("@/lib/pull-campaign-meta");
+    const [feed, links, notes] = await Promise.all([readDreiFeed(), readCampaignLinks(), readCampaignNotes()]);
     campaignHealthSyncedAt = feed?.at ?? "";
+    campaignLinks = links;
+    campaignNotes = notes;
+    campaignOptions = (feed?.campaigns ?? []).map((c) => c.name).filter(Boolean);
     const byName: Record<string, { sent?: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }> = {};
     for (const h of (feed?.campaignHealth ?? [])) byName[normCampaignName(h.name)] = h;
+    const interestedByName = feed?.campaignInterested ?? {};
     const keys = Object.keys(byName);
     for (const b of pullLists) {
-      const key = normCampaignName(b.name);
-      let h = byName[key];
-      if (!h && key) { const hitKey = keys.find((k) => k && (k.includes(key) || key.includes(k))); if (hitKey) h = byName[hitKey]; }
+      // 🔗 Explicit link wins (owner set it); else fall back to normalized filename↔campaign-name match.
+      const linked = links[b.id] ? normCampaignName(links[b.id]) : "";
+      const key = linked || normCampaignName(b.name);
+      let matchKey = byName[key] ? key : "";
+      if (!matchKey && key) { const hit = keys.find((k) => k && (k.includes(key) || key.includes(k))); if (hit) matchKey = hit; }
+      const h = matchKey ? byName[matchKey] : undefined;
       if (h) campaignHealth[b.id] = { sent: h.sent ?? 0, replied: h.replied, interested: h.interested, priced: h.priced, notInterested: h.notInterested, optedOut: h.optedOut };
+      const il = interestedByName[matchKey || key] ?? (linked ? interestedByName[linked] : undefined);
+      if (il && il.length) campaignInterested[b.id] = il;
     }
-  } catch { /* feed unavailable — campaign health just won't show */ }
+    // 💵 Offers traced to each campaign — reuse the pull-conversion rule (offer-stage opp whose ZIP is
+    // in the batch + created on/after the pull date), crediting the most-recent qualifying pull, so
+    // Michelle's offers logged in the War Room surface on the campaign with no double-entry.
+    const prepared = pullLists
+      .map((b) => ({ id: b.id, atMs: Date.parse(`${b.at}T00:00:00Z`) || 0, zips: new Set(b.zips || []) }))
+      .sort((a, c) => c.atMs - a.atMs);
+    for (const o of opps) {
+      const stage = o.stage ?? "";
+      if (!/\boffer\b|verbal|negotiat|contract|won|closed|signed|sold/i.test(stage) || /dead|lost|nurtur/i.test(stage)) continue;
+      const zs = (o.contact?.address ?? "").match(/\b\d{5}\b/g);
+      const zip = zs && zs.length ? zs[zs.length - 1] : null;
+      if (!zip) continue;
+      const createdMs = o.createdAt.getTime();
+      const hit = prepared.find((p) => p.atMs <= createdMs && p.zips.has(zip));
+      if (!hit) continue;
+      (campaignOffers[hit.id] ??= []).push({ name: o.title || "—", address: o.contact?.address ?? "", value: o.value ?? 0, stage, at: o.createdAt.toISOString() });
+    }
+    for (const id of Object.keys(campaignOffers)) campaignOffers[id] = campaignOffers[id].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 25);
+  } catch { /* feed/meta unavailable — campaign health just won't show */ }
 
   // 🖍 Hand-drawn / searched territories (areas we market in / have pulled vs uncharted).
   const { readTerritories } = await import("@/lib/map-territories");
@@ -321,7 +356,7 @@ export default async function MarketsPage() {
       {leader && <PullPriorityList rows={pullPriority} />}
       <MarketsTabs
         showResearch={leader}
-        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} campaignHealthSyncedAt={campaignHealthSyncedAt} closedDeals={closedDeals} />}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} campaignInterested={campaignInterested} campaignOffers={campaignOffers} campaignNotes={campaignNotes} campaignLinks={campaignLinks} campaignOptions={campaignOptions} campaignHealthSyncedAt={campaignHealthSyncedAt} closedDeals={closedDeals} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} marketStats={marketStatsByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
         niches={<NichePlaybook matches={nicheMatches} />}
