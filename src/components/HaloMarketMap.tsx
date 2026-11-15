@@ -90,6 +90,24 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
+// 💜 Convex hull (Andrew's monotone chain) over a pull's pins, in [lat,lng] space — wraps a campaign's
+// scattered dots into ONE glowing footprint so "this is the area these leads came from" reads at a glance
+// (Jon 2026-11-14). Small enough area that treating lat/lng as planar is fine.
+function convexHull(input: [number, number][]): [number, number][] {
+  const p = input.filter((q) => Number.isFinite(q[0]) && Number.isFinite(q[1]))
+    .slice().sort((a, b) => (a[1] - b[1]) || (a[0] - b[0])); // sort by lng, then lat
+  if (p.length < 3) return p;
+  // cross product with x = lng (idx 1), y = lat (idx 0)
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) =>
+    (a[1] - o[1]) * (b[0] - o[0]) - (a[0] - o[0]) * (b[1] - o[1]);
+  const lower: [number, number][] = [];
+  for (const q of p) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop(); lower.push(q); }
+  const upper: [number, number][] = [];
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop(); upper.push(q); }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+
 function loadScript(src: string, css?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (css && !document.querySelector(`link[href="${css}"]`)) {
@@ -117,6 +135,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const showFogRef = useRef(true);         // latest show.fog for the zoom handler closure
   const pullRef = useRef<unknown>(null);        // 📄 uploaded pulled-list pins layer
   const pullCanvasRef = useRef<unknown>(null);  // canvas renderer so thousands of pins stay smooth
+  const selRef = useRef<unknown>(null);         // 💜 selected-campaign highlight (hull outline + name label) on top of the pins
   const pullFileRef = useRef<HTMLInputElement>(null);
   const syncFogRef = useRef<(() => void) | null>(null); // show/hide fog based on zoom, called from outside the map effect
   const didFitRef = useRef(false);         // only auto-fit the view ONCE — never on a layer toggle (Jon 2026-11-10)
@@ -349,6 +368,37 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     if (!L || !map || !points || points.length < 2) return;
     try { map.fitBounds(L.latLngBounds(points), { padding: [60, 60], maxZoom: 12 }); } catch { /* ignore */ }
   }
+  // 💜 Which uploaded pull campaign is "lit up" on the map (its footprint outlined + its dots popped).
+  const [selectedPull, setSelectedPull] = useState<string | null>(null);
+  function clearPullSel() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sel = selRef.current as any; if (sel?.clearLayers) sel.clearLayers();
+    setSelectedPull(null);
+  }
+  // Click a campaign → draw a glowing outline around EXACTLY that pull's pins + a name label, so you can
+  // see at a glance which area on the map a campaign's leads came from. Click it again to clear (Jon 2026-11-14).
+  function showBatchArea(b: { id: string; name: string; count: number; pts: [number, number][] }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const L = (window as any).L; const map = mapRef.current as any; const sel = selRef.current as any;
+    if (selectedPull === b.id) { clearPullSel(); return; } // toggle off
+    setSelectedPull(b.id);
+    if (!L || !map || !sel) { zoomToTerritory(b.pts); return; }
+    sel.clearLayers();
+    const pts = b.pts || [];
+    if (pts.length >= 3) {
+      try {
+        const hull = convexHull(pts);
+        // soft wide glow underlay, then a crisp dashed violet outline + faint fill = one unmistakable footprint
+        L.polygon(hull, { color: "#d8b4fe", weight: 9, opacity: 0.22, fill: false, interactive: false, lineJoin: "round" }).addTo(sel);
+        const ring = L.polygon(hull, { color: "#e9d5ff", weight: 2.5, dashArray: "6 5", fillColor: "#a855f7", fillOpacity: 0.12, interactive: false }).addTo(sel);
+        const safeName = b.name.replace(/[<>&]/g, "");
+        L.marker(ring.getBounds().getCenter(), { interactive: false, zIndexOffset: 1000, icon: L.divIcon({ className: "", html: `<div style="transform:translate(-50%,-50%);white-space:nowrap;font:700 11px system-ui;color:#fff;background:rgba(88,28,135,.92);padding:3px 9px;border-radius:999px;border:1px solid #c084fc;box-shadow:0 2px 8px rgba(0,0,0,.45)">📄 ${safeName} · ${pts.length.toLocaleString()} pins</div>` }) }).addTo(sel);
+        map.fitBounds(ring.getBounds(), { padding: [70, 70], maxZoom: 13 });
+        return;
+      } catch { /* fall through to a plain zoom */ }
+    }
+    zoomToTerritory(pts);
+  }
 
   // ── init the map ONCE (tiles + draw control) ──
   useEffect(() => {
@@ -390,6 +440,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         lotsRef.current = L.layerGroup().addTo(map); // 🏘 parcels above fog, below the data markers
         pullCanvasRef.current = L.canvas({ padding: 0.5 }); // 📄 canvas renderer keeps thousands of pins smooth
         pullRef.current = L.layerGroup().addTo(map);        // 📄 uploaded pulled-list pins
+        selRef.current = L.layerGroup().addTo(map);         // 💜 selected-campaign footprint, drawn ABOVE the pins
 
         // 🏘 On-zoom parcel layer — pulls vacant lots (and flags recent sales) from the free FDEP
         // cadastral for the current viewport, debounced, only when zoomed in + toggled on. Failures
@@ -530,11 +581,18 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         marker.openPopup();
       } catch { marker.setPopupContent(`<div style="font:12px system-ui">📄 Pulled lead<br><span style="color:#64748b">Couldn't reach county records — try again.</span></div>`); }
     };
-    for (const b of pullBatches) for (const [lat, lng] of b.pts) {
-      const mk = L.circleMarker([lat, lng], { renderer: canvas, radius: rad, stroke: rad >= 5, color: "#ffffff", weight: 1, fillColor: "#a855f7", fillOpacity: 0.8, interactive: true }).addTo(grp);
-      mk.on("click", () => enrichLot(lat, lng, mk));
+    for (const b of pullBatches) {
+      // When a campaign is "lit up", its dots pop (bigger + bright) and every other pull fades back, so
+      // the selected area is unmistakable among overlapping pulls (Jon 2026-11-14).
+      const isSel = selectedPull === b.id;
+      const dim = selectedPull && !isSel;
+      const r = isSel ? rad + 1.5 : rad;
+      for (const [lat, lng] of b.pts) {
+        const mk = L.circleMarker([lat, lng], { renderer: canvas, radius: r, stroke: r >= 5, color: "#ffffff", weight: 1, fillColor: isSel ? "#c084fc" : "#a855f7", fillOpacity: dim ? 0.2 : 0.8, interactive: true }).addTo(grp);
+        mk.on("click", () => enrichLot(lat, lng, mk));
+      }
     }
-  }, [ready, pullBatches, show.pull, pullZoomR]);
+  }, [ready, pullBatches, show.pull, pullZoomR, selectedPull]);
 
   // ── redraw data layers whenever the data changes (markets, buyers, territories) ──
   useEffect(() => {
@@ -837,8 +895,9 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         const pct = (n: number, d: number) => (d > 0 ? `${((n / d) * 100).toFixed(n / d < 0.1 ? 2 : 1)}%` : "—");
         return (
         <div className="mt-2 px-1">
-          <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-400">📄 Uploaded pull lists ({pullBatches.length}) — purple pins show exactly where each pull landed (not in the CRM)
-            <button onClick={() => zoomToTerritory(pullBatches.flatMap((b) => b.pts))} className="rounded bg-purple-500/20 px-1.5 py-0.5 text-purple-300 ring-1 ring-purple-500/40 hover:bg-purple-500/30">zoom to all</button>
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-400">📄 Uploaded pull lists ({pullBatches.length}) — <span className="font-normal text-slate-500">click a campaign to light up its area on the map</span>
+            <button onClick={() => { clearPullSel(); zoomToTerritory(pullBatches.flatMap((b) => b.pts)); }} className="rounded bg-purple-500/20 px-1.5 py-0.5 text-purple-300 ring-1 ring-purple-500/40 hover:bg-purple-500/30">zoom to all</button>
+            {selectedPull && <button onClick={clearPullSel} className="rounded bg-slate-500/20 px-1.5 py-0.5 text-slate-300 ring-1 ring-slate-500/40 hover:bg-slate-500/30">✕ clear highlight</button>}
             {campaignHealthSyncedAt
               ? <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-500/30" title="Direct REI campaign responses last pulled from the Direct REI API. Refreshes 5×/day; hit the Direct REI card's refresh for now.">📊 Direct REI synced {new Date(campaignHealthSyncedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
               : <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300 ring-1 ring-amber-500/30" title="No Direct REI feed yet — the API key may be missing or the feed hasn't run. Hit the Direct REI card refresh.">📊 Direct REI not synced yet</span>}
@@ -858,12 +917,16 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
               const end = new Date(`${b.at}T00:00:00`); end.setDate(end.getDate() + 90);
               const left = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86_400_000));
               const c = conv(b.id);
+              const sel = selectedPull === b.id;
               return (
-                <div key={b.id} className="rounded-lg bg-purple-900/40 px-2.5 py-1.5 text-[11px] ring-1 ring-purple-700/50">
+                <div key={b.id} onClick={() => showBatchArea(b)} title={`Click to light up this campaign's area on the map · ${b.count.toLocaleString()} properties${b.count > b.pts.length ? ` (showing ${b.pts.length.toLocaleString()} sampled pins)` : ""}`} className={`cursor-pointer rounded-lg px-2.5 py-1.5 text-[11px] ring-1 transition ${sel ? "bg-purple-700/50 ring-purple-400 shadow-[0_0_0_1px_rgba(192,132,252,.5)]" : "bg-purple-900/40 ring-purple-700/50 hover:bg-purple-800/50 hover:ring-purple-500/70"}`}>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-purple-200">
-                    <button onClick={() => zoomToTerritory(b.pts)} title={`Zoom to this pull · ${b.count.toLocaleString()} properties${b.count > b.pts.length ? ` (showing ${b.pts.length.toLocaleString()} sampled pins)` : ""}`} className="hover:underline">📄 {b.name} · {b.count.toLocaleString()}{b.zips.length ? ` · ${b.zips.length} ZIP${b.zips.length > 1 ? "s" : ""}` : ""} · {b.at}</button>
+                    <span className="inline-flex items-center gap-1">
+                      <span className={`rounded px-1 py-0.5 text-[9.5px] font-bold ring-1 ${sel ? "bg-purple-400/30 text-white ring-purple-300" : "bg-purple-500/15 text-purple-300 ring-purple-500/40"}`}>{sel ? "✓ showing" : "📍 show area"}</span>
+                      📄 {b.name} · {b.count.toLocaleString()}{b.zips.length ? ` · ${b.zips.length} ZIP${b.zips.length > 1 ? "s" : ""}` : ""} · {b.at}
+                    </span>
                     <span className={left > 0 ? "text-amber-300" : "text-emerald-300"} title={left > 0 ? `Don't re-pull this area until ${end.toISOString().slice(0, 10)} (90-day cooldown)` : "Cooldown passed — OK to re-pull"}>{left > 0 ? `⏳ ${left}d` : "✓ clear"}</span>
-                    {canEdit && <button onClick={() => deletePullBatch(b.id)} title="Remove this pull list" className="ml-auto text-purple-300/70 hover:text-white">× remove</button>}
+                    {canEdit && <button onClick={(e) => { e.stopPropagation(); deletePullBatch(b.id); }} title="Remove this pull list" className="ml-auto text-purple-300/70 hover:text-white">× remove</button>}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10.5px]">
                     {c.leads > 0 ? (<>
