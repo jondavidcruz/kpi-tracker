@@ -77,28 +77,46 @@ const SEED: Omit<TargetMarket, "id">[] = [
   { name: "Columbia / Lake Murray (Lexington)", region: "Midlands SC", state: "SC", wealth: 3.5, business: 4, profile: "State capital metro + lake wealth", enclaves: ["Lake Murray", "Lexington", "Chapin", "Irmo"], landFocus: ["acreage", "infill_luxury", "commercial"], waterfront: true, status: "target", trend: "flat", trendNote: "Steady capital-metro demand; lake lots premium.", trendAt: "2026-11-06", notes: "Lake Murray waterfront + suburban land W of Columbia." },
 ];
 
+// 🧹 Retired markets (Jon 2026-11-15: dropped ALL of South Carolina — we're Florida-only now).
+// Markets whose (lowercased) name is here are pruned from storage on read AND never re-appended from
+// SEED, so they stay gone. The SEED entries above are kept intact so this is trivially reversible —
+// just empty this set to bring SC back. Keep names EXACTLY as the SEED spells them.
+export const RETIRED_MARKET_NAMES = new Set<string>([
+  "bluffton / hardeeville (jasper)",
+  "hilton head / beaufort (beaufort)",
+  "charleston / mount pleasant / daniel island",
+  "summerville / nexton (berkeley)",
+  "myrtle beach / grand strand (horry)",
+  "greenville / greer (upstate)",
+  "spartanburg (upstate)",
+  "rock hill / fort mill (york)",
+  "lake keowee / clemson (oconee)",
+  "aiken (csra)",
+  "columbia / lake murray (lexington)",
+]);
+const isRetired = (name: string) => RETIRED_MARKET_NAMES.has((name || "").toLowerCase());
+
 export async function readTargetMarkets(): Promise<TargetMarket[]> {
   const row = await db.resource.findFirst({ where: { category: MARKETS_CAT } }).catch(() => null);
   if (row?.description) {
     try {
-      const list = JSON.parse(row.description);
-      if (Array.isArray(list) && list.length) {
-        // Merge-append any NEW seed market not already stored (by name) — so markets added in code
-        // (e.g. the South Carolina set, Jon 2026-11-06) appear without a manual re-seed, while every
-        // existing market + the team's in-app edits are kept. Idempotent: runs once per new market.
-        const have = new Set((list as TargetMarket[]).map((m) => (m.name || "").toLowerCase()));
-        const missing = SEED.filter((s) => !have.has(s.name.toLowerCase())).map((m) => ({ ...m, id: id() }));
-        if (missing.length) {
-          const merged = [...(list as TargetMarket[]), ...missing];
-          await saveTargetMarkets(merged).catch(() => {});
-          return merged;
-        }
-        return list as TargetMarket[];
+      const raw = JSON.parse(row.description);
+      if (Array.isArray(raw) && raw.length) {
+        // 🧹 Drop any retired (SC) markets from storage.
+        const list = (raw as TargetMarket[]).filter((m) => !isRetired(m.name));
+        // Merge-append any NEW, non-retired seed market not already stored (by name) — so markets added
+        // in code appear without a manual re-seed, while existing markets + in-app edits are kept.
+        const have = new Set(list.map((m) => (m.name || "").toLowerCase()));
+        const missing = SEED.filter((s) => !have.has(s.name.toLowerCase()) && !isRetired(s.name)).map((m) => ({ ...m, id: id() }));
+        const merged = missing.length ? [...list, ...missing] : list;
+        // Persist if we pruned retired markets and/or appended new ones (idempotent thereafter).
+        if (merged.length !== raw.length) await saveTargetMarkets(merged).catch(() => {});
+        return merged;
       }
     } catch { /* reseed */ }
   }
-  // First load → seed from research.
-  const seeded: TargetMarket[] = SEED.map((m) => ({ ...m, id: id() }));
+  // First load → seed from research (minus retired markets).
+  const seeded: TargetMarket[] = SEED.filter((s) => !isRetired(s.name)).map((m) => ({ ...m, id: id() }));
   await db.resource.create({ data: { title: "target-markets", category: MARKETS_CAT, url: "", description: JSON.stringify(seeded) } }).catch(() => {});
   return seeded;
 }

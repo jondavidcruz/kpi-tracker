@@ -37,13 +37,7 @@ const COORDS: Record<string, [number, number]> = {
   "Orlando / Windermere / Winter Park": [28.5, -81.5], "Tampa Bay": [27.95, -82.46],
   "Sarasota / Lakewood Ranch": [27.36, -82.53], "Jacksonville / Ponte Vedra": [30.24, -81.45],
   "Jupiter Island / Vero Beach": [27.5, -80.33], "30A / Alys Beach (NW Florida)": [30.3, -86.0],
-  // South Carolina (Jon 2026-11-06)
-  "Bluffton / Hardeeville (Jasper)": [32.22, -80.98], "Hilton Head / Beaufort (Beaufort)": [32.33, -80.76],
-  "Charleston / Mount Pleasant / Daniel Island": [32.8, -79.93], "Summerville / Nexton (Berkeley)": [33.0, -80.1],
-  "Myrtle Beach / Grand Strand (Horry)": [33.69, -78.89], "Greenville / Greer (Upstate)": [34.85, -82.4],
-  "Spartanburg (Upstate)": [34.95, -81.93], "Rock Hill / Fort Mill (York)": [35.0, -80.95],
-  "Lake Keowee / Clemson (Oconee)": [34.75, -82.92], "Aiken (CSRA)": [33.56, -81.72],
-  "Columbia / Lake Murray (Lexington)": [34.05, -81.3],
+  // South Carolina removed 2026-11-15 — Florida-only focus (see RETIRED_MARKET_NAMES in target-markets.ts).
 };
 // 🏘 Zillow-style parcel layer — FREE, NO KEY, CORS-ok (verified end-to-end 2026-11-11). The FL
 // Statewide Cadastral (CADASTRAL_DOR) carries the full DOR tax-roll schema — use code, just value,
