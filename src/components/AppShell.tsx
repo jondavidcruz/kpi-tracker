@@ -28,6 +28,9 @@ export default async function AppShell({ children }: { children: React.ReactNode
   // the War Room shell, even for a signed-in owner. Candidates (who aren't in the
   // business) see ONLY the assessment, none of our sections.
   if (reqPath.startsWith("/assess") || reqPath === "/offer" || reqPath.startsWith("/offer/")) return <>{children}</>;
+  // 🎭 /demo is a standalone, no-login showcase on fake data — never wrap it in the real
+  // War Room chrome, even for a signed-in owner (it has its own demo shell).
+  if (reqPath === "/demo" || reqPath.startsWith("/demo/")) return <>{children}</>;
 
   // Not signed in (login page) → no chrome.
   if (!me) return <>{children}</>;
