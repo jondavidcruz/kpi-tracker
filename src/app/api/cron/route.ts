@@ -2927,6 +2927,16 @@ export async function GET(request: Request) {
     return NextResponse.json(await parkNeverCalled({ commit: url.searchParams.get("commit") === "1", days, diag: url.searchParams.get("diag") === "1" }));
   }
 
+  // 👻 Ghosted-offer sweep (?ghostsweep=1 dry-run / &commit=1 applies / &undo=1 restores last run /
+  // &days=30). Offer/contract-stage sellers who went silent >30d (no seller update, no answered call)
+  // → Cold pipeline's Ghosted Offer stage (Jon 2026-11-16). Also chained onto the daily run below.
+  if (url.searchParams.get("ghostsweep") === "1") {
+    const { ghostStaleOffers, undoLastGhostSweep } = await import("@/lib/crm-nurture");
+    if (url.searchParams.get("undo") === "1") return NextResponse.json(await undoLastGhostSweep());
+    const days = Number(url.searchParams.get("days") ?? 30) || 30;
+    return NextResponse.json(await ghostStaleOffers({ commit: url.searchParams.get("commit") === "1", days, diag: url.searchParams.get("diag") === "1" }));
+  }
+
   // 📋 Read-only AI Updates queue (?sugglist=1[&status=proposed,accepted][&n=80])
   // — lets the overnight crm-enhancer/optimizer runs see what Jon accepted or
   // declined without a local DB (crm-enhancer 2026-10-20).
@@ -4626,7 +4636,10 @@ export async function GET(request: Request) {
     // 🌙 daily auto-park of never-called NEW leads untouched 30+ days (best-effort)
     let nurturePark: unknown = null;
     try { const { parkNeverCalled } = await import("@/lib/crm-nurture"); nurturePark = await parkNeverCalled({ commit: true, days: 30 }); } catch (e) { nurturePark = { error: String(e).slice(0, 150) }; }
-    return NextResponse.json({ ok: true, date: yesterday, calls: calls.wrote, offersContracts: opps.counts, activity, nurturePark });
+    // 👻 daily auto-sweep of ghosted offer/contract leads (>30d silent, no answer) → Cold · Ghosted Offer
+    let ghostSweep: unknown = null;
+    try { const { ghostStaleOffers } = await import("@/lib/crm-nurture"); ghostSweep = await ghostStaleOffers({ commit: true, days: 30 }); } catch (e) { ghostSweep = { error: String(e).slice(0, 150) }; }
+    return NextResponse.json({ ok: true, date: yesterday, calls: calls.wrote, offersContracts: opps.counts, activity, nurturePark, ghostSweep });
   }
 
   // Daily huddle brief — 9:45am PT, Mon–Fri (after the 9am huddle, so the team has
