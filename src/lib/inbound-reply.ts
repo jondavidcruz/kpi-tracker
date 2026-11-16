@@ -49,6 +49,10 @@ export async function routeSellerReply(args: {
   const { channel, contact, opp } = args;
   const text = String(args.text ?? "").slice(0, 2000);
   let wasDnced = false, declined = false, realtor = false, qualified = false;
+  // 🧊 Is this lead sitting in the COLD / ghosted pipeline? (Jon 2026-11-16: "any lead that replies
+  // from the cold pipeline move to Michelle follow-up stage".) Cold repliers get routed to Michelle
+  // below instead of the generic within-pipeline forward-move.
+  const isCold = !!opp && /cold|ghost/i.test(opp.pipeline || "");
 
   try {
     const { DNC_REGEX, dncContact } = await import("@/lib/crm-dnc");
@@ -119,13 +123,36 @@ export async function routeSellerReply(args: {
       await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🪦 Auto-moved to Dead — seller clearly NOT interested (no follow-up, off the team's list): "${why.slice(0, 80)}"`, actor: "master-workflow" }).catch(() => {});
     };
     if (declined && opp) await applyDead(text);
-    else if (realtor && opp) await applyIntent("working_with_realtor", true);
+    // For a cold lead we don't move stage on a realtor reply (it would land in cold's own nurture) —
+    // the cold→Michelle move below handles the stage; we still tag it. Non-cold keeps the old move.
+    else if (realtor && opp) await applyIntent("working_with_realtor", !isCold);
     else if (qualified && opp) await applyIntent("qualified", false);
+
+    // 🧊→👩 COLD RE-ENGAGEMENT (Jon 2026-11-16): ANY reply from a lead in the Cold/ghosted pipeline
+    // that isn't a STOP/DNC or a clear decline bounces it straight to MICHELLE's Follow Up stage and
+    // reassigns it to her — so a warm reply never rots in the cold bucket (e.g. Gerard, "$105k").
+    let routedToMichelle = false;
+    if (opp && isCold && !wasDnced && !declined) {
+      try {
+        const { readPipelines } = await import("@/lib/crm");
+        const pls = await readPipelines();
+        const mp = pls.find((p) => /michelle/i.test(p.name));
+        const fu = mp?.stages.find((s) => /follow.?up/i.test(`${s.key} ${s.label}`))
+          ?? mp?.stages.find((s) => /new|call/i.test(`${s.key} ${s.label}`)) ?? mp?.stages[0];
+        if (mp && fu) {
+          const todayYmd = new Date().toISOString().slice(0, 10);
+          await db.crmOpportunity.update({ where: { id: opp.id }, data: { pipeline: mp.name, stage: fu.key, assignedTo: "Michelle Lagudas", archivedAt: null, nextFollowUp: todayYmd } }).catch(() => {});
+          await db.crmContact.update({ where: { id: contact.id }, data: { assignedTo: "Michelle Lagudas" } }).catch(() => {});
+          await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🧊→👩 Re-engaged cold lead — replied by ${channel}, auto-moved to ${mp.name} · ${fu.label} and assigned to Michelle: "${text.slice(0, 60)}"`, actor: "master-workflow" }).catch(() => {});
+          routedToMichelle = true;
+        }
+      } catch { /* best-effort — never breaks intake */ }
+    }
 
     // 💰/📨 Stage automation: a reply with a PRICE → move to Comp/Offer so the team can check the
     // numbers; any other engaged reply → advance a COLD lead to Follow Up. Forward-only (never pulls
-    // a deal back) and skips declined/realtor/DNC replies.
-    if (opp && !declined && !realtor && !wasDnced) {
+    // a deal back) and skips declined/realtor/DNC replies — and cold leads already routed to Michelle.
+    if (opp && !declined && !realtor && !wasDnced && !routedToMichelle) {
       try {
         const { readPipelines } = await import("@/lib/crm");
         const pls = await readPipelines();

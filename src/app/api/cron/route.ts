@@ -665,6 +665,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, job: "holidaysync", ...(r ?? { added: 0, removed: 0 }) });
   }
 
+  // 📨 Weekend drip run (?drips=1 — Jon 2026-11-16: "add weekend drip runs"). The base daily cron
+  // only fires Mon–Fri, so hot sequences (10 Days of Hell, cold re-engagement) went dark all
+  // weekend. This runs ONLY the drip engine (nothing else), scheduled Sat + Sun. Quiet-hours
+  // (9pm–8am by area code + address) and the per-line carrier caps are enforced inside runDueDrips,
+  // so weekend sends stay safe. Idempotent: a step advances before it sends, so overlap can't double-fire.
+  if (url.searchParams.get("drips") === "1") {
+    const { runDueDrips } = await import("@/lib/drip");
+    const r = await runDueDrips(200).catch((e) => ({ error: String(e).slice(0, 140) }));
+    return NextResponse.json({ ok: true, job: "drips", ...r });
+  }
+
   // 📡 Telnyx spend (?telnyxspend=1, daily cron): month-to-date cost from
   // detail records (voice + messaging, covers War Room AND Direct REI lines),
   // current balance, and a straight-line monthly projection → Resource
