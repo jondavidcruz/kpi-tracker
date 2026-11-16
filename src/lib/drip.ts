@@ -261,6 +261,28 @@ export async function stopDrip(oppId: string, reason = "stopped"): Promise<void>
   await db.crmOpportunity.update({ where: { id: oppId }, data: { formData: { ...fd, __dripEndedReason: reason } as never } });
 }
 
+/** 🛑 Stop EVERY follow-up automation on a lead — the drip sequence (__drip) AND the legacy
+ *  template sequence (crm-templates seqState) — in one call (Jon 2026-11-16: "whenever a lead is
+ *  moved to Dead, stop all automations / SMS / email / any kind of drip campaign"). Idempotent and
+ *  best-effort: a missing drip or sequence is a no-op. Call it from every path that marks a lead dead. */
+export async function stopAllAutomations(oppId: string, reason = "moved to dead"): Promise<void> {
+  if (!oppId) return;
+  await stopDrip(oppId, reason).catch(() => {});
+  try {
+    const { readSeqState, writeSeqState } = await import("@/lib/crm-templates");
+    const st = await readSeqState();
+    if (st && st[oppId]) { delete st[oppId]; await writeSeqState(st); }
+  } catch { /* legacy template-sequence state is optional */ }
+}
+
+/** True when a move lands a lead in a DEAD bucket — either a terminal stage key/label OR a whole
+ *  pipeline named like "AQ: Dead" (its stages, e.g. "Not Motivated", aren't keyed `dead`, so the
+ *  old `stage === "dead"` checks missed them — Jon 2026-11-16). */
+export function isDeadDestination(stageKey: string, pipelineName?: string | null): boolean {
+  if (pipelineName && /\bdead\b|not\s*motivated|trash|junk/i.test(pipelineName)) return true;
+  return isTerminalStage(stageKey) || /not\s*motivated/i.test((stageKey || "").replace(/[_-]+/g, " "));
+}
+
 // ── Level 2 auto-send (Jon 2026-11-10) ──────────────────────────────────────────────────────
 // Cron-safe senders that reuse the SAME guardrail libs as the manual send actions — owner-anonymity
 // scrub, quiet hours (by area code + address), live/sticky line pick, hard anti-duplicate. They

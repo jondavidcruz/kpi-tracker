@@ -313,6 +313,17 @@ export async function setOppStageAction(formData: FormData) {
   // deal lands on a stage that has one (contract sent / negotiating / offer ready / 10 days
   // of hell / ghosted). Assisted tasks, reply-stops, never blocks; seller pipelines only.
   { const { autoArmStageDrip } = await import("@/lib/drip"); autoArmStageDrip(id, stage, me.name, opp.pipeline).catch(() => {}); }
+  // 🛑 Moved to DEAD (a terminal stage OR a "Dead" pipeline like AQ: Dead, whose "Not Motivated"
+  // stage isn't keyed `dead`) → stop EVERY automation on this lead — drip + legacy sequence, SMS +
+  // email (Jon 2026-11-16). Runs after autoArmStageDrip so nothing can re-arm behind it.
+  {
+    const { isDeadDestination, stopAllAutomations } = await import("@/lib/drip");
+    const destPipeline = movePipeline ? wantPipeline : opp.pipeline;
+    if (isDeadDestination(stage, destPipeline)) {
+      await stopAllAutomations(id, `moved to dead (${destPipeline || stage})`).catch(() => {});
+      await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: `🛑 Moved to Dead — stopped all follow-up automations (drip + sequences, SMS + email).`, actor: me.name }).catch(() => {});
+    }
+  }
   // 📝 GHL-parity (Jon 2026-10-07): hitting an offer/contract stage auto-drafts
   // the PandaDoc contract so the rep just reviews and sends. Never blocks.
   if (full && /offer|contract/i.test(stage) && !/rejected|sent|comp/i.test(stage)) {
@@ -1358,6 +1369,8 @@ export async function bulkOppAction(formData: FormData) {
     await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { assignedTo: val } });
   } else if (op === "stage" && ((await readPipelines()).some((p) => p.stages.some((st) => st.key === val)) || CRM_STAGES.some((s) => s.key === val))) {
     await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { stage: val, ...(val === "dead" ? { archivedAt: new Date() } : {}) } });
+    // 🛑 Bulk-moved to a dead stage → stop every automation on each (Jon 2026-11-16).
+    { const { isDeadDestination, stopAllAutomations } = await import("@/lib/drip"); if (isDeadDestination(val, null)) for (const id of ids) await stopAllAutomations(id, `bulk moved to dead (${val})`).catch(() => {}); }
   } else if (op === "pipeline") {
     // move many to another pipeline → chosen stage (or first stage) + its owner
     const target = (await readPipelines()).find((p) => p.name === val);
@@ -1366,6 +1379,8 @@ export async function bulkOppAction(formData: FormData) {
     const stage = target.stages.some((s) => s.key === wantStage) ? wantStage : (target.stages[0]?.key ?? "new");
     const own = ownerForPipeline(val);
     await db.crmOpportunity.updateMany({ where: { id: { in: ids } }, data: { pipeline: val, stage, archivedAt: null, ...(own ? { assignedTo: own } : {}) } });
+    // 🛑 Bulk-moved into a Dead pipeline (e.g. AQ: Dead) → stop every automation on each (Jon 2026-11-16).
+    { const { isDeadDestination, stopAllAutomations } = await import("@/lib/drip"); if (isDeadDestination(stage, val)) for (const id of ids) await stopAllAutomations(id, `bulk moved to dead (${val})`).catch(() => {}); }
   } else if (op === "tag") {
     for (const id of ids) {
       const o = await db.crmOpportunity.findUnique({ where: { id }, select: { tags: true } });

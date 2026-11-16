@@ -120,6 +120,8 @@ export async function routeSellerReply(args: {
       const tag = "not-interested";
       const tags = !new RegExp(tag, "i").test(opp.tags || "") ? [opp.tags, tag].filter(Boolean).join(",") : (opp.tags || "");
       await db.crmOpportunity.update({ where: { id: opp.id }, data: { ...(dead && dead.key !== opp.stage ? { stage: dead.key } : {}), tags, nextFollowUp: "" } }).catch(() => {});
+      // 🛑 Dead → stop ALL automations (drip + legacy sequence), not just the drip (Jon 2026-11-16).
+      try { const { stopAllAutomations } = await import("@/lib/drip"); await stopAllAutomations(opp.id, "replied not interested → dead"); } catch { /* best-effort */ }
       await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: `🪦 Auto-moved to Dead — seller clearly NOT interested (no follow-up, off the team's list): "${why.slice(0, 80)}"`, actor: "master-workflow" }).catch(() => {});
     };
     if (declined && opp) await applyDead(text);
